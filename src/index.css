@@ -7,7 +7,7 @@
   --color-secondary: #78716c;
   --color-background: #fafaf9;
   --color-foreground: #1c1917;
-  --color-muted: #78716c;
+  --color-muted: #7a6f63;
   --color-muted-foreground: #a8a29e;
   --color-border: #e7e5e4;
   --color-card: #ffffff;
@@ -67,6 +67,22 @@ textarea {
   background-color: var(--color-background);
   color: var(--color-foreground);
   border-color: var(--color-border);
+}
+
+input::-webkit-input-placeholder, textarea::-webkit-input-placeholder {
+  color: var(--color-muted-foreground);
+}
+
+input::-moz-placeholder, textarea::-moz-placeholder {
+  color: var(--color-muted-foreground);
+}
+
+input:-ms-input-placeholder, textarea:-ms-input-placeholder {
+  color: var(--color-muted-foreground);
+}
+
+input::-ms-input-placeholder, textarea::-ms-input-placeholder {
+  color: var(--color-muted-foreground);
 }
 
 input::placeholder,
