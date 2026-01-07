@@ -1,22 +1,22 @@
 import { Outlet, NavLink } from "react-router-dom";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Layout() {
   return (
-    <div className="flex h-screen bg-[var(--color-background)]">
+    <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar */}
-      <aside className="w-[var(--spacing-sidebar)] border-r border-[var(--color-border)] flex flex-col">
-        <div className="p-4 border-b border-[var(--color-border)]">
+      <aside className="w-sidebar border-r border-border flex flex-col">
+        <div className="p-4 border-b border-border">
           <h1 className="text-xl font-semibold">Maibuk</h1>
         </div>
 
-        <nav className="flex-1 p-2">
+        <nav className="flex-1 p-2 gap-2">
           <NavLink
             to="/"
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                isActive
-                  ? "bg-[var(--color-accent)] text-white"
-                  : "hover:bg-[var(--color-border)]"
+              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isActive
+                ? "bg-primary text-white"
+                : "hover:bg-muted text-foreground"
               }`
             }
           >
@@ -29,10 +29,9 @@ export function Layout() {
           <NavLink
             to="/settings"
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                isActive
-                  ? "bg-[var(--color-accent)] text-white"
-                  : "hover:bg-[var(--color-border)]"
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
+                ? "bg-primary text-white"
+                : "hover:bg-muted text-foreground"
               }`
             }
           >
@@ -44,8 +43,9 @@ export function Layout() {
           </NavLink>
         </nav>
 
-        <div className="p-4 border-t border-[var(--color-border)] text-sm text-[var(--color-muted)]">
-          v0.1.0
+        <div className="p-4 border-t border-border space-y-3">
+          <ThemeToggle />
+          <p className="text-sm text-muted-foreground">v0.1.0</p>
         </div>
       </aside>
 
