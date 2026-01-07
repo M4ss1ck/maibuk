@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colors - Warm, minimal palette for writing */
+  --color-background: #fafaf9;
+  --color-foreground: #1c1917;
+  --color-muted: #78716c;
+  --color-border: #e7e5e4;
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
+
+  /* Dark mode colors */
+  --color-background-dark: #1c1917;
+  --color-foreground-dark: #fafaf9;
+  --color-muted-dark: #a8a29e;
+  --color-border-dark: #292524;
+
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Literata", ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, monospace;
+
+  /* Spacing */
+  --spacing-sidebar: 280px;
+  --spacing-editor-max: 720px;
+}
+
+/* Base styles */
+html {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* Editor typography */
+.editor-content {
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+
+/* Focus mode styles */
+.focus-mode {
+  background-color: var(--color-background);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  html {
+    background-color: var(--color-background-dark);
+    color: var(--color-foreground-dark);
+  }
+}
