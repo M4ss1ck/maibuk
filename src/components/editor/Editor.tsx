@@ -6,8 +6,15 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import Typography from "@tiptap/extension-typography";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
+import { Image } from "@tiptap/extension-image";
+import { Link } from "@tiptap/extension-link";
 import { useEffect, useCallback } from "react";
 import { EditorToolbar } from "./EditorToolbar";
+import { SceneBreak } from "./extensions/SceneBreak";
 
 interface EditorProps {
   content: string | null;
@@ -46,6 +53,30 @@ export function Editor({
         multicolor: false,
       }),
       Typography,
+      // Phase 3 extensions
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: {
+          class: "editor-table",
+        },
+      }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: "editor-image",
+        },
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "editor-link",
+        },
+      }),
+      SceneBreak,
     ],
     content: content || "",
     editable,

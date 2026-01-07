@@ -214,3 +214,96 @@ option {
   margin: 0 auto;
   padding: 2rem;
 }
+
+/* Phase 3: Table styles */
+.editor-content table,
+.editor-table {
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.editor-content table th,
+.editor-content table td {
+  border: 1px solid var(--color-border);
+  padding: 0.75em 1em;
+  vertical-align: top;
+  text-align: left;
+}
+
+.editor-content table th {
+  background-color: var(--color-muted);
+  font-weight: 600;
+}
+
+.editor-content table tr:hover td {
+  background-color: var(--color-muted);
+  background-opacity: 0.5;
+}
+
+/* Selected cell */
+.editor-content .selectedCell {
+  background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+/* Phase 3: Image styles */
+.editor-content img,
+.editor-image {
+  max-width: 100%;
+  height: auto;
+  margin: 1.5em auto;
+  display: block;
+  border-radius: 0.5em;
+}
+
+.editor-content img.ProseMirror-selectednode {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Phase 3: Scene break styles */
+.scene-break {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 2.5em 0;
+  user-select: none;
+}
+
+.scene-break-symbols {
+  font-size: 1.25em;
+  letter-spacing: 0.5em;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-serif);
+}
+
+/* Phase 3: Link styles */
+.editor-content a,
+.editor-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.editor-content a:hover {
+  color: var(--color-primary-hover);
+}
+
+/* Phase 3: Footnote styles */
+.footnote-marker {
+  color: var(--color-primary);
+  font-size: 0.75em;
+  vertical-align: super;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.footnote-marker::before {
+  content: "[";
+}
+
+.footnote-marker::after {
+  content: "]";
+}

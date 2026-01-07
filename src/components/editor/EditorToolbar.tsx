@@ -1,4 +1,8 @@
+import { useState } from "react";
 import type { Editor } from "@tiptap/react";
+import { TableMenu } from "./TableMenu";
+import { FindReplace } from "./FindReplace";
+import { ImageInsertDialog } from "./ImageInsertDialog";
 
 interface EditorToolbarProps {
   editor: Editor;
@@ -33,8 +37,11 @@ function Divider() {
 }
 
 export function EditorToolbar({ editor }: EditorToolbarProps) {
+  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [showImageDialog, setShowImageDialog] = useState(false);
+
   return (
-    <div className="h-12 border-b border-border flex items-center px-4 gap-1 flex-wrap">
+    <div className="relative h-12 border-b border-border flex items-center px-4 gap-1 flex-wrap">
       {/* Text formatting */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -212,6 +219,56 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10H11a4 4 0 00-4 4v2M21 10l-4-4M21 10l-4 4" />
         </svg>
       </ToolbarButton>
+
+      <Divider />
+
+      {/* Phase 3: Advanced features */}
+      <TableMenu editor={editor} />
+
+      <ToolbarButton
+        onClick={() => setShowImageDialog(true)}
+        title="Insert Image"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </ToolbarButton>
+
+      <ToolbarButton
+        onClick={() => (editor.commands as any).setSceneBreak?.()}
+        title="Scene Break (* * *)"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="6" cy="12" r="1.5" fill="currentColor" />
+          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+          <circle cx="18" cy="12" r="1.5" fill="currentColor" />
+        </svg>
+      </ToolbarButton>
+
+      <Divider />
+
+      <ToolbarButton
+        onClick={() => setShowFindReplace(!showFindReplace)}
+        isActive={showFindReplace}
+        title="Find & Replace (Ctrl+F)"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </ToolbarButton>
+
+      {/* Dialogs */}
+      <FindReplace
+        editor={editor}
+        isOpen={showFindReplace}
+        onClose={() => setShowFindReplace(false)}
+      />
+
+      <ImageInsertDialog
+        editor={editor}
+        isOpen={showImageDialog}
+        onClose={() => setShowImageDialog(false)}
+      />
     </div>
   );
 }
