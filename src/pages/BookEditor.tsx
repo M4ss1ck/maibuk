@@ -168,7 +168,7 @@ export function BookEditor() {
   }
 
   return (
-    <div className={`flex h-full ${focusMode ? "focus-mode" : ""}`}>
+    <div className={`flex h-dvh overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
       {/* Chapter sidebar - hidden in focus mode */}
       {!focusMode && (
         <ChapterList
@@ -182,7 +182,7 @@ export function BookEditor() {
       )}
 
       {/* Main editor area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Header bar - hidden in focus mode */}
         {!focusMode && (
           <div className="h-12 border-b border-border flex items-center px-4 gap-4">

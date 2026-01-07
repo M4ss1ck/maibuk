@@ -124,10 +124,10 @@ export function Editor({
   }
 
   return (
-    <div className={`flex-1 flex flex-col ${focusMode ? "focus-mode" : ""}`}>
+    <div className={`flex-1 flex flex-col min-h-0 ${focusMode ? "focus-mode" : ""}`}>
       {!focusMode && <EditorToolbar editor={editor} />}
 
-      <div className="flex-1 overflow-auto" onClick={handleFocus}>
+      <div className="flex-1 overflow-auto min-h-0" onClick={handleFocus}>
         <div className="max-w-editor-max mx-auto p-8">
           <EditorContent editor={editor} />
         </div>

@@ -135,6 +135,14 @@ option {
   padding-left: 1.5em;
 }
 
+.editor-content ul {
+  list-style-type: disc;
+}
+
+.editor-content ol {
+  list-style-type: decimal;
+}
+
 .editor-content li {
   margin: 0.25em 0;
 }
@@ -268,7 +276,10 @@ option {
   justify-content: center;
   align-items: center;
   margin: 2.5em 0;
-  user-select: none;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+      -ms-user-select: none;
+          user-select: none;
 }
 
 .scene-break-symbols {

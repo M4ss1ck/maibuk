@@ -88,8 +88,9 @@ export function ChapterList({
   };
 
   return (
-    <aside className="w-64 border-r border-border flex flex-col bg-background">
-      <div className="p-4 border-b border-border flex items-center justify-between">
+    <aside className="w-64 border-r border-border flex flex-col bg-background h-full shrink-0">
+      {/* Sticky header */}
+      <div className="p-4 border-b border-border flex items-center justify-between bg-background z-10 shrink-0">
         <h3 className="font-medium">Chapters</h3>
         <button
           onClick={() => setShowNewDialog(true)}
@@ -227,9 +228,9 @@ export function ChapterList({
         )}
       </div>
 
-      {/* Word count summary */}
+      {/* Sticky footer - Word count summary */}
       {chapters.length > 0 && (
-        <div className="p-3 border-t border-border text-xs text-muted-foreground">
+        <div className="p-3 border-t border-border text-xs text-muted-foreground bg-background shrink-0">
           <div className="flex justify-between">
             <span>Total words:</span>
             <span className="font-medium">
