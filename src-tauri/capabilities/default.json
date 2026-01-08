@@ -12,6 +12,9 @@
     "sql:allow-select",
     "sql:allow-close",
     "fs:default",
-    "dialog:default"
+    "fs:allow-write",
+    "fs:write-files",
+    "dialog:default",
+    "dialog:allow-save"
   ]
 }

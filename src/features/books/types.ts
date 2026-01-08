@@ -32,4 +32,6 @@ export interface UpdateBookInput {
   genre?: string;
   status?: "draft" | "in-progress" | "completed";
   targetWordCount?: number;
+  coverImagePath?: string;
+  coverData?: string;
 }

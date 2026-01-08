@@ -33,6 +33,7 @@
     "@tiptap/react": "^3.15.1",
     "@tiptap/starter-kit": "^3.15.1",
     "drizzle-orm": "^0.45.1",
+    "fabric": "^7.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.1.1",

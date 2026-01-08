@@ -162,6 +162,14 @@ export const useBookStore = create<BookStore>((set) => ({
       updates.push("target_word_count = ?");
       values.push(input.targetWordCount);
     }
+    if (input.coverImagePath !== undefined) {
+      updates.push("cover_image_path = ?");
+      values.push(input.coverImagePath);
+    }
+    if (input.coverData !== undefined) {
+      updates.push("cover_data = ?");
+      values.push(input.coverData);
+    }
 
     values.push(id);
 
