@@ -9,6 +9,7 @@ import {
   type ExportFormat,
 } from "../features/settings";
 import { Select, Switch } from "../components/ui";
+import { APP_VERSION } from "../constants";
 
 export function Settings() {
   const { theme, setTheme } = useTheme();
@@ -133,7 +134,7 @@ export function Settings() {
       <section>
         <h3 className="text-lg font-medium mb-4">About</h3>
         <div className="text-sm text-muted-foreground">
-          <p>Maibuk v0.1.1</p>
+          <p>Maibuk {APP_VERSION}</p>
           <p className="mt-1">A cross-platform writing app for authors</p>
         </div>
       </section>

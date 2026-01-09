@@ -1,5 +1,6 @@
 import { Outlet, NavLink } from "react-router-dom";
 import { ThemeToggle } from "./ThemeToggle";
+import { APP_VERSION } from "../constants";
 
 export function Layout() {
   return (
@@ -45,7 +46,7 @@ export function Layout() {
 
         <div className="p-4 border-t border-border space-y-3">
           <ThemeToggle />
-          <p className="text-sm text-muted-foreground">v0.1.1</p>
+          <p className="text-sm text-muted-foreground">{APP_VERSION}</p>
         </div>
       </aside>
 
