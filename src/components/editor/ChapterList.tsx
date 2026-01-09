@@ -54,6 +54,7 @@ export function ChapterList({
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedId(id);
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -164,7 +165,7 @@ export function ChapterList({
             {chapters.map((chapter) => (
               <li
                 key={chapter.id}
-                draggable
+                draggable={true}
                 onDragStart={(e) => handleDragStart(e, chapter.id)}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, chapter.id)}
@@ -176,6 +177,7 @@ export function ChapterList({
                   }`}
               >
                 <button
+                  draggable={false}
                   onClick={() => onSelectChapter(chapter)}
                   className="w-full text-left p-3 pr-8"
                 >
@@ -192,6 +194,7 @@ export function ChapterList({
 
                 {/* Delete button */}
                 <button
+                  draggable={false}
                   onClick={(e) => {
                     e.stopPropagation();
                     setDeleteConfirmId(chapter.id);
