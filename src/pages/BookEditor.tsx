@@ -304,6 +304,7 @@ export function BookEditor() {
         {/* Editor */}
         {currentChapter ? (
           <Editor
+            key={currentChapter.id}
             content={currentChapter.content}
             onUpdate={handleContentUpdate}
             onWordCountChange={handleWordCountChange}
