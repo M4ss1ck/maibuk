@@ -58,6 +58,22 @@ export function BookEditor() {
     }
   }, [bookId, chapters, updateWordCount]);
 
+  // triggered save
+  const handleSaveNow = useCallback(async () => {
+    if (currentChapter?.content) {
+      setSaveStatus("saving");
+      try {
+        await updateChapter(currentChapter.id, { content: currentChapter.content });
+        setSaveStatus("saved");
+        // Reset to idle after 2 seconds
+        setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch (error) {
+        console.error("Failed to save:", error);
+        setSaveStatus("idle");
+      }
+    }
+  }, [currentChapter, updateChapter]);
+
   // Debounced auto-save
   const debouncedSave = useDebouncedCallback(
     async (chapterId: string, content: string) => {
@@ -150,6 +166,11 @@ export function BookEditor() {
         e.preventDefault();
         toggleFocusMode();
       }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        handleSaveNow();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -224,7 +245,20 @@ export function BookEditor() {
                   Saved
                 </span>
               )}
+              {!["saving", "saved"].includes(saveStatus) && (
+                <button
+                  onClick={() => {
+                    handleSaveNow();
+                  }}
+                  disabled={!currentChapter?.content}
+                  title={"Save (Ctrl+S)"}
+                  className={`p-2 rounded transition-colors text-muted-foreground hover:text-primary`}
+                >
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M26 0H6a6 6 0 0 0-6 6v20a6 6 0 0 0 6 6h20a6 6 0 0 0 6-6V6a6 6 0 0 0-6-6zm-6 2v3a1 1 0 1 0 2 0V2h1v7H9V2zm10 24a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4h1v8a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V2h1a4 4 0 0 1 4 4zM24 14H8a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V15a1 1 0 0 0-1-1zm-1 12H9V16h14zM12 20h8a1 1 0 0 0 0-2h-8a1 1 0 0 0 0 2zM12 24h8a1 1 0 0 0 0-2h-8a1 1 0 0 0 0 2z"></path> </g></svg>
+                </button>
+              )}
             </div>
+
 
             {/* Word count */}
             <div className="text-sm text-muted-foreground">
