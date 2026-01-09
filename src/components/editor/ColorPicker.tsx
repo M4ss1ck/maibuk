@@ -5,6 +5,8 @@ interface ColorPickerProps {
   value: string;
   onChange: (color: string) => void;
   onClear?: () => void;
+  onToggle?: () => void;
+  isActive?: boolean;
   title: string;
   icon: React.ReactNode;
 }
@@ -16,17 +18,17 @@ const PRESET_COLORS = [
   "#7C2D12", "#713F12", "#365314", "#164E63", "#1E3A8A",
 ];
 
-export function ColorPicker({ value, onChange, onClear, title, icon }: ColorPickerProps) {
+export function ColorPicker({ value, onChange, onClear, onToggle, isActive, title, icon }: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
-        buttonRef.current &&
-        !buttonRef.current.contains(e.target as Node) &&
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node) &&
         dropdownRef.current &&
         !dropdownRef.current.contains(e.target as Node)
       ) {
@@ -43,9 +45,9 @@ export function ColorPicker({ value, onChange, onClear, title, icon }: ColorPick
     };
   }, [isOpen]);
 
-  const handleToggle = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
+  const handleDropdownToggle = () => {
+    if (!isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
       setPosition({
         top: rect.bottom + 4,
         left: rect.left,
@@ -56,25 +58,36 @@ export function ColorPicker({ value, onChange, onClear, title, icon }: ColorPick
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        onClick={handleToggle}
-        title={title}
-        className={`p-2 rounded transition-colors hover:bg-muted flex items-center gap-1`}
-      >
-        <span className="relative">
-          {icon}
-          {value && (
-            <span
-              className="absolute -bottom-0.5 left-0 right-0 h-1 rounded-sm"
-              style={{ backgroundColor: value }}
-            />
-          )}
-        </span>
-        <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      <div ref={containerRef} className="flex items-center">
+        {/* Main button - triggers toggle action */}
+        <button
+          onClick={onToggle}
+          title={title}
+          className={`p-2 rounded-l transition-colors ${isActive ? "bg-primary text-white" : "hover:bg-muted"
+            }`}
+        >
+          <span className="relative">
+            {icon}
+            {value && (
+              <span
+                className="absolute -bottom-0.5 left-0 right-0 h-1 rounded-sm"
+                style={{ backgroundColor: value }}
+              />
+            )}
+          </span>
+        </button>
+        {/* Dropdown arrow button - opens color picker */}
+        <button
+          onClick={handleDropdownToggle}
+          title={`${title} options`}
+          className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${isOpen ? "bg-muted" : "hover:bg-muted"
+            }`}
+        >
+          <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
 
       {isOpen && createPortal(
         <div

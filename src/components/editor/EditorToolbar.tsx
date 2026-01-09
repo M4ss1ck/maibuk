@@ -71,9 +71,14 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         : "18"; // default size
       const currentColor = attrs.color || "";
 
+      // Get highlight color from the highlight mark
+      const highlightAttrs = e.getAttributes("highlight");
+      const currentHighlightColor = highlightAttrs.color || "";
+
       return {
         fontSize: currentFontSize,
         color: currentColor,
+        highlightColor: currentHighlightColor,
         isBold: e.isActive("bold"),
         isItalic: e.isActive("italic"),
         isUnderline: e.isActive("underline"),
@@ -171,15 +176,20 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           </svg>
         </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHighlight().run()}
+
+        <ColorPicker
+          value={editorState.highlightColor}
+          onChange={(color) => editor.chain().focus().setHighlight({ color }).run()}
+          onClear={() => editor.chain().focus().unsetHighlight().run()}
+          onToggle={() => editor.chain().focus().toggleHighlight({ color: editorState.highlightColor || "#FFFF00" }).run()}
           isActive={editorState.isHighlight}
           title="Highlight"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-          </svg>
-        </ToolbarButton>
+          icon={
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          }
+        />
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleSubscript().run()}
@@ -205,10 +215,18 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           value={editorState.color}
           onChange={(color) => editor.chain().focus().setColor(color).run()}
           onClear={() => editor.chain().focus().unsetColor().run()}
+          onToggle={() => {
+            if (editorState.color) {
+              editor.chain().focus().unsetColor().run();
+            } else {
+              editor.chain().focus().setColor("#000000").run();
+            }
+          }}
+          isActive={!!editorState.color}
           title="Text Color"
           icon={
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 1920 1920">
-              <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M1846.308 1476.923V1920H74v-443.077h1772.308Zm-147.693 147.692H221.692v147.693h1476.923v-147.693ZM1109.751.06l509.391 1227.028-136.468 56.566-164.972-397.588H602.576l-164.972 397.588-136.468-56.566L810.526.059h299.225Zm-98.658 147.692h-101.76L663.868 738.373h592.542L1011.093 147.75Z" fill-rule="evenodd"></path> </g>
+              <g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M1846.308 1476.923V1920H74v-443.077h1772.308Zm-147.693 147.692H221.692v147.693h1476.923v-147.693ZM1109.751.06l509.391 1227.028-136.468 56.566-164.972-397.588H602.576l-164.972 397.588-136.468-56.566L810.526.059h299.225Zm-98.658 147.692h-101.76L663.868 738.373h592.542L1011.093 147.75Z" fillRule="evenodd"></path> </g>
             </svg>
           }
         />
