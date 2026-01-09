@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { Chapter, ChapterType } from "../../features/chapters/types";
+import { Select } from "../ui/Select";
 
 interface ChapterListProps {
   chapters: Chapter[];
   currentChapterId: string | null;
   onSelectChapter: (chapter: Chapter) => void;
   onCreateChapter: (title: string, type: ChapterType) => void;
+  onUpdateChapter: (id: string, title: string, type: ChapterType) => void;
   onDeleteChapter: (id: string) => void;
   onReorderChapters: (chapterIds: string[]) => void;
 }
@@ -33,6 +35,7 @@ export function ChapterList({
   currentChapterId,
   onSelectChapter,
   onCreateChapter,
+  onUpdateChapter,
   onDeleteChapter,
   onReorderChapters,
 }: ChapterListProps) {
@@ -41,6 +44,9 @@ export function ChapterList({
   const [newType, setNewType] = useState<ChapterType>("chapter");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editType, setEditType] = useState<ChapterType>("chapter");
 
   const handleCreate = () => {
     if (newTitle.trim()) {
@@ -86,6 +92,26 @@ export function ChapterList({
   const handleDelete = (id: string) => {
     onDeleteChapter(id);
     setDeleteConfirmId(null);
+  };
+
+  const startEditing = (chapter: Chapter) => {
+    setEditingId(chapter.id);
+    setEditTitle(chapter.title);
+    setEditType(chapter.chapterType);
+    setDeleteConfirmId(null);
+  };
+
+  const handleUpdate = () => {
+    if (editingId && editTitle.trim()) {
+      onUpdateChapter(editingId, editTitle.trim(), editType);
+      setEditingId(null);
+    }
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditTitle("");
+    setEditType("chapter");
   };
 
   return (
@@ -176,54 +202,115 @@ export function ChapterList({
                     : "hover:bg-muted/50"
                   }`}
               >
-                <button
-                  draggable={false}
-                  onClick={() => onSelectChapter(chapter)}
-                  className="w-full text-left p-3 pr-8"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">{chapterTypeIcons[chapter.chapterType]}</span>
-                    <span className="font-medium text-sm truncate">{chapter.title}</span>
+                {/* Edit form overlay */}
+                {editingId === chapter.id ? (
+                  <div className="p-2">
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleUpdate();
+                        if (e.key === "Escape") cancelEditing();
+                      }}
+                    />
+                    <Select
+                      value={editType}
+                      onChange={(value) => setEditType(value)}
+                      options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
+                        value: value as ChapterType,
+                        label,
+                      }))}
+                      className="mb-2"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleUpdate}
+                        disabled={!editTitle.trim()}
+                        className="flex-1 px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                    <span>{chapter.wordCount.toLocaleString()} words</span>
-                    <span>•</span>
-                    <span className="capitalize">{chapter.status}</span>
-                  </div>
-                </button>
-
-                {/* Delete button */}
-                <button
-                  draggable={false}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteConfirmId(chapter.id);
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 rounded transition-all"
-                  title="Delete chapter"
-                >
-                  <svg className="w-4 h-4 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-
-                {/* Delete confirmation */}
-                {deleteConfirmId === chapter.id && (
-                  <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
-                    <span className="text-xs">Delete?</span>
+                ) : (
+                  <>
                     <button
-                      onClick={() => handleDelete(chapter.id)}
-                      className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
+                      draggable={false}
+                      onClick={() => onSelectChapter(chapter)}
+                      className="w-full text-left p-3 pr-16"
                     >
-                      Yes
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{chapterTypeIcons[chapter.chapterType]}</span>
+                        <span className="font-medium text-sm truncate">{chapter.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <span>{chapter.wordCount.toLocaleString()} words</span>
+                        <span>•</span>
+                        <span className="capitalize">{chapter.status}</span>
+                      </div>
                     </button>
-                    <button
-                      onClick={() => setDeleteConfirmId(null)}
-                      className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
-                    >
-                      No
-                    </button>
-                  </div>
+
+                    {/* Action buttons - visible on hover and focus for accessibility */}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      {/* Edit button */}
+                      <button
+                        draggable={false}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditing(chapter);
+                        }}
+                        className="p-1 hover:bg-muted rounded transition-colors"
+                        title="Edit chapter"
+                      >
+                        <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+
+                      {/* Delete button */}
+                      <button
+                        draggable={false}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirmId(chapter.id);
+                        }}
+                        className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                        title="Delete chapter"
+                      >
+                        <svg className="w-4 h-4 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Delete confirmation */}
+                    {deleteConfirmId === chapter.id && (
+                      <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
+                        <span className="text-xs">Delete?</span>
+                        <button
+                          onClick={() => handleDelete(chapter.id)}
+                          className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
+                        >
+                          No
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </li>
             ))}

@@ -158,6 +158,13 @@ export function BookEditor() {
     [bookId, reorderChapters]
   );
 
+  const handleUpdateChapter = useCallback(
+    async (id: string, title: string, chapterType: ChapterType) => {
+      await updateChapter(id, { title, chapterType });
+    },
+    [updateChapter]
+  );
+
   // Toggle focus mode
   const toggleFocusMode = useCallback(() => {
     setFocusMode((prev) => !prev);
@@ -206,6 +213,7 @@ export function BookEditor() {
           currentChapterId={currentChapter?.id ?? null}
           onSelectChapter={handleSelectChapter}
           onCreateChapter={handleCreateChapter}
+          onUpdateChapter={handleUpdateChapter}
           onDeleteChapter={handleDeleteChapter}
           onReorderChapters={handleReorderChapters}
         />
