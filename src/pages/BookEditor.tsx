@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
@@ -28,6 +28,9 @@ export function BookEditor() {
   const [wordCount, setWordCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
 
+  // Ref to store the latest editor content
+  const editorContentRef = useRef<string>("");
+
   // Load book and chapters
   useEffect(() => {
     if (bookId) {
@@ -43,10 +46,12 @@ export function BookEditor() {
     }
   }, [chapters, currentChapter, setCurrentChapter]);
 
-  // Update word count display when chapter changes
+  // Update word count display and sync editor content ref when chapter changes
   useEffect(() => {
     if (currentChapter) {
       setWordCount(currentChapter.wordCount);
+      // Initialize the ref with the current chapter content
+      editorContentRef.current = currentChapter.content || "";
     }
   }, [currentChapter?.id]);
 
@@ -58,12 +63,13 @@ export function BookEditor() {
     }
   }, [bookId, chapters, updateWordCount]);
 
-  // triggered save
+  // triggered save - uses ref to get latest editor content
   const handleSaveNow = useCallback(async () => {
-    if (currentChapter?.content) {
+    const content = editorContentRef.current;
+    if (currentChapter && content) {
       setSaveStatus("saving");
       try {
-        await updateChapter(currentChapter.id, { content: currentChapter.content });
+        await updateChapter(currentChapter.id, { content });
         setSaveStatus("saved");
         // Reset to idle after 2 seconds
         setTimeout(() => setSaveStatus("idle"), 2000);
@@ -95,6 +101,8 @@ export function BookEditor() {
   const handleContentUpdate = useCallback(
     (content: string) => {
       if (currentChapter) {
+        // Update the ref with the latest content
+        editorContentRef.current = content;
         debouncedSave(currentChapter.id, content);
       }
     },

@@ -133,7 +133,7 @@ export function Settings() {
       <section>
         <h3 className="text-lg font-medium mb-4">About</h3>
         <div className="text-sm text-muted-foreground">
-          <p>Maibuk v0.1.0</p>
+          <p>Maibuk v0.1.1</p>
           <p className="mt-1">A cross-platform writing app for authors</p>
         </div>
       </section>

@@ -45,7 +45,7 @@ export function Layout() {
 
         <div className="p-4 border-t border-border space-y-3">
           <ThemeToggle />
-          <p className="text-sm text-muted-foreground">v0.1.0</p>
+          <p className="text-sm text-muted-foreground">v0.1.1</p>
         </div>
       </aside>
 

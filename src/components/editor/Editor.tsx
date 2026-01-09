@@ -8,6 +8,9 @@ import Highlight from "@tiptap/extension-highlight";
 import Typography from "@tiptap/extension-typography";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { FontFamily } from "@tiptap/extension-font-family";
+import { Color } from "@tiptap/extension-color";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
@@ -16,8 +19,10 @@ import { Image } from "@tiptap/extension-image";
 import { Link } from "@tiptap/extension-link";
 import { useEffect, useCallback } from "react";
 import { EditorToolbar } from "./EditorToolbar";
+import { LinkClickHandler } from "./LinkClickHandler";
 import { SceneBreak } from "./extensions/SceneBreak";
 import { FontSize } from "./extensions/FontSize";
+import { Indent } from "./extensions/Indent";
 
 interface EditorProps {
   content: string | null;
@@ -59,6 +64,9 @@ export function Editor({
       TextStyle,
       FontFamily,
       FontSize,
+      Color,
+      Subscript,
+      Superscript,
       Table.configure({
         resizable: true,
         HTMLAttributes: {
@@ -82,6 +90,7 @@ export function Editor({
         },
       }),
       SceneBreak,
+      Indent,
     ],
     content: content || "",
     editable,
@@ -137,6 +146,8 @@ export function Editor({
           <EditorContent editor={editor} />
         </div>
       </div>
+
+      <LinkClickHandler editor={editor} />
     </div>
   );
 }
