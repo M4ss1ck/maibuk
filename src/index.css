@@ -45,7 +45,8 @@
 
 /* Base styles */
 html {
-  font-family: var(--font-sans);
+  font-family: var(--app-font-family, var(--font-sans));
+  font-size: var(--app-font-size, 16px);
 }
 
 body {
@@ -54,6 +55,7 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
   transition: background-color 0.2s, color 0.2s;
+  font-size: 1rem;
 }
 
 #root {
@@ -98,8 +100,8 @@ option {
 
 /* Editor typography */
 .editor-content {
-  font-family: var(--font-serif);
-  font-size: 1.125rem;
+  font-family: var(--editor-font-family, var(--font-serif));
+  font-size: var(--editor-font-size, 18px);
   line-height: 1.75;
 }
 
