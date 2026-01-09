@@ -1,7 +1,7 @@
 {
   "name": "maibuk",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A cross-platform writing app for authors",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "build:android": "tauri android build",
     "build:web": "VITE_BUILD_TARGET=web tsc && vite build",
     "android:init": "tauri android init",
-    "android:dev": "tauri android dev"
+    "android:dev": "tauri android dev",
+    "version:bump": "./scripts/bump-version.sh"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
