@@ -145,17 +145,15 @@ export function ChapterList({
               if (e.key === "Escape") setShowNewDialog(false);
             }}
           />
-          <select
+          <Select
             value={newType}
-            onChange={(e) => setNewType(e.target.value as ChapterType)}
-            className="w-full px-3 py-2 text-sm border border-border rounded mb-2 bg-background text-foreground"
-          >
-            {Object.entries(chapterTypeLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setNewType(value)}
+            className="mb-2"
+            options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
+              value: value as ChapterType,
+              label,
+            }))}
+          />
           <div className="flex gap-2">
             <button
               onClick={handleCreate}
