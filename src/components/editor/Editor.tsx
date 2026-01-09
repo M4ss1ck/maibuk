@@ -6,6 +6,8 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import Typography from "@tiptap/extension-typography";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { FontFamily } from "@tiptap/extension-font-family";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
@@ -15,6 +17,7 @@ import { Link } from "@tiptap/extension-link";
 import { useEffect, useCallback } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SceneBreak } from "./extensions/SceneBreak";
+import { FontSize } from "./extensions/FontSize";
 
 interface EditorProps {
   content: string | null;
@@ -53,7 +56,9 @@ export function Editor({
         multicolor: false,
       }),
       Typography,
-      // Phase 3 extensions
+      TextStyle,
+      FontFamily,
+      FontSize,
       Table.configure({
         resizable: true,
         HTMLAttributes: {

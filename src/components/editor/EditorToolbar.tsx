@@ -1,13 +1,25 @@
 import { useState } from "react";
+import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { TableMenu } from "./TableMenu";
 import { FindReplace } from "./FindReplace";
 import { ImageInsertDialog } from "./ImageInsertDialog";
 import { FootnoteDialog } from "./FootnoteDialog";
+import { Select, Combobox } from "../ui";
 
 interface EditorToolbarProps {
   editor: Editor;
 }
+
+type FontFamilyValue = "Literata, serif" | "Inter, sans-serif" | "monospace";
+
+const FONT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "28", "32", "36", "48", "72"];
+
+const FONT_OPTIONS: { value: FontFamilyValue; label: string }[] = [
+  { value: "Literata, serif", label: "Serif" },
+  { value: "Inter, sans-serif", label: "Sans" },
+  { value: "monospace", label: "Mono" },
+];
 
 interface ToolbarButtonProps {
   onClick: () => void;
@@ -41,14 +53,74 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [showFootnoteDialog, setShowFootnoteDialog] = useState(false);
+  const [fontFamily, setFontFamily] = useState<FontFamilyValue>("Literata, serif");
+
+  // Subscribe to editor state changes for proper toolbar updates
+  const editorState = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      // Get the current font size from marks
+      const attrs = e.getAttributes("textStyle");
+      const currentFontSize = attrs.fontSize
+        ? attrs.fontSize.replace("px", "")
+        : "18"; // default size
+
+      return {
+        fontSize: currentFontSize,
+        isBold: e.isActive("bold"),
+        isItalic: e.isActive("italic"),
+        isUnderline: e.isActive("underline"),
+        isStrike: e.isActive("strike"),
+        isHighlight: e.isActive("highlight"),
+        isH1: e.isActive("heading", { level: 1 }),
+        isH2: e.isActive("heading", { level: 2 }),
+        isH3: e.isActive("heading", { level: 3 }),
+        isBulletList: e.isActive("bulletList"),
+        isOrderedList: e.isActive("orderedList"),
+        isBlockquote: e.isActive("blockquote"),
+        isAlignLeft: e.isActive({ textAlign: "left" }),
+        isAlignCenter: e.isActive({ textAlign: "center" }),
+        isAlignRight: e.isActive({ textAlign: "right" }),
+        canUndo: e.can().undo(),
+        canRedo: e.can().redo(),
+      };
+    },
+  });
+
+  const handleFontSizeChange = (size: string) => {
+    const sizeValue = size.replace(/[^0-9]/g, "");
+    if (sizeValue) {
+      editor.chain().focus().setFontSize(`${sizeValue}px`).run();
+    }
+  };
+
+  const handleFontFamilyChange = (family: FontFamilyValue) => {
+    setFontFamily(family);
+    editor.chain().focus().setFontFamily(family).run();
+  };
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-10">
       <div className="flex flex-wrap items-center px-4 py-2 gap-1 overflow-x-auto">
+        {/* Font controls */}
+        <Combobox
+          value={editorState.fontSize}
+          onChange={handleFontSizeChange}
+          options={FONT_SIZE_OPTIONS}
+          placeholder="Size"
+        />
+        <Select<FontFamilyValue>
+          value={fontFamily}
+          onChange={handleFontFamilyChange}
+          options={FONT_OPTIONS}
+        />
+
+        <Divider />
+
         {/* Text formatting */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
-          isActive={editor.isActive("bold")}
+          isActive={editorState.isBold}
           title="Bold (Ctrl+B)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,7 +131,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          isActive={editor.isActive("italic")}
+          isActive={editorState.isItalic}
           title="Italic (Ctrl+I)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,7 +141,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          isActive={editor.isActive("underline")}
+          isActive={editorState.isUnderline}
           title="Underline (Ctrl+U)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -79,7 +151,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleStrike().run()}
-          isActive={editor.isActive("strike")}
+          isActive={editorState.isStrike}
           title="Strikethrough"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -89,7 +161,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHighlight().run()}
-          isActive={editor.isActive("highlight")}
+          isActive={editorState.isHighlight}
           title="Highlight"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,7 +174,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         {/* Headings */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          isActive={editor.isActive("heading", { level: 1 })}
+          isActive={editorState.isH1}
           title="Heading 1"
         >
           <span className="text-sm font-bold">H1</span>
@@ -110,7 +182,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          isActive={editor.isActive("heading", { level: 2 })}
+          isActive={editorState.isH2}
           title="Heading 2"
         >
           <span className="text-sm font-bold">H2</span>
@@ -118,7 +190,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          isActive={editor.isActive("heading", { level: 3 })}
+          isActive={editorState.isH3}
           title="Heading 3"
         >
           <span className="text-sm font-bold">H3</span>
@@ -129,7 +201,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         {/* Lists */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          isActive={editor.isActive("bulletList")}
+          isActive={editorState.isBulletList}
           title="Bullet List"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,7 +211,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          isActive={editor.isActive("orderedList")}
+          isActive={editorState.isOrderedList}
           title="Numbered List"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -150,7 +222,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          isActive={editor.isActive("blockquote")}
+          isActive={editorState.isBlockquote}
           title="Quote"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,7 +235,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         {/* Text alignment */}
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
-          isActive={editor.isActive({ textAlign: "left" })}
+          isActive={editorState.isAlignLeft}
           title="Align Left"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -173,7 +245,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("center").run()}
-          isActive={editor.isActive({ textAlign: "center" })}
+          isActive={editorState.isAlignCenter}
           title="Align Center"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -183,7 +255,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("right").run()}
-          isActive={editor.isActive({ textAlign: "right" })}
+          isActive={editorState.isAlignRight}
           title="Align Right"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,7 +277,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().undo()}
+          disabled={!editorState.canUndo}
           title="Undo (Ctrl+Z)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -215,7 +287,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo()}
+          disabled={!editorState.canRedo}
           title="Redo (Ctrl+Shift+Z)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
