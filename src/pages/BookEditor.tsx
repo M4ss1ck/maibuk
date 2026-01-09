@@ -6,6 +6,7 @@ import type { Chapter, ChapterType } from "../features/chapters/types";
 import { Editor, ChapterList } from "../components/editor";
 import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { ExportDialog } from "../components/export";
 
 export function BookEditor() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -27,6 +28,7 @@ export function BookEditor() {
   // Local state
   const [focusMode, setFocusMode] = useState(false);
   const [wordCount, setWordCount] = useState(0);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
 
   // Ref to store the latest editor content
@@ -282,6 +284,17 @@ export function BookEditor() {
               {wordCount.toLocaleString()} words
             </div>
 
+            {/* Export button */}
+            <button
+              onClick={() => setShowExportDialog(true)}
+              className="p-2 hover:bg-muted rounded transition-colors"
+              title="Export Book"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </button>
+
             {/* Design Cover button */}
             <button
               onClick={() => navigate(`/book/${bookId}/cover`)}
@@ -338,6 +351,14 @@ export function BookEditor() {
           </div>
         )}
       </div>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        isOpen={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        book={currentBook}
+        chapters={chapters}
+      />
     </div>
   );
 }

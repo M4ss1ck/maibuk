@@ -154,12 +154,12 @@ interface Chapter {
 
 ### Phase 5: EPUB Export
 
-- [ ] Tiptap JSON → clean HTML conversion
-- [ ] epub-gen-memory integration
-- [ ] Table of contents generation
-- [ ] Cover embedding
-- [ ] Footnote handling
-- [ ] Export progress dialog
+- [x] Tiptap JSON → clean HTML conversion
+- [x] epub-gen-memory integration
+- [x] Table of contents generation
+- [x] Cover embedding
+- [x] Footnote handling
+- [x] Export progress dialog
 
 ### Phase 6: PDF Export
 
