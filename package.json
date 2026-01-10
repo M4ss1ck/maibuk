@@ -48,7 +48,6 @@
     "drizzle-orm": "^0.45.1",
     "epub-gen-memory": "^1.1.2",
     "fabric": "^7.1.0",
-    "pagedjs": "^0.4.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.1.1",
