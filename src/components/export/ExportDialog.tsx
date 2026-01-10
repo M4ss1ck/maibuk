@@ -108,18 +108,18 @@ export function ExportDialog({
 
       {/* Dialog container */}
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="bg-surface rounded-lg shadow-xl max-w-md w-full p-6 border border-border">
+        <DialogPanel className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 border border-border">
           <DialogTitle className="text-xl font-semibold text-foreground mb-4">
             Export Book
           </DialogTitle>
 
           {/* Book info */}
-          <div className="mb-6 p-3 bg-muted rounded-md">
+          <div className="mb-6 p-3 bg-primary rounded-md">
             <p className="font-medium text-foreground">{book.title}</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-success">
               by {book.authorName}
             </p>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-success mt-1">
               {exportableChapters.length} chapter
               {exportableChapters.length !== 1 ? "s" : ""} to export
             </p>
