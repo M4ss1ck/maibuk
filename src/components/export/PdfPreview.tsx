@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Previewer } from "pagedjs";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import { Button, Select } from "../ui";
 import {
   generatePdfHtml,
@@ -28,6 +33,7 @@ export function PdfPreview({
   const previewRef = useRef<HTMLDivElement>(null);
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState<PdfExportOptions>(initialOptions);
 
@@ -37,6 +43,8 @@ export function PdfPreview({
       styleRef.current = null;
     }
     document.querySelectorAll("style[data-pagedjs-inserted-styles]").forEach((s) => s.remove());
+    // Remove print mode class from body
+    document.body.classList.remove("pdf-print-mode");
   }, []);
 
   const renderPreview = useCallback(async () => {
@@ -107,8 +115,29 @@ export function PdfPreview({
           color: #000 !important;
         }
         @media print {
-          .pagedjs_pages { padding: 0 !important; }
-          .pagedjs_page { box-shadow: none !important; margin: 0 !important; }
+          html, body {
+            background: #fff !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .pagedjs_pages {
+            padding: 0 !important;
+            background: #fff !important;
+          }
+          .pagedjs_page {
+            box-shadow: none !important;
+            margin: 0 !important;
+            background: #fff !important;
+            color: #000 !important;
+          }
+          .pagedjs_pagebox,
+          .pagedjs_area,
+          .pagedjs_page_content,
+          .pagedjs_sheet {
+            background: #fff !important;
+            color: #000 !important;
+          }
         }
       `;
       document.head.appendChild(styleEl);
@@ -141,9 +170,84 @@ export function PdfPreview({
     return cleanup;
   }, [isOpen, renderPreview, cleanup]);
 
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
+  const handleExportPdf = useCallback(async () => {
+    if (!previewRef.current) return;
+
+    setIsExporting(true);
+    setError(null);
+
+    try {
+      const pages = previewRef.current.querySelectorAll(".pagedjs_page");
+      if (pages.length === 0) {
+        throw new Error("No pages found to export");
+      }
+
+      // Get page dimensions from the selected size and convert to mm
+      const pageSize = PAGE_SIZES[options.pageSize];
+      const parseToMm = (value: string): number => {
+        if (value.endsWith("mm")) {
+          return parseFloat(value);
+        } else if (value.endsWith("in")) {
+          return parseFloat(value) * 25.4;
+        } else if (value.endsWith("cm")) {
+          return parseFloat(value) * 10;
+        }
+        return parseFloat(value);
+      };
+
+      const widthMm = parseToMm(pageSize.width);
+      const heightMm = parseToMm(pageSize.height);
+
+      // Create PDF with the correct orientation and size
+      const pdf = new jsPDF({
+        orientation: widthMm > heightMm ? "landscape" : "portrait",
+        unit: "mm",
+        format: [widthMm, heightMm],
+      });
+
+      // Convert each page to canvas and add to PDF
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i] as HTMLElement;
+
+        // Capture the page as canvas with high quality
+        const canvas = await html2canvas(page, {
+          scale: 2, // Higher scale for better quality
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+        });
+
+        // Calculate dimensions to fit the PDF page
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+
+        if (i > 0) {
+          pdf.addPage([widthMm, heightMm]);
+        }
+
+        pdf.addImage(imgData, "JPEG", 0, 0, widthMm, heightMm);
+      }
+
+      // Generate default filename
+      const defaultFilename = `${book.title.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+
+      // Show save dialog
+      const filePath = await save({
+        defaultPath: defaultFilename,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+
+      if (filePath) {
+        // Get PDF as array buffer and write to file
+        const pdfOutput = pdf.output("arraybuffer");
+        await writeFile(filePath, new Uint8Array(pdfOutput));
+      }
+    } catch (err) {
+      console.error("PDF export error:", err);
+      setError(err instanceof Error ? err.message : "Failed to export PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [book.title, options.pageSize]);
 
   const handlePageSizeChange = useCallback((size: PageSize) => {
     setOptions((prev) => ({ ...prev, pageSize: size }));
@@ -151,8 +255,8 @@ export function PdfPreview({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+  return createPortal(
+    <div className="pdf-preview-overlay fixed inset-0 z-50 bg-background flex flex-col">
       <div className="h-14 border-b border-border flex items-center px-4 gap-4 bg-surface print:hidden">
         <Button variant="ghost" onClick={onClose}>
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -173,11 +277,20 @@ export function PdfPreview({
             />
           </div>
         </div>
-        <Button variant="primary" onClick={handlePrint}>
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-          </svg>
-          Print / Save as PDF
+        <Button variant="primary" onClick={handleExportPdf} disabled={isLoading || isExporting}>
+          {isExporting ? (
+            <>
+              <div className="animate-spin w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full" />
+              Exporting...
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Download PDF
+            </>
+          )}
         </Button>
       </div>
 
@@ -207,12 +320,51 @@ export function PdfPreview({
 
       <style>{`
         @media print {
-          body > *:not(.pdf-preview-container):not(.pagedjs_pages) {
+          /* Hide everything in the body except the PDF preview */
+          body.pdf-print-mode > *:not(.pdf-preview-overlay) {
             display: none !important;
           }
+          body.pdf-print-mode #root {
+            display: none !important;
+          }
+          /* Make the PDF preview the only visible element */
+          body.pdf-print-mode .pdf-preview-overlay {
+            position: static !important;
+            display: block !important;
+          }
+          html, body {
+            background: #fff !important;
+            color: #000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           .print\\:hidden { display: none !important; }
+          .pdf-preview-container {
+            position: static !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+          }
+          .pagedjs_pages {
+            display: block !important;
+            background: #fff !important;
+            padding: 0 !important;
+          }
+          .pagedjs_page {
+            display: block !important;
+            background: #fff !important;
+            color: #000 !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+          }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 }
