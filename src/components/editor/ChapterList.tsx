@@ -2,6 +2,9 @@ import { useState } from "react";
 import type { Chapter, ChapterType } from "../../features/chapters/types";
 import { Select } from "../ui/Select";
 import { useTranslation } from "react-i18next";
+import { ChapterIcon, EditIcon } from "../icons";
+import { DeleteIcon } from "../icons/DeleteIcon";
+import { AddIcon } from "../icons/AddIcon";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -20,15 +23,6 @@ const chapterTypeLabels: Record<ChapterType, string> = {
   part: "Part",
   frontmatter: "Front Matter",
   backmatter: "Back Matter",
-};
-
-const chapterTypeIcons: Record<ChapterType, string> = {
-  chapter: "📄",
-  prologue: "📖",
-  epilogue: "📕",
-  part: "📚",
-  frontmatter: "📋",
-  backmatter: "📝",
 };
 
 export function ChapterList({
@@ -126,9 +120,7 @@ export function ChapterList({
           className="p-1 hover:bg-muted rounded transition-colors"
           title={t("chapters.addChapter")}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <AddIcon className="w-5 h-5" />
         </button>
       </div>
 
@@ -243,7 +235,7 @@ export function ChapterList({
                       className="w-full text-left p-3 pr-16"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-sm">{chapterTypeIcons[chapter.chapterType]}</span>
+                        <ChapterIcon className="w-4 h-4 text-muted-foreground" />
                         <span className="font-medium text-sm truncate">{chapter.title}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -265,9 +257,7 @@ export function ChapterList({
                         className="p-1 hover:bg-muted rounded transition-colors"
                         title={t("chapters.editChapter")}
                       >
-                        <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <EditIcon className="w-4 h-4 text-foreground" />
                       </button>
 
                       {/* Delete button */}
@@ -280,9 +270,7 @@ export function ChapterList({
                         className="p-1 hover:bg-destructive/10 rounded transition-colors"
                         title={t("chapters.deleteChapter")}
                       >
-                        <svg className="w-4 h-4 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        <DeleteIcon className="w-4 h-4 text-destructive" />
                       </button>
                     </div>
 

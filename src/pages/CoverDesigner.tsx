@@ -7,6 +7,7 @@ import { useBookStore } from "../features/books/store";
 import { COVER_DIMENSIONS, DEFAULT_TEXT_STYLES, type CoverDimension, type TextStyle } from "../features/covers/types";
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
+import { BackIcon } from "../components/icons";
 
 export function CoverDesigner() {
   const { t } = useTranslation();
@@ -205,9 +206,7 @@ export function CoverDesigner() {
       {/* Header */}
       <div className="h-12 border-b border-border flex items-center px-4 gap-4">
         <Button variant="ghost" size="sm" onClick={handleBack}>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
+          <BackIcon className="w-5 h-5" />
         </Button>
 
         <div className="flex-1">

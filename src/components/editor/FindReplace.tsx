@@ -3,6 +3,7 @@ import type { Editor } from "@tiptap/react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { useTranslation } from "react-i18next";
+import { CloseIcon } from "../icons";
 
 interface FindReplaceProps {
   editor: Editor;
@@ -172,9 +173,7 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
           onClick={onClose}
           className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <CloseIcon className="w-4 h-4" />
         </button>
       </div>
 

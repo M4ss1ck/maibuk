@@ -5,6 +5,7 @@ import { generatePdfHtml, type PdfExportOptions } from "../../features/export";
 import type { Book } from "../../features/books/types";
 import type { Chapter } from "../../features/chapters/types";
 import { useTranslation } from "react-i18next";
+import { XIcon, PrintIcon } from "../icons";
 
 interface PdfPreviewProps {
   isOpen: boolean;
@@ -194,18 +195,14 @@ export function PdfPreview({
       {/* Toolbar */}
       <div className="pdf-preview-toolbar h-14 border-b border-border flex items-center px-4 gap-4 bg-surface">
         <Button variant="ghost" onClick={onClose}>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <XIcon className="w-5 h-5" />
         </Button>
         <h1 className="font-medium flex-1">{t("export.pdfPreview", { title: book.title })}</h1>
         <p className="text-sm text-muted-foreground">
           {t("export.portalDisclaimer")}
         </p>
         <Button variant="primary" onClick={handlePrint}>
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-          </svg>
+          <PrintIcon className="w-4 h-4 mr-2" />
           {t("export.portalButton")}
         </Button>
       </div>
