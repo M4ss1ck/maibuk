@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:linux": "tauri build --target x86_64-unknown-linux-gnu",
+    "build:arch": "tauri build --target x86_64-unknown-linux-gnu && ./scripts/build-arch-package.sh",
     "build:windows": "tauri build --target x86_64-pc-windows-gnu",
     "build:android": "tauri android build",
     "build:web": "VITE_BUILD_TARGET=web tsc && vite build",
