@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
+import { Switch } from "../ui";
 
 interface TableMenuProps {
   editor: Editor;
@@ -9,22 +11,55 @@ interface TableMenuProps {
 export function TableMenu({ editor }: TableMenuProps) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
+  const [addheaderRow, setAddHeaderRow] = useState(true);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const insertTable = (rows: number, cols: number) => {
+    console.log("Inserting table:", rows, "rows x", cols, "cols");
     editor
       .chain()
       .focus()
-      .insertTable({ rows, cols, withHeaderRow: true })
+      .insertTable({ rows, cols, withHeaderRow: addheaderRow })
       .run();
     setShowMenu(false);
   };
 
   const isInTable = editor.isActive("table");
 
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      // Only close if click is outside both the button and the menu
+      if (
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node) &&
+        !(e.target instanceof HTMLElement && e.target.closest('.tiptap-table-menu-portal'))
+      ) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showMenu]);
+
+  const handleShowMenu = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+      });
+    }
+    setShowMenu(true);
+  };
+
   if (!isInTable && !showMenu) {
     return (
       <button
-        onClick={() => setShowMenu(true)}
+        ref={buttonRef}
+        onClick={handleShowMenu}
         title={t("editor.insertTable")}
         className="p-2 rounded transition-colors hover:bg-muted"
       >
@@ -37,8 +72,9 @@ export function TableMenu({ editor }: TableMenuProps) {
 
   if (showMenu && !isInTable) {
     return (
-      <div className="relative">
+      <>
         <button
+          ref={buttonRef}
           onClick={() => setShowMenu(false)}
           title={t("editor.insertTable")}
           className="p-2 rounded transition-colors bg-primary text-white"
@@ -47,26 +83,44 @@ export function TableMenu({ editor }: TableMenuProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 3v18M14 3v18" />
           </svg>
         </button>
-
-        <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg p-3 z-50">
-          <p className="text-sm text-muted-foreground mb-2">{t("editor.selectTableSize")}:</p>
-          <div className="grid grid-cols-5 gap-1">
-            {[1, 2, 3, 4, 5].map((row) =>
-              [1, 2, 3, 4, 5].map((col) => (
-                <button
-                  key={`${row}-${col}`}
-                  onClick={() => insertTable(row, col)}
-                  className="w-6 h-6 border border-border hover:bg-primary hover:border-primary rounded text-xs"
-                  title={`${row}x${col} table`}
-                />
-              ))
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            {t("editor.insertTable")}
-          </p>
-        </div>
-      </div>
+        {createPortal(
+          <div
+            className="tiptap-table-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50"
+            style={{ top: menuPosition.top, left: menuPosition.left }}
+          >
+            <p className="text-sm text-muted-foreground mb-2">{t("editor.selectTableSize")}:</p>
+            <div className="grid grid-cols-5 gap-0.5">
+              {[1, 2, 3, 4, 5].map((row) =>
+                [1, 2, 3, 4, 5].map((col) => {
+                  const isActive = hoveredCell && row <= hoveredCell.row && col <= hoveredCell.col;
+                  return (
+                    <button
+                      key={`${row}-${col}`}
+                      onClick={() => insertTable(row, col)}
+                      onMouseEnter={() => setHoveredCell({ row, col })}
+                      onMouseLeave={() => setHoveredCell(null)}
+                      className={`w-full h-6 border border-muted rounded text-xs ${isActive ? "bg-primary text-white border-primary" : "hover:bg-primary hover:border-primary"}`}
+                      title={`${t("editor.table", { dimensions: `${row}x${col}` })}`}
+                    />
+                  );
+                })
+              )}
+            </div>
+            <div className="flex items-center justify-center mt-2">
+              <p className="mr-auto text-sm text-muted-foreground">{t("editor.addHeaderRow")}</p>
+              <Switch
+                checked={addheaderRow}
+                onChange={setAddHeaderRow}
+                className="h-2"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              {hoveredCell ? `${t("editor.insertTable")} (${hoveredCell.row}x${hoveredCell.col})` : t("editor.insertTable")}
+            </p>
+          </div>,
+          document.body
+        )}
+      </>
     );
   }
 

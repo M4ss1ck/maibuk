@@ -71,6 +71,8 @@
     "press": "Presiona",
     "or": "o",
     "exitFocus": "para salir del modo enfocado",
+    "table": "tabla {{dimensions}}",
+    "addHeaderRow": "Agregar Encabezado",
     "selectTableSize": "Selecciona el tamaño de la tabla:",
     "insertTable": "Insertar Tabla",
     "insertTableHint": "Clic para insertar tabla",

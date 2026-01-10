@@ -71,6 +71,8 @@
     "press": "Press",
     "or": "or",
     "exitFocus": "to exit focus mode",
+    "table": "{{dimensions}} table",
+    "addHeaderRow": "Add Header Row",
     "selectTableSize": "Select table size:",
     "insertTable": "Insert Table",
     "insertTableHint": "Click to insert table",

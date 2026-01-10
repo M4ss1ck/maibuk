@@ -16,6 +16,10 @@
   --color-destructive-hover: #dc2626;
   --color-success: #22c55e;
 
+  /** Table */
+  --color-table-border: #d6d3d1;
+  --color-table-header: #f5f5f4;
+
   /* Typography */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Literata", ui-serif, Georgia, serif;
@@ -41,6 +45,9 @@
   --color-destructive: #f87171;
   --color-destructive-hover: #ef4444;
   --color-success: #4ade80;
+
+  --color-table-border: #3f3a36;
+  --color-table-header: #2f2a26;
 }
 
 /* Base styles */
@@ -236,19 +243,19 @@ option {
 
 .editor-content table th,
 .editor-content table td {
-  border: 1px solid var(--color-border);
-  padding: 0.75em 1em;
+  border: 1px solid var(--color-table-border);
+  padding: 0 1em;
   vertical-align: top;
   text-align: left;
 }
 
 .editor-content table th {
-  background-color: var(--color-muted);
+  background-color: var(--color-table-header);
   font-weight: 600;
 }
 
 .editor-content table tr:hover td {
-  background-color: var(--color-muted);
+  background-color: var(--color-table-border);
   background-opacity: 0.5;
 }
 
