@@ -27,3 +27,8 @@ export * from "./ArrowDownIcon";
 export * from "./ArrowUpIcon";
 export * from "./DimensionIcon";
 export * from "./DownloadIcon";
+export * from "./FocusModeIcon";
+export * from "./SaveIcon";
+export * from "./CoverDesignIcon";
+export * from "./DocumentIcon";
+export * from "./RefreshIcon"

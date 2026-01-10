@@ -3,7 +3,7 @@ import type { Editor } from "@tiptap/react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { useTranslation } from "react-i18next";
-import { CloseIcon } from "../icons";
+import { CloseIcon, ChevronDownIcon } from "../icons";
 
 interface FindReplaceProps {
   editor: Editor;
@@ -194,14 +194,10 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
 
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={findPrev} disabled={matchCount === 0}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
+            <ChevronDownIcon className="w-4 h-4" />
           </Button>
           <Button variant="secondary" size="sm" onClick={findNext} disabled={matchCount === 0}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            <ChevronDownIcon className="w-4 h-4" />
           </Button>
         </div>
 

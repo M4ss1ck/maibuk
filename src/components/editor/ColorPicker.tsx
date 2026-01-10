@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { ChevronDownIcon } from "../icons";
 
 interface ColorPickerProps {
   value: string;
@@ -85,9 +86,7 @@ export function ColorPicker({ value, onChange, onClear, onToggle, isActive, titl
           className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${isOpen ? "bg-muted" : "hover:bg-muted"
             }`}
         >
-          <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          <ChevronDownIcon className="w-2 h-2" />
         </button>
       </div>
 

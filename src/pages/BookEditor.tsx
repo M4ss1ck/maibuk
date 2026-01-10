@@ -8,6 +8,7 @@ import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ExportDialog } from "../components/export";
 import { useTranslation } from "react-i18next";
+import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon, FocusModeIcon, DocumentIcon } from "../components/icons";
 
 export function BookEditor() {
   const { t } = useTranslation();
@@ -233,9 +234,7 @@ export function BookEditor() {
               className="p-2 hover:bg-muted rounded transition-colors"
               title={t("nav.backToHome")}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
+              <BackIcon className="w-5 h-5" />
             </button>
 
             <div className="flex-1">
@@ -251,18 +250,13 @@ export function BookEditor() {
             <div className="text-sm text-muted-foreground">
               {saveStatus === "saving" && (
                 <span className="flex items-center gap-1">
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
+                  <SpinnerIcon className="w-4 h-4 animate-spin" />
                   {t("editor.saving")}
                 </span>
               )}
               {saveStatus === "saved" && (
                 <span className="flex items-center gap-1 text-success">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+                  <CheckIcon className="w-4 h-4" />
                   {t("editor.saved")}
                 </span>
               )}
@@ -275,7 +269,7 @@ export function BookEditor() {
                   title={`${t("common.save")} (Ctrl+S)`}
                   className={`p-2 rounded transition-colors text-muted-foreground hover:text-primary`}
                 >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M26 0H6a6 6 0 0 0-6 6v20a6 6 0 0 0 6 6h20a6 6 0 0 0 6-6V6a6 6 0 0 0-6-6zm-6 2v3a1 1 0 1 0 2 0V2h1v7H9V2zm10 24a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4h1v8a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V2h1a4 4 0 0 1 4 4zM24 14H8a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V15a1 1 0 0 0-1-1zm-1 12H9V16h14zM12 20h8a1 1 0 0 0 0-2h-8a1 1 0 0 0 0 2zM12 24h8a1 1 0 0 0 0-2h-8a1 1 0 0 0 0 2z"></path> </g></svg>
+                  <SaveIcon className="w-5 h-5" />
                 </button>
               )}
             </div>
@@ -292,9 +286,7 @@ export function BookEditor() {
               className="p-2 hover:bg-muted rounded transition-colors"
               title={t("nav.exportBook")}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
+              <ExportIcon className="w-5 h-5" />
             </button>
 
             {/* Design Cover button */}
@@ -303,9 +295,7 @@ export function BookEditor() {
               className="p-2 hover:bg-muted rounded transition-colors"
               title={t("nav.designCover")}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <CoverDesignIcon className="w-5 h-5" />
             </button>
 
             {/** Theme toggle */}
@@ -317,9 +307,7 @@ export function BookEditor() {
               className="p-2 hover:bg-muted rounded transition-colors"
               title={t("nav.focusMode")}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-              </svg>
+              <FocusModeIcon className="w-5 h-5" />
             </button>
           </div>
         )}
@@ -337,9 +325,7 @@ export function BookEditor() {
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
-              <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+              <DocumentIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
               <p className="text-lg mb-2">{t("editor.noChapter")}</p>
               <p className="text-sm">{t("editor.createNewChapter")}</p>
             </div>
