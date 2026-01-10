@@ -109,8 +109,8 @@ jobs:
         with:
           name: linux-build-artifacts
           path: |
-            src-tauri/target/release/maibuk
-            src-tauri/target/release/bundle/deb/
+            src-tauri/target/x86_64-unknown-linux-gnu/release/maibuk
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/
             src-tauri/icons/128x128.png
           retention-days: 1
 
@@ -186,14 +186,18 @@ jobs:
 
       - name: Prepare artifacts for Arch build
         run: |
+          # Debug: Show what was downloaded
+          echo "=== Downloaded artifacts structure ==="
+          find ./artifacts -type f
+
           # Create the expected directory structure
           mkdir -p src-tauri/target/release/bundle/deb
           mkdir -p src-tauri/icons
 
-          # Move artifacts to expected locations
-          cp ./artifacts/maibuk src-tauri/target/release/maibuk || cp ./artifacts/release/maibuk src-tauri/target/release/maibuk
-          cp -r ./artifacts/deb/* src-tauri/target/release/bundle/deb/ 2>/dev/null || cp -r ./artifacts/bundle/deb/* src-tauri/target/release/bundle/deb/ 2>/dev/null || true
-          cp ./artifacts/128x128.png src-tauri/icons/ 2>/dev/null || cp ./artifacts/icons/128x128.png src-tauri/icons/ 2>/dev/null || true
+          # Move artifacts to expected locations (artifacts preserve the src-tauri path structure)
+          cp ./artifacts/src-tauri/target/x86_64-unknown-linux-gnu/release/maibuk src-tauri/target/release/maibuk
+          cp -r ./artifacts/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/* src-tauri/target/release/bundle/deb/
+          cp ./artifacts/src-tauri/icons/128x128.png src-tauri/icons/
 
           # Make binary executable
           chmod +x src-tauri/target/release/maibuk
