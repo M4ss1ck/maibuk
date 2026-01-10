@@ -194,16 +194,16 @@ jobs:
           mkdir -p src-tauri/target/release/bundle/deb
           mkdir -p src-tauri/icons
 
-          # Move artifacts to expected locations (artifacts preserve the src-tauri path structure)
-          cp ./artifacts/src-tauri/target/x86_64-unknown-linux-gnu/release/maibuk src-tauri/target/release/maibuk
-          cp -r ./artifacts/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/* src-tauri/target/release/bundle/deb/
-          cp ./artifacts/src-tauri/icons/128x128.png src-tauri/icons/
+          # Move artifacts to expected locations
+          cp ./artifacts/target/x86_64-unknown-linux-gnu/release/maibuk src-tauri/target/release/maibuk
+          cp -r ./artifacts/target/x86_64-unknown-linux-gnu/release/bundle/deb/* src-tauri/target/release/bundle/deb/
+          cp ./artifacts/icons/128x128.png src-tauri/icons/
 
           # Make binary executable
           chmod +x src-tauri/target/release/maibuk
 
           # List what we have
-          echo "=== Artifacts structure ==="
+          echo "=== Prepared artifacts ==="
           find src-tauri/target/release -type f | head -20
           ls -la src-tauri/icons/
 

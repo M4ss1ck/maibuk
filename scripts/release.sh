@@ -67,9 +67,13 @@ sed -i "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
 print_status "Updating tauri.conf.json version to $VERSION"
 sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
 
+# Update Cargo.lock by running cargo check
+print_status "Updating Cargo.lock"
+(cd src-tauri && cargo update -p maibuk --precise $VERSION 2>/dev/null || cargo check --quiet 2>/dev/null || true)
+
 # Create git commit
 print_status "Creating git commit"
-git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
+git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
 git commit -m "chore: bump version to $VERSION"
 
 # Create git tag
@@ -83,6 +87,7 @@ print_warning "This will trigger the release workflow on GitHub."
 echo "Files updated:"
 echo "  - package.json"
 echo "  - src-tauri/Cargo.toml"
+echo "  - src-tauri/Cargo.lock"
 echo "  - src-tauri/tauri.conf.json"
 echo
 echo "Git tag created: v$VERSION"
