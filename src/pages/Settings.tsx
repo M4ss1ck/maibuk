@@ -4,9 +4,11 @@ import {
   FONT_SIZE_OPTIONS,
   FONT_OPTIONS,
   EXPORT_FORMAT_OPTIONS,
+  LANGUAGE_OPTIONS,
   type FontSize,
   type FontFamily,
   type ExportFormat,
+  type Language,
 } from "../features/settings";
 import { Select, Switch } from "../components/ui";
 import { APP_VERSION } from "../constants";
@@ -17,10 +19,12 @@ export function Settings() {
     appFontSize,
     appFont,
     autoSave,
+    language,
     defaultExportFormat,
     setAppFontSize,
     setAppFont,
     setAutoSave,
+    setLanguage,
     setDefaultExportFormat,
   } = useSettings();
 
@@ -107,6 +111,18 @@ export function Settings() {
               checked={autoSave}
               onChange={setAutoSave}
               label="Toggle auto-save"
+            />
+          </div>
+
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <p className="font-medium">Language</p>
+              <p className="text-sm text-muted-foreground">Choose the app language</p>
+            </div>
+            <Select<Language>
+              value={language}
+              onChange={setLanguage}
+              options={LANGUAGE_OPTIONS}
             />
           </div>
         </div>

@@ -1,6 +1,7 @@
 export type FontSize = 14 | 16 | 18 | 20;
 export type FontFamily = "serif" | "sans" | "mono";
 export type ExportFormat = "epub" | "pdf";
+export type Language = "en" | "es";
 
 export interface Settings {
   // App UI settings
@@ -9,6 +10,7 @@ export interface Settings {
 
   // General settings
   autoSave: boolean;
+  language: Language;
 
   // Export settings
   defaultExportFormat: ExportFormat;
@@ -30,4 +32,9 @@ export const FONT_OPTIONS: { value: FontFamily; label: string }[] = [
 export const EXPORT_FORMAT_OPTIONS: { value: ExportFormat; label: string }[] = [
   { value: "epub", label: "EPUB" },
   { value: "pdf", label: "PDF" },
+];
+
+export const LANGUAGE_OPTIONS: { value: Language; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
 ];
