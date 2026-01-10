@@ -3,6 +3,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { APP_VERSION } from "../constants";
 import { useTranslation } from "react-i18next";
 import { ProjectsIcon, SettingsIcon } from "./icons";
+import logo from "../../src-tauri/icons/StoreLogo.png";
 
 export function Layout() {
   const { t } = useTranslation();
@@ -11,8 +12,9 @@ export function Layout() {
     <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar */}
       <aside className="w-sidebar border-r border-border flex flex-col">
-        <div className="p-4 border-b border-border">
-          <h1 className="text-xl font-semibold">{t("app.title")}</h1>
+        <div className="p-4 border-b border-border flex flex-row items-end gap-3 justify-start">
+          <img src={logo} alt="App Logo" className="w-14 mt-2" />
+          <h1 className="text-3xl font-semibold">{t("app.title")}</h1>
         </div>
 
         <nav className="flex-1 p-2 gap-2">
