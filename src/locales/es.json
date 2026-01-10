@@ -1,0 +1,62 @@
+{
+  "welcome": "Hola Mundo",
+  "app": {
+    "title": "Maibuk",
+    "description": "Una aplicación de escritura multiplataforma para autores"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito"
+  },
+  "books": {
+    "title": "Mis Libros",
+    "newBook": "Nuevo Libro",
+    "editBook": "Editar Libro",
+    "deleteBook": "Eliminar Libro",
+    "noBooks": "Aún no hay libros. ¡Crea tu primer libro!",
+    "loading": "Cargando..."
+  },
+  "chapters": {
+    "title": "Capítulos",
+    "newChapter": "Nuevo Capítulo",
+    "editChapter": "Editar Capítulo",
+    "deleteChapter": "Eliminar Capítulo",
+    "noChapters": "Aún no hay capítulos. ¡Añade tu primer capítulo!"
+  },
+  "editor": {
+    "placeholder": "Comienza a escribir...",
+    "findReplace": "Buscar y Reemplazar",
+    "insertImage": "Insertar Imagen",
+    "insertLink": "Insertar Enlace",
+    "insertTable": "Insertar Tabla",
+    "footnote": "Añadir Nota al Pie"
+  },
+  "export": {
+    "title": "Exportar",
+    "epub": "Exportar a EPUB",
+    "pdf": "Exportar a PDF",
+    "exporting": "Exportando..."
+  },
+  "settings": {
+    "title": "Configuración",
+    "theme": "Tema",
+    "language": "Idioma",
+    "dark": "Oscuro",
+    "light": "Claro",
+    "system": "Sistema"
+  },
+  "cover": {
+    "title": "Diseñador de Portada",
+    "addText": "Añadir Texto",
+    "addImage": "Añadir Imagen",
+    "backgroundColor": "Color de Fondo"
+  }
+}

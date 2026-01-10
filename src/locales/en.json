@@ -1,0 +1,62 @@
+{
+  "welcome": "Hello World",
+  "app": {
+    "title": "Maibuk",
+    "description": "A cross-platform writing app for authors"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "close": "Close",
+    "confirm": "Confirm",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  },
+  "books": {
+    "title": "My Books",
+    "newBook": "New Book",
+    "editBook": "Edit Book",
+    "deleteBook": "Delete Book",
+    "noBooks": "No books yet. Create your first book!",
+    "loading": "Loading..."
+  },
+  "chapters": {
+    "title": "Chapters",
+    "newChapter": "New Chapter",
+    "editChapter": "Edit Chapter",
+    "deleteChapter": "Delete Chapter",
+    "noChapters": "No chapters yet. Add your first chapter!"
+  },
+  "editor": {
+    "placeholder": "Start writing...",
+    "findReplace": "Find & Replace",
+    "insertImage": "Insert Image",
+    "insertLink": "Insert Link",
+    "insertTable": "Insert Table",
+    "footnote": "Add Footnote"
+  },
+  "export": {
+    "title": "Export",
+    "epub": "Export to EPUB",
+    "pdf": "Export to PDF",
+    "exporting": "Exporting..."
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": "Theme",
+    "language": "Language",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System"
+  },
+  "cover": {
+    "title": "Cover Designer",
+    "addText": "Add Text",
+    "addImage": "Add Image",
+    "backgroundColor": "Background Color"
+  }
+}
