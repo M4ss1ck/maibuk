@@ -142,6 +142,15 @@ img {
   margin: 1em auto;
 }
 
+/* Cover image - no margins, fit to page */
+img.cover-image,
+.cover img {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+  height: auto;
+}
+
 figure {
   margin: 1em 0;
   text-align: center;

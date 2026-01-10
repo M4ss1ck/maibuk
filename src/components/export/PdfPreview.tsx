@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Previewer } from "pagedjs";
-import { Button, Select } from "../ui";
-import {
-  generatePdfHtml,
-  PAGE_SIZES,
-  type PdfExportOptions,
-  type PageSize,
-} from "../../features/export";
+import { Button } from "../ui";
+import { generatePdfHtml, type PdfExportOptions } from "../../features/export";
 import type { Book } from "../../features/books/types";
 import type { Chapter } from "../../features/chapters/types";
 
@@ -30,7 +25,7 @@ export function PdfPreview({
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [options, setOptions] = useState<PdfExportOptions>(initialOptions);
+  const [options] = useState<PdfExportOptions>(initialOptions);
 
   const cleanup = useCallback(() => {
     if (styleRef.current && document.head.contains(styleRef.current)) {
@@ -38,8 +33,6 @@ export function PdfPreview({
       styleRef.current = null;
     }
     document.querySelectorAll("style[data-pagedjs-inserted-styles]").forEach((s) => s.remove());
-    // Remove print mode class from body
-    document.body.classList.remove("pdf-print-mode");
   }, []);
 
   const renderPreview = useCallback(async () => {
@@ -109,23 +102,58 @@ export function PdfPreview({
           background: transparent !important;
           color: #000 !important;
         }
+        
+        /* PRINT STYLES - Hide everything except preview content */
         @media print {
+          /* Hide the entire app */
+          body > *:not(.pdf-preview-overlay) {
+            display: none !important;
+          }
+          
+          /* Hide the preview toolbar */
+          .pdf-preview-overlay > div:first-child {
+            display: none !important;
+          }
+          
+          /* Make the preview container full screen for printing */
+          .pdf-preview-overlay {
+            position: static !important;
+            background: transparent !important;
+          }
+          
+          .pdf-preview-overlay > div:last-child {
+            overflow: visible !important;
+            background: #fff !important;
+          }
+          
           html, body {
             background: #fff !important;
             color: #000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+          
           .pagedjs_pages {
             padding: 0 !important;
             background: #fff !important;
           }
+          
           .pagedjs_page {
             box-shadow: none !important;
             margin: 0 !important;
             background: #fff !important;
             color: #000 !important;
+            page-break-after: always !important;
+            break-after: page !important;
           }
+          
+          .pagedjs_page:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          
           .pagedjs_pagebox,
           .pagedjs_area,
           .pagedjs_page_content,
@@ -166,21 +194,9 @@ export function PdfPreview({
   }, [isOpen, renderPreview, cleanup]);
 
   const handlePrint = useCallback(() => {
-    // Add class to body to hide everything except the PDF preview when printing
-    document.body.classList.add("pdf-print-mode");
-
-    // Remove the class after printing (whether completed or cancelled)
-    const handleAfterPrint = () => {
-      document.body.classList.remove("pdf-print-mode");
-      window.removeEventListener("afterprint", handleAfterPrint);
-    };
-    window.addEventListener("afterprint", handleAfterPrint);
-
+    // Use browser's print dialog
+    // User can choose "Save as PDF" and control page size, margins, headers/footers, etc.
     window.print();
-  }, []);
-
-  const handlePageSizeChange = useCallback((size: PageSize) => {
-    setOptions((prev) => ({ ...prev, pageSize: size }));
   }, []);
 
   if (!isOpen) return null;
@@ -194,32 +210,15 @@ export function PdfPreview({
           </svg>
         </Button>
         <h1 className="font-medium flex-1">PDF Preview: {book.title}</h1>
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-muted-foreground w-max whitespace-nowrap">Page Size:</label>
-          <div className="w-40">
-            <Select
-              value={options.pageSize}
-              onChange={(value) => handlePageSizeChange(value as PageSize)}
-              options={Object.entries(PAGE_SIZES).map(([value, { label }]) => ({
-                value: value as PageSize,
-                label,
-              }))}
-            />
-          </div>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Use your browser's print dialog to set page size, margins, and headers/footers
+        </p>
         <Button variant="primary" onClick={handlePrint} disabled={isLoading}>
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
           </svg>
           Print / Save as PDF
         </Button>
-      </div>
-
-      {/* Print instructions tooltip */}
-      <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-t border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200 print:hidden">
-        <strong>Tip:</strong> In the print dialog, select "Save as PDF" as the destination.
-        Make sure to set paper size to <strong>{PAGE_SIZES[options.pageSize].label}</strong> and
-        enable "Background graphics" for best results. Set margins to "None" or "Minimum".
       </div>
 
       <div className="flex-1 overflow-auto bg-neutral-200 dark:bg-neutral-800 print:bg-white print:overflow-visible">
@@ -241,57 +240,10 @@ export function PdfPreview({
         )}
         <div
           ref={previewRef}
-          className={`pdf-preview-container mx-auto print:m-0 ${isLoading ? "opacity-0" : ""}`}
+          className={`pdf-preview-container mx-auto ${isLoading ? "opacity-0" : ""}`}
           style={{ position: "relative", minHeight: "100%" }}
         />
       </div>
-
-      <style>{`
-        @media print {
-          /* Hide everything in the body except the PDF preview */
-          body.pdf-print-mode > *:not(.pdf-preview-overlay) {
-            display: none !important;
-          }
-          body.pdf-print-mode #root {
-            display: none !important;
-          }
-          /* Make the PDF preview the only visible element */
-          body.pdf-print-mode .pdf-preview-overlay {
-            position: static !important;
-            display: block !important;
-          }
-          html, body {
-            background: #fff !important;
-            color: #000 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow: visible !important;
-          }
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .print\\:hidden { display: none !important; }
-          .pdf-preview-container {
-            position: static !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: #fff !important;
-          }
-          .pagedjs_pages {
-            display: block !important;
-            background: #fff !important;
-            padding: 0 !important;
-          }
-          .pagedjs_page {
-            display: block !important;
-            background: #fff !important;
-            color: #000 !important;
-            box-shadow: none !important;
-            margin: 0 !important;
-          }
-        }
-      `}</style>
     </div>,
     document.body
   );

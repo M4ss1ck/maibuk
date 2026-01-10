@@ -1,6 +1,6 @@
 /**
- * CSS Paged Media styles for PDF export.
- * Uses Paged.js for rendering.
+ * CSS styles for PDF export via browser print.
+ * Browser controls page size, margins, headers/footers, etc.
  */
 
 export type PageSize = "a4" | "letter" | "6x9";
@@ -8,15 +8,11 @@ export type PageSize = "a4" | "letter" | "6x9";
 export interface PdfExportOptions {
   pageSize: PageSize;
   includeTableOfContents: boolean;
-  includePageNumbers: boolean;
-  includeRunningHeaders: boolean;
 }
 
 export const DEFAULT_PDF_OPTIONS: PdfExportOptions = {
   pageSize: "a4",
   includeTableOfContents: true,
-  includePageNumbers: true,
-  includeRunningHeaders: true,
 };
 
 export const PAGE_SIZES: Record<PageSize, { width: string; height: string; label: string }> = {
@@ -26,44 +22,28 @@ export const PAGE_SIZES: Record<PageSize, { width: string; height: string; label
 };
 
 /**
- * Generate CSS Paged Media styles for PDF export.
+ * Generate print styles for PDF export.
+ * No page numbers or headers - browser/user controls those.
  */
-export function generatePdfStyles(options: PdfExportOptions): string {
-  const pageSize = PAGE_SIZES[options.pageSize];
+export function generatePdfStyles(_options: PdfExportOptions): string {
   const s = ".pagedjs_page";
 
   return `
+/* Let browser control @page size and margins */
 @page {
-  size: ${pageSize.width} ${pageSize.height};
-  margin: 2.5cm 2cm;
-  ${options.includePageNumbers ? `
-  @bottom-center {
-    content: counter(page);
-    font-family: Georgia, serif;
-    font-size: 10pt;
-    color: #666;
-  }` : ""}
-  ${options.includeRunningHeaders ? `
-  @top-center {
-    content: string(chapter-title);
-    font-family: Georgia, serif;
-    font-size: 10pt;
-    font-style: italic;
-    color: #666;
-  }` : ""}
+  margin: 2cm;
 }
 
-@page cover { margin: 0; @top-center { content: none; } @bottom-center { content: none; } }
-@page toc { @top-center { content: none; } }
-@page chapter-start { @top-center { content: none; } }
+/* Cover page has no margins */
+@page cover {
+  margin: 0;
+}
 
-/* Page structure rules - UNSCOPED so Paged.js can process them */
+/* Page structure rules for Paged.js */
 .cover-page { page: cover; break-after: page; }
-.toc { page: toc; break-after: page; }
+.toc { break-after: page; }
 .chapter { break-before: page; }
 .cover-page + .chapter, .toc + .chapter { break-before: auto; }
-.chapter-header { page: chapter-start; }
-.chapter-title { string-set: chapter-title content(); }
 
 /* Visual styles - scoped to rendered pages */
 ${s} { font-family: Georgia, "Times New Roman", serif; font-size: 12pt; line-height: 1.6; color: #000; background: #fff; }

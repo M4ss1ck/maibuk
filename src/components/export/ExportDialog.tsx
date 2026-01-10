@@ -228,10 +228,10 @@ export function ExportDialog({
                 </div>
               </>
             ) : (
-              // PDF Options
+              // PDF Options - most settings controlled by browser print dialog
               <>
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">Page Size</label>
+                  <label className="text-sm text-foreground">Page Size (Preview)</label>
                   <div className="w-40">
                     <Select
                       value={pdfOptions.pageSize}
@@ -264,35 +264,9 @@ export function ExportDialog({
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
-                    Page Numbers
-                  </label>
-                  <Switch
-                    checked={pdfOptions.includePageNumbers}
-                    onChange={(checked) =>
-                      setPdfOptions((prev) => ({
-                        ...prev,
-                        includePageNumbers: checked,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
-                    Running Headers
-                  </label>
-                  <Switch
-                    checked={pdfOptions.includeRunningHeaders}
-                    onChange={(checked) =>
-                      setPdfOptions((prev) => ({
-                        ...prev,
-                        includeRunningHeaders: checked,
-                      }))
-                    }
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Page size, margins, and page numbers can be configured in your browser's print dialog.
+                </p>
               </>
             )}
           </div>
