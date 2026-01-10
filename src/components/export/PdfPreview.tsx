@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Previewer } from "pagedjs";
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
 import { Button, Select } from "../ui";
 import {
   generatePdfHtml,
@@ -33,7 +29,6 @@ export function PdfPreview({
   const previewRef = useRef<HTMLDivElement>(null);
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState<PdfExportOptions>(initialOptions);
 
@@ -170,84 +165,19 @@ export function PdfPreview({
     return cleanup;
   }, [isOpen, renderPreview, cleanup]);
 
-  const handleExportPdf = useCallback(async () => {
-    if (!previewRef.current) return;
+  const handlePrint = useCallback(() => {
+    // Add class to body to hide everything except the PDF preview when printing
+    document.body.classList.add("pdf-print-mode");
 
-    setIsExporting(true);
-    setError(null);
+    // Remove the class after printing (whether completed or cancelled)
+    const handleAfterPrint = () => {
+      document.body.classList.remove("pdf-print-mode");
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+    window.addEventListener("afterprint", handleAfterPrint);
 
-    try {
-      const pages = previewRef.current.querySelectorAll(".pagedjs_page");
-      if (pages.length === 0) {
-        throw new Error("No pages found to export");
-      }
-
-      // Get page dimensions from the selected size and convert to mm
-      const pageSize = PAGE_SIZES[options.pageSize];
-      const parseToMm = (value: string): number => {
-        if (value.endsWith("mm")) {
-          return parseFloat(value);
-        } else if (value.endsWith("in")) {
-          return parseFloat(value) * 25.4;
-        } else if (value.endsWith("cm")) {
-          return parseFloat(value) * 10;
-        }
-        return parseFloat(value);
-      };
-
-      const widthMm = parseToMm(pageSize.width);
-      const heightMm = parseToMm(pageSize.height);
-
-      // Create PDF with the correct orientation and size
-      const pdf = new jsPDF({
-        orientation: widthMm > heightMm ? "landscape" : "portrait",
-        unit: "mm",
-        format: [widthMm, heightMm],
-      });
-
-      // Convert each page to canvas and add to PDF
-      for (let i = 0; i < pages.length; i++) {
-        const page = pages[i] as HTMLElement;
-
-        // Capture the page as canvas with high quality
-        const canvas = await html2canvas(page, {
-          scale: 2, // Higher scale for better quality
-          useCORS: true,
-          logging: false,
-          backgroundColor: "#ffffff",
-        });
-
-        // Calculate dimensions to fit the PDF page
-        const imgData = canvas.toDataURL("image/jpeg", 0.95);
-
-        if (i > 0) {
-          pdf.addPage([widthMm, heightMm]);
-        }
-
-        pdf.addImage(imgData, "JPEG", 0, 0, widthMm, heightMm);
-      }
-
-      // Generate default filename
-      const defaultFilename = `${book.title.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
-
-      // Show save dialog
-      const filePath = await save({
-        defaultPath: defaultFilename,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-
-      if (filePath) {
-        // Get PDF as array buffer and write to file
-        const pdfOutput = pdf.output("arraybuffer");
-        await writeFile(filePath, new Uint8Array(pdfOutput));
-      }
-    } catch (err) {
-      console.error("PDF export error:", err);
-      setError(err instanceof Error ? err.message : "Failed to export PDF");
-    } finally {
-      setIsExporting(false);
-    }
-  }, [book.title, options.pageSize]);
+    window.print();
+  }, []);
 
   const handlePageSizeChange = useCallback((size: PageSize) => {
     setOptions((prev) => ({ ...prev, pageSize: size }));
@@ -277,21 +207,19 @@ export function PdfPreview({
             />
           </div>
         </div>
-        <Button variant="primary" onClick={handleExportPdf} disabled={isLoading || isExporting}>
-          {isExporting ? (
-            <>
-              <div className="animate-spin w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full" />
-              Exporting...
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Download PDF
-            </>
-          )}
+        <Button variant="primary" onClick={handlePrint} disabled={isLoading}>
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          Print / Save as PDF
         </Button>
+      </div>
+
+      {/* Print instructions tooltip */}
+      <div className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-t border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200 print:hidden">
+        <strong>Tip:</strong> In the print dialog, select "Save as PDF" as the destination.
+        Make sure to set paper size to <strong>{PAGE_SIZES[options.pageSize].label}</strong> and
+        enable "Background graphics" for best results. Set margins to "None" or "Minimum".
       </div>
 
       <div className="flex-1 overflow-auto bg-neutral-200 dark:bg-neutral-800 print:bg-white print:overflow-visible">
