@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Previewer } from "pagedjs";
 import { Button } from "../ui";
 import { generatePdfHtml, type PdfExportOptions } from "../../features/export";
 import type { Book } from "../../features/books/types";
@@ -22,180 +21,180 @@ export function PdfPreview({
   initialOptions,
 }: PdfPreviewProps) {
   const previewRef = useRef<HTMLDivElement>(null);
-  const styleRef = useRef<HTMLStyleElement | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const printStyleRef = useRef<HTMLStyleElement | null>(null);
   const [options] = useState<PdfExportOptions>(initialOptions);
 
-  const cleanup = useCallback(() => {
-    if (styleRef.current && document.head.contains(styleRef.current)) {
-      document.head.removeChild(styleRef.current);
-      styleRef.current = null;
-    }
-    document.querySelectorAll("style[data-pagedjs-inserted-styles]").forEach((s) => s.remove());
-  }, []);
-
-  const renderPreview = useCallback(async () => {
-    if (!previewRef.current || !isOpen) return;
-
-    setIsLoading(true);
-    setError(null);
-    cleanup();
+  // Generate preview content
+  useEffect(() => {
+    if (!isOpen || !previewRef.current) return;
 
     try {
-      previewRef.current.innerHTML = "";
-
-      // Generate the HTML
       const html = generatePdfHtml(book, chapters, options);
-
-      // Parse the HTML
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
 
-      // Extract styles and body content
+      // Extract body content and styles
       const styleContent = doc.querySelector("style")?.textContent || "";
       const bodyContent = doc.body.innerHTML;
 
-      // Create a detached container for Paged.js (not in DOM)
-      const sourceContainer = document.createElement("div");
-      sourceContainer.innerHTML = bodyContent;
-
-      // Add preview-specific styles
-      const styleEl = document.createElement("style");
-      styleEl.setAttribute("data-pagedjs-inserted-styles", "true");
-      styleEl.textContent = `
-        .pdf-preview-container,
-        .pdf-preview-container *,
-        .pagedjs_pages,
-        .pagedjs_pages * {
-          color-scheme: light !important;
+      // Add preview-specific styles for visual section separation (scoped to content)
+      const previewStyles = `
+        /* Preview-only: visual separation between sections */
+        .pdf-preview-content .cover-page {
+          border: 2px dashed #ccc;
+          margin-bottom: 2em;
+          min-height: 400px;
         }
-        .pagedjs_pages {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: center !important;
-          padding: 20px !important;
-          background: transparent !important;
+        .pdf-preview-content .toc {
+          border: 2px dashed #ccc;
+          margin-bottom: 2em;
+          padding: 2em;
         }
-        .pagedjs_page {
-          background: #fff !important;
-          color: #000 !important;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
-          margin-bottom: 24px !important;
+        .pdf-preview-content .chapter {
+          border: 2px dashed #ccc;
+          margin-bottom: 2em;
+          padding: 2em;
         }
-        .pagedjs_pagebox,
-        .pagedjs_area,
-        .pagedjs_page_content,
-        .pagedjs_margin,
-        .pagedjs_margin-content,
-        .pagedjs_sheet {
-          background: #fff !important;
-          color: #000 !important;
+        .pdf-preview-content .chapter-header {
+          padding-top: 1em;
         }
-        .pagedjs_page section,
-        .pagedjs_page div,
-        .pagedjs_page p,
-        .pagedjs_page span,
-        .pagedjs_page h1,
-        .pagedjs_page h2,
-        .pagedjs_page h3 {
-          background: transparent !important;
-          color: #000 !important;
+        /* Preview: show section labels */
+        .pdf-preview-content .cover-page::before {
+          content: "COVER PAGE";
+          display: block;
+          font-size: 10px;
+          color: #999;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin-bottom: 1em;
+          text-align: center;
+          font-family: system-ui, sans-serif;
         }
-        
-        /* PRINT STYLES - Hide everything except preview content */
-        @media print {
-          /* Hide the entire app */
-          body > *:not(.pdf-preview-overlay) {
-            display: none !important;
-          }
-          
-          /* Hide the preview toolbar */
-          .pdf-preview-overlay > div:first-child {
-            display: none !important;
-          }
-          
-          /* Make the preview container full screen for printing */
-          .pdf-preview-overlay {
-            position: static !important;
-            background: transparent !important;
-          }
-          
-          .pdf-preview-overlay > div:last-child {
-            overflow: visible !important;
-            background: #fff !important;
-          }
-          
-          html, body {
-            background: #fff !important;
-            color: #000 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          
-          .pagedjs_pages {
-            padding: 0 !important;
-            background: #fff !important;
-          }
-          
-          .pagedjs_page {
-            box-shadow: none !important;
-            margin: 0 !important;
-            background: #fff !important;
-            color: #000 !important;
-            page-break-after: always !important;
-            break-after: page !important;
-          }
-          
-          .pagedjs_page:last-child {
-            page-break-after: avoid !important;
-            break-after: avoid !important;
-          }
-          
-          .pagedjs_pagebox,
-          .pagedjs_area,
-          .pagedjs_page_content,
-          .pagedjs_sheet {
-            background: #fff !important;
-            color: #000 !important;
-          }
+        .pdf-preview-content .toc::before {
+          content: "TABLE OF CONTENTS PAGE";
+          display: block;
+          font-size: 10px;
+          color: #999;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin-bottom: 1em;
+          text-align: center;
+          font-family: system-ui, sans-serif;
+        }
+        .pdf-preview-content .chapter::before {
+          content: "NEW PAGE";
+          display: block;
+          font-size: 10px;
+          color: #999;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin-bottom: 1em;
+          text-align: center;
+          font-family: system-ui, sans-serif;
         }
       `;
-      document.head.appendChild(styleEl);
-      styleRef.current = styleEl;
 
-      // Run Paged.js
-      const previewer = new Previewer();
-      await previewer.preview(
-        sourceContainer,
-        [{ textContent: styleContent }],
-        previewRef.current
-      );
-
-      setIsLoading(false);
+      // Set preview content
+      previewRef.current.innerHTML = `
+        <style>${styleContent}</style>
+        <style>${previewStyles}</style>
+        ${bodyContent}
+      `;
     } catch (err) {
-      console.error("PDF preview error:", err);
-      setError(err instanceof Error ? err.message : "Failed to generate preview");
-      setIsLoading(false);
+      console.error("Preview error:", err);
+      if (previewRef.current) {
+        previewRef.current.innerHTML = `<p class="text-red-500">Error generating preview</p>`;
+      }
     }
-  }, [book, chapters, options, isOpen, cleanup]);
+  }, [isOpen, book, chapters, options]);
 
+  // Setup print styles
   useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(renderPreview, 200);
-      return () => {
-        clearTimeout(timer);
-        cleanup();
-      };
-    }
-    return cleanup;
-  }, [isOpen, renderPreview, cleanup]);
+    if (!isOpen) return;
+
+    // Create print styles
+    const styleEl = document.createElement("style");
+    styleEl.id = "pdf-print-styles";
+    styleEl.textContent = `
+      @media print {
+        /* Hide everything except the print content */
+        body > *:not(.pdf-preview-overlay) {
+          display: none !important;
+        }
+        
+        /* Hide the preview UI */
+        .pdf-preview-toolbar {
+          display: none !important;
+        }
+        
+        /* Reset the overlay for printing - make it flow naturally */
+        .pdf-preview-overlay {
+          position: static !important;
+          display: block !important;
+          background: transparent !important;
+          overflow: visible !important;
+          height: auto !important;
+        }
+        
+        .pdf-preview-scroll-area {
+          display: block !important;
+          overflow: visible !important;
+          background: #fff !important;
+          padding: 0 !important;
+          height: auto !important;
+        }
+        
+        .pdf-preview-content {
+          display: block !important;
+          max-width: none !important;
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          background: #fff !important;
+          min-height: auto !important;
+          height: auto !important;
+        }
+        
+        /* Hide preview-only visual elements */
+        .pdf-preview-content .cover-page::before,
+        .pdf-preview-content .toc::before,
+        .pdf-preview-content .chapter::before {
+          display: none !important;
+        }
+        
+        /* Remove preview decorations */
+        .pdf-preview-content .cover-page,
+        .pdf-preview-content .toc,
+        .pdf-preview-content .chapter {
+          border: none !important;
+          margin-bottom: 0 !important;
+          min-height: auto !important;
+        }
+        
+        /* Ensure colors and backgrounds print */
+        html, body {
+          background: #fff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
+    printStyleRef.current = styleEl;
+
+    return () => {
+      if (printStyleRef.current) {
+        printStyleRef.current.remove();
+        printStyleRef.current = null;
+      }
+    };
+  }, [isOpen]);
 
   const handlePrint = useCallback(() => {
-    // Use browser's print dialog
-    // User can choose "Save as PDF" and control page size, margins, headers/footers, etc.
     window.print();
   }, []);
 
@@ -203,7 +202,8 @@ export function PdfPreview({
 
   return createPortal(
     <div className="pdf-preview-overlay fixed inset-0 z-50 bg-background flex flex-col">
-      <div className="h-14 border-b border-border flex items-center px-4 gap-4 bg-surface print:hidden">
+      {/* Toolbar */}
+      <div className="pdf-preview-toolbar h-14 border-b border-border flex items-center px-4 gap-4 bg-surface">
         <Button variant="ghost" onClick={onClose}>
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -211,9 +211,9 @@ export function PdfPreview({
         </Button>
         <h1 className="font-medium flex-1">PDF Preview: {book.title}</h1>
         <p className="text-sm text-muted-foreground">
-          Use your browser's print dialog to set page size, margins, and headers/footers
+          Page layout is determined by your browser's print settings
         </p>
-        <Button variant="primary" onClick={handlePrint} disabled={isLoading}>
+        <Button variant="primary" onClick={handlePrint}>
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
           </svg>
@@ -221,27 +221,12 @@ export function PdfPreview({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-auto bg-neutral-200 dark:bg-neutral-800 print:bg-white print:overflow-visible">
-        {isLoading && (
-          <div className="flex items-center justify-center h-full print:hidden">
-            <div className="text-center">
-              <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-              <p className="text-muted-foreground">Generating preview...</p>
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="flex items-center justify-center h-full print:hidden">
-            <div className="text-center text-red-500">
-              <p className="font-medium">Error</p>
-              <p className="text-sm">{error}</p>
-            </div>
-          </div>
-        )}
+      {/* Content preview (scrollable) */}
+      <div className="pdf-preview-scroll-area flex-1 overflow-auto bg-neutral-200 dark:bg-neutral-800 p-8">
         <div
           ref={previewRef}
-          className={`pdf-preview-container mx-auto ${isLoading ? "opacity-0" : ""}`}
-          style={{ position: "relative", minHeight: "100%" }}
+          className="pdf-preview-content max-w-4xl mx-auto bg-white text-black p-12 shadow-lg rounded-lg"
+          style={{ minHeight: "100%" }}
         />
       </div>
     </div>,

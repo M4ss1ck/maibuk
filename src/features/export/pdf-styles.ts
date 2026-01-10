@@ -1,93 +1,350 @@
 /**
  * CSS styles for PDF export via browser print.
  * Browser controls page size, margins, headers/footers, etc.
+ * All styles are scoped to .pdf-preview-content to avoid affecting the UI.
  */
 
-export type PageSize = "a4" | "letter" | "6x9";
-
 export interface PdfExportOptions {
-  pageSize: PageSize;
   includeTableOfContents: boolean;
 }
 
 export const DEFAULT_PDF_OPTIONS: PdfExportOptions = {
-  pageSize: "a4",
   includeTableOfContents: true,
 };
 
-export const PAGE_SIZES: Record<PageSize, { width: string; height: string; label: string }> = {
-  a4: { width: "210mm", height: "297mm", label: "A4" },
-  letter: { width: "8.5in", height: "11in", label: "Letter" },
-  "6x9": { width: "6in", height: "9in", label: '6" × 9" (Book)' },
-};
-
 /**
- * Generate print styles for PDF export.
- * No page numbers or headers - browser/user controls those.
+ * Generate styles for PDF export.
+ * All rules scoped to .pdf-preview-content for preview isolation.
  */
 export function generatePdfStyles(_options: PdfExportOptions): string {
-  const s = ".pagedjs_page";
+  // Scope prefix for all styles
+  const s = ".pdf-preview-content";
 
   return `
-/* Let browser control @page size and margins */
-@page {
-  margin: 2cm;
+/* ===================
+   BASE TYPOGRAPHY
+   =================== */
+${s} {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 12pt;
+  line-height: 1.6;
+  color: #000;
+  background: #fff;
 }
 
-/* Cover page has no margins */
-@page cover {
-  margin: 0;
-}
-
-/* Page structure rules for Paged.js */
-.cover-page { page: cover; break-after: page; }
-.toc { break-after: page; }
-.chapter { break-before: page; }
-.cover-page + .chapter, .toc + .chapter { break-before: auto; }
-
-/* Visual styles - scoped to rendered pages */
-${s} { font-family: Georgia, "Times New Roman", serif; font-size: 12pt; line-height: 1.6; color: #000; background: #fff; }
 ${s} * { box-sizing: border-box; }
 
-${s} .cover-page { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; width: 100%; margin: 0; padding: 0; background: #fff; }
-${s} .cover-page img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-${s} .cover-page .title { font-size: 32pt; font-weight: bold; margin-bottom: 0.5em; color: #000; z-index: 1; }
-${s} .cover-page .subtitle { font-size: 18pt; font-style: italic; margin-bottom: 2em; color: #333; z-index: 1; }
-${s} .cover-page .author { font-size: 16pt; color: #000; margin-top: auto; z-index: 1; }
+/* ===================
+   COVER PAGE
+   =================== */
+${s} .cover-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2em;
+  background: #fff;
+  page-break-after: always;
+  break-after: page;
+}
 
-${s} .toc h2 { text-align: center; font-size: 18pt; margin-bottom: 2em; color: #000; }
-${s} .toc-entry { display: flex; margin-bottom: 0.75em; line-height: 1.4; }
-${s} .toc-entry a { color: #000; text-decoration: none; flex: 1; padding-right: 0.5em; }
-${s} .toc-entry .page-number { text-align: right; padding-left: 0.5em; }
-${s} .toc-entry .page-number::after { content: target-counter(attr(href url), page); }
+/* Cover with image */
+${s} .cover-page img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  display: block;
+}
 
-${s} .chapter-header { text-align: center; margin-bottom: 3em; padding-top: 4cm; }
-${s} .chapter-number { font-size: 14pt; font-variant: small-caps; letter-spacing: 0.15em; color: #666; margin-bottom: 0.5em; }
-${s} .chapter-title { font-size: 24pt; font-weight: normal; margin: 0; color: #000; }
-${s} .chapter-content { color: #000; }
+/* Text-only cover (no image) */
+${s} .cover-page .title {
+  font-size: 36pt;
+  font-weight: bold;
+  margin-bottom: 0.5em;
+  color: #000;
+}
 
-${s} h1, ${s} h2, ${s} h3, ${s} h4, ${s} h5, ${s} h6 { color: #000; break-after: avoid; margin-top: 1.5em; margin-bottom: 0.5em; }
-${s} p { margin: 0; text-indent: 1.5em; text-align: justify; orphans: 3; widows: 3; color: #000; }
-${s} h1 + p, ${s} h2 + p, ${s} h3 + p, ${s} h4 + p, ${s} hr + p, ${s} blockquote + p { text-indent: 0; }
-${s} .chapter-content > p:first-child { text-indent: 0; }
+${s} .cover-page .subtitle {
+  font-size: 18pt;
+  font-style: italic;
+  margin-bottom: 2em;
+  color: #555;
+}
 
-${s} hr { border: none; text-align: center; margin: 2em 0; }
-${s} hr::before { content: "* * *"; letter-spacing: 0.5em; color: #000; }
+${s} .cover-page .author {
+  font-size: 18pt;
+  color: #333;
+  margin-top: 3em;
+}
 
-${s} ul, ${s} ol { margin: 1em 0; padding-left: 2em; color: #000; }
-${s} li { margin-bottom: 0.25em; color: #000; }
-${s} blockquote { margin: 1.5em 2em; font-style: italic; color: #333; }
+/* ===================
+   TABLE OF CONTENTS
+   =================== */
+${s} .toc {
+  page-break-after: always;
+  break-after: page;
+  padding: 2em 0;
+}
 
-${s} img:not(.cover-page img) { max-width: 100%; height: auto; display: block; margin: 1em auto; }
-${s} table { width: 100%; border-collapse: collapse; margin: 1em 0; }
-${s} th, ${s} td { border: 1px solid #ccc; padding: 0.5em; text-align: left; color: #000; background: #fff; }
-${s} th { background: #f5f5f5; font-weight: bold; }
+${s} .toc h2 {
+  text-align: center;
+  font-size: 24pt;
+  margin-bottom: 2em;
+  color: #000;
+}
 
-${s} .footnote-ref { font-size: 0.75em; vertical-align: super; }
-${s} .footnote-ref a { color: #000; text-decoration: none; }
-${s} .endnotes { margin-top: 3em; border-top: 1px solid #ccc; padding-top: 1em; font-size: 10pt; }
-${s} .endnotes h2 { font-size: 14pt; margin-bottom: 1em; }
-${s} .endnote { margin-bottom: 0.5em; text-indent: 0; }
-${s} a { color: #000; text-decoration: none; }
+${s} .toc-entry {
+  display: block;
+  margin-bottom: 0.75em;
+  line-height: 1.6;
+  font-size: 14pt;
+}
+
+${s} .toc-entry a {
+  color: #000;
+  text-decoration: none;
+}
+
+${s} .toc-entry a:hover {
+  text-decoration: underline;
+}
+
+/* ===================
+   CHAPTERS
+   =================== */
+${s} .chapter {
+  page-break-before: always;
+  break-before: page;
+}
+
+/* First chapter doesn't need page break if it follows TOC or cover */
+${s} .toc + .chapter,
+${s} .cover-page + .chapter {
+  page-break-before: auto;
+  break-before: auto;
+}
+
+${s} .chapter-header {
+  text-align: center;
+  margin-bottom: 3em;
+  padding-top: 3em;
+  page-break-after: avoid;
+  break-after: avoid;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+${s} .chapter-number {
+  font-size: 14pt;
+  font-variant: small-caps;
+  letter-spacing: 0.2em;
+  color: #666;
+  margin-bottom: 0.75em;
+  display: block;
+}
+
+${s} .chapter-title {
+  font-size: 28pt;
+  font-weight: normal;
+  margin: 0;
+  color: #000;
+  line-height: 1.2;
+}
+
+${s} .chapter-content {
+  color: #000;
+}
+
+/* ===================
+   TYPOGRAPHY
+   =================== */
+   
+/* Headings - keep with following content */
+${s} h1, ${s} h2, ${s} h3, ${s} h4, ${s} h5, ${s} h6 {
+  color: #000;
+  page-break-after: avoid;
+  break-after: avoid;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+/* Paragraphs */
+${s} p {
+  margin: 0 0 0.75em 0;
+  text-indent: 1.5em;
+  text-align: justify;
+  orphans: 3;
+  widows: 3;
+  color: #000;
+}
+
+/* No indent after headings or breaks */
+${s} h1 + p, ${s} h2 + p, ${s} h3 + p, ${s} h4 + p, ${s} hr + p, ${s} blockquote + p {
+  text-indent: 0;
+}
+
+${s} .chapter-content > p:first-child {
+  text-indent: 0;
+}
+
+/* Scene breaks */
+${s} hr {
+  border: none;
+  text-align: center;
+  margin: 2em 0;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+${s} hr::before {
+  content: "* * *";
+  letter-spacing: 0.5em;
+  color: #666;
+  font-size: 14pt;
+}
+
+/* Lists */
+${s} ul, ${s} ol {
+  margin: 1em 0;
+  padding-left: 2em;
+  color: #000;
+}
+
+${s} li {
+  margin-bottom: 0.25em;
+  color: #000;
+}
+
+/* Blockquotes */
+${s} blockquote {
+  margin: 1.5em 2em;
+  font-style: italic;
+  color: #333;
+  border-left: 3px solid #ccc;
+  padding-left: 1em;
+}
+
+/* Images */
+${s} img:not(.cover-page img) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1.5em auto;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Tables */
+${s} table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+${s} th, ${s} td {
+  border: 1px solid #ccc;
+  padding: 0.5em;
+  text-align: left;
+  color: #000;
+  background: #fff;
+}
+
+${s} th {
+  background: #f5f5f5;
+  font-weight: bold;
+}
+
+/* Footnotes */
+${s} .footnote-ref {
+  font-size: 0.75em;
+  vertical-align: super;
+}
+
+${s} .footnote-ref a {
+  color: #000;
+  text-decoration: none;
+}
+
+${s} .endnotes {
+  margin-top: 3em;
+  border-top: 1px solid #ccc;
+  padding-top: 1em;
+  font-size: 10pt;
+}
+
+${s} .endnotes h2 {
+  font-size: 14pt;
+  margin-bottom: 1em;
+}
+
+${s} .endnote {
+  margin-bottom: 0.5em;
+  text-indent: 0;
+}
+
+/* Links */
+${s} a {
+  color: #000;
+  text-decoration: none;
+}
+
+/* ===================
+   PRINT STYLES
+   =================== */
+@media print {
+  /* Page margins - ensures content doesn't overflow into edges */
+  @page {
+    margin: 2.5cm 2cm;
+  }
+  
+  /* First page (cover) - no margins */
+  @page :first {
+    margin: 0;
+  }
+  
+  /* Reset any problematic styles */
+  ${s} {
+    margin: 0;
+    padding: 0;
+  }
+  
+  ${s} .cover-page {
+    padding: 0;
+    margin: 0;
+    height: 100vh;
+    page-break-after: always;
+  }
+  
+  ${s} .cover-page img {
+    width: 100%;
+    height: 100vh;
+    object-fit: contain;
+  }
+  
+  ${s} .toc {
+    padding-top: 2em;
+  }
+  
+  ${s} .chapter {
+    padding: 0;
+  }
+  
+  ${s} .chapter-header {
+    padding-top: 4em;
+  }
+  
+  /* Ensure text doesn't get clipped */
+  ${s} p,
+  ${s} li,
+  ${s} blockquote,
+  ${s} .chapter-content {
+    overflow: visible;
+  }
+}
 `;
 }

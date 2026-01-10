@@ -1,16 +1,14 @@
 import { useState, useCallback } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
-import { Button, Switch, Select } from "../ui";
+import { Button, Switch } from "../ui";
 import {
   generateEpub,
   getEpubFilename,
   DEFAULT_EXPORT_OPTIONS,
   DEFAULT_PDF_OPTIONS,
-  PAGE_SIZES,
   type EpubExportOptions,
   type PdfExportOptions,
   type ExportProgress,
-  type PageSize,
 } from "../../features/export";
 import type { Book } from "../../features/books/types";
 import type { Chapter } from "../../features/chapters/types";
@@ -231,25 +229,6 @@ export function ExportDialog({
               // PDF Options - most settings controlled by browser print dialog
               <>
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">Page Size (Preview)</label>
-                  <div className="w-40">
-                    <Select
-                      value={pdfOptions.pageSize}
-                      onChange={(value) =>
-                        setPdfOptions((prev) => ({
-                          ...prev,
-                          pageSize: value as PageSize,
-                        }))
-                      }
-                      options={Object.entries(PAGE_SIZES).map(([value, { label }]) => ({
-                        value: value as PageSize,
-                        label,
-                      }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
                   <label className="text-sm text-foreground">
                     Table of Contents
                   </label>
@@ -265,7 +244,7 @@ export function ExportDialog({
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Page size, margins, and page numbers can be configured in your browser's print dialog.
+                  Page size, margins, and page numbers are configured in your browser's print dialog.
                 </p>
               </>
             )}

@@ -46,14 +46,16 @@ export function generatePdfHtml(
   // Generate table of contents
   let tocHtml = "";
   if (options.includeTableOfContents) {
+    // Build TOC entries - we need to match chapter indices correctly
     const tocEntries = exportChapters
       .filter((ch) => ch.chapterType !== "frontmatter")
-      .map((ch, idx) => {
+      .map((ch) => {
         const displayTitle = getChapterDisplayTitle(ch);
+        // Find the actual index in the full list
+        const actualIndex = exportChapters.findIndex((c) => c.id === ch.id);
         return `
           <div class="toc-entry">
-            <a href="#chapter-${idx}">${escapeHtml(displayTitle)}</a>
-            <span class="page-number" href="#chapter-${idx}"></span>
+            <a href="#chapter-${actualIndex}">${escapeHtml(displayTitle)}</a>
           </div>
         `;
       })

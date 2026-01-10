@@ -4,5 +4,5 @@ export { EPUB_STYLES } from "./epub-styles";
 export type { EpubExportOptions, ExportProgress } from "./types";
 export { DEFAULT_EXPORT_OPTIONS } from "./types";
 export { generatePdfHtml } from "./pdf-generator";
-export { generatePdfStyles, PAGE_SIZES, DEFAULT_PDF_OPTIONS } from "./pdf-styles";
-export type { PdfExportOptions, PageSize } from "./pdf-styles";
+export { generatePdfStyles, DEFAULT_PDF_OPTIONS } from "./pdf-styles";
+export type { PdfExportOptions } from "./pdf-styles";
