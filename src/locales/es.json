@@ -26,7 +26,9 @@
     "no": "No",
     "deleteConfirm": "¿Eliminar?",
     "totalWords": "Total de palabras:",
-    "chaptersCount": "Capítulos:"
+    "chaptersCount": "Capítulos:",
+    "projects": "Proyectos",
+    "settings": "Configuración"
   },
   "nav": {
     "backToHome": "Volver al Inicio",
