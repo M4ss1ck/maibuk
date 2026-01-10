@@ -5,13 +5,16 @@ import {
   generateEpub,
   getEpubFilename,
   DEFAULT_EXPORT_OPTIONS,
+  DEFAULT_PDF_OPTIONS,
   type EpubExportOptions,
+  type PdfExportOptions,
   type ExportProgress,
 } from "../../features/export";
 import type { Book } from "../../features/books/types";
 import type { Chapter } from "../../features/chapters/types";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
+import { PdfPreview } from "./PdfPreview";
 
 interface ExportDialogProps {
   isOpen: boolean;
@@ -26,20 +29,31 @@ export function ExportDialog({
   book,
   chapters,
 }: ExportDialogProps) {
-  const [options, setOptions] = useState<EpubExportOptions>(
+  const [format, setFormat] = useState<"epub" | "pdf">("epub");
+  const [epubOptions, setEpubOptions] = useState<EpubExportOptions>(
     DEFAULT_EXPORT_OPTIONS
   );
+  const [pdfOptions, setPdfOptions] = useState<PdfExportOptions>(
+    DEFAULT_PDF_OPTIONS
+  );
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+
   const [progress, setProgress] = useState<ExportProgress>({
     status: "idle",
     message: "",
   });
 
   const handleExport = useCallback(async () => {
+    if (format === "pdf") {
+      setShowPdfPreview(true);
+      return;
+    }
+
     try {
       setProgress({ status: "preparing", message: "Preparing export..." });
 
       // Generate the EPUB
-      const blob = await generateEpub(book, chapters, options, (message) => {
+      const blob = await generateEpub(book, chapters, epubOptions, (message) => {
         setProgress((prev) => ({ ...prev, message }));
       });
 
@@ -85,12 +99,13 @@ export function ExportDialog({
         message: error instanceof Error ? error.message : "Export failed",
       });
     }
-  }, [book, chapters, options, onClose]);
+  }, [book, chapters, epubOptions, format, onClose]);
 
   const handleClose = useCallback(() => {
     if (progress.status !== "generating" && progress.status !== "saving") {
       onClose();
       setProgress({ status: "idle", message: "" });
+      setShowPdfPreview(false);
     }
   }, [onClose, progress.status]);
 
@@ -100,6 +115,18 @@ export function ExportDialog({
     progress.status === "saving";
 
   const exportableChapters = chapters.filter((ch) => ch.isIncludedInExport);
+
+  if (showPdfPreview) {
+    return (
+      <PdfPreview
+        isOpen={showPdfPreview}
+        onClose={() => setShowPdfPreview(false)}
+        book={book}
+        chapters={chapters}
+        initialOptions={pdfOptions}
+      />
+    );
+  }
 
   return (
     <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
@@ -125,22 +152,27 @@ export function ExportDialog({
             </p>
           </div>
 
-          {/* Format selector (only EPUB for now) */}
+          {/* Format selector */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-foreground mb-2">
               Format
             </label>
             <div className="flex gap-2">
               <button
-                className="flex-1 px-3 py-2 rounded-md text-sm font-medium bg-accent text-accent-foreground border-2 border-accent"
-                disabled
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${format === "epub"
+                  ? "bg-accent text-accent-foreground border-accent"
+                  : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+                  }`}
+                onClick={() => setFormat("epub")}
               >
                 EPUB
               </button>
               <button
-                className="flex-1 px-3 py-2 rounded-md text-sm font-medium bg-muted text-muted-foreground border-2 border-transparent opacity-50 cursor-not-allowed"
-                disabled
-                title="Coming in Phase 6"
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${format === "pdf"
+                  ? "bg-accent text-accent-foreground border-accent"
+                  : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+                  }`}
+                onClick={() => setFormat("pdf")}
               >
                 PDF
               </button>
@@ -149,47 +181,73 @@ export function ExportDialog({
 
           {/* Export options */}
           <div className="space-y-4 mb-6">
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-foreground">
-                Include Table of Contents
-              </label>
-              <Switch
-                checked={options.includeTableOfContents}
-                onChange={(checked) =>
-                  setOptions((prev) => ({
-                    ...prev,
-                    includeTableOfContents: checked,
-                  }))
-                }
-              />
-            </div>
+            {format === "epub" ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    Include Table of Contents
+                  </label>
+                  <Switch
+                    checked={epubOptions.includeTableOfContents}
+                    onChange={(checked) =>
+                      setEpubOptions((prev) => ({
+                        ...prev,
+                        includeTableOfContents: checked,
+                      }))
+                    }
+                  />
+                </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-foreground">
-                Number chapters in TOC
-              </label>
-              <Switch
-                checked={options.numberChapters}
-                onChange={(checked) =>
-                  setOptions((prev) => ({ ...prev, numberChapters: checked }))
-                }
-              />
-            </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    Number chapters in TOC
+                  </label>
+                  <Switch
+                    checked={epubOptions.numberChapters}
+                    onChange={(checked) =>
+                      setEpubOptions((prev) => ({ ...prev, numberChapters: checked }))
+                    }
+                  />
+                </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-foreground">
-                Prepend chapter titles
-              </label>
-              <Switch
-                checked={options.prependChapterTitles}
-                onChange={(checked) =>
-                  setOptions((prev) => ({
-                    ...prev,
-                    prependChapterTitles: checked,
-                  }))
-                }
-              />
-            </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    Prepend chapter titles
+                  </label>
+                  <Switch
+                    checked={epubOptions.prependChapterTitles}
+                    onChange={(checked) =>
+                      setEpubOptions((prev) => ({
+                        ...prev,
+                        prependChapterTitles: checked,
+                      }))
+                    }
+                  />
+                </div>
+              </>
+            ) : (
+              // PDF Options - most settings controlled by browser print dialog
+              <>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    Table of Contents
+                  </label>
+                  <Switch
+                    checked={pdfOptions.includeTableOfContents}
+                    onChange={(checked) =>
+                      setPdfOptions((prev) => ({
+                        ...prev,
+                        includeTableOfContents: checked,
+                      }))
+                    }
+                  />
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Page size, margins, and page numbers are configured in your browser's print dialog.
+                </p>
+              </>
+            )}
           </div>
 
           {/* Progress / Status */}
@@ -274,7 +332,11 @@ export function ExportDialog({
               onClick={handleExport}
               disabled={isExporting || exportableChapters.length === 0}
             >
-              {isExporting ? "Exporting..." : "Export EPUB"}
+              {isExporting
+                ? "Exporting..."
+                : format === "epub"
+                  ? "Export EPUB"
+                  : "Preview PDF"}
             </Button>
           </div>
         </DialogPanel>

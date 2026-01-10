@@ -84,6 +84,17 @@ export async function generateEpub(
     }
   }
 
+  // Add cover page as first chapter if cover exists
+  if (book.coverImagePath) {
+    const coverHtml = `<div class="cover"><img src="${book.coverImagePath}" alt="Cover" class="cover-image" /></div>`;
+    epubChapters.unshift({
+      title: "", // Empty title to prevent title page
+      content: coverHtml,
+      filename: "cover.xhtml",
+      excludeFromToc: true,
+    });
+  }
+
   // Build EPUB options
   const epubOptions: Options = {
     title: book.title,
@@ -99,23 +110,6 @@ export async function generateEpub(
     version: 3,
     verbose: false,
   };
-
-  // Add cover page as first chapter if cover exists
-  // This ensures the cover appears as the first readable page
-  if (book.coverImagePath) {
-    const coverPageHtml = `
-      <div style="text-align: center; height: 100%; display: flex; align-items: center; justify-content: center;">
-        <img src="${book.coverImagePath}" alt="Cover" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
-      </div>
-    `;
-    epubChapters.unshift({
-      title: "", // Empty to prevent title from showing
-      content: coverPageHtml,
-      beforeToc: true,
-      excludeFromToc: true,
-      filename: "cover.xhtml",
-    });
-  }
 
   onProgress?.("Generating EPUB file...");
 
