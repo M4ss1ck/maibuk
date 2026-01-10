@@ -14,8 +14,11 @@ RUN pacman -Syu --noconfirm && \
 RUN useradd -m builder && \
   echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
+# Create build directory and set permissions
+RUN mkdir -p /home/builder/build /output && chown builder:builder /home/builder/build /output
+
 # Set working directory
-WORKDIR /build
+WORKDIR /home/builder/build
 
 # Switch to builder user
 USER builder

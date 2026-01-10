@@ -114,12 +114,16 @@ docker build -t maibuk-arch-builder "$TEMP_BUILD_DIR"
 
 echo -e "${YELLOW}Running makepkg in container...${NC}"
 docker run --rm \
-    -v "$TEMP_BUILD_DIR:/build" \
+    -v "$TEMP_BUILD_DIR:/build-src:ro" \
     -v "$OUTPUT_DIR:/output" \
+    --user root \
     maibuk-arch-builder \
     bash -c "
-        cd /build && \
-        makepkg -sf --noconfirm && \
+        # Copy source files to writable directory and fix permissions
+        cp -r /build-src/* /home/builder/build/ && \
+        chown -R builder:builder /home/builder/build /output && \
+        cd /home/builder/build && \
+        su builder -c 'makepkg -sf --noconfirm' && \
         cp *.pkg.tar.zst /output/ 2>/dev/null || cp *.pkg.tar.* /output/
     "
 
