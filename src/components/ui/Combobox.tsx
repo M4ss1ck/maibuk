@@ -74,7 +74,7 @@ export function Combobox({
               value={query}
               className="relative cursor-pointer select-none py-1.5 px-3 text-sm text-foreground data-focus:bg-muted data-selected:bg-primary/10 data-selected:text-primary"
             >
-              Use "{query}"
+              "{query}"
             </ComboboxOption>
           )}
           {filteredOptions.map((option) => (

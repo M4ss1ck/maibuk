@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import type { Editor } from "@tiptap/react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { useTranslation } from "react-i18next";
 
 interface FindReplaceProps {
   editor: Editor;
@@ -10,6 +11,7 @@ interface FindReplaceProps {
 }
 
 export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
+  const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceTerm, setReplaceTerm] = useState("");
   const [matchCount, setMatchCount] = useState(0);
@@ -165,7 +167,7 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
   return (
     <div className="absolute top-14 right-4 bg-card border border-border rounded-lg shadow-lg p-4 z-50 w-80">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-medium text-foreground">Find & Replace</h3>
+        <h3 className="font-medium text-foreground">{t("editor.findReplace")}</h3>
         <button
           onClick={onClose}
           className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
@@ -179,14 +181,14 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
       <div className="space-y-3">
         <div>
           <Input
-            placeholder="Find..."
+            placeholder={t("editor.find")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             autoFocus
           />
           {searchTerm && (
             <div className="text-xs text-muted-foreground mt-1">
-              {matchCount > 0 ? `${currentMatch} of ${matchCount} matches` : "No matches"}
+              {matchCount > 0 ? t("editor.matchesOf", { current: currentMatch, total: matchCount }) : t("editor.noMatches")}
             </div>
           )}
         </div>
@@ -205,17 +207,17 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
         </div>
 
         <Input
-          placeholder="Replace with..."
+          placeholder={t("editor.replaceWith")}
           value={replaceTerm}
           onChange={(e) => setReplaceTerm(e.target.value)}
         />
 
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={replaceOne} disabled={matchCount === 0}>
-            Replace
+            {t("editor.replace")}
           </Button>
           <Button variant="secondary" size="sm" onClick={replaceAll} disabled={matchCount === 0}>
-            Replace All
+            {t("editor.replaceAll")}
           </Button>
         </div>
       </div>

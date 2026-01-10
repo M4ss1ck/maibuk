@@ -6,8 +6,10 @@ import { CoverCanvas, CoverToolbar, type CoverCanvasRef } from "../components/co
 import { useBookStore } from "../features/books/store";
 import { COVER_DIMENSIONS, DEFAULT_TEXT_STYLES, type CoverDimension, type TextStyle } from "../features/covers/types";
 import { Button } from "../components/ui/Button";
+import { useTranslation } from "react-i18next";
 
 export function CoverDesigner() {
+  const { t } = useTranslation();
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const canvasRef = useRef<CoverCanvasRef>(null);
@@ -192,7 +194,7 @@ export function CoverDesigner() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">{t("common.loading")}</p>
         </div>
       </div>
     );
@@ -209,7 +211,7 @@ export function CoverDesigner() {
         </Button>
 
         <div className="flex-1">
-          <h1 className="font-medium">Cover Designer</h1>
+          <h1 className="font-medium">{t("cover.title")}</h1>
           <p className="text-xs text-muted-foreground">{currentBook.title}</p>
         </div>
 
@@ -219,7 +221,7 @@ export function CoverDesigner() {
           onClick={handleSave}
           disabled={!hasChanges || isSaving}
         >
-          {isSaving ? "Saving..." : hasChanges ? "Save Cover" : "Saved"}
+          {isSaving ? t("common.loading") : hasChanges ? t("cover.saveCover") : t("cover.saved")}
         </Button>
       </div>
 
@@ -252,11 +254,11 @@ export function CoverDesigner() {
 
       {/* Tips */}
       <div className="h-10 border-t border-border flex items-center justify-center text-sm text-muted-foreground gap-4">
-        <span>Double-click text to edit</span>
+        <span>{t("cover.tips.doubleClick")}</span>
         <span>|</span>
-        <span>Delete: Remove selected</span>
+        <span>{t("cover.tips.delete")}</span>
         <span>|</span>
-        <span>Ctrl+S: Save</span>
+        <span>{t("cover.tips.save")}</span>
       </div>
     </div>
   );

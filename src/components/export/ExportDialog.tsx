@@ -15,6 +15,7 @@ import type { Chapter } from "../../features/chapters/types";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { PdfPreview } from "./PdfPreview";
+import { useTranslation } from "react-i18next";
 
 interface ExportDialogProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export function ExportDialog({
   book,
   chapters,
 }: ExportDialogProps) {
+  const { t } = useTranslation();
   const [format, setFormat] = useState<"epub" | "pdf">("epub");
   const [epubOptions, setEpubOptions] = useState<EpubExportOptions>(
     DEFAULT_EXPORT_OPTIONS
@@ -50,14 +52,14 @@ export function ExportDialog({
     }
 
     try {
-      setProgress({ status: "preparing", message: "Preparing export..." });
+      setProgress({ status: "preparing", message: t("export.preparingStatus") });
 
       // Generate the EPUB
       const blob = await generateEpub(book, chapters, epubOptions, (message) => {
         setProgress((prev) => ({ ...prev, message }));
       });
 
-      setProgress({ status: "saving", message: "Saving file..." });
+      setProgress({ status: "saving", message: t("export.savingStatus") });
 
       // Get save location from user
       const suggestedFilename = getEpubFilename(book);
@@ -96,7 +98,7 @@ export function ExportDialog({
       console.error("Export failed:", error);
       setProgress({
         status: "error",
-        message: error instanceof Error ? error.message : "Export failed",
+        message: error instanceof Error ? error.message : t("export.exportFailed"),
       });
     }
   }, [book, chapters, epubOptions, format, onClose]);
@@ -137,25 +139,24 @@ export function ExportDialog({
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 border border-border">
           <DialogTitle className="text-xl font-semibold text-foreground mb-4">
-            Export Book
+            {t("export.title")}
           </DialogTitle>
 
           {/* Book info */}
           <div className="mb-6 p-3 bg-primary rounded-md">
             <p className="font-medium text-foreground">{book.title}</p>
             <p className="text-sm text-success">
-              by {book.authorName}
+              {t("common.by")} {book.authorName}
             </p>
             <p className="text-sm text-success mt-1">
-              {exportableChapters.length} chapter
-              {exportableChapters.length !== 1 ? "s" : ""} to export
+              {t("export.chapter", { count: exportableChapters.length })}
             </p>
           </div>
 
           {/* Format selector */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-foreground mb-2">
-              Format
+              {t("export.format")}
             </label>
             <div className="flex gap-2">
               <button
@@ -165,7 +166,7 @@ export function ExportDialog({
                   }`}
                 onClick={() => setFormat("epub")}
               >
-                EPUB
+                {t("export.epub")}
               </button>
               <button
                 className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${format === "pdf"
@@ -174,7 +175,7 @@ export function ExportDialog({
                   }`}
                 onClick={() => setFormat("pdf")}
               >
-                PDF
+                {t("export.pdf")}
               </button>
             </div>
           </div>
@@ -185,7 +186,7 @@ export function ExportDialog({
               <>
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-foreground">
-                    Include Table of Contents
+                    {t("export.includeTOC")}
                   </label>
                   <Switch
                     checked={epubOptions.includeTableOfContents}
@@ -200,7 +201,7 @@ export function ExportDialog({
 
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-foreground">
-                    Number chapters in TOC
+                    {t("export.numberedTOC")}
                   </label>
                   <Switch
                     checked={epubOptions.numberChapters}
@@ -212,7 +213,7 @@ export function ExportDialog({
 
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-foreground">
-                    Prepend chapter titles
+                    {t("export.prependChapterTitles")}
                   </label>
                   <Switch
                     checked={epubOptions.prependChapterTitles}
@@ -230,7 +231,7 @@ export function ExportDialog({
               <>
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-foreground">
-                    Table of Contents
+                    {t("export.TOC")}
                   </label>
                   <Switch
                     checked={pdfOptions.includeTableOfContents}
@@ -244,7 +245,7 @@ export function ExportDialog({
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  Page size, margins, and page numbers are configured in your browser's print dialog.
+                  {t("export.disclaimer")}
                 </p>
               </>
             )}
@@ -325,7 +326,7 @@ export function ExportDialog({
               onClick={handleClose}
               disabled={isExporting}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="primary"
@@ -333,10 +334,10 @@ export function ExportDialog({
               disabled={isExporting || exportableChapters.length === 0}
             >
               {isExporting
-                ? "Exporting..."
+                ? t("export.exporting")
                 : format === "epub"
-                  ? "Export EPUB"
-                  : "Preview PDF"}
+                  ? t("export.exportEpub")
+                  : t("export.previewPdf")}
             </Button>
           </div>
         </DialogPanel>

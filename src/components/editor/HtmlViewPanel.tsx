@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Editor } from "@tiptap/react";
 import { Button } from "../ui/Button";
+import { useTranslation } from "react-i18next";
 
 interface HtmlViewPanelProps {
   editor: Editor;
@@ -9,6 +10,7 @@ interface HtmlViewPanelProps {
 }
 
 export function HtmlViewPanel({ editor, isOpen, onClose }: HtmlViewPanelProps) {
+  const { t } = useTranslation();
   const [html, setHtml] = useState("");
   const [error, setError] = useState("");
   const [isDirty, setIsDirty] = useState(false);
@@ -50,7 +52,7 @@ export function HtmlViewPanel({ editor, isOpen, onClose }: HtmlViewPanelProps) {
       setError("");
       setIsDirty(false);
     } catch (e) {
-      setError("Invalid HTML content");
+      setError(t("editor.invalidHtml"));
     }
   };
 
@@ -76,22 +78,22 @@ export function HtmlViewPanel({ editor, isOpen, onClose }: HtmlViewPanelProps) {
           <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
           </svg>
-          <span className="text-sm font-medium">HTML Source</span>
+          <span className="text-sm font-medium">{t("editor.htmlSource")}</span>
           {isDirty && (
             <span className="text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">
-              Modified
+              {t("editor.modified")}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={handleRefresh} title="Refresh from editor">
+          <Button size="sm" variant="ghost" onClick={handleRefresh} title={t("editor.refreshFromEditor")}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </Button>
           {isDirty && (
             <Button size="sm" onClick={handleApply}>
-              Apply
+              {t("editor.apply")}
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={onClose}>
@@ -109,7 +111,7 @@ export function HtmlViewPanel({ editor, isOpen, onClose }: HtmlViewPanelProps) {
           rows={12}
           className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground font-mono text-xs resize-y focus:outline-none focus:ring-2 focus:ring-primary"
           spellCheck={false}
-          placeholder="HTML content..."
+          placeholder={t("editor.htmlContent")}
         />
         {error && (
           <p className="text-sm text-destructive mt-1">{error}</p>

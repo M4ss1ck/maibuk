@@ -1,4 +1,5 @@
 import type { Book } from "../../features/books/types";
+import { useTranslation } from "react-i18next";
 
 interface BookCardProps {
   book: Book;
@@ -6,8 +7,10 @@ interface BookCardProps {
 }
 
 export function BookCard({ book, onClick }: BookCardProps) {
+  const { t, i18n } = useTranslation();
+
   const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat("en-US", {
+    return new Intl.DateTimeFormat(i18n.language, {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -26,7 +29,7 @@ export function BookCard({ book, onClick }: BookCardProps) {
       className="flex flex-col bg-card border border-border rounded-xl overflow-hidden hover:shadow-lg transition-shadow text-left w-full"
     >
       {/* Cover placeholder */}
-      <div className="aspect-[2/3] bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
+      <div className="aspect-2/3 bg-linear-to-br from-muted to-muted/50 flex items-center justify-center">
         {book.coverImagePath ? (
           <img
             src={book.coverImagePath}
@@ -47,15 +50,15 @@ export function BookCard({ book, onClick }: BookCardProps) {
 
         <div className="flex items-center justify-between mt-3">
           <span className={`text-xs px-2 py-1 rounded-full capitalize ${statusColors[book.status]}`}>
-            {book.status.replace("-", " ")}
+            {t(`common.${book.status}`)}
           </span>
           <span className="text-xs text-muted-foreground">
-            {book.wordCount.toLocaleString()} words
+            {book.wordCount.toLocaleString()} {t("common.words")}
           </span>
         </div>
 
         <p className="text-xs text-muted-foreground mt-2">
-          Updated {formatDate(book.updatedAt)}
+          {t("books.updated")} {formatDate(book.updatedAt)}
         </p>
       </div>
     </button>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { useTranslation } from "react-i18next";
 
 interface FootnoteDialogProps {
   editor: Editor;
@@ -10,12 +11,13 @@ interface FootnoteDialogProps {
 }
 
 export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps) {
+  const { t } = useTranslation();
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
 
   const handleInsert = () => {
     if (!content.trim()) {
-      setError("Footnote content is required");
+      setError(t("editor.footnoteRequired"));
       return;
     }
 
@@ -24,7 +26,7 @@ export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps)
     const selectedText = editor.state.doc.textBetween(from, to);
 
     if (!selectedText) {
-      setError("Please select some text to mark as a footnote");
+      setError(t("editor.selectTextForFootnote"));
       return;
     }
 
@@ -44,30 +46,30 @@ export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps)
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Add Footnote"
+      title={t("editor.footnote")}
       footer={
         <>
           <Button variant="secondary" onClick={handleClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
-          <Button onClick={handleInsert}>Add Footnote</Button>
+          <Button onClick={handleInsert}>{t("editor.footnote")}</Button>
         </>
       }
     >
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Select text in the editor, then add a footnote that will appear at the end of the chapter.
+          {t("editor.footnoteDescription")}
         </p>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Footnote Content</label>
+          <label className="block text-sm font-medium mb-1">{t("editor.footnoteContent")}</label>
           <textarea
             value={content}
             onChange={(e) => {
               setContent(e.target.value);
               setError("");
             }}
-            placeholder="Enter the footnote text..."
+            placeholder={t("editor.footnoteTextPlaceholder")}
             rows={4}
             className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
             autoFocus

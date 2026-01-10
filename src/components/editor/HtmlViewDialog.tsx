@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { Editor } from "@tiptap/react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { useTranslation } from "react-i18next";
 
 interface HtmlViewDialogProps {
   editor: Editor;
@@ -10,6 +11,7 @@ interface HtmlViewDialogProps {
 }
 
 export function HtmlViewDialog({ editor, isOpen, onClose }: HtmlViewDialogProps) {
+  const { t } = useTranslation();
   const [html, setHtml] = useState("");
   const [error, setError] = useState("");
 
@@ -49,7 +51,7 @@ export function HtmlViewDialog({ editor, isOpen, onClose }: HtmlViewDialogProps)
       editor.commands.setContent(html);
       handleClose();
     } catch (e) {
-      setError("Invalid HTML content");
+      setError(t("editor.invalidHtml"));
     }
   };
 
@@ -63,19 +65,19 @@ export function HtmlViewDialog({ editor, isOpen, onClose }: HtmlViewDialogProps)
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="View/Edit HTML"
+      title={t("editor.viewEditHtml")}
       footer={
         <>
           <Button variant="secondary" onClick={handleClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
-          <Button onClick={handleApply}>Apply Changes</Button>
+          <Button onClick={handleApply}>{t("editor.applyChanges")}</Button>
         </>
       }
     >
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Edit the HTML source directly. Be careful with manual edits as invalid HTML may cause issues.
+          {t("editor.htmlEditWarning")}
         </p>
 
         <div>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 
 interface ColorPickerProps {
   value: string;
@@ -19,6 +20,7 @@ const PRESET_COLORS = [
 ];
 
 export function ColorPicker({ value, onChange, onClear, onToggle, isActive, title, icon }: ColorPickerProps) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,9 +121,9 @@ export function ColorPicker({ value, onChange, onClear, onToggle, isActive, titl
                 onChange(e.target.value);
               }}
               className="w-8 h-8 cursor-pointer rounded border border-border"
-              title="Custom color"
+              title={t("editor.customColor")}
             />
-            <span className="text-xs text-muted-foreground flex-1">Custom</span>
+            <span className="text-xs text-muted-foreground flex-1">{t("cover.custom")}</span>
             {onClear && (
               <button
                 onClick={() => {
@@ -130,7 +132,7 @@ export function ColorPicker({ value, onChange, onClear, onToggle, isActive, titl
                 }}
                 className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted"
               >
-                Clear
+                {t("editor.clear")}
               </button>
             )}
           </div>

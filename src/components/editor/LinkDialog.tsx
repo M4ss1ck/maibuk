@@ -3,6 +3,7 @@ import type { Editor } from "@tiptap/react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { useTranslation } from "react-i18next";
 
 interface LinkDialogProps {
   editor: Editor;
@@ -11,6 +12,7 @@ interface LinkDialogProps {
 }
 
 export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
+  const { t } = useTranslation();
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [error, setError] = useState("");
@@ -30,7 +32,7 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
 
   const handleInsert = () => {
     if (!url.trim()) {
-      setError("URL is required");
+      setError(t("errors.URLRequired"));
       return;
     }
 
@@ -80,19 +82,19 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={isEditing ? "Edit Link" : "Insert Link"}
+      title={isEditing ? t("editor.editLink") : t("editor.insertLink")}
       footer={
         <>
           {isEditing && (
             <Button variant="secondary" onClick={handleRemove} className="text-destructive hover:bg-destructive hover:text-white">
-              Remove Link
+              {t("editor.removeLink")}
             </Button>
           )}
           <Button variant="secondary" onClick={handleClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleInsert}>
-            {isEditing ? "Update" : "Insert"}
+            {isEditing ? t("common.update") : t("common.insert")}
           </Button>
         </>
       }
@@ -114,15 +116,15 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            Display Text <span className="text-muted-foreground">(optional)</span>
+            {t("editor.displayText")} <span className="text-muted-foreground">{t("editor.optional")}</span>
           </label>
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Link text"
+            placeholder={t("editor.linkText")}
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Leave empty to use selected text
+            {t("editor.leaveEmpty")}
           </p>
         </div>
       </div>

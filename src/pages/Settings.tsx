@@ -12,8 +12,10 @@ import {
 } from "../features/settings";
 import { Select, Switch } from "../components/ui";
 import { APP_VERSION } from "../constants";
+import { useTranslation } from "react-i18next";
 
 export function Settings() {
+  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const {
     appFontSize,
@@ -30,16 +32,16 @@ export function Settings() {
 
   return (
     <div className="p-8 max-w-2xl">
-      <h2 className="text-2xl font-semibold mb-8">Settings</h2>
+      <h2 className="text-2xl font-semibold mb-8">{t("settings.title")}</h2>
 
       {/* Appearance Settings */}
       <section className="mb-8">
-        <h3 className="text-lg font-medium mb-4">Appearance</h3>
+        <h3 className="text-lg font-medium mb-4">{t("settings.appearance")}</h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between py-2">
             <div>
-              <p className="font-medium">Theme</p>
-              <p className="text-sm text-muted-foreground">Choose your preferred theme</p>
+              <p className="font-medium">{t("settings.theme")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.themeDescription")}</p>
             </div>
             <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
               <button
@@ -49,7 +51,7 @@ export function Settings() {
                   : "text-muted-foreground hover:text-foreground"
                   }`}
               >
-                Light
+                {t("settings.light")}
               </button>
               <button
                 onClick={() => setTheme("dark")}
@@ -58,7 +60,7 @@ export function Settings() {
                   : "text-muted-foreground hover:text-foreground"
                   }`}
               >
-                Dark
+                {t("settings.dark")}
               </button>
               <button
                 onClick={() => setTheme("system")}
@@ -67,15 +69,15 @@ export function Settings() {
                   : "text-muted-foreground hover:text-foreground"
                   }`}
               >
-                System
+                {t("settings.system")}
               </button>
             </div>
           </div>
 
           <div className="flex items-center justify-between py-2">
             <div>
-              <p className="font-medium">Font Size</p>
-              <p className="text-sm text-muted-foreground">Adjust the app text size</p>
+              <p className="font-medium">{t("settings.fontSize")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.fontSizeDescription")}</p>
             </div>
             <Select<FontSize>
               value={appFontSize}
@@ -86,8 +88,8 @@ export function Settings() {
 
           <div className="flex items-center justify-between py-2">
             <div>
-              <p className="font-medium">Font</p>
-              <p className="text-sm text-muted-foreground">Choose the app font</p>
+              <p className="font-medium">{t("settings.font")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.fontDescription")}</p>
             </div>
             <Select<FontFamily>
               value={appFont}
@@ -100,24 +102,24 @@ export function Settings() {
 
       {/* General Settings */}
       <section className="mb-8">
-        <h3 className="text-lg font-medium mb-4">General</h3>
+        <h3 className="text-lg font-medium mb-4">{t("settings.general")}</h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between py-2">
             <div>
-              <p className="font-medium">Auto-save</p>
-              <p className="text-sm text-muted-foreground">Automatically save your work</p>
+              <p className="font-medium">{t("settings.autoSave")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.autoSaveDescription")}</p>
             </div>
             <Switch
               checked={autoSave}
               onChange={setAutoSave}
-              label="Toggle auto-save"
+              label={t("settings.toggleAutoSave")}
             />
           </div>
 
           <div className="flex items-center justify-between py-2">
             <div>
-              <p className="font-medium">Language</p>
-              <p className="text-sm text-muted-foreground">Choose the app language</p>
+              <p className="font-medium">{t("settings.language")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.languageDescription")}</p>
             </div>
             <Select<Language>
               value={language}
@@ -130,12 +132,12 @@ export function Settings() {
 
       {/* Export Settings */}
       <section className="mb-8">
-        <h3 className="text-lg font-medium mb-4">Export Defaults</h3>
+        <h3 className="text-lg font-medium mb-4">{t("settings.export")}</h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between py-2">
             <div>
-              <p className="font-medium">Default Format</p>
-              <p className="text-sm text-muted-foreground">Preferred export format</p>
+              <p className="font-medium">{t("settings.defaultFormat")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.defaultFormatDescription")}</p>
             </div>
             <Select<ExportFormat>
               value={defaultExportFormat}
@@ -148,10 +150,10 @@ export function Settings() {
 
       {/* About */}
       <section>
-        <h3 className="text-lg font-medium mb-4">About</h3>
+        <h3 className="text-lg font-medium mb-4">{t("settings.about")}</h3>
         <div className="text-sm text-muted-foreground">
           <p>Maibuk {APP_VERSION}</p>
-          <p className="mt-1">A cross-platform writing app for authors</p>
+          <p className="mt-1">{t("app.description")}</p>
         </div>
       </section>
     </div>

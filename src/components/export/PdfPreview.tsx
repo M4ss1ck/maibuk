@@ -4,6 +4,7 @@ import { Button } from "../ui";
 import { generatePdfHtml, type PdfExportOptions } from "../../features/export";
 import type { Book } from "../../features/books/types";
 import type { Chapter } from "../../features/chapters/types";
+import { useTranslation } from "react-i18next";
 
 interface PdfPreviewProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export function PdfPreview({
   chapters,
   initialOptions,
 }: PdfPreviewProps) {
+  const { t } = useTranslation();
   const previewRef = useRef<HTMLDivElement>(null);
   const printStyleRef = useRef<HTMLStyleElement | null>(null);
   const [options] = useState<PdfExportOptions>(initialOptions);
@@ -60,7 +62,7 @@ export function PdfPreview({
         .pdf-preview-content .cover-page::after,
         .pdf-preview-content .toc::after,
         .pdf-preview-content .chapter::after {
-          content: "— page break —";
+          content: "${t("export.pageBreak")}";
           display: block;
           font-size: 11px;
           color: #888;
@@ -91,7 +93,7 @@ export function PdfPreview({
     } catch (err) {
       console.error("Preview error:", err);
       if (previewRef.current) {
-        previewRef.current.innerHTML = `<p class="text-red-500">Error generating preview</p>`;
+        previewRef.current.innerHTML = `<p class="text-red-500">${t("export.previewError")}</p>`;
       }
     }
   }, [isOpen, book, chapters, options]);
@@ -196,15 +198,15 @@ export function PdfPreview({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </Button>
-        <h1 className="font-medium flex-1">PDF Preview: {book.title}</h1>
+        <h1 className="font-medium flex-1">{t("export.pdfPreview", { title: book.title })}</h1>
         <p className="text-sm text-muted-foreground">
-          Page layout is determined by your browser's print settings
+          {t("export.portalDisclaimer")}
         </p>
         <Button variant="primary" onClick={handlePrint}>
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
           </svg>
-          Print / Save as PDF
+          {t("export.portalButton")}
         </Button>
       </div>
 

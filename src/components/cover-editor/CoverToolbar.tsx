@@ -7,6 +7,7 @@ import {
   type CoverDimension,
   type TextStyle,
 } from "../../features/covers/types";
+import { useTranslation } from "react-i18next";
 
 interface CoverToolbarProps {
   dimension: CoverDimension;
@@ -39,6 +40,7 @@ export function CoverToolbar({
   bookTitle = "Your Title",
   bookAuthor = "Author Name",
 }: CoverToolbarProps) {
+  const { t } = useTranslation();
   const [showDimensions, setShowDimensions] = useState(false);
   const [showTextMenu, setShowTextMenu] = useState(false);
   const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
@@ -114,9 +116,8 @@ export function CoverToolbar({
                   onDimensionChange(dim);
                   setShowDimensions(false);
                 }}
-                className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${
-                  dim.id === dimension.id ? "bg-muted" : ""
-                }`}
+                className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${dim.id === dimension.id ? "bg-muted" : ""
+                  }`}
               >
                 <span className="font-medium">{dim.name}</span>
                 <span className="text-xs text-muted-foreground">{dim.description}</span>
@@ -139,7 +140,7 @@ export function CoverToolbar({
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
           </svg>
-          Add Text
+          {t("cover.addText")}
         </Button>
 
         {showTextMenu && (
@@ -148,19 +149,19 @@ export function CoverToolbar({
               onClick={handleAddTitle}
               className="w-full px-4 py-2 text-left hover:bg-muted"
             >
-              Title
+              {t("cover.toolbar.title")}
             </button>
             <button
               onClick={handleAddSubtitle}
               className="w-full px-4 py-2 text-left hover:bg-muted"
             >
-              Subtitle
+              {t("cover.toolbar.subtitle")}
             </button>
             <button
               onClick={handleAddAuthor}
               className="w-full px-4 py-2 text-left hover:bg-muted"
             >
-              Author Name
+              {t("cover.toolbar.author")}
             </button>
           </div>
         )}
@@ -176,7 +177,7 @@ export function CoverToolbar({
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        Add Image
+        {t("cover.addImage")}
       </Button>
       <input
         ref={imageInputRef}
@@ -198,12 +199,12 @@ export function CoverToolbar({
             className="w-4 h-4 rounded border border-border"
             style={{ backgroundColor }}
           />
-          Background
+          {t("cover.background")}
         </Button>
 
         {showBackgroundMenu && (
           <div className="absolute top-full left-0 mt-1 w-64 bg-popover border border-border rounded-lg shadow-lg z-50 p-3">
-            <p className="text-sm font-medium mb-2">Color</p>
+            <p className="text-sm font-medium mb-2">{t("cover.backgroundColor")}</p>
             <div className="grid grid-cols-8 gap-1 mb-3">
               {PRESET_COLORS.map((color) => (
                 <button
@@ -214,7 +215,7 @@ export function CoverToolbar({
                 />
               ))}
             </div>
-            <p className="text-sm font-medium mb-2">Custom</p>
+            <p className="text-sm font-medium mb-2">{t("cover.custom")}</p>
             <input
               type="color"
               value={backgroundColor}
@@ -228,7 +229,7 @@ export function CoverToolbar({
                 onClick={() => bgImageInputRef.current?.click()}
                 className="w-full"
               >
-                Upload Background Image
+                {t("cover.upload")}
               </Button>
             </div>
           </div>
@@ -250,7 +251,7 @@ export function CoverToolbar({
         size="sm"
         onClick={onBringForward}
         disabled={!hasSelection}
-        title="Bring Forward"
+        title={t("cover.bringForward")}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
@@ -262,7 +263,7 @@ export function CoverToolbar({
         size="sm"
         onClick={onSendBackward}
         disabled={!hasSelection}
-        title="Send Backward"
+        title={t("cover.sendBackward")}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -274,7 +275,7 @@ export function CoverToolbar({
         size="sm"
         onClick={onDelete}
         disabled={!hasSelection}
-        title="Delete"
+        title={t("common.delete")}
         className="text-destructive hover:text-destructive"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -295,7 +296,7 @@ export function CoverToolbar({
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
-          Export
+          {t("cover.export")}
         </Button>
 
         {showExportMenu && (
@@ -307,7 +308,7 @@ export function CoverToolbar({
               }}
               className="w-full px-4 py-2 text-left hover:bg-muted"
             >
-              Export as PNG
+              {t("cover.pngExport")}
             </button>
             <button
               onClick={() => {
@@ -316,7 +317,7 @@ export function CoverToolbar({
               }}
               className="w-full px-4 py-2 text-left hover:bg-muted"
             >
-              Export as JPEG
+              {t("cover.jpgExport")}
             </button>
           </div>
         )}

@@ -24,6 +24,7 @@ import { SceneBreak } from "./extensions/SceneBreak";
 import { FontSize } from "./extensions/FontSize";
 import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
+import { useTranslation } from "react-i18next";
 
 interface EditorProps {
   content: string | null;
@@ -42,6 +43,7 @@ export function Editor({
   editable = true,
   focusMode = false,
 }: EditorProps) {
+  const { t } = useTranslation();
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -134,7 +136,7 @@ export function Editor({
   if (!editor) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading editor...</div>
+        <div className="animate-pulse text-muted-foreground">{t("editor.loadingEditor")}</div>
       </div>
     );
   }

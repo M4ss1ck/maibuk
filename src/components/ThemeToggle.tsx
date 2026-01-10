@@ -1,19 +1,21 @@
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "../features/theme";
+import { useTranslation } from "react-i18next";
 
 interface ThemeToggleProps {
   variant?: "inline" | "dropdown";
 }
 
 export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
+  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const themes = [
-    { value: "light" as const, label: "Light", icon: SunIcon },
-    { value: "dark" as const, label: "Dark", icon: MoonIcon },
-    { value: "system" as const, label: "System", icon: MonitorIcon },
+    { value: "light" as const, label: t("settings.light"), icon: SunIcon },
+    { value: "dark" as const, label: t("settings.dark"), icon: MoonIcon },
+    { value: "system" as const, label: t("settings.system"), icon: MonitorIcon },
   ];
 
   const currentTheme = themes.find((t) => t.value === theme) || themes[0];

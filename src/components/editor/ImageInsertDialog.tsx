@@ -3,6 +3,7 @@ import type { Editor } from "@tiptap/react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { useTranslation } from "react-i18next";
 
 interface ImageInsertDialogProps {
   editor: Editor;
@@ -11,13 +12,14 @@ interface ImageInsertDialogProps {
 }
 
 export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialogProps) {
+  const { t } = useTranslation();
   const [url, setUrl] = useState("");
   const [alt, setAlt] = useState("");
   const [error, setError] = useState("");
 
   const handleInsert = () => {
     if (!url.trim()) {
-      setError("Image URL is required");
+      setError(t("editor.imageUrlRequired"));
       return;
     }
 
@@ -79,13 +81,13 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Insert Image"
+      title={t("editor.insertImage")}
       footer={
         <>
           <Button variant="secondary" onClick={handleClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
-          <Button onClick={handleInsert}>Insert</Button>
+          <Button onClick={handleInsert}>{t("common.insert")}</Button>
         </>
       }
     >
@@ -95,19 +97,19 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Choose from Computer
+            {t("editor.chooseFromComputer")}
           </Button>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-border" />
-          <span className="text-sm text-muted-foreground">or</span>
+          <span className="text-sm text-muted-foreground">{t("editor.or")}</span>
           <div className="flex-1 h-px bg-border" />
         </div>
 
         <Input
-          label="Image URL"
-          placeholder="https://example.com/image.jpg"
+          label={t("editor.imageUrl")}
+          placeholder={t("editor.imageUrlPlaceholder")}
           value={url}
           onChange={(e) => {
             setUrl(e.target.value);
@@ -117,21 +119,21 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
         />
 
         <Input
-          label="Alt Text (optional)"
-          placeholder="Description of the image"
+          label={t("editor.altTextOptional")}
+          placeholder={t("editor.imageAltPlaceholder")}
           value={alt}
           onChange={(e) => setAlt(e.target.value)}
         />
 
         {url && (
           <div className="mt-4">
-            <p className="text-sm text-muted-foreground mb-2">Preview:</p>
+            <p className="text-sm text-muted-foreground mb-2">{t("editor.preview")}</p>
             <div className="border border-border rounded-lg p-2 bg-muted/20">
               <img
                 src={url}
                 alt={alt || "Preview"}
                 className="max-h-48 mx-auto object-contain"
-                onError={() => setError("Failed to load image preview")}
+                onError={() => setError(t("editor.failedToLoadPreview"))}
               />
             </div>
           </div>

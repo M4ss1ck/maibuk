@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { Editor } from "@tiptap/react";
+import { useTranslation } from "react-i18next";
 
 interface TableMenuProps {
   editor: Editor;
 }
 
 export function TableMenu({ editor }: TableMenuProps) {
+  const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
 
   const insertTable = (rows: number, cols: number) => {
@@ -23,7 +25,7 @@ export function TableMenu({ editor }: TableMenuProps) {
     return (
       <button
         onClick={() => setShowMenu(true)}
-        title="Insert Table"
+        title={t("editor.insertTable")}
         className="p-2 rounded transition-colors hover:bg-muted"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -38,7 +40,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <div className="relative">
         <button
           onClick={() => setShowMenu(false)}
-          title="Insert Table"
+          title={t("editor.insertTable")}
           className="p-2 rounded transition-colors bg-primary text-white"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,7 +49,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         </button>
 
         <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg p-3 z-50">
-          <p className="text-sm text-muted-foreground mb-2">Select table size:</p>
+          <p className="text-sm text-muted-foreground mb-2">{t("editor.selectTableSize")}:</p>
           <div className="grid grid-cols-5 gap-1">
             {[1, 2, 3, 4, 5].map((row) =>
               [1, 2, 3, 4, 5].map((col) => (
@@ -61,7 +63,7 @@ export function TableMenu({ editor }: TableMenuProps) {
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-2 text-center">
-            Click to insert table
+            {t("editor.insertTable")}
           </p>
         </div>
       </div>
@@ -74,7 +76,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <button
         onClick={() => editor.chain().focus().addColumnBefore().run()}
         disabled={!editor.can().addColumnBefore()}
-        title="Add Column Before"
+        title={t("editor.addColumnBefore")}
         className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +87,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <button
         onClick={() => editor.chain().focus().addColumnAfter().run()}
         disabled={!editor.can().addColumnAfter()}
-        title="Add Column After"
+        title={t("editor.addColumnAfter")}
         className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,7 +98,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <button
         onClick={() => editor.chain().focus().addRowBefore().run()}
         disabled={!editor.can().addRowBefore()}
-        title="Add Row Before"
+        title={t("editor.addRowBefore")}
         className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,7 +109,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <button
         onClick={() => editor.chain().focus().addRowAfter().run()}
         disabled={!editor.can().addRowAfter()}
-        title="Add Row After"
+        title={t("editor.addRowAfter")}
         className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -120,7 +122,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <button
         onClick={() => editor.chain().focus().deleteColumn().run()}
         disabled={!editor.can().deleteColumn()}
-        title="Delete Column"
+        title={t("editor.deleteColumn")}
         className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,7 +133,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <button
         onClick={() => editor.chain().focus().deleteRow().run()}
         disabled={!editor.can().deleteRow()}
-        title="Delete Row"
+        title={t("editor.deleteRow")}
         className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +144,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <button
         onClick={() => editor.chain().focus().deleteTable().run()}
         disabled={!editor.can().deleteTable()}
-        title="Delete Table"
+        title={t("editor.deleteTable")}
         className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

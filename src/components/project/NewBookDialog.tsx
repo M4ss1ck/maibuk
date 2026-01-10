@@ -3,6 +3,7 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { useBookStore } from "../../features/books/store";
+import { useTranslation } from "react-i18next";
 
 interface NewBookDialogProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface NewBookDialogProps {
 }
 
 export function NewBookDialog({ isOpen, onClose, onSuccess }: NewBookDialogProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [authorName, setAuthorName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -24,10 +26,10 @@ export function NewBookDialog({ isOpen, onClose, onSuccess }: NewBookDialogProps
     // Validate
     const newErrors: typeof errors = {};
     if (!title.trim()) {
-      newErrors.title = "Title is required";
+      newErrors.title = t("errors.titleRequired");
     }
     if (!authorName.trim()) {
-      newErrors.authorName = "Author name is required";
+      newErrors.authorName = t("errors.authorNameRequired");
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -61,22 +63,22 @@ export function NewBookDialog({ isOpen, onClose, onSuccess }: NewBookDialogProps
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title="Create New Book"
+      title={t("books.newBook")}
       footer={
         <>
           <Button variant="secondary" onClick={handleClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleSubmit} disabled={isLoading}>
-            {isLoading ? "Creating..." : "Create Book"}
+            {isLoading ? t("common.loading") : t("books.createBook")}
           </Button>
         </>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
-          label="Book Title"
-          placeholder="Enter the title of your book"
+          label={t("books.bookTitle")}
+          placeholder={t("books.bookTitlePlaceholder")}
           value={title}
           onChange={(e) => {
             setTitle(e.target.value);
@@ -87,8 +89,8 @@ export function NewBookDialog({ isOpen, onClose, onSuccess }: NewBookDialogProps
         />
 
         <Input
-          label="Author Name"
-          placeholder="Enter the author's name"
+          label={t("books.authorName")}
+          placeholder={t("books.authorNamePlaceholder")}
           value={authorName}
           onChange={(e) => {
             setAuthorName(e.target.value);

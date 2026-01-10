@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
@@ -14,6 +15,7 @@ interface LinkInfo {
 }
 
 export function LinkClickHandler({ editor }: LinkClickDialogProps) {
+  const { t } = useTranslation();
   const [linkInfo, setLinkInfo] = useState<LinkInfo | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
@@ -75,24 +77,24 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
     <Modal
       isOpen={showConfirmDialog}
       onClose={handleClose}
-      title="Open Link"
+      title={t("editor.openLink")}
       footer={
         <div className="flex gap-2 w-full">
           <Button variant="secondary" onClick={handleClose} className="flex-1">
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button variant="secondary" onClick={handleCopyLink} className="flex-1">
-            Copy URL
+            {t("editor.copyUrl")}
           </Button>
           <Button onClick={handleOpenLink} className="flex-1">
-            Open Link
+            {t("editor.openLink")}
           </Button>
         </div>
       }
     >
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          You are about to open an external link. Are you sure you want to continue?
+          {t("editor.externalLinkConfirm")}
         </p>
         <div className="p-3 bg-muted rounded-lg break-all">
           <code className="text-sm text-foreground">{linkInfo.url}</code>
