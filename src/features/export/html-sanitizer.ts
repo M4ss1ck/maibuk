@@ -133,5 +133,32 @@ function decodeHtmlEntities(text: string): string {
 export function processChapterHtml(html: string): string {
   const { html: sanitizedHtml, footnotes } = sanitizeHtmlForEpub(html);
   const endnotesHtml = generateEndnotesHtml(footnotes);
-  return sanitizedHtml + endnotesHtml;
+  // Clean up any malformed list HTML to prevent Paged.js errors
+  return cleanupListHtml(sanitizedHtml + endnotesHtml);
+}
+
+/**
+ * Cleans up malformed list HTML.
+ */
+function cleanupListHtml(html: string): string {
+  if (!html) return html;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+  const container = doc.body.firstElementChild;
+
+  if (!container) return html;
+
+  // Fix orphaned <li> elements
+  const allLis = container.querySelectorAll("li");
+  allLis.forEach((li) => {
+    const parent = li.parentElement;
+    if (parent && parent.tagName !== "UL" && parent.tagName !== "OL") {
+      const ul = doc.createElement("ul");
+      li.parentNode?.insertBefore(ul, li);
+      ul.appendChild(li);
+    }
+  });
+
+  return container.innerHTML;
 }
