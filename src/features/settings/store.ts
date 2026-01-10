@@ -36,7 +36,7 @@ export const useSettingsStore = create<SettingsStore>()(
       name: "maibuk-settings",
       onRehydrateStorage: () => (state) => {
         // Sync i18n with persisted language on rehydration
-        if (state?.language) {
+        if (state?.language && state.language !== i18n.language) {
           i18n.changeLanguage(state.language);
         }
       },

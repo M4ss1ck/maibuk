@@ -44,8 +44,20 @@ i18n.use(initReactI18next).init({
 });
 
 // Asynchronously detect system locale and update language
+// Only if no user preference is saved
 async function detectAndSetLocale(): Promise<void> {
   try {
+    // Check if user has a saved language preference
+    const savedSettings = localStorage.getItem('maibuk-settings');
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings);
+      if (parsed?.state?.language) {
+        // User has a saved preference, don't override with system locale
+        return;
+      }
+    }
+
+    // No saved preference, detect system locale
     const systemLocale = await locale();
     if (systemLocale) {
       const normalizedLang = normalizeLocale(systemLocale);
@@ -54,7 +66,7 @@ async function detectAndSetLocale(): Promise<void> {
       }
     }
   } catch (error) {
-    // Fallback to 'en' if Tauri OS plugin fails (e.g., in web mode)
+    // Fallback to 'en' if detection fails (e.g., in web mode)
     console.warn("Failed to detect system locale, using fallback:", error);
   }
 }
