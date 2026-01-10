@@ -1,0 +1,222 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., 0.1.8). Leave empty to use current version."
+        required: false
+        type: string
+
+jobs:
+  # Ensure version is synced across all files before building
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync version across files
+        if: github.event.inputs.version != ''
+        run: |
+          chmod +x ./scripts/bump-version.sh
+          ./scripts/bump-version.sh ${{ github.event.inputs.version }}
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Verify versions are in sync
+        run: |
+          PKG_VERSION=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
+          TAURI_VERSION=$(grep -Po '"version":\s*"\K[^"]+' src-tauri/tauri.conf.json | head -1)
+          CARGO_VERSION=$(grep -Po '^version = "\K[^"]+' src-tauri/Cargo.toml | head -1)
+
+          echo "package.json version: $PKG_VERSION"
+          echo "tauri.conf.json version: $TAURI_VERSION"
+          echo "Cargo.toml version: $CARGO_VERSION"
+
+          if [[ "$PKG_VERSION" != "$TAURI_VERSION" ]] || [[ "$PKG_VERSION" != "$CARGO_VERSION" ]]; then
+            echo "Error: Version mismatch detected!"
+            echo "Run './scripts/bump-version.sh $PKG_VERSION' to sync versions."
+            exit 1
+          fi
+
+  # Build for Linux (deb, rpm, appimage)
+  build-linux:
+    needs: prepare
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ needs.prepare.outputs.version }}
+          releaseName: "Maibuk v${{ needs.prepare.outputs.version }}"
+          releaseBody: "See the assets to download and install this version."
+          releaseDraft: true
+          prerelease: false
+          args: --target x86_64-unknown-linux-gnu
+
+      - name: Upload Linux artifacts for Arch build
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build-artifacts
+          path: |
+            src-tauri/target/release/maibuk
+            src-tauri/target/release/bundle/deb/
+            src-tauri/icons/128x128.png
+          retention-days: 1
+
+  # Build for Windows using GNU toolchain
+  build-windows:
+    needs: prepare
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cross-compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-mingw-w64-x86-64 \
+            nsis \
+            llvm \
+            clang \
+            lld
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ needs.prepare.outputs.version }}
+          releaseName: "Maibuk v${{ needs.prepare.outputs.version }}"
+          releaseBody: "See the assets to download and install this version."
+          releaseDraft: true
+          prerelease: false
+          args: --target x86_64-pc-windows-gnu
+
+  # Build Arch Linux package using Docker
+  build-arch:
+    needs: [prepare, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-build-artifacts
+          path: ./artifacts
+
+      - name: Prepare artifacts for Arch build
+        run: |
+          # Create the expected directory structure
+          mkdir -p src-tauri/target/release/bundle/deb
+          mkdir -p src-tauri/icons
+
+          # Move artifacts to expected locations
+          cp ./artifacts/maibuk src-tauri/target/release/maibuk || cp ./artifacts/release/maibuk src-tauri/target/release/maibuk
+          cp -r ./artifacts/deb/* src-tauri/target/release/bundle/deb/ 2>/dev/null || cp -r ./artifacts/bundle/deb/* src-tauri/target/release/bundle/deb/ 2>/dev/null || true
+          cp ./artifacts/128x128.png src-tauri/icons/ 2>/dev/null || cp ./artifacts/icons/128x128.png src-tauri/icons/ 2>/dev/null || true
+
+          # Make binary executable
+          chmod +x src-tauri/target/release/maibuk
+
+          # List what we have
+          echo "=== Artifacts structure ==="
+          find src-tauri/target/release -type f | head -20
+          ls -la src-tauri/icons/
+
+      - name: Build Arch Linux package
+        run: |
+          chmod +x ./scripts/build-arch-package.sh
+          ./scripts/build-arch-package.sh
+
+      - name: Upload Arch package to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: src-tauri/target/release/bundle/arch/*.pkg.tar.zst
+          tag_name: v${{ needs.prepare.outputs.version }}
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
