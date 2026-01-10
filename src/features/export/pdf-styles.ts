@@ -57,27 +57,33 @@ export function generatePdfStyles(options: PdfExportOptions): string {
 @page toc { @top-center { content: none; } }
 @page chapter-start { @top-center { content: none; } }
 
+/* Page structure rules - UNSCOPED so Paged.js can process them */
+.cover-page { page: cover; break-after: page; }
+.toc { page: toc; break-after: page; }
+.chapter { break-before: page; }
+.cover-page + .chapter, .toc + .chapter { break-before: auto; }
+.chapter-header { page: chapter-start; }
+.chapter-title { string-set: chapter-title content(); }
+
+/* Visual styles - scoped to rendered pages */
 ${s} { font-family: Georgia, "Times New Roman", serif; font-size: 12pt; line-height: 1.6; color: #000; background: #fff; }
 ${s} * { box-sizing: border-box; }
 
-${s} .cover-page { page: cover; break-after: page; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100vh; width: 100%; margin: 0; padding: 2cm; background: #fff; }
+${s} .cover-page { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; width: 100%; margin: 0; padding: 0; background: #fff; }
 ${s} .cover-page img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-${s} .cover-page .title { font-size: 32pt; font-weight: bold; margin-bottom: 0.5em; color: #000; }
-${s} .cover-page .subtitle { font-size: 18pt; font-style: italic; margin-bottom: 2em; color: #333; }
-${s} .cover-page .author { font-size: 16pt; color: #000; margin-top: auto; }
+${s} .cover-page .title { font-size: 32pt; font-weight: bold; margin-bottom: 0.5em; color: #000; z-index: 1; }
+${s} .cover-page .subtitle { font-size: 18pt; font-style: italic; margin-bottom: 2em; color: #333; z-index: 1; }
+${s} .cover-page .author { font-size: 16pt; color: #000; margin-top: auto; z-index: 1; }
 
-${s} .toc { page: toc; break-after: page; }
 ${s} .toc h2 { text-align: center; font-size: 18pt; margin-bottom: 2em; color: #000; }
 ${s} .toc-entry { display: flex; margin-bottom: 0.75em; line-height: 1.4; }
 ${s} .toc-entry a { color: #000; text-decoration: none; flex: 1; padding-right: 0.5em; }
 ${s} .toc-entry .page-number { text-align: right; padding-left: 0.5em; }
 ${s} .toc-entry .page-number::after { content: target-counter(attr(href url), page); }
 
-${s} .chapter { break-before: page; }
-${s} .cover-page + .chapter, ${s} .toc + .chapter { break-before: auto; }
-${s} .chapter-header { page: chapter-start; text-align: center; margin-bottom: 3em; padding-top: 4cm; }
+${s} .chapter-header { text-align: center; margin-bottom: 3em; padding-top: 4cm; }
 ${s} .chapter-number { font-size: 14pt; font-variant: small-caps; letter-spacing: 0.15em; color: #666; margin-bottom: 0.5em; }
-${s} .chapter-title { font-size: 24pt; font-weight: normal; margin: 0; color: #000; string-set: chapter-title content(); }
+${s} .chapter-title { font-size: 24pt; font-weight: normal; margin: 0; color: #000; }
 ${s} .chapter-content { color: #000; }
 
 ${s} h1, ${s} h2, ${s} h3, ${s} h4, ${s} h5, ${s} h6 { color: #000; break-after: avoid; margin-top: 1.5em; margin-bottom: 0.5em; }
