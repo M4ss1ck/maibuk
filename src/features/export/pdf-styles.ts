@@ -43,7 +43,6 @@ ${s} .cover-page {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 2em;
   background: #fff;
   page-break-after: always;
   break-after: page;
@@ -52,9 +51,10 @@ ${s} .cover-page {
 /* Cover with image */
 ${s} .cover-page img {
   max-width: 100%;
-  max-height: 90vh;
-  object-fit: contain;
-  display: block;
+  max-height: 100vh;
+  object-fit: cover;
+  height: 100vh;
+  width: 100%;
 }
 
 /* Text-only cover (no image) */

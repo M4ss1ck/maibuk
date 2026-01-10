@@ -41,56 +41,44 @@ export function PdfPreview({
       const previewStyles = `
         /* Preview-only: visual separation between sections */
         .pdf-preview-content .cover-page {
-          border: 2px dashed #ccc;
-          margin-bottom: 2em;
+          margin-bottom: 1em;
           min-height: 400px;
         }
         .pdf-preview-content .toc {
-          border: 2px dashed #ccc;
-          margin-bottom: 2em;
-          padding: 2em;
+          margin-bottom: 1em;
+          padding: 2em 0;
         }
         .pdf-preview-content .chapter {
-          border: 2px dashed #ccc;
-          margin-bottom: 2em;
-          padding: 2em;
+          margin-bottom: 1em;
+          padding: 2em 0;
         }
         .pdf-preview-content .chapter-header {
           padding-top: 1em;
         }
-        /* Preview: show section labels */
-        .pdf-preview-content .cover-page::before {
-          content: "COVER PAGE";
+        
+        /* Preview: page break separators AFTER sections */
+        .pdf-preview-content .cover-page::after,
+        .pdf-preview-content .toc::after,
+        .pdf-preview-content .chapter::after {
+          content: "— page break —";
           display: block;
-          font-size: 10px;
-          color: #999;
+          font-size: 11px;
+          color: #888;
           text-transform: uppercase;
-          letter-spacing: 0.1em;
-          margin-bottom: 1em;
+          letter-spacing: 0.15em;
           text-align: center;
           font-family: system-ui, sans-serif;
+          margin-top: 2em;
+          padding: 1em 0;
+          border-top: 1px dashed #ccc;
+          border-bottom: 1px dashed #ccc;
+          background: #f9f9f9;
+          width: 100%;
         }
-        .pdf-preview-content .toc::before {
-          content: "TABLE OF CONTENTS PAGE";
-          display: block;
-          font-size: 10px;
-          color: #999;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          margin-bottom: 1em;
-          text-align: center;
-          font-family: system-ui, sans-serif;
-        }
-        .pdf-preview-content .chapter::before {
-          content: "NEW PAGE";
-          display: block;
-          font-size: 10px;
-          color: #999;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          margin-bottom: 1em;
-          text-align: center;
-          font-family: system-ui, sans-serif;
+        
+        /* Last chapter doesn't need separator after */
+        .pdf-preview-content .chapter:last-child::after {
+          display: none;
         }
       `;
 
@@ -157,10 +145,10 @@ export function PdfPreview({
           height: auto !important;
         }
         
-        /* Hide preview-only visual elements */
-        .pdf-preview-content .cover-page::before,
-        .pdf-preview-content .toc::before,
-        .pdf-preview-content .chapter::before {
+        /* Hide preview-only visual elements (separators) */
+        .pdf-preview-content .cover-page::after,
+        .pdf-preview-content .toc::after,
+        .pdf-preview-content .chapter::after {
           display: none !important;
         }
         
@@ -168,7 +156,6 @@ export function PdfPreview({
         .pdf-preview-content .cover-page,
         .pdf-preview-content .toc,
         .pdf-preview-content .chapter {
-          border: none !important;
           margin-bottom: 0 !important;
           min-height: auto !important;
         }
