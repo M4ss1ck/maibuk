@@ -182,6 +182,13 @@
     "pdfPreview": "PDF Preview: {{title}}",
     "exporting": "Exporting..."
   },
+  "bookSettings": {
+    "title": "Book Settings",
+    "status": "Status",
+    "dangerZone": "Danger Zone",
+    "deleteConfirmMessage": "Are you sure you want to delete this book? This action cannot be undone and all chapters will be permanently deleted.",
+    "confirmDelete": "Yes, delete book"
+  },
   "settings": {
     "title": "Settings",
     "appearance": "Appearance",

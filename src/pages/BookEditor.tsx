@@ -8,7 +8,8 @@ import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ExportDialog } from "../components/export";
 import { useTranslation } from "react-i18next";
-import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon, FocusModeIcon, DocumentIcon } from "../components/icons";
+import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon, FocusModeIcon, DocumentIcon, SettingsIcon } from "../components/icons";
+import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 
 export function BookEditor() {
   const { t } = useTranslation();
@@ -16,7 +17,7 @@ export function BookEditor() {
   const navigate = useNavigate();
 
   // Stores
-  const { currentBook, loadBook, updateWordCount } = useBookStore();
+  const { currentBook, loadBook, updateWordCount, updateBook, deleteBook } = useBookStore();
   const {
     chapters,
     currentChapter,
@@ -32,6 +33,7 @@ export function BookEditor() {
   const [focusMode, setFocusMode] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
 
   // Ref to store the latest editor content
@@ -175,6 +177,24 @@ export function BookEditor() {
     setFocusMode((prev) => !prev);
   }, []);
 
+  // Handle book status update
+  const handleUpdateStatus = useCallback(
+    async (status: "draft" | "in-progress" | "completed") => {
+      if (bookId) {
+        await updateBook(bookId, { status });
+      }
+    },
+    [bookId, updateBook]
+  );
+
+  // Handle book deletion
+  const handleDeleteBook = useCallback(async () => {
+    if (bookId) {
+      await deleteBook(bookId);
+      navigate("/");
+    }
+  }, [bookId, deleteBook, navigate]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -298,6 +318,15 @@ export function BookEditor() {
               <CoverDesignIcon className="w-5 h-5" />
             </button>
 
+            {/* Book Settings button */}
+            <button
+              onClick={() => setShowSettingsDialog(true)}
+              className="p-2 hover:bg-muted rounded transition-colors"
+              title={t("bookSettings.title")}
+            >
+              <SettingsIcon className="w-5 h-5" />
+            </button>
+
             {/** Theme toggle */}
             <ThemeToggle variant="dropdown" />
 
@@ -346,6 +375,15 @@ export function BookEditor() {
         onClose={() => setShowExportDialog(false)}
         book={currentBook}
         chapters={chapters}
+      />
+
+      {/* Book Settings Dialog */}
+      <BookSettingsDialog
+        isOpen={showSettingsDialog}
+        onClose={() => setShowSettingsDialog(false)}
+        book={currentBook}
+        onUpdateStatus={handleUpdateStatus}
+        onDelete={handleDeleteBook}
       />
     </div>
   );

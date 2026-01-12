@@ -182,6 +182,13 @@
     "pdfPreview": "Vista Previa PDF: {{title}}",
     "exporting": "Exportando..."
   },
+  "bookSettings": {
+    "title": "Configuración del Libro",
+    "status": "Estado",
+    "dangerZone": "Zona de Peligro",
+    "deleteConfirmMessage": "¿Estás seguro de que quieres eliminar este libro? Esta acción no se puede deshacer y todos los capítulos se eliminarán permanentemente.",
+    "confirmDelete": "Sí, eliminar libro"
+  },
   "settings": {
     "title": "Configuración",
     "appearance": "Apariencia",
