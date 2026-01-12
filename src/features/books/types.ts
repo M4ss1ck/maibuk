@@ -30,6 +30,7 @@ export interface UpdateBookInput {
   authorName?: string;
   description?: string;
   genre?: string;
+  language?: string;
   status?: "draft" | "in-progress" | "completed";
   targetWordCount?: number;
   coverImagePath?: string;

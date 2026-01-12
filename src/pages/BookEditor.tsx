@@ -179,13 +179,9 @@ export function BookEditor() {
 
   // Handle book info update
   const handleUpdateBookInfo = useCallback(
-    async (
-      title: string,
-      authorName: string,
-      status: "draft" | "in-progress" | "completed"
-    ) => {
+    async (input: Parameters<typeof updateBook>[1]) => {
       if (bookId) {
-        await updateBook(bookId, { title, authorName, status });
+        await updateBook(bookId, input);
       }
     },
     [bookId, updateBook]

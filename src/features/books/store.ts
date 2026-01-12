@@ -154,6 +154,10 @@ export const useBookStore = create<BookStore>((set) => ({
       updates.push("genre = ?");
       values.push(input.genre);
     }
+    if (input.language !== undefined) {
+      updates.push("language = ?");
+      values.push(input.language);
+    }
     if (input.status !== undefined) {
       updates.push("status = ?");
       values.push(input.status);

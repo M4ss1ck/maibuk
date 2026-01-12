@@ -48,8 +48,17 @@
     "updated": "Actualizado",
     "bookTitle": "Título",
     "bookTitlePlaceholder": "Ingresa el título de tu libro",
+    "subtitle": "Subtítulo",
+    "subtitlePlaceholder": "Ingresa un subtítulo (opcional)",
     "authorName": "Autor",
     "authorNamePlaceholder": "Ingresa el nombre del autor",
+    "description": "Descripción",
+    "descriptionPlaceholder": "Ingresa una breve descripción de tu libro",
+    "genre": "Género",
+    "genrePlaceholder": "ej: Fantasía, Romance, Thriller",
+    "language": "Idioma",
+    "targetWordCount": "Meta de palabras",
+    "targetWordCountPlaceholder": "ej: 80000",
     "loading": "Cargando..."
   },
   "chapters": {
