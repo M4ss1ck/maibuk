@@ -53,7 +53,8 @@ export const useChapterStore = create<ChapterStore>((set) => ({
   error: null,
 
   loadChapters: async (bookId: string) => {
-    set({ isLoading: true, error: null });
+    // Clear currentChapter when loading chapters for a (potentially different) book
+    set({ isLoading: true, error: null, currentChapter: null });
     try {
       const db = await getDatabase();
       const result = await db.select<Record<string, unknown>[]>(
