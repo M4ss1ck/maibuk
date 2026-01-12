@@ -19,6 +19,8 @@ type FontFamilyValue = "Literata, serif" | "Inter, sans-serif" | "monospace";
 
 const FONT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "28", "32", "36", "48", "72"];
 
+const LINE_HEIGHT_OPTIONS = ["1", "1.15", "1.5", "2", "2.5", "3"];
+
 const FONT_OPTIONS: { value: FontFamilyValue; label: string }[] = [
   { value: "Literata, serif", label: "Serif" },
   { value: "Inter, sans-serif", label: "Sans" },
@@ -71,6 +73,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       const currentFontSize = attrs.fontSize
         ? attrs.fontSize.replace("px", "")
         : "18"; // default size
+      const currentLineHeight = attrs.lineHeight || "1.5"; // default line height
       const currentColor = attrs.color || "";
 
       // Get highlight color from the highlight mark
@@ -79,6 +82,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       return {
         fontSize: currentFontSize,
+        lineHeight: currentLineHeight,
         color: currentColor,
         highlightColor: currentHighlightColor,
         isBold: e.isActive("bold"),
@@ -110,6 +114,13 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     const sizeValue = size.replace(/[^0-9]/g, "");
     if (sizeValue) {
       editor.chain().focus().setFontSize(`${sizeValue}px`).run();
+    }
+  };
+
+  const handleLineHeightChange = (lineHeight: string) => {
+    const value = lineHeight.replace(/[^0-9.]/g, "");
+    if (value) {
+      editor.chain().focus().setLineHeight(value).run();
     }
   };
 
@@ -269,6 +280,13 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         >
           <span className="text-sm font-bold">H3</span>
         </ToolbarButton>
+
+        <Combobox
+          value={editorState.lineHeight}
+          onChange={handleLineHeightChange}
+          options={LINE_HEIGHT_OPTIONS}
+          placeholder={t("editor.lineHeight")}
+        />
 
         <Divider />
 

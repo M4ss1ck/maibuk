@@ -22,6 +22,7 @@ import { EditorToolbar } from "./EditorToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
 import { SceneBreak } from "./extensions/SceneBreak";
 import { FontSize } from "./extensions/FontSize";
+import { LineHeight } from "./extensions/LineHeight";
 import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
 import { useTranslation } from "react-i18next";
@@ -67,6 +68,7 @@ export function Editor({
       TextStyle,
       FontFamily,
       FontSize,
+      LineHeight,
       Color,
       Subscript,
       Superscript,

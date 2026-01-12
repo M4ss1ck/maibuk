@@ -138,6 +138,7 @@
     "viewHtml": "Ver HTML",
     "viewEditHtml": "Ver/Editar HTML",
     "size": "Tamaño",
+    "lineHeight": "Interlineado",
     "customColor": "Color personalizado",
     "refreshFromEditor": "Actualizar desde el editor",
     "htmlContent": "Contenido HTML...",
