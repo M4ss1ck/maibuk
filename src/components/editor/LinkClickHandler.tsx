@@ -71,6 +71,11 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
     setLinkInfo(null);
   };
 
+  const handleRemove = () => {
+    editor.chain().focus().unsetLink().run();
+    handleClose();
+  };
+
   if (!showConfirmDialog || !linkInfo) return null;
 
   return createPortal(
@@ -80,8 +85,8 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
       title={t("editor.openLink")}
       footer={
         <div className="flex gap-2 w-full">
-          <Button variant="secondary" onClick={handleClose} className="flex-1">
-            {t("common.cancel")}
+          <Button variant="destructive" onClick={handleRemove}>
+            {t("editor.removeLink")}
           </Button>
           <Button variant="secondary" onClick={handleCopyLink} className="flex-1">
             {t("editor.copyUrl")}
