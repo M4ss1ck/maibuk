@@ -177,11 +177,15 @@ export function BookEditor() {
     setFocusMode((prev) => !prev);
   }, []);
 
-  // Handle book status update
-  const handleUpdateStatus = useCallback(
-    async (status: "draft" | "in-progress" | "completed") => {
+  // Handle book info update
+  const handleUpdateBookInfo = useCallback(
+    async (
+      title: string,
+      authorName: string,
+      status: "draft" | "in-progress" | "completed"
+    ) => {
       if (bookId) {
-        await updateBook(bookId, { status });
+        await updateBook(bookId, { title, authorName, status });
       }
     },
     [bookId, updateBook]
@@ -382,7 +386,7 @@ export function BookEditor() {
         isOpen={showSettingsDialog}
         onClose={() => setShowSettingsDialog(false)}
         book={currentBook}
-        onUpdateStatus={handleUpdateStatus}
+        onUpdateBookInfo={handleUpdateBookInfo}
         onDelete={handleDeleteBook}
       />
     </div>

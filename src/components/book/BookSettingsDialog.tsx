@@ -1,15 +1,26 @@
 import { useState, useCallback } from "react";
-import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
+import {
+  Dialog,
+  DialogPanel,
+  DialogTitle,
+  Disclosure,
+  DisclosureButton,
+  DisclosurePanel,
+} from "@headlessui/react";
 import { Button } from "../ui";
 import { useTranslation } from "react-i18next";
-import { TrashIcon } from "../icons";
+import { TrashIcon, ChevronDownIcon } from "../icons";
 import type { Book } from "../../features/books/types";
 
 interface BookSettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   book: Book;
-  onUpdateStatus: (status: "draft" | "in-progress" | "completed") => void;
+  onUpdateBookInfo: (
+    title: string,
+    authorName: string,
+    status: "draft" | "in-progress" | "completed"
+  ) => void;
   onDelete: () => void;
 }
 
@@ -17,22 +28,26 @@ export function BookSettingsDialog({
   isOpen,
   onClose,
   book,
-  onUpdateStatus,
+  onUpdateBookInfo,
   onDelete,
 }: BookSettingsDialogProps) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(
     book.status
   );
+  const [title, setTitle] = useState(book.title);
+  const [authorName, setAuthorName] = useState(book.authorName);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const handleStatusChange = useCallback(
-    (newStatus: "draft" | "in-progress" | "completed") => {
-      setStatus(newStatus);
-      onUpdateStatus(newStatus);
-    },
-    [onUpdateStatus]
-  );
+  const hasChanges =
+    title !== book.title ||
+    authorName !== book.authorName ||
+    status !== book.status;
+
+  const handleSave = useCallback(() => {
+    onUpdateBookInfo(title, authorName, status);
+    onClose();
+  }, [title, authorName, status, onUpdateBookInfo, onClose]);
 
   const handleDelete = useCallback(() => {
     onDelete();
@@ -41,8 +56,12 @@ export function BookSettingsDialog({
 
   const handleClose = useCallback(() => {
     setShowDeleteConfirm(false);
+    // Reset to original values on close
+    setTitle(book.title);
+    setAuthorName(book.authorName);
+    setStatus(book.status);
     onClose();
-  }, [onClose]);
+  }, [onClose, book.title, book.authorName, book.status]);
 
   return (
     <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
@@ -57,11 +76,29 @@ export function BookSettingsDialog({
           </DialogTitle>
 
           {/* Book info */}
-          <div className="mb-6 p-3 bg-primary rounded-md">
-            <p className="font-medium text-foreground">{book.title}</p>
-            <p className="text-sm text-success">
-              {t("common.by")} {book.authorName}
-            </p>
+          <div className="mb-6 space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                {t("books.title")}
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                {t("books.authorName")}
+              </label>
+              <input
+                type="text"
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                className="w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
           </div>
 
           {/* Status selector */}
@@ -73,11 +110,12 @@ export function BookSettingsDialog({
               {(["draft", "in-progress", "completed"] as const).map((s) => (
                 <button
                   key={s}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${status === s
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
+                    status === s
                       ? "bg-accent text-accent-foreground border-accent"
                       : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
-                    }`}
-                  onClick={() => handleStatusChange(s)}
+                  }`}
+                  onClick={() => setStatus(s)}
                 >
                   {t(`common.${s}`)}
                 </button>
@@ -85,49 +123,62 @@ export function BookSettingsDialog({
             </div>
           </div>
 
-          {/* Danger zone */}
-          <div className="border-t border-border pt-4 mt-4">
-            <h3 className="text-sm font-medium text-destructive mb-3">
-              {t("bookSettings.dangerZone")}
-            </h3>
-
-            {!showDeleteConfirm ? (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-destructive border border-destructive rounded-md hover:bg-destructive/10 transition-colors"
-              >
-                <TrashIcon className="w-4 h-4" />
-                {t("books.deleteBook")}
-              </button>
-            ) : (
-              <div className="p-3 bg-destructive/10 border border-destructive rounded-md">
-                <p className="text-sm text-foreground mb-3">
-                  {t("bookSettings.deleteConfirmMessage")}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="destructive"
-                    onClick={handleDelete}
-                    className="flex-1"
-                  >
-                    {t("bookSettings.confirmDelete")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="flex-1"
-                  >
-                    {t("common.cancel")}
-                  </Button>
-                </div>
+          {/* Danger zone accordion */}
+          <Disclosure>
+            {({ open }) => (
+              <div className="border-t border-border pt-4 mt-4">
+                <DisclosureButton className="flex w-full items-center justify-between text-sm font-medium text-destructive">
+                  {t("bookSettings.dangerZone")}
+                  <ChevronDownIcon
+                    className={`w-4 h-4 transition-transform ${
+                      open ? "rotate-180" : ""
+                    }`}
+                  />
+                </DisclosureButton>
+                <DisclosurePanel className="mt-3">
+                  {!showDeleteConfirm ? (
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-destructive border border-destructive rounded-md hover:bg-destructive/10 transition-colors"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                      {t("books.deleteBook")}
+                    </button>
+                  ) : (
+                    <div className="p-3 bg-destructive/10 border border-destructive rounded-md">
+                      <p className="text-sm text-foreground mb-3">
+                        {t("bookSettings.deleteConfirmMessage")}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="destructive"
+                          onClick={handleDelete}
+                          className="flex-1"
+                        >
+                          {t("bookSettings.confirmDelete")}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setShowDeleteConfirm(false)}
+                          className="flex-1"
+                        >
+                          {t("common.cancel")}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </DisclosurePanel>
               </div>
             )}
-          </div>
+          </Disclosure>
 
-          {/* Close button */}
-          <div className="flex justify-end mt-6">
+          {/* Action buttons */}
+          <div className="flex justify-end gap-2 mt-6">
             <Button variant="ghost" onClick={handleClose}>
-              {t("common.close")}
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={handleSave} disabled={!hasChanges}>
+              {t("common.save")}
             </Button>
           </div>
         </DialogPanel>
