@@ -33,6 +33,7 @@ function toChapter(row: Record<string, unknown>): Chapter {
 interface ChapterStore {
   chapters: Chapter[];
   currentChapter: Chapter | null;
+  currentBookId: string | null; // Track which book's chapters are loaded
   isLoading: boolean;
   error: string | null;
 
@@ -46,15 +47,15 @@ interface ChapterStore {
   setCurrentChapter: (chapter: Chapter | null) => void;
 }
 
-export const useChapterStore = create<ChapterStore>((set) => ({
+export const useChapterStore = create<ChapterStore>((set, get) => ({
   chapters: [],
   currentChapter: null,
+  currentBookId: null,
   isLoading: false,
   error: null,
 
   loadChapters: async (bookId: string) => {
-    // Clear currentChapter when loading chapters for a (potentially different) book
-    set({ isLoading: true, error: null, currentChapter: null });
+    set({ isLoading: true, error: null, chapters: [], currentChapter: null, currentBookId: bookId });
     try {
       const db = await getDatabase();
       const result = await db.select<Record<string, unknown>[]>(
@@ -62,9 +63,16 @@ export const useChapterStore = create<ChapterStore>((set) => ({
         [bookId]
       );
       const chapters = result.map(toChapter);
-      set({ chapters, isLoading: false });
+
+      // Only update state if this is still the current book (prevents race condition)
+      if (get().currentBookId === bookId) {
+        set({ chapters, isLoading: false });
+      }
     } catch (error) {
-      set({ error: String(error), isLoading: false });
+      // Only set error if this is still the current book
+      if (get().currentBookId === bookId) {
+        set({ error: String(error), isLoading: false });
+      }
     }
   },
 
@@ -188,21 +196,21 @@ export const useChapterStore = create<ChapterStore>((set) => ({
       chapters: state.chapters.map((chapter) =>
         chapter.id === id
           ? {
-              ...chapter,
-              ...input,
-              ...(wordCount !== undefined ? { wordCount } : {}),
-              updatedAt: new Date(),
-            }
+            ...chapter,
+            ...input,
+            ...(wordCount !== undefined ? { wordCount } : {}),
+            updatedAt: new Date(),
+          }
           : chapter
       ),
       currentChapter:
         state.currentChapter?.id === id
           ? {
-              ...state.currentChapter,
-              ...input,
-              ...(wordCount !== undefined ? { wordCount } : {}),
-              updatedAt: new Date(),
-            }
+            ...state.currentChapter,
+            ...input,
+            ...(wordCount !== undefined ? { wordCount } : {}),
+            updatedAt: new Date(),
+          }
           : state.currentChapter,
     }));
   },
