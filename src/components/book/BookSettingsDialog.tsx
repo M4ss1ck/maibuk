@@ -73,11 +73,10 @@ export function BookSettingsDialog({
               {(["draft", "in-progress", "completed"] as const).map((s) => (
                 <button
                   key={s}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
-                    status === s
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${status === s
                       ? "bg-accent text-accent-foreground border-accent"
                       : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
-                  }`}
+                    }`}
                   onClick={() => handleStatusChange(s)}
                 >
                   {t(`common.${s}`)}
