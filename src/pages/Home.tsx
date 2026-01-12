@@ -5,7 +5,8 @@ import { BookCard } from "../components/project/BookCard";
 import { NewBookDialog } from "../components/project/NewBookDialog";
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
-import { AddIcon, BookIcon } from "../components/icons";
+import { AddIcon } from "../components/icons";
+import logo from "../../src-tauri/icons/icon.png";
 
 export function Home() {
   const { t } = useTranslation();
@@ -43,8 +44,8 @@ export function Home() {
       {books.length === 0 ? (
         /* Empty state */
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-24 h-24 mb-6 rounded-full bg-muted flex items-center justify-center">
-            <BookIcon className="w-12 h-12 text-muted-foreground" />
+          <div className="w-24 h-24 mb-6 flex items-center justify-center">
+            <img src={logo} alt="Logo" className="w-24" />
           </div>
           <h3 className="text-xl font-medium mb-2">{t("books.noBooks")}</h3>
           <p className="text-muted-foreground mb-6 max-w-md">
