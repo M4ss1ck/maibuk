@@ -1,6 +1,6 @@
 [package]
 name = "maibuk"
-version = "0.1.15"
+version = "0.1.16"
 description = "A cross-platform writing app for authors"
 authors = ["M4ss1ck"]
 edition = "2021"
