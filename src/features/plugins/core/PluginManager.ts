@@ -23,6 +23,8 @@ import type {
   NotificationType,
 } from "../types";
 import { usePluginStore, loadPluginCode } from "../store";
+import { PluginSandbox } from "../security/PluginSandbox";
+import { getPermissionManager } from "../security/PermissionManager";
 
 /**
  * Storage quota per plugin (5MB)
@@ -35,12 +37,23 @@ const STORAGE_QUOTA = 5 * 1024 * 1024;
 const STORAGE_PREFIX = "maibuk-plugin:";
 
 /**
+ * Execution mode for plugins
+ */
+type ExecutionMode = "sandbox" | "direct";
+
+/**
+ * Default execution mode - use sandbox for security
+ */
+const DEFAULT_EXECUTION_MODE: ExecutionMode = "sandbox";
+
+/**
  * Loaded plugin instance with runtime state
  */
 interface LoadedPlugin {
   plugin: InstalledPlugin;
   exports: PluginExports;
   api: PluginAPI;
+  sandbox: PluginSandbox | null;
   unsubscribers: Array<() => void>;
 }
 
@@ -178,7 +191,10 @@ export class PluginManager {
   /**
    * Load a plugin
    */
-  async loadPlugin(plugin: InstalledPlugin): Promise<void> {
+  async loadPlugin(
+    plugin: InstalledPlugin,
+    mode: ExecutionMode = DEFAULT_EXECUTION_MODE
+  ): Promise<void> {
     if (!plugin.enabled) {
       console.warn(`Plugin ${plugin.id} is not enabled`);
       return;
@@ -187,6 +203,15 @@ export class PluginManager {
     if (this.loadedPlugins.has(plugin.id)) {
       console.warn(`Plugin ${plugin.id} is already loaded`);
       return;
+    }
+
+    // Verify all required permissions are granted
+    const permissionManager = getPermissionManager();
+    if (!permissionManager.hasAllRequiredPermissions(plugin.id)) {
+      const missing = permissionManager.getMissingPermissions(plugin.id);
+      throw new Error(
+        `Plugin ${plugin.id} is missing required permissions: ${missing.join(", ")}`
+      );
     }
 
     // Load plugin code
@@ -198,14 +223,30 @@ export class PluginManager {
     // Create API bridge
     const api = this.createAPIBridge(plugin);
 
-    // Execute plugin code
-    const exports = await this.executePluginCode(plugin.id, code, api);
+    // Execute plugin code (with or without sandbox)
+    let exports: PluginExports;
+    let sandbox: PluginSandbox | null = null;
+
+    if (mode === "sandbox") {
+      // Create sandboxed environment
+      sandbox = new PluginSandbox(plugin.id, plugin.grantedPermissions);
+      try {
+        exports = await sandbox.execute(code, api);
+      } catch (error) {
+        sandbox.destroy();
+        throw error;
+      }
+    } else {
+      // Direct execution (less secure, for development/testing)
+      exports = await this.executePluginCodeDirect(plugin.id, code, api);
+    }
 
     // Store loaded plugin
     const loadedPlugin: LoadedPlugin = {
       plugin,
       exports,
       api,
+      sandbox,
       unsubscribers: [],
     };
     this.loadedPlugins.set(plugin.id, loadedPlugin);
@@ -226,7 +267,7 @@ export class PluginManager {
       }
     }
 
-    console.log(`Plugin ${plugin.id} loaded successfully`);
+    console.log(`Plugin ${plugin.id} loaded successfully (mode: ${mode})`);
   }
 
   /**
@@ -255,6 +296,11 @@ export class PluginManager {
         // Ignore cleanup errors
       }
     });
+
+    // Destroy sandbox if it exists
+    if (loaded.sandbox) {
+      loaded.sandbox.destroy();
+    }
 
     // Remove from loaded plugins
     this.loadedPlugins.delete(pluginId);
@@ -331,15 +377,16 @@ export class PluginManager {
   }
 
   /**
-   * Execute plugin code in a controlled environment
+   * Execute plugin code directly (without sandbox)
+   *
+   * WARNING: This is less secure and should only be used for development/testing.
+   * In production, use the sandbox execution mode.
    */
-  private async executePluginCode(
+  private async executePluginCodeDirect(
     pluginId: string,
     code: string,
     api: PluginAPI
   ): Promise<PluginExports> {
-    // Create a function that executes the plugin code
-    // This provides a controlled environment with the API injected
     try {
       // Wrap the code to capture exports
       const wrappedCode = `
@@ -356,8 +403,6 @@ export class PluginManager {
       `;
 
       // Execute with the API context
-      // Note: In production, this should use a proper sandbox (iframe or Web Worker)
-      // For Phase 1, we use a simpler approach
       const executor = new Function(wrappedCode);
       const exports = executor.call({ api }) as PluginExports;
 

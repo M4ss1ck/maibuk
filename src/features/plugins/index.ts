@@ -101,3 +101,27 @@ export {
   isCompatibleVersion,
   scanCodeForDangerousPatterns,
 } from "./core/PluginValidator";
+
+// =============================================================================
+// Security
+// =============================================================================
+
+// Permission Manager
+export {
+  PermissionManager,
+  PermissionDeniedError,
+  getPermissionManager,
+  checkPermission,
+  requirePermission,
+} from "./security/PermissionManager";
+
+// Plugin Sandbox
+export { PluginSandbox, createSandbox } from "./security/PluginSandbox";
+
+// Security Policy
+export {
+  generateCSP,
+  isUrlAllowed,
+  validatePluginCode,
+  SANDBOX_ATTRIBUTES,
+} from "./security/SecurityPolicy";
