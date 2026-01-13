@@ -220,7 +220,8 @@
     "defaultFormatDescription": "Formato de exportación preferido",
     "autoSave": "Guardado Automático",
     "autoSaveDescription": "Guarda automáticamente tu trabajo",
-    "toggleAutoSave": "Activar guardado automático"
+    "toggleAutoSave": "Activar guardado automático",
+    "updateAvailable": "{{version}} disponible"
   },
   "cover": {
     "title": "Diseñador de Portada",

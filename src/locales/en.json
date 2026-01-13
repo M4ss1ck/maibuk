@@ -220,7 +220,8 @@
     "defaultFormatDescription": "Preferred export format",
     "autoSave": "Auto-save",
     "autoSaveDescription": "Automatically save your work",
-    "toggleAutoSave": "Toggle auto-save"
+    "toggleAutoSave": "Toggle auto-save",
+    "updateAvailable": "{{version}} available"
   },
   "cover": {
     "title": "Cover Designer",
