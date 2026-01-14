@@ -4,6 +4,7 @@ import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
 import { Editor, ChapterList } from "../components/editor";
+import type { EditorStats } from "../components/editor/Editor";
 import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ExportDialog } from "../components/export";
@@ -32,6 +33,7 @@ export function BookEditor() {
   // Local state
   const [focusMode, setFocusMode] = useState(false);
   const [wordCount, setWordCount] = useState(0);
+  const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
@@ -120,6 +122,11 @@ export function BookEditor() {
   // Handle word count changes
   const handleWordCountChange = useCallback((count: number) => {
     setWordCount(count);
+  }, []);
+
+  // Handle editor stats changes (selection-aware)
+  const handleStatsChange = useCallback((stats: EditorStats) => {
+    setEditorStats(stats);
   }, []);
 
   // Chapter management handlers
@@ -295,9 +302,15 @@ export function BookEditor() {
             </div>
 
 
-            {/* Word count */}
+            {/* Word count - shows selection stats when text is selected */}
             <div className="text-sm text-muted-foreground">
-              {wordCount.toLocaleString()} {t("common.words")}
+              {editorStats?.hasSelection ? (
+                <span title={t("editor.selectionStats")}>
+                  {editorStats.words.toLocaleString()} {t("common.words")} / {editorStats.characters.toLocaleString()} {t("common.chars")}
+                </span>
+              ) : (
+                <span>{wordCount.toLocaleString()} {t("common.words")}</span>
+              )}
             </div>
 
             {/* Export button */}
@@ -348,6 +361,7 @@ export function BookEditor() {
             content={currentChapter.content}
             onUpdate={handleContentUpdate}
             onWordCountChange={handleWordCountChange}
+            onStatsChange={handleStatsChange}
             focusMode={focusMode}
             placeholder={`Start writing "${currentChapter.title}"...`}
           />

@@ -27,10 +27,17 @@ import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
 import { useTranslation } from "react-i18next";
 
+export interface EditorStats {
+  words: number;
+  characters: number;
+  hasSelection: boolean;
+}
+
 interface EditorProps {
   content: string | null;
   onUpdate: (content: string) => void;
   onWordCountChange?: (count: number) => void;
+  onStatsChange?: (stats: EditorStats) => void;
   placeholder?: string;
   editable?: boolean;
   focusMode?: boolean;
@@ -40,6 +47,7 @@ export function Editor({
   content,
   onUpdate,
   onWordCountChange,
+  onStatsChange,
   placeholder = "Start writing your chapter...",
   editable = true,
   focusMode = false,
@@ -130,6 +138,41 @@ export function Editor({
       onWordCountChange(words);
     }
   }, [editor, onWordCountChange]);
+
+  // Track selection changes and update stats
+  useEffect(() => {
+    if (!editor || !onStatsChange) return;
+
+    const updateStats = () => {
+      const { from, to } = editor.state.selection;
+      const hasSelection = from !== to;
+
+      if (hasSelection) {
+        // Get selected text and calculate stats
+        const selectedText = editor.state.doc.textBetween(from, to, " ");
+        const words = selectedText.trim().split(/\s+/).filter(word => word.length > 0).length;
+        const characters = selectedText.length;
+        onStatsChange({ words, characters, hasSelection: true });
+      } else {
+        // No selection - use total document stats
+        const words = editor.storage.characterCount.words();
+        const characters = editor.storage.characterCount.characters();
+        onStatsChange({ words, characters, hasSelection: false });
+      }
+    };
+
+    // Initial stats
+    updateStats();
+
+    // Listen to selection changes
+    editor.on("selectionUpdate", updateStats);
+    editor.on("update", updateStats);
+
+    return () => {
+      editor.off("selectionUpdate", updateStats);
+      editor.off("update", updateStats);
+    };
+  }, [editor, onStatsChange]);
 
   const handleFocus = useCallback(() => {
     editor?.chain().focus().run();
