@@ -26,6 +26,7 @@ import { LineHeight } from "./extensions/LineHeight";
 import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
 import { useTranslation } from "react-i18next";
+import { usePluginExtensions, getPluginManager } from "../../features/plugins";
 
 interface EditorProps {
   content: string | null;
@@ -45,76 +46,97 @@ export function Editor({
   focusMode = false,
 }: EditorProps) {
   const { t } = useTranslation();
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3],
+
+  // Get plugin extensions
+  const { extensions: pluginExtensions, key: pluginKey } = usePluginExtensions();
+
+  const editor = useEditor(
+    {
+      extensions: [
+        // Core extensions
+        StarterKit.configure({
+          heading: {
+            levels: [1, 2, 3],
+          },
+        }),
+        Placeholder.configure({
+          placeholder,
+          emptyEditorClass: "is-editor-empty",
+        }),
+        CharacterCount,
+        Underline,
+        TextAlign.configure({
+          types: ["heading", "paragraph"],
+        }),
+        CustomHighlight.configure({
+          multicolor: true,
+        }),
+        Typography,
+        TextStyle,
+        FontFamily,
+        FontSize,
+        LineHeight,
+        Color,
+        Subscript,
+        Superscript,
+        Table.configure({
+          resizable: true,
+          HTMLAttributes: {
+            class: "editor-table",
+          },
+        }),
+        TableRow,
+        TableCell,
+        TableHeader,
+        Image.configure({
+          inline: false,
+          allowBase64: true,
+          HTMLAttributes: {
+            class: "editor-image",
+          },
+        }),
+        Link.configure({
+          openOnClick: false,
+          HTMLAttributes: {
+            class: "editor-link",
+          },
+        }),
+        SceneBreak,
+        Indent,
+        PasteHandler,
+        // Plugin extensions (loaded dynamically)
+        ...pluginExtensions,
+      ],
+      content: content || "",
+      editable,
+      editorProps: {
+        attributes: {
+          class: "editor-content outline-none min-h-[500px]",
         },
-      }),
-      Placeholder.configure({
-        placeholder,
-        emptyEditorClass: "is-editor-empty",
-      }),
-      CharacterCount,
-      Underline,
-      TextAlign.configure({
-        types: ["heading", "paragraph"],
-      }),
-      CustomHighlight.configure({
-        multicolor: true,
-      }),
-      Typography,
-      TextStyle,
-      FontFamily,
-      FontSize,
-      LineHeight,
-      Color,
-      Subscript,
-      Superscript,
-      Table.configure({
-        resizable: true,
-        HTMLAttributes: {
-          class: "editor-table",
-        },
-      }),
-      TableRow,
-      TableCell,
-      TableHeader,
-      Image.configure({
-        inline: false,
-        allowBase64: true,
-        HTMLAttributes: {
-          class: "editor-image",
-        },
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: "editor-link",
-        },
-      }),
-      SceneBreak,
-      Indent,
-      PasteHandler,
-    ],
-    content: content || "",
-    editable,
-    editorProps: {
-      attributes: {
-        class: "editor-content outline-none min-h-[500px]",
+      },
+      onUpdate: ({ editor }) => {
+        const html = editor.getHTML();
+        onUpdate(html);
+
+        if (onWordCountChange) {
+          const words = editor.storage.characterCount.words();
+          onWordCountChange(words);
+        }
       },
     },
-    onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
-      onUpdate(html);
+    // Re-create editor when plugins change
+    [pluginKey]
+  );
 
-      if (onWordCountChange) {
-        const words = editor.storage.characterCount.words();
-        onWordCountChange(words);
-      }
-    },
-  });
+  // Provide editor instance to plugin manager
+  useEffect(() => {
+    const manager = getPluginManager();
+    manager.setEditor(editor);
+
+    return () => {
+      manager.setEditor(null);
+    };
+  }, [editor]);
 
   // Update content when it changes externally (e.g., switching chapters)
   useEffect(() => {

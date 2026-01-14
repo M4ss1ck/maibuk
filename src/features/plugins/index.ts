@@ -125,3 +125,43 @@ export {
   validatePluginCode,
   SANDBOX_ATTRIBUTES,
 } from "./security/SecurityPolicy";
+
+// =============================================================================
+// Hooks
+// =============================================================================
+
+export {
+  usePluginExtensions,
+  usePluginsAvailable,
+  type PluginExtensionInfo,
+  type UsePluginExtensionsOptions,
+} from "./hooks/usePluginExtensions";
+
+// =============================================================================
+// API
+// =============================================================================
+
+export {
+  createPluginAPIBridge,
+  cleanupPluginAPI,
+  setNotificationHandler,
+  setModalHandler,
+  setBookMetadataProvider,
+  setChapterMetadataProvider,
+  getUIRegistry,
+  getEventBus,
+  emitGlobalEvent,
+  GlobalEvents,
+} from "./api";
+
+// =============================================================================
+// Components
+// =============================================================================
+
+export {
+  PluginErrorBoundary,
+  PluginComponentWrapper,
+  PluginLoadingState,
+  PluginDisabledState,
+  usePluginErrorState,
+} from "./components";
