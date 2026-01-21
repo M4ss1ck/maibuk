@@ -330,4 +330,56 @@ export const Indent = Extension.create<IndentOptions>({
           },
     };
   },
+
+  addKeyboardShortcuts() {
+    return {
+      Tab: ({ editor }) => {
+        // If we're in a list item, let default behavior handle it (sink list item)
+        if (editor.isActive("listItem")) {
+          return false;
+        }
+
+        // If we're in a paragraph or heading with no indent, convert to bullet list
+        const { selection } = editor.state;
+        const { $from } = selection;
+        const node = $from.parent;
+
+        if (this.options.types.includes(node.type.name)) {
+          const hasIndent = node.attrs.indent && node.attrs.indent > 0;
+
+          if (!hasIndent) {
+            // Convert to bullet list
+            editor.chain().focus().toggleBulletList().run();
+            return true;
+          }
+        }
+
+        // Let default behavior handle other cases
+        return false;
+      },
+
+      "Shift-Tab": ({ editor }) => {
+        // If we're in a list item, let default behavior handle it (lift list item)
+        if (editor.isActive("listItem")) {
+          return false;
+        }
+
+        // Otherwise decrease indent if possible
+        const { selection } = editor.state;
+        const { $from } = selection;
+        const node = $from.parent;
+
+        if (this.options.types.includes(node.type.name)) {
+          const hasIndent = node.attrs.indent && node.attrs.indent > 0;
+
+          if (hasIndent) {
+            editor.commands.decreaseIndent();
+            return true;
+          }
+        }
+
+        return false;
+      },
+    };
+  },
 });
