@@ -32,6 +32,8 @@ export function Settings() {
     setDefaultExportFormat,
   } = useSettings();
 
+  const updateAvailable = isOutdated && latestVersion;
+
   return (
     <div className="p-8 max-w-2xl">
       <h2 className="text-2xl font-semibold mb-8">{t("settings.title")}</h2>
@@ -156,7 +158,7 @@ export function Settings() {
         <div className="text-sm text-muted-foreground">
           <p className="flex items-center gap-2">
             Maibuk {APP_VERSION}
-            {!isOutdated && latestVersion && (
+            {updateAvailable && (
               <a
                 href="https://maibuk.massick.dev"
                 target="_blank"
