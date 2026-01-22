@@ -93,6 +93,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         isSubscript: e.isActive("subscript"),
         isSuperscript: e.isActive("superscript"),
         isLink: e.isActive("link"),
+        isCode: e.isActive("code"),
+        isCodeBlock: e.isActive("codeBlock"),
         isH1: e.isActive("heading", { level: 1 }),
         isH2: e.isActive("heading", { level: 2 }),
         isH3: e.isActive("heading", { level: 3 }),
@@ -251,6 +253,26 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+        </ToolbarButton>
+
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleCode().run()}
+          isActive={editorState.isCode}
+          title={t("editor.code")}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+          </svg>
+        </ToolbarButton>
+
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          isActive={editorState.isCodeBlock}
+          title={t("editor.codeBlock")}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
           </svg>
         </ToolbarButton>
 
