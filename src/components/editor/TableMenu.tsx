@@ -3,6 +3,16 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { Switch } from "../ui";
+import {
+  Table,
+  Columns2,
+  Rows2,
+  Trash2,
+  BetweenVerticalStart,
+  BetweenVerticalEnd,
+  BetweenHorizonalStart,
+  BetweenHorizonalEnd,
+} from "lucide-react";
 
 interface TableMenuProps {
   editor: Editor;
@@ -63,9 +73,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         title={t("editor.insertTable")}
         className="p-2 rounded transition-colors hover:bg-muted"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 3v18M14 3v18" />
-        </svg>
+        <Table className="w-4 h-4" />
       </button>
     );
   }
@@ -79,9 +87,7 @@ export function TableMenu({ editor }: TableMenuProps) {
           title={t("editor.insertTable")}
           className="p-2 rounded transition-colors bg-primary text-white"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 3v18M14 3v18" />
-          </svg>
+          <Table className="w-4 h-4" />
         </button>
         {createPortal(
           <div
@@ -133,9 +139,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         title={t("editor.addColumnBefore")}
         className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19V5M5 12h6" />
-        </svg>
+        <BetweenVerticalStart className="w-3.5 h-3.5" />
       </button>
 
       <button
@@ -144,9 +148,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         title={t("editor.addColumnAfter")}
         className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5v14M13 12h6" />
-        </svg>
+        <BetweenVerticalEnd className="w-3.5 h-3.5" />
       </button>
 
       <button
@@ -155,9 +157,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         title={t("editor.addRowBefore")}
         className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 11h14M12 5v6" />
-        </svg>
+        <BetweenHorizonalStart className="w-3.5 h-3.5" />
       </button>
 
       <button
@@ -166,9 +166,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         title={t("editor.addRowAfter")}
         className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13h14M12 13v6" />
-        </svg>
+        <BetweenHorizonalEnd className="w-3.5 h-3.5" />
       </button>
 
       <div className="w-px h-4 bg-border mx-1" />
@@ -179,9 +177,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         title={t("editor.deleteColumn")}
         className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v18M15 3v18M6 12h12" />
-        </svg>
+        <Columns2 className="w-3.5 h-3.5" />
       </button>
 
       <button
@@ -190,9 +186,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         title={t("editor.deleteRow")}
         className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9h18M3 15h18M12 6v12" />
-        </svg>
+        <Rows2 className="w-3.5 h-3.5" />
       </button>
 
       <button
@@ -201,9 +195,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         title={t("editor.deleteTable")}
         className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
+        <Trash2 className="w-3.5 h-3.5" />
       </button>
     </div>
   );
