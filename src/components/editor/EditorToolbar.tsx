@@ -55,6 +55,14 @@ const FONT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "28", "32", "36",
 
 const LINE_HEIGHT_OPTIONS = ["1", "1.15", "1.5", "2", "2.5", "3"];
 
+// Heading font sizes (in px)
+const HEADING_SIZES: Record<1 | 2 | 3, string> = {
+  1: "36",
+  2: "27",
+  3: "22",
+};
+const DEFAULT_FONT_SIZE = "18";
+
 const FONT_OPTIONS: { value: FontFamilyValue; label: string }[] = [
   { value: "Literata, serif", label: "Serif" },
   { value: "Inter, sans-serif", label: "Sans" },
@@ -106,7 +114,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       const attrs = e.getAttributes("textStyle");
       const currentFontSize = attrs.fontSize
         ? attrs.fontSize.replace("px", "")
-        : "18"; // default size
+        : DEFAULT_FONT_SIZE;
       const currentLineHeight = attrs.lineHeight || "1.5"; // default line height
       const currentColor = attrs.color || "";
 
@@ -163,6 +171,33 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const handleFontFamilyChange = (family: FontFamilyValue) => {
     setFontFamily(family);
     editor.chain().focus().setFontFamily(family).run();
+  };
+
+  const handleHeadingToggle = (level: 1 | 2 | 3) => {
+    const isCurrentlyActive =
+      (level === 1 && editorState.isH1) ||
+      (level === 2 && editorState.isH2) ||
+      (level === 3 && editorState.isH3);
+
+    if (isCurrentlyActive) {
+      // Turning off heading: revert to paragraph with default font size
+      editor
+        .chain()
+        .focus()
+        .toggleHeading({ level })
+        .setFontSize(`${DEFAULT_FONT_SIZE}px`)
+        .setFontFamily(fontFamily)
+        .run();
+    } else {
+      // Turning on heading: set heading with appropriate font size
+      editor
+        .chain()
+        .focus()
+        .toggleHeading({ level })
+        .setFontSize(`${HEADING_SIZES[level]}px`)
+        .setFontFamily(fontFamily)
+        .run();
+    }
   };
 
   return (
@@ -287,7 +322,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         {/* Headings */}
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          onClick={() => handleHeadingToggle(1)}
           isActive={editorState.isH1}
           title={t("editor.heading1")}
         >
@@ -295,7 +330,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         </ToolbarButton>
 
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          onClick={() => handleHeadingToggle(2)}
           isActive={editorState.isH2}
           title={t("editor.heading2")}
         >
@@ -303,7 +338,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         </ToolbarButton>
 
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          onClick={() => handleHeadingToggle(3)}
           isActive={editorState.isH3}
           title={t("editor.heading3")}
         >
