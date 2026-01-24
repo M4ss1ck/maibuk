@@ -12,8 +12,7 @@ import {
 } from "../../features/export";
 import type { Book } from "../../features/books/types";
 import type { Chapter } from "../../features/chapters/types";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
 import { PdfPreview } from "./PdfPreview";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, CheckIcon, XIcon } from "../icons";
@@ -62,28 +61,36 @@ export function ExportDialog({
 
       setProgress({ status: "saving", message: t("export.savingStatus") });
 
-      // Get save location from user
       const suggestedFilename = getEpubFilename(book);
-      const filePath = await save({
-        defaultPath: suggestedFilename,
-        filters: [
-          {
-            name: "EPUB",
-            extensions: ["epub"],
-          },
-        ],
-      });
-
-      if (!filePath) {
-        // User cancelled
-        setProgress({ status: "idle", message: "" });
-        return;
-      }
-
-      // Convert blob to Uint8Array and save
       const arrayBuffer = await blob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
-      await writeFile(filePath, uint8Array);
+
+      if (IS_WEB) {
+        // On web, directly download the file
+        const fs = await getFileSystem();
+        fs.downloadFile(suggestedFilename, uint8Array, "application/epub+zip");
+      } else {
+        // On Tauri, show save dialog
+        const dialog = await getDialog();
+        const filePath = await dialog.save({
+          defaultPath: suggestedFilename,
+          filters: [
+            {
+              name: "EPUB",
+              extensions: ["epub"],
+            },
+          ],
+        });
+
+        if (!filePath) {
+          // User cancelled
+          setProgress({ status: "idle", message: "" });
+          return;
+        }
+
+        const fs = await getFileSystem();
+        await fs.writeFile(filePath, uint8Array);
+      }
 
       setProgress({
         status: "complete",
@@ -102,7 +109,7 @@ export function ExportDialog({
         message: error instanceof Error ? error.message : t("export.exportFailed"),
       });
     }
-  }, [book, chapters, epubOptions, format, onClose]);
+  }, [book, chapters, epubOptions, format, onClose, t]);
 
   const handleClose = useCallback(() => {
     if (progress.status !== "generating" && progress.status !== "saving") {

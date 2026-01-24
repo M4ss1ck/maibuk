@@ -1,6 +1,6 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import { locale } from "@tauri-apps/plugin-os";
+import { getOS } from "./lib/platform";
 
 // Static imports - Vite bundles these
 import en from "./locales/en.json";
@@ -57,8 +57,9 @@ async function detectAndSetLocale(): Promise<void> {
       }
     }
 
-    // No saved preference, detect system locale
-    const systemLocale = await locale();
+    // No saved preference, detect system locale using platform adapter
+    const os = await getOS();
+    const systemLocale = await os.locale();
     if (systemLocale) {
       const normalizedLang = normalizeLocale(systemLocale);
       if (normalizedLang !== i18n.language) {
@@ -66,7 +67,7 @@ async function detectAndSetLocale(): Promise<void> {
       }
     }
   } catch (error) {
-    // Fallback to 'en' if detection fails (e.g., in web mode)
+    // Fallback to 'en' if detection fails
     console.warn("Failed to detect system locale, using fallback:", error);
   }
 }

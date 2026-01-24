@@ -1,10 +1,12 @@
-import Database from "@tauri-apps/plugin-sql";
+import { createDatabase, IS_TAURI, type DatabaseAdapter } from "../platform";
 
-let db: Database | null = null;
+let db: DatabaseAdapter | null = null;
 
-export async function getDatabase(): Promise<Database> {
+export async function getDatabase(): Promise<DatabaseAdapter> {
   if (!db) {
-    db = await Database.load("sqlite:maibuk.db");
+    // Tauri uses "sqlite:" prefix, web just needs a name
+    const dbPath = IS_TAURI ? "sqlite:maibuk.db" : "maibuk.db";
+    db = await createDatabase(dbPath);
     await initializeSchema();
   }
   return db;

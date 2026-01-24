@@ -13,7 +13,9 @@
     "build:arch": "tauri build --target x86_64-unknown-linux-gnu && ./scripts/build-arch-package.sh",
     "build:windows": "tauri build --target x86_64-pc-windows-gnu",
     "build:android": "tauri android build",
+    "dev:web": "VITE_BUILD_TARGET=web vite",
     "build:web": "VITE_BUILD_TARGET=web tsc && vite build",
+    "preview:web": "VITE_BUILD_TARGET=web vite preview",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "version:bump": "./scripts/bump-version.sh"
@@ -56,6 +58,7 @@
     "react-dom": "^19.1.0",
     "react-i18next": "^16.5.1",
     "react-router-dom": "^7.1.1",
+    "sql.js": "^1.13.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
@@ -63,6 +66,7 @@
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/sql.js": "^1.4.9",
     "@vitejs/plugin-react": "^4.6.0",
     "drizzle-kit": "^0.31.8",
     "tailwindcss": "^4.0.0",
