@@ -35,19 +35,19 @@ export function Settings() {
   const updateAvailable = isOutdated && latestVersion;
 
   return (
-    <div className="p-8 max-w-2xl">
-      <h2 className="text-2xl font-semibold mb-8">{t("settings.title")}</h2>
+    <div className="p-4 sm:p-8 max-w-2xl overflow-auto h-full">
+      <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h2>
 
       {/* Appearance Settings */}
-      <section className="mb-8">
+      <section className="mb-6 sm:mb-8">
         <h3 className="text-lg font-medium mb-4">{t("settings.appearance")}</h3>
         <div className="space-y-4">
-          <div className="flex items-center justify-between py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
             <div>
               <p className="font-medium">{t("settings.theme")}</p>
               <p className="text-sm text-muted-foreground">{t("settings.themeDescription")}</p>
             </div>
-            <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+            <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
               <button
                 onClick={() => setTheme("light")}
                 className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "light"
@@ -78,7 +78,7 @@ export function Settings() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
             <div>
               <p className="font-medium">{t("settings.fontSize")}</p>
               <p className="text-sm text-muted-foreground">{t("settings.fontSizeDescription")}</p>
@@ -90,7 +90,7 @@ export function Settings() {
             />
           </div>
 
-          <div className="flex items-center justify-between py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
             <div>
               <p className="font-medium">{t("settings.font")}</p>
               <p className="text-sm text-muted-foreground">{t("settings.fontDescription")}</p>
@@ -105,10 +105,10 @@ export function Settings() {
       </section>
 
       {/* General Settings */}
-      <section className="mb-8">
+      <section className="mb-6 sm:mb-8">
         <h3 className="text-lg font-medium mb-4">{t("settings.general")}</h3>
         <div className="space-y-4">
-          <div className="flex items-center justify-between py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
             <div>
               <p className="font-medium">{t("settings.autoSave")}</p>
               <p className="text-sm text-muted-foreground">{t("settings.autoSaveDescription")}</p>
@@ -120,7 +120,7 @@ export function Settings() {
             />
           </div>
 
-          <div className="flex items-center justify-between py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
             <div>
               <p className="font-medium">{t("settings.language")}</p>
               <p className="text-sm text-muted-foreground">{t("settings.languageDescription")}</p>
@@ -135,10 +135,10 @@ export function Settings() {
       </section>
 
       {/* Export Settings */}
-      <section className="mb-8">
+      <section className="mb-6 sm:mb-8">
         <h3 className="text-lg font-medium mb-4">{t("settings.export")}</h3>
         <div className="space-y-4">
-          <div className="flex items-center justify-between py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
             <div>
               <p className="font-medium">{t("settings.defaultFormat")}</p>
               <p className="text-sm text-muted-foreground">{t("settings.defaultFormatDescription")}</p>

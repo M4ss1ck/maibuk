@@ -202,21 +202,23 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-10">
-      <div className="flex flex-wrap items-center px-4 py-2 gap-1 overflow-x-auto">
-        {/* Font controls */}
-        <Combobox
-          value={editorState.fontSize}
-          onChange={handleFontSizeChange}
-          options={FONT_SIZE_OPTIONS}
-          placeholder={t("editor.size")}
-        />
-        <Select<FontFamilyValue>
-          value={fontFamily}
-          onChange={handleFontFamilyChange}
-          options={FONT_OPTIONS}
-        />
+      <div className="flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto">
+        {/* Font controls - hidden on very small screens */}
+        <div className="hidden sm:contents">
+          <Combobox
+            value={editorState.fontSize}
+            onChange={handleFontSizeChange}
+            options={FONT_SIZE_OPTIONS}
+            placeholder={t("editor.size")}
+          />
+          <Select<FontFamilyValue>
+            value={fontFamily}
+            onChange={handleFontFamilyChange}
+            options={FONT_OPTIONS}
+          />
 
-        <Divider />
+          <Divider />
+        </div>
 
         {/* Text formatting */}
         <ToolbarButton
@@ -320,7 +322,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <Divider />
 
-        {/* Headings */}
+        {/* Headings - hide H3 and line height on very small screens */}
         <ToolbarButton
           onClick={() => handleHeadingToggle(1)}
           isActive={editorState.isH1}
@@ -337,20 +339,22 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <Heading2 className="w-4 h-4" />
         </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => handleHeadingToggle(3)}
-          isActive={editorState.isH3}
-          title={t("editor.heading3")}
-        >
-          <Heading3 className="w-4 h-4" />
-        </ToolbarButton>
+        <div className="hidden sm:contents">
+          <ToolbarButton
+            onClick={() => handleHeadingToggle(3)}
+            isActive={editorState.isH3}
+            title={t("editor.heading3")}
+          >
+            <Heading3 className="w-4 h-4" />
+          </ToolbarButton>
 
-        <Combobox
-          value={editorState.lineHeight}
-          onChange={handleLineHeightChange}
-          options={LINE_HEIGHT_OPTIONS}
-          placeholder={t("editor.lineHeight")}
-        />
+          <Combobox
+            value={editorState.lineHeight}
+            onChange={handleLineHeightChange}
+            options={LINE_HEIGHT_OPTIONS}
+            placeholder={t("editor.lineHeight")}
+          />
+        </div>
 
         <Divider />
 
@@ -382,48 +386,50 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <Divider />
 
         {/* Block/Paragraph indent - in lists: sink/lift, otherwise: margin-left */}
-        <ToolbarButton
-          onClick={() => {
-            if (editorState.canSinkListItem) {
-              editor.chain().focus().sinkListItem("listItem").run();
-            } else {
-              editor.chain().focus().increaseIndent().run();
-            }
-          }}
-          title={t("editor.increaseIndent")}
-        >
-          <IndentIncrease className="w-4 h-4" />
-        </ToolbarButton>
+        <div className="hidden md:contents">
+          <ToolbarButton
+            onClick={() => {
+              if (editorState.canSinkListItem) {
+                editor.chain().focus().sinkListItem("listItem").run();
+              } else {
+                editor.chain().focus().increaseIndent().run();
+              }
+            }}
+            title={t("editor.increaseIndent")}
+          >
+            <IndentIncrease className="w-4 h-4" />
+          </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => {
-            if (editorState.canLiftListItem) {
-              editor.chain().focus().liftListItem("listItem").run();
-            } else {
-              editor.chain().focus().decreaseIndent().run();
-            }
-          }}
-          title={t("editor.decreaseIndent")}
-        >
-          <IndentDecrease className="w-4 h-4" />
-        </ToolbarButton>
+          <ToolbarButton
+            onClick={() => {
+              if (editorState.canLiftListItem) {
+                editor.chain().focus().liftListItem("listItem").run();
+              } else {
+                editor.chain().focus().decreaseIndent().run();
+              }
+            }}
+            title={t("editor.decreaseIndent")}
+          >
+            <IndentDecrease className="w-4 h-4" />
+          </ToolbarButton>
 
-        {/* First-line indent (text-indent) */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().increaseFirstLineIndent().run()}
-          title={t("editor.increaseFirstLineIndent")}
-        >
-          <WrapText className="w-4 h-4" />
-        </ToolbarButton>
+          {/* First-line indent (text-indent) */}
+          <ToolbarButton
+            onClick={() => editor.chain().focus().increaseFirstLineIndent().run()}
+            title={t("editor.increaseFirstLineIndent")}
+          >
+            <WrapText className="w-4 h-4" />
+          </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()}
-          title={t("editor.decreaseFirstLineIndent")}
-        >
-          <WrapText className="w-4 h-4 scale-x-[-1]" />
-        </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()}
+            title={t("editor.decreaseFirstLineIndent")}
+          >
+            <WrapText className="w-4 h-4 scale-x-[-1]" />
+          </ToolbarButton>
 
-        <Divider />
+          <Divider />
+        </div>
 
         {/* Text alignment */}
         <ToolbarButton
@@ -450,20 +456,24 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <AlignRight className="w-4 h-4" />
         </ToolbarButton>
 
+        <div className="hidden sm:contents">
+          <Divider />
+
+          {/* Formatting utilities */}
+          <ToolbarButton
+            onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+            title={t("editor.removeFormatting")}
+          >
+            <RemoveFormatting className="w-4 h-4" />
+          </ToolbarButton>
+        </div>
+
         <Divider />
 
-        {/* Formatting utilities */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-          title={t("editor.removeFormatting")}
-        >
-          <RemoveFormatting className="w-4 h-4" />
-        </ToolbarButton>
-
-        <Divider />
-
-        {/* Phase 3: Advanced features */}
-        <TableMenu editor={editor} />
+        {/* Phase 3: Advanced features - some hidden on mobile */}
+        <div className="hidden md:contents">
+          <TableMenu editor={editor} />
+        </div>
 
         <ToolbarButton
           onClick={() => setShowImageDialog(true)}
@@ -472,29 +482,31 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <Image className="w-4 h-4" />
         </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => (editor.commands as any).setSceneBreak?.()}
-          title={t("editor.sceneBreak")}
-        >
-          <Ellipsis className="w-4 h-4" />
-        </ToolbarButton>
+        <div className="hidden sm:contents">
+          <ToolbarButton
+            onClick={() => (editor.commands as any).setSceneBreak?.()}
+            title={t("editor.sceneBreak")}
+          >
+            <Ellipsis className="w-4 h-4" />
+          </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => setShowFootnoteDialog(true)}
-          title={t("editor.footnote")}
-        >
-          <MessageSquareText className="w-4 h-4" />
-        </ToolbarButton>
+          <ToolbarButton
+            onClick={() => setShowFootnoteDialog(true)}
+            title={t("editor.footnote")}
+          >
+            <MessageSquareText className="w-4 h-4" />
+          </ToolbarButton>
 
-        <Divider />
+          <Divider />
 
-        {/* Misc */}
-        <ToolbarButton
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
-          title={t("editor.horizontalRule")}
-        >
-          <Minus className="w-4 h-4" />
-        </ToolbarButton>
+          {/* Misc */}
+          <ToolbarButton
+            onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            title={t("editor.horizontalRule")}
+          >
+            <Minus className="w-4 h-4" />
+          </ToolbarButton>
+        </div>
 
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
@@ -512,23 +524,25 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <Redo2 className="w-4 h-4" />
         </ToolbarButton>
 
-        <Divider />
+        <div className="hidden md:contents">
+          <Divider />
 
-        {/* New Phase 4: Extended features */}
-        <ToolbarButton
-          onClick={() => setShowFindReplace(!showFindReplace)}
-          isActive={showFindReplace}
-          title={t("editor.findReplaceShortcut")}
-        >
-          <Search className="w-4 h-4" />
-        </ToolbarButton>
+          {/* New Phase 4: Extended features */}
+          <ToolbarButton
+            onClick={() => setShowFindReplace(!showFindReplace)}
+            isActive={showFindReplace}
+            title={t("editor.findReplaceShortcut")}
+          >
+            <Search className="w-4 h-4" />
+          </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => setShowHtmlDialog(true)}
-          title={t("editor.viewHtml")}
-        >
-          <Code2 className="w-4 h-4" />
-        </ToolbarButton>
+          <ToolbarButton
+            onClick={() => setShowHtmlDialog(true)}
+            title={t("editor.viewHtml")}
+          >
+            <Code2 className="w-4 h-4" />
+          </ToolbarButton>
+        </div>
       </div>
 
       {/* Inline panels */}

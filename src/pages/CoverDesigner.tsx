@@ -214,14 +214,14 @@ export function CoverDesigner() {
   return (
     <div className="flex flex-col h-dvh">
       {/* Header */}
-      <div className="h-12 border-b border-border flex items-center px-4 gap-4">
+      <div className="h-12 border-b border-border flex items-center px-2 sm:px-4 gap-2 sm:gap-4">
         <Button variant="ghost" size="sm" onClick={handleBack}>
           <BackIcon className="w-5 h-5" />
         </Button>
 
-        <div className="flex-1">
-          <h1 className="font-medium">{t("cover.title")}</h1>
-          <p className="text-xs text-muted-foreground">{currentBook.title}</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="font-medium text-sm sm:text-base truncate">{t("cover.title")}</h1>
+          <p className="text-xs text-muted-foreground truncate">{currentBook.title}</p>
         </div>
 
         <Button
@@ -229,6 +229,7 @@ export function CoverDesigner() {
           size="sm"
           onClick={handleSave}
           disabled={!hasChanges || isSaving}
+          className="text-xs sm:text-sm"
         >
           {isSaving ? t("common.loading") : hasChanges ? t("cover.saveCover") : t("cover.saved")}
         </Button>
@@ -261,8 +262,8 @@ export function CoverDesigner() {
         className="flex-1"
       />
 
-      {/* Tips */}
-      <div className="h-10 border-t border-border flex items-center justify-center text-sm text-muted-foreground gap-4">
+      {/* Tips - hidden on mobile */}
+      <div className="hidden sm:flex h-10 border-t border-border items-center justify-center text-sm text-muted-foreground gap-4">
         <span>{t("cover.tips.doubleClick")}</span>
         <span>|</span>
         <span>{t("cover.tips.delete")}</span>
