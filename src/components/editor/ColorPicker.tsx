@@ -51,9 +51,23 @@ export function ColorPicker({ value, onChange, onClear, onToggle, isActive, titl
   const handleDropdownToggle = () => {
     if (!isOpen && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
+      const dropdownWidth = 192; // w-48 = 12rem = 192px
+      const viewportWidth = window.innerWidth;
+      const padding = 8;
+
+      // Ensure dropdown doesn't overflow right edge of viewport
+      let left = rect.left;
+      if (left + dropdownWidth > viewportWidth - padding) {
+        left = viewportWidth - dropdownWidth - padding;
+      }
+      // Ensure dropdown doesn't overflow left edge
+      if (left < padding) {
+        left = padding;
+      }
+
       setPosition({
         top: rect.bottom + 4,
-        left: rect.left,
+        left,
       });
     }
     setIsOpen(!isOpen);

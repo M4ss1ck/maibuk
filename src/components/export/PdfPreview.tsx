@@ -58,6 +58,13 @@ export function PdfPreview({
         .pdf-preview-content .chapter-header {
           padding-top: 1em;
         }
+
+        /* Fix <pre> overflow*/
+        .pdf-preview-content pre {
+          white-space: pre-wrap;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+        }
         
         /* Preview: page break separators AFTER sections */
         .pdf-preview-content .cover-page::after,
@@ -193,17 +200,17 @@ export function PdfPreview({
   return createPortal(
     <div className="pdf-preview-overlay fixed inset-0 z-50 bg-background flex flex-col">
       {/* Toolbar */}
-      <div className="pdf-preview-toolbar h-14 border-b border-border flex items-center px-4 gap-4 bg-surface">
+      <div className="pdf-preview-toolbar min-h-14 border-b border-border flex items-center px-4 gap-4 bg-surface flex-wrap">
         <Button variant="ghost" onClick={onClose}>
           <XIcon className="w-5 h-5" />
         </Button>
         <h1 className="font-medium flex-1">{t("export.pdfPreview", { title: book.title })}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="hidden lg:block text-sm text-muted-foreground">
           {t("export.portalDisclaimer")}
         </p>
         <Button variant="primary" onClick={handlePrint}>
           <PrintIcon className="w-4 h-4 mr-2" />
-          {t("export.portalButton")}
+          <span className="hidden lg:block">{t("export.portalButton")}</span>
         </Button>
       </div>
 
