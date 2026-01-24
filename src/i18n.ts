@@ -43,40 +43,19 @@ i18n.use(initReactI18next).init({
   },
 });
 
-// Asynchronously detect system locale and update language
-async function detectAndSetLocale(): Promise<void> {
+// Detect system locale (used by settings store for first-time users)
+export async function detectSystemLocale(): Promise<SupportedLanguage> {
   try {
-    // Check if user has a saved language preference
-    const savedSettings = localStorage.getItem('maibuk-settings');
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      if (parsed?.state?.language) {
-        // Apply the saved language preference
-        const savedLang = parsed.state.language as SupportedLanguage;
-        if (supportedLanguages.includes(savedLang) && savedLang !== i18n.language) {
-          await i18n.changeLanguage(savedLang);
-        }
-        return;
-      }
-    }
-
-    // No saved preference, detect system locale using platform adapter
     const os = await getOS();
     const systemLocale = await os.locale();
     if (systemLocale) {
-      const normalizedLang = normalizeLocale(systemLocale);
-      if (normalizedLang !== i18n.language) {
-        await i18n.changeLanguage(normalizedLang);
-      }
+      return normalizeLocale(systemLocale);
     }
   } catch (error) {
-    // Fallback to 'en' if detection fails
-    console.warn("Failed to detect system locale, using fallback:", error);
+    console.warn("Failed to detect system locale:", error);
   }
+  return fallbackLng;
 }
-
-// Trigger locale detection
-detectAndSetLocale();
 
 export default i18n;
 export { supportedLanguages, type SupportedLanguage };

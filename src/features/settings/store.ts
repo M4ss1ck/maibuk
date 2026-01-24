@@ -1,7 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import i18n from "../../i18n";
+import i18n, { detectSystemLocale } from "../../i18n";
 import type { Settings, FontSize, FontFamily, ExportFormat, Language } from "./types";
+
+const STORAGE_KEY = "maibuk-settings";
+
+// Check if this is first load (no persisted settings) - evaluated once at module load
+const isFirstLoad = !localStorage.getItem(STORAGE_KEY);
 
 interface SettingsStore extends Settings {
   setAppFontSize: (size: FontSize) => void;
@@ -33,10 +38,17 @@ export const useSettingsStore = create<SettingsStore>()(
       },
     }),
     {
-      name: "maibuk-settings",
+      name: STORAGE_KEY,
       onRehydrateStorage: () => (state) => {
-        // Sync i18n with persisted language on rehydration
-        if (state?.language && state.language !== i18n.language) {
+        if (isFirstLoad) {
+          // First load: detect system locale and apply it
+          detectSystemLocale().then((detectedLang) => {
+            i18n.changeLanguage(detectedLang);
+            // Update store with detected language
+            useSettingsStore.setState({ language: detectedLang });
+          });
+        } else if (state?.language) {
+          // Subsequent loads: always sync i18n with persisted language
           i18n.changeLanguage(state.language);
         }
       },
