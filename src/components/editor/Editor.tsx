@@ -59,6 +59,9 @@ export function Editor({
         heading: {
           levels: [1, 2, 3],
         },
+        // Disable extensions we configure separately
+        link: false,
+        underline: false,
       }),
       Placeholder.configure({
         placeholder,
