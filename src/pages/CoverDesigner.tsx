@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { IS_WEB, getDialog, getFileSystem } from "../lib/platform";
 import { CoverCanvas, CoverToolbar, type CoverCanvasRef } from "../components/cover-editor";
 import { useBookStore } from "../features/books/store";
 import { COVER_DIMENSIONS, DEFAULT_TEXT_STYLES, type CoverDimension, type TextStyle } from "../features/covers/types";
@@ -126,19 +125,30 @@ export function CoverDesigner() {
       bytes[i] = binary.charCodeAt(i);
     }
 
-    // Open save dialog
-    const filePath = await save({
-      defaultPath: `${currentBook?.title || "cover"}.${format}`,
-      filters: [
-        {
-          name: format.toUpperCase(),
-          extensions: [format],
-        },
-      ],
-    });
+    const filename = `${currentBook?.title || "cover"}.${format}`;
+    const mimeType = format === "png" ? "image/png" : "image/jpeg";
 
-    if (filePath) {
-      await writeFile(filePath, bytes);
+    if (IS_WEB) {
+      // On web, directly download the file
+      const fs = await getFileSystem();
+      fs.downloadFile(filename, bytes, mimeType);
+    } else {
+      // On Tauri, show save dialog
+      const dialog = await getDialog();
+      const filePath = await dialog.save({
+        defaultPath: filename,
+        filters: [
+          {
+            name: format.toUpperCase(),
+            extensions: [format],
+          },
+        ],
+      });
+
+      if (filePath) {
+        const fs = await getFileSystem();
+        await fs.writeFile(filePath, bytes);
+      }
     }
   }, [currentBook?.title]);
 

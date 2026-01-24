@@ -5,6 +5,7 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { useTranslation } from "react-i18next";
 import { ImageIcon } from "../icons";
+import { IS_WEB, getDialog, getFileSystem, getWebDialog } from "../../lib/platform";
 
 interface ImageInsertDialogProps {
   editor: Editor;
@@ -49,28 +50,46 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
   };
 
   const handleFileSelect = async () => {
-    try {
-      // Use Tauri's file dialog
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        multiple: false,
-        filters: [
-          {
-            name: "Images",
-            extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
-          },
-        ],
-      });
+    const imageFilters = [
+      {
+        name: "Images",
+        extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
+      },
+    ];
 
-      if (selected) {
-        // For local files, we need to convert to a data URL or use a local protocol
-        const { readFile } = await import("@tauri-apps/plugin-fs");
-        const contents = await readFile(selected);
-        const extension = selected.split(".").pop()?.toLowerCase() || "png";
-        const mimeType = extension === "svg" ? "image/svg+xml" : `image/${extension}`;
-        const base64 = btoa(String.fromCharCode(...contents));
-        const dataUrl = `data:${mimeType};base64,${base64}`;
-        setUrl(dataUrl);
+    try {
+      if (IS_WEB) {
+        // On web, use openWithData to get file contents directly
+        const webDialog = await getWebDialog();
+        const result = await webDialog.openWithData({
+          multiple: false,
+          filters: imageFilters,
+        });
+
+        if (result) {
+          const extension = result.name.split(".").pop()?.toLowerCase() || "png";
+          const mimeType = extension === "svg" ? "image/svg+xml" : `image/${extension}`;
+          const base64 = btoa(String.fromCharCode(...result.data));
+          const dataUrl = `data:${mimeType};base64,${base64}`;
+          setUrl(dataUrl);
+        }
+      } else {
+        // On Tauri, use dialog + filesystem
+        const dialog = await getDialog();
+        const selected = await dialog.open({
+          multiple: false,
+          filters: imageFilters,
+        });
+
+        if (selected) {
+          const fs = await getFileSystem();
+          const contents = await fs.readFile(selected);
+          const extension = selected.split(".").pop()?.toLowerCase() || "png";
+          const mimeType = extension === "svg" ? "image/svg+xml" : `image/${extension}`;
+          const base64 = btoa(String.fromCharCode(...contents));
+          const dataUrl = `data:${mimeType};base64,${base64}`;
+          setUrl(dataUrl);
+        }
       }
     } catch (err) {
       console.error("Failed to select file:", err);
