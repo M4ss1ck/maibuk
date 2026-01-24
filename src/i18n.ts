@@ -44,7 +44,6 @@ i18n.use(initReactI18next).init({
 });
 
 // Asynchronously detect system locale and update language
-// Only if no user preference is saved
 async function detectAndSetLocale(): Promise<void> {
   try {
     // Check if user has a saved language preference
@@ -52,7 +51,11 @@ async function detectAndSetLocale(): Promise<void> {
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
       if (parsed?.state?.language) {
-        // User has a saved preference, don't override with system locale
+        // Apply the saved language preference
+        const savedLang = parsed.state.language as SupportedLanguage;
+        if (supportedLanguages.includes(savedLang) && savedLang !== i18n.language) {
+          await i18n.changeLanguage(savedLang);
+        }
         return;
       }
     }
