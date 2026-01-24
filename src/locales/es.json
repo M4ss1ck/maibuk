@@ -35,7 +35,8 @@
     "backToHome": "Inicio",
     "exportBook": "Exportar Libro",
     "designCover": "Diseñar Portada",
-    "focusMode": "Modo Enfocado (F11)"
+    "focusMode": "Modo Enfocado (F11)",
+    "downloadApp": "Descargar App"
   },
   "books": {
     "title": "Mis Libros",

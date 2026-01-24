@@ -35,7 +35,8 @@
     "backToHome": "Back to Home",
     "exportBook": "Export Book",
     "designCover": "Design Cover",
-    "focusMode": "Focus Mode (F11)"
+    "focusMode": "Focus Mode (F11)",
+    "downloadApp": "Download App"
   },
   "books": {
     "title": "My Books",

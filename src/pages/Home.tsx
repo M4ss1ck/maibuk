@@ -6,6 +6,8 @@ import { NewBookDialog } from "../components/project/NewBookDialog";
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
 import { AddIcon } from "../components/icons";
+import { Download } from "lucide-react";
+import { IS_WEB } from "../lib/platform";
 import logo from "../../src-tauri/icons/icon.png";
 
 export function Home() {
@@ -35,10 +37,21 @@ export function Home() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-semibold">{t("books.title")}</h2>
-        <Button onClick={() => setIsNewBookOpen(true)}>
-          <AddIcon className="w-5 h-5" />
-          {t("books.newBook")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {IS_WEB && (
+            <Button
+              variant="secondary"
+              onClick={() => window.open("https://github.com/M4ss1ck/maibuk", "_blank")}
+            >
+              <Download className="w-5 h-5" />
+              {t("nav.downloadApp")}
+            </Button>
+          )}
+          <Button onClick={() => setIsNewBookOpen(true)}>
+            <AddIcon className="w-5 h-5" />
+            {t("books.newBook")}
+          </Button>
+        </div>
       </div>
 
       {books.length === 0 ? (
