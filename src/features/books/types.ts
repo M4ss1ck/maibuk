@@ -14,6 +14,7 @@ export interface Book {
   createdAt: Date;
   updatedAt: Date;
   lastOpenedAt?: Date;
+  lastChapterId?: string;
 }
 
 export interface CreateBookInput {
@@ -35,4 +36,5 @@ export interface UpdateBookInput {
   targetWordCount?: number;
   coverImagePath?: string;
   coverData?: string;
+  lastChapterId?: string;
 }

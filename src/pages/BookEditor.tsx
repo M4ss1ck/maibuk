@@ -49,12 +49,17 @@ export function BookEditor() {
     }
   }, [bookId, loadBook, loadChapters]);
 
-  // Auto-select first chapter if none selected
+  // Auto-select chapter: restore last edited or default to last chapter
   useEffect(() => {
-    if (chapters.length > 0 && !currentChapter) {
-      setCurrentChapter(chapters[0]);
+    // Wait for both book and chapters to be loaded for the correct book
+    if (chapters.length > 0 && !currentChapter && currentBook && currentBook.id === bookId) {
+      const lastEditedChapter = currentBook.lastChapterId
+        ? chapters.find((c) => c.id === currentBook.lastChapterId)
+        : null;
+      // Use last edited chapter if found, otherwise default to last chapter
+      setCurrentChapter(lastEditedChapter ?? chapters[chapters.length - 1]);
     }
-  }, [chapters, currentChapter, setCurrentChapter]);
+  }, [chapters, currentChapter, currentBook, bookId, setCurrentChapter]);
 
   // Update word count display and sync editor content ref when chapter changes
   useEffect(() => {
@@ -133,8 +138,12 @@ export function BookEditor() {
   const handleSelectChapter = useCallback(
     (chapter: Chapter) => {
       setCurrentChapter(chapter);
+      // Save as last edited chapter for this book
+      if (bookId) {
+        updateBook(bookId, { lastChapterId: chapter.id });
+      }
     },
-    [setCurrentChapter]
+    [bookId, setCurrentChapter, updateBook]
   );
 
   const handleCreateChapter = useCallback(
@@ -146,9 +155,11 @@ export function BookEditor() {
           chapterType: type,
         });
         setCurrentChapter(newChapter);
+        // Save as last edited chapter
+        updateBook(bookId, { lastChapterId: newChapter.id });
       }
     },
-    [bookId, createChapter, setCurrentChapter]
+    [bookId, createChapter, setCurrentChapter, updateBook]
   );
 
   const handleDeleteChapter = useCallback(

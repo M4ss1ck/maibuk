@@ -25,6 +25,7 @@ function toBook(row: Record<string, unknown>): Book {
     lastOpenedAt: row.last_opened_at
       ? new Date((row.last_opened_at as number) * 1000)
       : undefined,
+    lastChapterId: row.last_chapter_id as string | undefined,
   };
 }
 
@@ -173,6 +174,10 @@ export const useBookStore = create<BookStore>((set) => ({
     if (input.coverData !== undefined) {
       updates.push("cover_data = ?");
       values.push(input.coverData);
+    }
+    if (input.lastChapterId !== undefined) {
+      updates.push("last_chapter_id = ?");
+      values.push(input.lastChapterId);
     }
 
     values.push(id);

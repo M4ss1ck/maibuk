@@ -30,9 +30,17 @@ async function initializeSchema(): Promise<void> {
       status TEXT DEFAULT 'draft',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
-      last_opened_at INTEGER
+      last_opened_at INTEGER,
+      last_chapter_id TEXT
     )
   `);
+
+  // Migration: Add last_chapter_id column for existing databases
+  await db.execute(`
+    ALTER TABLE books ADD COLUMN last_chapter_id TEXT
+  `).catch(() => {
+    // Column already exists, ignore error
+  });
 
   // Create chapters table
   await db.execute(`
