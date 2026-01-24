@@ -228,7 +228,19 @@
     "autoSave": "Guardado Automático",
     "autoSaveDescription": "Guarda automáticamente tu trabajo",
     "toggleAutoSave": "Activar guardado automático",
-    "updateAvailable": "{{version}} disponible"
+    "updateAvailable": "{{version}} disponible",
+    "advanced": "Avanzado",
+    "exportDatabase": "Exportar Base de Datos",
+    "exportDatabaseDescription": "Descarga una copia de seguridad de todos tus datos",
+    "exportDatabaseButton": "Exportar",
+    "importDatabase": "Importar Base de Datos",
+    "importDatabaseDescription": "Importa datos desde un archivo de respaldo SQL",
+    "importDatabaseButton": "Importar",
+    "resetDatabase": "Reiniciar Base de Datos",
+    "resetDatabaseDescription": "Elimina todos los libros, capítulos y configuraciones",
+    "resetDatabaseButton": "Reiniciar",
+    "resetDatabaseConfirm": "¿Estás seguro de que quieres reiniciar la base de datos? Esto eliminará permanentemente todos tus libros, capítulos y configuraciones. Esta acción no se puede deshacer.",
+    "confirmReset": "Sí, reiniciar todo"
   },
   "cover": {
     "title": "Diseñador de Portada",

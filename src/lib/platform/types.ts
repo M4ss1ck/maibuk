@@ -4,6 +4,8 @@ export interface DatabaseAdapter {
   execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }>;
   select<T = unknown[]>(sql: string, params?: unknown[]): Promise<T>;
   close(): Promise<void>;
+  exportData(): Promise<Uint8Array>;
+  importData(sqlContent: string): Promise<void>;
 }
 
 export interface SaveDialogOptions {
