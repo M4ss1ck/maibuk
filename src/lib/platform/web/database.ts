@@ -3,6 +3,32 @@ import type { DatabaseAdapter } from "../types";
 
 const DB_STORAGE_KEY = "maibuk-database";
 
+function escapeSQL(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") {
+    return `'${value.replace(/'/g, "''")}'`;
+  }
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function generateInsertStatements(
+  tableName: string,
+  rows: Record<string, unknown>[]
+): string {
+  if (rows.length === 0) return "";
+
+  const statements: string[] = [];
+  for (const row of rows) {
+    const columns = Object.keys(row);
+    const values = columns.map((col) => escapeSQL(row[col]));
+    statements.push(
+      `INSERT INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
+    );
+  }
+  return statements.join("\n");
+}
+
 class WebDatabaseAdapter implements DatabaseAdapter {
   constructor(private db: SqlJsDatabase) {}
 
@@ -35,7 +61,34 @@ class WebDatabaseAdapter implements DatabaseAdapter {
   }
 
   async exportData(): Promise<Uint8Array> {
-    return this.db.export();
+    // Generate SQL dump for consistency with Tauri export
+    const [books, chapters, coverTemplates, settings] = await Promise.all([
+      this.select<Record<string, unknown>[]>("SELECT * FROM books"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
+    ]);
+
+    const lines: string[] = [
+      "-- Maibuk Database Export (SQL Dump)",
+      `-- Exported at: ${new Date().toISOString()}`,
+      "-- Import this file into a SQLite database after creating the schema",
+      "",
+      "-- Books",
+      generateInsertStatements("books", books),
+      "",
+      "-- Chapters",
+      generateInsertStatements("chapters", chapters),
+      "",
+      "-- Cover Templates",
+      generateInsertStatements("cover_templates", coverTemplates),
+      "",
+      "-- Settings",
+      generateInsertStatements("settings", settings),
+    ];
+
+    const sqlDump = lines.join("\n");
+    return new TextEncoder().encode(sqlDump);
   }
 
   private persist(): void {

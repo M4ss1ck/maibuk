@@ -47,11 +47,9 @@ export function Settings() {
     setIsExporting(true);
     try {
       const data = await exportDatabase();
-      const dateStr = new Date().toISOString().split("T")[0];
+      const filename = `maibuk-backup-${new Date().toISOString().split("T")[0]}.sql`;
 
       if (IS_TAURI) {
-        // Tauri exports as SQL dump (no filesystem read permissions needed)
-        const filename = `maibuk-backup-${dateStr}.sql`;
         const dialog = await getDialog();
         const path = await dialog.save({
           defaultPath: filename,
@@ -62,10 +60,8 @@ export function Settings() {
           await fs.writeFile(path, data);
         }
       } else {
-        // Web exports as raw SQLite database file
-        const filename = `maibuk-backup-${dateStr}.db`;
         const fs = await getFileSystem();
-        fs.downloadFile(filename, data, "application/x-sqlite3");
+        fs.downloadFile(filename, data, "text/plain");
       }
     } catch (error) {
       console.error("Failed to export database:", error);
