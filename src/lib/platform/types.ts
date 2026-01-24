@@ -5,6 +5,7 @@ export interface DatabaseAdapter {
   select<T = unknown[]>(sql: string, params?: unknown[]): Promise<T>;
   close(): Promise<void>;
   exportData(): Promise<Uint8Array>;
+  importData(sqlContent: string): Promise<void>;
 }
 
 export interface SaveDialogOptions {

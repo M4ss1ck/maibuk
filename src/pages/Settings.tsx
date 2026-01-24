@@ -16,8 +16,8 @@ import { APP_VERSION } from "../constants";
 import { useVersionCheck } from "../features/version";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "../components/icons";
-import { exportDatabase, resetDatabase } from "../lib/db";
-import { getFileSystem, IS_TAURI, getDialog } from "../lib/platform";
+import { exportDatabase, importDatabase, resetDatabase } from "../lib/db";
+import { getFileSystem, IS_TAURI, getDialog, getWebDialog } from "../lib/platform";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -39,6 +39,7 @@ export function Settings() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
   const updateAvailable = isOutdated && latestVersion;
@@ -67,6 +68,42 @@ export function Settings() {
       console.error("Failed to export database:", error);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleImportDatabase = async () => {
+    setIsImporting(true);
+    try {
+      let sqlContent: string | null = null;
+
+      if (IS_TAURI) {
+        const dialog = await getDialog();
+        const path = await dialog.open({
+          filters: [{ name: "SQL File", extensions: ["sql"] }],
+        });
+        if (path) {
+          const fs = await getFileSystem();
+          const data = await fs.readFile(path);
+          sqlContent = new TextDecoder().decode(data);
+        }
+      } else {
+        const webDialog = await getWebDialog();
+        const file = await webDialog.openWithData({
+          filters: [{ name: "SQL File", extensions: ["sql"] }],
+        });
+        if (file) {
+          sqlContent = new TextDecoder().decode(file.data);
+        }
+      }
+
+      if (sqlContent) {
+        await importDatabase(sqlContent);
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error("Failed to import database:", error);
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -227,6 +264,21 @@ export function Settings() {
                 disabled={isExporting}
               >
                 {isExporting ? t("common.loading") : t("settings.exportDatabaseButton")}
+              </Button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.importDatabase")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.importDatabaseDescription")}</p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleImportDatabase}
+                disabled={isImporting}
+              >
+                {isImporting ? t("common.loading") : t("settings.importDatabaseButton")}
               </Button>
             </div>
 

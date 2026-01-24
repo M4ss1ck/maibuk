@@ -116,3 +116,9 @@ export async function resetDatabase(): Promise<void> {
   await database.execute("DELETE FROM cover_templates");
   await database.execute("DELETE FROM settings");
 }
+
+export async function importDatabase(sqlContent: string): Promise<void> {
+  const database = await getDatabase();
+  // Import the SQL content (merges with existing data)
+  await database.importData(sqlContent);
+}
