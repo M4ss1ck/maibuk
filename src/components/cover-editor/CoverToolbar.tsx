@@ -99,17 +99,17 @@ export function CoverToolbar({
   };
 
   return (
-    <div className="h-14 border-b border-border bg-background flex items-center px-4 gap-2">
+    <div className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2">
       {/* Dimension selector */}
       <div className="relative">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setShowDimensions(!showDimensions)}
-          className="gap-2"
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
         >
           <DimensionIcon className="w-4 h-4" />
-          {dimension.name}
+          <span className="hidden sm:inline">{dimension.name}</span>
           <ChevronDownIcon className="w-3 h-3" />
         </Button>
 
@@ -133,7 +133,7 @@ export function CoverToolbar({
         )}
       </div>
 
-      <div className="w-px h-6 bg-border mx-2" />
+      <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
       {/* Add Text */}
       <div className="relative">
@@ -141,10 +141,10 @@ export function CoverToolbar({
           variant="ghost"
           size="sm"
           onClick={() => setShowTextMenu(!showTextMenu)}
-          className="gap-2"
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
         >
           <TextIcon className="w-4 h-4" />
-          {t("cover.addText")}
+          <span className="hidden sm:inline">{t("cover.addText")}</span>
         </Button>
 
         {showTextMenu && (
@@ -176,10 +176,11 @@ export function CoverToolbar({
         variant="ghost"
         size="sm"
         onClick={() => imageInputRef.current?.click()}
-        className="gap-2"
+        className="gap-1 sm:gap-2 text-xs sm:text-sm"
+        title={t("cover.addImage")}
       >
         <ImageIcon className="w-4 h-4" />
-        {t("cover.addImage")}
+        <span className="hidden sm:inline">{t("cover.addImage")}</span>
       </Button>
       <input
         ref={imageInputRef}
@@ -195,13 +196,14 @@ export function CoverToolbar({
           variant="ghost"
           size="sm"
           onClick={() => setShowBackgroundMenu(!showBackgroundMenu)}
-          className="gap-2"
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
+          title={t("cover.background")}
         >
           <div
             className="w-4 h-4 rounded border border-border"
             style={{ backgroundColor }}
           />
-          {t("cover.background")}
+          <span className="hidden sm:inline">{t("cover.background")}</span>
         </Button>
 
         {showBackgroundMenu && (
@@ -245,7 +247,7 @@ export function CoverToolbar({
         className="hidden"
       />
 
-      <div className="w-px h-6 bg-border mx-2" />
+      <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
       {/* Layer controls */}
       <Button
@@ -279,7 +281,7 @@ export function CoverToolbar({
         <TrashIcon className="w-4 h-4" />
       </Button>
 
-      <div className="flex-1" />
+      <div className="flex-1 min-w-2" />
 
       {/* Export */}
       <div className="relative">
@@ -287,10 +289,10 @@ export function CoverToolbar({
           variant="primary"
           size="sm"
           onClick={() => setShowExportMenu(!showExportMenu)}
-          className="gap-2"
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
         >
           <ExportIcon className="w-4 h-4" />
-          {t("cover.export")}
+          <span className="hidden sm:inline">{t("cover.export")}</span>
         </Button>
 
         {showExportMenu && (

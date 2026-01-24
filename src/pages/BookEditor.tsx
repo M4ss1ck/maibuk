@@ -9,8 +9,9 @@ import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ExportDialog } from "../components/export";
 import { useTranslation } from "react-i18next";
-import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon, FocusModeIcon, DocumentIcon, SettingsIcon } from "../components/icons";
+import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon, FocusModeIcon, DocumentIcon, SettingsIcon, CloseIcon } from "../components/icons";
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
+import { Menu, MoreVertical } from "lucide-react";
 
 export function BookEditor() {
   const { t } = useTranslation();
@@ -37,6 +38,8 @@ export function BookEditor() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
+  const [showMobileChapters, setShowMobileChapters] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
@@ -249,24 +252,60 @@ export function BookEditor() {
 
   return (
     <div className={`flex h-dvh overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
-      {/* Chapter sidebar - hidden in focus mode */}
-      {!focusMode && (
-        <ChapterList
-          chapters={chapters}
-          currentChapterId={currentChapter?.id ?? null}
-          onSelectChapter={handleSelectChapter}
-          onCreateChapter={handleCreateChapter}
-          onUpdateChapter={handleUpdateChapter}
-          onDeleteChapter={handleDeleteChapter}
-          onReorderChapters={handleReorderChapters}
+      {/* Mobile chapter drawer overlay */}
+      {showMobileChapters && !focusMode && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setShowMobileChapters(false)}
         />
+      )}
+
+      {/* Chapter sidebar - hidden on mobile, shown as drawer when toggled */}
+      {!focusMode && (
+        <div
+          className={`
+            fixed md:relative z-50 md:z-auto
+            h-full transform transition-transform duration-300 ease-in-out
+            ${showMobileChapters ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+          `}
+        >
+          {/* Mobile close button */}
+          <button
+            onClick={() => setShowMobileChapters(false)}
+            className="md:hidden absolute top-3 right-3 z-10 p-2 hover:bg-muted rounded-lg transition-colors"
+            aria-label="Close chapters"
+          >
+            <CloseIcon className="w-5 h-5" />
+          </button>
+          <ChapterList
+            chapters={chapters}
+            currentChapterId={currentChapter?.id ?? null}
+            onSelectChapter={(chapter) => {
+              handleSelectChapter(chapter);
+              setShowMobileChapters(false);
+            }}
+            onCreateChapter={handleCreateChapter}
+            onUpdateChapter={handleUpdateChapter}
+            onDeleteChapter={handleDeleteChapter}
+            onReorderChapters={handleReorderChapters}
+          />
+        </div>
       )}
 
       {/* Main editor area */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Header bar - hidden in focus mode */}
         {!focusMode && (
-          <div className="h-12 border-b border-border flex items-center px-4 gap-4">
+          <div className="h-12 border-b border-border flex items-center px-2 sm:px-4 gap-1 sm:gap-2 md:gap-4">
+            {/* Mobile chapter toggle */}
+            <button
+              onClick={() => setShowMobileChapters(true)}
+              className="md:hidden p-2 hover:bg-muted rounded transition-colors"
+              title={t("chapters.title")}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
             <button
               onClick={() => navigate("/")}
               className="p-2 hover:bg-muted rounded transition-colors"
@@ -275,8 +314,8 @@ export function BookEditor() {
               <BackIcon className="w-5 h-5" />
             </button>
 
-            <div className="flex-1">
-              <h1 className="font-medium truncate">{currentBook.title}</h1>
+            <div className="flex-1 min-w-0">
+              <h1 className="font-medium truncate text-sm sm:text-base">{currentBook.title}</h1>
               {currentChapter && (
                 <p className="text-xs text-muted-foreground truncate">
                   {currentChapter.title}
@@ -289,13 +328,13 @@ export function BookEditor() {
               {saveStatus === "saving" && (
                 <span className="flex items-center gap-1">
                   <SpinnerIcon className="w-4 h-4 animate-spin" />
-                  {t("editor.saving")}
+                  <span className="hidden sm:inline">{t("editor.saving")}</span>
                 </span>
               )}
               {saveStatus === "saved" && (
                 <span className="flex items-center gap-1 text-success">
                   <CheckIcon className="w-4 h-4" />
-                  {t("editor.saved")}
+                  <span className="hidden sm:inline">{t("editor.saved")}</span>
                 </span>
               )}
               {!["saving", "saved"].includes(saveStatus) && (
@@ -312,9 +351,8 @@ export function BookEditor() {
               )}
             </div>
 
-
-            {/* Word count - shows selection stats when text is selected */}
-            <div className="text-sm text-muted-foreground">
+            {/* Word count - hidden on mobile */}
+            <div className="hidden sm:block text-sm text-muted-foreground">
               {editorStats?.hasSelection ? (
                 <span title={t("editor.selectionStats")}>
                   {editorStats.words.toLocaleString()} {t("common.words")} / {editorStats.characters.toLocaleString()} {t("common.chars")}
@@ -324,44 +362,112 @@ export function BookEditor() {
               )}
             </div>
 
-            {/* Export button */}
-            <button
-              onClick={() => setShowExportDialog(true)}
-              className="p-2 hover:bg-muted rounded transition-colors"
-              title={t("nav.exportBook")}
-            >
-              <ExportIcon className="w-5 h-5" />
-            </button>
+            {/* Desktop action buttons */}
+            <div className="hidden md:flex items-center gap-1">
+              {/* Export button */}
+              <button
+                onClick={() => setShowExportDialog(true)}
+                className="p-2 hover:bg-muted rounded transition-colors"
+                title={t("nav.exportBook")}
+              >
+                <ExportIcon className="w-5 h-5" />
+              </button>
 
-            {/* Design Cover button */}
-            <button
-              onClick={() => navigate(`/book/${bookId}/cover`)}
-              className="p-2 hover:bg-muted rounded transition-colors"
-              title={t("nav.designCover")}
-            >
-              <CoverDesignIcon className="w-5 h-5" />
-            </button>
+              {/* Design Cover button */}
+              <button
+                onClick={() => navigate(`/book/${bookId}/cover`)}
+                className="p-2 hover:bg-muted rounded transition-colors"
+                title={t("nav.designCover")}
+              >
+                <CoverDesignIcon className="w-5 h-5" />
+              </button>
 
-            {/* Book Settings button */}
-            <button
-              onClick={() => setShowSettingsDialog(true)}
-              className="p-2 hover:bg-muted rounded transition-colors"
-              title={t("bookSettings.title")}
-            >
-              <SettingsIcon className="w-5 h-5" />
-            </button>
+              {/* Book Settings button */}
+              <button
+                onClick={() => setShowSettingsDialog(true)}
+                className="p-2 hover:bg-muted rounded transition-colors"
+                title={t("bookSettings.title")}
+              >
+                <SettingsIcon className="w-5 h-5" />
+              </button>
 
-            {/** Theme toggle */}
-            <ThemeToggle variant="dropdown" />
+              {/** Theme toggle */}
+              <ThemeToggle variant="dropdown" />
 
-            {/* Focus mode toggle */}
-            <button
-              onClick={toggleFocusMode}
-              className="p-2 hover:bg-muted rounded transition-colors"
-              title={t("nav.focusMode")}
-            >
-              <FocusModeIcon className="w-5 h-5" />
-            </button>
+              {/* Focus mode toggle */}
+              <button
+                onClick={toggleFocusMode}
+                className="p-2 hover:bg-muted rounded transition-colors"
+                title={t("nav.focusMode")}
+              >
+                <FocusModeIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mobile more menu */}
+            <div className="md:hidden relative">
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="p-2 hover:bg-muted rounded transition-colors"
+                title={t("common.more")}
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+
+              {showMobileMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowMobileMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50">
+                    <button
+                      onClick={() => {
+                        setShowExportDialog(true);
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                    >
+                      <ExportIcon className="w-4 h-4" />
+                      {t("nav.exportBook")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigate(`/book/${bookId}/cover`);
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                    >
+                      <CoverDesignIcon className="w-4 h-4" />
+                      {t("nav.designCover")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowSettingsDialog(true);
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                    >
+                      <SettingsIcon className="w-4 h-4" />
+                      {t("bookSettings.title")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        toggleFocusMode();
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                    >
+                      <FocusModeIcon className="w-4 h-4" />
+                      {t("nav.focusMode")}
+                    </button>
+                    <div className="px-4 py-2 border-t border-border">
+                      <ThemeToggle />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
 

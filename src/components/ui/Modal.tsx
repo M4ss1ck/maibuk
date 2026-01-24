@@ -33,7 +33,7 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50"
@@ -43,14 +43,14 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative bg-background rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden"
+        className="relative bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-md sm:mx-4 max-h-[90vh] overflow-hidden flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 id="modal-title" className="text-lg font-semibold">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
+          <h2 id="modal-title" className="text-base sm:text-lg font-semibold">
             {title}
           </h2>
           <button
@@ -63,13 +63,13 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
         </div>
 
         {/* Content */}
-        <div className="px-6 py-4">
+        <div className="px-4 sm:px-6 py-4 overflow-auto flex-1">
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-muted/30">
+          <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-border bg-muted/30 shrink-0">
             {footer}
           </div>
         )}

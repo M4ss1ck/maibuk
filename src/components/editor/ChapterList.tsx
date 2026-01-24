@@ -123,9 +123,9 @@ export function ChapterList({
   };
 
   return (
-    <aside className="w-64 border-r border-border flex flex-col bg-background h-full shrink-0">
+    <aside className="w-72 sm:w-64 border-r border-border flex flex-col bg-background h-full shrink-0">
       {/* Sticky header */}
-      <div className="p-4 border-b border-border flex items-center justify-between bg-background z-10 shrink-0">
+      <div className="p-4 pt-12 md:pt-4 border-b border-border flex items-center justify-between bg-background z-10 shrink-0">
         <h3 className="font-medium">{t("chapters.title")}</h3>
         <button
           onClick={() => setShowNewDialog(true)}

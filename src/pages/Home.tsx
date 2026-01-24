@@ -34,22 +34,24 @@ export function Home() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="text-2xl font-semibold">{t("books.title")}</h2>
+    <div className="p-4 sm:p-8 overflow-auto h-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+        <h2 className="text-xl sm:text-2xl font-semibold">{t("books.title")}</h2>
         <div className="flex items-center gap-2">
           {IS_WEB && (
             <Button
               variant="secondary"
               onClick={() => window.open("https://github.com/M4ss1ck/maibuk/releases", "_blank")}
+              className="text-sm"
             >
               <Download className="w-5 h-5" />
-              {t("nav.downloadApp")}
+              <span className="hidden sm:inline">{t("nav.downloadApp")}</span>
             </Button>
           )}
-          <Button onClick={() => setIsNewBookOpen(true)}>
+          <Button onClick={() => setIsNewBookOpen(true)} className="text-sm">
             <AddIcon className="w-5 h-5" />
-            {t("books.newBook")}
+            <span className="hidden sm:inline">{t("books.newBook")}</span>
+            <span className="sm:hidden">{t("common.new")}</span>
           </Button>
         </div>
       </div>
