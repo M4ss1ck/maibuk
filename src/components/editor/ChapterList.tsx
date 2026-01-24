@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Chapter, ChapterType } from "../../features/chapters/types";
 import { Select } from "../ui/Select";
 import { useTranslation } from "react-i18next";
@@ -35,6 +35,18 @@ export function ChapterList({
   onReorderChapters,
 }: ChapterListProps) {
   const { t } = useTranslation();
+  const listContainerRef = useRef<HTMLDivElement>(null);
+  const selectedItemRef = useRef<HTMLLIElement>(null);
+
+  // Scroll to selected chapter or bottom of list on mount/change
+  useEffect(() => {
+    if (selectedItemRef.current) {
+      selectedItemRef.current.scrollIntoView({ block: "nearest" });
+    } else if (listContainerRef.current) {
+      listContainerRef.current.scrollTop = listContainerRef.current.scrollHeight;
+    }
+  }, [currentChapterId, chapters.length]);
+
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState<ChapterType>("chapter");
@@ -167,7 +179,7 @@ export function ChapterList({
       )}
 
       {/* Chapter list */}
-      <div className="flex-1 overflow-auto">
+      <div ref={listContainerRef} className="flex-1 overflow-auto">
         {chapters.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground text-sm">
             <p>{t("chapters.noChapters")}</p>
@@ -177,6 +189,7 @@ export function ChapterList({
             {chapters.map((chapter) => (
               <li
                 key={chapter.id}
+                ref={currentChapterId === chapter.id ? selectedItemRef : null}
                 draggable={true}
                 onDragStart={(e) => handleDragStart(e, chapter.id)}
                 onDragOver={handleDragOver}
