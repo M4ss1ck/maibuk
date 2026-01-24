@@ -34,6 +34,10 @@ class WebDatabaseAdapter implements DatabaseAdapter {
     this.db.close();
   }
 
+  async exportData(): Promise<Uint8Array> {
+    return this.db.export();
+  }
+
   private persist(): void {
     try {
       const data = this.db.export();

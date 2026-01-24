@@ -101,3 +101,18 @@ export async function closeDatabase(): Promise<void> {
     db = null;
   }
 }
+
+export async function exportDatabase(): Promise<Uint8Array> {
+  const database = await getDatabase();
+  return database.exportData();
+}
+
+export async function resetDatabase(): Promise<void> {
+  const database = await getDatabase();
+
+  // Delete all data from tables (order matters due to foreign keys)
+  await database.execute("DELETE FROM chapters");
+  await database.execute("DELETE FROM books");
+  await database.execute("DELETE FROM cover_templates");
+  await database.execute("DELETE FROM settings");
+}

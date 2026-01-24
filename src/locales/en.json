@@ -228,7 +228,16 @@
     "autoSave": "Auto-save",
     "autoSaveDescription": "Automatically save your work",
     "toggleAutoSave": "Toggle auto-save",
-    "updateAvailable": "{{version}} available"
+    "updateAvailable": "{{version}} available",
+    "advanced": "Advanced",
+    "exportDatabase": "Export Database",
+    "exportDatabaseDescription": "Download a backup of all your data",
+    "exportDatabaseButton": "Export",
+    "resetDatabase": "Reset Database",
+    "resetDatabaseDescription": "Delete all books, chapters, and settings",
+    "resetDatabaseButton": "Reset",
+    "resetDatabaseConfirm": "Are you sure you want to reset the database? This will permanently delete all your books, chapters, and settings. This action cannot be undone.",
+    "confirmReset": "Yes, reset everything"
   },
   "cover": {
     "title": "Cover Designer",
