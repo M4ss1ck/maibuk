@@ -41,7 +41,7 @@ export function Home() {
           {IS_WEB && (
             <Button
               variant="secondary"
-              onClick={() => window.open("https://github.com/M4ss1ck/maibuk", "_blank")}
+              onClick={() => window.open("https://github.com/M4ss1ck/maibuk/releases", "_blank")}
             >
               <Download className="w-5 h-5" />
               {t("nav.downloadApp")}
