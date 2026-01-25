@@ -222,7 +222,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       </div>
 
       {/* Toolbar content - hidden on mobile when collapsed */}
-      <div className={`${isToolbarExpanded ? 'block' : 'hidden'} md:block flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto`}>
+      <div className={`${isToolbarExpanded ? 'flex' : 'hidden'} md:flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto`}>
         <Combobox
           value={editorState.fontSize}
           onChange={handleFontSizeChange}
