@@ -43,6 +43,8 @@ import {
   Search,
   Code2,
   WrapText,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -105,6 +107,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showHtmlDialog, setShowHtmlDialog] = useState(false);
   const [fontFamily, setFontFamily] = useState<FontFamilyValue>("Literata, serif");
+  const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
 
   // Subscribe to editor state changes for proper toolbar updates
   const editorState = useEditorState({
@@ -202,7 +205,24 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-10">
-      <div className="flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto">
+      {/* Mobile toolbar toggle button */}
+      <div className="flex md:hidden items-center justify-between px-4 py-1 border-b border-border">
+        <span className="text-xs font-medium">{t("editor.toolbar")}</span>
+        <button
+          onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
+          className="p-1 rounded hover:bg-muted transition-colors"
+          title={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
+        >
+          {isToolbarExpanded ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </button>
+      </div>
+
+      {/* Toolbar content - hidden on mobile when collapsed */}
+      <div className={`${isToolbarExpanded ? 'block' : 'hidden'} md:block flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto`}>
         <Combobox
           value={editorState.fontSize}
           onChange={handleFontSizeChange}

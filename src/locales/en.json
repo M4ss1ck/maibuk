@@ -173,7 +173,10 @@
     "clear": "Clear",
     "applyChanges": "Apply Changes",
     "htmlEditWarning": "Edit the HTML source directly. Be careful with manual edits as invalid HTML may cause issues.",
-    "selectionStats": "Selected text statistics"
+    "selectionStats": "Selected text statistics",
+    "toolbar": "Toolbar",
+    "hideToolbar": "Hide toolbar",
+    "showToolbar": "Show toolbar"
   },
   "export": {
     "title": "Export Book",
