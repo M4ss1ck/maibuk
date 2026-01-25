@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "../components/icons";
 import { exportDatabase, importDatabase, resetDatabase } from "../lib/db";
 import { getFileSystem, IS_TAURI, getDialog, getWebDialog } from "../lib/platform";
+import { PluginSettings } from "../features/plugins/components";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -237,6 +238,9 @@ export function Settings() {
           </div>
         </div>
       </section>
+
+      {/* Plugin Settings */}
+      <PluginSettings />
 
       {/* Advanced Settings */}
       <section className="mb-6 sm:mb-8">

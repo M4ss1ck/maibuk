@@ -5,7 +5,7 @@
  * Handles dynamic loading, error boundaries, and cleanup.
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Extension } from "@tiptap/core";
 import { usePluginStore } from "../store";
 import { getPluginManager } from "../core/PluginManager";
@@ -59,23 +59,20 @@ export function usePluginExtensions(options: UsePluginExtensionsOptions = {}) {
   const [extensionInfo, setExtensionInfo] = useState<PluginExtensionInfo[]>([]);
   const [errors, setErrors] = useState<Array<{ pluginId: string; error: string }>>([]);
 
-  // Get enabled editor plugins from store
-  const enabledPlugins = usePluginStore((state) =>
-    Object.values(state.plugins).filter(
-      (p) => p.enabled && p.manifest.type === "editor-extension"
-    )
-  );
-
-  // Create a stable key based on enabled plugin IDs and versions
-  const pluginsKey = useMemo(() => {
+  // Create a stable key directly from store state (returns a string, not an array)
+  // This prevents infinite loops from array reference changes
+  const pluginsKey = usePluginStore((state) => {
     if (!enabled) return "disabled";
-    return enabledPlugins
+    return Object.values(state.plugins)
+      .filter((p) => p.enabled && p.manifest.type === "editor-extension")
       .map((p) => `${p.id}:${p.manifest.version}`)
       .sort()
       .join(",");
-  }, [enabled, enabledPlugins]);
+  });
 
   // Load extensions when plugins change
+  // Note: We use pluginsKey as the dependency instead of enabledPlugins
+  // because enabledPlugins creates a new array reference on each render
   useEffect(() => {
     if (!enabled) {
       setExtensions([]);
@@ -94,7 +91,13 @@ export function usePluginExtensions(options: UsePluginExtensionsOptions = {}) {
       const loadedExtensions: PluginExtensionInfo[] = [];
       const loadErrors: Array<{ pluginId: string; error: string }> = [];
 
-      for (const plugin of enabledPlugins) {
+      // Get current plugins from store to avoid stale closure
+      const currentPlugins = usePluginStore.getState();
+      const plugins = Object.values(currentPlugins.plugins).filter(
+        (p) => p.enabled && p.manifest.type === "editor-extension"
+      );
+
+      for (const plugin of plugins) {
         try {
           // Get extension from plugin manager
           const ext = manager.getPluginExtension(plugin.id);
@@ -132,7 +135,7 @@ export function usePluginExtensions(options: UsePluginExtensionsOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, pluginsKey, enabledPlugins]);
+  }, [enabled, pluginsKey]);
 
   return {
     /**
