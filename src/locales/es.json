@@ -173,7 +173,10 @@
     "clear": "Limpiar",
     "applyChanges": "Aplicar Cambios",
     "htmlEditWarning": "Edita el código HTML directamente. Ten cuidado con las ediciones manuales ya que HTML inválido puede causar problemas.",
-    "selectionStats": "Estadísticas del texto seleccionado"
+    "selectionStats": "Estadísticas del texto seleccionado",
+    "toolbar": "Barra de herramientas",
+    "hideToolbar": "Ocultar barra de herramientas",
+    "showToolbar": "Mostrar barra de herramientas"
   },
   "export": {
     "title": "Exportar Libro",
