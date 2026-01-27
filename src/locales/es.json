@@ -145,6 +145,7 @@
     "viewEditHtml": "Ver/Editar HTML",
     "size": "Tamaño",
     "lineHeight": "Interlineado",
+    "fontFamily": "Fuente",
     "customColor": "Color personalizado",
     "refreshFromEditor": "Actualizar desde el editor",
     "htmlContent": "Contenido HTML...",

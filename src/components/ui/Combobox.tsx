@@ -14,6 +14,7 @@ interface ComboboxProps {
   options: string[];
   placeholder?: string;
   className?: string;
+  inputWidth?: string;
 }
 
 export function Combobox({
@@ -22,6 +23,7 @@ export function Combobox({
   options,
   placeholder = "",
   className = "",
+  inputWidth = "w-17.5",
 }: ComboboxProps) {
   const [query, setQuery] = useState("");
 
@@ -55,7 +57,7 @@ export function Combobox({
       <div className={`relative ${className}`}>
         <div className="relative">
           <ComboboxInput
-            className="w-17.5 px-2 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
+            className={`${inputWidth} px-2 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1`}
             displayValue={(val: string) => val}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -68,7 +70,7 @@ export function Combobox({
 
         <ComboboxOptions
           anchor="bottom start"
-          className="absolute z-50 mt-1 max-h-48 w-25 overflow-auto rounded-lg bg-background border border-border shadow-lg focus:outline-none"
+          className="absolute z-50 mt-1 max-h-48 min-w-25 overflow-auto rounded-lg bg-background border border-border shadow-lg focus:outline-none"
         >
           {isCustomValue && (
             <ComboboxOption
