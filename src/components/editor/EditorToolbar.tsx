@@ -8,7 +8,7 @@ import { FootnoteDialog } from "./FootnoteDialog";
 import { LinkDialog } from "./LinkDialog";
 import { HtmlViewPanel } from "./HtmlViewPanel";
 import { ColorPicker } from "./ColorPicker";
-import { Select, Combobox } from "../ui";
+import { Combobox } from "../ui";
 import { useTranslation } from "react-i18next";
 import {
   Bold,
@@ -51,8 +51,6 @@ interface EditorToolbarProps {
   editor: Editor;
 }
 
-type FontFamilyValue = "Literata, serif" | "Inter, sans-serif" | "monospace";
-
 const FONT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "28", "32", "36", "48", "72"];
 
 const LINE_HEIGHT_OPTIONS = ["1", "1.15", "1.5", "2", "2.5", "3"];
@@ -65,10 +63,19 @@ const HEADING_SIZES: Record<1 | 2 | 3, string> = {
 };
 const DEFAULT_FONT_SIZE = "18";
 
-const FONT_OPTIONS: { value: FontFamilyValue; label: string }[] = [
-  { value: "Literata, serif", label: "Serif" },
-  { value: "Inter, sans-serif", label: "Sans" },
-  { value: "monospace", label: "Mono" },
+const FONT_FAMILY_OPTIONS = [
+  "Literata, serif",
+  "Inter, sans-serif",
+  "monospace",
+  "divider",
+  "DejaVu Sans, sans-serif",
+  "Ubuntu, sans-serif",
+  "Arial, sans-serif",
+  "Georgia, serif",
+  "Courier New, monospace",
+  "Verdana, sans-serif",
+  "Times New Roman, serif",
+  "Trebuchet MS, sans-serif",
 ];
 
 interface ToolbarButtonProps {
@@ -106,7 +113,6 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showFootnoteDialog, setShowFootnoteDialog] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showHtmlDialog, setShowHtmlDialog] = useState(false);
-  const [fontFamily, setFontFamily] = useState<FontFamilyValue>("Literata, serif");
   const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
 
   // Subscribe to editor state changes for proper toolbar updates
@@ -119,6 +125,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         ? attrs.fontSize.replace("px", "")
         : DEFAULT_FONT_SIZE;
       const currentLineHeight = attrs.lineHeight || "1.5"; // default line height
+      const currentFontFamily = attrs.fontFamily || "Literata, serif";
       const currentColor = attrs.color || "";
 
       // Get highlight color from the highlight mark
@@ -128,6 +135,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       return {
         fontSize: currentFontSize,
         lineHeight: currentLineHeight,
+        fontFamily: currentFontFamily,
         color: currentColor,
         highlightColor: currentHighlightColor,
         isBold: e.isActive("bold"),
@@ -171,9 +179,10 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     }
   };
 
-  const handleFontFamilyChange = (family: FontFamilyValue) => {
-    setFontFamily(family);
-    editor.chain().focus().setFontFamily(family).run();
+  const handleFontFamilyChange = (family: string) => {
+    if (family.trim()) {
+      editor.chain().focus().setFontFamily(family).run();
+    }
   };
 
   const handleHeadingToggle = (level: 1 | 2 | 3) => {
@@ -189,7 +198,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         .focus()
         .toggleHeading({ level })
         .setFontSize(`${DEFAULT_FONT_SIZE}px`)
-        .setFontFamily(fontFamily)
+        .setFontFamily(editorState.fontFamily)
         .run();
     } else {
       // Turning on heading: set heading with appropriate font size
@@ -198,7 +207,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         .focus()
         .toggleHeading({ level })
         .setFontSize(`${HEADING_SIZES[level]}px`)
-        .setFontFamily(fontFamily)
+        .setFontFamily(editorState.fontFamily)
         .run();
     }
   };
@@ -229,10 +238,12 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           options={FONT_SIZE_OPTIONS}
           placeholder={t("editor.size")}
         />
-        <Select<FontFamilyValue>
-          value={fontFamily}
+        <Combobox
+          value={editorState.fontFamily}
           onChange={handleFontFamilyChange}
-          options={FONT_OPTIONS}
+          options={FONT_FAMILY_OPTIONS}
+          placeholder={t("editor.fontFamily")}
+          inputClasses="w-40"
         />
 
         <Divider />

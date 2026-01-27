@@ -145,6 +145,7 @@
     "viewEditHtml": "View/Edit HTML",
     "size": "Size",
     "lineHeight": "Line height",
+    "fontFamily": "Font",
     "customColor": "Custom color",
     "refreshFromEditor": "Refresh from editor",
     "htmlContent": "HTML content...",
