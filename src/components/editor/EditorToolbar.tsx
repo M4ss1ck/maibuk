@@ -68,10 +68,14 @@ const FONT_FAMILY_OPTIONS = [
   "Inter, sans-serif",
   "monospace",
   "divider",
-  "Georgia, serif",
+  "DejaVu Sans, sans-serif",
+  "Ubuntu, sans-serif",
   "Arial, sans-serif",
-  "Times New Roman, serif",
+  "Georgia, serif",
   "Courier New, monospace",
+  "Verdana, sans-serif",
+  "Times New Roman, serif",
+  "Trebuchet MS, sans-serif",
 ];
 
 interface ToolbarButtonProps {
