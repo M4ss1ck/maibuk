@@ -14,7 +14,7 @@ interface ComboboxProps {
   options: string[];
   placeholder?: string;
   className?: string;
-  inputWidth?: string;
+  inputClasses?: string;
 }
 
 export function Combobox({
@@ -23,7 +23,7 @@ export function Combobox({
   options,
   placeholder = "",
   className = "",
-  inputWidth = "w-17.5",
+  inputClasses = "w-17.5",
 }: ComboboxProps) {
   const [query, setQuery] = useState("");
 
@@ -57,7 +57,7 @@ export function Combobox({
       <div className={`relative ${className}`}>
         <div className="relative">
           <ComboboxInput
-            className={`${inputWidth} px-2 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1`}
+            className={`${inputClasses} pl-2 pr-6 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 line-clamp-1`}
             displayValue={(val: string) => val}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -80,15 +80,25 @@ export function Combobox({
               "{query}"
             </ComboboxOption>
           )}
-          {filteredOptions.map((option) => (
-            <ComboboxOption
-              key={option}
-              value={option}
-              className="relative cursor-pointer select-none py-1.5 px-3 text-sm text-foreground data-focus:bg-muted data-selected:bg-primary/10 data-selected:text-primary"
-            >
-              {option}
-            </ComboboxOption>
-          ))}
+          {filteredOptions.map((option, i) => {
+            if (option === "divider") {
+              return (
+                <hr
+                  key={option + i}
+                  className="my-1 border-t border-border"
+                />
+              );
+            }
+            return (
+              <ComboboxOption
+                key={option}
+                value={option}
+                className="relative cursor-pointer select-none py-1.5 px-3 text-sm text-foreground data-focus:bg-muted data-selected:bg-primary/10 data-selected:text-primary"
+              >
+                {option}
+              </ComboboxOption>
+            )
+          })}
         </ComboboxOptions>
       </div>
     </HeadlessCombobox>

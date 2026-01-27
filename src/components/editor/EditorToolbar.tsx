@@ -66,11 +66,12 @@ const DEFAULT_FONT_SIZE = "18";
 const FONT_FAMILY_OPTIONS = [
   "Literata, serif",
   "Inter, sans-serif",
+  "monospace",
+  "divider",
   "Georgia, serif",
   "Arial, sans-serif",
   "Times New Roman, serif",
   "Courier New, monospace",
-  "monospace",
 ];
 
 interface ToolbarButtonProps {
@@ -238,7 +239,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onChange={handleFontFamilyChange}
           options={FONT_FAMILY_OPTIONS}
           placeholder={t("editor.fontFamily")}
-          inputWidth="w-40"
+          inputClasses="w-40"
         />
 
         <Divider />
