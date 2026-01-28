@@ -177,7 +177,13 @@
     "selectionStats": "Selected text statistics",
     "toolbar": "Toolbar",
     "hideToolbar": "Hide toolbar",
-    "showToolbar": "Show toolbar"
+    "showToolbar": "Show toolbar",
+    "uppercase": "Uppercase",
+    "lowercase": "Lowercase",
+    "textCase": "Text Case",
+    "alternatingCase": "aLtErNaTiNg",
+    "sentenceCase": "Sentence case",
+    "titleCase": "Title Case"
   },
   "export": {
     "title": "Export Book",
