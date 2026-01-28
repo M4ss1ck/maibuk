@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { TableMenu } from "./TableMenu";
@@ -45,6 +46,9 @@ import {
   WrapText,
   ChevronDown,
   ChevronUp,
+  CaseSensitive,
+  CaseUpper,
+  CaseLower,
 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -114,6 +118,9 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showHtmlDialog, setShowHtmlDialog] = useState(false);
   const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
+  const [showCaseMenu, setShowCaseMenu] = useState(false);
+  const [caseMenuPosition, setCaseMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const caseButtonRef = useRef<HTMLButtonElement>(null);
 
   // Subscribe to editor state changes for proper toolbar updates
   const editorState = useEditorState({
@@ -211,6 +218,59 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         .run();
     }
   };
+
+  // Text case transformation functions
+  const getSelectedText = (): string => {
+    const { from, to } = editor.state.selection;
+    return editor.state.doc.textBetween(from, to, "");
+  };
+
+  const transformSelectedText = (transformer: (text: string) => string) => {
+    const { from, to } = editor.state.selection;
+    const text = getSelectedText();
+    if (text) {
+      editor.chain().focus().deleteRange({ from, to }).insertContent(transformer(text)).run();
+    }
+  };
+
+  const toUpperCase = () => transformSelectedText((text) => text.toUpperCase());
+  const toLowerCase = () => transformSelectedText((text) => text.toLowerCase());
+  const toAlternatingCase = () => transformSelectedText((text) =>
+    text.split("").map((char, i) => i % 2 === 0 ? char.toLowerCase() : char.toUpperCase()).join("")
+  );
+  const toSentenceCase = () => transformSelectedText((text) =>
+    text.toLowerCase().replace(/(^\s*\w|[.!?]\s+\w)/g, (c) => c.toUpperCase())
+  );
+  const toTitleCase = () => transformSelectedText((text) =>
+    text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+
+  const handleShowCaseMenu = () => {
+    if (caseButtonRef.current) {
+      const rect = caseButtonRef.current.getBoundingClientRect();
+      setCaseMenuPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+      });
+    }
+    setShowCaseMenu(true);
+  };
+
+  // Close case menu when clicking outside
+  useEffect(() => {
+    if (!showCaseMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        caseButtonRef.current &&
+        !caseButtonRef.current.contains(e.target as Node) &&
+        !(e.target instanceof HTMLElement && e.target.closest('.text-case-menu-portal'))
+      ) {
+        setShowCaseMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showCaseMenu]);
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-10">
@@ -485,6 +545,60 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         >
           <RemoveFormatting className="w-4 h-4" />
         </ToolbarButton>
+
+        <Divider />
+
+        {/* Text case transformations */}
+        <ToolbarButton
+          onClick={toUpperCase}
+          title={t("editor.uppercase")}
+        >
+          <CaseUpper className="w-4 h-4" />
+        </ToolbarButton>
+
+        <ToolbarButton
+          onClick={toLowerCase}
+          title={t("editor.lowercase")}
+        >
+          <CaseLower className="w-4 h-4" />
+        </ToolbarButton>
+
+        <button
+          ref={caseButtonRef}
+          onClick={() => showCaseMenu ? setShowCaseMenu(false) : handleShowCaseMenu()}
+          title={t("editor.textCase")}
+          className={`p-2 rounded transition-colors flex items-center gap-0.5 ${showCaseMenu ? "bg-primary text-white" : "hover:bg-muted"}`}
+        >
+          <CaseSensitive className="w-4 h-4" />
+          <ChevronDown className="w-3 h-3" />
+        </button>
+
+        {showCaseMenu && createPortal(
+          <div
+            className="text-case-menu-portal fixed bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-35"
+            style={{ top: caseMenuPosition.top, left: caseMenuPosition.left }}
+          >
+            <button
+              onClick={() => { toAlternatingCase(); setShowCaseMenu(false); }}
+              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors"
+            >
+              {t("editor.alternatingCase")}
+            </button>
+            <button
+              onClick={() => { toSentenceCase(); setShowCaseMenu(false); }}
+              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors"
+            >
+              {t("editor.sentenceCase")}
+            </button>
+            <button
+              onClick={() => { toTitleCase(); setShowCaseMenu(false); }}
+              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors"
+            >
+              {t("editor.titleCase")}
+            </button>
+          </div>,
+          document.body
+        )}
 
         <Divider />
 

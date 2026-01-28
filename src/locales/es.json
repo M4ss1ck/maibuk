@@ -177,7 +177,13 @@
     "selectionStats": "Estadísticas del texto seleccionado",
     "toolbar": "Barra de herramientas",
     "hideToolbar": "Ocultar barra de herramientas",
-    "showToolbar": "Mostrar barra de herramientas"
+    "showToolbar": "Mostrar barra de herramientas",
+    "uppercase": "Mayúsculas",
+    "lowercase": "Minúsculas",
+    "textCase": "Mayús/Minús",
+    "alternatingCase": "aLtErNaDo",
+    "sentenceCase": "Oración",
+    "titleCase": "Título"
   },
   "export": {
     "title": "Exportar Libro",
