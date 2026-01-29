@@ -9,6 +9,7 @@ import { AddIcon } from "../components/icons";
 import { Download } from "lucide-react";
 import { IS_WEB } from "../lib/platform";
 import logo from "../../src-tauri/icons/icon.png";
+import { DOWNLOAD_PAGE } from "../constants";
 
 export function Home() {
   const { t } = useTranslation();
@@ -41,7 +42,7 @@ export function Home() {
           {IS_WEB && (
             <Button
               variant="secondary"
-              onClick={() => window.open("https://github.com/M4ss1ck/maibuk/releases", "_blank")}
+              onClick={() => window.open(DOWNLOAD_PAGE, "_blank")}
               className="text-sm"
             >
               <Download className="w-5 h-5" />
