@@ -12,7 +12,7 @@ import {
   type Language,
 } from "../features/settings";
 import { Select, Switch, Button, Modal } from "../components/ui";
-import { APP_VERSION } from "../constants";
+import { APP_VERSION, DOWNLOAD_PAGE } from "../constants";
 import { useVersionCheck } from "../features/version";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "../components/icons";
@@ -330,7 +330,7 @@ export function Settings() {
             Maibuk {APP_VERSION}
             {updateAvailable && (
               <a
-                href="https://maibuk.massick.dev"
+                href={DOWNLOAD_PAGE}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full hover:bg-amber-500/30 transition-colors"
