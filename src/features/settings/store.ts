@@ -14,6 +14,8 @@ interface SettingsStore extends Settings {
   setAutoSave: (enabled: boolean) => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
   setLanguage: (language: Language) => void;
+  lastPath: string | null;
+  setLastPath: (path: string | null) => void;
 }
 
 const defaultSettings: Settings = {
@@ -28,6 +30,7 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       ...defaultSettings,
+      lastPath: null,
       setAppFontSize: (appFontSize) => set({ appFontSize }),
       setAppFont: (appFont) => set({ appFont }),
       setAutoSave: (autoSave) => set({ autoSave }),
@@ -36,21 +39,27 @@ export const useSettingsStore = create<SettingsStore>()(
         i18n.changeLanguage(language);
         set({ language });
       },
+      setLastPath: (lastPath) => set({ lastPath }),
     }),
     {
       name: STORAGE_KEY,
-      onRehydrateStorage: () => (state) => {
-        if (isFirstLoad) {
-          // First load: detect system locale and apply it
-          detectSystemLocale().then((detectedLang) => {
-            i18n.changeLanguage(detectedLang);
-            // Update store with detected language
-            useSettingsStore.setState({ language: detectedLang });
-          });
-        } else if (state?.language) {
-          // Subsequent loads: always sync i18n with persisted language
-          i18n.changeLanguage(state.language);
-        }
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error("Failed to rehydrate settings:", error);
+          }
+
+          if (isFirstLoad) {
+            // First load: detect system locale and apply it
+            detectSystemLocale().then((detectedLang) => {
+              i18n.changeLanguage(detectedLang);
+              useSettingsStore.setState({ language: detectedLang });
+            });
+          } else if (state?.language) {
+            // Subsequent loads: always sync i18n with persisted language
+            i18n.changeLanguage(state.language);
+          }
+        };
       },
     }
   )
