@@ -15,6 +15,8 @@ interface SettingsStore extends Settings {
   setDefaultExportFormat: (format: ExportFormat) => void;
   setLanguage: (language: Language) => void;
   setSpellCheckEnabled: (enabled: boolean) => void;
+  addCustomWord: (word: string) => void;
+  removeCustomWord: (word: string) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -25,6 +27,7 @@ const defaultSettings: Settings = {
   autoSave: true,
   language: (i18n.language as Language) || "en",
   spellCheckEnabled: true,
+  customDictionary: [],
   defaultExportFormat: "epub",
 };
 
@@ -42,6 +45,28 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ language });
       },
       setSpellCheckEnabled: (spellCheckEnabled) => set({ spellCheckEnabled }),
+      addCustomWord: (word) => {
+        const normalized = word.trim();
+        if (!normalized) return;
+
+        set((state) => {
+          const exists = state.customDictionary.some(
+            (entry) => entry.toLowerCase() === normalized.toLowerCase()
+          );
+          if (exists) return state;
+          return { customDictionary: [...state.customDictionary, normalized] };
+        });
+      },
+      removeCustomWord: (word) => {
+        const normalized = word.trim();
+        if (!normalized) return;
+
+        set((state) => ({
+          customDictionary: state.customDictionary.filter(
+            (entry) => entry.toLowerCase() !== normalized.toLowerCase()
+          ),
+        }));
+      },
       setLastPath: (lastPath) => set({ lastPath }),
     }),
     {

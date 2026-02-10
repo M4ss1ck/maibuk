@@ -142,6 +142,7 @@
     "redo": "Rehacer (Ctrl+Shift+Z)",
     "findReplaceShortcut": "Buscar y Reemplazar (Ctrl+F)",
     "spellCheck": "Corrector ortográfico",
+    "addToDictionary": "Agregar al diccionario",
     "viewHtml": "Ver HTML",
     "viewEditHtml": "Ver/Editar HTML",
     "size": "Tamaño",

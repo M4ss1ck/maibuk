@@ -3,6 +3,7 @@ import { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Language } from "../../../features/settings/types";
+import { useSettingsStore } from "../../../features/settings/store";
 import { spellCheckService } from "../../../lib/spellcheck";
 
 const WORD_REGEX = /\p{L}+/gu;
@@ -28,12 +29,21 @@ type SpellCheckStorage = {
   clearDecorations: (() => void) | null;
 };
 
+async function initSpellCheckWithCustomDictionary(language: Language): Promise<void> {
+  await spellCheckService.init(language);
+  const customDictionary = useSettingsStore.getState().customDictionary;
+  if (customDictionary.length > 0) {
+    await spellCheckService.loadCustomDictionary(customDictionary);
+  }
+}
+
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     spellCheck: {
       toggleSpellCheck: () => ReturnType;
       setSpellCheckEnabled: (enabled: boolean) => ReturnType;
       setSpellCheckLanguage: (language: Language) => ReturnType;
+      addToDictionary: (word: string) => ReturnType;
     };
   }
 }
@@ -84,8 +94,9 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
             return true;
           }
 
-          void spellCheckService.init(storage.language).catch(() => null);
-          storage.requestCheck?.();
+          void initSpellCheckWithCustomDictionary(storage.language).finally(() => {
+            storage.requestCheck?.();
+          });
           return true;
         },
       setSpellCheckLanguage:
@@ -97,7 +108,26 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
           storage.language = language;
 
           if (storage.enabled) {
-            void spellCheckService.init(language).catch(() => null);
+            void initSpellCheckWithCustomDictionary(language).finally(() => {
+              storage.requestCheck?.();
+            });
+          }
+
+          return true;
+        },
+      addToDictionary:
+        (word: string) =>
+        ({ editor }) => {
+          const storage = editor.storage.spellCheck as SpellCheckStorage | undefined;
+          if (!storage) return false;
+
+          const normalized = word.trim();
+          if (!normalized) return false;
+
+          useSettingsStore.getState().addCustomWord(normalized);
+          spellCheckService.addWord(normalized);
+
+          if (storage.enabled) {
             storage.requestCheck?.();
           }
 
@@ -142,7 +172,7 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
           let checkVersion = 0;
 
           if (extension.storage.enabled) {
-            spellCheckService.init(extension.storage.language).catch(() => null);
+            void initSpellCheckWithCustomDictionary(extension.storage.language);
           }
 
           const updateDecorations = (decorations: Decoration[]) => {

@@ -142,6 +142,7 @@
     "redo": "Redo (Ctrl+Shift+Z)",
     "findReplaceShortcut": "Find & Replace (Ctrl+F)",
     "spellCheck": "Spell Check",
+    "addToDictionary": "Add to Dictionary",
     "viewHtml": "View HTML",
     "viewEditHtml": "View/Edit HTML",
     "size": "Size",

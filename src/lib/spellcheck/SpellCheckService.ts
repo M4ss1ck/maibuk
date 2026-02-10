@@ -105,6 +105,19 @@ class SpellCheckService {
     }
   }
 
+  async loadCustomDictionary(words: string[]): Promise<void> {
+    if (!this.worker || !this.readyPromise) return;
+    await this.readyPromise;
+
+    const uniqueWords = Array.from(
+      new Set(words.map((word) => word.trim()).filter((word) => word.length > 0))
+    );
+
+    for (const word of uniqueWords) {
+      this.send({ type: "addWord", word });
+    }
+  }
+
   destroy(): void {
     if (this.worker) {
       this.worker.terminate();

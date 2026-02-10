@@ -12,6 +12,7 @@ export interface Settings {
   autoSave: boolean;
   language: Language;
   spellCheckEnabled: boolean;
+  customDictionary: string[];
 
   // Export settings
   defaultExportFormat: ExportFormat;
