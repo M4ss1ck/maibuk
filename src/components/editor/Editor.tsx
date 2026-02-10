@@ -20,12 +20,15 @@ import { Link } from "@tiptap/extension-link";
 import { useEffect, useCallback } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
+import { SpellCheckPopover } from "./SpellCheckPopover";
 import { SceneBreak } from "./extensions/SceneBreak";
 import { FontSize } from "./extensions/FontSize";
 import { LineHeight } from "./extensions/LineHeight";
 import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
+import { SpellCheck } from "./extensions/SpellCheck";
 import { useTranslation } from "react-i18next";
+import { useSettingsStore } from "../../features/settings/store";
 
 export interface EditorStats {
   words: number;
@@ -53,6 +56,8 @@ export function Editor({
   focusMode = false,
 }: EditorProps) {
   const { t } = useTranslation();
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
+  const language = useSettingsStore((state) => state.language);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -108,6 +113,10 @@ export function Editor({
       SceneBreak,
       Indent,
       PasteHandler,
+      SpellCheck.configure({
+        enabled: spellCheckEnabled,
+        language,
+      }),
     ],
     content: content || "",
     editable,
@@ -133,6 +142,17 @@ export function Editor({
       editor.commands.setContent(content);
     }
   }, [editor, content]);
+
+  useEffect(() => {
+    if (!editor?.commands?.setSpellCheckEnabled) return;
+    editor.commands.setSpellCheckEnabled(spellCheckEnabled);
+  }, [editor?.commands?.setSpellCheckEnabled, spellCheckEnabled]);
+
+  useEffect(() => {
+    if (!editor?.commands?.setSpellCheckLanguage) return;
+    editor.commands.setSpellCheckLanguage(language);
+  }, [editor?.commands?.setSpellCheckLanguage, language]);
+
 
   // Update word count on initial load
   useEffect(() => {
@@ -200,6 +220,7 @@ export function Editor({
       </div>
 
       <LinkClickHandler editor={editor} />
+      <SpellCheckPopover editor={editor} />
     </div>
   );
 }

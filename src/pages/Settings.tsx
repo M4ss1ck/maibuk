@@ -29,15 +29,22 @@ export function Settings() {
     autoSave,
     language,
     defaultExportFormat,
+    spellCheckEnabled,
+    customDictionary,
+    dictionaryOpenInBrowser,
     setAppFontSize,
     setAppFont,
     setAutoSave,
     setLanguage,
     setDefaultExportFormat,
+    setSpellCheckEnabled,
+    removeCustomWord,
+    setDictionaryOpenInBrowser,
   } = useSettings();
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [customDictionaryOpen, setCustomDictionaryOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -220,6 +227,49 @@ export function Settings() {
         </div>
       </section>
 
+      {/* Editor Settings */}
+      <section className="mb-6 sm:mb-8">
+        <h3 className="text-lg font-medium mb-4">{t("settings.editor")}</h3>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div>
+              <p className="font-medium">{t("settings.spellCheck")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.spellCheckDescription")}</p>
+            </div>
+            <Switch
+              checked={spellCheckEnabled}
+              onChange={setSpellCheckEnabled}
+              label={t("settings.toggleSpellCheck")}
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div>
+              <p className="font-medium">{t("settings.dictionaryOpenInBrowser")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.dictionaryOpenInBrowserDescription")}</p>
+            </div>
+            <Switch
+              checked={dictionaryOpenInBrowser}
+              onChange={setDictionaryOpenInBrowser}
+              label={t("settings.toggleDictionaryOpenInBrowser")}
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div>
+              <p className="font-medium">{t("settings.customDictionary")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.customDictionaryDescription")}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t("settings.customDictionaryCount", { count: customDictionary.length })}
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => setCustomDictionaryOpen(true)}>
+              {t("settings.editCustomDictionary")}
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {/* Export Settings */}
       <section className="mb-6 sm:mb-8">
         <h3 className="text-lg font-medium mb-4">{t("settings.export")}</h3>
@@ -320,6 +370,40 @@ export function Settings() {
         }
       >
         <p className="text-muted-foreground">{t("settings.resetDatabaseConfirm")}</p>
+      </Modal>
+
+      {/* Custom Dictionary Modal */}
+      <Modal
+        isOpen={customDictionaryOpen}
+        onClose={() => setCustomDictionaryOpen(false)}
+        title={t("settings.customDictionaryTitle")}
+        footer={
+          <Button variant="secondary" onClick={() => setCustomDictionaryOpen(false)}>
+            {t("common.close")}
+          </Button>
+        }
+      >
+        {customDictionary.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("settings.customDictionaryEmpty")}</p>
+        ) : (
+          <div className="space-y-2">
+            {customDictionary.map((word) => (
+              <div
+                key={word}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-border"
+              >
+                <span className="text-sm">{word}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeCustomWord(word)}
+                >
+                  {t("settings.removeWord")}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
 
       {/* About */}

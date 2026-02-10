@@ -10,6 +10,9 @@ const isWeb = buildTarget === "web";
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
+  worker: {
+    format: "es" as const,
+  },
   define: {
     __APP_VERSION__: JSON.stringify(`v${version}`),
   },

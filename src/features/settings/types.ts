@@ -11,6 +11,9 @@ export interface Settings {
   // General settings
   autoSave: boolean;
   language: Language;
+  spellCheckEnabled: boolean;
+  customDictionary: string[];
+  dictionaryOpenInBrowser: boolean;
 
   // Export settings
   defaultExportFormat: ExportFormat;
