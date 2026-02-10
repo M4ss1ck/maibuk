@@ -20,6 +20,7 @@ import { Link } from "@tiptap/extension-link";
 import { useEffect, useCallback } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
+import { SpellCheckPopover } from "./SpellCheckPopover";
 import { SceneBreak } from "./extensions/SceneBreak";
 import { FontSize } from "./extensions/FontSize";
 import { LineHeight } from "./extensions/LineHeight";
@@ -152,6 +153,7 @@ export function Editor({
     editor.commands.setSpellCheckLanguage(language);
   }, [editor?.commands?.setSpellCheckLanguage, language]);
 
+
   // Update word count on initial load
   useEffect(() => {
     if (editor && onWordCountChange) {
@@ -218,6 +220,7 @@ export function Editor({
       </div>
 
       <LinkClickHandler editor={editor} />
+      <SpellCheckPopover editor={editor} />
     </div>
   );
 }

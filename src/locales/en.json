@@ -143,6 +143,7 @@
     "findReplaceShortcut": "Find & Replace (Ctrl+F)",
     "spellCheck": "Spell Check",
     "addToDictionary": "Add to Dictionary",
+    "noSuggestions": "No suggestions",
     "viewHtml": "View HTML",
     "viewEditHtml": "View/Edit HTML",
     "size": "Size",

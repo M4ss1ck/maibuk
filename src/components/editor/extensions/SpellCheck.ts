@@ -27,6 +27,7 @@ type SpellCheckStorage = {
   language: Language;
   requestCheck: (() => void) | null;
   clearDecorations: (() => void) | null;
+  getMisspellingAt: ((pos: number) => Misspelling | null) | null;
 };
 
 async function initSpellCheckWithCustomDictionary(language: Language): Promise<void> {
@@ -66,6 +67,7 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
       language: this.options.language,
       requestCheck: null,
       clearDecorations: null,
+      getMisspellingAt: null,
     };
   },
 
@@ -248,6 +250,14 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
             extension.storage.misspellings = [];
             updateDecorations([]);
           };
+          extension.storage.getMisspellingAt = (pos: number) => {
+            for (const misspelling of extension.storage.misspellings) {
+              if (pos >= misspelling.from && pos <= misspelling.to) {
+                return misspelling;
+              }
+            }
+            return null;
+          };
 
           return {
             update(view, prevState) {
@@ -262,6 +272,7 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
               }
               extension.storage.requestCheck = null;
               extension.storage.clearDecorations = null;
+              extension.storage.getMisspellingAt = null;
             },
           };
         },
