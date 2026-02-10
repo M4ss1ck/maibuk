@@ -14,6 +14,7 @@ import { FontSizeSelect } from "./FontSizeSelect";
 import { LineHeightSelect } from "./LineHeightSelect";
 import { FontFamilySelect } from "./FontFamilySelect";
 import { useTranslation } from "react-i18next";
+import { useSettingsStore } from "../../features/settings/store";
 import {
   Bold,
   Italic,
@@ -49,6 +50,7 @@ import {
   WrapText,
   ChevronDown,
   ChevronUp,
+  SpellCheck,
 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -70,6 +72,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showHtmlDialog, setShowHtmlDialog] = useState(false);
   const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
+  const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
 
   const editorState = useEditorState({
     editor,
@@ -133,6 +137,11 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         .setFontFamily(editorState.fontFamily)
         .run();
     }
+  };
+
+  const handleSpellCheckToggle = () => {
+    const nextEnabled = !spellCheckEnabled;
+    setSpellCheckEnabled(nextEnabled);
   };
 
   return (
@@ -324,6 +333,10 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton onClick={() => setShowFindReplace(!showFindReplace)} isActive={showFindReplace} title={t("editor.findReplaceShortcut")}>
           <Search className="w-4 h-4" />
+        </ToolbarButton>
+
+        <ToolbarButton onClick={handleSpellCheckToggle} isActive={spellCheckEnabled} title={t("editor.spellCheck")}>
+          <SpellCheck className="w-4 h-4" />
         </ToolbarButton>
 
         <ToolbarButton onClick={() => setShowHtmlDialog(true)} title={t("editor.viewHtml")}>

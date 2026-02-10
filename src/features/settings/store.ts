@@ -14,6 +14,7 @@ interface SettingsStore extends Settings {
   setAutoSave: (enabled: boolean) => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
   setLanguage: (language: Language) => void;
+  setSpellCheckEnabled: (enabled: boolean) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -23,6 +24,7 @@ const defaultSettings: Settings = {
   appFont: "sans",
   autoSave: true,
   language: (i18n.language as Language) || "en",
+  spellCheckEnabled: true,
   defaultExportFormat: "epub",
 };
 
@@ -39,6 +41,7 @@ export const useSettingsStore = create<SettingsStore>()(
         i18n.changeLanguage(language);
         set({ language });
       },
+      setSpellCheckEnabled: (spellCheckEnabled) => set({ spellCheckEnabled }),
       setLastPath: (lastPath) => set({ lastPath }),
     }),
     {

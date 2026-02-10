@@ -141,6 +141,7 @@
     "undo": "Undo (Ctrl+Z)",
     "redo": "Redo (Ctrl+Shift+Z)",
     "findReplaceShortcut": "Find & Replace (Ctrl+F)",
+    "spellCheck": "Spell Check",
     "viewHtml": "View HTML",
     "viewEditHtml": "View/Edit HTML",
     "size": "Size",

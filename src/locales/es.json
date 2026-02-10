@@ -141,6 +141,7 @@
     "undo": "Deshacer (Ctrl+Z)",
     "redo": "Rehacer (Ctrl+Shift+Z)",
     "findReplaceShortcut": "Buscar y Reemplazar (Ctrl+F)",
+    "spellCheck": "Corrector ortográfico",
     "viewHtml": "Ver HTML",
     "viewEditHtml": "Ver/Editar HTML",
     "size": "Tamaño",

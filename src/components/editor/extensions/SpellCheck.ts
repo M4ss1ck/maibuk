@@ -16,12 +16,27 @@ type Misspelling = {
 
 type SpellCheckOptions = {
   language: Language;
+  enabled: boolean;
   debounceMs: number;
 };
 
 type SpellCheckStorage = {
   misspellings: Misspelling[];
+  enabled: boolean;
+  language: Language;
+  requestCheck: (() => void) | null;
+  clearDecorations: (() => void) | null;
 };
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    spellCheck: {
+      toggleSpellCheck: () => ReturnType;
+      setSpellCheckEnabled: (enabled: boolean) => ReturnType;
+      setSpellCheckLanguage: (language: Language) => ReturnType;
+    };
+  }
+}
 
 export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>({
   name: "spellCheck",
@@ -29,6 +44,7 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
   addOptions() {
     return {
       language: "en" as Language,
+      enabled: true,
       debounceMs: 300,
     };
   },
@@ -36,11 +52,62 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
   addStorage() {
     return {
       misspellings: [],
+      enabled: this.options.enabled,
+      language: this.options.language,
+      requestCheck: null,
+      clearDecorations: null,
+    };
+  },
+
+  addCommands() {
+    return {
+      toggleSpellCheck:
+        () =>
+        ({ editor }) => {
+          const storage = editor.storage.spellCheck as SpellCheckStorage | undefined;
+          if (!storage) return false;
+
+          const nextEnabled = !storage.enabled;
+          return editor.commands.setSpellCheckEnabled(nextEnabled);
+        },
+      setSpellCheckEnabled:
+        (enabled: boolean) =>
+        ({ editor }) => {
+          const storage = editor.storage.spellCheck as SpellCheckStorage | undefined;
+          if (!storage) return false;
+          if (storage.enabled === enabled) return true;
+
+          storage.enabled = enabled;
+
+          if (!enabled) {
+            storage.clearDecorations?.();
+            return true;
+          }
+
+          void spellCheckService.init(storage.language).catch(() => null);
+          storage.requestCheck?.();
+          return true;
+        },
+      setSpellCheckLanguage:
+        (language: Language) =>
+        ({ editor }) => {
+          const storage = editor.storage.spellCheck as SpellCheckStorage | undefined;
+          if (!storage || storage.language === language) return true;
+
+          storage.language = language;
+
+          if (storage.enabled) {
+            void spellCheckService.init(language).catch(() => null);
+            storage.requestCheck?.();
+          }
+
+          return true;
+        },
     };
   },
 
   addProseMirrorPlugins() {
-    const { debounceMs, language } = this.options;
+    const { debounceMs } = this.options;
     const extension = this;
 
     return [
@@ -74,7 +141,9 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
           let debounceTimer: number | null = null;
           let checkVersion = 0;
 
-          spellCheckService.init(language).catch(() => null);
+          if (extension.storage.enabled) {
+            spellCheckService.init(extension.storage.language).catch(() => null);
+          }
 
           const updateDecorations = (decorations: Decoration[]) => {
             const decorationSet = DecorationSet.create(editorView.state.doc, decorations);
@@ -86,6 +155,13 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
 
           const runCheck = async () => {
             const currentVersion = ++checkVersion;
+
+            if (!extension.storage.enabled) {
+              extension.storage.misspellings = [];
+              updateDecorations([]);
+              return;
+            }
+
             const { uniqueWords, ranges } = extractWords(editorView.state.doc);
 
             if (uniqueWords.length === 0) {
@@ -101,7 +177,7 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
               return;
             }
 
-            if (destroyed || currentVersion !== checkVersion) return;
+            if (destroyed || currentVersion !== checkVersion || !extension.storage.enabled) return;
 
             const misspelledSet = new Set(misspelled);
             const decorations: Decoration[] = [];
@@ -122,6 +198,11 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
           };
 
           const scheduleCheck = () => {
+            if (!extension.storage.enabled) {
+              extension.storage.misspellings = [];
+              updateDecorations([]);
+              return;
+            }
             if (debounceTimer !== null) {
               window.clearTimeout(debounceTimer);
             }
@@ -131,6 +212,12 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
           };
 
           scheduleCheck();
+
+          extension.storage.requestCheck = scheduleCheck;
+          extension.storage.clearDecorations = () => {
+            extension.storage.misspellings = [];
+            updateDecorations([]);
+          };
 
           return {
             update(view, prevState) {
@@ -143,6 +230,8 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
               if (debounceTimer !== null) {
                 window.clearTimeout(debounceTimer);
               }
+              extension.storage.requestCheck = null;
+              extension.storage.clearDecorations = null;
             },
           };
         },

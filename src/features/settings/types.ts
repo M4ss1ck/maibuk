@@ -11,6 +11,7 @@ export interface Settings {
   // General settings
   autoSave: boolean;
   language: Language;
+  spellCheckEnabled: boolean;
 
   // Export settings
   defaultExportFormat: ExportFormat;
