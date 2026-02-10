@@ -13,6 +13,7 @@ export interface Settings {
   language: Language;
   spellCheckEnabled: boolean;
   customDictionary: string[];
+  dictionaryOpenInBrowser: boolean;
 
   // Export settings
   defaultExportFormat: ExportFormat;

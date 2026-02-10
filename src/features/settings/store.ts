@@ -17,6 +17,7 @@ interface SettingsStore extends Settings {
   setSpellCheckEnabled: (enabled: boolean) => void;
   addCustomWord: (word: string) => void;
   removeCustomWord: (word: string) => void;
+  setDictionaryOpenInBrowser: (enabled: boolean) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -28,6 +29,7 @@ const defaultSettings: Settings = {
   language: (i18n.language as Language) || "en",
   spellCheckEnabled: true,
   customDictionary: [],
+  dictionaryOpenInBrowser: false,
   defaultExportFormat: "epub",
 };
 
@@ -45,6 +47,7 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ language });
       },
       setSpellCheckEnabled: (spellCheckEnabled) => set({ spellCheckEnabled }),
+      setDictionaryOpenInBrowser: (dictionaryOpenInBrowser) => set({ dictionaryOpenInBrowser }),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;

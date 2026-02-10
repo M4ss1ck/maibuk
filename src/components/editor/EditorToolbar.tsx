@@ -79,6 +79,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
+  const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
 
   const editorState = useEditorState({
     editor,
@@ -156,6 +157,11 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     if (!selectedText) return;
     const word = selectedText.split(/\s+/)[0];
     if (!word) return;
+    if (dictionaryOpenInBrowser) {
+      const url = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
     setDictionaryWord(word);
     setShowDictionaryDialog(true);
   };

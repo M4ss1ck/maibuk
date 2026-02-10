@@ -24,9 +24,9 @@ class SpellCheckService {
   private readyPromise: Promise<void> | null = null;
   private currentLang: Language | null = null;
 
-  async init(lang: Language): Promise<void> {
-    // Skip if already initialized with the same language
-    if (this.currentLang === lang && this.worker) {
+  async init(lang: Language, options: { force?: boolean } = {}): Promise<void> {
+    // Skip if already initialized with the same language unless forced
+    if (!options.force && this.currentLang === lang && this.worker) {
       return;
     }
 

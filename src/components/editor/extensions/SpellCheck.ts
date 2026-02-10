@@ -30,8 +30,11 @@ type SpellCheckStorage = {
   getMisspellingAt: ((pos: number) => Misspelling | null) | null;
 };
 
-async function initSpellCheckWithCustomDictionary(language: Language): Promise<void> {
-  await spellCheckService.init(language);
+async function initSpellCheckWithCustomDictionary(
+  language: Language,
+  options: { force?: boolean } = {}
+): Promise<void> {
+  await spellCheckService.init(language, options);
   const customDictionary = useSettingsStore.getState().customDictionary;
   if (customDictionary.length > 0) {
     await spellCheckService.loadCustomDictionary(customDictionary);
@@ -172,6 +175,8 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
           let destroyed = false;
           let debounceTimer: number | null = null;
           let checkVersion = 0;
+          let unsubscribe: (() => void) | null = null;
+          let lastDictionary = normalizeDictionary(useSettingsStore.getState().customDictionary);
 
           if (extension.storage.enabled) {
             void initSpellCheckWithCustomDictionary(extension.storage.language);
@@ -245,6 +250,36 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
 
           scheduleCheck();
 
+          unsubscribe = useSettingsStore.subscribe((state) => {
+            const nextDictionary = normalizeDictionary(state.customDictionary);
+            if (areArraysEqual(nextDictionary, lastDictionary)) return;
+
+            const previousSet = new Set(lastDictionary);
+            const nextSet = new Set(nextDictionary);
+            const removed = lastDictionary.some((word) => !nextSet.has(word));
+            const added = nextDictionary.filter((word) => !previousSet.has(word));
+
+            lastDictionary = nextDictionary;
+
+            if (!extension.storage.enabled) return;
+
+            if (removed) {
+              void initSpellCheckWithCustomDictionary(extension.storage.language, {
+                force: true,
+              }).finally(() => {
+                extension.storage.requestCheck?.();
+              });
+              return;
+            }
+
+            if (added.length > 0) {
+              for (const word of added) {
+                spellCheckService.addWord(word);
+              }
+              extension.storage.requestCheck?.();
+            }
+          });
+
           extension.storage.requestCheck = scheduleCheck;
           extension.storage.clearDecorations = () => {
             extension.storage.misspellings = [];
@@ -270,6 +305,8 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
               if (debounceTimer !== null) {
                 window.clearTimeout(debounceTimer);
               }
+              unsubscribe?.();
+              unsubscribe = null;
               extension.storage.requestCheck = null;
               extension.storage.clearDecorations = null;
               extension.storage.getMisspellingAt = null;
@@ -314,4 +351,15 @@ function extractWords(doc: ProseMirrorNode): {
     uniqueWords: Array.from(uniqueWords),
     ranges,
   };
+}
+
+function normalizeDictionary(words: string[]): string[] {
+  return words
+    .map((word) => word.trim().toLowerCase())
+    .filter((word) => word.length > 0);
+}
+
+function areArraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
 }
