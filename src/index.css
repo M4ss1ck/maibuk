@@ -204,6 +204,12 @@ option {
   color: inherit;
 }
 
+.spellcheck-error {
+  text-decoration: underline wavy;
+  text-decoration-color: var(--color-destructive);
+  text-underline-offset: 3px;
+}
+
 /* Placeholder styles */
 .editor-content.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
