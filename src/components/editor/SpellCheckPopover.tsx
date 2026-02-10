@@ -48,6 +48,20 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isOpen || !popoverRef.current || !popover) return;
+
+    const rect = popoverRef.current.getBoundingClientRect();
+    const adjusted = adjustPopoverPosition(popover.position, rect);
+
+    if (
+      adjusted.left !== popover.position.left ||
+      adjusted.top !== popover.position.top
+    ) {
+      setPopover((prev) => (prev ? { ...prev, position: adjusted } : prev));
+    }
+  }, [isOpen, popover]);
+
+  useEffect(() => {
     const handleContextMenu = (event: MouseEvent) => {
       const position = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
       const misspelling = position
@@ -101,14 +115,14 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-50 w-56 rounded-lg border border-border bg-card shadow-lg"
+      className="fixed z-50 w-56 max-h-[60vh] rounded-lg border border-border bg-card shadow-lg flex flex-col"
       style={{ top: popover.position.top, left: popover.position.left }}
     >
-      <div className="px-3 py-2 border-b border-border">
+      <div className="px-3 py-2 border-b border-border shrink-0">
         <p className="text-xs text-muted-foreground truncate">{popover.word}</p>
       </div>
 
-      <div className="py-1">
+      <div className="py-1 overflow-auto">
         {popover.isLoading ? (
           <div className="px-3 py-2 text-sm text-muted-foreground">{t("common.loading")}</div>
         ) : topSuggestions.length > 0 ? (
@@ -133,7 +147,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
         )}
       </div>
 
-      <div className="border-t border-border p-2">
+      <div className="border-t border-border p-2 shrink-0">
         <button
           onClick={() => {
             editor.commands.addToDictionary(popover.word);
@@ -158,5 +172,18 @@ function clampPopoverPosition(clientX: number, clientY: number) {
   return {
     left: Math.min(Math.max(clientX, padding), Math.max(maxLeft, padding)),
     top: Math.min(Math.max(clientY, padding), Math.max(maxTop, padding)),
+  };
+}
+
+function adjustPopoverPosition(
+  position: { top: number; left: number },
+  rect: DOMRect
+) {
+  const padding = 8;
+  const maxLeft = window.innerWidth - rect.width - padding;
+  const maxTop = window.innerHeight - rect.height - padding;
+  return {
+    left: Math.min(Math.max(position.left, padding), Math.max(maxLeft, padding)),
+    top: Math.min(Math.max(position.top, padding), Math.max(maxTop, padding)),
   };
 }

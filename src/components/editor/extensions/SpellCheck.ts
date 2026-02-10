@@ -42,6 +42,9 @@ async function initSpellCheckWithCustomDictionary(
 }
 
 declare module "@tiptap/core" {
+  interface Storage {
+    spellCheck?: SpellCheckStorage;
+  }
   interface Commands<ReturnType> {
     spellCheck: {
       toggleSpellCheck: () => ReturnType;
@@ -78,66 +81,66 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
     return {
       toggleSpellCheck:
         () =>
-        ({ editor }) => {
-          const storage = editor.storage.spellCheck as SpellCheckStorage | undefined;
-          if (!storage) return false;
+          ({ editor }) => {
+            const storage = editor.storage.spellCheck;
+            if (!storage) return false;
 
-          const nextEnabled = !storage.enabled;
-          return editor.commands.setSpellCheckEnabled(nextEnabled);
-        },
+            const nextEnabled = !storage.enabled;
+            return editor.commands.setSpellCheckEnabled(nextEnabled);
+          },
       setSpellCheckEnabled:
         (enabled: boolean) =>
-        ({ editor }) => {
-          const storage = editor.storage.spellCheck as SpellCheckStorage | undefined;
-          if (!storage) return false;
-          if (storage.enabled === enabled) return true;
+          ({ editor }) => {
+            const storage = editor.storage.spellCheck;
+            if (!storage) return false;
+            if (storage.enabled === enabled) return true;
 
-          storage.enabled = enabled;
+            storage.enabled = enabled;
 
-          if (!enabled) {
-            storage.clearDecorations?.();
-            return true;
-          }
+            if (!enabled) {
+              storage.clearDecorations?.();
+              return true;
+            }
 
-          void initSpellCheckWithCustomDictionary(storage.language).finally(() => {
-            storage.requestCheck?.();
-          });
-          return true;
-        },
-      setSpellCheckLanguage:
-        (language: Language) =>
-        ({ editor }) => {
-          const storage = editor.storage.spellCheck as SpellCheckStorage | undefined;
-          if (!storage || storage.language === language) return true;
-
-          storage.language = language;
-
-          if (storage.enabled) {
-            void initSpellCheckWithCustomDictionary(language).finally(() => {
+            void initSpellCheckWithCustomDictionary(storage.language).finally(() => {
               storage.requestCheck?.();
             });
-          }
+            return true;
+          },
+      setSpellCheckLanguage:
+        (language: Language) =>
+          ({ editor }) => {
+            const storage = editor.storage.spellCheck;
+            if (!storage || storage.language === language) return true;
 
-          return true;
-        },
+            storage.language = language;
+
+            if (storage.enabled) {
+              void initSpellCheckWithCustomDictionary(language).finally(() => {
+                storage.requestCheck?.();
+              });
+            }
+
+            return true;
+          },
       addToDictionary:
         (word: string) =>
-        ({ editor }) => {
-          const storage = editor.storage.spellCheck as SpellCheckStorage | undefined;
-          if (!storage) return false;
+          ({ editor }) => {
+            const storage = editor.storage.spellCheck;
+            if (!storage) return false;
 
-          const normalized = word.trim();
-          if (!normalized) return false;
+            const normalized = word.trim();
+            if (!normalized) return false;
 
-          useSettingsStore.getState().addCustomWord(normalized);
-          spellCheckService.addWord(normalized);
+            useSettingsStore.getState().addCustomWord(normalized);
+            spellCheckService.addWord(normalized);
 
-          if (storage.enabled) {
-            storage.requestCheck?.();
-          }
+            if (storage.enabled) {
+              storage.requestCheck?.();
+            }
 
-          return true;
-        },
+            return true;
+          },
     };
   },
 
