@@ -142,6 +142,7 @@
     "redo": "Redo (Ctrl+Shift+Z)",
     "findReplaceShortcut": "Find & Replace (Ctrl+F)",
     "spellCheck": "Spell Check",
+    "dictionary": "Dictionary",
     "addToDictionary": "Add to Dictionary",
     "noSuggestions": "No suggestions",
     "viewHtml": "View HTML",
@@ -187,6 +188,13 @@
     "alternatingCase": "aLtErNaTiNg",
     "sentenceCase": "Sentence case",
     "titleCase": "Title Case"
+  },
+  "dictionary": {
+    "title": "Dictionary",
+    "noDefinition": "No definition found",
+    "viewOnWiktionary": "View on Wiktionary",
+    "phonetic": "Pronunciation",
+    "translations": "Translations"
   },
   "export": {
     "title": "Export Book",

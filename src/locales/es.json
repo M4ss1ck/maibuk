@@ -142,6 +142,7 @@
     "redo": "Rehacer (Ctrl+Shift+Z)",
     "findReplaceShortcut": "Buscar y Reemplazar (Ctrl+F)",
     "spellCheck": "Corrector ortográfico",
+    "dictionary": "Diccionario",
     "addToDictionary": "Agregar al diccionario",
     "noSuggestions": "Sin sugerencias",
     "viewHtml": "Ver HTML",
@@ -187,6 +188,13 @@
     "alternatingCase": "aLtErNaDo",
     "sentenceCase": "Oración",
     "titleCase": "Título"
+  },
+  "dictionary": {
+    "title": "Diccionario",
+    "noDefinition": "No se encontró definición",
+    "viewOnWiktionary": "Ver en Wiktionary",
+    "phonetic": "Pronunciación",
+    "translations": "Traducciones"
   },
   "export": {
     "title": "Exportar Libro",

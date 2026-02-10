@@ -13,6 +13,7 @@ import { TextCaseMenu } from "./TextCaseMenu";
 import { FontSizeSelect } from "./FontSizeSelect";
 import { LineHeightSelect } from "./LineHeightSelect";
 import { FontFamilySelect } from "./FontFamilySelect";
+import { DictionaryDialog } from "./DictionaryDialog";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 import {
@@ -50,6 +51,7 @@ import {
   WrapText,
   ChevronDown,
   ChevronUp,
+  BookOpen,
   SpellCheck,
 } from "lucide-react";
 
@@ -71,9 +73,12 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showFootnoteDialog, setShowFootnoteDialog] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showHtmlDialog, setShowHtmlDialog] = useState(false);
+  const [showDictionaryDialog, setShowDictionaryDialog] = useState(false);
+  const [dictionaryWord, setDictionaryWord] = useState("");
   const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
+  const language = useSettingsStore((state) => state.language);
 
   const editorState = useEditorState({
     editor,
@@ -106,6 +111,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         isAlignLeft: e.isActive({ textAlign: "left" }),
         isAlignCenter: e.isActive({ textAlign: "center" }),
         isAlignRight: e.isActive({ textAlign: "right" }),
+        hasSelection: !e.state.selection.empty,
         canUndo: e.can().undo(),
         canRedo: e.can().redo(),
         canSinkListItem: e.can().sinkListItem("listItem"),
@@ -142,6 +148,16 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const handleSpellCheckToggle = () => {
     const nextEnabled = !spellCheckEnabled;
     setSpellCheckEnabled(nextEnabled);
+  };
+
+  const handleOpenDictionary = () => {
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to, " ").trim();
+    if (!selectedText) return;
+    const word = selectedText.split(/\s+/)[0];
+    if (!word) return;
+    setDictionaryWord(word);
+    setShowDictionaryDialog(true);
   };
 
   return (
@@ -339,6 +355,14 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <SpellCheck className="w-4 h-4" />
         </ToolbarButton>
 
+        <ToolbarButton
+          onClick={handleOpenDictionary}
+          disabled={!editorState.hasSelection}
+          title={t("editor.dictionary")}
+        >
+          <BookOpen className="w-4 h-4" />
+        </ToolbarButton>
+
         <ToolbarButton onClick={() => setShowHtmlDialog(true)} title={t("editor.viewHtml")}>
           <Code2 className="w-4 h-4" />
         </ToolbarButton>
@@ -350,6 +374,12 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       <ImageInsertDialog editor={editor} isOpen={showImageDialog} onClose={() => setShowImageDialog(false)} />
       <FootnoteDialog editor={editor} isOpen={showFootnoteDialog} onClose={() => setShowFootnoteDialog(false)} />
       <LinkDialog editor={editor} isOpen={showLinkDialog} onClose={() => setShowLinkDialog(false)} />
+      <DictionaryDialog
+        isOpen={showDictionaryDialog}
+        word={dictionaryWord}
+        language={language}
+        onClose={() => setShowDictionaryDialog(false)}
+      />
     </div>
   );
 }
