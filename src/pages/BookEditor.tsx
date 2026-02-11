@@ -44,6 +44,7 @@ export function BookEditor() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const showInlineFootnotes = useSettingsStore((s) => s.showInlineFootnotes);
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
+  const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
 
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
@@ -527,6 +528,7 @@ export function BookEditor() {
           chapters={chapters}
           currentChapterId={currentChapter?.id ?? null}
           onSelectChapter={handleSelectChapter}
+          onClose={() => setShowNotesChapter(false)}
         />
       )}
 

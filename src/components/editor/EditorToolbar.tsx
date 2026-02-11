@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { TableMenu } from "./TableMenu";
@@ -78,8 +78,26 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
+  const showNotesChapter = useSettingsStore((state) => state.showNotesChapter);
+  const setShowNotesChapter = useSettingsStore((state) => state.setShowNotesChapter);
   const language = useSettingsStore((state) => state.language);
   const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
+
+  // Track editor focus with a delayed blur so toolbar clicks still read it as focused
+  const editorWasFocusedRef = useRef(false);
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onFocus = () => { editorWasFocusedRef.current = true; };
+    const onBlur = () => {
+      setTimeout(() => { editorWasFocusedRef.current = false; }, 150);
+    };
+    dom.addEventListener("focus", onFocus);
+    dom.addEventListener("blur", onBlur);
+    return () => {
+      dom.removeEventListener("focus", onFocus);
+      dom.removeEventListener("blur", onBlur);
+    };
+  }, [editor]);
 
   const editorState = useEditorState({
     editor,
@@ -333,7 +351,13 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <Ellipsis className="w-4 h-4" />
         </ToolbarButton>
 
-        <ToolbarButton onClick={() => setShowFootnoteDialog(true)} title={t("editor.footnote")}>
+        <ToolbarButton onClick={() => {
+          if (editorWasFocusedRef.current) {
+            setShowFootnoteDialog(true);
+          } else {
+            setShowNotesChapter(!showNotesChapter);
+          }
+        }} title={t("editor.footnote")}>
           <MessageSquareText className="w-4 h-4" />
         </ToolbarButton>
 

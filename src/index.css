@@ -391,6 +391,21 @@ option {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.notes-panel-close {
+  color: var(--color-muted-foreground);
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.notes-panel-close:hover {
+  color: var(--color-foreground);
 }
 
 .notes-panel-title {

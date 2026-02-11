@@ -14,6 +14,7 @@ interface NotesPanelProps {
   chapters: Chapter[];
   currentChapterId: string | null;
   onSelectChapter: (chapter: Chapter) => void;
+  onClose: () => void;
 }
 
 const FOOTNOTE_REGEX =
@@ -54,7 +55,7 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
-export function NotesPanel({ chapters, currentChapterId, onSelectChapter }: NotesPanelProps) {
+export function NotesPanel({ chapters, currentChapterId, onSelectChapter, onClose }: NotesPanelProps) {
   const { t } = useTranslation();
 
   const footnotes = useMemo(() => extractFootnotes(chapters), [chapters]);
@@ -64,6 +65,9 @@ export function NotesPanel({ chapters, currentChapterId, onSelectChapter }: Note
       <div className="notes-panel">
         <div className="notes-panel-header">
           <h3 className="notes-panel-title">{t("editor.notesPanel")}</h3>
+          <button onClick={onClose} className="notes-panel-close" title={t("common.close")}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
         <p className="text-sm text-muted-foreground px-4 py-3">{t("editor.noFootnotes")}</p>
       </div>
@@ -104,6 +108,9 @@ export function NotesPanel({ chapters, currentChapterId, onSelectChapter }: Note
     <div className="notes-panel">
       <div className="notes-panel-header">
         <h3 className="notes-panel-title">{t("editor.notesPanel")}</h3>
+        <button onClick={onClose} className="notes-panel-close" title={t("common.close")}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
       </div>
       <div className="notes-panel-content">
         {Array.from(grouped.entries()).map(([chapterId, group]) => (
