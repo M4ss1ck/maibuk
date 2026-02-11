@@ -4,6 +4,7 @@ import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
 import { Editor, ChapterList } from "../components/editor";
+import { NotesPanel } from "../components/editor/NotesPanel";
 import type { EditorStats } from "../components/editor/Editor";
 import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -11,6 +12,7 @@ import { ExportDialog } from "../components/export";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon, FocusModeIcon, DocumentIcon, SettingsIcon, CloseIcon } from "../components/icons";
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
+import { useSettingsStore } from "../features/settings/store";
 import { Menu, MoreVertical } from "lucide-react";
 
 export function BookEditor() {
@@ -40,6 +42,8 @@ export function BookEditor() {
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
   const [showMobileChapters, setShowMobileChapters] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const showInlineFootnotes = useSettingsStore((s) => s.showInlineFootnotes);
+  const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
 
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
@@ -496,6 +500,7 @@ export function BookEditor() {
             onStatsChange={handleStatsChange}
             focusMode={focusMode}
             footnoteStartIndex={footnoteStartIndex}
+            showInlineFootnotes={showInlineFootnotes}
             placeholder={`Start writing "${currentChapter.title}"...`}
           />
         ) : (
@@ -515,6 +520,15 @@ export function BookEditor() {
           </div>
         )}
       </div>
+
+      {/* Notes Panel */}
+      {showNotesChapter && !focusMode && (
+        <NotesPanel
+          chapters={chapters}
+          currentChapterId={currentChapter?.id ?? null}
+          onSelectChapter={handleSelectChapter}
+        />
+      )}
 
       {/* Export Dialog */}
       <ExportDialog

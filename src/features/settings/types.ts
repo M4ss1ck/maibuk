@@ -15,6 +15,10 @@ export interface Settings {
   customDictionary: string[];
   dictionaryOpenInBrowser: boolean;
 
+  // Footnote settings
+  showInlineFootnotes: boolean;
+  showNotesChapter: boolean;
+
   // Export settings
   defaultExportFormat: ExportFormat;
 }

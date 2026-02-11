@@ -47,6 +47,7 @@ interface EditorProps {
   editable?: boolean;
   focusMode?: boolean;
   footnoteStartIndex?: number;
+  showInlineFootnotes?: boolean;
 }
 
 export function Editor({
@@ -58,6 +59,7 @@ export function Editor({
   editable = true,
   focusMode = false,
   footnoteStartIndex = 1,
+  showInlineFootnotes = true,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -223,7 +225,7 @@ export function Editor({
       <div className="flex-1 overflow-auto min-h-0" onClick={handleFocus}>
         <div className="max-w-editor-max mx-auto p-8">
           <EditorContent editor={editor} />
-          <FootnoteList editor={editor} startIndex={footnoteStartIndex} />
+          {showInlineFootnotes && <FootnoteList editor={editor} startIndex={footnoteStartIndex} />}
         </div>
       </div>
 
