@@ -205,8 +205,10 @@ option {
 }
 
 .spellcheck-error {
-  text-decoration: underline wavy;
-  text-decoration-color: var(--color-destructive);
+  -webkit-text-decoration: underline wavy;
+          text-decoration: underline wavy;
+  -webkit-text-decoration-color: var(--color-destructive);
+          text-decoration-color: var(--color-destructive);
   text-underline-offset: 3px;
 }
 
@@ -317,19 +319,59 @@ option {
   color: var(--color-primary-hover);
 }
 
-/* Phase 3: Footnote styles */
-.footnote-marker {
-  color: var(--color-primary);
-  font-size: 0.75em;
+/* Footnote reference (inline superscript number) */
+.footnote-ref {
+  display: inline;
   vertical-align: super;
+  font-size: 0.75em;
+  line-height: 0;
+}
+
+.footnote-ref-link {
+  color: var(--color-primary);
   cursor: pointer;
   font-weight: 600;
+  text-decoration: none;
 }
 
-.footnote-marker::before {
-  content: "[";
+.footnote-ref-link:hover {
+  text-decoration: underline;
 }
 
-.footnote-marker::after {
-  content: "]";
+/* Footnote list at end of chapter */
+.footnote-section {
+  margin-top: 3rem;
+  padding-top: 1rem;
+}
+
+.footnote-divider {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin-bottom: 1rem;
+}
+
+.footnote-list {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.footnote-item {
+  margin-bottom: 0.5rem;
+  color: var(--color-foreground);
+}
+
+.footnote-content {
+  margin-right: 0.25rem;
+}
+
+.footnote-backref {
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.75rem;
+}
+
+.footnote-backref:hover {
+  text-decoration: underline;
 }

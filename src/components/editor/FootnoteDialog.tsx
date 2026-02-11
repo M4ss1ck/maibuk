@@ -21,17 +21,8 @@ export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps)
       return;
     }
 
-    // Get selected text or use a default marker
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to);
-
-    if (!selectedText) {
-      setError(t("editor.selectTextForFootnote"));
-      return;
-    }
-
-    // Apply footnote mark to selected text
-    (editor.commands as any).setFootnote?.({ content: content.trim() });
+    // Insert footnote node at current cursor position
+    (editor.commands as any).insertFootnote?.({ content: content.trim() });
 
     handleClose();
   };
@@ -52,7 +43,7 @@ export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps)
           <Button variant="secondary" onClick={handleClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={handleInsert}>{t("editor.footnote")}</Button>
+          <Button onClick={handleInsert}>{t("editor.insertFootnote")}</Button>
         </>
       }
     >

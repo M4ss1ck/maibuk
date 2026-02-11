@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
@@ -80,6 +80,21 @@ export function BookEditor() {
       updateWordCount(bookId, totalWords);
     }
   }, [bookId, chapters, updateWordCount]);
+
+  // Compute book-wise footnote start index for the current chapter
+  const footnoteStartIndex = useMemo(() => {
+    if (!currentChapter) return 1;
+    let count = 0;
+    for (const ch of chapters) {
+      if (ch.order < currentChapter.order) {
+        if (ch.content) {
+          const matches = ch.content.match(/<sup[^>]+data-footnote/g);
+          count += matches ? matches.length : 0;
+        }
+      }
+    }
+    return count + 1;
+  }, [chapters, currentChapter]);
 
   // triggered save - uses ref to get latest editor content
   const handleSaveNow = useCallback(async () => {
@@ -480,6 +495,7 @@ export function BookEditor() {
             onWordCountChange={handleWordCountChange}
             onStatsChange={handleStatsChange}
             focusMode={focusMode}
+            footnoteStartIndex={footnoteStartIndex}
             placeholder={`Start writing "${currentChapter.title}"...`}
           />
         ) : (

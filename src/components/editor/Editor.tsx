@@ -21,12 +21,14 @@ import { useEffect, useCallback } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
 import { SpellCheckPopover } from "./SpellCheckPopover";
+import { FootnoteList } from "./FootnoteList";
 import { SceneBreak } from "./extensions/SceneBreak";
 import { FontSize } from "./extensions/FontSize";
 import { LineHeight } from "./extensions/LineHeight";
 import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
 import { SpellCheck } from "./extensions/SpellCheck";
+import { Footnote } from "./extensions/Footnote";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 
@@ -44,6 +46,7 @@ interface EditorProps {
   placeholder?: string;
   editable?: boolean;
   focusMode?: boolean;
+  footnoteStartIndex?: number;
 }
 
 export function Editor({
@@ -54,6 +57,7 @@ export function Editor({
   placeholder = "Start writing your chapter...",
   editable = true,
   focusMode = false,
+  footnoteStartIndex = 1,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -113,6 +117,9 @@ export function Editor({
       SceneBreak,
       Indent,
       PasteHandler,
+      Footnote.configure({
+        startIndex: footnoteStartIndex,
+      }),
       SpellCheck.configure({
         enabled: spellCheckEnabled,
         language,
@@ -216,6 +223,7 @@ export function Editor({
       <div className="flex-1 overflow-auto min-h-0" onClick={handleFocus}>
         <div className="max-w-editor-max mx-auto p-8">
           <EditorContent editor={editor} />
+          <FootnoteList editor={editor} startIndex={footnoteStartIndex} />
         </div>
       </div>
 

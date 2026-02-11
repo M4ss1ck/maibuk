@@ -33,24 +33,38 @@ export function sanitizeHtmlForEpub(html: string): SanitizeResult {
   let footnoteCounter = 0;
 
   // Extract and convert footnotes
-  // Footnotes are: <span data-footnote data-footnote-content="..." data-footnote-id="...">text</span>
+  // New format (inline node): <sup data-footnote="" data-footnote-content="..." data-footnote-id="..."></sup>
   sanitized = sanitized.replace(
-    /<span[^>]*data-footnote[^>]*data-footnote-content="([^"]*)"[^>]*data-footnote-id="([^"]*)"[^>]*>(.*?)<\/span>/gi,
-    (_match, content, id, text) => {
+    /<sup[^>]*data-footnote(?:="")?[^>]*data-footnote-content="([^"]*)"[^>]*data-footnote-id="([^"]*)"[^>]*>(?:.*?)<\/sup>/gi,
+    (_match, content, id) => {
       footnoteCounter++;
       footnotes.push({
         id: id || `fn-${footnoteCounter}`,
         content: decodeHtmlEntities(content),
         number: footnoteCounter,
       });
-      return `${text}<sup class="footnote-ref"><a href="#fn-${footnoteCounter}" id="fnref-${footnoteCounter}">[${footnoteCounter}]</a></sup>`;
+      return `<sup class="footnote-ref"><a href="#fn-${footnoteCounter}" id="fnref-${footnoteCounter}">[${footnoteCounter}]</a></sup>`;
     }
   );
 
-  // Also handle footnotes where attributes are in different order
+  // Also handle sup footnotes where attributes are in different order
   sanitized = sanitized.replace(
-    /<span[^>]*data-footnote-id="([^"]*)"[^>]*data-footnote-content="([^"]*)"[^>]*data-footnote[^>]*>(.*?)<\/span>/gi,
-    (_match, id, content, text) => {
+    /<sup[^>]*data-footnote-id="([^"]*)"[^>]*data-footnote-content="([^"]*)"[^>]*data-footnote(?:="")?[^>]*>(?:.*?)<\/sup>/gi,
+    (_match, id, content) => {
+      footnoteCounter++;
+      footnotes.push({
+        id: id || `fn-${footnoteCounter}`,
+        content: decodeHtmlEntities(content),
+        number: footnoteCounter,
+      });
+      return `<sup class="footnote-ref"><a href="#fn-${footnoteCounter}" id="fnref-${footnoteCounter}">[${footnoteCounter}]</a></sup>`;
+    }
+  );
+
+  // Legacy format (mark-based): <span data-footnote data-footnote-content="..." data-footnote-id="...">text</span>
+  sanitized = sanitized.replace(
+    /<span[^>]*data-footnote[^>]*data-footnote-content="([^"]*)"[^>]*data-footnote-id="([^"]*)"[^>]*>(.*?)<\/span>/gi,
+    (_match, content, id, text) => {
       footnoteCounter++;
       footnotes.push({
         id: id || `fn-${footnoteCounter}`,
