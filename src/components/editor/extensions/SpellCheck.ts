@@ -6,7 +6,11 @@ import type { Language } from "../../../features/settings/types";
 import { useSettingsStore } from "../../../features/settings/store";
 import { spellCheckService } from "../../../lib/spellcheck";
 
-const WORD_REGEX = /\p{L}+/gu;
+const WORD_REGEX = /\p{L}+(?:['\u2019]\p{L}+)*/gu;
+const FILE_LIKE_REGEX =
+  /\b[\p{L}\p{N}][\p{L}\p{N}_-]*\.(?:[\p{L}\p{N}]{2,5})(?:\.[\p{L}\p{N}]{2,5})*\b/gu;
+const URL_LIKE_REGEX = /(?:https?:\/\/|www\.)\S+/gi;
+const EMAIL_LIKE_REGEX = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu;
 const spellCheckPluginKey = new PluginKey("spellCheck");
 
 type Misspelling = {
@@ -328,20 +332,22 @@ function extractWords(doc: ProseMirrorNode): {
   const uniqueWords = new Set<string>();
   const ranges: Misspelling[] = [];
 
-  doc.descendants((node, pos, parent) => {
+  doc.descendants((node, pos) => {
     if (node.type.name === "codeBlock") {
       return false;
     }
 
     if (!node.isText || !node.text) return;
-    if (parent?.type?.name === "codeBlock") return;
     if (node.marks.some((mark) => mark.type.name === "code")) return;
+    if (node.marks.some((mark) => mark.type.name === "link")) return;
 
     const text = node.text;
+    const excludedRanges = collectExcludedRanges(text);
     for (const match of text.matchAll(WORD_REGEX)) {
       if (match.index === undefined) continue;
       const word = match[0];
       if (!word) continue;
+      if (isWithinExcludedRange(match.index, word.length, excludedRanges)) continue;
 
       const from = pos + match.index;
       const to = from + word.length;
@@ -354,6 +360,33 @@ function extractWords(doc: ProseMirrorNode): {
     uniqueWords: Array.from(uniqueWords),
     ranges,
   };
+}
+
+function collectExcludedRanges(text: string): { from: number; to: number }[] {
+  const ranges: { from: number; to: number }[] = [];
+  for (const match of text.matchAll(URL_LIKE_REGEX)) {
+    if (match.index === undefined) continue;
+    ranges.push({ from: match.index, to: match.index + match[0].length });
+  }
+  for (const match of text.matchAll(EMAIL_LIKE_REGEX)) {
+    if (match.index === undefined) continue;
+    ranges.push({ from: match.index, to: match.index + match[0].length });
+  }
+  for (const match of text.matchAll(FILE_LIKE_REGEX)) {
+    if (match.index === undefined) continue;
+    ranges.push({ from: match.index, to: match.index + match[0].length });
+  }
+  return ranges;
+}
+
+function isWithinExcludedRange(
+  start: number,
+  length: number,
+  ranges: { from: number; to: number }[]
+): boolean {
+  if (ranges.length === 0) return false;
+  const end = start + length;
+  return ranges.some((range) => start < range.to && end > range.from);
 }
 
 function normalizeDictionary(words: string[]): string[] {
