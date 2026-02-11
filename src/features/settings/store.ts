@@ -18,6 +18,8 @@ interface SettingsStore extends Settings {
   addCustomWord: (word: string) => void;
   removeCustomWord: (word: string) => void;
   setDictionaryOpenInBrowser: (enabled: boolean) => void;
+  setShowInlineFootnotes: (enabled: boolean) => void;
+  setShowNotesChapter: (enabled: boolean) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -30,6 +32,8 @@ const defaultSettings: Settings = {
   spellCheckEnabled: true,
   customDictionary: [],
   dictionaryOpenInBrowser: false,
+  showInlineFootnotes: true,
+  showNotesChapter: false,
   defaultExportFormat: "epub",
 };
 
@@ -48,6 +52,8 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       setSpellCheckEnabled: (spellCheckEnabled) => set({ spellCheckEnabled }),
       setDictionaryOpenInBrowser: (dictionaryOpenInBrowser) => set({ dictionaryOpenInBrowser }),
+      setShowInlineFootnotes: (showInlineFootnotes) => set({ showInlineFootnotes }),
+      setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;

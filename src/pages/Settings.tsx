@@ -32,6 +32,8 @@ export function Settings() {
     spellCheckEnabled,
     customDictionary,
     dictionaryOpenInBrowser,
+    showInlineFootnotes,
+    showNotesChapter,
     setAppFontSize,
     setAppFont,
     setAutoSave,
@@ -40,6 +42,8 @@ export function Settings() {
     setSpellCheckEnabled,
     removeCustomWord,
     setDictionaryOpenInBrowser,
+    setShowInlineFootnotes,
+    setShowNotesChapter,
   } = useSettings();
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -266,6 +270,30 @@ export function Settings() {
             <Button variant="secondary" size="sm" onClick={() => setCustomDictionaryOpen(true)}>
               {t("settings.editCustomDictionary")}
             </Button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div>
+              <p className="font-medium">{t("settings.showInlineFootnotes")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.showInlineFootnotesDescription")}</p>
+            </div>
+            <Switch
+              checked={showInlineFootnotes}
+              onChange={setShowInlineFootnotes}
+              label={t("settings.toggleInlineFootnotes")}
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div>
+              <p className="font-medium">{t("settings.showNotesChapter")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.showNotesChapterDescription")}</p>
+            </div>
+            <Switch
+              checked={showNotesChapter}
+              onChange={setShowNotesChapter}
+              label={t("settings.toggleNotesChapter")}
+            />
           </div>
         </div>
       </section>
