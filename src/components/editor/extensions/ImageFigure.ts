@@ -21,9 +21,17 @@ export const ImageFigure = Node.create<ImageFigureOptions>({
 
   group: "block",
 
-  atom: true,
+  content: "text*",
+
+  selectable: true,
 
   draggable: true,
+
+  isolating: true,
+
+  defining: true,
+
+  allowGapCursor: true,
 
   addOptions() {
     return {
@@ -57,13 +65,10 @@ export const ImageFigure = Node.create<ImageFigureOptions>({
       },
       caption: {
         default: "",
+        rendered: false,
         parseHTML: (el: HTMLElement) => {
-          const figcaption = el.querySelector("figcaption");
-          return figcaption?.textContent || "";
+          return el.getAttribute("data-caption") || "";
         },
-        renderHTML: (attributes: { caption: string }) => ({
-          "data-caption": attributes.caption || "",
-        }),
       },
       width: {
         default: null,
@@ -84,11 +89,49 @@ export const ImageFigure = Node.create<ImageFigureOptions>({
 
   parseHTML() {
     return [
-      { tag: "figure[data-image]", priority: 60 },
-      { tag: "figure", priority: 55, getAttrs: (el: HTMLElement) => {
-        return el.querySelector("img") ? {} : false;
-      }},
-      { tag: "img[src]", priority: 50 },
+      {
+        tag: "figure[data-image]",
+        priority: 60,
+        getAttrs: (el: HTMLElement) => {
+          const img = el.querySelector("img");
+          if (!img) return false;
+          return {
+            src: img.getAttribute("src") || null,
+            alt: img.getAttribute("alt") || null,
+            title: img.getAttribute("title") || null,
+            width: el.getAttribute("data-width") || null,
+            alignment: el.getAttribute("data-alignment") || "center",
+            caption: el.getAttribute("data-caption") || "",
+          };
+        },
+        contentElement: "figcaption",
+      },
+      {
+        tag: "figure",
+        priority: 55,
+        getAttrs: (el: HTMLElement) => {
+          const img = el.querySelector("img");
+          if (!img) return false;
+          return {
+            src: img.getAttribute("src") || null,
+            alt: img.getAttribute("alt") || null,
+            title: img.getAttribute("title") || null,
+            width: el.getAttribute("data-width") || null,
+            alignment: el.getAttribute("data-alignment") || "center",
+            caption: el.getAttribute("data-caption") || "",
+          };
+        },
+        contentElement: "figcaption",
+      },
+      {
+        tag: "img[src]",
+        priority: 50,
+        getAttrs: (el: HTMLElement) => ({
+          src: el.getAttribute("src") || null,
+          alt: el.getAttribute("alt") || null,
+          title: el.getAttribute("title") || null,
+        }),
+      },
     ];
   },
 
@@ -100,12 +143,34 @@ export const ImageFigure = Node.create<ImageFigureOptions>({
         "data-image": "",
       }),
       ["img", { src, alt: alt || undefined, title: title || undefined }],
-      ["figcaption", {}, HTMLAttributes["data-caption"] || ""],
+      ["figcaption", 0],
     ];
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(ImageView);
+    return ReactNodeViewRenderer(ImageView, {
+      stopEvent: ({ event }) => {
+        const target = event.target as Node | null;
+        const element = target instanceof Element ? target : null;
+        if (!element) {
+          return false;
+        }
+
+        if (element.closest("[data-node-view-content]")) {
+          return false;
+        }
+
+        if (element.closest(".image-resize-handle")) {
+          return true;
+        }
+
+        if (element.closest(".image-floating-toolbar")) {
+          return true;
+        }
+
+        return false;
+      },
+    });
   },
 
   addCommands() {

@@ -83,16 +83,21 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
       event.preventDefault();
       event.stopPropagation();
 
-      const pos = editor.view.posAtDOM(figureEl, 0);
-      const node = editor.state.doc.nodeAt(pos);
-      if (!node || node.type.name !== "image") {
+      const posFromCoords = editor.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      })?.pos;
+      const posFromDom = editor.view.posAtDOM(figureEl, 0);
+      const resolvedPos = editor.state.doc.resolve(posFromCoords ?? posFromDom);
+      const imageInfo = findImageNodeAtPos(editor, resolvedPos.pos);
+      if (!imageInfo) {
         setMenu(null);
         return;
       }
 
       setMenu({
-        pos,
-        nodeAttrs: node.attrs,
+        pos: imageInfo.pos,
+        nodeAttrs: imageInfo.node.attrs,
         position: clampPosition(event.clientX, event.clientY),
       });
     };
@@ -270,6 +275,17 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
       )}
     </>
   );
+}
+
+function findImageNodeAtPos(editor: Editor, pos: number) {
+  const $pos = editor.state.doc.resolve(pos);
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    const node = $pos.node(depth);
+    if (node.type.name === "image") {
+      return { node, pos: $pos.before(depth) };
+    }
+  }
+  return null;
 }
 
 function MenuItem({

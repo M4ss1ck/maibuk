@@ -321,18 +321,32 @@ option {
   font-size: 0.875em;
   color: var(--color-muted-foreground);
   padding: 0.5em 0.25em;
-  outline: none;
   min-height: 1.5em;
   font-style: italic;
+  position: relative;
 }
 
-.image-caption:empty::before {
-  content: attr(data-placeholder);
+.image-caption[data-empty="true"]::before {
   color: var(--color-muted-foreground);
+  content: attr(data-placeholder);
   opacity: 0.5;
+  pointer-events: none;
 }
 
-.image-caption:focus {
+.image-caption [data-node-view-content-react] {
+  outline: none;
+  white-space: pre-wrap;
+}
+
+.image-caption [data-node-view-content-react]:focus {
+  outline: none;
+}
+
+.image-caption[data-empty="true"] [data-node-view-content-react] {
+  min-height: 1.5em;
+}
+
+.image-caption:focus-within {
   border-bottom: 1px solid var(--color-primary);
 }
 

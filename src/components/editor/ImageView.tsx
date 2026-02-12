@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-import { NodeViewWrapper } from "@tiptap/react";
+import { NodeViewWrapper, NodeViewContent } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import {
@@ -8,18 +8,20 @@ import {
   AlignRight,
   Trash2,
 } from "lucide-react";
+import { NodeSelection } from "@tiptap/pm/state";
 
 const HANDLES = ["nw", "ne", "sw", "se"] as const;
 
 export function ImageView({
   node,
+  editor,
+  getPos,
   updateAttributes,
   deleteNode,
   selected,
 }: NodeViewProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
-  const captionRef = useRef<HTMLDivElement>(null);
   const [resizingWidth, setResizingWidth] = useState<string | null>(null);
   const resizingWidthRef = useRef<string | null>(null);
 
@@ -28,26 +30,33 @@ export function ImageView({
     resizingWidthRef.current = resizingWidth;
   }, [resizingWidth]);
 
-  // Initialize caption text on mount
+  // Migrate legacy caption attribute into node content once.
   useEffect(() => {
-    if (captionRef.current && node.attrs.caption) {
-      captionRef.current.textContent = node.attrs.caption;
+    const legacyCaption = node.attrs.caption as string | undefined;
+    if (!legacyCaption || node.textContent.trim().length > 0) {
+      return;
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleCaptionBlur = useCallback(() => {
-    const text = captionRef.current?.textContent || "";
-    if (text !== node.attrs.caption) {
-      updateAttributes({ caption: text });
+    const pos = typeof getPos === "function" ? getPos() : null;
+    if (typeof pos !== "number") {
+      return;
     }
-  }, [node.attrs.caption, updateAttributes]);
+
+    const tr = editor.state.tr;
+    tr.insertText(legacyCaption, pos + 1);
+    tr.setNodeMarkup(pos, undefined, {
+      ...node.attrs,
+      caption: "",
+    });
+    editor.view.dispatch(tr);
+  }, [editor, getPos, node.attrs, node.textContent]);
 
   const handleCaptionKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       // Prevent Enter from creating newlines in caption
       if (e.key === "Enter") {
         e.preventDefault();
-        captionRef.current?.blur();
+        e.stopPropagation();
       }
     },
     []
@@ -107,8 +116,27 @@ export function ImageView({
     [updateAttributes]
   );
 
+  const handleImageMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      if (!editor.isEditable) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const pos = typeof getPos === "function" ? getPos() : null;
+      if (typeof pos !== "number") return;
+
+      const tr = editor.state.tr.setSelection(
+        NodeSelection.create(editor.state.doc, pos)
+      );
+      editor.view.dispatch(tr);
+    },
+    [editor, getPos]
+  );
+
   const alignment = node.attrs.alignment || "center";
   const width = resizingWidth || node.attrs.width || "100%";
+  const isCaptionEmpty = node.textContent.trim().length === 0;
 
   return (
     <NodeViewWrapper
@@ -157,7 +185,11 @@ export function ImageView({
       )}
 
       {/* Image container with resize handles */}
-      <div className="image-view-container" ref={containerRef}>
+      <div
+        className="image-view-container"
+        ref={containerRef}
+        onMouseDown={handleImageMouseDown}
+      >
         <img
           src={node.attrs.src}
           alt={node.attrs.alt || ""}
@@ -177,14 +209,12 @@ export function ImageView({
       </div>
 
       {/* Editable caption */}
-      <div
-        ref={captionRef}
+      <NodeViewContent
+        // as="figcaption"
         className="image-caption"
-        contentEditable
-        suppressContentEditableWarning
-        onBlur={handleCaptionBlur}
-        onKeyDown={handleCaptionKeyDown}
         data-placeholder={t("editor.imageCaptionPlaceholder")}
+        data-empty={isCaptionEmpty ? "true" : "false"}
+        onKeyDownCapture={handleCaptionKeyDown}
       />
     </NodeViewWrapper>
   );

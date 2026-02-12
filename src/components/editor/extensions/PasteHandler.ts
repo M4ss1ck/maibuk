@@ -19,6 +19,38 @@ export const PasteHandler = Extension.create({
       new Plugin({
         key: new PluginKey("pasteHandler"),
         props: {
+          handlePaste(view, event) {
+            const clipboardData = event.clipboardData;
+            if (!clipboardData) return false;
+
+            const items = Array.from(clipboardData.items);
+            const imageItem = items.find((item) => item.type.startsWith("image/"));
+            if (!imageItem) return false;
+
+            const file = imageItem.getAsFile();
+            if (!file) return false;
+
+            const reader = new FileReader();
+            reader.onload = () => {
+              const src = typeof reader.result === "string" ? reader.result : null;
+              if (!src) return;
+
+              const imageType = view.state.schema.nodes.image;
+              if (!imageType) return;
+
+              const node = imageType.create({
+                src,
+                alt: null,
+                title: null,
+              });
+
+              const tr = view.state.tr.replaceSelectionWith(node);
+              view.dispatch(tr.scrollIntoView());
+            };
+
+            reader.readAsDataURL(file);
+            return true;
+          },
           transformPastedHTML(html: string) {
             // Create a temporary DOM element to parse the HTML
             const doc = new DOMParser().parseFromString(html, "text/html");
@@ -63,8 +95,31 @@ export const PasteHandler = Extension.create({
 
             const newContent = processFragment(slice.content);
 
+            const containsImageNode = (fragment: Fragment): boolean => {
+              let found = false;
+              fragment.forEach((child) => {
+                if (found) return;
+                if (child.type.name === "image") {
+                  found = true;
+                  return;
+                }
+                if (child.content.size > 0) {
+                  found = containsImageNode(child.content);
+                }
+              });
+              return found;
+            };
+
             // Check if the first node has indent attributes that would be lost
             let newOpenStart = slice.openStart;
+            let newOpenEnd = slice.openEnd;
+
+            // Prevent images from being "opened" and merged with surrounding text.
+            if (containsImageNode(newContent)) {
+              newOpenStart = 0;
+              newOpenEnd = 0;
+            }
+
             if (slice.openStart > 0 && newContent.firstChild) {
               const firstNode = newContent.firstChild;
               // Check for indent-related attributes
@@ -80,7 +135,7 @@ export const PasteHandler = Extension.create({
               }
             }
 
-            return new Slice(newContent, newOpenStart, slice.openEnd);
+            return new Slice(newContent, newOpenStart, newOpenEnd);
           },
         },
       }),
