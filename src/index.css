@@ -255,6 +255,7 @@ option {
   padding: 0 1em;
   vertical-align: top;
   text-align: left;
+  position: relative;
 }
 
 .editor-content table th {
@@ -265,6 +266,34 @@ option {
 .editor-content table tr:hover td {
   background-color: var(--color-table-border);
   background-opacity: 0.5;
+}
+
+/* Table column resize feedback */
+.editor-content.resize-cursor {
+  cursor: col-resize;
+}
+
+.editor-content .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -2px;
+  width: 4px;
+  background-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.editor-content table th:hover .column-resize-handle,
+.editor-content table td:hover .column-resize-handle,
+.editor-content.resize-cursor .column-resize-handle {
+  opacity: 1;
+}
+
+.editor-content table th:hover,
+.editor-content table td:hover {
+  box-shadow: inset -2px 0 0 color-mix(in srgb, var(--color-primary) 60%, transparent);
 }
 
 /* Selected cell */
