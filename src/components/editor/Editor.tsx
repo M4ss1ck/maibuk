@@ -15,12 +15,13 @@ import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
-import { Image } from "@tiptap/extension-image";
+import { ImageFigure } from "./extensions/ImageFigure";
 import { Link } from "@tiptap/extension-link";
 import { useEffect, useCallback } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
 import { SpellCheckPopover } from "./SpellCheckPopover";
+import { ImageContextMenu } from "./ImageContextMenu";
 import { FootnoteList } from "./FootnoteList";
 import { SceneBreak } from "./extensions/SceneBreak";
 import { FontSize } from "./extensions/FontSize";
@@ -103,12 +104,8 @@ export function Editor({
       TableRow,
       TableCell,
       TableHeader,
-      Image.configure({
-        inline: false,
+      ImageFigure.configure({
         allowBase64: true,
-        HTMLAttributes: {
-          class: "editor-image",
-        },
       }),
       Link.configure({
         openOnClick: false,
@@ -231,6 +228,7 @@ export function Editor({
 
       <LinkClickHandler editor={editor} />
       <SpellCheckPopover editor={editor} />
+      <ImageContextMenu editor={editor} />
     </div>
   );
 }

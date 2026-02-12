@@ -272,19 +272,124 @@ option {
   background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
-/* Phase 3: Image styles */
-.editor-content img,
-.editor-image {
+/* Image figure node view */
+.editor-image-figure {
+  margin: 1.5em 0;
+  position: relative;
+  transition: width 0.15s ease;
+}
+
+.editor-image-figure.align-left {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.editor-image-figure.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.editor-image-figure.align-right {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.editor-image-figure img {
   max-width: 100%;
+  width: 100%;
   height: auto;
-  margin: 1.5em auto;
   display: block;
   border-radius: 0.5em;
 }
 
-.editor-content img.ProseMirror-selectednode {
+.editor-image-figure.ProseMirror-selectednode {
   outline: 3px solid var(--color-primary);
   outline-offset: 2px;
+  border-radius: 0.5em;
+}
+
+/* Image view container (holds img + resize handles) */
+.image-view-container {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+/* Caption */
+.image-caption {
+  text-align: center;
+  font-size: 0.875em;
+  color: var(--color-muted-foreground);
+  padding: 0.5em 0.25em;
+  outline: none;
+  min-height: 1.5em;
+  font-style: italic;
+}
+
+.image-caption:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-muted-foreground);
+  opacity: 0.5;
+}
+
+.image-caption:focus {
+  border-bottom: 1px solid var(--color-primary);
+}
+
+/* Resize handles */
+.image-resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--color-primary);
+  border: 2px solid white;
+  border-radius: 2px;
+  z-index: 5;
+}
+
+.image-resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
+.image-resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
+.image-resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+.image-resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+
+/* Floating toolbar */
+.image-floating-toolbar {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.image-floating-toolbar button {
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+  color: var(--color-foreground);
+}
+
+.image-floating-toolbar button:hover {
+  background-color: var(--color-muted);
+}
+
+.image-floating-toolbar button.active {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.image-floating-toolbar .toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 2px;
 }
 
 /* Phase 3: Scene break styles */
