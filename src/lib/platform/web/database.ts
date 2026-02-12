@@ -3,6 +3,16 @@ import type { DatabaseAdapter } from "../types";
 
 const DB_STORAGE_KEY = "maibuk-database";
 
+/** Convert Uint8Array to base64 without stack overflow on large arrays. */
+function uint8ArrayToBase64(data: Uint8Array): string {
+  const CHUNK = 8192;
+  let binary = "";
+  for (let i = 0; i < data.length; i += CHUNK) {
+    binary += String.fromCharCode(...data.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
 function escapeSQL(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "number") return String(value);
@@ -171,12 +181,13 @@ class WebDatabaseAdapter implements DatabaseAdapter {
       const data = this.db.export();
       // For larger databases, use IndexedDB instead of localStorage
       if (data.length < 5 * 1024 * 1024) {
-        // Less than 5MB
-        const base64 = btoa(String.fromCharCode(...data));
+        // Less than 5MB - use localStorage for synchronous persistence
+        const base64 = uint8ArrayToBase64(data);
         localStorage.setItem(DB_STORAGE_KEY, base64);
       } else {
-        // Use IndexedDB for larger databases
-        this.persistToIndexedDB(data);
+        // Use IndexedDB for larger databases and clear stale localStorage
+        localStorage.removeItem(DB_STORAGE_KEY);
+        void this.persistToIndexedDB(data);
       }
     } catch (error) {
       console.error("Failed to persist database:", error);

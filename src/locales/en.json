@@ -193,7 +193,13 @@
     "textCase": "Text Case",
     "alternatingCase": "aLtErNaTiNg",
     "sentenceCase": "Sentence case",
-    "titleCase": "Title Case"
+    "titleCase": "Title Case",
+    "imageCaptionPlaceholder": "Add a caption...",
+    "imageEditAlt": "Edit Alt Text",
+    "imageAltText": "Alt Text",
+    "imageCopy": "Copy Image",
+    "imageSave": "Save Image",
+    "imageAlignment": "Alignment"
   },
   "dictionary": {
     "title": "Dictionary",

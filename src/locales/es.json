@@ -193,7 +193,13 @@
     "textCase": "Mayús/Minús",
     "alternatingCase": "aLtErNaDo",
     "sentenceCase": "Oración",
-    "titleCase": "Título"
+    "titleCase": "Título",
+    "imageCaptionPlaceholder": "Agregar pie de foto...",
+    "imageEditAlt": "Editar texto alternativo",
+    "imageAltText": "Texto Alternativo",
+    "imageCopy": "Copiar imagen",
+    "imageSave": "Guardar imagen",
+    "imageAlignment": "Alineación"
   },
   "dictionary": {
     "title": "Diccionario",
