@@ -64,6 +64,16 @@ export async function getWebDialog(): Promise<WebDialogAdapter> {
   return webDialog;
 }
 
+// Open external URL in the default browser
+export async function openExternal(url: string): Promise<void> {
+  if (IS_WEB) {
+    window.open(url, "_blank", "noopener,noreferrer");
+  } else {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(url);
+  }
+}
+
 // OS factory
 export async function getOS(): Promise<OSAdapter> {
   if (IS_WEB) {

@@ -4,6 +4,7 @@ import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { useSyncStore } from "../../features/sync/store";
+import { openExternal } from "../../lib/platform";
 
 interface AuthDialogProps {
   isOpen: boolean;
@@ -104,13 +105,7 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
           <p className="mb-1">{t("sync.infoCardText")}</p>
           <button
             type="button"
-            onClick={() =>
-              window.open(
-                "https://maibuk.massick.dev/sync",
-                "_blank",
-                "noopener,noreferrer",
-              )
-            }
+            onClick={() => openExternal("https://maibuk.massick.dev/sync")}
             className="text-blue-600 dark:text-blue-300 hover:underline font-medium"
           >
             {t("sync.infoCardLearnMore")}

@@ -16,6 +16,7 @@ import { FontFamilySelect } from "./FontFamilySelect";
 import { DictionaryDialog } from "./DictionaryDialog";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
+import { openExternal } from "../../lib/platform";
 import {
   Bold,
   Italic,
@@ -177,7 +178,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     if (!word) return;
     if (dictionaryOpenInBrowser) {
       const url = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
+      openExternal(url);
       return;
     }
     setDictionaryWord(word);
