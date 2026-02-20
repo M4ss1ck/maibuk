@@ -57,6 +57,7 @@
     "i18next": "^25.7.4",
     "lucide-react": "^0.562.0",
     "nspell": "^2.1.5",
+    "pocketbase": "^0.26.8",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^16.5.1",
