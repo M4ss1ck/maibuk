@@ -143,27 +143,6 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
               : t("sync.switchToLogin")}
           </button>
         </div>
-
-        <div className="relative py-2">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-background px-2 text-muted-foreground">
-              {t("sync.or")}
-            </span>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full"
-          onClick={() => handleOAuth("google")}
-          disabled={loading || !serverUrl}
-        >
-          {t("sync.signInWithGoogle")}
-        </Button>
       </form>
     </Modal>
   );
