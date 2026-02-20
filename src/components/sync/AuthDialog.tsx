@@ -13,7 +13,7 @@ interface AuthDialogProps {
 
 export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
   const { t } = useTranslation();
-  const { apiUrl, setApiUrl, login, register, loginWithOAuth } =
+  const { apiUrl, setApiUrl, login, register } =
     useSyncStore();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [serverUrl, setServerUrl] = useState(apiUrl);
@@ -48,25 +48,6 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
 
       setEmail("");
       setPassword("");
-      onClose();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("sync.syncError"),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOAuth = async (provider: string) => {
-    setError(null);
-    setLoading(true);
-
-    try {
-      if (serverUrl !== apiUrl) {
-        setApiUrl(serverUrl);
-      }
-      await loginWithOAuth(provider);
       onClose();
     } catch (err) {
       setError(
