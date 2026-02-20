@@ -137,383 +137,385 @@ export function Settings() {
   };
 
   return (
-    <div className="p-4 sm:p-8 max-w-2xl overflow-auto h-full">
-      <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h2>
+    <div className="h-full overflow-auto">
+      <div className="p-4 sm:p-8 max-w-2xl">
+        <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h2>
 
-      {/* Appearance Settings */}
-      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-        <h3 className="text-lg font-medium mb-4">{t("settings.appearance")}</h3>
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.theme")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.themeDescription")}</p>
+        {/* Appearance Settings */}
+        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+          <h3 className="text-lg font-medium mb-4">{t("settings.appearance")}</h3>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.theme")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.themeDescription")}</p>
+              </div>
+              <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
+                <button
+                  onClick={() => setTheme("light")}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "light"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  {t("settings.light")}
+                </button>
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "dark"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  {t("settings.dark")}
+                </button>
+                <button
+                  onClick={() => setTheme("system")}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "system"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  {t("settings.system")}
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
-              <button
-                onClick={() => setTheme("light")}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "light"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                {t("settings.light")}
-              </button>
-              <button
-                onClick={() => setTheme("dark")}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "dark"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                {t("settings.dark")}
-              </button>
-              <button
-                onClick={() => setTheme("system")}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "system"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                {t("settings.system")}
-              </button>
-            </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.fontSize")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.fontSizeDescription")}</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.fontSize")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.fontSizeDescription")}</p>
+              </div>
+              <Select<FontSize>
+                value={appFontSize}
+                onChange={setAppFontSize}
+                options={FONT_SIZE_OPTIONS}
+              />
             </div>
-            <Select<FontSize>
-              value={appFontSize}
-              onChange={setAppFontSize}
-              options={FONT_SIZE_OPTIONS}
-            />
-          </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.font")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.fontDescription")}</p>
-            </div>
-            <Select<FontFamily>
-              value={appFont}
-              onChange={setAppFont}
-              options={FONT_OPTIONS}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* General Settings */}
-      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-        <h3 className="text-lg font-medium mb-4">{t("settings.general")}</h3>
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.autoSave")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.autoSaveDescription")}</p>
-            </div>
-            <Switch
-              checked={autoSave}
-              onChange={setAutoSave}
-              label={t("settings.toggleAutoSave")}
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.language")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.languageDescription")}</p>
-            </div>
-            <Select<Language>
-              value={language}
-              onChange={setLanguage}
-              options={LANGUAGE_OPTIONS}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Sync Settings */}
-      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-        <h3 className="text-lg font-medium mb-4">{t("sync.title")}</h3>
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div className="flex-1">
-              <p className="font-medium">{t("sync.serverUrl")}</p>
-              <p className="text-sm text-muted-foreground">{t("sync.serverUrlDescription")}</p>
-            </div>
-            <div className="w-full sm:w-56">
-              <Input
-                type="url"
-                value={syncServerUrl}
-                onChange={(e) => setSyncServerUrl(e.target.value)}
-                onBlur={() => {
-                  if (syncServerUrl !== apiUrl) {
-                    setApiUrl(syncServerUrl);
-                  }
-                }}
-                placeholder="https://sync.example.com"
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.font")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.fontDescription")}</p>
+              </div>
+              <Select<FontFamily>
+                value={appFont}
+                onChange={setAppFont}
+                options={FONT_OPTIONS}
               />
             </div>
           </div>
+        </section>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("sync.accountStatus")}</p>
-              <p className="text-sm text-muted-foreground">
-                {authStatus === "logged-in" && userEmail
-                  ? t("sync.loggedInAs", { email: userEmail })
-                  : t("sync.notLoggedIn")}
-              </p>
-            </div>
-            {authStatus === "logged-in" ? (
-              <Button variant="secondary" size="sm" onClick={logout}>
-                {t("sync.logout")}
-              </Button>
-            ) : (
-              <Button variant="primary" size="sm" onClick={() => setShowAuthDialog(true)}>
-                {t("sync.login")}
-              </Button>
-            )}
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            {t("sync.encryptionInfo")}
-          </p>
-        </div>
-      </section>
-
-      <AuthDialog
-        isOpen={showAuthDialog}
-        onClose={() => setShowAuthDialog(false)}
-      />
-
-      {/* Editor Settings */}
-      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-        <h3 className="text-lg font-medium mb-4">{t("settings.editor")}</h3>
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.spellCheck")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.spellCheckDescription")}</p>
-            </div>
-            <Switch
-              checked={spellCheckEnabled}
-              onChange={setSpellCheckEnabled}
-              label={t("settings.toggleSpellCheck")}
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.dictionaryOpenInBrowser")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.dictionaryOpenInBrowserDescription")}</p>
-            </div>
-            <Switch
-              checked={dictionaryOpenInBrowser}
-              onChange={setDictionaryOpenInBrowser}
-              label={t("settings.toggleDictionaryOpenInBrowser")}
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.customDictionary")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.customDictionaryDescription")}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {t("settings.customDictionaryCount", { count: customDictionary.length })}
-              </p>
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => setCustomDictionaryOpen(true)}>
-              {t("settings.editCustomDictionary")}
-            </Button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.showInlineFootnotes")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.showInlineFootnotesDescription")}</p>
-            </div>
-            <Switch
-              checked={showInlineFootnotes}
-              onChange={setShowInlineFootnotes}
-              label={t("settings.toggleInlineFootnotes")}
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.showNotesChapter")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.showNotesChapterDescription")}</p>
-            </div>
-            <Switch
-              checked={showNotesChapter}
-              onChange={setShowNotesChapter}
-              label={t("settings.toggleNotesChapter")}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Export Settings */}
-      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-        <h3 className="text-lg font-medium mb-4">{t("settings.export")}</h3>
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-            <div>
-              <p className="font-medium">{t("settings.defaultFormat")}</p>
-              <p className="text-sm text-muted-foreground">{t("settings.defaultFormatDescription")}</p>
-            </div>
-            <Select<ExportFormat>
-              value={defaultExportFormat}
-              onChange={setDefaultExportFormat}
-              options={EXPORT_FORMAT_OPTIONS}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Advanced Settings */}
-      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-        <button
-          onClick={() => setAdvancedOpen(!advancedOpen)}
-          className="flex items-center justify-between w-full text-left"
-        >
-          <h3 className="text-lg font-medium">{t("settings.advanced")}</h3>
-          <ChevronDownIcon
-            className={`w-5 h-5 text-muted-foreground transition-transform ${advancedOpen ? "rotate-180" : ""}`}
-          />
-        </button>
-
-        {advancedOpen && (
-          <div className="mt-4 space-y-4 border-l-2 border-destructive/30 pl-4">
+        {/* General Settings */}
+        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+          <h3 className="text-lg font-medium mb-4">{t("settings.general")}</h3>
+          <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
-                <p className="font-medium">{t("settings.exportDatabase")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.exportDatabaseDescription")}</p>
+                <p className="font-medium">{t("settings.autoSave")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.autoSaveDescription")}</p>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleExportDatabase}
-                disabled={isExporting}
-              >
-                {isExporting ? t("common.loading") : t("settings.exportDatabaseButton")}
+              <Switch
+                checked={autoSave}
+                onChange={setAutoSave}
+                label={t("settings.toggleAutoSave")}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.language")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.languageDescription")}</p>
+              </div>
+              <Select<Language>
+                value={language}
+                onChange={setLanguage}
+                options={LANGUAGE_OPTIONS}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Sync Settings */}
+        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+          <h3 className="text-lg font-medium mb-4">{t("sync.title")}</h3>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div className="flex-1">
+                <p className="font-medium">{t("sync.serverUrl")}</p>
+                <p className="text-sm text-muted-foreground">{t("sync.serverUrlDescription")}</p>
+              </div>
+              <div className="w-full sm:w-56">
+                <Input
+                  type="url"
+                  value={syncServerUrl}
+                  onChange={(e) => setSyncServerUrl(e.target.value)}
+                  onBlur={() => {
+                    if (syncServerUrl !== apiUrl) {
+                      setApiUrl(syncServerUrl);
+                    }
+                  }}
+                  placeholder="https://sync.example.com"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("sync.accountStatus")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {authStatus === "logged-in" && userEmail
+                    ? t("sync.loggedInAs", { email: userEmail })
+                    : t("sync.notLoggedIn")}
+                </p>
+              </div>
+              {authStatus === "logged-in" ? (
+                <Button variant="secondary" size="sm" onClick={logout}>
+                  {t("sync.logout")}
+                </Button>
+              ) : (
+                <Button variant="primary" size="sm" onClick={() => setShowAuthDialog(true)}>
+                  {t("sync.login")}
+                </Button>
+              )}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              {t("sync.encryptionInfo")}
+            </p>
+          </div>
+        </section>
+
+        <AuthDialog
+          isOpen={showAuthDialog}
+          onClose={() => setShowAuthDialog(false)}
+        />
+
+        {/* Editor Settings */}
+        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+          <h3 className="text-lg font-medium mb-4">{t("settings.editor")}</h3>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.spellCheck")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.spellCheckDescription")}</p>
+              </div>
+              <Switch
+                checked={spellCheckEnabled}
+                onChange={setSpellCheckEnabled}
+                label={t("settings.toggleSpellCheck")}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.dictionaryOpenInBrowser")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.dictionaryOpenInBrowserDescription")}</p>
+              </div>
+              <Switch
+                checked={dictionaryOpenInBrowser}
+                onChange={setDictionaryOpenInBrowser}
+                label={t("settings.toggleDictionaryOpenInBrowser")}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.customDictionary")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.customDictionaryDescription")}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t("settings.customDictionaryCount", { count: customDictionary.length })}
+                </p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setCustomDictionaryOpen(true)}>
+                {t("settings.editCustomDictionary")}
               </Button>
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
-                <p className="font-medium">{t("settings.importDatabase")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.importDatabaseDescription")}</p>
+                <p className="font-medium">{t("settings.showInlineFootnotes")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.showInlineFootnotesDescription")}</p>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleImportDatabase}
-                disabled={isImporting}
-              >
-                {isImporting ? t("common.loading") : t("settings.importDatabaseButton")}
-              </Button>
+              <Switch
+                checked={showInlineFootnotes}
+                onChange={setShowInlineFootnotes}
+                label={t("settings.toggleInlineFootnotes")}
+              />
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
-                <p className="font-medium text-destructive">{t("settings.resetDatabase")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.resetDatabaseDescription")}</p>
+                <p className="font-medium">{t("settings.showNotesChapter")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.showNotesChapterDescription")}</p>
               </div>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setResetModalOpen(true)}
-              >
-                {t("settings.resetDatabaseButton")}
-              </Button>
+              <Switch
+                checked={showNotesChapter}
+                onChange={setShowNotesChapter}
+                label={t("settings.toggleNotesChapter")}
+              />
             </div>
           </div>
-        )}
-      </section>
+        </section>
 
-      {/* Reset Confirmation Modal */}
-      <Modal
-        isOpen={resetModalOpen}
-        onClose={() => setResetModalOpen(false)}
-        title={t("settings.resetDatabase")}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setResetModalOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleResetDatabase}
-              disabled={isResetting}
-            >
-              {isResetting ? t("common.loading") : t("settings.confirmReset")}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-muted-foreground">{t("settings.resetDatabaseConfirm")}</p>
-      </Modal>
+        {/* Export Settings */}
+        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+          <h3 className="text-lg font-medium mb-4">{t("settings.export")}</h3>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.defaultFormat")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.defaultFormatDescription")}</p>
+              </div>
+              <Select<ExportFormat>
+                value={defaultExportFormat}
+                onChange={setDefaultExportFormat}
+                options={EXPORT_FORMAT_OPTIONS}
+              />
+            </div>
+          </div>
+        </section>
 
-      {/* Custom Dictionary Modal */}
-      <Modal
-        isOpen={customDictionaryOpen}
-        onClose={() => setCustomDictionaryOpen(false)}
-        title={t("settings.customDictionaryTitle")}
-        footer={
-          <Button variant="secondary" onClick={() => setCustomDictionaryOpen(false)}>
-            {t("common.close")}
-          </Button>
-        }
-      >
-        {customDictionary.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("settings.customDictionaryEmpty")}</p>
-        ) : (
-          <div className="space-y-2">
-            {customDictionary.map((word) => (
-              <div
-                key={word}
-                className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-border"
-              >
-                <span className="text-sm">{word}</span>
+        {/* Advanced Settings */}
+        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+          <button
+            onClick={() => setAdvancedOpen(!advancedOpen)}
+            className="flex items-center justify-between w-full text-left"
+          >
+            <h3 className="text-lg font-medium">{t("settings.advanced")}</h3>
+            <ChevronDownIcon
+              className={`w-5 h-5 text-muted-foreground transition-transform ${advancedOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {advancedOpen && (
+            <div className="mt-4 space-y-4 border-l-2 border-destructive/30 pl-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+                <div>
+                  <p className="font-medium">{t("settings.exportDatabase")}</p>
+                  <p className="text-sm text-muted-foreground">{t("settings.exportDatabaseDescription")}</p>
+                </div>
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
-                  onClick={() => removeCustomWord(word)}
+                  onClick={handleExportDatabase}
+                  disabled={isExporting}
                 >
-                  {t("settings.removeWord")}
+                  {isExporting ? t("common.loading") : t("settings.exportDatabaseButton")}
                 </Button>
               </div>
-            ))}
-          </div>
-        )}
-      </Modal>
 
-      {/* About */}
-      <section className="rounded-xl border border-border p-4 sm:p-5">
-        <h3 className="text-lg font-medium mb-4">{t("settings.about")}</h3>
-        <div className="text-sm text-muted-foreground">
-          <p className="flex items-center gap-2">
-            Maibuk {APP_VERSION}
-            {updateAvailable && (
-              <a
-                href={DOWNLOAD_PAGE}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full hover:bg-amber-500/30 transition-colors"
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+                <div>
+                  <p className="font-medium">{t("settings.importDatabase")}</p>
+                  <p className="text-sm text-muted-foreground">{t("settings.importDatabaseDescription")}</p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleImportDatabase}
+                  disabled={isImporting}
+                >
+                  {isImporting ? t("common.loading") : t("settings.importDatabaseButton")}
+                </Button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+                <div>
+                  <p className="font-medium text-destructive">{t("settings.resetDatabase")}</p>
+                  <p className="text-sm text-muted-foreground">{t("settings.resetDatabaseDescription")}</p>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setResetModalOpen(true)}
+                >
+                  {t("settings.resetDatabaseButton")}
+                </Button>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Reset Confirmation Modal */}
+        <Modal
+          isOpen={resetModalOpen}
+          onClose={() => setResetModalOpen(false)}
+          title={t("settings.resetDatabase")}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setResetModalOpen(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleResetDatabase}
+                disabled={isResetting}
               >
-                {t("settings.updateAvailable", { version: latestVersion })}
-              </a>
-            )}
-          </p>
-          <p className="mt-1">{t("app.description")}</p>
-        </div>
-      </section>
+                {isResetting ? t("common.loading") : t("settings.confirmReset")}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-muted-foreground">{t("settings.resetDatabaseConfirm")}</p>
+        </Modal>
+
+        {/* Custom Dictionary Modal */}
+        <Modal
+          isOpen={customDictionaryOpen}
+          onClose={() => setCustomDictionaryOpen(false)}
+          title={t("settings.customDictionaryTitle")}
+          footer={
+            <Button variant="secondary" onClick={() => setCustomDictionaryOpen(false)}>
+              {t("common.close")}
+            </Button>
+          }
+        >
+          {customDictionary.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("settings.customDictionaryEmpty")}</p>
+          ) : (
+            <div className="space-y-2">
+              {customDictionary.map((word) => (
+                <div
+                  key={word}
+                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-border"
+                >
+                  <span className="text-sm">{word}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeCustomWord(word)}
+                  >
+                    {t("settings.removeWord")}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+
+        {/* About */}
+        <section className="rounded-xl border border-border p-4 sm:p-5">
+          <h3 className="text-lg font-medium mb-4">{t("settings.about")}</h3>
+          <div className="text-sm text-muted-foreground">
+            <p className="flex items-center gap-2">
+              Maibuk {APP_VERSION}
+              {updateAvailable && (
+                <a
+                  href={DOWNLOAD_PAGE}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full hover:bg-amber-500/30 transition-colors"
+                >
+                  {t("settings.updateAvailable", { version: latestVersion })}
+                </a>
+              )}
+            </p>
+            <p className="mt-1">{t("app.description")}</p>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
