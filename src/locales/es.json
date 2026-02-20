@@ -354,7 +354,9 @@
     "accountStatus": "Cuenta",
     "accountStatusDescription": "Estado de la cuenta de sincronización",
     "loggedInAs": "Conectado como {{email}}",
-    "encryptionInfo": "Todos los datos se cifran en tu dispositivo antes de sincronizarlos. El servidor nunca ve tus datos en texto plano."
+    "encryptionInfo": "Todos los datos se cifran en tu dispositivo antes de sincronizarlos. El servidor nunca ve tus datos en texto plano.",
+    "infoCardText": "La sincronización requiere un servidor. Puedes usar el oficial o el tuyo.",
+    "infoCardLearnMore": "Saber más sobre la sincronización"
   },
   "errors": {
     "titleRequired": "El título es obligatorio",
