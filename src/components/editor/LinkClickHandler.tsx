@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { openExternal } from "../../lib/platform";
 
 interface LinkClickDialogProps {
   editor: Editor;
@@ -50,7 +51,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
 
   const handleOpenLink = () => {
     if (linkInfo?.url) {
-      window.open(linkInfo.url, "_blank", "noopener,noreferrer");
+      openExternal(linkInfo.url);
     }
     handleClose();
   };
