@@ -3,10 +3,13 @@ export type FontFamily = "serif" | "sans" | "mono";
 export type ExportFormat = "epub" | "pdf";
 export type Language = "en" | "es";
 
+export const DEFAULT_PRIMARY_COLOR = "#3B82F6";
+
 export interface Settings {
   // App UI settings
   appFontSize: FontSize;
   appFont: FontFamily;
+  primaryColor: string;
 
   // General settings
   autoSave: boolean;

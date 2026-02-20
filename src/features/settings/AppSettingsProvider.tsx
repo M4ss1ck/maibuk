@@ -9,14 +9,42 @@ const FONT_FAMILY_MAP: Record<FontFamily, string> = {
   mono: "var(--font-mono)",
 };
 
+function hexToRgb(hex: string) {
+  const normalized = hex.replace("#", "");
+  const safeHex = normalized.length === 3
+    ? normalized.split("").map((ch) => `${ch}${ch}`).join("")
+    : normalized;
+
+  const r = Number.parseInt(safeHex.slice(0, 2), 16);
+  const g = Number.parseInt(safeHex.slice(2, 4), 16);
+  const b = Number.parseInt(safeHex.slice(4, 6), 16);
+  return { r, g, b };
+}
+
+function rgbToHex(r: number, g: number, b: number) {
+  const clamp = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+  return `#${clamp(r).toString(16).padStart(2, "0")}${clamp(g).toString(16).padStart(2, "0")}${clamp(b).toString(16).padStart(2, "0")}`.toUpperCase();
+}
+
+function darken(hex: string, amount: number) {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
+}
+
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
-  const { appFontSize, appFont, language } = useSettingsStore();
+  const { appFontSize, appFont, primaryColor, language } = useSettingsStore();
 
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty("--app-font-size", `${appFontSize}px`);
     root.style.setProperty("--app-font-family", FONT_FAMILY_MAP[appFont]);
   }, [appFontSize, appFont]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--color-primary", primaryColor);
+    root.style.setProperty("--color-primary-hover", darken(primaryColor, 0.12));
+  }, [primaryColor]);
 
   useEffect(() => {
     // Ensure i18n language is synchronized with settings language
