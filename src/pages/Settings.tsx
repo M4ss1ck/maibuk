@@ -11,13 +11,15 @@ import {
   type ExportFormat,
   type Language,
 } from "../features/settings";
-import { Select, Switch, Button, Modal } from "../components/ui";
+import { Select, Switch, Button, Modal, Input } from "../components/ui";
 import { APP_VERSION, DOWNLOAD_PAGE } from "../constants";
 import { useVersionCheck } from "../features/version";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "../components/icons";
 import { exportDatabase, importDatabase, resetDatabase } from "../lib/db";
 import { getFileSystem, IS_TAURI, getDialog, getWebDialog } from "../lib/platform";
+import { useSyncStore } from "../features/sync/store";
+import { AuthDialog } from "../components/sync/AuthDialog";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -46,6 +48,9 @@ export function Settings() {
     setShowNotesChapter,
   } = useSettings();
 
+  const { apiUrl, setApiUrl, authStatus, userEmail, logout } = useSyncStore();
+  const [syncServerUrl, setSyncServerUrl] = useState(apiUrl);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [customDictionaryOpen, setCustomDictionaryOpen] = useState(false);
@@ -136,7 +141,7 @@ export function Settings() {
       <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h2>
 
       {/* Appearance Settings */}
-      <section className="mb-6 sm:mb-8">
+      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
         <h3 className="text-lg font-medium mb-4">{t("settings.appearance")}</h3>
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
@@ -202,7 +207,7 @@ export function Settings() {
       </section>
 
       {/* General Settings */}
-      <section className="mb-6 sm:mb-8">
+      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
         <h3 className="text-lg font-medium mb-4">{t("settings.general")}</h3>
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
@@ -231,8 +236,63 @@ export function Settings() {
         </div>
       </section>
 
+      {/* Sync Settings */}
+      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+        <h3 className="text-lg font-medium mb-4">{t("sync.title")}</h3>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex-1">
+              <p className="font-medium">{t("sync.serverUrl")}</p>
+              <p className="text-sm text-muted-foreground">{t("sync.serverUrlDescription")}</p>
+            </div>
+            <div className="w-full sm:w-56">
+              <Input
+                type="url"
+                value={syncServerUrl}
+                onChange={(e) => setSyncServerUrl(e.target.value)}
+                onBlur={() => {
+                  if (syncServerUrl !== apiUrl) {
+                    setApiUrl(syncServerUrl);
+                  }
+                }}
+                placeholder="https://sync.example.com"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div>
+              <p className="font-medium">{t("sync.accountStatus")}</p>
+              <p className="text-sm text-muted-foreground">
+                {authStatus === "logged-in" && userEmail
+                  ? t("sync.loggedInAs", { email: userEmail })
+                  : t("sync.notLoggedIn")}
+              </p>
+            </div>
+            {authStatus === "logged-in" ? (
+              <Button variant="secondary" size="sm" onClick={logout}>
+                {t("sync.logout")}
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" onClick={() => setShowAuthDialog(true)}>
+                {t("sync.login")}
+              </Button>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            {t("sync.encryptionInfo")}
+          </p>
+        </div>
+      </section>
+
+      <AuthDialog
+        isOpen={showAuthDialog}
+        onClose={() => setShowAuthDialog(false)}
+      />
+
       {/* Editor Settings */}
-      <section className="mb-6 sm:mb-8">
+      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
         <h3 className="text-lg font-medium mb-4">{t("settings.editor")}</h3>
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
@@ -299,7 +359,7 @@ export function Settings() {
       </section>
 
       {/* Export Settings */}
-      <section className="mb-6 sm:mb-8">
+      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
         <h3 className="text-lg font-medium mb-4">{t("settings.export")}</h3>
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
@@ -317,7 +377,7 @@ export function Settings() {
       </section>
 
       {/* Advanced Settings */}
-      <section className="mb-6 sm:mb-8">
+      <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
         <button
           onClick={() => setAdvancedOpen(!advancedOpen)}
           className="flex items-center justify-between w-full text-left"
@@ -435,7 +495,7 @@ export function Settings() {
       </Modal>
 
       {/* About */}
-      <section>
+      <section className="rounded-xl border border-border p-4 sm:p-5">
         <h3 className="text-lg font-medium mb-4">{t("settings.about")}</h3>
         <div className="text-sm text-muted-foreground">
           <p className="flex items-center gap-2">

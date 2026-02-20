@@ -87,6 +87,7 @@ src/
 │   │   └── extensions/  # Custom TipTap extensions
 │   ├── cover-editor/    # Fabric.js cover canvas and toolbar
 │   ├── export/          # Export dialogs and previews
+│   ├── sync/            # Sync status button, auth/passphrase dialogs, sync panel
 │   ├── project/         # Book card, new book dialog
 │   ├── book/            # Book settings dialog
 │   └── icons/           # Custom SVG icon components
@@ -96,6 +97,7 @@ src/
 │   ├── covers/          # types.ts
 │   ├── export/          # generators, sanitizers, styles, types
 │   ├── settings/        # store.ts, types.ts, AppSettingsProvider.tsx
+│   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts
 │   ├── theme/           # store.ts
 │   └── version/         # useVersionCheck.ts
 ├── hooks/               # Shared React hooks
@@ -209,6 +211,11 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `APP_VERSION` / `DOWNLOAD_PAGE` | `src/constants.ts` |
 | `detectSystemLocale()` | `src/i18n.ts` |
 | Font/size/language option arrays | `src/features/settings/types.ts` |
+| `encrypt()` / `decrypt()` / `computeChecksum()` | `src/features/sync/crypto.ts` |
+| `serializeBook()` / `applyBookSnapshot()` | `src/features/sync/serializer.ts` |
+| `syncBook()` / `syncAllBooks()` | `src/features/sync/sync-engine.ts` |
+| PocketBase client (`initClient`, `login`, etc.) | `src/features/sync/client.ts` |
+| `useSyncStore` | `src/features/sync/store.ts` |
 
 ---
 

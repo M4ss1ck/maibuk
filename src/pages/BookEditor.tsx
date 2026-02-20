@@ -14,6 +14,7 @@ import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { useSettingsStore } from "../features/settings/store";
 import { Menu, MoreVertical } from "lucide-react";
+import { SyncStatusButton } from "../components/sync/SyncStatusButton";
 
 export function BookEditor() {
   const { t } = useTranslation();
@@ -370,6 +371,9 @@ export function BookEditor() {
                 </button>
               )}
             </div>
+
+            {/* Sync */}
+            <SyncStatusButton />
 
             {/* Word count - hidden on mobile */}
             <div className="hidden sm:block text-sm text-muted-foreground">
