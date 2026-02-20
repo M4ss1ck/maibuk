@@ -143,7 +143,7 @@ export function Settings() {
 
         {/* Appearance Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg font-medium mb-4">{t("settings.appearance")}</h3>
+          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.appearance")}</h3>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
@@ -209,7 +209,7 @@ export function Settings() {
 
         {/* General Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg font-medium mb-4">{t("settings.general")}</h3>
+          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.general")}</h3>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
@@ -239,7 +239,7 @@ export function Settings() {
 
         {/* Sync Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg font-medium mb-4">{t("sync.title")}</h3>
+          <h3 className="text-lg text-primary font-medium mb-4">{t("sync.title")}</h3>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div className="flex-1">
@@ -294,7 +294,7 @@ export function Settings() {
 
         {/* Editor Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg font-medium mb-4">{t("settings.editor")}</h3>
+          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.editor")}</h3>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
@@ -361,7 +361,7 @@ export function Settings() {
 
         {/* Export Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg font-medium mb-4">{t("settings.export")}</h3>
+          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.export")}</h3>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
@@ -383,7 +383,7 @@ export function Settings() {
             onClick={() => setAdvancedOpen(!advancedOpen)}
             className="flex items-center justify-between w-full text-left"
           >
-            <h3 className="text-lg font-medium">{t("settings.advanced")}</h3>
+            <h3 className="text-lg text-destructive font-medium">{t("settings.advanced")}</h3>
             <ChevronDownIcon
               className={`w-5 h-5 text-muted-foreground transition-transform ${advancedOpen ? "rotate-180" : ""}`}
             />
@@ -497,7 +497,7 @@ export function Settings() {
 
         {/* About */}
         <section className="rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg font-medium mb-4">{t("settings.about")}</h3>
+          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.about")}</h3>
           <div className="text-sm text-muted-foreground">
             <p className="flex items-center gap-2">
               Maibuk {APP_VERSION}
