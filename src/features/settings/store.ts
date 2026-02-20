@@ -1,7 +1,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import i18n, { detectSystemLocale } from "../../i18n";
-import type { Settings, FontSize, FontFamily, ExportFormat, Language } from "./types";
+import {
+  DEFAULT_PRIMARY_COLOR,
+  type Settings,
+  type FontSize,
+  type FontFamily,
+  type ExportFormat,
+  type Language,
+} from "./types";
 
 const STORAGE_KEY = "maibuk-settings";
 
@@ -11,6 +18,7 @@ const isFirstLoad = !localStorage.getItem(STORAGE_KEY);
 interface SettingsStore extends Settings {
   setAppFontSize: (size: FontSize) => void;
   setAppFont: (font: FontFamily) => void;
+  setPrimaryColor: (color: string) => void;
   setAutoSave: (enabled: boolean) => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
   setLanguage: (language: Language) => void;
@@ -27,6 +35,7 @@ interface SettingsStore extends Settings {
 const defaultSettings: Settings = {
   appFontSize: 16,
   appFont: "sans",
+  primaryColor: DEFAULT_PRIMARY_COLOR,
   autoSave: true,
   language: (i18n.language as Language) || "en",
   spellCheckEnabled: true,
@@ -37,6 +46,18 @@ const defaultSettings: Settings = {
   defaultExportFormat: "epub",
 };
 
+function normalizeHexColor(color: string): string {
+  const normalized = color.trim().toUpperCase();
+  if (/^#[0-9A-F]{6}$/.test(normalized)) {
+    return normalized;
+  }
+  if (/^#[0-9A-F]{3}$/.test(normalized)) {
+    const [r, g, b] = normalized.slice(1);
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return DEFAULT_PRIMARY_COLOR;
+}
+
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
@@ -44,6 +65,7 @@ export const useSettingsStore = create<SettingsStore>()(
       lastPath: null,
       setAppFontSize: (appFontSize) => set({ appFontSize }),
       setAppFont: (appFont) => set({ appFont }),
+      setPrimaryColor: (primaryColor) => set({ primaryColor: normalizeHexColor(primaryColor) }),
       setAutoSave: (autoSave) => set({ autoSave }),
       setDefaultExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
       setLanguage: (language) => {

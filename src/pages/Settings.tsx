@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTheme } from "../features/theme";
 import {
   useSettings,
+  DEFAULT_PRIMARY_COLOR,
   FONT_SIZE_OPTIONS,
   FONT_OPTIONS,
   EXPORT_FORMAT_OPTIONS,
@@ -28,6 +29,7 @@ export function Settings() {
   const {
     appFontSize,
     appFont,
+    primaryColor,
     autoSave,
     language,
     defaultExportFormat,
@@ -38,6 +40,7 @@ export function Settings() {
     showNotesChapter,
     setAppFontSize,
     setAppFont,
+    setPrimaryColor,
     setAutoSave,
     setLanguage,
     setDefaultExportFormat,
@@ -203,6 +206,30 @@ export function Settings() {
                 onChange={setAppFont}
                 options={FONT_OPTIONS}
               />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.primaryColor")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.primaryColorDescription")}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  aria-label={t("settings.primaryColor")}
+                  className="h-9 w-12 p-1 rounded-lg border border-border bg-background cursor-pointer"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPrimaryColor(DEFAULT_PRIMARY_COLOR)}
+                  disabled={primaryColor === DEFAULT_PRIMARY_COLOR}
+                >
+                  {t("settings.resetPrimaryColor")}
+                </Button>
+              </div>
             </div>
           </div>
         </section>
