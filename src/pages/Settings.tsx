@@ -271,7 +271,7 @@ export function Settings() {
                 </p>
               </div>
               {authStatus === "logged-in" ? (
-                <Button variant="secondary" size="sm" onClick={logout}>
+                <Button variant="destructive" size="sm" onClick={logout}>
                   {t("sync.logout")}
                 </Button>
               ) : (
@@ -328,7 +328,7 @@ export function Settings() {
                   {t("settings.customDictionaryCount", { count: customDictionary.length })}
                 </p>
               </div>
-              <Button variant="secondary" size="sm" onClick={() => setCustomDictionaryOpen(true)}>
+              <Button variant="primary" size="sm" onClick={() => setCustomDictionaryOpen(true)}>
                 {t("settings.editCustomDictionary")}
               </Button>
             </div>
@@ -397,7 +397,7 @@ export function Settings() {
                   <p className="text-sm text-muted-foreground">{t("settings.exportDatabaseDescription")}</p>
                 </div>
                 <Button
-                  variant="secondary"
+                  variant="primary"
                   size="sm"
                   onClick={handleExportDatabase}
                   disabled={isExporting}
@@ -412,7 +412,7 @@ export function Settings() {
                   <p className="text-sm text-muted-foreground">{t("settings.importDatabaseDescription")}</p>
                 </div>
                 <Button
-                  variant="secondary"
+                  variant="primary"
                   size="sm"
                   onClick={handleImportDatabase}
                   disabled={isImporting}
@@ -467,7 +467,7 @@ export function Settings() {
           onClose={() => setCustomDictionaryOpen(false)}
           title={t("settings.customDictionaryTitle")}
           footer={
-            <Button variant="secondary" onClick={() => setCustomDictionaryOpen(false)}>
+            <Button variant="destructive" onClick={() => setCustomDictionaryOpen(false)}>
               {t("common.close")}
             </Button>
           }
