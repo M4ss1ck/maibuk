@@ -6,6 +6,7 @@ import { CoverDesigner } from "./pages/CoverDesigner";
 import { Settings } from "./pages/Settings";
 import { StartupRedirect } from "./components/StartupRedirect";
 import { PathTracker } from "./components/PathTracker";
+import { ToastViewport } from "./components/ui";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
         <Route path="book/:bookId" element={<BookEditor />} />
         <Route path="book/:bookId/cover" element={<CoverDesigner />} />
       </Routes>
+      <ToastViewport />
     </StartupRedirect>
   );
 }

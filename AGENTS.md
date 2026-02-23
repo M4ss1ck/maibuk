@@ -216,6 +216,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `syncBook()` / `syncAllBooks()` | `src/features/sync/sync-engine.ts` |
 | PocketBase client (`initClient`, `login`, etc.) | `src/features/sync/client.ts` |
 | `useSyncStore` | `src/features/sync/store.ts` |
+| `toast.success()` / `ToastViewport` | `src/components/ui/Toast.tsx` |
 
 ---
 

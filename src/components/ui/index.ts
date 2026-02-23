@@ -4,3 +4,4 @@ export { Input } from "./Input";
 export { Modal } from "./Modal";
 export { Select } from "./Select";
 export { Switch } from "./Switch";
+export { ToastViewport, toast } from "./Toast";

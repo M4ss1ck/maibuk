@@ -14,6 +14,7 @@ import {
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
+import { toast } from "../ui";
 import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
 
 interface ImageContextMenuProps {
@@ -136,6 +137,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
       await navigator.clipboard.write([
         new ClipboardItem({ [blob.type]: blob }),
       ]);
+      toast.success(t("common.copied"));
     } catch (err) {
       console.error("Failed to copy image:", err);
     }

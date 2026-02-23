@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { toast } from "../ui";
 import { openExternal } from "../../lib/platform";
 
 interface LinkClickDialogProps {
@@ -60,6 +61,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
     if (linkInfo?.url) {
       try {
         await navigator.clipboard.writeText(linkInfo.url);
+        toast.success(t("common.copied"));
       } catch (e) {
         console.error("Failed to copy link:", e);
       }
