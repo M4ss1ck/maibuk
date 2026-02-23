@@ -47,7 +47,13 @@ function createToastId(): string {
   return `toast_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function isFocusModeActive(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.querySelector(".focus-mode") !== null;
+}
+
 function showToast(input: ToastInput): void {
+  if (isFocusModeActive()) return;
   const id = createToastId();
   const toast: Toast = {
     id,
