@@ -4,3 +4,4 @@ export { FontSize } from "./FontSize";
 export { TextIndent } from "./TextIndent";
 export { Indent } from "./Indent";
 export { SpellCheck } from "./SpellCheck";
+export { CopyHandler } from "./CopyHandler";

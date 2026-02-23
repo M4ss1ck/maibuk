@@ -28,6 +28,7 @@ import { FontSize } from "./extensions/FontSize";
 import { LineHeight } from "./extensions/LineHeight";
 import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
+import { CopyHandler } from "./extensions/CopyHandler";
 import { SpellCheck } from "./extensions/SpellCheck";
 import { Footnote } from "./extensions/Footnote";
 import { useTranslation } from "react-i18next";
@@ -116,6 +117,7 @@ export function Editor({
       SceneBreak,
       Indent,
       PasteHandler,
+      CopyHandler,
       Footnote.configure({
         startIndex: footnoteStartIndex,
       }),
