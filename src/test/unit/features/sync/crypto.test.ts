@@ -8,7 +8,7 @@ import {
   getPassphrase,
   isSyncCryptoError,
   setPassphrase,
-} from "./crypto";
+} from "../../../../features/sync/crypto";
 
 describe("sync crypto", () => {
   it("encrypts and decrypts data with the same passphrase", async () => {
@@ -21,6 +21,38 @@ describe("sync crypto", () => {
     expect(encrypted).toBeInstanceOf(Uint8Array);
     expect(encrypted.length).toBeGreaterThan(0);
     expect(decrypted).toBe(plaintext);
+  });
+
+  it("returns a different payload every time because salt and IV are random", async () => {
+    const plaintext = "same text";
+    const passphrase = "same-passphrase";
+
+    const encryptedA = await encrypt(plaintext, passphrase);
+    const encryptedB = await encrypt(plaintext, passphrase);
+
+    expect(encryptedA).not.toEqual(encryptedB);
+  });
+
+  it("throws MISSING_PASSPHRASE when encrypting with an empty passphrase", async () => {
+    await expect(encrypt("data", "")).rejects.toSatisfy((error: unknown) => {
+      if (!isSyncCryptoError(error)) {
+        return false;
+      }
+
+      return error.code === "MISSING_PASSPHRASE";
+    });
+  });
+
+  it("throws MISSING_PASSPHRASE when decrypting with an empty passphrase", async () => {
+    const encrypted = await encrypt("secret", "passphrase-a");
+
+    await expect(decrypt(encrypted, "")).rejects.toSatisfy((error: unknown) => {
+      if (!isSyncCryptoError(error)) {
+        return false;
+      }
+
+      return error.code === "MISSING_PASSPHRASE";
+    });
   });
 
   it("throws INVALID_PAYLOAD for blobs that are too short", async () => {
@@ -51,6 +83,7 @@ describe("sync crypto", () => {
     expect(hash).toBe(
       "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
     );
+    expect(hash).toHaveLength(64);
   });
 
   it("stores and clears session passphrase", () => {

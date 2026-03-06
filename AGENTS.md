@@ -103,6 +103,7 @@ src/
 │   ├── theme/           # store.ts
 │   └── version/         # useVersionCheck.ts
 ├── hooks/               # Shared React hooks
+├── test/                # Test suites (unit/integration) + setup
 ├── lib/                 # Low-level infrastructure
 │   ├── db/              # Database init + schema
 │   └── platform/        # Cross-platform adapters (Tauri vs Web)
@@ -125,6 +126,7 @@ src/
 | New feature (store + types) | `src/features/<name>/` with `store.ts`, `types.ts`, `index.ts` |
 | Custom TipTap extension     | `src/components/editor/extensions/`                            |
 | Shared hook                 | `src/hooks/` (and re-export from `src/hooks/index.ts`)         |
+| Unit/Integration tests      | `src/test/unit/` and `src/test/integration/`                   |
 | Platform adapter            | `src/lib/platform/tauri/` and `src/lib/platform/web/`          |
 | Page component              | `src/pages/`                                                   |
 | Translation keys            | `src/locales/en.json` and `src/locales/es.json`                |
@@ -224,6 +226,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`           |
 | `useSyncStore`                                                     | `src/features/sync/store.ts`            |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`           |
+| `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`          |
 
 ---
 
@@ -259,18 +262,113 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 
 ## 6. Testing & Quality
 
-### Current State
+### Architecture
 
-Testing is configured with **Vitest + Testing Library + jsdom**.
+Testing is configured with **Vitest + Testing Library + jsdom**, following a **phased coverage expansion** pattern (inspired by the kaont project).
 
-- Test files: `src/**/*.test.ts` and `src/**/*.test.tsx`
+- Test files: `src/test/**/*.test.ts` and `src/test/**/*.test.tsx`
 - Test setup: `src/test/setup.ts`
+- Support helpers: `src/test/support/` (fixtures, factories)
 - Commands:
-  - `pnpm test` (watch mode)
-  - `pnpm test:run` (single run)
-  - `pnpm test:coverage` (coverage report)
+  - `pnpm test` (watch mode — TDD loop)
+  - `pnpm test:run` (single run — CI)
+  - `pnpm test:coverage` (coverage report with threshold enforcement)
 
-Use TDD by default:
+### Coverage Strategy
+
+Coverage uses a **targeted include list** in `vite.config.ts` — only files with actual tests are measured. Each phase of testing adds new files to the list and ratchets thresholds upward.
+
+**Current thresholds** (Phase 1 — pure logic):
+
+| Metric     | Threshold |
+| ---------- | --------- |
+| Lines      | 80%       |
+| Statements | 80%       |
+| Functions  | 90%       |
+| Branches   | 60%       |
+
+**How to expand coverage:**
+
+1. Write tests for a new file in `src/test/unit/` (or `src/test/integration/`)
+2. Add the source file path to `coverage.include` in `vite.config.ts`
+3. Verify thresholds still pass with `pnpm test:coverage`
+4. Ratchet thresholds upward if the new file pushes averages above current limits
+
+### Test Directory Structure
+
+```
+src/test/
+├── setup.ts                    # Global setup (jest-dom matchers)
+├── support/                    # Shared test helpers
+│   └── fixtures.ts             # buildBook(), buildChapter() factories
+└── unit/                       # Unit tests (mirror src/ structure)
+    ├── constants.test.ts
+    ├── i18n.test.ts
+    ├── components/
+    │   └── editor/
+    │       └── paste-handler.test.ts
+    └── features/
+        ├── covers/
+        │   └── cover-types.test.ts
+        ├── export/
+        │   ├── epub-generator.test.ts
+        │   ├── epub-styles.test.ts
+        │   ├── export-types.test.ts
+        │   ├── html-sanitizer.test.ts
+        │   ├── pdf-generator.test.ts
+        │   └── pdf-styles.test.ts
+        ├── settings/
+        │   ├── app-settings-helpers.test.ts
+        │   └── settings-types.test.ts
+        ├── sync/
+        │   └── crypto.test.ts
+        └── version/
+            └── compareVersions.test.ts
+```
+
+### Test Patterns
+
+**Pure function tests** (no mocks needed):
+
+```ts
+import { describe, expect, it } from "vitest";
+import { someFunction } from "../../../../features/module/file";
+
+describe("someFunction()", () => {
+  it("describes expected behavior", () => {
+    expect(someFunction(input)).toBe(expected);
+  });
+});
+```
+
+**Tests with platform mocks** (vi.hoisted + vi.mock):
+
+```ts
+const { mockFn } = vi.hoisted(() => ({ mockFn: vi.fn() }));
+vi.mock("../../lib/platform", () => ({ getOS: mockFn }));
+```
+
+**Test fixtures** (shared factories in `src/test/support/fixtures.ts`):
+
+```ts
+import { buildBook, buildChapter } from "../../../support/fixtures";
+
+const book = buildBook({ title: "Custom Title" });
+const chapter = buildChapter({ content: "<p>Hello</p>" });
+```
+
+**Testing unexported helpers** — when a function is private (e.g., `hexToRgb`, `compareVersions`), replicate the logic in the test file and add a comment noting to switch to direct import if the function is ever exported.
+
+### Phased Rollout Plan
+
+| Phase                  | Scope                                                                                                                  | Status              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **1 — Pure logic**     | Export generators, styles, crypto, i18n, constants, cover/settings types, paste-handler transforms, version comparison | ✅ Done (127 tests) |
+| **2 — Stores + hooks** | Zustand stores (mocked DB), useAutoSave, useVersionCheck, useSyncFlow                                                  | Planned             |
+| **3 — UI components**  | UI primitives (Button, Modal, Input, etc.) + editor smoke tests                                                        | Planned             |
+| **4 — Integration**    | Page rendering, routing, StartupRedirect, theme toggling                                                               | Planned             |
+
+### TDD Workflow
 
 1. Write a failing test
 2. Implement the minimum code to pass

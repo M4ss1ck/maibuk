@@ -26,8 +26,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
-        run: pnpm test:run
+      - name: Run tests with coverage gates
+        run: pnpm test:coverage
 
       - name: Build web target
         run: pnpm build:web

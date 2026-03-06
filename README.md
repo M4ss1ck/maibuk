@@ -89,7 +89,12 @@ pnpm test:run
 pnpm test:coverage
 ```
 
-CI and release pipelines run the test suite before build/release jobs.
+Test organization (to keep features uncluttered):
+
+- Unit tests: `src/test/unit/**/*.test.ts`
+- Integration tests: `src/test/integration/**/*.test.ts`
+
+CI and release pipelines enforce coverage thresholds before build/release jobs.
 
 ## Project Structure
 

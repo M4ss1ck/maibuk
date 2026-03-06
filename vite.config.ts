@@ -21,10 +21,31 @@ export default defineConfig(() => ({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    include: ["src/test/**/*.test.ts", "src/test/**/*.test.tsx"],
     coverage: {
       provider: "v8" as const,
-      reporter: ["text", "html"] as ("text" | "html")[],
+      reporter: ["text", "html", "lcov"] as ("text" | "html" | "lcov")[],
+      include: [
+        // Phase 1: Pure logic (export pipeline, crypto, i18n, constants)
+        "src/features/export/html-sanitizer.ts",
+        "src/features/export/pdf-generator.ts",
+        "src/features/export/pdf-styles.ts",
+        "src/features/export/epub-styles.ts",
+        "src/features/export/epub-generator.ts",
+        "src/features/sync/crypto.ts",
+        "src/i18n.ts",
+        "src/constants.ts",
+        // Phase 2+: Stores, hooks, components (add files here as tests grow)
+      ],
+      exclude: [
+        "src/**/*.d.ts",
+      ],
+      thresholds: {
+        lines: 80,
+        functions: 90,
+        statements: 80,
+        branches: 60,
+      },
     },
   },
 
