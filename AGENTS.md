@@ -227,6 +227,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useSyncStore`                                                     | `src/features/sync/store.ts`            |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`           |
 | `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`          |
+| `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`   |
 
 ---
 
@@ -300,14 +301,21 @@ Coverage uses a **targeted include list** in `vite.config.ts` — only files wit
 src/test/
 ├── setup.ts                    # Global setup (jest-dom matchers)
 ├── support/                    # Shared test helpers
-│   └── fixtures.ts             # buildBook(), buildChapter() factories
+│   ├── fixtures.ts             # buildBook(), buildChapter() factories
+│   └── db-test-context.ts      # In-memory sql.js DatabaseAdapter for store tests
 └── unit/                       # Unit tests (mirror src/ structure)
     ├── constants.test.ts
     ├── i18n.test.ts
     ├── components/
     │   └── editor/
     │       └── paste-handler.test.ts
+    ├── hooks/
+    │   └── useAutoSave.test.ts
     └── features/
+        ├── books/
+        │   └── book-store.test.ts
+        ├── chapters/
+        │   └── chapter-store.test.ts
         ├── covers/
         │   └── cover-types.test.ts
         ├── export/
@@ -319,11 +327,16 @@ src/test/
         │   └── pdf-styles.test.ts
         ├── settings/
         │   ├── app-settings-helpers.test.ts
+        │   ├── settings-store.test.ts
         │   └── settings-types.test.ts
         ├── sync/
-        │   └── crypto.test.ts
+        │   ├── crypto.test.ts
+        │   └── sync-store.test.ts
+        ├── theme/
+        │   └── theme-store.test.ts
         └── version/
-            └── compareVersions.test.ts
+            ├── compareVersions.test.ts
+            └── useVersionCheck.test.ts
 ```
 
 ### Test Patterns
@@ -357,6 +370,46 @@ const book = buildBook({ title: "Custom Title" });
 const chapter = buildChapter({ content: "<p>Hello</p>" });
 ```
 
+**DB-backed store tests** (in-memory sql.js + vi.mock):
+
+```ts
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { DatabaseAdapter } from "../../../../lib/platform/types";
+import { createTestDatabase } from "../../../support/db-test-context";
+
+let testDb: DatabaseAdapter;
+const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
+vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
+const { useBookStore } = await import("../../../../features/books/store");
+
+beforeEach(async () => {
+  testDb = await createTestDatabase();
+  mockGetDatabase.mockResolvedValue(testDb);
+  useBookStore.setState({
+    books: [],
+    currentBook: null,
+    isLoading: false,
+    error: null,
+  });
+});
+```
+
+**Hook tests** (renderHook + fake timers):
+
+```ts
+import { renderHook, act } from "@testing-library/react";
+import { vi } from "vitest";
+
+vi.useFakeTimers();
+const { result } = renderHook(() => useDebouncedCallback(callback, 300));
+act(() => {
+  result.current("arg");
+});
+act(() => {
+  vi.advanceTimersByTime(300);
+});
+```
+
 **Testing unexported helpers** — when a function is private (e.g., `hexToRgb`, `compareVersions`), replicate the logic in the test file and add a comment noting to switch to direct import if the function is ever exported.
 
 ### Phased Rollout Plan
@@ -364,7 +417,7 @@ const chapter = buildChapter({ content: "<p>Hello</p>" });
 | Phase                  | Scope                                                                                                                  | Status              |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- |
 | **1 — Pure logic**     | Export generators, styles, crypto, i18n, constants, cover/settings types, paste-handler transforms, version comparison | ✅ Done (127 tests) |
-| **2 — Stores + hooks** | Zustand stores (mocked DB), useAutoSave, useVersionCheck, useSyncFlow                                                  | Planned             |
+| **2 — Stores + hooks** | Zustand stores (in-memory sql.js DB), useAutoSave, useVersionCheck, useSettingsStore, useThemeStore, useSyncStore      | ✅ Done (231 tests) |
 | **3 — UI components**  | UI primitives (Button, Modal, Input, etc.) + editor smoke tests                                                        | Planned             |
 | **4 — Integration**    | Page rendering, routing, StartupRedirect, theme toggling                                                               | Planned             |
 

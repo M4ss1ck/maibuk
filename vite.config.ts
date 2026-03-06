@@ -35,7 +35,14 @@ export default defineConfig(() => ({
         "src/features/sync/crypto.ts",
         "src/i18n.ts",
         "src/constants.ts",
-        // Phase 2+: Stores, hooks, components (add files here as tests grow)
+        // Phase 2: Stores + hooks
+        "src/features/books/store.ts",
+        "src/features/chapters/store.ts",
+        "src/features/settings/store.ts",
+        "src/features/theme/store.ts",
+        "src/features/sync/store.ts",
+        "src/hooks/useAutoSave.ts",
+        "src/features/version/useVersionCheck.ts",
       ],
       exclude: [
         "src/**/*.d.ts",
