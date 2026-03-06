@@ -1,0 +1,279 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Mock all sync module dependencies before importing the store
+const {
+  mockInitClient,
+  mockRestoreAuth,
+  mockPbLogin,
+  mockPbRegister,
+  mockPbLoginWithOAuth,
+  mockPbLogout,
+  mockIsAuthenticated,
+  mockClearPassphrase,
+  mockSyncAllBooks,
+  mockSyncBook,
+} = vi.hoisted(() => ({
+  mockInitClient: vi.fn(),
+  mockRestoreAuth: vi.fn(),
+  mockPbLogin: vi.fn(),
+  mockPbRegister: vi.fn(),
+  mockPbLoginWithOAuth: vi.fn(),
+  mockPbLogout: vi.fn(),
+  mockIsAuthenticated: vi.fn(() => true),
+  mockClearPassphrase: vi.fn(),
+  mockSyncAllBooks: vi.fn(),
+  mockSyncBook: vi.fn(),
+}));
+
+vi.mock("../../../../features/sync/client", () => ({
+  initClient: mockInitClient,
+  restoreAuth: mockRestoreAuth,
+  login: mockPbLogin,
+  register: mockPbRegister,
+  loginWithOAuth: mockPbLoginWithOAuth,
+  logout: mockPbLogout,
+  isAuthenticated: mockIsAuthenticated,
+}));
+
+vi.mock("../../../../features/sync/crypto", () => ({
+  clearPassphrase: mockClearPassphrase,
+}));
+
+vi.mock("../../../../features/sync/sync-engine", () => ({
+  syncAllBooks: mockSyncAllBooks,
+  syncBook: mockSyncBook,
+}));
+
+const { useSyncStore } = await import("../../../../features/sync/store");
+
+function resetSyncStore() {
+  useSyncStore.setState({
+    authStatus: "logged-out",
+    userEmail: null,
+    authToken: null,
+    syncStatus: "idle",
+    lastSyncedAt: null,
+    syncError: null,
+    apiUrl: "",
+    bookSyncMeta: {},
+  });
+}
+
+describe("useSyncStore", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    resetSyncStore();
+  });
+
+  describe("initial state", () => {
+    it("starts logged out with idle status", () => {
+      const state = useSyncStore.getState();
+      expect(state.authStatus).toBe("logged-out");
+      expect(state.userEmail).toBeNull();
+      expect(state.authToken).toBeNull();
+      expect(state.syncStatus).toBe("idle");
+      expect(state.lastSyncedAt).toBeNull();
+      expect(state.syncError).toBeNull();
+      expect(state.apiUrl).toBe("");
+      expect(state.bookSyncMeta).toEqual({});
+    });
+  });
+
+  describe("setApiUrl()", () => {
+    it("sets URL and initializes client", () => {
+      useSyncStore.getState().setApiUrl("https://sync.example.com");
+
+      expect(useSyncStore.getState().apiUrl).toBe("https://sync.example.com");
+      expect(mockInitClient).toHaveBeenCalledWith("https://sync.example.com");
+    });
+  });
+
+  describe("login()", () => {
+    it("sets auth state on successful login", async () => {
+      mockPbLogin.mockResolvedValue({
+        email: "user@test.com",
+        token: "jwt-token-123",
+      });
+
+      await useSyncStore.getState().login("user@test.com", "password");
+
+      const state = useSyncStore.getState();
+      expect(state.authStatus).toBe("logged-in");
+      expect(state.userEmail).toBe("user@test.com");
+      expect(state.authToken).toBe("jwt-token-123");
+    });
+
+    it("propagates login errors", async () => {
+      mockPbLogin.mockRejectedValue(new Error("Invalid credentials"));
+
+      await expect(
+        useSyncStore.getState().login("bad@test.com", "wrong")
+      ).rejects.toThrow("Invalid credentials");
+    });
+  });
+
+  describe("register()", () => {
+    it("sets auth state on successful registration", async () => {
+      mockPbRegister.mockResolvedValue({
+        email: "new@test.com",
+        token: "new-token",
+      });
+
+      await useSyncStore.getState().register("new@test.com", "password");
+
+      expect(useSyncStore.getState().authStatus).toBe("logged-in");
+      expect(useSyncStore.getState().userEmail).toBe("new@test.com");
+    });
+  });
+
+  describe("loginWithOAuth()", () => {
+    it("sets auth state after OAuth flow", async () => {
+      mockPbLoginWithOAuth.mockResolvedValue({
+        email: "oauth@test.com",
+        token: "oauth-token",
+      });
+
+      await useSyncStore.getState().loginWithOAuth("google");
+
+      expect(useSyncStore.getState().authStatus).toBe("logged-in");
+      expect(useSyncStore.getState().userEmail).toBe("oauth@test.com");
+      expect(mockPbLoginWithOAuth).toHaveBeenCalledWith("google");
+    });
+  });
+
+  describe("logout()", () => {
+    it("clears auth state and calls cleanup functions", () => {
+      // Start in a logged-in state
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        userEmail: "user@test.com",
+        authToken: "token",
+        syncStatus: "success",
+        bookSyncMeta: {
+          "book-1": {
+            remoteId: "r1",
+            bookId: "book-1",
+            checksum: "abc",
+            updatedAt: 100,
+          },
+        },
+      });
+
+      useSyncStore.getState().logout();
+
+      const state = useSyncStore.getState();
+      expect(state.authStatus).toBe("logged-out");
+      expect(state.userEmail).toBeNull();
+      expect(state.authToken).toBeNull();
+      expect(state.syncStatus).toBe("idle");
+      expect(state.syncError).toBeNull();
+      expect(state.bookSyncMeta).toEqual({});
+
+      expect(mockPbLogout).toHaveBeenCalled();
+      expect(mockClearPassphrase).toHaveBeenCalled();
+    });
+  });
+
+  describe("syncAll()", () => {
+    it("calls syncAllBooks and sets success status", async () => {
+      mockSyncAllBooks.mockResolvedValue(undefined);
+
+      await useSyncStore.getState().syncAll("my-passphrase");
+
+      expect(mockSyncAllBooks).toHaveBeenCalledWith("my-passphrase");
+      expect(useSyncStore.getState().syncStatus).toBe("success");
+      expect(useSyncStore.getState().lastSyncedAt).toBeDefined();
+      expect(useSyncStore.getState().lastSyncedAt).toBeGreaterThan(0);
+    });
+
+    it("sets error status on failure and rethrows", async () => {
+      mockSyncAllBooks.mockRejectedValue(new Error("Network error"));
+
+      await expect(
+        useSyncStore.getState().syncAll("passphrase")
+      ).rejects.toThrow("Network error");
+
+      expect(useSyncStore.getState().syncStatus).toBe("error");
+      expect(useSyncStore.getState().syncError).toBe("Network error");
+    });
+
+    it("sets syncing status during operation", async () => {
+      let capturedStatus: string | undefined;
+      mockSyncAllBooks.mockImplementation(async () => {
+        capturedStatus = useSyncStore.getState().syncStatus;
+      });
+
+      await useSyncStore.getState().syncAll("passphrase");
+
+      expect(capturedStatus).toBe("syncing");
+    });
+  });
+
+  describe("syncSingleBook()", () => {
+    it("calls syncBook and sets success status", async () => {
+      mockSyncBook.mockResolvedValue(undefined);
+
+      await useSyncStore.getState().syncSingleBook("book-1", "passphrase");
+
+      expect(mockSyncBook).toHaveBeenCalledWith("book-1", "passphrase");
+      expect(useSyncStore.getState().syncStatus).toBe("success");
+    });
+
+    it("sets error status on failure", async () => {
+      mockSyncBook.mockRejectedValue(new Error("Sync failed"));
+
+      await expect(
+        useSyncStore.getState().syncSingleBook("book-1", "passphrase")
+      ).rejects.toThrow("Sync failed");
+
+      expect(useSyncStore.getState().syncStatus).toBe("error");
+      expect(useSyncStore.getState().syncError).toBe("Sync failed");
+    });
+
+    it("handles non-Error rejections gracefully", async () => {
+      mockSyncBook.mockRejectedValue("string error");
+
+      await expect(
+        useSyncStore.getState().syncSingleBook("book-1", "passphrase")
+      ).rejects.toBe("string error");
+
+      expect(useSyncStore.getState().syncError).toBe("Sync failed");
+    });
+  });
+
+  describe("updateBookMeta()", () => {
+    it("adds sync meta for a book", () => {
+      const meta = {
+        remoteId: "remote-1",
+        bookId: "book-1",
+        checksum: "abc123",
+        updatedAt: 1700000000,
+      };
+
+      useSyncStore.getState().updateBookMeta("book-1", meta);
+
+      expect(useSyncStore.getState().bookSyncMeta["book-1"]).toEqual(meta);
+    });
+
+    it("updates existing book meta", () => {
+      useSyncStore.getState().updateBookMeta("book-1", {
+        remoteId: "r1",
+        bookId: "book-1",
+        checksum: "old",
+        updatedAt: 100,
+      });
+
+      useSyncStore.getState().updateBookMeta("book-1", {
+        remoteId: "r1",
+        bookId: "book-1",
+        checksum: "new",
+        updatedAt: 200,
+      });
+
+      expect(useSyncStore.getState().bookSyncMeta["book-1"].checksum).toBe(
+        "new"
+      );
+    });
+  });
+});

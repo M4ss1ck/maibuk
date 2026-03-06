@@ -1,3 +1,5 @@
+/// <reference types="vitest/config" />
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -8,13 +10,65 @@ const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
 const isWeb = buildTarget === "web";
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(() => ({
   plugins: [react(), tailwindcss()],
   worker: {
     format: "es" as const,
   },
   define: {
     __APP_VERSION__: JSON.stringify(`v${version}`),
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/test/**/*.test.ts", "src/test/**/*.test.tsx"],
+    coverage: {
+      provider: "v8" as const,
+      reporter: ["text", "html", "lcov"] as ("text" | "html" | "lcov")[],
+      include: [
+        // Phase 1: Pure logic (export pipeline, crypto, i18n, constants)
+        "src/features/export/html-sanitizer.ts",
+        "src/features/export/pdf-generator.ts",
+        "src/features/export/pdf-styles.ts",
+        "src/features/export/epub-styles.ts",
+        "src/features/export/epub-generator.ts",
+        "src/features/sync/crypto.ts",
+        "src/i18n.ts",
+        "src/constants.ts",
+        // Phase 2: Stores + hooks
+        "src/features/books/store.ts",
+        "src/features/chapters/store.ts",
+        "src/features/settings/store.ts",
+        "src/features/theme/store.ts",
+        "src/features/sync/store.ts",
+        "src/hooks/useAutoSave.ts",
+        "src/features/version/useVersionCheck.ts",
+        // Phase 3: UI components
+        "src/components/ui/Button.tsx",
+        "src/components/ui/Input.tsx",
+        "src/components/ui/Modal.tsx",
+        "src/components/ui/Select.tsx",
+        "src/components/ui/Switch.tsx",
+        "src/components/ui/Toast.tsx",
+        "src/components/ui/Combobox.tsx",
+        // Phase 4: Integration (routing, providers, layout)
+        "src/components/LoadingScreen.tsx",
+        "src/components/PathTracker.tsx",
+        "src/components/ThemeProvider.tsx",
+        "src/components/ThemeToggle.tsx",
+        "src/components/StartupRedirect.tsx",
+        "src/components/Layout.tsx",
+      ],
+      exclude: [
+        "src/**/*.d.ts",
+      ],
+      thresholds: {
+        lines: 80,
+        functions: 90,
+        statements: 80,
+        branches: 60,
+      },
+    },
   },
 
   // Use relative paths for web builds (static hosting)

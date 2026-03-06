@@ -13,13 +13,17 @@
 2. **Write a concrete plan**
    - Break work into small, verifiable tasks (prefer 2-10 minute chunks).
    - Include affected files and validation steps.
-3. **Execute in small increments**
+3. **Apply TDD by default**
+   - Add or update a failing test first when behavior changes.
+   - Implement the smallest code change to make tests pass.
+   - Refactor only after tests are green.
+4. **Execute in small increments**
    - Implement one task at a time.
    - Keep edits minimal and focused.
-4. **Verify before completion**
+5. **Verify before completion**
    - Run project checks relevant to the change.
    - Confirm behavior with concrete evidence.
-5. **Review and report**
+6. **Review and report**
    - Summarize what changed, what was validated, and any risks/follow-ups.
 
 ## Maibuk-specific non-negotiables

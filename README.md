@@ -47,6 +47,9 @@ pnpm install
 
 # Run in development mode
 pnpm tauri dev
+
+# Run tests in watch mode
+pnpm test
 ```
 
 #### Building
@@ -64,6 +67,34 @@ pnpm build:android
 # Build web version
 pnpm build:web
 ```
+
+## Testing (TDD)
+
+This project now uses **Vitest + Testing Library** and follows a **test-driven development workflow**:
+
+1. Write a failing test first
+2. Implement the smallest change to make it pass
+3. Refactor while keeping tests green
+
+Commands:
+
+```bash
+# Watch mode (local TDD loop)
+pnpm test
+
+# Single run (CI/release)
+pnpm test:run
+
+# Coverage report
+pnpm test:coverage
+```
+
+Test organization (to keep features uncluttered):
+
+- Unit tests: `src/test/unit/**/*.test.ts`
+- Integration tests: `src/test/integration/**/*.test.ts`
+
+CI and release pipelines enforce coverage thresholds before build/release jobs.
 
 ## Project Structure
 

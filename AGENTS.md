@@ -6,21 +6,21 @@
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| UI Framework | React 19 + TypeScript 5.8 |
-| Bundler | Vite 7 |
-| Native Shell | Tauri 2.0 (Rust) |
-| Styling | Tailwind CSS 4 + CSS custom properties |
-| State | Zustand 5 (with `persist` middleware for settings/theme) |
-| Routing | React Router v7 (`react-router-dom`) |
-| Rich Text Editor | TipTap 3.15 |
-| Cover Designer | Fabric.js 7 |
-| Database | SQLite (Tauri plugin) / sql.js (web) via Drizzle ORM schema |
-| i18n | i18next + react-i18next (English, Spanish) |
-| Icons | Lucide React + custom SVGs in `src/components/icons/` |
-| Accessible UI | Headless UI 2.2 |
-| Package Manager | pnpm 10 |
+| Layer            | Technology                                                  |
+| ---------------- | ----------------------------------------------------------- |
+| UI Framework     | React 19 + TypeScript 5.8                                   |
+| Bundler          | Vite 7                                                      |
+| Native Shell     | Tauri 2.0 (Rust)                                            |
+| Styling          | Tailwind CSS 4 + CSS custom properties                      |
+| State            | Zustand 5 (with `persist` middleware for settings/theme)    |
+| Routing          | React Router v7 (`react-router-dom`)                        |
+| Rich Text Editor | TipTap 3.15                                                 |
+| Cover Designer   | Fabric.js 7                                                 |
+| Database         | SQLite (Tauri plugin) / sql.js (web) via Drizzle ORM schema |
+| i18n             | i18next + react-i18next (English, Spanish)                  |
+| Icons            | Lucide React + custom SVGs in `src/components/icons/`       |
+| Accessible UI    | Headless UI 2.2                                             |
+| Package Manager  | pnpm 10                                                     |
 
 ### Entry Points
 
@@ -30,12 +30,12 @@
 
 ### Routes
 
-| Path | Component | Layout |
-|------|-----------|--------|
-| `/` | `Home` | Sidebar layout (`Layout`) |
-| `/settings` | `Settings` | Sidebar layout (`Layout`) |
-| `/book/:bookId` | `BookEditor` | Full-page (no sidebar) |
-| `/book/:bookId/cover` | `CoverDesigner` | Full-page (no sidebar) |
+| Path                  | Component       | Layout                    |
+| --------------------- | --------------- | ------------------------- |
+| `/`                   | `Home`          | Sidebar layout (`Layout`) |
+| `/settings`           | `Settings`      | Sidebar layout (`Layout`) |
+| `/book/:bookId`       | `BookEditor`    | Full-page (no sidebar)    |
+| `/book/:bookId/cover` | `CoverDesigner` | Full-page (no sidebar)    |
 
 ---
 
@@ -44,6 +44,7 @@
 ### DRY — Search Before Creating
 
 Before writing any new utility, hook, component, or helper:
+
 1. Search `src/hooks/` for existing hooks (`useAutoSave`, `useDebouncedCallback`)
 2. Search `src/components/ui/` for existing UI components (`Button`, `Modal`, `Input`, `Select`, `Combobox`, `Switch`)
 3. Search `src/lib/platform/` for platform abstractions (`DatabaseAdapter`, `FileSystemAdapter`, `DialogAdapter`, `OSAdapter`)
@@ -55,6 +56,7 @@ Before writing any new utility, hook, component, or helper:
 ### Reusable Components First
 
 If logic is used in more than one place, extract it:
+
 - UI primitives → `src/components/ui/`
 - React hooks → `src/hooks/`
 - Platform operations → `src/lib/platform/`
@@ -101,6 +103,7 @@ src/
 │   ├── theme/           # store.ts
 │   └── version/         # useVersionCheck.ts
 ├── hooks/               # Shared React hooks
+├── test/                # Test suites (unit/integration) + setup
 ├── lib/                 # Low-level infrastructure
 │   ├── db/              # Database init + schema
 │   └── platform/        # Cross-platform adapters (Tauri vs Web)
@@ -116,16 +119,17 @@ src/
 
 ### Where New Files Go
 
-| File type | Location |
-|-----------|----------|
-| Reusable UI component | `src/components/ui/` |
-| Feature-specific component | `src/components/<feature>/` |
+| File type                   | Location                                                       |
+| --------------------------- | -------------------------------------------------------------- |
+| Reusable UI component       | `src/components/ui/`                                           |
+| Feature-specific component  | `src/components/<feature>/`                                    |
 | New feature (store + types) | `src/features/<name>/` with `store.ts`, `types.ts`, `index.ts` |
-| Custom TipTap extension | `src/components/editor/extensions/` |
-| Shared hook | `src/hooks/` (and re-export from `src/hooks/index.ts`) |
-| Platform adapter | `src/lib/platform/tauri/` and `src/lib/platform/web/` |
-| Page component | `src/pages/` |
-| Translation keys | `src/locales/en.json` and `src/locales/es.json` |
+| Custom TipTap extension     | `src/components/editor/extensions/`                            |
+| Shared hook                 | `src/hooks/` (and re-export from `src/hooks/index.ts`)         |
+| Unit/Integration tests      | `src/test/unit/` and `src/test/integration/`                   |
+| Platform adapter            | `src/lib/platform/tauri/` and `src/lib/platform/web/`          |
+| Page component              | `src/pages/`                                                   |
+| Translation keys            | `src/locales/en.json` and `src/locales/es.json`                |
 
 ### Naming Conventions
 
@@ -140,6 +144,7 @@ src/
 ### Import Conventions
 
 Imports follow this order (observed from existing code):
+
 1. React / React DOM
 2. Third-party libraries (`zustand`, `react-router-dom`, `@tiptap/*`, `@headlessui/react`, `lucide-react`)
 3. Internal absolute paths — features, lib, hooks
@@ -161,17 +166,20 @@ There are **no path aliases** configured. All imports use relative paths (`../..
 ### Component Patterns
 
 **Functional components with named exports** (no default exports for components):
+
 ```tsx
 export function MyComponent({ prop }: MyComponentProps) { ... }
 ```
 
 **Exception**: `forwardRef` components use `const` + named export:
+
 ```tsx
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(...)
 Button.displayName = "Button";
 ```
 
 **Dialog/Modal pattern** (uses Headless UI):
+
 ```tsx
 <Dialog open={isOpen} onClose={onClose}>
   <DialogBackdrop />
@@ -189,6 +197,7 @@ Button.displayName = "Button";
 ### Zustand Store Pattern
 
 Every store follows this structure (see `src/features/books/store.ts`):
+
 1. Private `generateId()` using `crypto.randomUUID()`
 2. Private `toModel(row)` mapper from DB row to TypeScript interface
 3. Interface declaring state + actions
@@ -198,25 +207,27 @@ Every store follows this structure (see `src/features/books/store.ts`):
 
 ### Existing Shared Utilities — CHECK BEFORE WRITING NEW ONES
 
-| What | Where |
-|------|-------|
-| `useAutoSave(callback, delay)` | `src/hooks/useAutoSave.ts` |
-| `useDebouncedCallback(callback, delay)` | `src/hooks/useAutoSave.ts` |
-| `getDatabase()` | `src/lib/db/index.ts` |
-| `exportDatabase()` / `importDatabase()` / `resetDatabase()` | `src/lib/db/index.ts` |
-| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts` |
-| `IS_WEB` / `IS_TAURI` | `src/lib/platform/index.ts` |
-| `processChapterHtml()` / `sanitizeHtmlForEpub()` | `src/features/export/html-sanitizer.ts` |
-| `generateEpub()` / `generatePdfHtml()` | `src/features/export/` |
-| `APP_VERSION` / `DOWNLOAD_PAGE` | `src/constants.ts` |
-| `detectSystemLocale()` | `src/i18n.ts` |
-| Font/size/language option arrays | `src/features/settings/types.ts` |
-| `encrypt()` / `decrypt()` / `computeChecksum()` | `src/features/sync/crypto.ts` |
-| `serializeBook()` / `applyBookSnapshot()` | `src/features/sync/serializer.ts` |
-| `syncBook()` / `syncAllBooks()` | `src/features/sync/sync-engine.ts` |
-| PocketBase client (`initClient`, `login`, etc.) | `src/features/sync/client.ts` |
-| `useSyncStore` | `src/features/sync/store.ts` |
-| `toast.success()` / `ToastViewport` | `src/components/ui/Toast.tsx` |
+| What                                                               | Where                                   |
+| ------------------------------------------------------------------ | --------------------------------------- |
+| `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`              |
+| `useDebouncedCallback(callback, delay)`                            | `src/hooks/useAutoSave.ts`              |
+| `getDatabase()`                                                    | `src/lib/db/index.ts`                   |
+| `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                   |
+| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`             |
+| `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`             |
+| `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts` |
+| `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                  |
+| `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                      |
+| `detectSystemLocale()`                                             | `src/i18n.ts`                           |
+| Font/size/language option arrays                                   | `src/features/settings/types.ts`        |
+| `encrypt()` / `decrypt()` / `computeChecksum()`                    | `src/features/sync/crypto.ts`           |
+| `serializeBook()` / `applyBookSnapshot()`                          | `src/features/sync/serializer.ts`       |
+| `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`      |
+| PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`           |
+| `useSyncStore`                                                     | `src/features/sync/store.ts`            |
+| `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`           |
+| `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`          |
+| `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`   |
 
 ---
 
@@ -228,16 +239,16 @@ All styling uses Tailwind utility classes inline. There are **no separate CSS fi
 
 Design tokens are defined as CSS custom properties in `src/index.css` under `@theme`:
 
-| Token | Light | Dark | Usage |
-|-------|-------|------|-------|
-| `--color-primary` | `#3b82f6` | `#60a5fa` | `bg-primary`, `text-primary` |
-| `--color-background` | `#fafaf9` | `#1c1917` | `bg-background` |
-| `--color-foreground` | `#1c1917` | `#fafaf9` | `text-foreground` |
-| `--color-muted` | `#7a6f63` | `#44403c` | `bg-muted` |
-| `--color-border` | `#e7e5e4` | `#292524` | `border-border` |
-| `--color-card` | `#ffffff` | `#292524` | `bg-card` |
-| `--color-destructive` | `#ef4444` | `#f87171` | `bg-destructive` |
-| `--color-success` | `#22c55e` | `#4ade80` | `text-success` |
+| Token                 | Light     | Dark      | Usage                        |
+| --------------------- | --------- | --------- | ---------------------------- |
+| `--color-primary`     | `#3b82f6` | `#60a5fa` | `bg-primary`, `text-primary` |
+| `--color-background`  | `#fafaf9` | `#1c1917` | `bg-background`              |
+| `--color-foreground`  | `#1c1917` | `#fafaf9` | `text-foreground`            |
+| `--color-muted`       | `#7a6f63` | `#44403c` | `bg-muted`                   |
+| `--color-border`      | `#e7e5e4` | `#292524` | `border-border`              |
+| `--color-card`        | `#ffffff` | `#292524` | `bg-card`                    |
+| `--color-destructive` | `#ef4444` | `#f87171` | `bg-destructive`             |
+| `--color-success`     | `#22c55e` | `#4ade80` | `text-success`               |
 
 ### Rules
 
@@ -252,11 +263,184 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 
 ## 6. Testing & Quality
 
-### Current State
+### Architecture
 
-There is **no testing framework configured** (no vitest, jest, or testing-library). No test files exist.
+Testing is configured with **Vitest + Testing Library + jsdom**, following a **phased coverage expansion** pattern (inspired by the kaont project).
 
-If adding tests in the future, follow the conventions for Vite + React projects (vitest + @testing-library/react would be the natural fit).
+- Test files: `src/test/**/*.test.ts` and `src/test/**/*.test.tsx`
+- Test setup: `src/test/setup.ts`
+- Support helpers: `src/test/support/` (fixtures, factories)
+- Commands:
+  - `pnpm test` (watch mode — TDD loop)
+  - `pnpm test:run` (single run — CI)
+  - `pnpm test:coverage` (coverage report with threshold enforcement)
+
+### Coverage Strategy
+
+Coverage uses a **targeted include list** in `vite.config.ts` — only files with actual tests are measured. Each phase of testing adds new files to the list and ratchets thresholds upward.
+
+**Current thresholds** (Phase 1 — pure logic):
+
+| Metric     | Threshold |
+| ---------- | --------- |
+| Lines      | 80%       |
+| Statements | 80%       |
+| Functions  | 90%       |
+| Branches   | 60%       |
+
+**How to expand coverage:**
+
+1. Write tests for a new file in `src/test/unit/` (or `src/test/integration/`)
+2. Add the source file path to `coverage.include` in `vite.config.ts`
+3. Verify thresholds still pass with `pnpm test:coverage`
+4. Ratchet thresholds upward if the new file pushes averages above current limits
+
+### Test Directory Structure
+
+```
+src/test/
+├── setup.ts                    # Global setup (jest-dom, cleanup, ResizeObserver & matchMedia polyfills)
+├── support/                    # Shared test helpers
+│   ├── fixtures.ts             # buildBook(), buildChapter() factories
+│   └── db-test-context.ts      # In-memory sql.js DatabaseAdapter for store tests
+├── integration/                # Integration tests (components + routing + stores)
+│   ├── Layout.test.tsx
+│   ├── LoadingScreen.test.tsx
+│   ├── PathTracker.test.tsx
+│   ├── StartupRedirect.test.tsx
+│   ├── ThemeProvider.test.tsx
+│   └── ThemeToggle.test.tsx
+└── unit/                       # Unit tests (mirror src/ structure)
+    ├── constants.test.ts
+    ├── i18n.test.ts
+    ├── components/
+    │   ├── editor/
+    │   │   └── paste-handler.test.ts
+    │   └── ui/
+    │       ├── Button.test.tsx
+    │       ├── Combobox.test.tsx
+    │       ├── Input.test.tsx
+    │       ├── Modal.test.tsx
+    │       ├── Select.test.tsx
+    │       ├── Switch.test.tsx
+    │       └── Toast.test.tsx
+    ├── hooks/
+    │   └── useAutoSave.test.ts
+    └── features/
+        ├── books/
+        │   └── book-store.test.ts
+        ├── chapters/
+        │   └── chapter-store.test.ts
+        ├── covers/
+        │   └── cover-types.test.ts
+        ├── export/
+        │   ├── epub-generator.test.ts
+        │   ├── epub-styles.test.ts
+        │   ├── export-types.test.ts
+        │   ├── html-sanitizer.test.ts
+        │   ├── pdf-generator.test.ts
+        │   └── pdf-styles.test.ts
+        ├── settings/
+        │   ├── app-settings-helpers.test.ts
+        │   ├── settings-store.test.ts
+        │   └── settings-types.test.ts
+        ├── sync/
+        │   ├── crypto.test.ts
+        │   └── sync-store.test.ts
+        ├── theme/
+        │   └── theme-store.test.ts
+        └── version/
+            ├── compareVersions.test.ts
+            └── useVersionCheck.test.ts
+```
+
+### Test Patterns
+
+**Pure function tests** (no mocks needed):
+
+```ts
+import { describe, expect, it } from "vitest";
+import { someFunction } from "../../../../features/module/file";
+
+describe("someFunction()", () => {
+  it("describes expected behavior", () => {
+    expect(someFunction(input)).toBe(expected);
+  });
+});
+```
+
+**Tests with platform mocks** (vi.hoisted + vi.mock):
+
+```ts
+const { mockFn } = vi.hoisted(() => ({ mockFn: vi.fn() }));
+vi.mock("../../lib/platform", () => ({ getOS: mockFn }));
+```
+
+**Test fixtures** (shared factories in `src/test/support/fixtures.ts`):
+
+```ts
+import { buildBook, buildChapter } from "../../../support/fixtures";
+
+const book = buildBook({ title: "Custom Title" });
+const chapter = buildChapter({ content: "<p>Hello</p>" });
+```
+
+**DB-backed store tests** (in-memory sql.js + vi.mock):
+
+```ts
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import type { DatabaseAdapter } from "../../../../lib/platform/types";
+import { createTestDatabase } from "../../../support/db-test-context";
+
+let testDb: DatabaseAdapter;
+const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
+vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
+const { useBookStore } = await import("../../../../features/books/store");
+
+beforeEach(async () => {
+  testDb = await createTestDatabase();
+  mockGetDatabase.mockResolvedValue(testDb);
+  useBookStore.setState({
+    books: [],
+    currentBook: null,
+    isLoading: false,
+    error: null,
+  });
+});
+```
+
+**Hook tests** (renderHook + fake timers):
+
+```ts
+import { renderHook, act } from "@testing-library/react";
+import { vi } from "vitest";
+
+vi.useFakeTimers();
+const { result } = renderHook(() => useDebouncedCallback(callback, 300));
+act(() => {
+  result.current("arg");
+});
+act(() => {
+  vi.advanceTimersByTime(300);
+});
+```
+
+**Testing unexported helpers** — when a function is private (e.g., `hexToRgb`, `compareVersions`), replicate the logic in the test file and add a comment noting to switch to direct import if the function is ever exported.
+
+### Phased Rollout Plan
+
+| Phase                  | Scope                                                                                                                  | Status              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **1 — Pure logic**     | Export generators, styles, crypto, i18n, constants, cover/settings types, paste-handler transforms, version comparison | ✅ Done (127 tests) |
+| **2 — Stores + hooks** | Zustand stores (in-memory sql.js DB), useAutoSave, useVersionCheck, useSettingsStore, useThemeStore, useSyncStore      | ✅ Done (231 tests) |
+| **3 — UI components**  | UI primitives (Button, Modal, Input, Select, Switch, Toast, Combobox)                                                  | ✅ Done (305 tests) |
+| **4 — Integration**    | Page rendering, routing, StartupRedirect, theme toggling, Layout, LoadingScreen                                        | ✅ Done (335 tests) |
+
+### TDD Workflow
+
+1. Write a failing test
+2. Implement the minimum code to pass
+3. Refactor safely with tests green
 
 ### Linting & Formatting
 
@@ -282,6 +466,7 @@ There is **no ESLint or Prettier configured** in the project. TypeScript strict 
 ### Updating AGENTS.md
 
 Update this file when:
+
 - A new feature module is added to `src/features/`
 - A new shared hook or utility is created
 - A new reusable UI component is added to `src/components/ui/`
@@ -327,6 +512,9 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 # Development
 pnpm dev              # Tauri dev (Vite + Rust hot reload)
 pnpm dev:web          # Web-only dev (VITE_BUILD_TARGET=web)
+pnpm test             # Tests in watch mode (TDD loop)
+pnpm test:run         # Tests once (CI)
+pnpm test:coverage    # Coverage report
 
 # Build
 pnpm build            # TypeScript check + Vite build (for Tauri)
