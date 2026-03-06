@@ -307,8 +307,16 @@ src/test/
     ├── constants.test.ts
     ├── i18n.test.ts
     ├── components/
-    │   └── editor/
-    │       └── paste-handler.test.ts
+    │   ├── editor/
+    │   │   └── paste-handler.test.ts
+    │   └── ui/
+    │       ├── Button.test.tsx
+    │       ├── Combobox.test.tsx
+    │       ├── Input.test.tsx
+    │       ├── Modal.test.tsx
+    │       ├── Select.test.tsx
+    │       ├── Switch.test.tsx
+    │       └── Toast.test.tsx
     ├── hooks/
     │   └── useAutoSave.test.ts
     └── features/
@@ -418,7 +426,7 @@ act(() => {
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- |
 | **1 — Pure logic**     | Export generators, styles, crypto, i18n, constants, cover/settings types, paste-handler transforms, version comparison | ✅ Done (127 tests) |
 | **2 — Stores + hooks** | Zustand stores (in-memory sql.js DB), useAutoSave, useVersionCheck, useSettingsStore, useThemeStore, useSyncStore      | ✅ Done (231 tests) |
-| **3 — UI components**  | UI primitives (Button, Modal, Input, etc.) + editor smoke tests                                                        | Planned             |
+| **3 — UI components**  | UI primitives (Button, Modal, Input, Select, Switch, Toast, Combobox)                                                  | ✅ Done (305 tests) |
 | **4 — Integration**    | Page rendering, routing, StartupRedirect, theme toggling                                                               | Planned             |
 
 ### TDD Workflow

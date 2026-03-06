@@ -43,6 +43,14 @@ export default defineConfig(() => ({
         "src/features/sync/store.ts",
         "src/hooks/useAutoSave.ts",
         "src/features/version/useVersionCheck.ts",
+        // Phase 3: UI components
+        "src/components/ui/Button.tsx",
+        "src/components/ui/Input.tsx",
+        "src/components/ui/Modal.tsx",
+        "src/components/ui/Select.tsx",
+        "src/components/ui/Switch.tsx",
+        "src/components/ui/Toast.tsx",
+        "src/components/ui/Combobox.tsx",
       ],
       exclude: [
         "src/**/*.d.ts",
