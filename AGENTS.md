@@ -299,10 +299,17 @@ Coverage uses a **targeted include list** in `vite.config.ts` — only files wit
 
 ```
 src/test/
-├── setup.ts                    # Global setup (jest-dom matchers)
+├── setup.ts                    # Global setup (jest-dom, cleanup, ResizeObserver & matchMedia polyfills)
 ├── support/                    # Shared test helpers
 │   ├── fixtures.ts             # buildBook(), buildChapter() factories
 │   └── db-test-context.ts      # In-memory sql.js DatabaseAdapter for store tests
+├── integration/                # Integration tests (components + routing + stores)
+│   ├── Layout.test.tsx
+│   ├── LoadingScreen.test.tsx
+│   ├── PathTracker.test.tsx
+│   ├── StartupRedirect.test.tsx
+│   ├── ThemeProvider.test.tsx
+│   └── ThemeToggle.test.tsx
 └── unit/                       # Unit tests (mirror src/ structure)
     ├── constants.test.ts
     ├── i18n.test.ts
@@ -427,7 +434,7 @@ act(() => {
 | **1 — Pure logic**     | Export generators, styles, crypto, i18n, constants, cover/settings types, paste-handler transforms, version comparison | ✅ Done (127 tests) |
 | **2 — Stores + hooks** | Zustand stores (in-memory sql.js DB), useAutoSave, useVersionCheck, useSettingsStore, useThemeStore, useSyncStore      | ✅ Done (231 tests) |
 | **3 — UI components**  | UI primitives (Button, Modal, Input, Select, Switch, Toast, Combobox)                                                  | ✅ Done (305 tests) |
-| **4 — Integration**    | Page rendering, routing, StartupRedirect, theme toggling                                                               | Planned             |
+| **4 — Integration**    | Page rendering, routing, StartupRedirect, theme toggling, Layout, LoadingScreen                                        | ✅ Done (335 tests) |
 
 ### TDD Workflow
 

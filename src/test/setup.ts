@@ -11,6 +11,21 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   } as unknown as typeof globalThis.ResizeObserver;
 }
 
+// Polyfill matchMedia for theme-related code (applyTheme uses it)
+if (typeof window.matchMedia === "undefined") {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      addEventListener: () => { },
+      removeEventListener: () => { },
+      onchange: null,
+      addListener: () => { },
+      removeListener: () => { },
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+}
+
 // Ensure DOM is cleaned up between tests (React Testing Library auto-cleanup)
 afterEach(() => {
   cleanup();

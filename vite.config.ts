@@ -51,6 +51,13 @@ export default defineConfig(() => ({
         "src/components/ui/Switch.tsx",
         "src/components/ui/Toast.tsx",
         "src/components/ui/Combobox.tsx",
+        // Phase 4: Integration (routing, providers, layout)
+        "src/components/LoadingScreen.tsx",
+        "src/components/PathTracker.tsx",
+        "src/components/ThemeProvider.tsx",
+        "src/components/ThemeToggle.tsx",
+        "src/components/StartupRedirect.tsx",
+        "src/components/Layout.tsx",
       ],
       exclude: [
         "src/**/*.d.ts",
