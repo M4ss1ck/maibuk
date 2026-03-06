@@ -50,9 +50,31 @@ jobs:
             exit 1
           fi
 
+  quality:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run test suite
+        run: pnpm test:run
+
   # Build for Linux (deb, rpm, appimage)
   build-linux:
-    needs: prepare
+    needs: [prepare, quality]
     permissions:
       contents: write
     runs-on: ubuntu-22.04
@@ -116,7 +138,7 @@ jobs:
 
   # Build for Windows using GNU toolchain
   build-windows:
-    needs: prepare
+    needs: [prepare, quality]
     permissions:
       contents: write
     runs-on: ubuntu-22.04
@@ -170,7 +192,7 @@ jobs:
 
   # Build Arch Linux package using Docker
   build-arch:
-    needs: [prepare, build-linux]
+    needs: [prepare, quality, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write

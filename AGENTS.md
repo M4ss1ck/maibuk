@@ -6,21 +6,21 @@
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| UI Framework | React 19 + TypeScript 5.8 |
-| Bundler | Vite 7 |
-| Native Shell | Tauri 2.0 (Rust) |
-| Styling | Tailwind CSS 4 + CSS custom properties |
-| State | Zustand 5 (with `persist` middleware for settings/theme) |
-| Routing | React Router v7 (`react-router-dom`) |
-| Rich Text Editor | TipTap 3.15 |
-| Cover Designer | Fabric.js 7 |
-| Database | SQLite (Tauri plugin) / sql.js (web) via Drizzle ORM schema |
-| i18n | i18next + react-i18next (English, Spanish) |
-| Icons | Lucide React + custom SVGs in `src/components/icons/` |
-| Accessible UI | Headless UI 2.2 |
-| Package Manager | pnpm 10 |
+| Layer            | Technology                                                  |
+| ---------------- | ----------------------------------------------------------- |
+| UI Framework     | React 19 + TypeScript 5.8                                   |
+| Bundler          | Vite 7                                                      |
+| Native Shell     | Tauri 2.0 (Rust)                                            |
+| Styling          | Tailwind CSS 4 + CSS custom properties                      |
+| State            | Zustand 5 (with `persist` middleware for settings/theme)    |
+| Routing          | React Router v7 (`react-router-dom`)                        |
+| Rich Text Editor | TipTap 3.15                                                 |
+| Cover Designer   | Fabric.js 7                                                 |
+| Database         | SQLite (Tauri plugin) / sql.js (web) via Drizzle ORM schema |
+| i18n             | i18next + react-i18next (English, Spanish)                  |
+| Icons            | Lucide React + custom SVGs in `src/components/icons/`       |
+| Accessible UI    | Headless UI 2.2                                             |
+| Package Manager  | pnpm 10                                                     |
 
 ### Entry Points
 
@@ -30,12 +30,12 @@
 
 ### Routes
 
-| Path | Component | Layout |
-|------|-----------|--------|
-| `/` | `Home` | Sidebar layout (`Layout`) |
-| `/settings` | `Settings` | Sidebar layout (`Layout`) |
-| `/book/:bookId` | `BookEditor` | Full-page (no sidebar) |
-| `/book/:bookId/cover` | `CoverDesigner` | Full-page (no sidebar) |
+| Path                  | Component       | Layout                    |
+| --------------------- | --------------- | ------------------------- |
+| `/`                   | `Home`          | Sidebar layout (`Layout`) |
+| `/settings`           | `Settings`      | Sidebar layout (`Layout`) |
+| `/book/:bookId`       | `BookEditor`    | Full-page (no sidebar)    |
+| `/book/:bookId/cover` | `CoverDesigner` | Full-page (no sidebar)    |
 
 ---
 
@@ -44,6 +44,7 @@
 ### DRY — Search Before Creating
 
 Before writing any new utility, hook, component, or helper:
+
 1. Search `src/hooks/` for existing hooks (`useAutoSave`, `useDebouncedCallback`)
 2. Search `src/components/ui/` for existing UI components (`Button`, `Modal`, `Input`, `Select`, `Combobox`, `Switch`)
 3. Search `src/lib/platform/` for platform abstractions (`DatabaseAdapter`, `FileSystemAdapter`, `DialogAdapter`, `OSAdapter`)
@@ -55,6 +56,7 @@ Before writing any new utility, hook, component, or helper:
 ### Reusable Components First
 
 If logic is used in more than one place, extract it:
+
 - UI primitives → `src/components/ui/`
 - React hooks → `src/hooks/`
 - Platform operations → `src/lib/platform/`
@@ -116,16 +118,16 @@ src/
 
 ### Where New Files Go
 
-| File type | Location |
-|-----------|----------|
-| Reusable UI component | `src/components/ui/` |
-| Feature-specific component | `src/components/<feature>/` |
+| File type                   | Location                                                       |
+| --------------------------- | -------------------------------------------------------------- |
+| Reusable UI component       | `src/components/ui/`                                           |
+| Feature-specific component  | `src/components/<feature>/`                                    |
 | New feature (store + types) | `src/features/<name>/` with `store.ts`, `types.ts`, `index.ts` |
-| Custom TipTap extension | `src/components/editor/extensions/` |
-| Shared hook | `src/hooks/` (and re-export from `src/hooks/index.ts`) |
-| Platform adapter | `src/lib/platform/tauri/` and `src/lib/platform/web/` |
-| Page component | `src/pages/` |
-| Translation keys | `src/locales/en.json` and `src/locales/es.json` |
+| Custom TipTap extension     | `src/components/editor/extensions/`                            |
+| Shared hook                 | `src/hooks/` (and re-export from `src/hooks/index.ts`)         |
+| Platform adapter            | `src/lib/platform/tauri/` and `src/lib/platform/web/`          |
+| Page component              | `src/pages/`                                                   |
+| Translation keys            | `src/locales/en.json` and `src/locales/es.json`                |
 
 ### Naming Conventions
 
@@ -140,6 +142,7 @@ src/
 ### Import Conventions
 
 Imports follow this order (observed from existing code):
+
 1. React / React DOM
 2. Third-party libraries (`zustand`, `react-router-dom`, `@tiptap/*`, `@headlessui/react`, `lucide-react`)
 3. Internal absolute paths — features, lib, hooks
@@ -161,17 +164,20 @@ There are **no path aliases** configured. All imports use relative paths (`../..
 ### Component Patterns
 
 **Functional components with named exports** (no default exports for components):
+
 ```tsx
 export function MyComponent({ prop }: MyComponentProps) { ... }
 ```
 
 **Exception**: `forwardRef` components use `const` + named export:
+
 ```tsx
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(...)
 Button.displayName = "Button";
 ```
 
 **Dialog/Modal pattern** (uses Headless UI):
+
 ```tsx
 <Dialog open={isOpen} onClose={onClose}>
   <DialogBackdrop />
@@ -189,6 +195,7 @@ Button.displayName = "Button";
 ### Zustand Store Pattern
 
 Every store follows this structure (see `src/features/books/store.ts`):
+
 1. Private `generateId()` using `crypto.randomUUID()`
 2. Private `toModel(row)` mapper from DB row to TypeScript interface
 3. Interface declaring state + actions
@@ -198,25 +205,25 @@ Every store follows this structure (see `src/features/books/store.ts`):
 
 ### Existing Shared Utilities — CHECK BEFORE WRITING NEW ONES
 
-| What | Where |
-|------|-------|
-| `useAutoSave(callback, delay)` | `src/hooks/useAutoSave.ts` |
-| `useDebouncedCallback(callback, delay)` | `src/hooks/useAutoSave.ts` |
-| `getDatabase()` | `src/lib/db/index.ts` |
-| `exportDatabase()` / `importDatabase()` / `resetDatabase()` | `src/lib/db/index.ts` |
-| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts` |
-| `IS_WEB` / `IS_TAURI` | `src/lib/platform/index.ts` |
-| `processChapterHtml()` / `sanitizeHtmlForEpub()` | `src/features/export/html-sanitizer.ts` |
-| `generateEpub()` / `generatePdfHtml()` | `src/features/export/` |
-| `APP_VERSION` / `DOWNLOAD_PAGE` | `src/constants.ts` |
-| `detectSystemLocale()` | `src/i18n.ts` |
-| Font/size/language option arrays | `src/features/settings/types.ts` |
-| `encrypt()` / `decrypt()` / `computeChecksum()` | `src/features/sync/crypto.ts` |
-| `serializeBook()` / `applyBookSnapshot()` | `src/features/sync/serializer.ts` |
-| `syncBook()` / `syncAllBooks()` | `src/features/sync/sync-engine.ts` |
-| PocketBase client (`initClient`, `login`, etc.) | `src/features/sync/client.ts` |
-| `useSyncStore` | `src/features/sync/store.ts` |
-| `toast.success()` / `ToastViewport` | `src/components/ui/Toast.tsx` |
+| What                                                               | Where                                   |
+| ------------------------------------------------------------------ | --------------------------------------- |
+| `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`              |
+| `useDebouncedCallback(callback, delay)`                            | `src/hooks/useAutoSave.ts`              |
+| `getDatabase()`                                                    | `src/lib/db/index.ts`                   |
+| `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                   |
+| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`             |
+| `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`             |
+| `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts` |
+| `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                  |
+| `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                      |
+| `detectSystemLocale()`                                             | `src/i18n.ts`                           |
+| Font/size/language option arrays                                   | `src/features/settings/types.ts`        |
+| `encrypt()` / `decrypt()` / `computeChecksum()`                    | `src/features/sync/crypto.ts`           |
+| `serializeBook()` / `applyBookSnapshot()`                          | `src/features/sync/serializer.ts`       |
+| `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`      |
+| PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`           |
+| `useSyncStore`                                                     | `src/features/sync/store.ts`            |
+| `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`           |
 
 ---
 
@@ -228,16 +235,16 @@ All styling uses Tailwind utility classes inline. There are **no separate CSS fi
 
 Design tokens are defined as CSS custom properties in `src/index.css` under `@theme`:
 
-| Token | Light | Dark | Usage |
-|-------|-------|------|-------|
-| `--color-primary` | `#3b82f6` | `#60a5fa` | `bg-primary`, `text-primary` |
-| `--color-background` | `#fafaf9` | `#1c1917` | `bg-background` |
-| `--color-foreground` | `#1c1917` | `#fafaf9` | `text-foreground` |
-| `--color-muted` | `#7a6f63` | `#44403c` | `bg-muted` |
-| `--color-border` | `#e7e5e4` | `#292524` | `border-border` |
-| `--color-card` | `#ffffff` | `#292524` | `bg-card` |
-| `--color-destructive` | `#ef4444` | `#f87171` | `bg-destructive` |
-| `--color-success` | `#22c55e` | `#4ade80` | `text-success` |
+| Token                 | Light     | Dark      | Usage                        |
+| --------------------- | --------- | --------- | ---------------------------- |
+| `--color-primary`     | `#3b82f6` | `#60a5fa` | `bg-primary`, `text-primary` |
+| `--color-background`  | `#fafaf9` | `#1c1917` | `bg-background`              |
+| `--color-foreground`  | `#1c1917` | `#fafaf9` | `text-foreground`            |
+| `--color-muted`       | `#7a6f63` | `#44403c` | `bg-muted`                   |
+| `--color-border`      | `#e7e5e4` | `#292524` | `border-border`              |
+| `--color-card`        | `#ffffff` | `#292524` | `bg-card`                    |
+| `--color-destructive` | `#ef4444` | `#f87171` | `bg-destructive`             |
+| `--color-success`     | `#22c55e` | `#4ade80` | `text-success`               |
 
 ### Rules
 
@@ -254,9 +261,20 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 
 ### Current State
 
-There is **no testing framework configured** (no vitest, jest, or testing-library). No test files exist.
+Testing is configured with **Vitest + Testing Library + jsdom**.
 
-If adding tests in the future, follow the conventions for Vite + React projects (vitest + @testing-library/react would be the natural fit).
+- Test files: `src/**/*.test.ts` and `src/**/*.test.tsx`
+- Test setup: `src/test/setup.ts`
+- Commands:
+  - `pnpm test` (watch mode)
+  - `pnpm test:run` (single run)
+  - `pnpm test:coverage` (coverage report)
+
+Use TDD by default:
+
+1. Write a failing test
+2. Implement the minimum code to pass
+3. Refactor safely with tests green
 
 ### Linting & Formatting
 
@@ -282,6 +300,7 @@ There is **no ESLint or Prettier configured** in the project. TypeScript strict 
 ### Updating AGENTS.md
 
 Update this file when:
+
 - A new feature module is added to `src/features/`
 - A new shared hook or utility is created
 - A new reusable UI component is added to `src/components/ui/`
@@ -327,6 +346,9 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 # Development
 pnpm dev              # Tauri dev (Vite + Rust hot reload)
 pnpm dev:web          # Web-only dev (VITE_BUILD_TARGET=web)
+pnpm test             # Tests in watch mode (TDD loop)
+pnpm test:run         # Tests once (CI)
+pnpm test:coverage    # Coverage report
 
 # Build
 pnpm build            # TypeScript check + Vite build (for Tauri)

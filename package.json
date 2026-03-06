@@ -7,6 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "preview": "vite preview",
     "tauri": "tauri",
     "build:linux": "tauri build --target x86_64-unknown-linux-gnu",
@@ -68,15 +71,21 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/nspell": "^2.1.6",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@types/sql.js": "^1.4.9",
     "@vitejs/plugin-react": "^4.6.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "drizzle-kit": "^0.31.8",
+    "jsdom": "^28.1.0",
     "tailwindcss": "^4.0.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.0.18"
   },
   "packageManager": "pnpm@10.13.1+sha512.37ebf1a5c7a30d5fabe0c5df44ee8da4c965ca0c5af3dbab28c3a1681b70a256218d05c81c9c0dcf767ef6b8551eb5b960042b9ed4300c59242336377e01cfad"
 }

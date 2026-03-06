@@ -1,3 +1,5 @@
+/// <reference types="vitest/config" />
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -8,13 +10,22 @@ const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
 const isWeb = buildTarget === "web";
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(() => ({
   plugins: [react(), tailwindcss()],
   worker: {
     format: "es" as const,
   },
   define: {
     __APP_VERSION__: JSON.stringify(`v${version}`),
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    coverage: {
+      provider: "v8" as const,
+      reporter: ["text", "html"] as ("text" | "html")[],
+    },
   },
 
   // Use relative paths for web builds (static hosting)
