@@ -373,6 +373,8 @@
     "showHelp": "Show shortcuts help",
     "gotoProjects": "Go to Projects",
     "gotoSettings": "Go to Settings",
+    "toggleTheme": "Cycle theme",
+    "toggleShortcutHints": "Toggle shortcut hints",
     "newBook": "Create new book",
     "jumpBooks": "Jump to book by number",
     "moveSelection": "Move card selection",

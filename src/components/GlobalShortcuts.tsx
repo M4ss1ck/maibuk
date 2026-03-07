@@ -3,17 +3,39 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useShortcuts } from "../lib/shortcuts";
 import { useTranslation } from "react-i18next";
 import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
+import { useThemeStore } from "../features/theme";
+import { useSettingsStore } from "../features/settings/store";
 
 export function GlobalShortcuts() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const theme = useThemeStore((state) => state.theme);
+  const setTheme = useThemeStore((state) => state.setTheme);
+  const hideKeyboardHints = useSettingsStore((state) => state.hideKeyboardHints);
+  const setHideKeyboardHints = useSettingsStore((state) => state.setHideKeyboardHints);
+
+  const cycleTheme = () => {
+    if (theme === "light") {
+      setTheme("dark");
+      return;
+    }
+
+    if (theme === "dark") {
+      setTheme("system");
+      return;
+    }
+
+    setTheme("light");
+  };
 
   const activeShortcuts = useMemo(() => {
     const list: { id: string; label: string; keys: string[] }[] = [
       { id: "global.gotoProjects", label: t("shortcuts.gotoProjects"), keys: ["g", "p"] },
       { id: "global.gotoSettings", label: t("shortcuts.gotoSettings"), keys: ["g", "s"] },
+      { id: "global.toggleTheme", label: t("shortcuts.toggleTheme"), keys: ["g", "t"] },
+      { id: "global.toggleShortcutHints", label: t("shortcuts.toggleShortcutHints"), keys: ["g", "h"] },
       { id: "global.showHelp", label: t("shortcuts.showHelp"), keys: ["?"] },
     ];
 
@@ -59,6 +81,18 @@ export function GlobalShortcuts() {
         if (location.pathname !== "/settings") {
           navigate("/settings");
         }
+      },
+    },
+    {
+      sequence: ["g", "t"],
+      onTrigger: () => {
+        cycleTheme();
+      },
+    },
+    {
+      sequence: ["g", "h"],
+      onTrigger: () => {
+        setHideKeyboardHints(!hideKeyboardHints);
       },
     },
     {
