@@ -32,7 +32,7 @@ function darken(hex: string, amount: number) {
 }
 
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
-  const { appFontSize, appFont, primaryColor, language } = useSettingsStore();
+  const { appFontSize, appFont, primaryColor, language, hideKeyboardHints } = useSettingsStore();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -52,6 +52,11 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
       i18n.changeLanguage(language);
     }
   }, [language]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.hideKeyboardHints = hideKeyboardHints ? "true" : "false";
+  }, [hideKeyboardHints]);
 
   return <>{children}</>;
 }

@@ -15,6 +15,7 @@ import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { useSettingsStore } from "../features/settings/store";
 import { Menu, MoreVertical } from "lucide-react";
 import { SyncStatusButton } from "../components/sync/SyncStatusButton";
+import { useShortcuts } from "../lib/shortcuts";
 
 export function BookEditor() {
   const { t } = useTranslation();
@@ -46,6 +47,7 @@ export function BookEditor() {
   const showInlineFootnotes = useSettingsStore((s) => s.showInlineFootnotes);
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
   const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
+  const hideKeyboardHints = useSettingsStore((s) => s.hideKeyboardHints);
 
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
@@ -237,28 +239,30 @@ export function BookEditor() {
     }
   }, [bookId, deleteBook, navigate]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Escape to exit focus mode
-      if (e.key === "Escape" && focusMode) {
-        setFocusMode(false);
-      }
-      // F11 or Ctrl+Shift+F to toggle focus mode
-      if (e.key === "F11" || (e.ctrlKey && e.shiftKey && e.key === "F")) {
-        e.preventDefault();
-        toggleFocusMode();
-      }
-
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
+  useShortcuts([
+    {
+      keys: "escape",
+      onTrigger: () => setFocusMode(false),
+      enabled: focusMode,
+    },
+    {
+      keys: ["f11", "ctrl+shift+f", "meta+shift+f"],
+      onTrigger: () => toggleFocusMode(),
+    },
+    {
+      keys: ["ctrl+s", "meta+s"],
+      onTrigger: () => {
         handleSaveNow();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [focusMode, toggleFocusMode]);
+      },
+      allowInInput: true,
+    },
+    {
+      keys: "backspace",
+      onTrigger: () => {
+        navigate("/");
+      },
+    },
+  ]);
 
   if (!currentBook) {
     return (
@@ -519,7 +523,7 @@ export function BookEditor() {
         )}
 
         {/* Focus mode exit hint */}
-        {focusMode && (
+        {focusMode && !hideKeyboardHints && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm opacity-0 hover:opacity-100 transition-opacity">
             {t("editor.press")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">Esc</kbd> {t("editor.or")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">F11</kbd> {t("editor.exitFocus")}
           </div>

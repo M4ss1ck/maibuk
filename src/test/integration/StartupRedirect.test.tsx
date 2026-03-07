@@ -40,6 +40,7 @@ describe("StartupRedirect", () => {
       dictionaryOpenInBrowser: false,
       showInlineFootnotes: true,
       showNotesChapter: false,
+      hideKeyboardHints: false,
       defaultExportFormat: "epub",
     });
   });

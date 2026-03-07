@@ -35,6 +35,7 @@ describe("useSettingsStore", () => {
       dictionaryOpenInBrowser: false,
       showInlineFootnotes: true,
       showNotesChapter: false,
+      hideKeyboardHints: false,
       defaultExportFormat: "epub",
       lastPath: null,
     });
@@ -49,6 +50,7 @@ describe("useSettingsStore", () => {
       expect(state.language).toBe("en");
       expect(state.spellCheckEnabled).toBe(true);
       expect(state.customDictionary).toEqual([]);
+      expect(state.hideKeyboardHints).toBe(false);
       expect(state.defaultExportFormat).toBe("epub");
       expect(state.lastPath).toBeNull();
     });
@@ -179,6 +181,13 @@ describe("useSettingsStore", () => {
     it("toggles notes chapter", () => {
       useSettingsStore.getState().setShowNotesChapter(true);
       expect(useSettingsStore.getState().showNotesChapter).toBe(true);
+    });
+  });
+
+  describe("setHideKeyboardHints()", () => {
+    it("toggles keyboard hints visibility", () => {
+      useSettingsStore.getState().setHideKeyboardHints(true);
+      expect(useSettingsStore.getState().hideKeyboardHints).toBe(true);
     });
   });
 

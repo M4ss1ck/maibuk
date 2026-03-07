@@ -10,17 +10,76 @@ import { Download } from "lucide-react";
 import { IS_WEB } from "../lib/platform";
 import logo from "../../src-tauri/icons/icon.png";
 import { DOWNLOAD_PAGE } from "../constants";
+import { KeyboardShortcut } from "../components/ui";
+import { isModKey, isTypingTarget } from "../lib/keyboard";
+import { useShortcuts } from "../lib/shortcuts";
 
 export function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [isNewBookOpen, setIsNewBookOpen] = useState(false);
+  const [focusedBookIndex, setFocusedBookIndex] = useState(0);
 
   const { books, isLoading, loadBooks } = useBookStore();
 
   useEffect(() => {
     loadBooks();
   }, [loadBooks]);
+
+  useEffect(() => {
+    if (books.length === 0) {
+      setFocusedBookIndex(0);
+      return;
+    }
+
+    if (focusedBookIndex > books.length - 1) {
+      setFocusedBookIndex(books.length - 1);
+    }
+  }, [books.length, focusedBookIndex]);
+
+  useShortcuts([
+    {
+      keys: ["ctrl+n", "meta+n"],
+      onTrigger: (event) => {
+        if (isTypingTarget(event.target) || isModKey(event) === false) return;
+        setIsNewBookOpen(true);
+      },
+      allowInInput: true,
+    },
+    {
+      keys: ["arrowdown", "arrowright", "j"],
+      onTrigger: () => {
+        setFocusedBookIndex((prev) => Math.min(prev + 1, books.length - 1));
+      },
+      enabled: !isNewBookOpen && books.length > 0,
+    },
+    {
+      keys: ["arrowup", "arrowleft", "k"],
+      onTrigger: () => {
+        setFocusedBookIndex((prev) => Math.max(prev - 1, 0));
+      },
+      enabled: !isNewBookOpen && books.length > 0,
+    },
+    {
+      keys: "enter",
+      onTrigger: () => {
+        const selected = books[focusedBookIndex];
+        if (selected) {
+          navigate(`/book/${selected.id}`);
+        }
+      },
+      enabled: !isNewBookOpen && books.length > 0,
+    },
+    ...Array.from({ length: 9 }, (_, i) => ({
+      keys: String(i + 1),
+      onTrigger: () => {
+        if (i < books.length) {
+          setFocusedBookIndex(i);
+        }
+      },
+      enabled: !isNewBookOpen && books.length > 0,
+    })),
+  ]);
 
   const handleBookCreated = (bookId: string) => {
     navigate(`/book/${bookId}`);
@@ -53,6 +112,7 @@ export function Home() {
             <AddIcon className="w-5 h-5" />
             <span className="hidden sm:inline">{t("books.newBook")}</span>
             <span className="sm:hidden">{t("common.new")}</span>
+            <KeyboardShortcut keys={["Ctrl", "N"]} className="hidden lg:inline-flex" />
           </Button>
         </div>
       </div>
@@ -74,11 +134,13 @@ export function Home() {
       ) : (
         /* Book grid */
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {books.map((book) => (
+          {books.map((book, index) => (
             <BookCard
               key={book.id}
               book={book}
               onClick={() => navigate(`/book/${book.id}`)}
+              indexHint={index < 9 ? index + 1 : undefined}
+              isFocused={books[focusedBookIndex]?.id === book.id}
             />
           ))}
         </div>

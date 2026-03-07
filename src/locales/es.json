@@ -278,6 +278,9 @@
     "showNotesChapter": "Panel de notas",
     "showNotesChapterDescription": "Mostrar un panel con todas las notas al pie del libro",
     "toggleNotesChapter": "Activar panel de notas",
+    "hideKeyboardHints": "Ocultar atajos visuales",
+    "hideKeyboardHintsDescription": "Oculta los indicadores visuales de atajos mostrados como teclas",
+    "toggleHideKeyboardHints": "Activar atajos visuales",
     "customDictionary": "Diccionario personalizado",
     "customDictionaryDescription": "Las palabras añadidas no se marcarán como incorrectas",
     "customDictionaryCount": "{{count}} palabras",
@@ -363,5 +366,20 @@
     "titleRequired": "El título es obligatorio",
     "authorNameRequired": "El nombre del autor es obligatorio",
     "URLRequired": "La URL es obligatoria"
+  },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "none": "No hay atajos disponibles para esta pantalla",
+    "showHelp": "Mostrar ayuda de atajos",
+    "gotoProjects": "Ir a Proyectos",
+    "gotoSettings": "Ir a Configuración",
+    "newBook": "Crear libro nuevo",
+    "jumpBooks": "Ir al libro por número",
+    "moveSelection": "Mover selección de tarjetas",
+    "openSelected": "Abrir libro seleccionado",
+    "save": "Guardar",
+    "toggleFocusMode": "Alternar modo enfoque",
+    "backFromEditor": "Volver desde el editor",
+    "deleteSelection": "Eliminar objeto seleccionado"
   }
 }

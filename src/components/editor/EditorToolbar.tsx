@@ -17,6 +17,7 @@ import { DictionaryDialog } from "./DictionaryDialog";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 import { openExternal } from "../../lib/platform";
+import { isModKey } from "../../lib/keyboard";
 import {
   Bold,
   Italic,
@@ -184,6 +185,40 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     setDictionaryWord(word);
     setShowDictionaryDialog(true);
   };
+
+  useEffect(() => {
+    const dom = editor.view.dom;
+
+    const handleEditorKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || !isModKey(event)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "f") {
+        event.preventDefault();
+        setShowFindReplace(true);
+        return;
+      }
+
+      if (key === "k") {
+        event.preventDefault();
+        setShowLinkDialog(true);
+        return;
+      }
+
+      if (event.altKey && key === "n") {
+        event.preventDefault();
+        setShowFootnoteDialog(true);
+      }
+    };
+
+    dom.addEventListener("keydown", handleEditorKeyDown);
+    return () => {
+      dom.removeEventListener("keydown", handleEditorKeyDown);
+    };
+  }, [editor]);
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-10">

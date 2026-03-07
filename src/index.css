@@ -65,6 +65,10 @@ body {
   font-size: 1rem;
 }
 
+:root[data-hide-keyboard-hints="true"] .kbd-shortcut:not(.kbd-shortcut-always) {
+  display: none;
+}
+
 #root {
   min-height: 100vh;
 }

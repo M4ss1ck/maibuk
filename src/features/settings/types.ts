@@ -21,6 +21,7 @@ export interface Settings {
   // Footnote settings
   showInlineFootnotes: boolean;
   showNotesChapter: boolean;
+  hideKeyboardHints: boolean;
 
   // Export settings
   defaultExportFormat: ExportFormat;

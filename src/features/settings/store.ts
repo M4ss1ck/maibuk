@@ -28,6 +28,7 @@ interface SettingsStore extends Settings {
   setDictionaryOpenInBrowser: (enabled: boolean) => void;
   setShowInlineFootnotes: (enabled: boolean) => void;
   setShowNotesChapter: (enabled: boolean) => void;
+  setHideKeyboardHints: (enabled: boolean) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -43,6 +44,7 @@ const defaultSettings: Settings = {
   dictionaryOpenInBrowser: false,
   showInlineFootnotes: true,
   showNotesChapter: false,
+  hideKeyboardHints: false,
   defaultExportFormat: "epub",
 };
 
@@ -76,6 +78,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setDictionaryOpenInBrowser: (dictionaryOpenInBrowser) => set({ dictionaryOpenInBrowser }),
       setShowInlineFootnotes: (showInlineFootnotes) => set({ showInlineFootnotes }),
       setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
+      setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, NavLink } from "react-router-dom";
 import { ThemeToggle } from "./ThemeToggle";
 import { APP_VERSION } from "../constants";
@@ -6,12 +6,26 @@ import { useTranslation } from "react-i18next";
 import { ProjectsIcon, SettingsIcon, CloseIcon } from "./icons";
 import { Menu } from "lucide-react";
 import logo from "../../src-tauri/icons/icon.png";
+import { KeyboardShortcut } from "./ui";
 
 export function Layout() {
   const { t } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMobileMenu();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -74,7 +88,8 @@ export function Layout() {
             }
           >
             <ProjectsIcon className="w-5 h-5" />
-            {t("common.projects")}
+            <span className="flex-1">{t("common.projects")}</span>
+            <KeyboardShortcut keys={["g", "p"]} className="ml-auto hidden lg:inline-flex" />
           </NavLink>
 
           <NavLink
@@ -88,7 +103,8 @@ export function Layout() {
             }
           >
             <SettingsIcon className="w-5 h-5" />
-            {t("common.settings")}
+            <span className="flex-1">{t("common.settings")}</span>
+            <KeyboardShortcut keys={["g", "s"]} className="ml-auto hidden lg:inline-flex" />
           </NavLink>
         </nav>
 
