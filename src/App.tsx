@@ -7,11 +7,13 @@ import { Settings } from "./pages/Settings";
 import { StartupRedirect } from "./components/StartupRedirect";
 import { PathTracker } from "./components/PathTracker";
 import { ToastViewport } from "./components/ui";
+import { GlobalShortcuts } from "./components/GlobalShortcuts";
 
 function App() {
   return (
     <StartupRedirect>
       <PathTracker />
+      <GlobalShortcuts />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />

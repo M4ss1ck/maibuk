@@ -1,13 +1,16 @@
 import type { Book } from "../../features/books/types";
 import { useTranslation } from "react-i18next";
 import { BookStackIcon } from "../icons";
+import { KeyboardShortcut } from "../ui";
 
 interface BookCardProps {
   book: Book;
   onClick: () => void;
+  indexHint?: number;
+  isFocused?: boolean;
 }
 
-export function BookCard({ book, onClick }: BookCardProps) {
+export function BookCard({ book, onClick, indexHint, isFocused = false }: BookCardProps) {
   const { t, i18n } = useTranslation();
 
   const formatDate = (date: Date) => {
@@ -27,8 +30,15 @@ export function BookCard({ book, onClick }: BookCardProps) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col bg-card border border-border rounded-xl overflow-hidden hover:shadow-lg transition-shadow text-left w-full"
+      className={`relative flex flex-col bg-card border rounded-xl overflow-hidden hover:shadow-lg transition-shadow text-left w-full ${isFocused ? "border-primary ring-1 ring-primary/30" : "border-border"}`}
     >
+      {indexHint ? (
+        <KeyboardShortcut
+          keys={[String(indexHint)]}
+          className="absolute left-2 top-2 z-10"
+        />
+      ) : null}
+
       {/* Cover placeholder */}
       <div className="aspect-2/3 bg-linear-to-br from-muted to-muted/50 flex items-center justify-center">
         {book.coverImagePath ? (

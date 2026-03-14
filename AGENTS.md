@@ -207,27 +207,30 @@ Every store follows this structure (see `src/features/books/store.ts`):
 
 ### Existing Shared Utilities — CHECK BEFORE WRITING NEW ONES
 
-| What                                                               | Where                                   |
-| ------------------------------------------------------------------ | --------------------------------------- |
-| `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`              |
-| `useDebouncedCallback(callback, delay)`                            | `src/hooks/useAutoSave.ts`              |
-| `getDatabase()`                                                    | `src/lib/db/index.ts`                   |
-| `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                   |
-| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`             |
-| `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`             |
-| `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts` |
-| `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                  |
-| `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                      |
-| `detectSystemLocale()`                                             | `src/i18n.ts`                           |
-| Font/size/language option arrays                                   | `src/features/settings/types.ts`        |
-| `encrypt()` / `decrypt()` / `computeChecksum()`                    | `src/features/sync/crypto.ts`           |
-| `serializeBook()` / `applyBookSnapshot()`                          | `src/features/sync/serializer.ts`       |
-| `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`      |
-| PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`           |
-| `useSyncStore`                                                     | `src/features/sync/store.ts`            |
-| `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`           |
-| `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`          |
-| `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`   |
+| What                                                               | Where                                    |
+| ------------------------------------------------------------------ | ---------------------------------------- |
+| `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`               |
+| `useDebouncedCallback(callback, delay)`                            | `src/hooks/useAutoSave.ts`               |
+| `useShortcuts(shortcuts, options)`                                 | `src/lib/shortcuts.ts`                   |
+| `getDatabase()`                                                    | `src/lib/db/index.ts`                    |
+| `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                    |
+| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`              |
+| `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`              |
+| `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts`  |
+| `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                   |
+| `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                       |
+| `detectSystemLocale()`                                             | `src/i18n.ts`                            |
+| Font/size/language option arrays                                   | `src/features/settings/types.ts`         |
+| `encrypt()` / `decrypt()` / `computeChecksum()`                    | `src/features/sync/crypto.ts`            |
+| `serializeBook()` / `applyBookSnapshot()`                          | `src/features/sync/serializer.ts`        |
+| `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`       |
+| PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`            |
+| `useSyncStore`                                                     | `src/features/sync/store.ts`             |
+| `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`            |
+| `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx` |
+| `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`           |
+| `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`    |
+| `isTypingTarget()` / `isModKey()`                                  | `src/lib/keyboard.ts`                    |
 
 ---
 

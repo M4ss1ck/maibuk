@@ -38,6 +38,7 @@ export function Settings() {
     dictionaryOpenInBrowser,
     showInlineFootnotes,
     showNotesChapter,
+    hideKeyboardHints,
     setAppFontSize,
     setAppFont,
     setPrimaryColor,
@@ -49,6 +50,7 @@ export function Settings() {
     setDictionaryOpenInBrowser,
     setShowInlineFootnotes,
     setShowNotesChapter,
+    setHideKeyboardHints,
   } = useSettings();
 
   const { apiUrl, setApiUrl, authStatus, userEmail, logout } = useSyncStore();
@@ -381,6 +383,18 @@ export function Settings() {
                 checked={showNotesChapter}
                 onChange={setShowNotesChapter}
                 label={t("settings.toggleNotesChapter")}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.hideKeyboardHints")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.hideKeyboardHintsDescription")}</p>
+              </div>
+              <Switch
+                checked={hideKeyboardHints}
+                onChange={setHideKeyboardHints}
+                label={t("settings.toggleHideKeyboardHints")}
               />
             </div>
           </div>

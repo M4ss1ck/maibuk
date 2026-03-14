@@ -278,6 +278,9 @@
     "showNotesChapter": "Notes panel",
     "showNotesChapterDescription": "Show a panel with all footnotes across the book",
     "toggleNotesChapter": "Toggle notes panel",
+    "hideKeyboardHints": "Hide keyboard hints",
+    "hideKeyboardHintsDescription": "Hide visual shortcut indicators shown as keyboard badges",
+    "toggleHideKeyboardHints": "Toggle keyboard hints",
     "customDictionary": "Custom dictionary",
     "customDictionaryDescription": "Words added from the editor won't be flagged as misspelled",
     "customDictionaryCount": "{{count}} words",
@@ -363,5 +366,22 @@
     "titleRequired": "Title is required",
     "authorNameRequired": "Author name is required",
     "URLRequired": "URL is required"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "none": "No shortcuts available for this screen",
+    "showHelp": "Show shortcuts help",
+    "gotoProjects": "Go to Projects",
+    "gotoSettings": "Go to Settings",
+    "toggleTheme": "Cycle theme",
+    "toggleShortcutHints": "Toggle shortcut hints",
+    "newBook": "Create new book",
+    "jumpBooks": "Jump to book by number",
+    "moveSelection": "Move card selection",
+    "openSelected": "Open selected book",
+    "save": "Save",
+    "toggleFocusMode": "Toggle focus mode",
+    "backFromEditor": "Back from editor",
+    "deleteSelection": "Delete selected object"
   }
 }

@@ -7,6 +7,7 @@ import { COVER_DIMENSIONS, DEFAULT_TEXT_STYLES, type CoverDimension, type TextSt
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
 import { BackIcon } from "../components/icons";
+import { useShortcuts } from "../lib/shortcuts";
 
 export function CoverDesigner() {
   const { t } = useTranslation();
@@ -180,25 +181,19 @@ export function CoverDesigner() {
     navigate(`/book/${bookId}`);
   }, [navigate, bookId, hasChanges]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Delete selected
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (document.activeElement?.tagName !== "INPUT") {
-          handleDelete();
-        }
-      }
-      // Save
-      if (e.ctrlKey && e.key === "s") {
-        e.preventDefault();
+  useShortcuts([
+    {
+      keys: ["delete", "backspace"],
+      onTrigger: () => handleDelete(),
+    },
+    {
+      keys: ["ctrl+s", "meta+s"],
+      onTrigger: () => {
         handleSave();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleDelete, handleSave]);
+      },
+      allowInInput: true,
+    },
+  ]);
 
   if (!currentBook) {
     return (
