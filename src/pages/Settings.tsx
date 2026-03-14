@@ -237,10 +237,10 @@ export function Settings() {
         </section>
 
         {/* General Settings */}
-        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.general")}</h3>
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+        <section className="mb-6 sm:mb-8">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">{t("settings.general")}</h3>
+          <div className="divide-y divide-border">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.autoSave")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.autoSaveDescription")}</p>
@@ -252,7 +252,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.language")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.languageDescription")}</p>
@@ -267,10 +267,10 @@ export function Settings() {
         </section>
 
         {/* Sync Settings */}
-        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("sync.title")}</h3>
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+        <section className="mb-6 sm:mb-8">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">{t("sync.title")}</h3>
+          <div className="divide-y divide-border">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div className="flex-1">
                 <p className="font-medium">{t("sync.serverUrl")}</p>
                 <p className="text-sm text-muted-foreground">{t("sync.serverUrlDescription")}</p>
@@ -290,8 +290,8 @@ export function Settings() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
-              <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+              <div className="flex-1">
                 <p className="font-medium">{t("sync.accountStatus")}</p>
                 <p className="text-sm text-muted-foreground">
                   {authStatus === "logged-in" && userEmail
@@ -401,10 +401,10 @@ export function Settings() {
         </section>
 
         {/* Export Settings */}
-        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.export")}</h3>
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+        <section className="mb-6 sm:mb-8">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">{t("settings.export")}</h3>
+          <div className="divide-y divide-border">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.defaultFormat")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.defaultFormatDescription")}</p>
@@ -537,8 +537,7 @@ export function Settings() {
         </Modal>
 
         {/* About */}
-        <section className="rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.about")}</h3>
+        <section className="pt-4 border-t border-border">
           <div className="text-sm text-muted-foreground">
             <p className="flex items-center gap-2">
               Maibuk {APP_VERSION}
