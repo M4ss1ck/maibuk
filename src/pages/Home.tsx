@@ -5,10 +5,9 @@ import { BookCard } from "../components/project/BookCard";
 import { NewBookDialog } from "../components/project/NewBookDialog";
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
-import { AddIcon } from "../components/icons";
+import { AddIcon, BookStackIcon } from "../components/icons";
 import { Download } from "lucide-react";
 import { IS_WEB } from "../lib/platform";
-import logo from "../../src-tauri/icons/icon.png";
 import { DOWNLOAD_PAGE } from "../constants";
 import { KeyboardShortcut } from "../components/ui";
 import { isModKey, isTypingTarget } from "../lib/keyboard";
@@ -119,15 +118,16 @@ export function Home() {
 
       {books.length === 0 ? (
         /* Empty state */
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-24 h-24 mb-6 flex items-center justify-center">
-            <img src={logo} alt="Logo" className="w-24" />
+        <div className="empty-state-enter flex flex-col items-center justify-center py-20 sm:py-28 text-center">
+          <div className="w-20 h-20 mb-8 text-muted-foreground/60">
+            <BookStackIcon className="w-full h-full" />
           </div>
-          <h3 className="text-xl font-medium mb-2">{t("books.noBooks")}</h3>
-          <p className="text-muted-foreground mb-6 max-w-md">
+          <h3 className="text-2xl sm:text-3xl font-semibold mb-3 tracking-tight">{t("books.noBooks")}</h3>
+          <p className="text-muted-foreground mb-8 max-w-sm leading-relaxed">
             {t("books.noBooksFull")}
           </p>
           <Button size="lg" onClick={() => setIsNewBookOpen(true)}>
+            <AddIcon className="w-5 h-5" />
             {t("books.noBooksButton")}
           </Button>
         </div>
@@ -141,6 +141,7 @@ export function Home() {
               onClick={() => navigate(`/book/${book.id}`)}
               indexHint={index < 9 ? index + 1 : undefined}
               isFocused={books[focusedBookIndex]?.id === book.id}
+              index={index}
             />
           ))}
         </div>

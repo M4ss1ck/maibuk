@@ -8,9 +8,10 @@ interface BookCardProps {
   onClick: () => void;
   indexHint?: number;
   isFocused?: boolean;
+  index?: number;
 }
 
-export function BookCard({ book, onClick, indexHint, isFocused = false }: BookCardProps) {
+export function BookCard({ book, onClick, indexHint, isFocused = false, index = 0 }: BookCardProps) {
   const { t, i18n } = useTranslation();
 
   const formatDate = (date: Date) => {
@@ -30,7 +31,8 @@ export function BookCard({ book, onClick, indexHint, isFocused = false }: BookCa
   return (
     <button
       onClick={onClick}
-      className={`relative flex flex-col bg-card border rounded-xl overflow-hidden hover:shadow-lg transition-shadow text-left w-full ${isFocused ? "border-primary ring-1 ring-primary/30" : "border-border"}`}
+      style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
+      className={`book-card-enter relative flex flex-col bg-card border rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200 text-left w-full ${isFocused ? "border-primary ring-1 ring-primary/30" : "border-border"}`}
     >
       {indexHint ? (
         <KeyboardShortcut
@@ -39,8 +41,8 @@ export function BookCard({ book, onClick, indexHint, isFocused = false }: BookCa
         />
       ) : null}
 
-      {/* Cover placeholder */}
-      <div className="aspect-2/3 bg-linear-to-br from-muted to-muted/50 flex items-center justify-center">
+      {/* Cover */}
+      <div className="aspect-2/3 bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center">
         {book.coverImagePath ? (
           <img
             src={book.coverImagePath}

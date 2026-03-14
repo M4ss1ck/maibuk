@@ -714,6 +714,18 @@ option {
   animation: slide-up 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Empty state entrance */
+.empty-state-enter {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+/* Book card entrance — stagger via inline --delay */
+.book-card-enter {
+  opacity: 0;
+  animation: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--delay, 0ms);
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .modal-backdrop-enter,
@@ -721,7 +733,10 @@ option {
   .toast-enter,
   .toast-exit,
   .loading-entrance,
-  .dropdown-enter {
+  .dropdown-enter,
+  .empty-state-enter,
+  .book-card-enter {
     animation: none;
+    opacity: 1;
   }
 }
