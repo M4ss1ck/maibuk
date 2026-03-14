@@ -1,8 +1,15 @@
 export { generateEpub, getEpubFilename } from "./epub-generator";
 export { processChapterHtml, sanitizeHtmlForEpub } from "./html-sanitizer";
 export { EPUB_STYLES } from "./epub-styles";
-export type { EpubExportOptions, ExportProgress } from "./types";
-export { DEFAULT_EXPORT_OPTIONS } from "./types";
-export { generatePdfHtml } from "./pdf-generator";
-export { generatePdfStyles, DEFAULT_PDF_OPTIONS } from "./pdf-styles";
-export type { PdfExportOptions } from "./pdf-styles";
+export type {
+  EpubExportOptions,
+  ExportProgress,
+  PdfExportOptions,
+  PdfPageSize,
+  PdfMarginPreset,
+} from "./types";
+export { DEFAULT_EXPORT_OPTIONS, DEFAULT_PDF_OPTIONS, PDF_BASE_FONT } from "./types";
+export { generatePdf, getPdfFilename, sanitizePdfText } from "./pdf-generator";
+export { createPdfStyles } from "./pdf-styles";
+export type { PdfStyles } from "./pdf-styles";
+export { mapCssFontToPdf } from "./pdf-content-renderer";

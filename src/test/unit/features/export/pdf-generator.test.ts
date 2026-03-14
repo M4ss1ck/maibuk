@@ -1,218 +1,229 @@
-import { describe, expect, it } from "vitest";
-import { generatePdfHtml } from "../../../../features/export/pdf-generator";
+import { vi, describe, expect, it, beforeEach } from "vitest";
 import { buildBook, buildChapter } from "../../../support/fixtures";
 
-describe("generatePdfHtml()", () => {
-  const defaultOptions = { includeTableOfContents: false };
+// vi.hoisted ensures mocks are available when vi.mock factories run
+const { mockToBlob, mockPdf, mockPdfLibLoad, mockEmbedFont } = vi.hoisted(() => {
+  const mockToBlob = vi.fn().mockResolvedValue(new Blob(["fake-pdf"], { type: "application/pdf" }));
+  const mockPdf = vi.fn().mockReturnValue({ toBlob: mockToBlob });
+  const mockWidthOfTextAtSize = vi.fn().mockReturnValue(20);
+  const mockEmbedFont = vi.fn().mockResolvedValue({ widthOfTextAtSize: mockWidthOfTextAtSize });
+  const mockDrawText = vi.fn();
+  const mockGetPages = vi.fn().mockReturnValue([
+    { getSize: () => ({ width: 595, height: 842 }), drawText: mockDrawText },
+    { getSize: () => ({ width: 595, height: 842 }), drawText: mockDrawText },
+  ]);
+  const mockSave = vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]));
+  const mockPdfLibLoad = vi.fn().mockResolvedValue({
+    embedFont: mockEmbedFont,
+    getPages: mockGetPages,
+    save: mockSave,
+  });
+  return { mockToBlob, mockPdf, mockPdfLibLoad, mockEmbedFont };
+});
 
-  it("throws when no chapters are selected for export", () => {
+vi.mock("@react-pdf/renderer", () => ({
+  pdf: mockPdf,
+  Font: { registerHyphenationCallback: mockPdf }, // Stub — actual hyphenation tested implicitly
+  Document: "Document",
+  Page: "Page",
+  View: "View",
+  Text: "Text",
+  Image: "Image",
+  Link: "Link",
+  StyleSheet: { create: (styles: Record<string, unknown>) => styles },
+}));
+
+vi.mock("pdf-lib", () => ({
+  PDFDocument: { load: mockPdfLibLoad },
+  StandardFonts: { TimesRoman: "TimesRoman", Helvetica: "Helvetica", Courier: "Courier" },
+  rgb: (r: number, g: number, b: number) => ({ r, g, b }),
+}));
+
+// Mock the PdfDocument component
+vi.mock("../../../../features/export/pdf-document", () => ({
+  PdfDocument: () => null,
+}));
+
+import { generatePdf, getPdfFilename, sanitizePdfText } from "../../../../features/export/pdf-generator";
+import { DEFAULT_PDF_OPTIONS } from "../../../../features/export/types";
+
+describe("sanitizePdfText()", () => {
+  it("returns normal text unchanged", () => {
+    expect(sanitizePdfText("Hello, world!")).toBe("Hello, world!");
+  });
+
+  it("preserves tabs, newlines, and carriage returns", () => {
+    expect(sanitizePdfText("line1\nline2\ttab\r")).toBe("line1\nline2\ttab\r");
+  });
+
+  it("strips C0 control characters (except \\t \\n \\r)", () => {
+    expect(sanitizePdfText("abc\x00\x01\x08\x0Bdef")).toBe("abcdef");
+  });
+
+  it("strips C1 control characters", () => {
+    expect(sanitizePdfText("abc\x80\x9Fdef")).toBe("abcdef");
+  });
+
+  it("strips unpaired high surrogates", () => {
+    const input = "abc\uD800def";
+    expect(sanitizePdfText(input)).toBe("abcdef");
+  });
+
+  it("strips unpaired low surrogates", () => {
+    const input = "abc\uDC00def";
+    expect(sanitizePdfText(input)).toBe("abcdef");
+  });
+
+  it("preserves valid surrogate pairs (emoji)", () => {
+    const emoji = "Hello 😊 World";
+    expect(sanitizePdfText(emoji)).toBe(emoji);
+  });
+});
+
+describe("generatePdf()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Reset the toBlob mock to return a valid Blob each time
+    mockToBlob.mockResolvedValue(new Blob(["fake-pdf"], { type: "application/pdf" }));
+  });
+
+  it("throws when no chapters are selected for export", async () => {
     const book = buildBook();
     const chapters = [buildChapter({ isIncludedInExport: false })];
 
-    expect(() => generatePdfHtml(book, chapters, defaultOptions)).toThrow(
-      "No chapters selected for export",
-    );
+    await expect(
+      generatePdf(book, chapters, DEFAULT_PDF_OPTIONS)
+    ).rejects.toThrow("No chapters selected for export");
   });
 
-  it("renders a valid HTML document with doctype, head, and body", () => {
-    const book = buildBook({ title: "My Novel" });
-    const chapters = [buildChapter({ title: "Opening", content: "<p>Hello</p>" })];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).toMatch(/^<!DOCTYPE html>/);
-    expect(html).toContain("<html");
-    expect(html).toContain("<head>");
-    expect(html).toContain("</head>");
-    expect(html).toContain("<body>");
-    expect(html).toContain("</body>");
-    expect(html).toContain("</html>");
-  });
-
-  it("includes book title in the <title> tag", () => {
-    const book = buildBook({ title: "My Novel" });
-    const chapters = [buildChapter()];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).toContain("<title>My Novel</title>");
-  });
-
-  it("sets the lang attribute from book.language", () => {
-    const book = buildBook({ language: "es" });
-    const chapters = [buildChapter()];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).toContain('lang="es"');
-  });
-
-  it("renders a text-only cover when no cover image is provided", () => {
-    const book = buildBook({ title: "No Cover", authorName: "Jane Doe" });
-    const chapters = [buildChapter()];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).toContain('class="cover-page"');
-    expect(html).toContain('class="title"');
-    expect(html).toContain("No Cover");
-    expect(html).toContain("Jane Doe");
-    expect(html).not.toContain("<img");
-  });
-
-  it("renders a cover image when coverImagePath is set", () => {
-    const book = buildBook({ coverImagePath: "data:image/png;base64,abc" });
-    const chapters = [buildChapter()];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).toContain("<img");
-    expect(html).toContain("data:image/png;base64,abc");
-  });
-
-  it("renders subtitle when present", () => {
-    const book = buildBook({ subtitle: "A Subtitle" });
-    const chapters = [buildChapter()];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).toContain("A Subtitle");
-    expect(html).toContain('class="subtitle"');
-  });
-
-  it("omits subtitle div when not present", () => {
-    const book = buildBook({ subtitle: undefined });
-    const chapters = [buildChapter()];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).not.toContain('class="subtitle"');
-  });
-
-  it("includes table of contents when option is enabled", () => {
+  it("returns a Blob when chapters exist", async () => {
     const book = buildBook();
-    const chapters = [
-      buildChapter({ title: "Chapter One", chapterType: "chapter", order: 1 }),
-      buildChapter({ title: "Chapter Two", chapterType: "chapter", order: 2 }),
-    ];
+    const chapters = [buildChapter({ isIncludedInExport: true })];
 
-    const html = generatePdfHtml(book, chapters, {
-      includeTableOfContents: true,
+    const blob = await generatePdf(book, chapters, DEFAULT_PDF_OPTIONS);
+
+    expect(blob).toBeInstanceOf(Blob);
+  });
+
+  it("calls pdf() to generate the document", async () => {
+    const book = buildBook();
+    const chapters = [buildChapter()];
+
+    await generatePdf(book, chapters, DEFAULT_PDF_OPTIONS);
+
+    expect(mockPdf).toHaveBeenCalledTimes(1);
+    expect(mockToBlob).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters out chapters not included in export", async () => {
+    const book = buildBook();
+    const included = buildChapter({
+      title: "Included",
+      isIncludedInExport: true,
+      order: 1,
+    });
+    const excluded = buildChapter({
+      title: "Excluded",
+      isIncludedInExport: false,
+      order: 2,
     });
 
-    expect(html).toContain('class="toc"');
-    expect(html).toContain("Table of Contents");
-    expect(html).toContain("Chapter One");
-    expect(html).toContain("Chapter Two");
+    await generatePdf(book, [included, excluded], DEFAULT_PDF_OPTIONS);
+
+    expect(mockPdf).toHaveBeenCalledTimes(1);
+    const element = mockPdf.mock.calls[0][0];
+    expect(element.props.chapters).toHaveLength(1);
+    expect(element.props.chapters[0].title).toBe("Included");
   });
 
-  it("excludes frontmatter chapters from TOC", () => {
+  it("sorts chapters by order", async () => {
     const book = buildBook();
-    const chapters = [
-      buildChapter({ title: "Preface", chapterType: "frontmatter", order: 1 }),
-      buildChapter({ title: "Chapter One", chapterType: "chapter", order: 2 }),
-    ];
+    const second = buildChapter({ title: "Second", order: 2 });
+    const first = buildChapter({ title: "First", order: 1 });
 
-    const html = generatePdfHtml(book, chapters, {
-      includeTableOfContents: true,
-    });
+    await generatePdf(book, [second, first], DEFAULT_PDF_OPTIONS);
 
-    expect(html).toContain('class="toc"');
-    // Preface should not be in the TOC, but should still render as a section
-    const tocSection = html.match(/<section class="toc">[\s\S]*?<\/section>/);
-    expect(tocSection).toBeTruthy();
-    expect(tocSection![0]).not.toContain("Preface");
-    expect(tocSection![0]).toContain("Chapter One");
+    const element = mockPdf.mock.calls[0][0];
+    expect(element.props.chapters[0].title).toBe("First");
+    expect(element.props.chapters[1].title).toBe("Second");
   });
 
-  it("does not include TOC when option is disabled", () => {
+  it("passes options to the PdfDocument element", async () => {
+    const book = buildBook();
+    const chapters = [buildChapter()];
+    const options = { ...DEFAULT_PDF_OPTIONS, pageSize: "A5" as const };
+
+    await generatePdf(book, chapters, options);
+
+    const element = mockPdf.mock.calls[0][0];
+    expect(element.props.options.pageSize).toBe("A5");
+  });
+
+  it("sanitizes book title before passing to PdfDocument", async () => {
+    const book = buildBook({ title: "My\x00Book" });
+    const chapters = [buildChapter()];
+
+    await generatePdf(book, chapters, DEFAULT_PDF_OPTIONS);
+
+    const element = mockPdf.mock.calls[0][0];
+    expect(element.props.book.title).toBe("MyBook");
+  });
+
+  it("stamps page numbers via pdf-lib when includePageNumbers is true", async () => {
     const book = buildBook();
     const chapters = [buildChapter()];
 
-    const html = generatePdfHtml(book, chapters, {
-      includeTableOfContents: false,
-    });
+    await generatePdf(book, chapters, { ...DEFAULT_PDF_OPTIONS, includePageNumbers: true });
 
-    expect(html).not.toContain('class="toc"');
+    expect(mockPdfLibLoad).toHaveBeenCalledTimes(1);
+    expect(mockEmbedFont).toHaveBeenCalledTimes(1);
+    expect(mockEmbedFont).toHaveBeenCalledWith("TimesRoman");
   });
 
-  it("filters out chapters not included in export", () => {
-    const book = buildBook();
-    const chapters = [
-      buildChapter({ title: "Included", isIncludedInExport: true, order: 1 }),
-      buildChapter({ title: "Excluded", isIncludedInExport: false, order: 2 }),
-    ];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).toContain("Included");
-    expect(html).not.toContain("Excluded");
-  });
-
-  it("sorts chapters by order", () => {
-    const book = buildBook();
-    const chapters = [
-      buildChapter({ title: "Second", order: 2 }),
-      buildChapter({ title: "First", order: 1 }),
-    ];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    const firstIdx = html.indexOf("First");
-    const secondIdx = html.indexOf("Second");
-    expect(firstIdx).toBeLessThan(secondIdx);
-  });
-
-  it("renders chapter numbers only for 'chapter' type", () => {
-    const book = buildBook();
-    const chapters = [
-      buildChapter({ title: "Prologue", chapterType: "prologue", order: 1 }),
-      buildChapter({ title: "Opening", chapterType: "chapter", order: 2 }),
-    ];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    // The chapter section should have "Chapter 1"
-    expect(html).toContain("Chapter 1");
-    // Prologue should not get a chapter number
-    const prologueSection = html.match(
-      /<section class="chapter" id="chapter-0">[\s\S]*?<\/section>/,
-    );
-    expect(prologueSection).toBeTruthy();
-    expect(prologueSection![0]).not.toContain("chapter-number");
-  });
-
-  it("escapes HTML special characters in title and author", () => {
-    const book = buildBook({
-      title: 'A <Book> & "More"',
-      authorName: "O'Brien",
-    });
-    const chapters = [buildChapter()];
-
-    const html = generatePdfHtml(book, chapters, defaultOptions);
-
-    expect(html).toContain("A &lt;Book&gt; &amp; &quot;More&quot;");
-    expect(html).toContain("O&#039;Brien");
-  });
-
-  it("embeds generated styles inside a <style> tag", () => {
+  it("skips page stamping when includePageNumbers is false", async () => {
     const book = buildBook();
     const chapters = [buildChapter()];
 
-    const html = generatePdfHtml(book, chapters, defaultOptions);
+    await generatePdf(book, chapters, { ...DEFAULT_PDF_OPTIONS, includePageNumbers: false });
 
-    expect(html).toContain("<style>");
-    expect(html).toContain("</style>");
-    // Verify it contains actual CSS content from generatePdfStyles
-    expect(html).toContain(".pdf-preview-content");
+    expect(mockPdfLibLoad).not.toHaveBeenCalled();
   });
 
-  it("handles chapters with null content gracefully", () => {
+  it("calls onProgress callback with status messages", async () => {
     const book = buildBook();
-    const chapters = [buildChapter({ content: null })];
+    const chapters = [buildChapter()];
+    const onProgress = vi.fn();
 
-    const html = generatePdfHtml(book, chapters, defaultOptions);
+    await generatePdf(book, chapters, DEFAULT_PDF_OPTIONS, onProgress);
 
-    expect(html).toContain("<p></p>");
+    expect(onProgress).toHaveBeenCalledWith("Preparing chapters...");
+    expect(onProgress).toHaveBeenCalledWith("Generating PDF document...");
+    expect(onProgress).toHaveBeenCalledWith("Adding page numbers...");
+    expect(onProgress).toHaveBeenCalledWith("PDF generated successfully!");
+  });
+});
+
+describe("getPdfFilename()", () => {
+  it("returns a .pdf filename from book title", () => {
+    const book = buildBook({ title: "My Book" });
+    expect(getPdfFilename(book)).toBe("My_Book.pdf");
+  });
+
+  it("sanitizes special characters", () => {
+    const book = buildBook({ title: 'A <Book> "Quoted"' });
+    expect(getPdfFilename(book)).toBe("A_Book_Quoted.pdf");
+  });
+
+  it("replaces spaces with underscores", () => {
+    const book = buildBook({ title: "Hello World Again" });
+    expect(getPdfFilename(book)).toBe("Hello_World_Again.pdf");
+  });
+
+  it("truncates long titles to 100 characters", () => {
+    const longTitle = "A".repeat(200);
+    const book = buildBook({ title: longTitle });
+    const filename = getPdfFilename(book);
+    // 100 chars + ".pdf" = 104
+    expect(filename.length).toBe(104);
   });
 });
