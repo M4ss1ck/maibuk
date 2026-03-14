@@ -448,7 +448,7 @@ export function BookEditor() {
                     className="fixed inset-0 z-40"
                     onClick={() => setShowMobileMenu(false)}
                   />
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border rounded-lg shadow-lg z-50">
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border rounded-lg shadow-lg z-50 dropdown-enter">
                     <button
                       onClick={() => {
                         setShowExportDialog(true);

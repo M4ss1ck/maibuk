@@ -648,3 +648,80 @@ option {
   color: var(--color-foreground);
   line-height: 1.4;
 }
+
+/* ─── Animation keyframes ─── */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes slide-down-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes logo-entrance {
+  0% { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Modal animations (custom Modal component) */
+.modal-backdrop-enter {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+.modal-panel-enter {
+  animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Toast animation */
+.toast-enter {
+  animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast-exit {
+  animation: toast-out 0.15s ease-in forwards;
+}
+
+/* Loading screen entrance */
+.loading-entrance {
+  animation: logo-entrance 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Dropdown menu entrance */
+.dropdown-enter {
+  animation: slide-up 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop-enter,
+  .modal-panel-enter,
+  .toast-enter,
+  .toast-exit,
+  .loading-entrance,
+  .dropdown-enter {
+    animation: none;
+  }
+}

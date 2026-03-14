@@ -10,10 +10,10 @@ describe("LoadingScreen", () => {
     expect(logo.tagName).toBe("IMG");
   });
 
-  it("applies pulse animation to the logo", () => {
+  it("applies entrance animation to the logo", () => {
     render(<LoadingScreen />);
     const logo = screen.getByAltText("Maibuk");
-    expect(logo.className).toContain("animate-pulse");
+    expect(logo.className).toContain("loading-entrance");
   });
 
   it("uses full dynamic viewport height", () => {

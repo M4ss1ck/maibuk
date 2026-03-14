@@ -119,13 +119,15 @@ export function BookSettingsDialog({
     "w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-accent";
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
+    <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50" aria-hidden="true" />
+      <div className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-[closed]:opacity-0" aria-hidden="true" />
 
       {/* Dialog container */}
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto">
+        <DialogPanel
+          transition
+          className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto transition duration-200 ease-out data-[closed]:translate-y-4 data-[closed]:opacity-0 data-[closed]:sm:scale-95 data-[closed]:sm:translate-y-0">
           <DialogTitle className="text-xl font-semibold text-foreground mb-4">
             {t("bookSettings.title")}
           </DialogTitle>

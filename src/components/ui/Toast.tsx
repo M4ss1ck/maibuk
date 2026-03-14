@@ -85,7 +85,7 @@ export function ToastViewport() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-sm text-foreground"
+          className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-sm text-foreground toast-enter"
           role="status"
         >
           {toast.variant === "success" && <CheckIcon className="h-4 w-4 text-success" />}
