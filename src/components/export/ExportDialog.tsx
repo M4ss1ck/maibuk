@@ -151,12 +151,12 @@ export function ExportDialog({
           </DialogTitle>
 
           {/* Book info */}
-          <div className="mb-6 p-3 bg-primary rounded-md">
+          <div className="mb-6 p-3 bg-info-bg rounded-lg border border-border">
             <p className="font-medium text-foreground">{book.title}</p>
-            <p className="text-sm text-success">
+            <p className="text-sm text-muted-foreground">
               {t("common.by")} {book.authorName}
             </p>
-            <p className="text-sm text-success mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               {t("export.chapter", { count: exportableChapters.length })}
             </p>
           </div>
@@ -258,10 +258,10 @@ export function ExportDialog({
           {progress.status !== "idle" && (
             <div
               className={`mb-4 p-3 rounded-md text-sm ${progress.status === "error"
-                ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200"
+                ? "bg-feedback-error-bg text-feedback-error-text"
                 : progress.status === "complete"
-                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200"
-                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200"
+                  ? "bg-feedback-success-bg text-feedback-success-text"
+                  : "bg-feedback-progress-bg text-feedback-progress-text"
                 }`}
             >
               <div className="flex items-center gap-2">

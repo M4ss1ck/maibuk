@@ -16,6 +16,32 @@
   --color-destructive-hover: #dc2626;
   --color-success: #22c55e;
 
+  /* Status badges */
+  --color-status-draft-bg: #e7e5e4;
+  --color-status-draft-text: #78716c;
+  --color-status-progress-bg: #dbeafe;
+  --color-status-progress-text: #2563eb;
+  --color-status-complete-bg: #dcfce7;
+  --color-status-complete-text: #16a34a;
+
+  /* Feedback banners */
+  --color-info-bg: #dbeafe;
+  --color-info-text: #1e40af;
+  --color-info-link: #2563eb;
+  --color-warning-bg: #fef3c7;
+  --color-warning-text: #92400e;
+  --color-feedback-error-bg: #fee2e2;
+  --color-feedback-error-text: #991b1b;
+  --color-feedback-success-bg: #dcfce7;
+  --color-feedback-success-text: #166534;
+  --color-feedback-progress-bg: #dbeafe;
+  --color-feedback-progress-text: #1e40af;
+  --color-update-bg: rgba(217, 119, 6, 0.15);
+  --color-update-text: #d97706;
+
+  /* Preview surface */
+  --color-preview-bg: #d6d3d1;
+
   /** Table */
   --color-table-border: #d6d3d1;
   --color-table-header: #f5f5f4;
@@ -48,6 +74,32 @@
 
   --color-table-border: #3f3a36;
   --color-table-header: #2f2a26;
+
+  /* Status badges */
+  --color-status-draft-bg: #44403c;
+  --color-status-draft-text: #a8a29e;
+  --color-status-progress-bg: rgba(37, 99, 235, 0.2);
+  --color-status-progress-text: #93c5fd;
+  --color-status-complete-bg: rgba(22, 163, 74, 0.2);
+  --color-status-complete-text: #86efac;
+
+  /* Feedback banners */
+  --color-info-bg: rgba(37, 99, 235, 0.15);
+  --color-info-text: #bfdbfe;
+  --color-info-link: #93c5fd;
+  --color-warning-bg: rgba(217, 119, 6, 0.15);
+  --color-warning-text: #fde68a;
+  --color-feedback-error-bg: rgba(220, 38, 38, 0.15);
+  --color-feedback-error-text: #fecaca;
+  --color-feedback-success-bg: rgba(22, 163, 74, 0.15);
+  --color-feedback-success-text: #bbf7d0;
+  --color-feedback-progress-bg: rgba(37, 99, 235, 0.15);
+  --color-feedback-progress-text: #bfdbfe;
+  --color-update-bg: rgba(217, 119, 6, 0.15);
+  --color-update-text: #fbbf24;
+
+  /* Preview surface */
+  --color-preview-bg: #292524;
 }
 
 /* Base styles */

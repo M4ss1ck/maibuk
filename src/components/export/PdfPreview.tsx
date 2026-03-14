@@ -215,7 +215,7 @@ export function PdfPreview({
       </div>
 
       {/* Content preview (scrollable) */}
-      <div className="pdf-preview-scroll-area flex-1 overflow-auto bg-neutral-200 dark:bg-neutral-800 p-8">
+      <div className="pdf-preview-scroll-area flex-1 overflow-auto bg-preview-bg p-8">
         <div
           ref={previewRef}
           className="pdf-preview-content max-w-4xl mx-auto bg-white text-black p-12 shadow-lg rounded-lg"

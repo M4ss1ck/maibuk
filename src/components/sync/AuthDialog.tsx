@@ -82,12 +82,12 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="rounded-lg bg-blue-100 dark:bg-blue-900/30 p-3 text-sm text-blue-800 dark:text-blue-200">
+        <div className="rounded-lg bg-info-bg p-3 text-sm text-info-text">
           <p className="mb-1">{t("sync.infoCardText")}</p>
           <button
             type="button"
             onClick={() => openExternal("https://maibuk.massick.dev/sync")}
-            className="text-blue-600 dark:text-blue-300 hover:underline font-medium"
+            className="text-info-link hover:underline font-medium"
           >
             {t("sync.infoCardLearnMore")}
           </button>
