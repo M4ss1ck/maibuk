@@ -25,6 +25,10 @@ export interface Settings {
 
   // Export settings
   defaultExportFormat: ExportFormat;
+
+  // Editor layout settings
+  sidebarWidth: number;
+  toolbarExpanded: boolean;
 }
 
 export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [

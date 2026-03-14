@@ -77,7 +77,10 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showHtmlDialog, setShowHtmlDialog] = useState(false);
   const [showDictionaryDialog, setShowDictionaryDialog] = useState(false);
   const [dictionaryWord, setDictionaryWord] = useState("");
-  const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
+  const [isToolbarExpanded, setIsToolbarExpanded] = [
+    useSettingsStore((state) => state.toolbarExpanded),
+    useSettingsStore((state) => state.setToolbarExpanded),
+  ];
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
   const showNotesChapter = useSettingsStore((state) => state.showNotesChapter);
@@ -235,6 +238,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <Divider />
 
         <FontSizeSelect editor={editor} value={editorState.fontSize} />
+        <FontFamilySelect editor={editor} value={editorState.fontFamily} />
 
         <Divider />
 
@@ -248,6 +252,10 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
         <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editorState.isUnderline} title={t("editor.underline")}>
           <Underline className="w-4 h-4" />
+        </ToolbarButton>
+
+        <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editorState.isStrike} title={t("editor.strikethrough")}>
+          <Strikethrough className="w-4 h-4" />
         </ToolbarButton>
 
         <Divider />
@@ -285,14 +293,9 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       {/* Extended toolbar — visible when expanded */}
       {isToolbarExpanded && (
         <div className="flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto border-t border-border">
-          <FontFamilySelect editor={editor} value={editorState.fontFamily} />
           <LineHeightSelect editor={editor} value={editorState.lineHeight} />
 
           <Divider />
-
-          <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editorState.isStrike} title={t("editor.strikethrough")}>
-            <Strikethrough className="w-4 h-4" />
-          </ToolbarButton>
 
           <ColorPicker
             value={editorState.highlightColor}

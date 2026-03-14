@@ -29,6 +29,8 @@ interface SettingsStore extends Settings {
   setShowInlineFootnotes: (enabled: boolean) => void;
   setShowNotesChapter: (enabled: boolean) => void;
   setHideKeyboardHints: (enabled: boolean) => void;
+  setSidebarWidth: (width: number) => void;
+  setToolbarExpanded: (expanded: boolean) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -46,6 +48,8 @@ const defaultSettings: Settings = {
   showNotesChapter: false,
   hideKeyboardHints: false,
   defaultExportFormat: "epub",
+  sidebarWidth: 256,
+  toolbarExpanded: false,
 };
 
 function normalizeHexColor(color: string): string {
@@ -79,6 +83,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setShowInlineFootnotes: (showInlineFootnotes) => set({ showInlineFootnotes }),
       setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
+      setSidebarWidth: (sidebarWidth) => set({ sidebarWidth: Math.max(200, Math.min(480, sidebarWidth)) }),
+      setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;

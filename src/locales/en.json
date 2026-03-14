@@ -73,7 +73,9 @@
     "deleteChapter": "Delete Chapter",
     "noChapters": "No chapters yet. Add your first chapter!",
     "addChapter": "Add Chapter",
-    "chapterTitlePlaceholder": "Chapter title..."
+    "chapterTitlePlaceholder": "Chapter title...",
+    "showSidebar": "Show chapters",
+    "hideSidebar": "Hide chapters"
   },
   "editor": {
     "loading": "Loading book...",
@@ -381,6 +383,7 @@
     "openSelected": "Open selected book",
     "save": "Save",
     "toggleFocusMode": "Toggle focus mode",
+    "toggleSidebar": "Toggle sidebar",
     "backFromEditor": "Back from editor",
     "deleteSelection": "Delete selected object"
   }

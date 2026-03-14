@@ -10,6 +10,7 @@ import {
   Strikethrough,
   Highlighter,
   Link,
+  Code,
   Heading1,
   Heading2,
   Heading3,
@@ -39,6 +40,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
       isStrike: e.isActive("strike"),
       isHighlight: e.isActive("highlight"),
       isLink: e.isActive("link"),
+      isCode: e.isActive("code"),
       isH1: e.isActive("heading", { level: 1 }),
       isH2: e.isActive("heading", { level: 2 }),
       isH3: e.isActive("heading", { level: 3 }),
@@ -149,6 +151,10 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
 
       <ToolbarButton onClick={onLinkClick} isActive={editorState.isLink} title={t("editor.insertLinkShortcut")}>
         <Link className="w-3.5 h-3.5" />
+      </ToolbarButton>
+
+      <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editorState.isCode} title={t("editor.code")}>
+        <Code className="w-3.5 h-3.5" />
       </ToolbarButton>
     </div>
   );

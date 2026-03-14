@@ -73,7 +73,9 @@
     "deleteChapter": "Eliminar Capítulo",
     "noChapters": "Aún no hay capítulos. ¡Añade tu primer capítulo!",
     "addChapter": "Añadir",
-    "chapterTitlePlaceholder": "Título del capítulo..."
+    "chapterTitlePlaceholder": "Título del capítulo...",
+    "showSidebar": "Mostrar capítulos",
+    "hideSidebar": "Ocultar capítulos"
   },
   "editor": {
     "loading": "Cargando libro...",
@@ -381,6 +383,7 @@
     "openSelected": "Abrir libro seleccionado",
     "save": "Guardar",
     "toggleFocusMode": "Alternar modo enfoque",
+    "toggleSidebar": "Alternar barra lateral",
     "backFromEditor": "Volver desde el editor",
     "deleteSelection": "Eliminar objeto seleccionado"
   }
