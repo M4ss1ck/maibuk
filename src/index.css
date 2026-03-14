@@ -726,6 +726,11 @@ option {
   animation-delay: var(--delay, 0ms);
 }
 
+/* Selection toolbar (floating bubble menu) */
+.selection-toolbar-enter {
+  animation: fade-in 0.12s ease-out forwards;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .modal-backdrop-enter,
@@ -735,7 +740,8 @@ option {
   .loading-entrance,
   .dropdown-enter,
   .empty-state-enter,
-  .book-card-enter {
+  .book-card-enter,
+  .selection-toolbar-enter {
     animation: none;
     opacity: 1;
   }
