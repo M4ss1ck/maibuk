@@ -49,7 +49,7 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
         </button>
 
         {isOpen && (
-          <div className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg py-1 min-w-30 z-50">
+            <div className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg py-1 min-w-30 z-50 dropdown-enter">
             {themes.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}

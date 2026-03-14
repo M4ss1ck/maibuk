@@ -8,9 +8,10 @@ interface BookCardProps {
   onClick: () => void;
   indexHint?: number;
   isFocused?: boolean;
+  index?: number;
 }
 
-export function BookCard({ book, onClick, indexHint, isFocused = false }: BookCardProps) {
+export function BookCard({ book, onClick, indexHint, isFocused = false, index = 0 }: BookCardProps) {
   const { t, i18n } = useTranslation();
 
   const formatDate = (date: Date) => {
@@ -22,15 +23,16 @@ export function BookCard({ book, onClick, indexHint, isFocused = false }: BookCa
   };
 
   const statusColors = {
-    draft: "bg-muted text-muted-foreground",
-    "in-progress": "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
-    completed: "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400",
+    draft: "bg-status-draft-bg text-status-draft-text",
+    "in-progress": "bg-status-progress-bg text-status-progress-text",
+    completed: "bg-status-complete-bg text-status-complete-text",
   };
 
   return (
     <button
       onClick={onClick}
-      className={`relative flex flex-col bg-card border rounded-xl overflow-hidden hover:shadow-lg transition-shadow text-left w-full ${isFocused ? "border-primary ring-1 ring-primary/30" : "border-border"}`}
+      style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
+      className={`book-card-enter relative flex flex-col bg-card border rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200 text-left w-full ${isFocused ? "border-primary ring-1 ring-primary/30" : "border-border"}`}
     >
       {indexHint ? (
         <KeyboardShortcut
@@ -39,8 +41,8 @@ export function BookCard({ book, onClick, indexHint, isFocused = false }: BookCa
         />
       ) : null}
 
-      {/* Cover placeholder */}
-      <div className="aspect-2/3 bg-linear-to-br from-muted to-muted/50 flex items-center justify-center">
+      {/* Cover */}
+      <div className="aspect-2/3 bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center">
         {book.coverImagePath ? (
           <img
             src={book.coverImagePath}

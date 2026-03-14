@@ -7,7 +7,7 @@ export function LoadingScreen() {
         <img
           src={logo}
           alt="Maibuk"
-          className="w-20 h-20 animate-pulse"
+          className="w-20 h-20 loading-entrance"
         />
       </div>
     </div>

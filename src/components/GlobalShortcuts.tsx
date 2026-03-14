@@ -52,6 +52,7 @@ export function GlobalShortcuts() {
       list.push(
         { id: "editor.save", label: t("shortcuts.save"), keys: ["Ctrl+S"] },
         { id: "editor.focusMode", label: t("shortcuts.toggleFocusMode"), keys: ["F11"] },
+        { id: "editor.toggleSidebar", label: t("shortcuts.toggleSidebar"), keys: ["Ctrl+\\"] },
         { id: "editor.back", label: t("shortcuts.backFromEditor"), keys: ["Backspace"] },
       );
     }

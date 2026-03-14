@@ -17,9 +17,11 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { ImageFigure } from "./extensions/ImageFigure";
 import { Link } from "@tiptap/extension-link";
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { EditorToolbar } from "./EditorToolbar";
+import { SelectionToolbar } from "./SelectionToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
+import { LinkDialog } from "./LinkDialog";
 import { SpellCheckPopover } from "./SpellCheckPopover";
 import { ImageContextMenu } from "./ImageContextMenu";
 import { FootnoteList } from "./FootnoteList";
@@ -66,6 +68,7 @@ export function Editor({
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
+  const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -231,6 +234,12 @@ export function Editor({
       <LinkClickHandler editor={editor} />
       <SpellCheckPopover editor={editor} />
       <ImageContextMenu editor={editor} />
+
+      {/* Floating selection toolbar */}
+      {!focusMode && (
+        <SelectionToolbar editor={editor} onLinkClick={() => setShowBubbleLinkDialog(true)} />
+      )}
+      <LinkDialog editor={editor} isOpen={showBubbleLinkDialog} onClose={() => setShowBubbleLinkDialog(false)} />
     </div>
   );
 }

@@ -532,3 +532,33 @@ pnpm preview:web      # Preview web build
 pnpm version:bump     # Bump version via script
 pnpm tauri            # Direct Tauri CLI access
 ```
+
+---
+
+## 10. Design Context
+
+### Users
+
+Indie book authors — power users who value minimalism and craft. They come to Maibuk in **creative flow** mode: they want to disappear into their writing, not manage a project. The interface should remove friction, stay out of the way during writing, and feel satisfying during the moments they do interact with it (organizing chapters, exporting, designing covers). These are people who chose a dedicated writing tool over Google Docs — they care about the experience.
+
+### Brand Personality
+
+**Bold · Creative · Modern**
+
+Maibuk is confident, not timid. It has opinions about how writing software should feel. It's modern without being trendy — no chasing aesthetic fads. It's creative in the sense that it respects the creative process: it knows when to be invisible (writing) and when to delight (interactions, transitions, feedback). It never feels corporate, generic, or template-driven.
+
+### Aesthetic Direction
+
+- **Warm, grounded palette**: Stone-based neutrals (`stone-50` → `stone-950`) with user-customizable primary accent. The warmth is intentional — it avoids the cold, clinical feel of pure grays. Keep it.
+- **Editorial confidence**: Typography-driven hierarchy, generous whitespace during writing, tight purposeful density in toolbars and sidebars. Think magazine editorial layout sensibility applied to a tool.
+- **Own identity**: Maibuk should never look like "a React template" or "another Electron app." Every design decision should feel intentional. If a user showed the interface to someone, they should recognize it as _Maibuk_, not "some writing app."
+- **No anti-references needed** — the directive is simply: never be generic.
+- **Theme**: Light and dark modes via CSS variable swap (`.dark` class). No `dark:` Tailwind prefixes. The warm stone palette already provides good differentiation between themes.
+
+### Design Principles
+
+1. **Flow first** — The writing experience is sacred. The editor should feel like a blank page with superpowers hidden beneath the surface. Progressive disclosure: simple by default, powerful on demand.
+2. **Intentional density** — Toolbars, sidebars, and settings can be dense, but every element must earn its space. No decorative padding, no filler icons, no redundant labels. Tight where it should be tight, spacious where it should be spacious.
+3. **Confident restraint** — Bold doesn't mean loud. The interface should feel decisive — clear hierarchy, strong primary actions, no ambiguity about what to do next. But it achieves this through restraint: fewer elements with more purpose, not more elements with less.
+4. **Tangible feedback** — Every interaction should feel responsive and real. Save status, sync state, export progress, drag-and-drop reordering — these moments are where trust is built. Invest in making them feel right.
+5. **Never generic** — Before adding any UI element, ask: "Would this look the same in a generic template?" If yes, reconsider. Maibuk's identity comes from the accumulation of small, intentional choices — a distinctive empty state, a satisfying hover effect, a well-crafted transition.

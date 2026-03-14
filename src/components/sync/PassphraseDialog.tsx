@@ -147,7 +147,7 @@ export function PassphraseDialog({
           </Button>
         )}
 
-        <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-3 text-sm text-yellow-800 dark:text-yellow-200">
+        <div className="rounded-lg bg-warning-bg p-3 text-sm text-warning-text">
           {t("sync.encryptionWarning")}
         </div>
       </form>

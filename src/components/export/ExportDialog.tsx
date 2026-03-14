@@ -139,24 +139,26 @@ export function ExportDialog({
   }
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
+    <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50" aria-hidden="true" />
+      <div className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-[closed]:opacity-0" aria-hidden="true" />
 
       {/* Dialog container */}
       <div className="fixed inset-0 flex items-end sm:items-center justify-center sm:p-4">
-        <DialogPanel className="bg-background rounded-t-xl sm:rounded-lg shadow-xl max-w-md w-full p-4 sm:p-6 border border-border max-h-[90vh] overflow-auto">
+        <DialogPanel
+          transition
+          className="bg-background rounded-t-xl sm:rounded-lg shadow-xl max-w-md w-full p-4 sm:p-6 border border-border max-h-[90vh] overflow-auto transition duration-200 ease-out data-[closed]:translate-y-4 data-[closed]:opacity-0 data-[closed]:sm:scale-95 data-[closed]:sm:translate-y-0">
           <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground mb-4">
             {t("export.title")}
           </DialogTitle>
 
           {/* Book info */}
-          <div className="mb-6 p-3 bg-primary rounded-md">
+          <div className="mb-6 p-3 bg-info-bg rounded-lg border border-border">
             <p className="font-medium text-foreground">{book.title}</p>
-            <p className="text-sm text-success">
+            <p className="text-sm text-muted-foreground">
               {t("common.by")} {book.authorName}
             </p>
-            <p className="text-sm text-success mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               {t("export.chapter", { count: exportableChapters.length })}
             </p>
           </div>
@@ -258,10 +260,10 @@ export function ExportDialog({
           {progress.status !== "idle" && (
             <div
               className={`mb-4 p-3 rounded-md text-sm ${progress.status === "error"
-                ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200"
+                ? "bg-feedback-error-bg text-feedback-error-text"
                 : progress.status === "complete"
-                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200"
-                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200"
+                  ? "bg-feedback-success-bg text-feedback-success-text"
+                  : "bg-feedback-progress-bg text-feedback-progress-text"
                 }`}
             >
               <div className="flex items-center gap-2">

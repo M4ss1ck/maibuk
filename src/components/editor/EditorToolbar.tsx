@@ -77,7 +77,10 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showHtmlDialog, setShowHtmlDialog] = useState(false);
   const [showDictionaryDialog, setShowDictionaryDialog] = useState(false);
   const [dictionaryWord, setDictionaryWord] = useState("");
-  const [isToolbarExpanded, setIsToolbarExpanded] = useState(false);
+  const [isToolbarExpanded, setIsToolbarExpanded] = [
+    useSettingsStore((state) => state.toolbarExpanded),
+    useSettingsStore((state) => state.setToolbarExpanded),
+  ];
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
   const showNotesChapter = useSettingsStore((state) => state.showNotesChapter);
@@ -222,20 +225,18 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-10">
-      {/* Mobile toolbar toggle */}
-      <div className="flex md:hidden items-center justify-between px-4 py-1 border-b border-border">
-        <span className="text-xs font-medium">{t("editor.toolbar")}</span>
-        <button
-          onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
-          className="p-1 rounded hover:bg-muted transition-colors"
-          title={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
-        >
-          {isToolbarExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-      </div>
+      {/* Compact toolbar — always visible */}
+      <div className="flex items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto">
+        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editorState.canUndo} title={t("editor.undo")}>
+          <Undo2 className="w-4 h-4" />
+        </ToolbarButton>
 
-      {/* Toolbar content */}
-      <div className={`${isToolbarExpanded ? 'flex' : 'hidden'} md:flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto`}>
+        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editorState.canRedo} title={t("editor.redo")}>
+          <Redo2 className="w-4 h-4" />
+        </ToolbarButton>
+
+        <Divider />
+
         <FontSizeSelect editor={editor} value={editorState.fontSize} />
         <FontFamilySelect editor={editor} value={editorState.fontFamily} />
 
@@ -257,46 +258,6 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <Strikethrough className="w-4 h-4" />
         </ToolbarButton>
 
-        <ColorPicker
-          value={editorState.highlightColor}
-          onChange={(color) => editor.chain().focus().setHighlight({ color }).run()}
-          onClear={() => editor.chain().focus().unsetHighlight().run()}
-          onToggle={() => editor.chain().focus().toggleHighlight({ color: editorState.highlightColor || "#FFFF00" }).run()}
-          isActive={editorState.isHighlight}
-          title={t("editor.highlight")}
-          icon={<Highlighter className="w-4 h-4" />}
-        />
-
-        <ToolbarButton onClick={() => editor.chain().focus().toggleSubscript().run()} isActive={editorState.isSubscript} title={t("editor.subscript")}>
-          <Subscript className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().toggleSuperscript().run()} isActive={editorState.isSuperscript} title={t("editor.superscript")}>
-          <Superscript className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ColorPicker
-          value={editorState.color}
-          onChange={(color) => editor.chain().focus().setColor(color).run()}
-          onClear={() => editor.chain().focus().unsetColor().run()}
-          onToggle={() => editorState.color ? editor.chain().focus().unsetColor().run() : editor.chain().focus().setColor("#000000").run()}
-          isActive={!!editorState.color}
-          title={t("editor.textColor")}
-          icon={<Baseline className="w-4 h-4" />}
-        />
-
-        <ToolbarButton onClick={() => setShowLinkDialog(true)} isActive={editorState.isLink} title={t("editor.insertLinkShortcut")}>
-          <Link className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editorState.isCode} title={t("editor.code")}>
-          <Code className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editorState.isCodeBlock} title={t("editor.codeBlock")}>
-          <SquareCode className="w-4 h-4" />
-        </ToolbarButton>
-
         <Divider />
 
         <ToolbarButton onClick={() => handleHeadingToggle(1)} isActive={editorState.isH1} title={t("editor.heading1")}>
@@ -311,128 +272,178 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <Heading3 className="w-4 h-4" />
         </ToolbarButton>
 
-        <LineHeightSelect editor={editor} value={editorState.lineHeight} />
-
-        <Divider />
-
-        <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editorState.isBulletList} title={t("editor.bulletList")}>
-          <List className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editorState.isOrderedList} title={t("editor.numberedList")}>
-          <ListOrdered className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editorState.isBlockquote} title={t("editor.quote")}>
-          <Quote className="w-4 h-4" />
-        </ToolbarButton>
-
-        <Divider />
-
-        <ToolbarButton
-          onClick={() => editorState.canSinkListItem ? editor.chain().focus().sinkListItem("listItem").run() : editor.chain().focus().increaseIndent().run()}
-          title={t("editor.increaseIndent")}
-        >
-          <IndentIncrease className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={() => editorState.canLiftListItem ? editor.chain().focus().liftListItem("listItem").run() : editor.chain().focus().decreaseIndent().run()}
-          title={t("editor.decreaseIndent")}
-        >
-          <IndentDecrease className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().increaseFirstLineIndent().run()} title={t("editor.increaseFirstLineIndent")}>
-          <WrapText className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()} title={t("editor.decreaseFirstLineIndent")}>
-          <WrapText className="w-4 h-4 scale-x-[-1]" />
-        </ToolbarButton>
-
-        <Divider />
-
-        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("left").run()} isActive={editorState.isAlignLeft} title={t("editor.alignLeft")}>
-          <AlignLeft className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("center").run()} isActive={editorState.isAlignCenter} title={t("editor.alignCenter")}>
-          <AlignCenter className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("right").run()} isActive={editorState.isAlignRight} title={t("editor.alignRight")}>
-          <AlignRight className="w-4 h-4" />
-        </ToolbarButton>
-
-        <Divider />
-
-        <ToolbarButton onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} title={t("editor.removeFormatting")}>
-          <RemoveFormatting className="w-4 h-4" />
-        </ToolbarButton>
-
-        <Divider />
-
-        <TextCaseMenu editor={editor} />
-
-        <Divider />
-
-        <TableMenu editor={editor} />
-
-        <ToolbarButton onClick={() => setShowImageDialog(true)} title={t("editor.insertImage")}>
-          <Image className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => (editor.commands as any).setSceneBreak?.()} title={t("editor.sceneBreak")}>
-          <Ellipsis className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => {
-          if (editorWasFocusedRef.current) {
-            setShowFootnoteDialog(true);
-          } else {
-            setShowNotesChapter(!showNotesChapter);
-          }
-        }} title={t("editor.footnote")}>
-          <MessageSquareText className="w-4 h-4" />
-        </ToolbarButton>
-
-        <Divider />
-
-        <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title={t("editor.horizontalRule")}>
-          <Minus className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editorState.canUndo} title={t("editor.undo")}>
-          <Undo2 className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editorState.canRedo} title={t("editor.redo")}>
-          <Redo2 className="w-4 h-4" />
-        </ToolbarButton>
-
         <Divider />
 
         <ToolbarButton onClick={() => setShowFindReplace(!showFindReplace)} isActive={showFindReplace} title={t("editor.findReplaceShortcut")}>
           <Search className="w-4 h-4" />
         </ToolbarButton>
 
-        <ToolbarButton onClick={handleSpellCheckToggle} isActive={spellCheckEnabled} title={t("editor.spellCheck")}>
-          <SpellCheck className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={handleOpenDictionary}
-          disabled={!editorState.hasSelection}
-          title={t("editor.dictionary")}
-        >
-          <BookOpen className="w-4 h-4" />
-        </ToolbarButton>
-
-        <ToolbarButton onClick={() => setShowHtmlDialog(true)} title={t("editor.viewHtml")}>
-          <Code2 className="w-4 h-4" />
-        </ToolbarButton>
+        {/* Expand/collapse toggle */}
+        <div className="ml-auto">
+          <button
+            onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
+            className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
+            title={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
+          >
+            {isToolbarExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
+
+      {/* Extended toolbar — visible when expanded */}
+      {isToolbarExpanded && (
+        <div className="flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto border-t border-border">
+          <LineHeightSelect editor={editor} value={editorState.lineHeight} />
+
+          <Divider />
+
+          <ColorPicker
+            value={editorState.highlightColor}
+            onChange={(color) => editor.chain().focus().setHighlight({ color }).run()}
+            onClear={() => editor.chain().focus().unsetHighlight().run()}
+            onToggle={() => editor.chain().focus().toggleHighlight({ color: editorState.highlightColor || "#FFFF00" }).run()}
+            isActive={editorState.isHighlight}
+            title={t("editor.highlight")}
+            icon={<Highlighter className="w-4 h-4" />}
+          />
+
+          <ToolbarButton onClick={() => editor.chain().focus().toggleSubscript().run()} isActive={editorState.isSubscript} title={t("editor.subscript")}>
+            <Subscript className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().toggleSuperscript().run()} isActive={editorState.isSuperscript} title={t("editor.superscript")}>
+            <Superscript className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ColorPicker
+            value={editorState.color}
+            onChange={(color) => editor.chain().focus().setColor(color).run()}
+            onClear={() => editor.chain().focus().unsetColor().run()}
+            onToggle={() => editorState.color ? editor.chain().focus().unsetColor().run() : editor.chain().focus().setColor("#000000").run()}
+            isActive={!!editorState.color}
+            title={t("editor.textColor")}
+            icon={<Baseline className="w-4 h-4" />}
+          />
+
+          <ToolbarButton onClick={() => setShowLinkDialog(true)} isActive={editorState.isLink} title={t("editor.insertLinkShortcut")}>
+            <Link className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editorState.isCode} title={t("editor.code")}>
+            <Code className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editorState.isCodeBlock} title={t("editor.codeBlock")}>
+            <SquareCode className="w-4 h-4" />
+          </ToolbarButton>
+
+          <Divider />
+
+          <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editorState.isBulletList} title={t("editor.bulletList")}>
+            <List className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editorState.isOrderedList} title={t("editor.numberedList")}>
+            <ListOrdered className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editorState.isBlockquote} title={t("editor.quote")}>
+            <Quote className="w-4 h-4" />
+          </ToolbarButton>
+
+          <Divider />
+
+          <ToolbarButton
+            onClick={() => editorState.canSinkListItem ? editor.chain().focus().sinkListItem("listItem").run() : editor.chain().focus().increaseIndent().run()}
+            title={t("editor.increaseIndent")}
+          >
+            <IndentIncrease className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton
+            onClick={() => editorState.canLiftListItem ? editor.chain().focus().liftListItem("listItem").run() : editor.chain().focus().decreaseIndent().run()}
+            title={t("editor.decreaseIndent")}
+          >
+            <IndentDecrease className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().increaseFirstLineIndent().run()} title={t("editor.increaseFirstLineIndent")}>
+            <WrapText className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()} title={t("editor.decreaseFirstLineIndent")}>
+            <WrapText className="w-4 h-4 scale-x-[-1]" />
+          </ToolbarButton>
+
+          <Divider />
+
+          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("left").run()} isActive={editorState.isAlignLeft} title={t("editor.alignLeft")}>
+            <AlignLeft className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("center").run()} isActive={editorState.isAlignCenter} title={t("editor.alignCenter")}>
+            <AlignCenter className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign("right").run()} isActive={editorState.isAlignRight} title={t("editor.alignRight")}>
+            <AlignRight className="w-4 h-4" />
+          </ToolbarButton>
+
+          <Divider />
+
+          <ToolbarButton onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} title={t("editor.removeFormatting")}>
+            <RemoveFormatting className="w-4 h-4" />
+          </ToolbarButton>
+
+          <Divider />
+
+          <TextCaseMenu editor={editor} />
+
+          <Divider />
+
+          <TableMenu editor={editor} />
+
+          <ToolbarButton onClick={() => setShowImageDialog(true)} title={t("editor.insertImage")}>
+            <Image className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => (editor.commands as any).setSceneBreak?.()} title={t("editor.sceneBreak")}>
+            <Ellipsis className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => {
+            if (editorWasFocusedRef.current) {
+              setShowFootnoteDialog(true);
+            } else {
+              setShowNotesChapter(!showNotesChapter);
+            }
+          }} title={t("editor.footnote")}>
+            <MessageSquareText className="w-4 h-4" />
+          </ToolbarButton>
+
+          <Divider />
+
+          <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title={t("editor.horizontalRule")}>
+            <Minus className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={handleSpellCheckToggle} isActive={spellCheckEnabled} title={t("editor.spellCheck")}>
+            <SpellCheck className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton
+            onClick={handleOpenDictionary}
+            disabled={!editorState.hasSelection}
+            title={t("editor.dictionary")}
+          >
+            <BookOpen className="w-4 h-4" />
+          </ToolbarButton>
+
+          <ToolbarButton onClick={() => setShowHtmlDialog(true)} title={t("editor.viewHtml")}>
+            <Code2 className="w-4 h-4" />
+          </ToolbarButton>
+        </div>
+      )}
 
       {/* Panels and Dialogs */}
       <HtmlViewPanel editor={editor} isOpen={showHtmlDialog} onClose={() => setShowHtmlDialog(false)} />

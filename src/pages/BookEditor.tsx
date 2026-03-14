@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon, FocusModeIcon, DocumentIcon, SettingsIcon, CloseIcon } from "../components/icons";
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { useSettingsStore } from "../features/settings/store";
-import { Menu, MoreVertical } from "lucide-react";
+import { Menu, MoreVertical, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { SyncStatusButton } from "../components/sync/SyncStatusButton";
 import { useShortcuts } from "../lib/shortcuts";
 
@@ -44,6 +44,10 @@ export function BookEditor() {
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
   const [showMobileChapters, setShowMobileChapters] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
+  const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
+  const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
+  const isResizing = useRef(false);
   const showInlineFootnotes = useSettingsStore((s) => s.showInlineFootnotes);
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
   const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
@@ -221,6 +225,33 @@ export function BookEditor() {
     setFocusMode((prev) => !prev);
   }, []);
 
+  // Sidebar drag-resize handler
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, [sidebarWidth]);
+
   // Handle book info update
   const handleUpdateBookInfo = useCallback(
     async (input: Parameters<typeof updateBook>[1]) => {
@@ -257,6 +288,15 @@ export function BookEditor() {
       allowInInput: true,
     },
     {
+      keys: ["ctrl+\\", "meta+\\"],
+      onTrigger: () => {
+        setShowSidebar((prev) => {
+          if (!prev) setSidebarWidth(256);
+          return !prev;
+        });
+      },
+    },
+    {
       keys: "backspace",
       onTrigger: () => {
         navigate("/");
@@ -285,36 +325,60 @@ export function BookEditor() {
         />
       )}
 
-      {/* Chapter sidebar - hidden on mobile, shown as drawer when toggled */}
+      {/* Chapter sidebar */}
       {!focusMode && (
-        <div
-          className={`
-            fixed md:relative z-50 md:z-auto
-            h-full transform transition-transform duration-300 ease-in-out
-            ${showMobileChapters ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
-          `}
-        >
-          {/* Mobile close button */}
-          <button
-            onClick={() => setShowMobileChapters(false)}
-            className="md:hidden absolute top-3 right-3 z-10 p-2 hover:bg-muted rounded-lg transition-colors"
-            aria-label="Close chapters"
+        <>
+          {/* Mobile drawer */}
+          <div
+            className={`
+              md:hidden fixed z-50 w-72
+              h-full transform transition-transform duration-300 ease-in-out
+              ${showMobileChapters ? "translate-x-0" : "-translate-x-full"}
+            `}
           >
-            <CloseIcon className="w-5 h-5" />
-          </button>
-          <ChapterList
-            chapters={chapters}
-            currentChapterId={currentChapter?.id ?? null}
-            onSelectChapter={(chapter) => {
-              handleSelectChapter(chapter);
-              setShowMobileChapters(false);
-            }}
-            onCreateChapter={handleCreateChapter}
-            onUpdateChapter={handleUpdateChapter}
-            onDeleteChapter={handleDeleteChapter}
-            onReorderChapters={handleReorderChapters}
-          />
-        </div>
+            <button
+              onClick={() => setShowMobileChapters(false)}
+              className="absolute top-3 right-3 z-10 p-2 hover:bg-muted rounded-lg transition-colors"
+              aria-label="Close chapters"
+            >
+              <CloseIcon className="w-5 h-5" />
+            </button>
+            <ChapterList
+              chapters={chapters}
+              currentChapterId={currentChapter?.id ?? null}
+              onSelectChapter={(chapter) => {
+                handleSelectChapter(chapter);
+                setShowMobileChapters(false);
+              }}
+              onCreateChapter={handleCreateChapter}
+              onUpdateChapter={handleUpdateChapter}
+              onDeleteChapter={handleDeleteChapter}
+              onReorderChapters={handleReorderChapters}
+            />
+          </div>
+
+          {/* Desktop sidebar — width controlled by drag */}
+          <div
+            className="hidden md:flex h-full relative shrink-0"
+            style={{ width: showSidebar ? `${sidebarWidth}px` : 0, overflow: showSidebar ? undefined : "hidden" }}
+          >
+            <ChapterList
+              chapters={chapters}
+              currentChapterId={currentChapter?.id ?? null}
+              onSelectChapter={handleSelectChapter}
+              onCreateChapter={handleCreateChapter}
+              onUpdateChapter={handleUpdateChapter}
+              onDeleteChapter={handleDeleteChapter}
+              onReorderChapters={handleReorderChapters}
+            />
+            {showSidebar && (
+              <div
+                onMouseDown={handleResizeStart}
+                className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+              />
+            )}
+          </div>
+        </>
       )}
 
       {/* Main editor area */}
@@ -337,6 +401,18 @@ export function BookEditor() {
               title={t("nav.backToHome")}
             >
               <BackIcon className="w-5 h-5" />
+            </button>
+
+            {/* Desktop sidebar toggle */}
+            <button
+              onClick={() => setShowSidebar((prev) => {
+                if (!prev) setSidebarWidth(256);
+                return !prev;
+              })}
+              className="hidden md:block p-2 hover:bg-muted rounded transition-colors"
+              title={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
+            >
+              {showSidebar ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
             </button>
 
             <div className="flex-1 min-w-0">
@@ -448,7 +524,7 @@ export function BookEditor() {
                     className="fixed inset-0 z-40"
                     onClick={() => setShowMobileMenu(false)}
                   />
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border rounded-lg shadow-lg z-50">
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border rounded-lg shadow-lg z-50 dropdown-enter">
                     <button
                       onClick={() => {
                         setShowExportDialog(true);

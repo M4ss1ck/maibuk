@@ -47,9 +47,9 @@
     "editBook": "Edit Book",
     "deleteBook": "Delete Book",
     "createBook": "Create Book",
-    "noBooks": "No books yet",
-    "noBooksFull": "Start your writing journey by creating your first book. Add chapters, design a cover, and export to EPUB or PDF.",
-    "noBooksButton": "Create your first book",
+    "noBooks": "Your stories begin here",
+    "noBooksFull": "Every great book starts with a blank page and the courage to fill it. Create your first book and let the words flow.",
+    "noBooksButton": "Start writing",
     "updated": "Updated",
     "bookTitle": "Book Title",
     "bookTitlePlaceholder": "Enter the title of your book",
@@ -73,7 +73,9 @@
     "deleteChapter": "Delete Chapter",
     "noChapters": "No chapters yet. Add your first chapter!",
     "addChapter": "Add Chapter",
-    "chapterTitlePlaceholder": "Chapter title..."
+    "chapterTitlePlaceholder": "Chapter title...",
+    "showSidebar": "Show chapters",
+    "hideSidebar": "Hide chapters"
   },
   "editor": {
     "loading": "Loading book...",
@@ -381,6 +383,7 @@
     "openSelected": "Open selected book",
     "save": "Save",
     "toggleFocusMode": "Toggle focus mode",
+    "toggleSidebar": "Toggle sidebar",
     "backFromEditor": "Back from editor",
     "deleteSelection": "Delete selected object"
   }

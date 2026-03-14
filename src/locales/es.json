@@ -47,9 +47,9 @@
     "editBook": "Editar Libro",
     "deleteBook": "Eliminar Libro",
     "createBook": "Crear Libro",
-    "noBooks": "Aún no hay libros",
-    "noBooksFull": "Comienza tu viaje de escritura con tu primer libro. Añade capítulos, diseña una portada y exporta a EPUB o PDF.",
-    "noBooksButton": "Crea tu primer libro",
+    "noBooks": "Tus historias comienzan aquí",
+    "noBooksFull": "Todo gran libro empieza con una página en blanco y el valor de llenarla. Crea tu primer libro y deja que las palabras fluyan.",
+    "noBooksButton": "Empieza a escribir",
     "updated": "Actualizado",
     "bookTitle": "Título",
     "bookTitlePlaceholder": "Ingresa el título de tu libro",
@@ -73,7 +73,9 @@
     "deleteChapter": "Eliminar Capítulo",
     "noChapters": "Aún no hay capítulos. ¡Añade tu primer capítulo!",
     "addChapter": "Añadir",
-    "chapterTitlePlaceholder": "Título del capítulo..."
+    "chapterTitlePlaceholder": "Título del capítulo...",
+    "showSidebar": "Mostrar capítulos",
+    "hideSidebar": "Ocultar capítulos"
   },
   "editor": {
     "loading": "Cargando libro...",
@@ -381,6 +383,7 @@
     "openSelected": "Abrir libro seleccionado",
     "save": "Guardar",
     "toggleFocusMode": "Alternar modo enfoque",
+    "toggleSidebar": "Alternar barra lateral",
     "backFromEditor": "Volver desde el editor",
     "deleteSelection": "Eliminar objeto seleccionado"
   }
