@@ -6,10 +6,10 @@ export type {
   ExportProgress,
   PdfExportOptions,
   PdfPageSize,
-  PdfFontFamily,
   PdfMarginPreset,
 } from "./types";
-export { DEFAULT_EXPORT_OPTIONS, DEFAULT_PDF_OPTIONS } from "./types";
+export { DEFAULT_EXPORT_OPTIONS, DEFAULT_PDF_OPTIONS, PDF_BASE_FONT } from "./types";
 export { generatePdf, getPdfFilename, sanitizePdfText } from "./pdf-generator";
 export { createPdfStyles } from "./pdf-styles";
 export type { PdfStyles } from "./pdf-styles";
+export { mapCssFontToPdf } from "./pdf-content-renderer";

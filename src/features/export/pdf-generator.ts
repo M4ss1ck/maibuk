@@ -15,7 +15,7 @@ import { pdf, Font } from "@react-pdf/renderer";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { Book } from "../books/types";
 import type { Chapter } from "../chapters/types";
-import type { PdfExportOptions, PdfFontFamily } from "./types";
+import type { PdfExportOptions } from "./types";
 import { PdfDocument } from "./pdf-document";
 import { getMargins } from "./pdf-styles";
 
@@ -65,12 +65,6 @@ function ensureHyphenation() {
 // pdf-lib page number stamping (avoids react-pdf render callback bug)
 // ---------------------------------------------------------------------------
 
-const FONT_MAP: Record<PdfFontFamily, StandardFonts> = {
-  "Times-Roman": StandardFonts.TimesRoman,
-  Helvetica: StandardFonts.Helvetica,
-  Courier: StandardFonts.Courier,
-};
-
 async function stampPageNumbers(
   rawBlob: Blob,
   options: PdfExportOptions,
@@ -78,7 +72,7 @@ async function stampPageNumbers(
 ): Promise<Blob> {
   const bytes = new Uint8Array(await rawBlob.arrayBuffer());
   const pdfDoc = await PDFDocument.load(bytes);
-  const font = await pdfDoc.embedFont(FONT_MAP[options.fontFamily]);
+  const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const margins = getMargins(options.margins);
   const fontSize = 10;
   const pages = pdfDoc.getPages();

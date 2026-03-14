@@ -6,6 +6,7 @@
  */
 import { StyleSheet } from "@react-pdf/renderer";
 import type { PdfExportOptions, PdfMarginPreset } from "./types";
+import { PDF_BASE_FONT } from "./types";
 
 const MARGIN_PRESETS: Record<
   PdfMarginPreset,
@@ -22,7 +23,7 @@ export function getMargins(preset: PdfMarginPreset) {
 
 export function createPdfStyles(options: PdfExportOptions) {
   const margins = MARGIN_PRESETS[options.margins];
-  const fontFamily = options.fontFamily;
+  const fontFamily = PDF_BASE_FONT;
   const baseFontSize = 12;
 
   return StyleSheet.create({

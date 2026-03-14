@@ -10,6 +10,7 @@ vi.mock("@react-pdf/renderer", () => ({
 }));
 
 import { renderHtmlContent } from "../../../../features/export/pdf-content-renderer";
+import { mapCssFontToPdf } from "../../../../features/export/pdf-content-renderer";
 import { createPdfStyles } from "../../../../features/export/pdf-styles";
 import { DEFAULT_PDF_OPTIONS } from "../../../../features/export/types";
 
@@ -140,6 +141,157 @@ describe("renderHtmlContent() key uniqueness", () => {
   it("assigns unique keys with adjacent unknown inline elements (pass-through)", () => {
     // <abbr> and <cite> are unknown inline elements that pass-through like span
     const html = "<p><abbr><em>A</em></abbr><cite><em>B</em></cite></p>";
+    const nodes = renderHtmlContent(html, styles);
+    assertNoDuplicateSiblingKeys(nodes);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mapCssFontToPdf()
+// ---------------------------------------------------------------------------
+
+describe("mapCssFontToPdf()", () => {
+  it("maps serif fonts to Times-Roman", () => {
+    expect(mapCssFontToPdf("Literata, serif")).toBe("Times-Roman");
+    expect(mapCssFontToPdf("Georgia, serif")).toBe("Times-Roman");
+    expect(mapCssFontToPdf("Times New Roman, serif")).toBe("Times-Roman");
+    expect(mapCssFontToPdf("serif")).toBe("Times-Roman");
+  });
+
+  it("maps sans-serif fonts to Helvetica", () => {
+    expect(mapCssFontToPdf("Inter, sans-serif")).toBe("Helvetica");
+    expect(mapCssFontToPdf("Arial, sans-serif")).toBe("Helvetica");
+    expect(mapCssFontToPdf("DejaVu Sans, sans-serif")).toBe("Helvetica");
+    expect(mapCssFontToPdf("Ubuntu, sans-serif")).toBe("Helvetica");
+    expect(mapCssFontToPdf("Verdana, sans-serif")).toBe("Helvetica");
+    expect(mapCssFontToPdf("Trebuchet MS, sans-serif")).toBe("Helvetica");
+    expect(mapCssFontToPdf("Helvetica")).toBe("Helvetica");
+    expect(mapCssFontToPdf("Tahoma, sans-serif")).toBe("Helvetica");
+    expect(mapCssFontToPdf("Segoe UI, sans-serif")).toBe("Helvetica");
+  });
+
+  it("maps monospace fonts to Courier", () => {
+    expect(mapCssFontToPdf("monospace")).toBe("Courier");
+    expect(mapCssFontToPdf("Courier New, monospace")).toBe("Courier");
+    expect(mapCssFontToPdf("Consolas, monospace")).toBe("Courier");
+  });
+
+  it("defaults to Times-Roman for unknown fonts", () => {
+    expect(mapCssFontToPdf("CustomFont")).toBe("Times-Roman");
+    expect(mapCssFontToPdf("")).toBe("Times-Roman");
+  });
+
+  it("is case-insensitive", () => {
+    expect(mapCssFontToPdf("ARIAL, SANS-SERIF")).toBe("Helvetica");
+    expect(mapCssFontToPdf("COURIER NEW")).toBe("Courier");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inline style rendering (color, font-family, font-size, highlights)
+// ---------------------------------------------------------------------------
+
+describe("renderHtmlContent() inline style preservation", () => {
+  /**
+   * Helper to extract the `style` prop from the first inline child
+   * of the first paragraph node. Handles both single-child and array-children
+   * (React stores a single child directly, not in an array).
+   */
+  function getFirstInlineStyle(nodes: unknown[]): Record<string, unknown> | undefined {
+    const paragraph = nodes[0] as { props?: { children?: unknown } };
+    const rawChildren = paragraph?.props?.children;
+    const children = Array.isArray(rawChildren) ? rawChildren : rawChildren ? [rawChildren] : [];
+    // First child that is an element (skip plain text)
+    const inlineEl = children.find(
+      (c): c is { props: { style: Record<string, unknown> } } =>
+        c !== null && typeof c === "object" && "props" in c && !!(c as { props?: { style?: unknown } }).props?.style
+    );
+    return inlineEl?.props?.style;
+  }
+
+  it("applies text color from span style attribute", () => {
+    const html = '<p><span style="color: #EF4444">red text</span></p>';
+    const nodes = renderHtmlContent(html, styles);
+    const inlineStyle = getFirstInlineStyle(nodes);
+    expect(inlineStyle).toBeDefined();
+    expect(inlineStyle?.color).toBe("#EF4444");
+  });
+
+  it("maps font-family to a react-pdf built-in font", () => {
+    const html = '<p><span style="font-family: Georgia, serif">serif text</span></p>';
+    const nodes = renderHtmlContent(html, styles);
+    const inlineStyle = getFirstInlineStyle(nodes);
+    expect(inlineStyle).toBeDefined();
+    expect(inlineStyle?.fontFamily).toBe("Times-Roman");
+  });
+
+  it("maps sans-serif font-family to Helvetica", () => {
+    const html = '<p><span style="font-family: Inter, sans-serif">sans text</span></p>';
+    const nodes = renderHtmlContent(html, styles);
+    const inlineStyle = getFirstInlineStyle(nodes);
+    expect(inlineStyle).toBeDefined();
+    expect(inlineStyle?.fontFamily).toBe("Helvetica");
+  });
+
+  it("converts font-size from px to pt", () => {
+    const html = '<p><span style="font-size: 24px">big text</span></p>';
+    const nodes = renderHtmlContent(html, styles);
+    const inlineStyle = getFirstInlineStyle(nodes);
+    expect(inlineStyle).toBeDefined();
+    // 24px * 0.75 = 18pt
+    expect(inlineStyle?.fontSize).toBe(18);
+  });
+
+  it("preserves multiple inline styles on a single span", () => {
+    const html = '<p><span style="color: #3B82F6; font-family: Arial, sans-serif; font-size: 16px">styled</span></p>';
+    const nodes = renderHtmlContent(html, styles);
+    const inlineStyle = getFirstInlineStyle(nodes);
+    expect(inlineStyle).toBeDefined();
+    expect(inlineStyle?.color).toBe("#3B82F6");
+    expect(inlineStyle?.fontFamily).toBe("Helvetica");
+    expect(inlineStyle?.fontSize).toBe(12); // 16px * 0.75 = 12pt
+  });
+
+  it("passes through spans without inline styles (no wrapper)", () => {
+    const html = "<p><span>plain text</span></p>";
+    const nodes = renderHtmlContent(html, styles);
+    // The span should be a pass-through — text is directly in the paragraph
+    const paragraph = nodes[0] as { props?: { children?: unknown[] } };
+    const rawChildren = paragraph?.props?.children;
+    const children = Array.isArray(rawChildren) ? rawChildren : rawChildren ? [rawChildren] : [];
+    expect(children.length).toBeGreaterThan(0);
+    // Should contain plain text, not a styled Text element
+    const hasStyledChild = children.some(
+      (c) => c !== null && typeof c === "object" && "props" in c &&
+        !!(c as { props?: { style?: unknown } }).props?.style
+    );
+    expect(hasStyledChild).toBe(false);
+  });
+
+  it("applies background-color from mark elements", () => {
+    const html = '<p><mark style="background-color: #22C55E">highlighted</mark></p>';
+    const nodes = renderHtmlContent(html, styles);
+    const inlineStyle = getFirstInlineStyle(nodes);
+    expect(inlineStyle).toBeDefined();
+    expect(inlineStyle?.backgroundColor).toBe("#22C55E");
+  });
+
+  it("defaults mark background to yellow when no style is present", () => {
+    const html = "<p><mark>highlighted</mark></p>";
+    const nodes = renderHtmlContent(html, styles);
+    const inlineStyle = getFirstInlineStyle(nodes);
+    expect(inlineStyle).toBeDefined();
+    expect(inlineStyle?.backgroundColor).toBe("#ffff00");
+  });
+
+  it("assigns unique keys when styled spans are present", () => {
+    const html = '<p><span style="color: red">A</span> <span style="color: blue">B</span></p>';
+    const nodes = renderHtmlContent(html, styles);
+    assertNoDuplicateSiblingKeys(nodes);
+  });
+
+  it("assigns unique keys with mixed styled spans and plain formatting", () => {
+    const html = '<p><em>italic</em> <span style="color: #EF4444"><strong>red bold</strong></span> plain</p>';
     const nodes = renderHtmlContent(html, styles);
     assertNoDuplicateSiblingKeys(nodes);
   });

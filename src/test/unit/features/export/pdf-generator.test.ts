@@ -177,6 +177,7 @@ describe("generatePdf()", () => {
 
     expect(mockPdfLibLoad).toHaveBeenCalledTimes(1);
     expect(mockEmbedFont).toHaveBeenCalledTimes(1);
+    expect(mockEmbedFont).toHaveBeenCalledWith("TimesRoman");
   });
 
   it("skips page stamping when includePageNumbers is false", async () => {

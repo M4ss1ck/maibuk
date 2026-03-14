@@ -71,16 +71,12 @@ describe("createPdfStyles()", () => {
     expect(styles).toHaveProperty("pageNumber");
   });
 
-  it("uses the specified font family", () => {
-    const options: PdfExportOptions = {
-      ...DEFAULT_PDF_OPTIONS,
-      fontFamily: "Helvetica",
-    };
-    const styles = createPdfStyles(options);
+  it("uses the default base font (Times-Roman) for all text styles", () => {
+    const styles = createPdfStyles(DEFAULT_PDF_OPTIONS);
 
-    expect(styles.paragraph).toHaveProperty("fontFamily", "Helvetica");
-    expect(styles.coverTitle).toHaveProperty("fontFamily", "Helvetica");
-    expect(styles.chapterTitle).toHaveProperty("fontFamily", "Helvetica");
+    expect(styles.paragraph).toHaveProperty("fontFamily", "Times-Roman");
+    expect(styles.coverTitle).toHaveProperty("fontFamily", "Times-Roman");
+    expect(styles.chapterTitle).toHaveProperty("fontFamily", "Times-Roman");
   });
 
   it("applies standard margins by default", () => {
@@ -204,7 +200,6 @@ describe("DEFAULT_PDF_OPTIONS", () => {
     expect(DEFAULT_PDF_OPTIONS.numberChapters).toBe(true);
     expect(DEFAULT_PDF_OPTIONS.includePageNumbers).toBe(true);
     expect(DEFAULT_PDF_OPTIONS.pageSize).toBe("A4");
-    expect(DEFAULT_PDF_OPTIONS.fontFamily).toBe("Times-Roman");
     expect(DEFAULT_PDF_OPTIONS.margins).toBe("standard");
   });
 });

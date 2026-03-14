@@ -19,15 +19,16 @@ export const DEFAULT_EXPORT_OPTIONS: EpubExportOptions = {
 // --- PDF Export ---
 
 export type PdfPageSize = "A4" | "LETTER" | "A5";
-export type PdfFontFamily = "Times-Roman" | "Helvetica" | "Courier";
 export type PdfMarginPreset = "standard" | "wide" | "narrow";
+
+/** Default font for PDF structural elements (TOC, chapter titles, page numbers). */
+export const PDF_BASE_FONT = "Times-Roman";
 
 export interface PdfExportOptions {
   includeTableOfContents: boolean;
   numberChapters: boolean;
   includePageNumbers: boolean;
   pageSize: PdfPageSize;
-  fontFamily: PdfFontFamily;
   margins: PdfMarginPreset;
 }
 
@@ -36,6 +37,5 @@ export const DEFAULT_PDF_OPTIONS: PdfExportOptions = {
   numberChapters: true,
   includePageNumbers: true,
   pageSize: "A4",
-  fontFamily: "Times-Roman",
   margins: "standard",
 };

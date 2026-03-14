@@ -3,10 +3,116 @@
  *
  * Converts sanitized HTML strings (from processChapterHtml) into
  * React-PDF element trees that can be embedded inside a <Page>.
+ *
+ * Inline styles (color, font-family, font-size, background-color) are
+ * extracted from <span> and <mark> elements and mapped to react-pdf styles
+ * so that the exported PDF preserves the look of the writing editor.
  */
 import { createElement, type ReactNode } from "react";
 import { Text, View, Image, Link } from "@react-pdf/renderer";
 import type { PdfStyles } from "./pdf-styles";
+
+// ---------------------------------------------------------------------------
+// CSS → react-pdf style helpers
+// ---------------------------------------------------------------------------
+
+interface ParsedInlineStyles {
+  color?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  backgroundColor?: string;
+}
+
+/**
+ * Maps CSS font-family values to react-pdf built-in font families.
+ * react-pdf ships with Times-Roman, Helvetica, and Courier.
+ */
+export function mapCssFontToPdf(cssFontFamily: string): string {
+  const lower = cssFontFamily.toLowerCase();
+
+  if (
+    lower.includes("mono") ||
+    lower.includes("courier") ||
+    lower.includes("consolas")
+  ) {
+    return "Courier";
+  }
+
+  if (
+    lower.includes("sans") ||
+    lower.includes("inter") ||
+    lower.includes("arial") ||
+    lower.includes("verdana") ||
+    lower.includes("ubuntu") ||
+    lower.includes("trebuchet") ||
+    lower.includes("dejavu") ||
+    lower.includes("helvetica") ||
+    lower.includes("tahoma") ||
+    lower.includes("segoe")
+  ) {
+    return "Helvetica";
+  }
+
+  // Serif fallback (Literata, Georgia, Times New Roman, etc.)
+  return "Times-Roman";
+}
+
+/**
+ * Parses a DOM element's inline `style` attribute into react-pdf-compatible
+ * style properties.
+ */
+function parseInlineStyles(el: Element): ParsedInlineStyles {
+  const styleStr = el.getAttribute("style");
+  if (!styleStr) return {};
+
+  const result: ParsedInlineStyles = {};
+  const props = styleStr.split(";").map((p) => p.trim()).filter(Boolean);
+
+  for (const prop of props) {
+    const colonIdx = prop.indexOf(":");
+    if (colonIdx < 0) continue;
+
+    const name = prop.substring(0, colonIdx).trim().toLowerCase();
+    const value = prop.substring(colonIdx + 1).trim();
+
+    switch (name) {
+      case "color":
+        result.color = value;
+        break;
+      case "font-family":
+        result.fontFamily = mapCssFontToPdf(value);
+        break;
+      case "font-size": {
+        const match = value.match(/^(\d+(?:\.\d+)?)\s*px$/);
+        if (match) {
+          // Convert px to pt (1px ≈ 0.75pt)
+          result.fontSize = parseFloat(match[1]) * 0.75;
+        }
+        break;
+      }
+      case "background-color":
+        result.backgroundColor = value;
+        break;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Converts a ParsedInlineStyles object into a react-pdf style object,
+ * omitting undefined values.
+ */
+function toReactPdfStyle(
+  parsed: ParsedInlineStyles
+): Record<string, string | number> | null {
+  const style: Record<string, string | number> = {};
+  if (parsed.color) style.color = parsed.color;
+  if (parsed.fontFamily) style.fontFamily = parsed.fontFamily;
+  if (parsed.fontSize) style.fontSize = parsed.fontSize;
+  if (parsed.backgroundColor) style.backgroundColor = parsed.backgroundColor;
+  return Object.keys(style).length > 0 ? style : null;
+}
 
 /**
  * Parses an HTML string and returns React-PDF elements.
@@ -396,25 +502,42 @@ function renderInlineChildren(
         );
         break;
       case "mark": {
-        const bgColor =
-          el
-            .getAttribute("style")
-            ?.match(/background-color:\s*([^;]+)/)?.[1] || "#ffff00";
+        const parsed = parseInlineStyles(el);
+        const bgColor = parsed.backgroundColor || "#ffff00";
+        const markStyle: Record<string, string | number> = { backgroundColor: bgColor };
+        // Preserve any other inline styles on the mark itself
+        if (parsed.color) markStyle.color = parsed.color;
+        if (parsed.fontFamily) markStyle.fontFamily = parsed.fontFamily;
+        if (parsed.fontSize) markStyle.fontSize = parsed.fontSize;
         result.push(
           createElement(
             Text,
-            { key: nextKey(), style: { backgroundColor: bgColor.trim() } },
+            { key: nextKey(), style: markStyle },
             ...renderInlineChildren(el, styles)
           )
         );
         break;
       }
-      case "span":
-        // Pass-through: process children into the SAME result array & counter
-        for (let c = 0; c < el.childNodes.length; c++) {
-          processNode(el.childNodes[c]);
+      case "span": {
+        // Extract inline styles (color, font-family, font-size, background-color)
+        // so the PDF preserves the same look as the writing editor.
+        const spanStyle = toReactPdfStyle(parseInlineStyles(el));
+        if (spanStyle) {
+          result.push(
+            createElement(
+              Text,
+              { key: nextKey(), style: spanStyle },
+              ...renderInlineChildren(el, styles)
+            )
+          );
+        } else {
+          // No styles — pass-through into the SAME result array & counter
+          for (let c = 0; c < el.childNodes.length; c++) {
+            processNode(el.childNodes[c]);
+          }
         }
         break;
+      }
       case "br":
         result.push("\n");
         break;

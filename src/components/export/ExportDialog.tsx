@@ -11,7 +11,6 @@ import {
   type EpubExportOptions,
   type PdfExportOptions,
   type PdfPageSize,
-  type PdfFontFamily,
   type PdfMarginPreset,
   type ExportProgress,
 } from "../../features/export";
@@ -136,12 +135,6 @@ export function ExportDialog({
     { value: "A4", label: t("export.pageSizeA4") },
     { value: "LETTER", label: t("export.pageSizeLetter") },
     { value: "A5", label: t("export.pageSizeA5") },
-  ];
-
-  const fontOptions: { value: PdfFontFamily; label: string }[] = [
-    { value: "Times-Roman", label: t("export.fontSerif") },
-    { value: "Helvetica", label: t("export.fontSans") },
-    { value: "Courier", label: t("export.fontMono") },
   ];
 
   const marginOptions: { value: PdfMarginPreset; label: string }[] = [
@@ -298,20 +291,6 @@ export function ExportDialog({
                       pageSize: value,
                     }))}
                     options={pageSizeOptions}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
-                    {t("export.fontFamily")}
-                  </label>
-                  <Select
-                    value={pdfOptions.fontFamily}
-                    onChange={(value) => setPdfOptions((prev) => ({
-                      ...prev,
-                      fontFamily: value,
-                    }))}
-                    options={fontOptions}
                   />
                 </div>
 
