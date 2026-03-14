@@ -1,19 +1,23 @@
 import { useState, useCallback } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
-import { Button, Switch } from "../ui";
+import { Button, Switch, Select } from "../ui";
 import {
   generateEpub,
   getEpubFilename,
+  generatePdf,
+  getPdfFilename,
   DEFAULT_EXPORT_OPTIONS,
   DEFAULT_PDF_OPTIONS,
   type EpubExportOptions,
   type PdfExportOptions,
+  type PdfPageSize,
+  type PdfFontFamily,
+  type PdfMarginPreset,
   type ExportProgress,
 } from "../../features/export";
 import type { Book } from "../../features/books/types";
 import type { Chapter } from "../../features/chapters/types";
 import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
-import { PdfPreview } from "./PdfPreview";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, CheckIcon, XIcon } from "../icons";
 
@@ -38,7 +42,6 @@ export function ExportDialog({
   const [pdfOptions, setPdfOptions] = useState<PdfExportOptions>(
     DEFAULT_PDF_OPTIONS
   );
-  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   const [progress, setProgress] = useState<ExportProgress>({
     status: "idle",
@@ -46,44 +49,49 @@ export function ExportDialog({
   });
 
   const handleExport = useCallback(async () => {
-    if (format === "pdf") {
-      setShowPdfPreview(true);
-      return;
-    }
-
     try {
       setProgress({ status: "preparing", message: t("export.preparingStatus") });
 
-      // Generate the EPUB
-      const blob = await generateEpub(book, chapters, epubOptions, (message) => {
-        setProgress((prev) => ({ ...prev, message }));
-      });
+      let blob: Blob;
+      let suggestedFilename: string;
+      let mimeType: string;
+      let filterName: string;
+      let filterExtension: string;
+
+      if (format === "pdf") {
+        blob = await generatePdf(book, chapters, pdfOptions, (message: string) => {
+          setProgress((prev) => ({ ...prev, message }));
+        });
+        suggestedFilename = getPdfFilename(book);
+        mimeType = "application/pdf";
+        filterName = "PDF";
+        filterExtension = "pdf";
+      } else {
+        blob = await generateEpub(book, chapters, epubOptions, (message) => {
+          setProgress((prev) => ({ ...prev, message }));
+        });
+        suggestedFilename = getEpubFilename(book);
+        mimeType = "application/epub+zip";
+        filterName = "EPUB";
+        filterExtension = "epub";
+      }
 
       setProgress({ status: "saving", message: t("export.savingStatus") });
 
-      const suggestedFilename = getEpubFilename(book);
       const arrayBuffer = await blob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
 
       if (IS_WEB) {
-        // On web, directly download the file
         const fs = await getFileSystem();
-        fs.downloadFile(suggestedFilename, uint8Array, "application/epub+zip");
+        fs.downloadFile(suggestedFilename, uint8Array, mimeType);
       } else {
-        // On Tauri, show save dialog
         const dialog = await getDialog();
         const filePath = await dialog.save({
           defaultPath: suggestedFilename,
-          filters: [
-            {
-              name: "EPUB",
-              extensions: ["epub"],
-            },
-          ],
+          filters: [{ name: filterName, extensions: [filterExtension] }],
         });
 
         if (!filePath) {
-          // User cancelled
           setProgress({ status: "idle", message: "" });
           return;
         }
@@ -94,10 +102,9 @@ export function ExportDialog({
 
       setProgress({
         status: "complete",
-        message: "EPUB exported successfully!",
+        message: t("export.exportSuccess", { format: format.toUpperCase() }),
       });
 
-      // Close dialog after a short delay
       setTimeout(() => {
         onClose();
         setProgress({ status: "idle", message: "" });
@@ -109,13 +116,12 @@ export function ExportDialog({
         message: error instanceof Error ? error.message : t("export.exportFailed"),
       });
     }
-  }, [book, chapters, epubOptions, format, onClose, t]);
+  }, [book, chapters, epubOptions, pdfOptions, format, onClose, t]);
 
   const handleClose = useCallback(() => {
     if (progress.status !== "generating" && progress.status !== "saving") {
       onClose();
       setProgress({ status: "idle", message: "" });
-      setShowPdfPreview(false);
     }
   }, [onClose, progress.status]);
 
@@ -126,17 +132,23 @@ export function ExportDialog({
 
   const exportableChapters = chapters.filter((ch) => ch.isIncludedInExport);
 
-  if (showPdfPreview) {
-    return (
-      <PdfPreview
-        isOpen={showPdfPreview}
-        onClose={() => setShowPdfPreview(false)}
-        book={book}
-        chapters={chapters}
-        initialOptions={pdfOptions}
-      />
-    );
-  }
+  const pageSizeOptions: { value: PdfPageSize; label: string }[] = [
+    { value: "A4", label: t("export.pageSizeA4") },
+    { value: "LETTER", label: t("export.pageSizeLetter") },
+    { value: "A5", label: t("export.pageSizeA5") },
+  ];
+
+  const fontOptions: { value: PdfFontFamily; label: string }[] = [
+    { value: "Times-Roman", label: t("export.fontSerif") },
+    { value: "Helvetica", label: t("export.fontSans") },
+    { value: "Courier", label: t("export.fontMono") },
+  ];
+
+  const marginOptions: { value: PdfMarginPreset; label: string }[] = [
+    { value: "standard", label: t("export.marginsStandard") },
+    { value: "wide", label: t("export.marginsWide") },
+    { value: "narrow", label: t("export.marginsNarrow") },
+  ];
 
   return (
     <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
@@ -234,11 +246,11 @@ export function ExportDialog({
                 </div>
               </>
             ) : (
-              // PDF Options - most settings controlled by browser print dialog
+              // PDF Options
               <>
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-foreground">
-                    {t("export.TOC")}
+                    {t("export.includeTOC")}
                   </label>
                   <Switch
                     checked={pdfOptions.includeTableOfContents}
@@ -249,9 +261,73 @@ export function ExportDialog({
                   />
                 </div>
 
-                <p className="text-xs text-muted-foreground">
-                  {t("export.disclaimer")}
-                </p>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    {t("export.numberChapters")}
+                  </label>
+                  <Switch
+                    checked={pdfOptions.numberChapters}
+                    onChange={(checked) => setPdfOptions((prev) => ({
+                      ...prev,
+                      numberChapters: checked,
+                    }))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    {t("export.includePageNumbers")}
+                  </label>
+                  <Switch
+                    checked={pdfOptions.includePageNumbers}
+                    onChange={(checked) => setPdfOptions((prev) => ({
+                      ...prev,
+                      includePageNumbers: checked,
+                    }))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    {t("export.pageSize")}
+                  </label>
+                  <Select
+                    value={pdfOptions.pageSize}
+                    onChange={(value) => setPdfOptions((prev) => ({
+                      ...prev,
+                      pageSize: value,
+                    }))}
+                    options={pageSizeOptions}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    {t("export.fontFamily")}
+                  </label>
+                  <Select
+                    value={pdfOptions.fontFamily}
+                    onChange={(value) => setPdfOptions((prev) => ({
+                      ...prev,
+                      fontFamily: value,
+                    }))}
+                    options={fontOptions}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-foreground">
+                    {t("export.marginPreset")}
+                  </label>
+                  <Select
+                    value={pdfOptions.margins}
+                    onChange={(value) => setPdfOptions((prev) => ({
+                      ...prev,
+                      margins: value,
+                    }))}
+                    options={marginOptions}
+                  />
+                </div>
               </>
             )}
           </div>
@@ -295,7 +371,7 @@ export function ExportDialog({
                 ? t("export.exporting")
                 : format === "epub"
                   ? t("export.exportEpub")
-                  : t("export.previewPdf")}
+                  : t("export.exportPdf")}
             </Button>
           </div>
         </DialogPanel>
