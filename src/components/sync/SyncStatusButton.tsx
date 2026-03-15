@@ -36,8 +36,14 @@ export function SyncStatusButton() {
     if (syncStatus === "awaiting-confirmation") {
       return <AlertTriangle className="w-5 h-5" />;
     }
+    if (syncStatus === "cancelled") {
+      return <AlertTriangle className="w-5 h-5" />;
+    }
     if (syncStatus === "syncing") {
       return <Loader2 className="w-5 h-5 animate-spin" />;
+    }
+    if (syncStatus === "partial") {
+      return <CloudAlert className="w-5 h-5" />;
     }
     if (syncStatus === "error") {
       return <CloudAlert className="w-5 h-5" />;
@@ -50,8 +56,12 @@ export function SyncStatusButton() {
       ? "text-muted-foreground"
       : syncStatus === "awaiting-confirmation"
         ? "text-warning-text"
+        : syncStatus === "cancelled"
+          ? "text-warning-text"
         : syncStatus === "syncing"
           ? "text-primary"
+          : syncStatus === "partial"
+            ? "text-warning-text"
           : syncStatus === "error"
             ? "text-destructive"
             : syncStatus === "success"

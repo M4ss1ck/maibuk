@@ -50,7 +50,7 @@ vi.mock("../../../../features/backup/backup-service", () => ({
   },
 }));
 
-const { syncBook } = await import("../../../../features/sync/sync-engine");
+const { syncBook, syncAllBooks } = await import("../../../../features/sync/sync-engine");
 
 describe("syncBook — timestamp fix", () => {
   const mockDb = {
@@ -101,7 +101,7 @@ describe("syncBook — timestamp fix", () => {
     const result = await syncBook("book-1", "pass", noopConflict);
 
     expect(noopConflict).toHaveBeenCalled();
-    expect(result).toBe("cancelled");
+    expect(result).toEqual({ outcome: "cancelled", action: "cancelled" });
   });
 
   it("calls onConflict when timestamps are equal but checksums differ", async () => {
@@ -123,7 +123,10 @@ describe("syncBook — timestamp fix", () => {
 
   it("throws if called while already syncing (concurrency guard)", async () => {
     // Set up a sync that blocks indefinitely on onConflict
-    const neverResolve = () => new Promise<"push" | "pull" | "cancel">(() => { });
+    let resolveConflict: ((choice: "push" | "pull" | "cancel") => void) | null = null;
+    const blockedConflict = () => new Promise<"push" | "pull" | "cancel">((resolve) => {
+      resolveConflict = resolve;
+    });
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
       if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
@@ -134,7 +137,7 @@ describe("syncBook — timestamp fix", () => {
     ]);
 
     // Start a sync that will block on the conflict dialog
-    syncBook("book-1", "pass", neverResolve);
+    const firstSync = syncBook("book-1", "pass", blockedConflict);
 
     // Allow the first sync to reach the onConflict call
     await new Promise((r) => setTimeout(r, 10));
@@ -142,8 +145,73 @@ describe("syncBook — timestamp fix", () => {
     // Second sync should throw immediately
     await expect(syncBook("book-2", "pass", vi.fn())).rejects.toThrow("already in progress");
 
-    // Note: firstSync never completes in this test. The module-level isSyncing flag
-    // remains true. This test must be the LAST test in the describe block, or the
-    // test file must re-import the module to reset module state.
+    if (resolveConflict) {
+      (resolveConflict as (choice: "push" | "pull" | "cancel") => void)("cancel");
+    }
+    await expect(firstSync).resolves.toEqual({ outcome: "cancelled", action: "cancelled" });
+  });
+});
+
+describe("syncAllBooks — truthful outcomes", () => {
+  const mockDb = {
+    select: vi.fn(),
+    execute: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetDatabase.mockResolvedValue(mockDb);
+    mockSerializeBook.mockResolvedValue('{"book":{}}');
+    mockComputeChecksum.mockResolvedValue("local-checksum");
+    mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) {
+        return [
+          { id: "book-1", updated_at: 5000 },
+          { id: "book-2", updated_at: 1000 },
+        ];
+      }
+      if (sql.includes("SELECT title") && sql.includes("book-2")) {
+        return [{ title: "Book Two" }];
+      }
+      return [];
+    });
+  });
+
+  it("returns cancelled when the first conflict is cancelled before any sync work lands", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) {
+        return [{ id: "book-2", updated_at: 1000 }];
+      }
+      if (sql.includes("SELECT title")) {
+        return [{ title: "Book Two" }];
+      }
+      return [];
+    });
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-2", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+
+    const result = await syncAllBooks("pass", vi.fn().mockResolvedValue("cancel"));
+
+    expect(result.outcome).toBe("cancelled");
+    expect(result.actions).toEqual(["cancelled"]);
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(mockPullBookBlob).not.toHaveBeenCalled();
+  });
+
+  it("returns partial when cancellation happens after earlier books synced", async () => {
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-one", updatedAt: 3000 },
+      { bookId: "book-2", checksum: "remote-two", updatedAt: 5000 },
+    ]);
+
+    const onConflict = vi.fn().mockResolvedValue("cancel");
+    const result = await syncAllBooks("pass", onConflict);
+
+    expect(result.outcome).toBe("partial");
+    expect(result.actions).toEqual(["pushed", "cancelled"]);
+    expect(mockPushBookBlob).toHaveBeenCalledTimes(1);
+    expect(onConflict).toHaveBeenCalledTimes(1);
   });
 });

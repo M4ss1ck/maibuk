@@ -6,7 +6,7 @@ import {
   pullBookBlob,
   listRemoteBooks,
 } from "./client";
-import type { BookSnapshot, SyncItemMeta } from "./types";
+import type { BookSnapshot, SyncItemMeta, SingleSyncResult, BatchSyncResult } from "./types";
 import type { SyncAction, ConflictResolver } from "./types";
 import { createBackup } from "../../lib/platform";
 import { BackupService } from "../backup/backup-service";
@@ -138,7 +138,7 @@ export async function syncBook(
   bookId: string,
   passphrase: string,
   onConflict: ConflictResolver,
-): Promise<SyncAction> {
+): Promise<SingleSyncResult> {
   assertNotSyncing();
   isSyncing = true;
   try {
@@ -147,7 +147,11 @@ export async function syncBook(
     const backupService = new BackupService(adapter);
     await backupService.createBackup("pre-sync");
 
-    return await syncBookCore(bookId, passphrase, onConflict);
+    const action = await syncBookCore(bookId, passphrase, onConflict);
+    return {
+      outcome: action === "cancelled" ? "cancelled" : "success",
+      action,
+    };
   } finally {
     isSyncing = false;
   }
@@ -161,11 +165,12 @@ interface BookTimestampRow {
 export async function syncAllBooks(
   passphrase: string,
   onConflict: ConflictResolver,
-): Promise<void> {
+): Promise<BatchSyncResult> {
   assertNotSyncing();
   isSyncing = true;
   try {
     assertOnline();
+    const actions: SyncAction[] = [];
 
     // Mandatory pre-sync backup
     const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
@@ -184,7 +189,14 @@ export async function syncAllBooks(
     const remoteBooks = await listRemoteBooks();
 
     for (const book of localBooks) {
-      await syncBookCore(book.id, passphrase, onConflict, remoteBooks, book.updated_at);
+      const action = await syncBookCore(book.id, passphrase, onConflict, remoteBooks, book.updated_at);
+      actions.push(action);
+      if (action === "cancelled") {
+        return {
+          outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
+          actions,
+        };
+      }
     }
 
     // Pull remote-only books (no local data — auto-pull, no conflict dialog)
@@ -196,7 +208,10 @@ export async function syncAllBooks(
 
       const snapshot = await decryptSnapshot(pulled.data, passphrase);
       await applyBookSnapshot(snapshot);
+      actions.push("pulled");
     }
+
+    return { outcome: "success", actions };
   } finally {
     isSyncing = false;
   }

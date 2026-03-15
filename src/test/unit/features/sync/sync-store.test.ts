@@ -177,7 +177,7 @@ describe("useSyncStore", () => {
 
   describe("syncAll()", () => {
     it("calls syncAllBooks and sets success status", async () => {
-      mockSyncAllBooks.mockResolvedValue(undefined);
+      mockSyncAllBooks.mockResolvedValue({ outcome: "success", actions: ["pushed"] });
       const mockOnConflict = vi.fn();
 
       await useSyncStore.getState().syncAll("my-passphrase", mockOnConflict);
@@ -203,17 +203,39 @@ describe("useSyncStore", () => {
       let capturedStatus: string | undefined;
       mockSyncAllBooks.mockImplementation(async () => {
         capturedStatus = useSyncStore.getState().syncStatus;
+        return { outcome: "success", actions: ["skipped"] };
       });
 
       await useSyncStore.getState().syncAll("passphrase", vi.fn());
 
       expect(capturedStatus).toBe("syncing");
     });
+
+    it("sets cancelled status without updating last synced time", async () => {
+      useSyncStore.setState({ lastSyncedAt: 1234 });
+      mockSyncAllBooks.mockResolvedValue({ outcome: "cancelled", actions: ["cancelled"] });
+
+      await useSyncStore.getState().syncAll("passphrase", vi.fn());
+
+      expect(useSyncStore.getState().syncStatus).toBe("cancelled");
+      expect(useSyncStore.getState().lastSyncedAt).toBe(1234);
+      expect(useSyncStore.getState().syncError).toBeNull();
+    });
+
+    it("sets partial status when some books synced before cancellation", async () => {
+      mockSyncAllBooks.mockResolvedValue({ outcome: "partial", actions: ["pushed", "cancelled"] });
+
+      await useSyncStore.getState().syncAll("passphrase", vi.fn());
+
+      expect(useSyncStore.getState().syncStatus).toBe("partial");
+      expect(useSyncStore.getState().lastSyncedAt).toBeGreaterThan(0);
+      expect(useSyncStore.getState().syncError).toBeNull();
+    });
   });
 
   describe("syncSingleBook()", () => {
     it("calls syncBook and sets success status", async () => {
-      mockSyncBook.mockResolvedValue(undefined);
+      mockSyncBook.mockResolvedValue({ outcome: "success", action: "pushed" });
       const mockOnConflict = vi.fn();
 
       await useSyncStore.getState().syncSingleBook("book-1", "passphrase", mockOnConflict);
@@ -241,6 +263,17 @@ describe("useSyncStore", () => {
       ).rejects.toBe("string error");
 
       expect(useSyncStore.getState().syncError).toBe("Sync failed");
+    });
+
+    it("sets cancelled status when the user cancels a single-book conflict", async () => {
+      useSyncStore.setState({ lastSyncedAt: 555 });
+      mockSyncBook.mockResolvedValue({ outcome: "cancelled", action: "cancelled" });
+
+      await useSyncStore.getState().syncSingleBook("book-1", "passphrase", vi.fn());
+
+      expect(useSyncStore.getState().syncStatus).toBe("cancelled");
+      expect(useSyncStore.getState().lastSyncedAt).toBe(555);
+      expect(useSyncStore.getState().syncError).toBeNull();
     });
   });
 

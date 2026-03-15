@@ -1,4 +1,8 @@
 import type { BackupAdapter, BackupEntry } from "../../lib/platform/types";
+import { getDatabase } from "../../lib/db";
+import { parseSqlStatements } from "../../lib/db/sql-parser";
+import { useBookStore } from "../books/store";
+import { useChapterStore } from "../chapters/store";
 import { generateSqlDump } from "./generate-sql-dump";
 import { computeChecksum } from "../sync/crypto";
 
@@ -10,6 +14,11 @@ function buildFilename(trigger: BackupEntry["trigger"]): string {
 
 const PROTECTED_TRIGGERS = new Set<BackupEntry["trigger"]>(["pre-sync", "pre-restore"]);
 const MIN_PROTECTED = 2;
+const RESTORE_TABLE_PATTERN = /^INSERT\s+INTO\s+"?(books|chapters)"?/i;
+
+function isRestoreStatement(statement: string): boolean {
+  return RESTORE_TABLE_PATTERN.test(statement.trim());
+}
 
 export class BackupService {
   constructor(private adapter: BackupAdapter) { }
@@ -41,6 +50,55 @@ export class BackupService {
 
     const actual = await computeChecksum(sql);
     return actual === entry.checksum;
+  }
+
+  async restoreBackup(filename: string): Promise<void> {
+    await this.createBackup("pre-restore");
+
+    let sql: string;
+    try {
+      sql = await this.adapter.readBackup(filename);
+    } catch {
+      throw new Error("BACKUP_CORRUPT");
+    }
+
+    const statements = parseSqlStatements(sql).filter(isRestoreStatement);
+    if (statements.length === 0) {
+      throw new Error("RESTORE_INVALID");
+    }
+
+    const db = await getDatabase();
+    await db.execute("BEGIN");
+
+    try {
+      await db.execute("DELETE FROM chapters");
+      await db.execute("DELETE FROM books");
+
+      for (const statement of statements) {
+        await db.execute(statement);
+      }
+
+      await db.execute("COMMIT");
+    } catch {
+      await db.execute("ROLLBACK").catch(() => undefined);
+      throw new Error("RESTORE_FAILED");
+    }
+
+    await useBookStore.getState().loadBooks();
+    const firstBookId = useBookStore.getState().books[0]?.id ?? null;
+
+    if (firstBookId) {
+      await useChapterStore.getState().loadChapters(firstBookId);
+      return;
+    }
+
+    useChapterStore.setState({
+      chapters: [],
+      currentChapter: null,
+      currentBookId: null,
+      isLoading: false,
+      error: null,
+    });
   }
 
   async pruneBackups(maxCount: number): Promise<void> {

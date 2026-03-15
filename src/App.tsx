@@ -10,32 +10,17 @@ import { PathTracker } from "./components/PathTracker";
 import { ToastViewport } from "./components/ui";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
 import { IS_TAURI } from "./lib/platform";
-import { createLaunchBackup, createCloseBackup } from "./features/backup/lifecycle";
+import { runLaunchBackupOnce, registerCloseBackupHandlerOnce } from "./features/backup/lifecycle";
 
 function App() {
   useEffect(() => {
-    createLaunchBackup();
+    void runLaunchBackupOnce();
   }, []);
 
   useEffect(() => {
     if (!IS_TAURI) return;
 
-    let unlisten: (() => void) | undefined;
-
-    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-      getCurrentWindow().onCloseRequested(async (event) => {
-        event.preventDefault();
-        await createCloseBackup();
-        // Use destroy() instead of close() to avoid re-triggering onCloseRequested
-        getCurrentWindow().destroy();
-      }).then((fn) => {
-        unlisten = fn;
-      });
-    });
-
-    return () => {
-      unlisten?.();
-    };
+    void registerCloseBackupHandlerOnce();
   }, []);
 
   return (

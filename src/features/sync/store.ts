@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AuthStatus, SyncStatus, SyncItemMeta, ConflictResolver } from "./types";
+import type { AuthStatus, SyncStatus, SyncItemMeta, ConflictResolver, SyncOutcome } from "./types";
 import {
   initClient,
   restoreAuth,
@@ -33,6 +33,22 @@ interface SyncStore {
   syncAll: (passphrase: string, onConflict: ConflictResolver) => Promise<void>;
   syncSingleBook: (bookId: string, passphrase: string, onConflict: ConflictResolver) => Promise<void>;
   updateBookMeta: (bookId: string, meta: SyncItemMeta) => void;
+}
+
+function applySyncOutcome(
+  outcome: SyncOutcome,
+  set: (partial: Partial<SyncStore>) => void,
+): void {
+  if (outcome === "cancelled") {
+    set({ syncStatus: "cancelled", syncError: null });
+    return;
+  }
+
+  set({
+    syncStatus: outcome === "partial" ? "partial" : "success",
+    syncError: null,
+    lastSyncedAt: Math.floor(Date.now() / 1000),
+  });
 }
 
 export const useSyncStore = create<SyncStore>()(
@@ -95,8 +111,8 @@ export const useSyncStore = create<SyncStore>()(
       syncAll: async (passphrase, onConflict) => {
         set({ syncStatus: "syncing", syncError: null });
         try {
-          await syncAllBooks(passphrase, onConflict);
-          set({ syncStatus: "success", lastSyncedAt: Math.floor(Date.now() / 1000) });
+          const result = await syncAllBooks(passphrase, onConflict);
+          applySyncOutcome(result.outcome, set);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Sync failed";
           set({ syncStatus: "error", syncError: message });
@@ -107,8 +123,8 @@ export const useSyncStore = create<SyncStore>()(
       syncSingleBook: async (bookId, passphrase, onConflict) => {
         set({ syncStatus: "syncing", syncError: null });
         try {
-          await syncBook(bookId, passphrase, onConflict);
-          set({ syncStatus: "success", lastSyncedAt: Math.floor(Date.now() / 1000) });
+          const result = await syncBook(bookId, passphrase, onConflict);
+          applySyncOutcome(result.outcome, set);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Sync failed";
           set({ syncStatus: "error", syncError: message });

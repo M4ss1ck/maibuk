@@ -2,10 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createBackup, getDialog, IS_TAURI } from "../../lib/platform";
 import { BackupService } from "../../features/backup/backup-service";
-import { parseSqlStatements } from "../../lib/db/sql-parser";
-import { getDatabase } from "../../lib/db";
-import { useBookStore } from "../../features/books/store";
-import { useChapterStore } from "../../features/chapters/store";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -89,55 +85,19 @@ export function BackupSection() {
     if (!service) return;
 
     try {
-      // Verify integrity
-      const valid = await service.verifyBackup(filename);
-      if (!valid) {
-        setErrorMessage(t("backup.backupCorrupt"));
-        return;
-      }
-
-      // Pre-restore backup
-      await service.createBackup("pre-restore");
-
-      // Read the backup SQL and parse with proper SQL parser
-      const sql = await service.readBackup(filename);
-      const allStatements = parseSqlStatements(sql);
-
-      // Filter to books and chapters INSERT statements only
-      const statements = allStatements.filter((s) =>
-        s.startsWith('INSERT INTO "books"') ||
-        s.startsWith('INSERT INTO "chapters"')
-      );
-
-      const db = await getDatabase();
-      await db.execute("BEGIN");
-      try {
-        await db.execute("DELETE FROM chapters");
-        await db.execute("DELETE FROM books");
-
-        for (const stmt of statements) {
-          await db.execute(stmt);
-        }
-
-        await db.execute("COMMIT");
-      } catch {
-        await db.execute("ROLLBACK");
-        setErrorMessage(t("backup.restoreFailed"));
-        return;
-      }
-
-      // Reload stores so UI reflects restored data
-      await useBookStore.getState().loadBooks();
-      await useChapterStore.getState().loadChapters(
-        useBookStore.getState().books[0]?.id ?? ""
-      );
+      await service.restoreBackup(filename);
       toast.success(t("backup.restoreSuccess"));
-    } catch {
-      setErrorMessage(t("backup.restoreFailed"));
+      await refresh();
+    } catch (error) {
+      if (error instanceof Error && error.message === "BACKUP_CORRUPT") {
+        setErrorMessage(t("backup.backupCorrupt"));
+      } else {
+        setErrorMessage(t("backup.restoreFailed"));
+      }
     } finally {
       setConfirmRestore(null);
     }
-  }, [service, t]);
+  }, [refresh, service, t]);
 
   const totalSize = backups.reduce((sum, b) => sum + b.sizeBytes, 0);
 

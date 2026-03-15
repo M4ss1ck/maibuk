@@ -2,6 +2,9 @@ import { createBackup as createBackupAdapter } from "../../lib/platform";
 import { useSettingsStore } from "../settings/store";
 import { BackupService } from "./backup-service";
 
+let launchBackupStarted = false;
+let closeBackupRegistered = false;
+
 async function getRetention(): Promise<number> {
   return useSettingsStore.getState().backupRetention;
 }
@@ -31,4 +34,35 @@ export async function createCloseBackup(): Promise<void> {
   } catch (error) {
     console.warn("Failed to create close backup:", error);
   }
+}
+
+export async function runLaunchBackupOnce(): Promise<void> {
+  if (launchBackupStarted) {
+    return;
+  }
+
+  launchBackupStarted = true;
+  await createLaunchBackup();
+}
+
+export async function registerCloseBackupHandlerOnce(): Promise<void> {
+  if (closeBackupRegistered) {
+    return;
+  }
+
+  closeBackupRegistered = true;
+
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const currentWindow = getCurrentWindow();
+
+  await currentWindow.onCloseRequested(async (event) => {
+    event.preventDefault();
+    await createCloseBackup();
+    currentWindow.destroy();
+  });
+}
+
+export function resetBackupLifecycleForTests(): void {
+  launchBackupStarted = false;
+  closeBackupRegistered = false;
 }
