@@ -12,13 +12,12 @@ const PROTECTED_TRIGGERS = new Set<BackupEntry["trigger"]>(["pre-sync", "pre-res
 const MIN_PROTECTED = 2;
 
 export class BackupService {
-  constructor(private adapter: BackupAdapter) {}
+  constructor(private adapter: BackupAdapter) { }
 
   async createBackup(trigger: BackupEntry["trigger"]): Promise<string> {
     const sql = await generateSqlDump();
-    const checksum = await computeChecksum(sql);
     const filename = buildFilename(trigger);
-    await this.adapter.saveBackup(filename, sql, trigger, checksum);
+    await this.adapter.saveBackup(filename, sql);
     return filename;
   }
 

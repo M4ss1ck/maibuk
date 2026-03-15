@@ -13,6 +13,23 @@ interface StoredBackup {
   checksum: string;
 }
 
+const STORAGE_FULL_MESSAGE = "Backup storage full. Delete old backups in Settings or reduce retention limit.";
+
+function parseTriggerFromFilename(filename: string): BackupEntry["trigger"] {
+  const match = filename.match(/^maibuk-backup-(launch|close|pre-sync|pre-restore|manual)-/);
+  return match?.[1] as BackupEntry["trigger"] ?? "unknown";
+}
+
+async function computeChecksum(data: string): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(data),
+  );
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -37,19 +54,14 @@ async function withDB<T>(fn: (db: IDBDatabase) => Promise<T>): Promise<T> {
 }
 
 class WebBackupAdapter implements BackupAdapter {
-  async saveBackup(
-    filename: string,
-    sqlContent: string,
-    trigger: BackupEntry["trigger"],
-    checksum: string,
-  ): Promise<void> {
+  async saveBackup(filename: string, sqlContent: string): Promise<void> {
     const entry: StoredBackup = {
       filename,
       sql: sqlContent,
-      trigger,
+      trigger: parseTriggerFromFilename(filename),
       createdAt: new Date().toISOString(),
       sizeBytes: new Blob([sqlContent]).size,
-      checksum,
+      checksum: await computeChecksum(sqlContent),
     };
 
     try {
@@ -70,16 +82,20 @@ class WebBackupAdapter implements BackupAdapter {
           return true;
         });
         if (!oldest) {
-          throw new Error("Backup storage full. Delete old backups in Settings or reduce retention limit.");
+          throw new Error(STORAGE_FULL_MESSAGE);
         }
         await this.deleteBackup(oldest.filename);
         // Retry once
-        await withDB((db) => new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(STORE_NAME, "readwrite");
-          tx.objectStore(STORE_NAME).put(entry);
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        }));
+        try {
+          await withDB((db) => new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            tx.objectStore(STORE_NAME).put(entry);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          }));
+        } catch {
+          throw new Error(STORAGE_FULL_MESSAGE);
+        }
       } else {
         throw error;
       }
@@ -107,13 +123,18 @@ class WebBackupAdapter implements BackupAdapter {
   }
 
   async readBackup(filename: string): Promise<string> {
-    return withDB((db) => new Promise((resolve, reject) => {
+    return withDB((db) => new Promise(async (resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const request = tx.objectStore(STORE_NAME).get(filename);
-      request.onsuccess = () => {
+      request.onsuccess = async () => {
         const stored = request.result as StoredBackup | undefined;
         if (!stored) {
           reject(new Error(`Backup not found: ${filename}`));
+          return;
+        }
+        const checksum = await computeChecksum(stored.sql);
+        if (checksum !== stored.checksum) {
+          reject(new Error(`Backup checksum mismatch: ${filename}`));
           return;
         }
         resolve(stored.sql);

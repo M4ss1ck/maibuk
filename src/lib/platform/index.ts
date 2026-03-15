@@ -89,11 +89,11 @@ export async function getOS(): Promise<OSAdapter> {
 }
 
 // Backup factory
-export async function createBackup(): Promise<BackupAdapter> {
+export async function createBackup(customDir?: string | null): Promise<BackupAdapter> {
   if (IS_WEB) {
     const { createWebBackup } = await import("./web/backup");
     return createWebBackup();
   }
   const { createTauriBackup } = await import("./tauri/backup");
-  return createTauriBackup();
+  return createTauriBackup(customDir ?? undefined);
 }

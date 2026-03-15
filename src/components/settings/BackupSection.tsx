@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { createBackup } from "../../lib/platform";
+import { createBackup, getDialog, IS_TAURI } from "../../lib/platform";
 import { BackupService } from "../../features/backup/backup-service";
 import { parseSqlStatements } from "../../lib/db/sql-parser";
 import { getDatabase } from "../../lib/db";
@@ -8,31 +8,55 @@ import { useBookStore } from "../../features/books/store";
 import { useChapterStore } from "../../features/chapters/store";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
 import { toast } from "../ui/Toast";
 import type { BackupEntry } from "../../lib/platform/types";
+import { useSettingsStore } from "../../features/settings/store";
 
-const DEFAULT_RETENTION = 20;
 const SIZE_WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
 
 export function BackupSection() {
   const { t } = useTranslation();
+  const {
+    backupRetention,
+    backupDirectory,
+    setBackupRetention,
+    setBackupDirectory,
+  } = useSettingsStore();
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [service, setService] = useState<BackupService | null>(null);
   const [loading, setLoading] = useState(true);
-  const [retention, setRetention] = useState(DEFAULT_RETENTION);
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    createBackup().then((adapter) => {
-      const svc = new BackupService(adapter);
-      setService(svc);
-      svc.listBackups().then((list) => {
+    let cancelled = false;
+
+    async function loadService(): Promise<void> {
+      setLoading(true);
+      try {
+        const adapter = await createBackup(backupDirectory);
+        const svc = new BackupService(adapter);
+        const list = await svc.listBackups();
+        if (cancelled) return;
+        setService(svc);
         setBackups(list);
-        setLoading(false);
-      });
-    });
-  }, []);
+      } catch {
+        if (cancelled) return;
+        setErrorMessage(t("backup.loadFailed"));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadService();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backupDirectory, t]);
 
   const refresh = useCallback(async () => {
     if (!service) return;
@@ -42,10 +66,18 @@ export function BackupSection() {
   const handleCreate = useCallback(async () => {
     if (!service) return;
     await service.createBackup("manual");
-    await service.pruneBackups(retention);
+    await service.pruneBackups(backupRetention);
     await refresh();
     toast.success(t("backup.backupCreated"));
-  }, [service, retention, refresh, t]);
+  }, [service, backupRetention, refresh, t]);
+
+  const handleChooseDirectory = useCallback(async () => {
+    const dialog = await getDialog();
+    const path = await dialog.open({ directory: true });
+    if (path) {
+      setBackupDirectory(path);
+    }
+  }, [setBackupDirectory]);
 
   const handleDelete = useCallback(async (filename: string) => {
     if (!service) return;
@@ -119,16 +151,30 @@ export function BackupSection() {
       </div>
 
       <div className="flex items-center gap-4">
-        <label className="text-sm text-foreground">{t("backup.retentionLimit")}</label>
-        <input
+        <Input
           type="number"
+          label={t("backup.retentionLimit")}
           min={1}
           max={100}
-          value={retention}
-          onChange={(e) => setRetention(Number(e.target.value))}
-          className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+          value={backupRetention}
+          onChange={(e) => setBackupRetention(Number(e.target.value))}
+          className="w-24"
         />
       </div>
+
+      {IS_TAURI && (
+        <div className="flex items-end gap-3">
+          <Input
+            label={t("backup.directoryLabel")}
+            value={backupDirectory ?? ""}
+            onChange={(e) => setBackupDirectory(e.target.value || null)}
+            placeholder={t("backup.directoryPlaceholder")}
+          />
+          <Button variant="secondary" onClick={() => void handleChooseDirectory()}>
+            {t("backup.chooseDirectory")}
+          </Button>
+        </div>
+      )}
 
       <Button variant="primary" onClick={handleCreate}>
         {t("backup.createBackup")}

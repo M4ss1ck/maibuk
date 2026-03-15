@@ -15,6 +15,7 @@ export interface SaveDialogOptions {
 
 export interface OpenDialogOptions {
   multiple?: boolean;
+  directory?: boolean;
   filters?: { name: string; extensions: string[] }[];
 }
 
@@ -54,7 +55,7 @@ export interface BackupEntry {
 }
 
 export interface BackupAdapter {
-  saveBackup(filename: string, sqlContent: string, trigger: BackupEntry["trigger"], checksum: string): Promise<void>;
+  saveBackup(filename: string, sqlContent: string): Promise<void>;
   listBackups(): Promise<BackupEntry[]>;
   readBackup(filename: string): Promise<string>;
   deleteBackup(filename: string): Promise<void>;

@@ -1,41 +1,73 @@
 /**
  * Parse a SQL dump into individual statements, correctly handling semicolons
- * inside single-quoted and double-quoted strings (including escaped quotes).
- * Strips SQL comments (lines starting with --).
+ * inside single-quoted and double-quoted strings.
+ * Strips SQL line comments (--) that appear outside quoted strings.
  */
 export function parseSqlStatements(sqlContent: string): string[] {
   const statements: string[] = [];
   let current = "";
-  let inString = false;
-  let stringChar = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inLineComment = false;
 
   for (let i = 0; i < sqlContent.length; i++) {
     const char = sqlContent[i];
+    const next = sqlContent[i + 1];
 
-    if ((char === "'" || char === '"') && sqlContent[i - 1] !== "\\") {
-      if (!inString) {
-        inString = true;
-        stringChar = char;
-      } else if (char === stringChar) {
-        if (char === "'" && sqlContent[i + 1] === "'") {
-          current += char;
-          i++;
-          current += sqlContent[i];
-          continue;
-        }
-        inString = false;
-        stringChar = "";
+    if (inLineComment) {
+      if (char === "\n") {
+        inLineComment = false;
       }
+      continue;
     }
 
-    if (char === ";" && !inString) {
+    if (inSingleQuote) {
+      current += char;
+      if (char === "'") {
+        if (next === "'") {
+          current += char;
+          i++;
+          continue;
+        }
+        inSingleQuote = false;
+      }
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      current += char;
+      if (char === '"') {
+        if (next === '"') {
+          current += char;
+          i++;
+          continue;
+        }
+        inDoubleQuote = false;
+      }
+      continue;
+    }
+
+    if (char === "-" && next === "-") {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+
+    if (char === "'") {
+      inSingleQuote = true;
+      current += char;
+      continue;
+    }
+
+    if (char === '"') {
+      inDoubleQuote = true;
+      current += char;
+      continue;
+    }
+
+    if (char === ";") {
       const trimmed = current.trim();
-      const clean = trimmed
-        .split("\n")
-        .filter((line) => !line.trim().startsWith("--"))
-        .join("\n")
-        .trim();
-      if (clean.length > 0) statements.push(clean);
+      if (trimmed.length > 0) statements.push(trimmed);
       current = "";
     } else {
       current += char;
@@ -43,13 +75,8 @@ export function parseSqlStatements(sqlContent: string): string[] {
   }
 
   const trimmed = current.trim();
-  if (trimmed.length > 0 && !trimmed.startsWith("--")) {
-    const clean = trimmed
-      .split("\n")
-      .filter((line) => !line.trim().startsWith("--"))
-      .join("\n")
-      .trim();
-    if (clean.length > 0) statements.push(clean);
+  if (trimmed.length > 0) {
+    statements.push(trimmed);
   }
 
   return statements;

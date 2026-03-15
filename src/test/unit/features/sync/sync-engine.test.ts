@@ -34,6 +34,7 @@ vi.mock("../../../../features/sync/client", () => ({
 // Pre-mock backup module — Task 10 will add backup imports to sync-engine.ts.
 // Without this mock, vitest would try to resolve the real backup module and fail.
 vi.mock("../../../../lib/platform", () => ({
+  getOS: vi.fn().mockResolvedValue({ locale: vi.fn().mockResolvedValue("en-US") }),
   createBackup: vi.fn().mockResolvedValue({
     saveBackup: vi.fn(),
     listBackups: vi.fn().mockResolvedValue([]),
@@ -122,7 +123,7 @@ describe("syncBook — timestamp fix", () => {
 
   it("throws if called while already syncing (concurrency guard)", async () => {
     // Set up a sync that blocks indefinitely on onConflict
-    const neverResolve = () => new Promise<"push" | "pull" | "cancel">(() => {});
+    const neverResolve = () => new Promise<"push" | "pull" | "cancel">(() => { });
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
       if (sql.includes("SELECT title")) return [{ title: "Test Book" }];

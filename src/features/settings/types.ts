@@ -4,6 +4,12 @@ export type ExportFormat = "epub" | "pdf";
 export type Language = "en" | "es";
 
 export const DEFAULT_PRIMARY_COLOR = "#3B82F6";
+export const DEFAULT_TAURI_BACKUP_RETENTION = 20;
+export const DEFAULT_WEB_BACKUP_RETENTION = 5;
+
+export function getDefaultBackupRetention(isWeb: boolean): number {
+  return isWeb ? DEFAULT_WEB_BACKUP_RETENTION : DEFAULT_TAURI_BACKUP_RETENTION;
+}
 
 export interface Settings {
   // App UI settings
@@ -25,6 +31,10 @@ export interface Settings {
 
   // Export settings
   defaultExportFormat: ExportFormat;
+
+  // Backup settings
+  backupRetention: number;
+  backupDirectory: string | null;
 
   // Editor layout settings
   sidebarWidth: number;

@@ -61,6 +61,8 @@ export default defineConfig(() => ({
         // Phase 5: Backup + sync safety
         "src/features/backup/backup-service.ts",
         "src/features/backup/generate-sql-dump.ts",
+        "src/lib/db/sql-parser.ts",
+        "src/lib/platform/tauri/backup.ts",
         "src/lib/platform/web/backup.ts",
         "src/features/sync/sync-engine.ts",
       ],

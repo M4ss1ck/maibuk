@@ -405,6 +405,10 @@
   "backup": {
     "title": "Backups",
     "description": "Automatic backups are created on app launch, before sync, and before restore.",
+    "directoryLabel": "Backup directory",
+    "directoryPlaceholder": "Use the default app backup directory",
+    "chooseDirectory": "Choose folder",
+    "loadFailed": "Could not load backups.",
     "retentionLimit": "Maximum backups to keep",
     "createBackup": "Create Backup Now",
     "restoreBackup": "Restore",

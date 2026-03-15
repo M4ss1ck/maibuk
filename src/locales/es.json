@@ -405,6 +405,10 @@
   "backup": {
     "title": "Copias de seguridad",
     "description": "Se crean copias de seguridad automáticas al iniciar la app, antes de sincronizar y antes de restaurar.",
+    "directoryLabel": "Carpeta de copias",
+    "directoryPlaceholder": "Usar la carpeta predeterminada de la app",
+    "chooseDirectory": "Elegir carpeta",
+    "loadFailed": "No se pudieron cargar las copias de seguridad.",
     "retentionLimit": "Máximo de copias a conservar",
     "createBackup": "Crear copia ahora",
     "restoreBackup": "Restaurar",

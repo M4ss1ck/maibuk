@@ -10,6 +10,7 @@ import type { BookSnapshot, SyncItemMeta } from "./types";
 import type { SyncAction, ConflictResolver } from "./types";
 import { createBackup } from "../../lib/platform";
 import { BackupService } from "../backup/backup-service";
+import { useSettingsStore } from "../settings/store";
 
 let isSyncing = false;
 
@@ -142,7 +143,7 @@ export async function syncBook(
   isSyncing = true;
   try {
     // Mandatory pre-sync backup
-    const adapter = await createBackup();
+    const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
     const backupService = new BackupService(adapter);
     await backupService.createBackup("pre-sync");
 
@@ -167,7 +168,7 @@ export async function syncAllBooks(
     assertOnline();
 
     // Mandatory pre-sync backup
-    const adapter = await createBackup();
+    const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
     const backupService = new BackupService(adapter);
     await backupService.createBackup("pre-sync");
 
