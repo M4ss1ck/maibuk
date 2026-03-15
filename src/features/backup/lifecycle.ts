@@ -1,4 +1,5 @@
 import { createBackup as createBackupAdapter } from "../../lib/platform";
+import { waitForDatabaseReady } from "../../lib/db";
 import { useSettingsStore } from "../settings/store";
 import { BackupService } from "./backup-service";
 
@@ -42,6 +43,7 @@ export async function runLaunchBackupOnce(): Promise<void> {
   }
 
   launchBackupStarted = true;
+  await waitForDatabaseReady();
   await createLaunchBackup();
 }
 

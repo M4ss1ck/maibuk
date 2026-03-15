@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const mockGetDatabase = vi.hoisted(() => vi.fn());
+const mockCreateBackupAdapter = vi.hoisted(() => vi.fn());
 const mockSerializeBook = vi.hoisted(() => vi.fn());
 const mockComputeChecksum = vi.hoisted(() => vi.fn());
 const mockEncrypt = vi.hoisted(() => vi.fn());
@@ -35,22 +36,18 @@ vi.mock("../../../../features/sync/client", () => ({
 // Without this mock, vitest would try to resolve the real backup module and fail.
 vi.mock("../../../../lib/platform", () => ({
   getOS: vi.fn().mockResolvedValue({ locale: vi.fn().mockResolvedValue("en-US") }),
-  createBackup: vi.fn().mockResolvedValue({
-    saveBackup: vi.fn(),
-    listBackups: vi.fn().mockResolvedValue([]),
-    readBackup: vi.fn(),
-    deleteBackup: vi.fn(),
-  }),
+  createBackup: mockCreateBackupAdapter,
 }));
 
+const mockBackupServiceCreateBackup = vi.hoisted(() => vi.fn());
 vi.mock("../../../../features/backup/backup-service", () => ({
   BackupService: class {
-    createBackup = vi.fn().mockResolvedValue("mock-backup.sql");
+    createBackup = mockBackupServiceCreateBackup;
     pruneBackups = vi.fn();
   },
 }));
 
-const { syncBook, syncAllBooks } = await import("../../../../features/sync/sync-engine");
+const { syncBook, syncAllBooks, resetSyncEngineForTests } = await import("../../../../features/sync/sync-engine");
 
 describe("syncBook — timestamp fix", () => {
   const mockDb = {
@@ -61,7 +58,15 @@ describe("syncBook — timestamp fix", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSyncEngineForTests();
     mockGetDatabase.mockResolvedValue(mockDb);
+    mockCreateBackupAdapter.mockResolvedValue({
+      saveBackup: vi.fn(),
+      listBackups: vi.fn().mockResolvedValue([]),
+      readBackup: vi.fn(),
+      deleteBackup: vi.fn(),
+    });
+    mockBackupServiceCreateBackup.mockResolvedValue("mock-backup.sql");
     mockSerializeBook.mockResolvedValue('{"book":{}}');
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
@@ -150,6 +155,17 @@ describe("syncBook — timestamp fix", () => {
     }
     await expect(firstSync).resolves.toEqual({ outcome: "cancelled", action: "cancelled" });
   });
+
+  it("rethrows a spec-friendly error when the pre-sync backup fails", async () => {
+    mockBackupServiceCreateBackup.mockRejectedValue(new Error("disk full"));
+
+    await expect(syncBook("book-1", "pass", noopConflict)).rejects.toThrow(
+      "Could not create a safety backup. Sync aborted. Free up disk space and try again.",
+    );
+
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(mockPullBookBlob).not.toHaveBeenCalled();
+  });
 });
 
 describe("syncAllBooks — truthful outcomes", () => {
@@ -160,7 +176,15 @@ describe("syncAllBooks — truthful outcomes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSyncEngineForTests();
     mockGetDatabase.mockResolvedValue(mockDb);
+    mockCreateBackupAdapter.mockResolvedValue({
+      saveBackup: vi.fn(),
+      listBackups: vi.fn().mockResolvedValue([]),
+      readBackup: vi.fn(),
+      deleteBackup: vi.fn(),
+    });
+    mockBackupServiceCreateBackup.mockResolvedValue("mock-backup.sql");
     mockSerializeBook.mockResolvedValue('{"book":{}}');
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
@@ -213,5 +237,23 @@ describe("syncAllBooks — truthful outcomes", () => {
     expect(result.actions).toEqual(["pushed", "cancelled"]);
     expect(mockPushBookBlob).toHaveBeenCalledTimes(1);
     expect(onConflict).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses the configured backup service across sync invocations", async () => {
+    mockListRemoteBooks.mockResolvedValue([]);
+
+    await syncBook("book-1", "pass", vi.fn());
+    await syncAllBooks("pass", vi.fn());
+
+    expect(mockCreateBackupAdapter).toHaveBeenCalledTimes(1);
+    expect(mockBackupServiceCreateBackup).toHaveBeenCalledTimes(2);
+  });
+
+  it("rethrows the spec-friendly error when the batch pre-sync backup fails", async () => {
+    mockBackupServiceCreateBackup.mockRejectedValue(new Error("quota exceeded"));
+
+    await expect(syncAllBooks("pass", vi.fn())).rejects.toThrow(
+      "Could not create a safety backup. Sync aborted. Free up disk space and try again.",
+    );
   });
 });

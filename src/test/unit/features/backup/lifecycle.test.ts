@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockCreateBackupAdapter = vi.hoisted(() => vi.fn());
 const mockCreateBackup = vi.hoisted(() => vi.fn());
 const mockPruneBackups = vi.hoisted(() => vi.fn());
+const mockWaitForDatabaseReady = vi.hoisted(() => vi.fn());
 const mockGetCurrentWindow = vi.hoisted(() => vi.fn());
 const mockOnCloseRequested = vi.hoisted(() => vi.fn());
 const mockDestroy = vi.hoisted(() => vi.fn());
@@ -13,6 +14,10 @@ const mockSettingsState = vi.hoisted(() => ({
 
 vi.mock("../../../../lib/platform", () => ({
   createBackup: mockCreateBackupAdapter,
+}));
+
+vi.mock("../../../../lib/db", () => ({
+  waitForDatabaseReady: mockWaitForDatabaseReady,
 }));
 
 vi.mock("../../../../features/settings/store", () => ({
@@ -44,6 +49,7 @@ describe("backup lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetBackupLifecycleForTests();
+    mockWaitForDatabaseReady.mockResolvedValue(undefined);
     mockCreateBackupAdapter.mockResolvedValue({});
     mockCreateBackup.mockResolvedValue("backup.sql");
     mockPruneBackups.mockResolvedValue(undefined);
@@ -75,6 +81,7 @@ describe("backup lifecycle", () => {
     await runLaunchBackupOnce();
     await runLaunchBackupOnce();
 
+    expect(mockWaitForDatabaseReady).toHaveBeenCalledTimes(1);
     expect(mockCreateBackup).toHaveBeenCalledTimes(1);
     expect(mockCreateBackup).toHaveBeenCalledWith("launch");
   });

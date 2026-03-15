@@ -1,15 +1,27 @@
 import { createDatabase, IS_TAURI, type DatabaseAdapter } from "../platform";
 
 let db: DatabaseAdapter | null = null;
+let dbPromise: Promise<DatabaseAdapter> | null = null;
 
 export async function getDatabase(): Promise<DatabaseAdapter> {
-  if (!db) {
-    // Tauri uses "sqlite:" prefix, web just needs a name
-    const dbPath = IS_TAURI ? "sqlite:maibuk.db" : "maibuk.db";
-    db = await createDatabase(dbPath);
-    await initializeSchema();
+  if (db) {
+    return db;
   }
-  return db;
+
+  if (!dbPromise) {
+    dbPromise = (async () => {
+      const dbPath = IS_TAURI ? "sqlite:maibuk.db" : "maibuk.db";
+      db = await createDatabase(dbPath);
+      await initializeSchema();
+      return db;
+    })();
+  }
+
+  return dbPromise;
+}
+
+export async function waitForDatabaseReady(): Promise<void> {
+  await getDatabase();
 }
 
 async function initializeSchema(): Promise<void> {
@@ -100,6 +112,7 @@ export async function closeDatabase(): Promise<void> {
     await db.close();
     db = null;
   }
+  dbPromise = null;
 }
 
 export async function exportDatabase(): Promise<Uint8Array> {

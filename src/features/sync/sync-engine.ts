@@ -13,6 +13,8 @@ import { BackupService } from "../backup/backup-service";
 import { useSettingsStore } from "../settings/store";
 
 let isSyncing = false;
+let backupServicePromise: Promise<BackupService> | null = null;
+const PRE_SYNC_BACKUP_ERROR = "Could not create a safety backup. Sync aborted. Free up disk space and try again.";
 
 async function decryptSnapshot(
   data: Uint8Array,
@@ -67,6 +69,26 @@ async function getBookTitle(bookId: string): Promise<string> {
 function assertNotSyncing(): void {
   if (isSyncing) {
     throw new Error("A sync operation is already in progress");
+  }
+}
+
+async function getSyncBackupService(): Promise<BackupService> {
+  if (!backupServicePromise) {
+    backupServicePromise = (async () => {
+      const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
+      return new BackupService(adapter);
+    })();
+  }
+
+  return backupServicePromise;
+}
+
+async function createPreSyncBackupOrThrow(): Promise<void> {
+  try {
+    const backupService = await getSyncBackupService();
+    await backupService.createBackup("pre-sync");
+  } catch {
+    throw new Error(PRE_SYNC_BACKUP_ERROR);
   }
 }
 
@@ -142,10 +164,7 @@ export async function syncBook(
   assertNotSyncing();
   isSyncing = true;
   try {
-    // Mandatory pre-sync backup
-    const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
-    const backupService = new BackupService(adapter);
-    await backupService.createBackup("pre-sync");
+    await createPreSyncBackupOrThrow();
 
     const action = await syncBookCore(bookId, passphrase, onConflict);
     return {
@@ -172,10 +191,7 @@ export async function syncAllBooks(
     assertOnline();
     const actions: SyncAction[] = [];
 
-    // Mandatory pre-sync backup
-    const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
-    const backupService = new BackupService(adapter);
-    await backupService.createBackup("pre-sync");
+    await createPreSyncBackupOrThrow();
 
     const db = await getDatabase();
     const localBooks = await db.select<BookTimestampRow[]>(
@@ -215,4 +231,9 @@ export async function syncAllBooks(
   } finally {
     isSyncing = false;
   }
+}
+
+export function resetSyncEngineForTests(): void {
+  isSyncing = false;
+  backupServicePromise = null;
 }
