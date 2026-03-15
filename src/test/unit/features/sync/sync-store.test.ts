@@ -178,10 +178,11 @@ describe("useSyncStore", () => {
   describe("syncAll()", () => {
     it("calls syncAllBooks and sets success status", async () => {
       mockSyncAllBooks.mockResolvedValue(undefined);
+      const mockOnConflict = vi.fn();
 
-      await useSyncStore.getState().syncAll("my-passphrase");
+      await useSyncStore.getState().syncAll("my-passphrase", mockOnConflict);
 
-      expect(mockSyncAllBooks).toHaveBeenCalledWith("my-passphrase");
+      expect(mockSyncAllBooks).toHaveBeenCalledWith("my-passphrase", mockOnConflict);
       expect(useSyncStore.getState().syncStatus).toBe("success");
       expect(useSyncStore.getState().lastSyncedAt).toBeDefined();
       expect(useSyncStore.getState().lastSyncedAt).toBeGreaterThan(0);
@@ -191,7 +192,7 @@ describe("useSyncStore", () => {
       mockSyncAllBooks.mockRejectedValue(new Error("Network error"));
 
       await expect(
-        useSyncStore.getState().syncAll("passphrase")
+        useSyncStore.getState().syncAll("passphrase", vi.fn())
       ).rejects.toThrow("Network error");
 
       expect(useSyncStore.getState().syncStatus).toBe("error");
@@ -204,7 +205,7 @@ describe("useSyncStore", () => {
         capturedStatus = useSyncStore.getState().syncStatus;
       });
 
-      await useSyncStore.getState().syncAll("passphrase");
+      await useSyncStore.getState().syncAll("passphrase", vi.fn());
 
       expect(capturedStatus).toBe("syncing");
     });
@@ -213,10 +214,11 @@ describe("useSyncStore", () => {
   describe("syncSingleBook()", () => {
     it("calls syncBook and sets success status", async () => {
       mockSyncBook.mockResolvedValue(undefined);
+      const mockOnConflict = vi.fn();
 
-      await useSyncStore.getState().syncSingleBook("book-1", "passphrase");
+      await useSyncStore.getState().syncSingleBook("book-1", "passphrase", mockOnConflict);
 
-      expect(mockSyncBook).toHaveBeenCalledWith("book-1", "passphrase");
+      expect(mockSyncBook).toHaveBeenCalledWith("book-1", "passphrase", mockOnConflict);
       expect(useSyncStore.getState().syncStatus).toBe("success");
     });
 
@@ -224,7 +226,7 @@ describe("useSyncStore", () => {
       mockSyncBook.mockRejectedValue(new Error("Sync failed"));
 
       await expect(
-        useSyncStore.getState().syncSingleBook("book-1", "passphrase")
+        useSyncStore.getState().syncSingleBook("book-1", "passphrase", vi.fn())
       ).rejects.toThrow("Sync failed");
 
       expect(useSyncStore.getState().syncStatus).toBe("error");
@@ -235,7 +237,7 @@ describe("useSyncStore", () => {
       mockSyncBook.mockRejectedValue("string error");
 
       await expect(
-        useSyncStore.getState().syncSingleBook("book-1", "passphrase")
+        useSyncStore.getState().syncSingleBook("book-1", "passphrase", vi.fn())
       ).rejects.toBe("string error");
 
       expect(useSyncStore.getState().syncError).toBe("Sync failed");

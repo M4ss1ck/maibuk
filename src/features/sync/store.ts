@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AuthStatus, SyncStatus, SyncItemMeta } from "./types";
+import type { AuthStatus, SyncStatus, SyncItemMeta, ConflictResolver } from "./types";
 import {
   initClient,
   restoreAuth,
@@ -30,8 +30,8 @@ interface SyncStore {
   register: (email: string, password: string) => Promise<void>;
   loginWithOAuth: (provider: string) => Promise<void>;
   logout: () => void;
-  syncAll: (passphrase: string) => Promise<void>;
-  syncSingleBook: (bookId: string, passphrase: string) => Promise<void>;
+  syncAll: (passphrase: string, onConflict: ConflictResolver) => Promise<void>;
+  syncSingleBook: (bookId: string, passphrase: string, onConflict: ConflictResolver) => Promise<void>;
   updateBookMeta: (bookId: string, meta: SyncItemMeta) => void;
 }
 
@@ -92,29 +92,25 @@ export const useSyncStore = create<SyncStore>()(
         });
       },
 
-      syncAll: async (passphrase) => {
+      syncAll: async (passphrase, onConflict) => {
         set({ syncStatus: "syncing", syncError: null });
         try {
-          await syncAllBooks(passphrase);
-          const now = Math.floor(Date.now() / 1000);
-          set({ syncStatus: "success", lastSyncedAt: now });
+          await syncAllBooks(passphrase, onConflict);
+          set({ syncStatus: "success", lastSyncedAt: Math.floor(Date.now() / 1000) });
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Sync failed";
+          const message = error instanceof Error ? error.message : "Sync failed";
           set({ syncStatus: "error", syncError: message });
           throw error;
         }
       },
 
-      syncSingleBook: async (bookId, passphrase) => {
+      syncSingleBook: async (bookId, passphrase, onConflict) => {
         set({ syncStatus: "syncing", syncError: null });
         try {
-          await syncBook(bookId, passphrase);
-          const now = Math.floor(Date.now() / 1000);
-          set({ syncStatus: "success", lastSyncedAt: now });
+          await syncBook(bookId, passphrase, onConflict);
+          set({ syncStatus: "success", lastSyncedAt: Math.floor(Date.now() / 1000) });
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Sync failed";
+          const message = error instanceof Error ? error.message : "Sync failed";
           set({ syncStatus: "error", syncError: message });
           throw error;
         }
