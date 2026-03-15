@@ -89,11 +89,13 @@ src/
 │   │   └── extensions/  # Custom TipTap extensions
 │   ├── cover-editor/    # Fabric.js cover canvas and toolbar
 │   ├── export/          # Export dialogs and previews
-│   ├── sync/            # Sync status button, auth/passphrase dialogs, sync panel
+│   ├── sync/            # Sync status button, auth/passphrase dialogs, conflict dialog, sync panel
+│   ├── settings/        # BackupSection
 │   ├── project/         # Book card, new book dialog
 │   ├── book/            # Book settings dialog
 │   └── icons/           # Custom SVG icon components
 ├── features/            # Feature modules (business logic + state)
+│   ├── backup/          # backup-service.ts, generate-sql-dump.ts, lifecycle.ts, types.ts
 │   ├── books/           # store.ts, types.ts
 │   ├── chapters/        # store.ts, types.ts
 │   ├── covers/          # types.ts
@@ -231,6 +233,11 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`           |
 | `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`    |
 | `isTypingTarget()` / `isModKey()`                                  | `src/lib/keyboard.ts`                    |
+| `BackupService` (create, prune, verify)                            | `src/features/backup/backup-service.ts`  |
+| `generateSqlDump()`                                                | `src/features/backup/generate-sql-dump.ts` |
+| `createLaunchBackup()` / `createCloseBackup()`                     | `src/features/backup/lifecycle.ts`       |
+| `parseSqlStatements()`                                             | `src/lib/db/sql-parser.ts`               |
+| `createBackup()` (platform factory)                                | `src/lib/platform/index.ts`              |
 
 ---
 
