@@ -370,7 +370,14 @@
     "loggedInAs": "Logged in as {{email}}",
     "encryptionInfo": "All data is encrypted on your device before syncing. The server never sees your plaintext data.",
     "infoCardText": "Sync requires a server. You can use the official one or your own.",
-    "infoCardLearnMore": "Learn more about sync setup"
+    "infoCardLearnMore": "Learn more about sync setup",
+    "conflictTitle": "Sync Conflict",
+    "conflictDescription": "The book \"{{title}}\" has different versions locally and on the server.",
+    "localLastModified": "Local last modified: {{date}}",
+    "remoteLastSynced": "Remote last synced: {{date}}",
+    "keepLocal": "Keep Local & Push",
+    "useRemote": "Use Remote & Pull",
+    "cancelSync": "Cancel"
   },
   "errors": {
     "titleRequired": "Title is required",

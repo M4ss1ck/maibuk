@@ -370,7 +370,14 @@
     "loggedInAs": "Conectado como {{email}}",
     "encryptionInfo": "Todos los datos se cifran en tu dispositivo antes de sincronizarlos. El servidor nunca ve tus datos en texto plano.",
     "infoCardText": "La sincronización requiere un servidor. Puedes usar el oficial o el tuyo.",
-    "infoCardLearnMore": "Saber más sobre la sincronización"
+    "infoCardLearnMore": "Saber más sobre la sincronización",
+    "conflictTitle": "Conflicto de sincronización",
+    "conflictDescription": "El libro \"{{title}}\" tiene versiones diferentes localmente y en el servidor.",
+    "localLastModified": "Última modificación local: {{date}}",
+    "remoteLastSynced": "Última sincronización remota: {{date}}",
+    "keepLocal": "Mantener local y subir",
+    "useRemote": "Usar remoto y descargar",
+    "cancelSync": "Cancelar"
   },
   "errors": {
     "titleRequired": "El título es obligatorio",
