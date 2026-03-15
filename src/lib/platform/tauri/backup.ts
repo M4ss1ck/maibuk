@@ -1,5 +1,5 @@
 import { readTextFile, writeTextFile, readDir, remove, mkdir, stat } from "@tauri-apps/plugin-fs";
-import { appConfigDir } from "@tauri-apps/api/path";
+import { appConfigDir, join } from "@tauri-apps/api/path";
 import type { BackupAdapter, BackupEntry } from "../types";
 import { computeChecksum } from "../../checksum";
 import { parseTriggerFromFilename } from "../../../features/backup/utils";
@@ -32,7 +32,7 @@ function isManagedMetaFile(name: string | undefined): name is string {
 async function getBackupDir(customDir?: string): Promise<string> {
   if (customDir) return customDir;
   const configDir = await appConfigDir();
-  const dir = `${configDir}backups`;
+  const dir = await join(configDir, "backups");
   await mkdir(dir, { recursive: true }).catch(() => {
     // Directory already exists
   });

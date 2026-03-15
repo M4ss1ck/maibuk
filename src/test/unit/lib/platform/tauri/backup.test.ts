@@ -7,6 +7,7 @@ const mockRemove = vi.hoisted(() => vi.fn());
 const mockMkdir = vi.hoisted(() => vi.fn());
 const mockStat = vi.hoisted(() => vi.fn());
 const mockAppConfigDir = vi.hoisted(() => vi.fn());
+const mockJoin = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: mockReadTextFile,
@@ -19,6 +20,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 
 vi.mock("@tauri-apps/api/path", () => ({
   appConfigDir: mockAppConfigDir,
+  join: mockJoin,
 }));
 
 const { createTauriBackup } = await import("../../../../../lib/platform/tauri/backup");
@@ -27,10 +29,20 @@ describe("TauriBackupAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAppConfigDir.mockResolvedValue("/config/");
+    mockJoin.mockImplementation(async (...parts: string[]) => parts.join("/").replace(/\/+/, "/").replace(/([^:]\/)\/+/, "$1"));
     mockMkdir.mockResolvedValue(undefined);
     mockRemove.mockResolvedValue(undefined);
     mockWriteTextFile.mockResolvedValue(undefined);
     mockStat.mockResolvedValue({ size: 12, mtime: "2026-03-15T14:30:00.000Z" });
+  });
+
+  it("joins the default backup directory safely when appConfigDir has no trailing slash", async () => {
+    mockAppConfigDir.mockResolvedValue("/config");
+
+    await createTauriBackup();
+
+    expect(mockJoin).toHaveBeenCalledWith("/config", "backups");
+    expect(mockMkdir).toHaveBeenCalledWith("/config/backups", { recursive: true });
   });
 
   it("rejects unsafe filenames", async () => {

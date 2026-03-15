@@ -12,6 +12,7 @@
     "sql:allow-select",
     "sql:allow-close",
     "fs:default",
+    "fs:allow-appconfig-write-recursive",
     "fs:allow-write",
     "fs:write-files",
     "fs:allow-read",
