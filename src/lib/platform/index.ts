@@ -5,6 +5,7 @@ import type {
   DialogAdapter,
   OSAdapter,
   WebDialogAdapter,
+  BackupAdapter,
 } from "./types";
 
 // Build-time constant - Vite replaces this during build
@@ -21,6 +22,8 @@ export type {
   SaveDialogOptions,
   OpenDialogOptions,
   FileWithData,
+  BackupAdapter,
+  BackupEntry,
 } from "./types";
 
 // Database factory
@@ -83,4 +86,14 @@ export async function getOS(): Promise<OSAdapter> {
     const { tauriOS } = await import("./tauri/os");
     return tauriOS;
   }
+}
+
+// Backup factory
+export async function createBackup(): Promise<BackupAdapter> {
+  if (IS_WEB) {
+    const { createWebBackup } = await import("./web/backup");
+    return createWebBackup();
+  }
+  const { createTauriBackup } = await import("./tauri/backup");
+  return createTauriBackup();
 }
