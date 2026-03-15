@@ -58,15 +58,15 @@ export function SyncStatusButton() {
         ? "text-warning-text"
         : syncStatus === "cancelled"
           ? "text-warning-text"
-        : syncStatus === "syncing"
-          ? "text-primary"
-          : syncStatus === "partial"
-            ? "text-warning-text"
-          : syncStatus === "error"
-            ? "text-destructive"
-            : syncStatus === "success"
-              ? "text-success"
-              : "text-muted-foreground";
+          : syncStatus === "syncing"
+            ? "text-primary"
+            : syncStatus === "partial"
+              ? "text-warning-text"
+              : syncStatus === "error"
+                ? "text-destructive"
+                : syncStatus === "success"
+                  ? "text-success"
+                  : "text-muted-foreground";
 
   return (
     <div className="relative">
