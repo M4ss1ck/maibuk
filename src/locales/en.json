@@ -419,6 +419,8 @@
     "restoreFailed": "Restore failed. Your data was not modified.",
     "backupCorrupt": "Backup is corrupted and cannot be restored.",
     "backupCreated": "Backup created",
+    "createFailed": "Could not create backup. Check available disk space.",
+    "deleteFailed": "Could not delete the backup.",
     "sizeWarning": "Total backup size exceeds 500MB. Consider deleting old backups.",
     "columnDate": "Date",
     "columnTrigger": "Trigger",

@@ -13,7 +13,6 @@ import { BackupService } from "../backup/backup-service";
 import { useSettingsStore } from "../settings/store";
 
 let isSyncing = false;
-let backupServicePromise: Promise<BackupService> | null = null;
 const PRE_SYNC_BACKUP_ERROR = "Could not create a safety backup. Sync aborted. Free up disk space and try again.";
 
 async function decryptSnapshot(
@@ -72,27 +71,17 @@ function assertNotSyncing(): void {
   }
 }
 
-async function getSyncBackupService(): Promise<BackupService> {
-  if (!backupServicePromise) {
-    backupServicePromise = (async () => {
-      const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
-      return new BackupService(adapter);
-    })();
-  }
-
-  return backupServicePromise;
-}
-
 async function createPreSyncBackupOrThrow(): Promise<void> {
   try {
-    const backupService = await getSyncBackupService();
+    const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
+    const backupService = new BackupService(adapter);
     await backupService.createBackup("pre-sync");
   } catch {
     throw new Error(PRE_SYNC_BACKUP_ERROR);
   }
 }
 
-async function syncBookCore(
+async function syncBookInBatch(
   bookId: string,
   passphrase: string,
   onConflict: ConflictResolver,
@@ -166,7 +155,7 @@ export async function syncBook(
   try {
     await createPreSyncBackupOrThrow();
 
-    const action = await syncBookCore(bookId, passphrase, onConflict);
+    const action = await syncBookInBatch(bookId, passphrase, onConflict);
     return {
       outcome: action === "cancelled" ? "cancelled" : "success",
       action,
@@ -205,7 +194,7 @@ export async function syncAllBooks(
     const remoteBooks = await listRemoteBooks();
 
     for (const book of localBooks) {
-      const action = await syncBookCore(book.id, passphrase, onConflict, remoteBooks, book.updated_at);
+      const action = await syncBookInBatch(book.id, passphrase, onConflict, remoteBooks, book.updated_at);
       actions.push(action);
       if (action === "cancelled") {
         return {
@@ -235,5 +224,4 @@ export async function syncAllBooks(
 
 export function resetSyncEngineForTests(): void {
   isSyncing = false;
-  backupServicePromise = null;
 }

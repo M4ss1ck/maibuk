@@ -1,3 +1,5 @@
+export { computeChecksum } from "../../lib/checksum";
+
 const PBKDF2_ITERATIONS = 600_000;
 const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
@@ -136,14 +138,3 @@ export async function decrypt(
   }
 }
 
-export async function computeChecksum(data: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest(
-    "SHA-256",
-    encoder.encode(data),
-  );
-  const hashArray = new Uint8Array(hashBuffer);
-  return Array.from(hashArray)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}

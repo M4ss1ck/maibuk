@@ -1,6 +1,8 @@
 import { readTextFile, writeTextFile, readDir, remove, mkdir, stat } from "@tauri-apps/plugin-fs";
 import { appConfigDir } from "@tauri-apps/api/path";
 import type { BackupAdapter, BackupEntry } from "../types";
+import { computeChecksum } from "../../checksum";
+import { parseTriggerFromFilename } from "../../../features/backup/utils";
 
 interface BackupMeta {
   trigger: BackupEntry["trigger"];
@@ -10,11 +12,6 @@ interface BackupMeta {
 }
 
 const BACKUP_FILENAME_PATTERN = /^maibuk-backup-(launch|close|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/;
-
-function parseTriggerFromFilename(filename: string): BackupEntry["trigger"] {
-  const match = filename.match(/^maibuk-backup-(launch|close|pre-sync|pre-restore|manual)-/);
-  return match?.[1] as BackupEntry["trigger"] ?? "unknown";
-}
 
 function ensureSafeFilename(filename: string): string {
   if (!BACKUP_FILENAME_PATTERN.test(filename)) {
@@ -30,16 +27,6 @@ function isManagedSqlFile(name: string | undefined): name is string {
 function isManagedMetaFile(name: string | undefined): name is string {
   return typeof name === "string"
     && /^maibuk-backup-(launch|close|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.meta\.json$/.test(name);
-}
-
-async function computeChecksum(data: string): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(data),
-  );
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 async function getBackupDir(customDir?: string): Promise<string> {
@@ -61,7 +48,7 @@ async function buildMetaFromSql(sqlPath: string, filename: string, sqlContent: s
   return {
     trigger: parseTriggerFromFilename(filename),
     createdAt: new Date(fileStat.mtime ?? Date.now()).toISOString(),
-    sizeBytes: fileStat.size,
+    sizeBytes: new Blob([sqlContent]).size,
     checksum: await computeChecksum(sqlContent),
   };
 }

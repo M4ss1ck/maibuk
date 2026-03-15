@@ -1,28 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { BackupAdapter, BackupEntry } from "../../../../lib/platform/types";
+import { parseTriggerFromFilename } from "../../../../features/backup/utils";
 
 const mockGenerateSqlDump = vi.hoisted(() => vi.fn());
-const mockComputeChecksum = vi.hoisted(() => vi.fn());
 const mockCreateBackup = vi.hoisted(() => vi.fn());
 const mockGetDatabase = vi.hoisted(() => vi.fn());
 const mockParseSqlStatements = vi.hoisted(() => vi.fn());
 const mockLoadBooks = vi.hoisted(() => vi.fn());
 const mockLoadChapters = vi.hoisted(() => vi.fn());
+const mockSetChapterState = vi.hoisted(() => vi.fn());
 const mockBookState = vi.hoisted(() => ({
   books: [{ id: "book-1" }],
   loadBooks: mockLoadBooks,
 }));
-const mockChapterState = vi.hoisted(() => ({
-  currentBookId: "book-1",
-  loadChapters: mockLoadChapters,
-}));
+const mockChapterState = vi.hoisted(
+  (): { currentBookId: string | null; loadChapters: typeof mockLoadChapters } => ({
+    currentBookId: "book-1",
+    loadChapters: mockLoadChapters,
+  }),
+);
 
 vi.mock("../../../../features/backup/generate-sql-dump", () => ({
   generateSqlDump: mockGenerateSqlDump,
-}));
-
-vi.mock("../../../../features/sync/crypto", () => ({
-  computeChecksum: mockComputeChecksum,
 }));
 
 vi.mock("../../../../lib/platform", () => ({
@@ -47,18 +46,13 @@ vi.mock("../../../../features/books/store", () => ({
 vi.mock("../../../../features/chapters/store", () => ({
   useChapterStore: {
     getState: () => mockChapterState,
-    setState: vi.fn(),
+    setState: mockSetChapterState,
   },
 }));
 
 const { BackupService } = await import(
   "../../../../features/backup/backup-service"
 );
-
-function parseTriggerFromFilename(filename: string): BackupEntry["trigger"] {
-  const match = filename.match(/^maibuk-backup-(launch|close|pre-sync|pre-restore|manual)-/);
-  return match?.[1] as BackupEntry["trigger"] ?? "unknown";
-}
 
 function createMockAdapter(): BackupAdapter {
   const store = new Map<string, { sql: string; entry: BackupEntry }>();
@@ -102,13 +96,13 @@ describe("BackupService", () => {
     mockAdapter = createMockAdapter();
     mockCreateBackup.mockResolvedValue(mockAdapter);
     mockGenerateSqlDump.mockResolvedValue("INSERT INTO books ...");
-    mockComputeChecksum.mockResolvedValue("hash:INSERT INTO books ...");
     mockDb = {
       execute: vi.fn().mockResolvedValue({ rowsAffected: 1 }),
     };
     mockGetDatabase.mockResolvedValue(mockDb);
     mockParseSqlStatements.mockReturnValue([]);
     mockBookState.books = [{ id: "book-1" }];
+    mockChapterState.currentBookId = "book-1";
     mockLoadBooks.mockResolvedValue(undefined);
     mockLoadChapters.mockResolvedValue(undefined);
     service = new BackupService(mockAdapter);
@@ -175,26 +169,6 @@ describe("BackupService", () => {
     });
   });
 
-  describe("verifyBackup", () => {
-    it("returns true for valid checksum", async () => {
-      await service.createBackup("manual");
-      const list = await mockAdapter.listBackups();
-      mockComputeChecksum.mockResolvedValue(list[0].checksum);
-
-      const valid = await service.verifyBackup(list[0].filename);
-      expect(valid).toBe(true);
-    });
-
-    it("returns false for mismatched checksum", async () => {
-      await service.createBackup("manual");
-      const list = await mockAdapter.listBackups();
-      mockComputeChecksum.mockResolvedValue("different-hash");
-
-      const valid = await service.verifyBackup(list[0].filename);
-      expect(valid).toBe(false);
-    });
-  });
-
   describe("restoreBackup", () => {
     it("creates a pre-restore backup before reading the target backup", async () => {
       const calls: string[] = [];
@@ -228,9 +202,11 @@ describe("BackupService", () => {
     });
 
     it("restores books and chapters and reloads stores", async () => {
+      mockChapterState.currentBookId = "book-1";
       mockAdapter.readBackup = vi.fn(async () => "restore sql");
       mockParseSqlStatements.mockReturnValue([
         'INSERT INTO "books" VALUES ("book-1")',
+        'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")',
         'INSERT INTO "chapters" VALUES ("chapter-1")',
         'INSERT INTO "settings" VALUES ("ignored")',
       ]);
@@ -241,10 +217,61 @@ describe("BackupService", () => {
       expect(mockDb.execute).toHaveBeenNthCalledWith(2, "DELETE FROM chapters");
       expect(mockDb.execute).toHaveBeenNthCalledWith(3, "DELETE FROM books");
       expect(mockDb.execute).toHaveBeenNthCalledWith(4, 'INSERT INTO "books" VALUES ("book-1")');
-      expect(mockDb.execute).toHaveBeenNthCalledWith(5, 'INSERT INTO "chapters" VALUES ("chapter-1")');
-      expect(mockDb.execute).toHaveBeenNthCalledWith(6, "COMMIT");
+      expect(mockDb.execute).toHaveBeenNthCalledWith(5, 'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")');
+      expect(mockDb.execute).toHaveBeenNthCalledWith(6, 'INSERT INTO "chapters" VALUES ("chapter-1")');
+      expect(mockDb.execute).toHaveBeenNthCalledWith(7, "COMMIT");
       expect(mockLoadBooks).toHaveBeenCalled();
       expect(mockLoadChapters).toHaveBeenCalledWith("book-1");
+    });
+
+    it("clears chapter state when current book is absent from restored data", async () => {
+      mockChapterState.currentBookId = "deleted-book";
+      mockBookState.books = [{ id: "book-1" }];
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockReturnValue(['INSERT INTO "books" VALUES ("book-1")']);
+
+      await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+
+      expect(mockLoadChapters).not.toHaveBeenCalled();
+      expect(mockSetChapterState).toHaveBeenCalledWith({
+        chapters: [],
+        currentChapter: null,
+        currentBookId: null,
+        isLoading: false,
+        error: null,
+      });
+    });
+
+    it("clears chapter state when there was no current book", async () => {
+      mockChapterState.currentBookId = null;
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockReturnValue(['INSERT INTO "books" VALUES ("book-1")']);
+
+      await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+
+      expect(mockLoadChapters).not.toHaveBeenCalled();
+      expect(mockSetChapterState).toHaveBeenCalled();
+    });
+
+    it("rejects statements that target restore tables without a values clause", async () => {
+      mockAdapter.readBackup = vi.fn(async () => 'INSERT INTO "books" SET id = 1');
+      mockParseSqlStatements.mockReturnValue(['INSERT INTO "books" SET id = 1']);
+
+      await expect(service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")).rejects.toThrow(
+        "RESTORE_INVALID",
+      );
+
+      expect(mockDb.execute).not.toHaveBeenCalledWith("BEGIN");
+    });
+
+    it("accepts insert or replace statements for restore tables", async () => {
+      mockChapterState.currentBookId = "book-1";
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockReturnValue(['INSERT OR REPLACE INTO "books" VALUES ("book-1")']);
+
+      await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+
+      expect(mockDb.execute).toHaveBeenCalledWith('INSERT OR REPLACE INTO "books" VALUES ("book-1")');
     });
 
     it("rolls back if restore statements fail", async () => {

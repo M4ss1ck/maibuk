@@ -79,6 +79,5 @@ export function useSyncFlow() {
     completePassphraseFlow,
     activeConflict,
     resolveConflict,
-    onConflict,
   };
 }

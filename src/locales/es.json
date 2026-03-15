@@ -419,6 +419,8 @@
     "restoreFailed": "La restauración falló. Tus datos no fueron modificados.",
     "backupCorrupt": "La copia de seguridad está dañada y no se puede restaurar.",
     "backupCreated": "Copia de seguridad creada",
+    "createFailed": "No se pudo crear la copia de seguridad. Verifica el espacio disponible en disco.",
+    "deleteFailed": "No se pudo eliminar la copia de seguridad.",
     "sizeWarning": "El tamaño total de las copias supera los 500 MB. Considera eliminar copias antiguas.",
     "columnDate": "Fecha",
     "columnTrigger": "Tipo",

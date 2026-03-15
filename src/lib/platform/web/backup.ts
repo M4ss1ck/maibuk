@@ -1,4 +1,6 @@
 import type { BackupAdapter, BackupEntry } from "../types";
+import { computeChecksum } from "../../checksum";
+import { parseTriggerFromFilename } from "../../../features/backup/utils";
 
 const DB_NAME = "maibuk-backups";
 const DB_VERSION = 1;
@@ -14,21 +16,6 @@ interface StoredBackup {
 }
 
 const STORAGE_FULL_MESSAGE = "Backup storage full. Delete old backups in Settings or reduce retention limit.";
-
-function parseTriggerFromFilename(filename: string): BackupEntry["trigger"] {
-  const match = filename.match(/^maibuk-backup-(launch|close|pre-sync|pre-restore|manual)-/);
-  return match?.[1] as BackupEntry["trigger"] ?? "unknown";
-}
-
-async function computeChecksum(data: string): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(data),
-  );
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -123,24 +110,23 @@ class WebBackupAdapter implements BackupAdapter {
   }
 
   async readBackup(filename: string): Promise<string> {
-    return withDB((db) => new Promise(async (resolve, reject) => {
+    const stored = await withDB<StoredBackup | undefined>((db) => new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const request = tx.objectStore(STORE_NAME).get(filename);
-      request.onsuccess = async () => {
-        const stored = request.result as StoredBackup | undefined;
-        if (!stored) {
-          reject(new Error(`Backup not found: ${filename}`));
-          return;
-        }
-        const checksum = await computeChecksum(stored.sql);
-        if (checksum !== stored.checksum) {
-          reject(new Error(`Backup checksum mismatch: ${filename}`));
-          return;
-        }
-        resolve(stored.sql);
-      };
+      request.onsuccess = () => resolve(request.result as StoredBackup | undefined);
       request.onerror = () => reject(request.error);
     }));
+
+    if (!stored) {
+      throw new Error(`Backup not found: ${filename}`);
+    }
+
+    const checksum = await computeChecksum(stored.sql);
+    if (checksum !== stored.checksum) {
+      throw new Error(`Backup checksum mismatch: ${filename}`);
+    }
+
+    return stored.sql;
   }
 
   async deleteBackup(filename: string): Promise<void> {

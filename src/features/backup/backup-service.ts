@@ -4,7 +4,6 @@ import { parseSqlStatements } from "../../lib/db/sql-parser";
 import { useBookStore } from "../books/store";
 import { useChapterStore } from "../chapters/store";
 import { generateSqlDump } from "./generate-sql-dump";
-import { computeChecksum } from "../sync/crypto";
 
 function buildFilename(trigger: BackupEntry["trigger"]): string {
   const now = new Date();
@@ -14,7 +13,12 @@ function buildFilename(trigger: BackupEntry["trigger"]): string {
 
 const PROTECTED_TRIGGERS = new Set<BackupEntry["trigger"]>(["pre-sync", "pre-restore"]);
 const MIN_PROTECTED = 2;
-const RESTORE_TABLE_PATTERN = /^INSERT\s+INTO\s+"?(books|chapters)"?/i;
+/**
+ * Filter to only allow restore INSERT statements targeting books and chapters.
+ * Multi-statement injection is blocked by `parseSqlStatements()` splitting on
+ * unquoted semicolons, and this regex requires a concrete VALUES clause.
+ */
+const RESTORE_TABLE_PATTERN = /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
 
 function isRestoreStatement(statement: string): boolean {
   return RESTORE_TABLE_PATTERN.test(statement.trim());
@@ -42,21 +46,13 @@ export class BackupService {
     return this.adapter.deleteBackup(filename);
   }
 
-  async verifyBackup(filename: string): Promise<boolean> {
-    const sql = await this.adapter.readBackup(filename);
-    const list = await this.adapter.listBackups();
-    const entry = list.find((e) => e.filename === filename);
-    if (!entry) return false;
-
-    const actual = await computeChecksum(sql);
-    return actual === entry.checksum;
-  }
-
   async restoreBackup(filename: string): Promise<void> {
     await this.createBackup("pre-restore");
 
     let sql: string;
     try {
+      // Adapter-level reads enforce checksum verification before SQL content is
+      // returned, so corrupted backups fail here before any restore work begins.
       sql = await this.adapter.readBackup(filename);
     } catch {
       throw new Error("BACKUP_CORRUPT");
@@ -85,10 +81,14 @@ export class BackupService {
     }
 
     await useBookStore.getState().loadBooks();
-    const firstBookId = useBookStore.getState().books[0]?.id ?? null;
+    const previousBookId = useChapterStore.getState().currentBookId;
+    const restoredBooks = useBookStore.getState().books;
+    const currentBookStillExists = previousBookId
+      ? restoredBooks.some((book) => book.id === previousBookId)
+      : false;
 
-    if (firstBookId) {
-      await useChapterStore.getState().loadChapters(firstBookId);
+    if (currentBookStillExists && previousBookId) {
+      await useChapterStore.getState().loadChapters(previousBookId);
       return;
     }
 

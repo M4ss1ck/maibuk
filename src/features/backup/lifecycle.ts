@@ -6,7 +6,7 @@ import { BackupService } from "./backup-service";
 let launchBackupStarted = false;
 let closeBackupRegistered = false;
 
-async function getRetention(): Promise<number> {
+function getRetention(): number {
   return useSettingsStore.getState().backupRetention;
 }
 
@@ -19,7 +19,7 @@ export async function createLaunchBackup(): Promise<void> {
   try {
     const service = await createConfiguredBackupService();
     await service.createBackup("launch");
-    const retention = await getRetention();
+    const retention = getRetention();
     await service.pruneBackups(retention);
   } catch (error) {
     console.warn("Failed to create launch backup:", error);
@@ -30,7 +30,7 @@ export async function createCloseBackup(): Promise<void> {
   try {
     const service = await createConfiguredBackupService();
     await service.createBackup("close");
-    const retention = await getRetention();
+    const retention = getRetention();
     await service.pruneBackups(retention);
   } catch (error) {
     console.warn("Failed to create close backup:", error);

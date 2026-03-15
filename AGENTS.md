@@ -223,7 +223,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                         |
 | `detectSystemLocale()`                                             | `src/i18n.ts`                              |
 | Font/size/language option arrays                                   | `src/features/settings/types.ts`           |
-| `encrypt()` / `decrypt()` / `computeChecksum()`                    | `src/features/sync/crypto.ts`              |
+| `encrypt()` / `decrypt()`                                          | `src/features/sync/crypto.ts`              |
 | `serializeBook()` / `applyBookSnapshot()`                          | `src/features/sync/serializer.ts`          |
 | `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`         |
 | PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`              |
@@ -238,6 +238,8 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `createLaunchBackup()` / `createCloseBackup()`                     | `src/features/backup/lifecycle.ts`         |
 | `parseSqlStatements()`                                             | `src/lib/db/sql-parser.ts`                 |
 | `createBackup()` (platform factory)                                | `src/lib/platform/index.ts`                |
+| `computeChecksum()`                                                | `src/lib/checksum.ts`                      |
+| `parseTriggerFromFilename()`                                       | `src/features/backup/utils.ts`             |
 
 ---
 

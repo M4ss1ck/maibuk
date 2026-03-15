@@ -61,10 +61,19 @@ export function BackupSection() {
 
   const handleCreate = useCallback(async () => {
     if (!service) return;
-    await service.createBackup("manual");
-    await service.pruneBackups(backupRetention);
-    await refresh();
-    toast.success(t("backup.backupCreated"));
+    try {
+      setErrorMessage(null);
+      await service.createBackup("manual");
+      try {
+        await service.pruneBackups(backupRetention);
+      } catch {
+        console.warn("Failed to prune backups after manual backup creation.");
+      }
+      await refresh();
+      toast.success(t("backup.backupCreated"));
+    } catch {
+      setErrorMessage(t("backup.createFailed"));
+    }
   }, [service, backupRetention, refresh, t]);
 
   const handleChooseDirectory = useCallback(async () => {
@@ -77,9 +86,14 @@ export function BackupSection() {
 
   const handleDelete = useCallback(async (filename: string) => {
     if (!service) return;
-    await service.deleteBackup(filename);
-    await refresh();
-  }, [service, refresh]);
+    try {
+      setErrorMessage(null);
+      await service.deleteBackup(filename);
+      await refresh();
+    } catch {
+      setErrorMessage(t("backup.deleteFailed"));
+    }
+  }, [service, refresh, t]);
 
   const handleRestore = useCallback(async (filename: string) => {
     if (!service) return;

@@ -59,19 +59,20 @@ describe("TauriBackupAdapter", () => {
 
   it("repairs orphan sql metadata on first read", async () => {
     const adapter = await createTauriBackup("/safe/backups");
+    const sql = "INSERT INTO books VALUES ('1');";
     mockReadTextFile.mockImplementation(async (path: string) => {
       if (path.endsWith(".meta.json")) {
         throw new Error("missing meta");
       }
-      return "INSERT INTO books VALUES ('1');";
+      return sql;
     });
 
     const content = await adapter.readBackup("maibuk-backup-pre-sync-2026-03-15T14-30-00.sql");
 
-    expect(content).toBe("INSERT INTO books VALUES ('1');");
+    expect(content).toBe(sql);
     expect(mockWriteTextFile).toHaveBeenCalledWith(
       "/safe/backups/maibuk-backup-pre-sync-2026-03-15T14-30-00.meta.json",
-      expect.stringContaining('"trigger":"pre-sync"'),
+      expect.stringContaining(`"sizeBytes":${new Blob([sql]).size}`),
     );
   });
 
@@ -96,5 +97,29 @@ describe("TauriBackupAdapter", () => {
     expect(list).toHaveLength(1);
     expect(mockRemove).not.toHaveBeenCalledWith("/safe/backups/notes.txt");
     expect(mockRemove).not.toHaveBeenCalledWith("/safe/backups/orphan.meta.json");
+  });
+
+  it("cleans up managed orphan metadata sidecars without matching sql files", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    mockReadDir.mockResolvedValue([
+      { name: "maibuk-backup-launch-2026-03-15T14-30-00.sql" },
+      { name: "maibuk-backup-launch-2026-03-15T14-30-00.meta.json" },
+      { name: "maibuk-backup-manual-2026-03-15T12-00-00.meta.json" },
+    ]);
+    mockReadTextFile.mockResolvedValue(JSON.stringify({
+      trigger: "launch",
+      createdAt: "2026-03-15T14:30:00.000Z",
+      sizeBytes: 12,
+      checksum: "abcd",
+    }));
+
+    await adapter.listBackups();
+
+    expect(mockRemove).toHaveBeenCalledWith(
+      "/safe/backups/maibuk-backup-manual-2026-03-15T12-00-00.meta.json",
+    );
+    expect(mockRemove).not.toHaveBeenCalledWith(
+      "/safe/backups/maibuk-backup-launch-2026-03-15T14-30-00.meta.json",
+    );
   });
 });

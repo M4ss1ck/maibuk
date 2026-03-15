@@ -239,13 +239,13 @@ describe("syncAllBooks — truthful outcomes", () => {
     expect(onConflict).toHaveBeenCalledTimes(1);
   });
 
-  it("reuses the configured backup service across sync invocations", async () => {
+  it("recreates the configured backup service for each sync invocation", async () => {
     mockListRemoteBooks.mockResolvedValue([]);
 
     await syncBook("book-1", "pass", vi.fn());
     await syncAllBooks("pass", vi.fn());
 
-    expect(mockCreateBackupAdapter).toHaveBeenCalledTimes(1);
+    expect(mockCreateBackupAdapter).toHaveBeenCalledTimes(2);
     expect(mockBackupServiceCreateBackup).toHaveBeenCalledTimes(2);
   });
 
