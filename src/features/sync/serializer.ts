@@ -101,62 +101,70 @@ export async function applyBookSnapshot(
   const db = await getDatabase();
   const { book, chapters } = snapshot;
 
-  // Upsert book
-  await db.execute(
-    `INSERT OR REPLACE INTO books (
-      id, title, subtitle, author_name, description, genre, language,
-      cover_image_path, cover_data, word_count, target_word_count, status,
-      created_at, updated_at, last_opened_at, last_chapter_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      book.id,
-      book.title,
-      book.subtitle,
-      book.authorName,
-      book.description,
-      book.genre,
-      book.language,
-      book.coverImagePath,
-      book.coverData,
-      book.wordCount,
-      book.targetWordCount,
-      book.status,
-      book.createdAt,
-      book.updatedAt,
-      book.lastOpenedAt,
-      book.lastChapterId,
-    ],
-  );
-
-  // Delete existing chapters for this book, then insert fresh
-  await db.execute("DELETE FROM chapters WHERE book_id = ?", [book.id]);
-
-  for (const ch of chapters) {
+  await db.execute("BEGIN");
+  try {
+    // Upsert book
     await db.execute(
-      `INSERT INTO chapters (
-        id, book_id, title, content, synopsis, "order", parent_id,
-        chapter_type, word_count, status, is_included_in_export,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO books (
+        id, title, subtitle, author_name, description, genre, language,
+        cover_image_path, cover_data, word_count, target_word_count, status,
+        created_at, updated_at, last_opened_at, last_chapter_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        ch.id,
-        ch.bookId,
-        ch.title,
-        ch.content,
-        ch.synopsis,
-        ch.order,
-        ch.parentId,
-        ch.chapterType,
-        ch.wordCount,
-        ch.status,
-        ch.isIncludedInExport ? 1 : 0,
-        ch.createdAt,
-        ch.updatedAt,
+        book.id,
+        book.title,
+        book.subtitle,
+        book.authorName,
+        book.description,
+        book.genre,
+        book.language,
+        book.coverImagePath,
+        book.coverData,
+        book.wordCount,
+        book.targetWordCount,
+        book.status,
+        book.createdAt,
+        book.updatedAt,
+        book.lastOpenedAt,
+        book.lastChapterId,
       ],
     );
+
+    // Delete existing chapters for this book, then insert fresh
+    await db.execute("DELETE FROM chapters WHERE book_id = ?", [book.id]);
+
+    for (const ch of chapters) {
+      await db.execute(
+        `INSERT INTO chapters (
+          id, book_id, title, content, synopsis, "order", parent_id,
+          chapter_type, word_count, status, is_included_in_export,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ch.id,
+          ch.bookId,
+          ch.title,
+          ch.content,
+          ch.synopsis,
+          ch.order,
+          ch.parentId,
+          ch.chapterType,
+          ch.wordCount,
+          ch.status,
+          ch.isIncludedInExport ? 1 : 0,
+          ch.createdAt,
+          ch.updatedAt,
+        ],
+      );
+    }
+
+    await db.execute("COMMIT");
+  } catch (error) {
+    await db.execute("ROLLBACK");
+    throw error;
   }
 
-  // Reload stores so UI reflects the new data
+  // Reload stores so UI reflects the new data (outside transaction)
   await useBookStore.getState().loadBooks();
   const currentBookId = useChapterStore.getState().currentBookId;
   if (currentBookId === book.id) {
