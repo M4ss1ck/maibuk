@@ -317,6 +317,11 @@ export function Settings() {
           </div>
         </section>
 
+        {/* Backups */}
+        <section className="pt-4 border-t border-border mb-6">
+          <BackupSection />
+        </section>
+
         <AuthDialog
           isOpen={showAuthDialog}
           onClose={() => setShowAuthDialog(false)}
@@ -536,11 +541,6 @@ export function Settings() {
             </div>
           )}
         </Modal>
-
-        {/* Backups */}
-        <section className="pt-4 border-t border-border">
-          <BackupSection />
-        </section>
 
         {/* About */}
         <section className="pt-4 border-t border-border">

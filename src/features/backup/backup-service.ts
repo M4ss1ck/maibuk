@@ -1,4 +1,4 @@
-import type { BackupAdapter, BackupEntry } from "../../lib/platform/types";
+import type { BackupAdapter, BackupEntry, DatabaseAdapter } from "../../lib/platform/types";
 import { getDatabase } from "../../lib/db";
 import { parseSqlStatements } from "../../lib/db/sql-parser";
 import { useBookStore } from "../books/store";
@@ -24,14 +24,56 @@ function isRestoreStatement(statement: string): boolean {
   return RESTORE_TABLE_PATTERN.test(statement.trim());
 }
 
+function extractRestoreStatements(sql: string): string[] {
+  return parseSqlStatements(sql).filter(isRestoreStatement);
+}
+
+const INSERT_PATTERN = /^INSERT\s/i;
+
+function dumpHasData(sql: string): boolean {
+  return parseSqlStatements(sql).some((s) => INSERT_PATTERN.test(s.trim()));
+}
+
+async function replaceRestoreData(
+  db: DatabaseAdapter,
+  statements: string[],
+): Promise<void> {
+  // Delete existing data first, then insert from backup.
+  // Each statement is auto-committed. If an INSERT fails, the database
+  // will be in a partial state — the pre-restore backup is the safety net.
+  await db.execute("DELETE FROM chapters");
+  await db.execute("DELETE FROM books");
+
+  for (let i = 0; i < statements.length; i++) {
+    try {
+      await db.execute(statements[i]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Restore failed on statement ${i + 1}/${statements.length}: ${detail}`,
+      );
+    }
+  }
+}
+
 export class BackupService {
   constructor(private adapter: BackupAdapter) { }
 
-  async createBackup(trigger: BackupEntry["trigger"]): Promise<string> {
-    const sql = await generateSqlDump();
+  private async saveBackupSnapshot(
+    trigger: BackupEntry["trigger"],
+    sql: string,
+  ): Promise<string> {
     const filename = buildFilename(trigger);
     await this.adapter.saveBackup(filename, sql);
     return filename;
+  }
+
+  async createBackup(trigger: BackupEntry["trigger"]): Promise<string> {
+    const sql = await generateSqlDump();
+    if (!dumpHasData(sql)) {
+      throw new Error("BACKUP_EMPTY");
+    }
+    return this.saveBackupSnapshot(trigger, sql);
   }
 
   async listBackups(): Promise<BackupEntry[]> {
@@ -47,7 +89,10 @@ export class BackupService {
   }
 
   async restoreBackup(filename: string): Promise<void> {
-    await this.createBackup("pre-restore");
+    const currentSql = await generateSqlDump();
+    if (dumpHasData(currentSql)) {
+      await this.saveBackupSnapshot("pre-restore", currentSql);
+    }
 
     let sql: string;
     try {
@@ -58,26 +103,19 @@ export class BackupService {
       throw new Error("BACKUP_CORRUPT");
     }
 
-    const statements = parseSqlStatements(sql).filter(isRestoreStatement);
+    const statements = extractRestoreStatements(sql);
     if (statements.length === 0) {
       throw new Error("RESTORE_INVALID");
     }
 
     const db = await getDatabase();
-    await db.execute("BEGIN");
 
     try {
-      await db.execute("DELETE FROM chapters");
-      await db.execute("DELETE FROM books");
-
-      for (const statement of statements) {
-        await db.execute(statement);
-      }
-
-      await db.execute("COMMIT");
-    } catch {
-      await db.execute("ROLLBACK").catch(() => undefined);
-      throw new Error("RESTORE_FAILED");
+      await replaceRestoreData(db, statements);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("Restore data replacement failed:", detail);
+      throw new Error(`RESTORE_FAILED: ${detail}`);
     }
 
     await useBookStore.getState().loadBooks();

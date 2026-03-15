@@ -61,18 +61,24 @@ export function BackupSection() {
 
   const handleCreate = useCallback(async () => {
     if (!service) return;
+    setErrorMessage(null);
     try {
-      setErrorMessage(null);
       await service.createBackup("manual");
+      toast.success(t("backup.backupCreated"));
       try {
         await service.pruneBackups(backupRetention);
       } catch {
         console.warn("Failed to prune backups after manual backup creation.");
       }
-      await refresh();
-      toast.success(t("backup.backupCreated"));
-    } catch {
-      setErrorMessage(t("backup.createFailed"));
+    } catch (error) {
+      console.error("Failed to create backup:", error);
+      if (error instanceof Error && error.message === "BACKUP_EMPTY") {
+        setErrorMessage(t("backup.backupEmpty"));
+      } else {
+        setErrorMessage(t("backup.createFailed"));
+      }
+    } finally {
+      await refresh().catch(() => { });
     }
   }, [service, backupRetention, refresh, t]);
 
@@ -86,30 +92,43 @@ export function BackupSection() {
 
   const handleDelete = useCallback(async (filename: string) => {
     if (!service) return;
+    setErrorMessage(null);
     try {
-      setErrorMessage(null);
       await service.deleteBackup(filename);
-      await refresh();
-    } catch {
+    } catch (error) {
+      console.error("Failed to delete backup:", error);
       setErrorMessage(t("backup.deleteFailed"));
+    } finally {
+      await refresh().catch(() => { });
     }
   }, [service, refresh, t]);
 
   const handleRestore = useCallback(async (filename: string) => {
     if (!service) return;
-
+    setErrorMessage(null);
     try {
       await service.restoreBackup(filename);
       toast.success(t("backup.restoreSuccess"));
-      await refresh();
     } catch (error) {
-      if (error instanceof Error && error.message === "BACKUP_CORRUPT") {
-        setErrorMessage(t("backup.backupCorrupt"));
+      console.error("Backup restore failed:", error);
+      if (error instanceof Error) {
+        if (error.message === "BACKUP_CORRUPT") {
+          setErrorMessage(t("backup.backupCorrupt"));
+        } else if (error.message === "RESTORE_INVALID") {
+          setErrorMessage(t("backup.restoreInvalid"));
+        } else if (error.message.startsWith("RESTORE_FAILED:")) {
+          // Show the real error detail so the user (or developer) can diagnose
+          const detail = error.message.slice("RESTORE_FAILED: ".length);
+          setErrorMessage(`${t("backup.restoreFailed")}\n\n${detail}`);
+        } else {
+          setErrorMessage(t("backup.restoreFailed"));
+        }
       } else {
         setErrorMessage(t("backup.restoreFailed"));
       }
     } finally {
       setConfirmRestore(null);
+      await refresh().catch(() => { });
     }
   }, [refresh, service, t]);
 
@@ -119,8 +138,8 @@ export function BackupSection() {
 
   return (
     <div className="space-y-4">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t("backup.title")}</h3>
       <div>
-        <h3 className="text-lg font-medium text-foreground">{t("backup.title")}</h3>
         <p className="text-sm text-muted-foreground">{t("backup.description")}</p>
       </div>
 
@@ -181,7 +200,9 @@ export function BackupSection() {
                     {t(`backup.trigger.${backup.trigger}`)}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {(backup.sizeBytes / 1024).toFixed(0)} KB
+                    {backup.sizeBytes < 1024
+                      ? `${backup.sizeBytes} B`
+                      : `${(backup.sizeBytes / 1024).toFixed(0)} KB`}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <Button

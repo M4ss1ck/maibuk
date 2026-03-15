@@ -100,7 +100,12 @@ describe("BackupService", () => {
       execute: vi.fn().mockResolvedValue({ rowsAffected: 1 }),
     };
     mockGetDatabase.mockResolvedValue(mockDb);
-    mockParseSqlStatements.mockReturnValue([]);
+    mockParseSqlStatements.mockImplementation((sql: string) => {
+      if (sql === "INSERT INTO books ...") {
+        return ["INSERT INTO books ..."];
+      }
+      return [];
+    });
     mockBookState.books = [{ id: "book-1" }];
     mockChapterState.currentBookId = "book-1";
     mockLoadBooks.mockResolvedValue(undefined);
@@ -117,6 +122,22 @@ describe("BackupService", () => {
         expect.stringMatching(/^maibuk-backup-launch-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/),
         "INSERT INTO books ..."
       );
+    });
+
+    it("throws BACKUP_EMPTY when dump contains no INSERT statements", async () => {
+      mockGenerateSqlDump.mockResolvedValue(
+        "-- Maibuk Database Export (SQL Dump)\n-- Exported at: 2026-03-15\n\n-- Books\n\n-- Chapters\n"
+      );
+
+      await expect(service.createBackup("launch")).rejects.toThrow("BACKUP_EMPTY");
+      expect(mockAdapter.saveBackup).not.toHaveBeenCalled();
+    });
+
+    it("throws BACKUP_EMPTY when dump is an empty string", async () => {
+      mockGenerateSqlDump.mockResolvedValue("");
+
+      await expect(service.createBackup("manual")).rejects.toThrow("BACKUP_EMPTY");
+      expect(mockAdapter.saveBackup).not.toHaveBeenCalled();
     });
   });
 
@@ -190,13 +211,18 @@ describe("BackupService", () => {
 
     it("does not mutate data when no restoreable statements exist", async () => {
       mockAdapter.readBackup = vi.fn(async () => "INSERT INTO settings VALUES ('x');");
-      mockParseSqlStatements.mockReturnValue(["INSERT INTO settings VALUES ('x')"]);
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "INSERT INTO books ...") {
+          return [];
+        }
+        return ["INSERT INTO settings VALUES ('x')"];
+      });
 
       await expect(service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")).rejects.toThrow(
         "RESTORE_INVALID",
       );
 
-      expect(mockDb.execute).not.toHaveBeenCalledWith("BEGIN");
+      expect(mockDb.execute).not.toHaveBeenCalled();
       expect(mockLoadBooks).not.toHaveBeenCalled();
       expect(mockLoadChapters).not.toHaveBeenCalled();
     });
@@ -204,22 +230,29 @@ describe("BackupService", () => {
     it("restores books and chapters and reloads stores", async () => {
       mockChapterState.currentBookId = "book-1";
       mockAdapter.readBackup = vi.fn(async () => "restore sql");
-      mockParseSqlStatements.mockReturnValue([
-        'INSERT INTO "books" VALUES ("book-1")',
-        'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")',
-        'INSERT INTO "chapters" VALUES ("chapter-1")',
-        'INSERT INTO "settings" VALUES ("ignored")',
-      ]);
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "INSERT INTO books ...") {
+          return [];
+        }
+        if (sql === "restore sql") {
+          return [
+            'INSERT INTO "books" VALUES ("book-1")',
+            'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")',
+            'INSERT INTO "chapters" VALUES ("chapter-1")',
+            'INSERT INTO "settings" VALUES ("ignored")',
+          ];
+        }
+        return [];
+      });
 
       await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
 
-      expect(mockDb.execute).toHaveBeenNthCalledWith(1, "BEGIN");
-      expect(mockDb.execute).toHaveBeenNthCalledWith(2, "DELETE FROM chapters");
-      expect(mockDb.execute).toHaveBeenNthCalledWith(3, "DELETE FROM books");
-      expect(mockDb.execute).toHaveBeenNthCalledWith(4, 'INSERT INTO "books" VALUES ("book-1")');
-      expect(mockDb.execute).toHaveBeenNthCalledWith(5, 'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")');
-      expect(mockDb.execute).toHaveBeenNthCalledWith(6, 'INSERT INTO "chapters" VALUES ("chapter-1")');
-      expect(mockDb.execute).toHaveBeenNthCalledWith(7, "COMMIT");
+      expect(mockDb.execute).toHaveBeenNthCalledWith(1, "DELETE FROM chapters");
+      expect(mockDb.execute).toHaveBeenNthCalledWith(2, "DELETE FROM books");
+      expect(mockDb.execute).toHaveBeenNthCalledWith(3, 'INSERT INTO "books" VALUES ("book-1")');
+      expect(mockDb.execute).toHaveBeenNthCalledWith(4, 'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")');
+      expect(mockDb.execute).toHaveBeenNthCalledWith(5, 'INSERT INTO "chapters" VALUES ("chapter-1")');
+      expect(mockDb.execute).toHaveBeenCalledTimes(5);
       expect(mockLoadBooks).toHaveBeenCalled();
       expect(mockLoadChapters).toHaveBeenCalledWith("book-1");
     });
@@ -228,7 +261,12 @@ describe("BackupService", () => {
       mockChapterState.currentBookId = "deleted-book";
       mockBookState.books = [{ id: "book-1" }];
       mockAdapter.readBackup = vi.fn(async () => "restore sql");
-      mockParseSqlStatements.mockReturnValue(['INSERT INTO "books" VALUES ("book-1")']);
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
 
       await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
 
@@ -245,7 +283,12 @@ describe("BackupService", () => {
     it("clears chapter state when there was no current book", async () => {
       mockChapterState.currentBookId = null;
       mockAdapter.readBackup = vi.fn(async () => "restore sql");
-      mockParseSqlStatements.mockReturnValue(['INSERT INTO "books" VALUES ("book-1")']);
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
 
       await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
 
@@ -255,41 +298,79 @@ describe("BackupService", () => {
 
     it("rejects statements that target restore tables without a values clause", async () => {
       mockAdapter.readBackup = vi.fn(async () => 'INSERT INTO "books" SET id = 1');
-      mockParseSqlStatements.mockReturnValue(['INSERT INTO "books" SET id = 1']);
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === 'INSERT INTO "books" SET id = 1') {
+          return ['INSERT INTO "books" SET id = 1'];
+        }
+        return [];
+      });
 
       await expect(service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")).rejects.toThrow(
         "RESTORE_INVALID",
       );
 
-      expect(mockDb.execute).not.toHaveBeenCalledWith("BEGIN");
+      expect(mockDb.execute).not.toHaveBeenCalled();
     });
 
     it("accepts insert or replace statements for restore tables", async () => {
       mockChapterState.currentBookId = "book-1";
       mockAdapter.readBackup = vi.fn(async () => "restore sql");
-      mockParseSqlStatements.mockReturnValue(['INSERT OR REPLACE INTO "books" VALUES ("book-1")']);
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT OR REPLACE INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
 
       await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
 
       expect(mockDb.execute).toHaveBeenCalledWith('INSERT OR REPLACE INTO "books" VALUES ("book-1")');
     });
 
-    it("rolls back if restore statements fail", async () => {
+    it("surfaces statement-level error when an INSERT fails", async () => {
       mockAdapter.readBackup = vi.fn(async () => "restore sql");
-      mockParseSqlStatements.mockReturnValue(['INSERT INTO "books" VALUES ("book-1")']);
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
       mockDb.execute
-        .mockResolvedValueOnce({ rowsAffected: 1 })
-        .mockResolvedValueOnce({ rowsAffected: 1 })
-        .mockResolvedValueOnce({ rowsAffected: 1 })
-        .mockRejectedValueOnce(new Error("insert failed"))
-        .mockResolvedValueOnce({ rowsAffected: 1 });
+        .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM chapters
+        .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM books
+        .mockRejectedValueOnce(new Error("UNIQUE constraint failed")); // INSERT fails
 
       await expect(service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")).rejects.toThrow(
-        "RESTORE_FAILED",
+        "RESTORE_FAILED: Restore failed on statement 1/1: UNIQUE constraint failed",
       );
 
-      expect(mockDb.execute).toHaveBeenCalledWith("ROLLBACK");
+      expect(mockDb.execute).toHaveBeenCalledTimes(3);
       expect(mockLoadBooks).not.toHaveBeenCalled();
+    });
+
+    it("skips pre-restore snapshot when current database is empty but still restores", async () => {
+      // generateSqlDump returns comment-only dump (empty DB)
+      mockGenerateSqlDump.mockResolvedValue(
+        "-- Maibuk Database Export\n-- Exported at: 2026-03-15\n\n-- Books\n\n-- Chapters\n"
+      );
+      mockChapterState.currentBookId = "book-1";
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
+
+      await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+
+      // Should NOT have saved a useless pre-restore backup
+      expect(mockAdapter.saveBackup).not.toHaveBeenCalled();
+      // But restore should still proceed
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM chapters");
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM books");
+      expect(mockDb.execute).toHaveBeenCalledWith('INSERT INTO "books" VALUES ("book-1")');
+      expect(mockLoadBooks).toHaveBeenCalled();
     });
   });
 });
