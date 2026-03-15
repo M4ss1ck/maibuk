@@ -401,5 +401,34 @@
     "toggleSidebar": "Alternar barra lateral",
     "backFromEditor": "Volver desde el editor",
     "deleteSelection": "Eliminar objeto seleccionado"
+  },
+  "backup": {
+    "title": "Copias de seguridad",
+    "description": "Se crean copias de seguridad automáticas al iniciar la app, antes de sincronizar y antes de restaurar.",
+    "retentionLimit": "Máximo de copias a conservar",
+    "createBackup": "Crear copia ahora",
+    "restoreBackup": "Restaurar",
+    "deleteBackup": "Eliminar",
+    "noBackups": "Aún no hay copias de seguridad",
+    "restoreConfirm": "Esto reemplazará todos los datos de libros y capítulos. La configuración se mantendrá. Se creará una copia de seguridad previa automáticamente.",
+    "restoreSuccess": "Copia de seguridad restaurada correctamente",
+    "restoreFailed": "La restauración falló. Tus datos no fueron modificados.",
+    "backupCorrupt": "La copia de seguridad está dañada y no se puede restaurar.",
+    "backupCreated": "Copia de seguridad creada",
+    "sizeWarning": "El tamaño total de las copias supera los 500 MB. Considera eliminar copias antiguas.",
+    "columnDate": "Fecha",
+    "columnTrigger": "Tipo",
+    "columnSize": "Tamaño",
+    "columnActions": "Acciones",
+    "ok": "OK",
+    "cancel": "Cancelar",
+    "trigger": {
+      "launch": "Inicio",
+      "close": "Cierre",
+      "pre-sync": "Pre-sincronización",
+      "pre-restore": "Pre-restauración",
+      "manual": "Manual",
+      "unknown": "Desconocido"
+    }
   }
 }

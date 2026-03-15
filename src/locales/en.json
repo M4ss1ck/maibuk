@@ -401,5 +401,34 @@
     "toggleSidebar": "Toggle sidebar",
     "backFromEditor": "Back from editor",
     "deleteSelection": "Delete selected object"
+  },
+  "backup": {
+    "title": "Backups",
+    "description": "Automatic backups are created on app launch, before sync, and before restore.",
+    "retentionLimit": "Maximum backups to keep",
+    "createBackup": "Create Backup Now",
+    "restoreBackup": "Restore",
+    "deleteBackup": "Delete",
+    "noBackups": "No backups yet",
+    "restoreConfirm": "This will replace all book and chapter data. App settings will be preserved. A pre-restore backup will be created first.",
+    "restoreSuccess": "Backup restored successfully",
+    "restoreFailed": "Restore failed. Your data was not modified.",
+    "backupCorrupt": "Backup is corrupted and cannot be restored.",
+    "backupCreated": "Backup created",
+    "sizeWarning": "Total backup size exceeds 500MB. Consider deleting old backups.",
+    "columnDate": "Date",
+    "columnTrigger": "Trigger",
+    "columnSize": "Size",
+    "columnActions": "Actions",
+    "ok": "OK",
+    "cancel": "Cancel",
+    "trigger": {
+      "launch": "Launch",
+      "close": "Close",
+      "pre-sync": "Pre-sync",
+      "pre-restore": "Pre-restore",
+      "manual": "Manual",
+      "unknown": "Unknown"
+    }
   }
 }

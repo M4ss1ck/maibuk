@@ -21,6 +21,7 @@ import { exportDatabase, importDatabase, resetDatabase } from "../lib/db";
 import { getFileSystem, IS_TAURI, getDialog, getWebDialog } from "../lib/platform";
 import { useSyncStore } from "../features/sync/store";
 import { AuthDialog } from "../components/sync/AuthDialog";
+import { BackupSection } from "../components/settings/BackupSection";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -535,6 +536,11 @@ export function Settings() {
             </div>
           )}
         </Modal>
+
+        {/* Backups */}
+        <section className="pt-4 border-t border-border">
+          <BackupSection />
+        </section>
 
         {/* About */}
         <section className="pt-4 border-t border-border">
