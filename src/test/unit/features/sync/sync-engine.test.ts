@@ -43,10 +43,10 @@ vi.mock("../../../../lib/platform", () => ({
 }));
 
 vi.mock("../../../../features/backup/backup-service", () => ({
-  BackupService: vi.fn().mockImplementation(() => ({
-    createBackup: vi.fn().mockResolvedValue("mock-backup.sql"),
-    pruneBackups: vi.fn(),
-  })),
+  BackupService: class {
+    createBackup = vi.fn().mockResolvedValue("mock-backup.sql");
+    pruneBackups = vi.fn();
+  },
 }));
 
 const { syncBook } = await import("../../../../features/sync/sync-engine");

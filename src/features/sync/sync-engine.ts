@@ -8,6 +8,8 @@ import {
 } from "./client";
 import type { BookSnapshot, SyncItemMeta } from "./types";
 import type { SyncAction, ConflictResolver } from "./types";
+import { createBackup } from "../../lib/platform";
+import { BackupService } from "../backup/backup-service";
 
 let isSyncing = false;
 
@@ -139,6 +141,11 @@ export async function syncBook(
   assertNotSyncing();
   isSyncing = true;
   try {
+    // Mandatory pre-sync backup
+    const adapter = await createBackup();
+    const backupService = new BackupService(adapter);
+    await backupService.createBackup("pre-sync");
+
     return await syncBookCore(bookId, passphrase, onConflict);
   } finally {
     isSyncing = false;
@@ -158,6 +165,11 @@ export async function syncAllBooks(
   isSyncing = true;
   try {
     assertOnline();
+
+    // Mandatory pre-sync backup
+    const adapter = await createBackup();
+    const backupService = new BackupService(adapter);
+    await backupService.createBackup("pre-sync");
 
     const db = await getDatabase();
     const localBooks = await db.select<BookTimestampRow[]>(
