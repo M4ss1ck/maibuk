@@ -3,7 +3,7 @@ import { waitForDatabaseReady } from "../../lib/db";
 import { useSettingsStore } from "../settings/store";
 import { BackupService } from "./backup-service";
 
-let launchBackupStarted = false;
+let dailyBackupStarted = false;
 let closeBackupRegistered = false;
 
 function getRetention(): number {
@@ -15,14 +15,21 @@ async function createConfiguredBackupService(): Promise<BackupService> {
   return new BackupService(adapter);
 }
 
-export async function createLaunchBackup(): Promise<void> {
+/**
+ * Create at most one "daily" backup per calendar day (UTC).
+ * If today's daily backup already exists, this is a no-op.
+ */
+export async function createDailyBackup(): Promise<void> {
   try {
     const service = await createConfiguredBackupService();
-    await service.createBackup("launch");
+    if (await service.hasBackupForToday("daily")) {
+      return;
+    }
+    await service.createBackup("daily");
     const retention = getRetention();
     await service.pruneBackups(retention);
   } catch (error) {
-    console.warn("Failed to create launch backup:", error);
+    console.warn("Failed to create daily backup:", error);
   }
 }
 
@@ -37,14 +44,14 @@ export async function createCloseBackup(): Promise<void> {
   }
 }
 
-export async function runLaunchBackupOnce(): Promise<void> {
-  if (launchBackupStarted) {
+export async function runDailyBackupOnce(): Promise<void> {
+  if (dailyBackupStarted) {
     return;
   }
 
-  launchBackupStarted = true;
+  dailyBackupStarted = true;
   await waitForDatabaseReady();
-  await createLaunchBackup();
+  await createDailyBackup();
 }
 
 export async function registerCloseBackupHandlerOnce(): Promise<void> {
@@ -65,6 +72,6 @@ export async function registerCloseBackupHandlerOnce(): Promise<void> {
 }
 
 export function resetBackupLifecycleForTests(): void {
-  launchBackupStarted = false;
+  dailyBackupStarted = false;
   closeBackupRegistered = false;
 }

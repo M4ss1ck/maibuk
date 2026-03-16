@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockCreateBackupAdapter = vi.hoisted(() => vi.fn());
 const mockCreateBackup = vi.hoisted(() => vi.fn());
 const mockPruneBackups = vi.hoisted(() => vi.fn());
+const mockHasBackupForToday = vi.hoisted(() => vi.fn());
 const mockWaitForDatabaseReady = vi.hoisted(() => vi.fn());
 const mockGetCurrentWindow = vi.hoisted(() => vi.fn());
 const mockOnCloseRequested = vi.hoisted(() => vi.fn());
@@ -30,6 +31,7 @@ vi.mock("../../../../features/backup/backup-service", () => ({
   BackupService: class {
     createBackup = mockCreateBackup;
     pruneBackups = mockPruneBackups;
+    hasBackupForToday = mockHasBackupForToday;
   },
 }));
 
@@ -38,9 +40,9 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 const {
-  createLaunchBackup,
+  createDailyBackup,
   createCloseBackup,
-  runLaunchBackupOnce,
+  runDailyBackupOnce,
   registerCloseBackupHandlerOnce,
   resetBackupLifecycleForTests,
 } = await import("../../../../features/backup/lifecycle");
@@ -53,6 +55,7 @@ describe("backup lifecycle", () => {
     mockCreateBackupAdapter.mockResolvedValue({});
     mockCreateBackup.mockResolvedValue("backup.sql");
     mockPruneBackups.mockResolvedValue(undefined);
+    mockHasBackupForToday.mockResolvedValue(false);
     mockOnCloseRequested.mockResolvedValue(() => undefined);
     mockDestroy.mockResolvedValue(undefined);
     mockGetCurrentWindow.mockReturnValue({
@@ -61,12 +64,23 @@ describe("backup lifecycle", () => {
     });
   });
 
-  it("creates a launch backup using persisted settings", async () => {
-    await createLaunchBackup();
+  it("creates a daily backup using persisted settings", async () => {
+    await createDailyBackup();
 
     expect(mockCreateBackupAdapter).toHaveBeenCalledWith("/tmp/backups");
-    expect(mockCreateBackup).toHaveBeenCalledWith("launch");
+    expect(mockHasBackupForToday).toHaveBeenCalledWith("daily");
+    expect(mockCreateBackup).toHaveBeenCalledWith("daily");
     expect(mockPruneBackups).toHaveBeenCalledWith(12);
+  });
+
+  it("skips daily backup if one already exists for today", async () => {
+    mockHasBackupForToday.mockResolvedValue(true);
+
+    await createDailyBackup();
+
+    expect(mockHasBackupForToday).toHaveBeenCalledWith("daily");
+    expect(mockCreateBackup).not.toHaveBeenCalled();
+    expect(mockPruneBackups).not.toHaveBeenCalled();
   });
 
   it("creates a close backup using persisted settings", async () => {
@@ -77,13 +91,13 @@ describe("backup lifecycle", () => {
     expect(mockPruneBackups).toHaveBeenCalledWith(12);
   });
 
-  it("runs launch backup only once", async () => {
-    await runLaunchBackupOnce();
-    await runLaunchBackupOnce();
+  it("runs daily backup only once per session", async () => {
+    await runDailyBackupOnce();
+    await runDailyBackupOnce();
 
     expect(mockWaitForDatabaseReady).toHaveBeenCalledTimes(1);
     expect(mockCreateBackup).toHaveBeenCalledTimes(1);
-    expect(mockCreateBackup).toHaveBeenCalledWith("launch");
+    expect(mockCreateBackup).toHaveBeenCalledWith("daily");
   });
 
   it("registers the close handler only once and creates a close backup before destroy", async () => {

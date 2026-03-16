@@ -406,7 +406,7 @@
   },
   "backup": {
     "title": "Copias de seguridad",
-    "description": "Se crean copias de seguridad automáticas al iniciar la app, antes de sincronizar y antes de restaurar.",
+    "description": "Se crea una copia diaria autom\u00e1ticamente (una vez al d\u00eda), adem\u00e1s de antes de sincronizar y antes de restaurar.",
     "directoryLabel": "Carpeta de copias",
     "directoryPlaceholder": "Usar la carpeta predeterminada de la app",
     "chooseDirectory": "Elegir carpeta",
@@ -433,7 +433,7 @@
     "ok": "OK",
     "cancel": "Cancelar",
     "trigger": {
-      "launch": "Inicio",
+      "daily": "Diaria",
       "close": "Cierre",
       "pre-sync": "Pre-sincronización",
       "pre-restore": "Pre-restauración",

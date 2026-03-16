@@ -15,21 +15,21 @@ describe("WebBackupAdapter", () => {
   describe("saveBackup + listBackups", () => {
     it("saves a backup and lists it", async () => {
       await adapter.saveBackup(
-        "maibuk-backup-launch-2026-03-15T14-30-00.sql",
+        "maibuk-backup-daily-2026-03-15T14-30-00.sql",
         "INSERT INTO books ..."
       );
 
       const list = await adapter.listBackups();
       expect(list).toHaveLength(1);
-      expect(list[0].filename).toBe("maibuk-backup-launch-2026-03-15T14-30-00.sql");
-      expect(list[0].trigger).toBe("launch");
+      expect(list[0].filename).toBe("maibuk-backup-daily-2026-03-15T14-30-00.sql");
+      expect(list[0].trigger).toBe("daily");
       expect(list[0].checksum).toMatch(/^[0-9a-f]{64}$/);
       expect(list[0].sizeBytes).toBeGreaterThan(0);
       expect(list[0].createdAt).toBeInstanceOf(Date);
     });
 
     it("lists multiple backups sorted newest first", async () => {
-      await adapter.saveBackup("maibuk-backup-launch-2026-03-15T14-30-00.sql", "sql1");
+      await adapter.saveBackup("maibuk-backup-daily-2026-03-15T14-30-00.sql", "sql1");
       // Small delay to ensure different timestamps
       await new Promise((r) => setTimeout(r, 10));
       await adapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T14-30-10.sql", "sql2");
@@ -37,7 +37,7 @@ describe("WebBackupAdapter", () => {
       const list = await adapter.listBackups();
       expect(list).toHaveLength(2);
       expect(list[0].filename).toBe("maibuk-backup-pre-sync-2026-03-15T14-30-10.sql");
-      expect(list[1].filename).toBe("maibuk-backup-launch-2026-03-15T14-30-00.sql");
+      expect(list[1].filename).toBe("maibuk-backup-daily-2026-03-15T14-30-00.sql");
     });
   });
 
@@ -87,8 +87,8 @@ describe("WebBackupAdapter", () => {
 
   describe("deleteBackup", () => {
     it("deletes a backup", async () => {
-      await adapter.saveBackup("maibuk-backup-launch-2026-03-15T14-30-00.sql", "sql");
-      await adapter.deleteBackup("maibuk-backup-launch-2026-03-15T14-30-00.sql");
+      await adapter.saveBackup("maibuk-backup-daily-2026-03-15T14-30-00.sql", "sql");
+      await adapter.deleteBackup("maibuk-backup-daily-2026-03-15T14-30-00.sql");
 
       const list = await adapter.listBackups();
       expect(list).toHaveLength(0);
@@ -106,9 +106,9 @@ describe("WebBackupAdapter", () => {
             const getAllRequest = {
               result: [
                 {
-                  filename: "maibuk-backup-launch-2026-03-15T14-25-00.sql",
+                  filename: "maibuk-backup-daily-2026-03-15T14-25-00.sql",
                   sql: "old",
-                  trigger: "launch",
+                  trigger: "daily",
                   createdAt: new Date().toISOString(),
                   sizeBytes: 3,
                   checksum: "abc",

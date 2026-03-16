@@ -76,6 +76,17 @@ export class BackupService {
     return this.saveBackupSnapshot(trigger, sql);
   }
 
+  /** Returns true if a backup with the given trigger already exists for today (UTC date). */
+  async hasBackupForToday(trigger: BackupEntry["trigger"]): Promise<boolean> {
+    const list = await this.adapter.listBackups();
+    const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+    return list.some(
+      (entry) =>
+        entry.trigger === trigger &&
+        entry.createdAt.toISOString().slice(0, 10) === todayStr,
+    );
+  }
+
   async listBackups(): Promise<BackupEntry[]> {
     return this.adapter.listBackups();
   }

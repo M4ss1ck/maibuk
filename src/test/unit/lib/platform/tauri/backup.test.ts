@@ -92,13 +92,13 @@ describe("TauriBackupAdapter", () => {
     const adapter = await createTauriBackup("/safe/backups");
     mockReadDir.mockResolvedValue([
       { name: undefined },
-      { name: "maibuk-backup-launch-2026-03-15T14-30-00.sql" },
-      { name: "maibuk-backup-launch-2026-03-15T14-30-00.meta.json" },
+      { name: "maibuk-backup-daily-2026-03-15T14-30-00.sql" },
+      { name: "maibuk-backup-daily-2026-03-15T14-30-00.meta.json" },
       { name: "orphan.meta.json" },
       { name: "notes.txt" },
     ]);
     mockReadTextFile.mockResolvedValue(JSON.stringify({
-      trigger: "launch",
+      trigger: "daily",
       createdAt: "2026-03-15T14:30:00.000Z",
       sizeBytes: 12,
       checksum: "abcd",
@@ -114,12 +114,12 @@ describe("TauriBackupAdapter", () => {
   it("cleans up managed orphan metadata sidecars without matching sql files", async () => {
     const adapter = await createTauriBackup("/safe/backups");
     mockReadDir.mockResolvedValue([
-      { name: "maibuk-backup-launch-2026-03-15T14-30-00.sql" },
-      { name: "maibuk-backup-launch-2026-03-15T14-30-00.meta.json" },
+      { name: "maibuk-backup-daily-2026-03-15T14-30-00.sql" },
+      { name: "maibuk-backup-daily-2026-03-15T14-30-00.meta.json" },
       { name: "maibuk-backup-manual-2026-03-15T12-00-00.meta.json" },
     ]);
     mockReadTextFile.mockResolvedValue(JSON.stringify({
-      trigger: "launch",
+      trigger: "daily",
       createdAt: "2026-03-15T14:30:00.000Z",
       sizeBytes: 12,
       checksum: "abcd",
@@ -131,7 +131,7 @@ describe("TauriBackupAdapter", () => {
       "/safe/backups/maibuk-backup-manual-2026-03-15T12-00-00.meta.json",
     );
     expect(mockRemove).not.toHaveBeenCalledWith(
-      "/safe/backups/maibuk-backup-launch-2026-03-15T14-30-00.meta.json",
+      "/safe/backups/maibuk-backup-daily-2026-03-15T14-30-00.meta.json",
     );
   });
 });

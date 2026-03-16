@@ -115,11 +115,11 @@ describe("BackupService", () => {
 
   describe("createBackup", () => {
     it("generates dump and saves with correct filename pattern", async () => {
-      await service.createBackup("launch");
+      await service.createBackup("daily");
 
       expect(mockGenerateSqlDump).toHaveBeenCalled();
       expect(mockAdapter.saveBackup).toHaveBeenCalledWith(
-        expect.stringMatching(/^maibuk-backup-launch-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/),
+        expect.stringMatching(/^maibuk-backup-daily-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/),
         "INSERT INTO books ..."
       );
     });
@@ -129,7 +129,7 @@ describe("BackupService", () => {
         "-- Maibuk Database Export (SQL Dump)\n-- Exported at: 2026-03-15\n\n-- Books\n\n-- Chapters\n"
       );
 
-      await expect(service.createBackup("launch")).rejects.toThrow("BACKUP_EMPTY");
+      await expect(service.createBackup("daily")).rejects.toThrow("BACKUP_EMPTY");
       expect(mockAdapter.saveBackup).not.toHaveBeenCalled();
     });
 
@@ -144,9 +144,9 @@ describe("BackupService", () => {
   describe("pruneBackups", () => {
     it("deletes oldest backup when over limit", async () => {
       // Use deterministic filenames via direct adapter calls
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-00.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-01.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-02.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", "sql");
 
       await service.pruneBackups(2);
 
@@ -159,11 +159,11 @@ describe("BackupService", () => {
       await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", "sql");
       await mockAdapter.saveBackup("maibuk-backup-pre-restore-2026-03-15T10-00-02.sql", "sql");
       await mockAdapter.saveBackup("maibuk-backup-pre-restore-2026-03-15T10-00-03.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-04.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-05.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-06.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-04.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-05.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-06.sql", "sql");
 
-      // Prune to 4 total — should delete launch backups, keep pre-sync and pre-restore
+      // Prune to 4 total — should delete daily backups, keep pre-sync and pre-restore
       await service.pruneBackups(4);
 
       const list = await mockAdapter.listBackups();
@@ -174,19 +174,44 @@ describe("BackupService", () => {
     });
 
     it("deletes from most-represented trigger type first", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-00.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-01.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-launch-2026-03-15T10-00-02.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", "sql");
       await mockAdapter.saveBackup("maibuk-backup-manual-2026-03-15T10-00-03.sql", "sql");
 
       await service.pruneBackups(2);
 
       const list = await mockAdapter.listBackups();
-      // Should have deleted launch backups first (most represented), keeping manual
-      const launchCount = list.filter((e) => e.trigger === "launch").length;
+      // Should have deleted daily backups first (most represented), keeping manual
+      const dailyCount = list.filter((e) => e.trigger === "daily").length;
       const manualCount = list.filter((e) => e.trigger === "manual").length;
       expect(manualCount).toBe(1);
-      expect(launchCount).toBe(1);
+      expect(dailyCount).toBe(1);
+    });
+  });
+
+  describe("hasBackupForToday", () => {
+    it("returns true when a backup with the trigger exists for today", async () => {
+      const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "-");
+      const filename = `maibuk-backup-daily-${todayStr}T10-00-00.sql`;
+      await mockAdapter.saveBackup(filename, "INSERT INTO books ...");
+
+      const result = await service.hasBackupForToday("daily");
+      expect(result).toBe(true);
+    });
+
+    it("returns false when no backup with the trigger exists for today", async () => {
+      const result = await service.hasBackupForToday("daily");
+      expect(result).toBe(false);
+    });
+
+    it("returns false when today has a different trigger", async () => {
+      const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "-");
+      const filename = `maibuk-backup-close-${todayStr}T10-00-00.sql`;
+      await mockAdapter.saveBackup(filename, "INSERT INTO books ...");
+
+      const result = await service.hasBackupForToday("daily");
+      expect(result).toBe(false);
     });
   });
 

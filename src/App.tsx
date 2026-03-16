@@ -10,11 +10,11 @@ import { PathTracker } from "./components/PathTracker";
 import { ToastViewport } from "./components/ui";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
 import { IS_TAURI } from "./lib/platform";
-import { runLaunchBackupOnce, registerCloseBackupHandlerOnce } from "./features/backup/lifecycle";
+import { runDailyBackupOnce, registerCloseBackupHandlerOnce } from "./features/backup/lifecycle";
 
 function App() {
   useEffect(() => {
-    void runLaunchBackupOnce();
+    void runDailyBackupOnce();
   }, []);
 
   useEffect(() => {
