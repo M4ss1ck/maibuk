@@ -125,6 +125,17 @@ export async function pullBookBlob(
   };
 }
 
+/** Normalizes PocketBase datetime strings to Unix seconds. Returns 0 for unparseable input. */
+export function parsePocketBaseDate(dateStr: string): number {
+  if (!dateStr) return 0;
+  // PocketBase uses exactly one space between date and time, replace with T for ISO 8601
+  let iso = dateStr.replace(" ", "T");
+  if (!iso.endsWith("Z")) iso += "Z";
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return 0;
+  return Math.floor(ms / 1000);
+}
+
 export async function listRemoteBooks(): Promise<SyncItemMeta[]> {
   const client = getClient();
 
@@ -136,6 +147,6 @@ export async function listRemoteBooks(): Promise<SyncItemMeta[]> {
     remoteId: record.id,
     bookId: record.book_id as string,
     checksum: record.checksum as string,
-    updatedAt: Math.floor(new Date(record.updated).getTime() / 1000),
+    updatedAt: parsePocketBaseDate(record.updated as string),
   }));
 }

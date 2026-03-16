@@ -67,6 +67,7 @@ export default defineConfig(() => ({
         "src/lib/platform/tauri/backup.ts",
         "src/lib/platform/web/backup.ts",
         "src/features/sync/sync-engine.ts",
+        "src/features/sync/client.ts",
       ],
       exclude: [
         "src/**/*.d.ts",
