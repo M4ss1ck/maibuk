@@ -379,7 +379,8 @@
     "remoteLastSynced": "Remote last synced: {{date}}",
     "keepLocal": "Keep Local & Push",
     "useRemote": "Use Remote & Pull",
-    "cancelSync": "Cancel"
+    "cancelSync": "Cancel",
+    "sessionExpired": "Your session has expired. Please log in again."
   },
   "errors": {
     "titleRequired": "Title is required",

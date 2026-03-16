@@ -379,7 +379,8 @@
     "remoteLastSynced": "Última sincronización remota: {{date}}",
     "keepLocal": "Mantener local y subir",
     "useRemote": "Usar remoto y descargar",
-    "cancelSync": "Cancelar"
+    "cancelSync": "Cancelar",
+    "sessionExpired": "Tu sesión ha expirado. Por favor, inicia sesión de nuevo."
   },
   "errors": {
     "titleRequired": "El título es obligatorio",
