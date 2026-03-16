@@ -200,6 +200,9 @@ export const useSyncStore = create<SyncStore>()(
           if (state.apiUrl) {
             initClient(state.apiUrl);
           }
+          if (state.passphrase) {
+            cryptoSetPassphrase(state.passphrase);
+          }
           if (state.authToken && state.apiUrl) {
             restoreAuth(state.authToken);
             // Fire-and-forget: validate token with server
