@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
-import { Cloud, CloudOff, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
+import { Cloud, CloudOff, CloudUpload, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
 import { useSyncStore } from "../../features/sync/store";
+import { useBookStore } from "../../features/books/store";
 import { useSyncFlow } from "../../features/sync/useSyncFlow";
 import { AuthDialog } from "./AuthDialog";
 import { SyncPanel } from "./SyncPanel";
@@ -8,9 +9,13 @@ import { PassphraseDialog } from "./PassphraseDialog";
 import { ConflictDialog } from "./ConflictDialog";
 
 export function SyncStatusButton() {
-  const { authStatus, syncStatus } = useSyncStore();
+  const { authStatus, syncStatus, lastSyncedAt } = useSyncStore();
+  const { books } = useBookStore();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showSyncPanel, setShowSyncPanel] = useState(false);
+
+  const hasPendingChanges = authStatus === "logged-in" && lastSyncedAt != null
+    && books.some((b) => Math.floor(b.updatedAt.getTime() / 1000) > lastSyncedAt);
   const {
     showPassphraseDialog,
     closePassphraseDialog,
@@ -48,6 +53,9 @@ export function SyncStatusButton() {
     if (syncStatus === "error") {
       return <CloudAlert className="w-5 h-5" />;
     }
+    if (hasPendingChanges) {
+      return <CloudUpload className="w-5 h-5" />;
+    }
     return <Cloud className="w-5 h-5" />;
   };
 
@@ -66,7 +74,11 @@ export function SyncStatusButton() {
                 ? "text-destructive"
                 : syncStatus === "success"
                   ? "text-success"
-                  : "text-muted-foreground";
+                  : hasPendingChanges
+                    ? "text-primary"
+                    : lastSyncedAt
+                      ? "text-success"
+                      : "text-muted-foreground";
 
   return (
     <div className="relative">
