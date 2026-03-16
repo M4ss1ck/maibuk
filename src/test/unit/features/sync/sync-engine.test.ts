@@ -51,9 +51,11 @@ vi.mock("../../../../features/sync/store", () => ({
 }));
 
 const mockBackupServiceCreateBackup = vi.hoisted(() => vi.fn());
+const mockBackupServiceDeleteByTrigger = vi.hoisted(() => vi.fn());
 vi.mock("../../../../features/backup/backup-service", () => ({
   BackupService: class {
     createBackup = mockBackupServiceCreateBackup;
+    deleteByTrigger = mockBackupServiceDeleteByTrigger;
     pruneBackups = vi.fn();
   },
 }));

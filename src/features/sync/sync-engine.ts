@@ -77,6 +77,7 @@ async function createPreSyncBackupOrThrow(): Promise<void> {
   try {
     const adapter = await createBackup(useSettingsStore.getState().backupDirectory);
     const backupService = new BackupService(adapter);
+    await backupService.deleteByTrigger("pre-sync");
     await backupService.createBackup("pre-sync");
   } catch {
     throw new Error(PRE_SYNC_BACKUP_ERROR);

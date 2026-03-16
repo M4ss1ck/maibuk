@@ -108,7 +108,7 @@ export function GlobalShortcuts() {
         const passphrase = getPassphrase();
         if (!passphrase) return;
         const skipConflicts = async () => "cancel" as const;
-        useSyncStore.getState().syncAll(passphrase, skipConflicts).catch(() => {});
+        useSyncStore.getState().syncAll(passphrase, skipConflicts).catch(() => { });
       },
     },
     {

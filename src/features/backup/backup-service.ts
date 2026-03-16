@@ -150,6 +150,15 @@ export class BackupService {
     });
   }
 
+  async deleteByTrigger(trigger: BackupEntry["trigger"]): Promise<void> {
+    const list = await this.adapter.listBackups();
+    for (const entry of list) {
+      if (entry.trigger === trigger) {
+        await this.adapter.deleteBackup(entry.filename);
+      }
+    }
+  }
+
   async pruneBackups(maxCount: number): Promise<void> {
     const list = await this.adapter.listBackups();
     if (list.length <= maxCount) return;

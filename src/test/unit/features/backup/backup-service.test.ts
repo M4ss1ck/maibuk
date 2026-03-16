@@ -141,6 +141,29 @@ describe("BackupService", () => {
     });
   });
 
+  describe("deleteByTrigger", () => {
+    it("removes all backups matching the given trigger", async () => {
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-00.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", "sql");
+
+      await service.deleteByTrigger("pre-sync");
+
+      const list = await mockAdapter.listBackups();
+      expect(list.length).toBe(1);
+      expect(list[0].trigger).toBe("daily");
+    });
+
+    it("does nothing when no backups match the trigger", async () => {
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", "sql");
+
+      await service.deleteByTrigger("pre-sync");
+
+      const list = await mockAdapter.listBackups();
+      expect(list.length).toBe(1);
+    });
+  });
+
   describe("pruneBackups", () => {
     it("deletes oldest backup when over limit", async () => {
       // Use deterministic filenames via direct adapter calls
