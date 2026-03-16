@@ -63,6 +63,7 @@ export default defineConfig(() => ({
         "src/features/backup/generate-sql-dump.ts",
         "src/features/backup/lifecycle.ts",
         "src/lib/db/sql-parser.ts",
+        "src/lib/db/index.ts",
         "src/lib/platform/tauri/backup.ts",
         "src/lib/platform/web/backup.ts",
         "src/features/sync/sync-engine.ts",

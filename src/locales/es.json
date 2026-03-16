@@ -306,9 +306,11 @@
     "importDatabase": "Importar Base de Datos",
     "importDatabaseDescription": "Importa datos desde un archivo de respaldo SQL",
     "importDatabaseButton": "Importar",
+    "importDatabaseFailed": "La importación falló. Verifica que el archivo sea una exportación válida de Maibuk.",
     "resetDatabase": "Reiniciar Base de Datos",
     "resetDatabaseDescription": "Elimina todos los libros, capítulos y configuraciones",
     "resetDatabaseButton": "Reiniciar",
+    "resetDatabaseFailed": "No se pudo reiniciar la base de datos. Intenta reiniciar la aplicación.",
     "resetDatabaseConfirm": "¿Estás seguro de que quieres reiniciar la base de datos? Esto eliminará permanentemente todos tus libros, capítulos y configuraciones. Esta acción no se puede deshacer.",
     "confirmReset": "Sí, reiniciar todo"
   },

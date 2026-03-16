@@ -34,14 +34,14 @@ function generateInsertStatements(
     const columns = Object.keys(row);
     const values = columns.map((col) => escapeSQL(row[col]));
     statements.push(
-      `INSERT INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
+      `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
     );
   }
   return statements.join("\n");
 }
 
 class WebDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: SqlJsDatabase) {}
+  constructor(private db: SqlJsDatabase) { }
 
   async execute(
     sql: string,

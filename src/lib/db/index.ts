@@ -130,8 +130,28 @@ export async function resetDatabase(): Promise<void> {
   await database.execute("DELETE FROM settings");
 }
 
+/**
+ * Regex that matches INSERT (with optional OR REPLACE/OR IGNORE) followed
+ * by INTO. Captures everything before "INTO" so we can normalise it.
+ */
+const INSERT_INTO_RE = /^(INSERT\s+(?:OR\s+\w+\s+)?)INTO/i;
+
+/**
+ * Convert all INSERT INTO statements to INSERT OR REPLACE INTO so that
+ * re-importing an export doesn't fail with UNIQUE constraint errors.
+ * Non-INSERT statements are passed through unchanged.
+ */
+export function normaliseToUpsert(sql: string): string {
+  return sql.replace(INSERT_INTO_RE, "INSERT OR REPLACE INTO");
+}
+
 export async function importDatabase(sqlContent: string): Promise<void> {
   const database = await getDatabase();
-  // Import the SQL content (merges with existing data)
-  await database.importData(sqlContent);
+  // Convert INSERT → INSERT OR REPLACE so re-importing doesn't fail on
+  // existing rows (UNIQUE constraint).
+  const upsertSql = sqlContent
+    .split("\n")
+    .map((line) => normaliseToUpsert(line))
+    .join("\n");
+  await database.importData(upsertSql);
 }

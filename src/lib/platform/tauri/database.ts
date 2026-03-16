@@ -22,14 +22,14 @@ function generateInsertStatements(
     const columns = Object.keys(row);
     const values = columns.map((col) => escapeSQL(row[col]));
     statements.push(
-      `INSERT INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
+      `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
     );
   }
   return statements.join("\n");
 }
 
 class TauriDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: Database) {}
+  constructor(private db: Database) { }
 
   async execute(
     sql: string,

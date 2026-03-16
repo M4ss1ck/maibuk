@@ -101,39 +101,44 @@ export async function applyBookSnapshot(
   const db = await getDatabase();
   const { book, chapters } = snapshot;
 
-  await db.execute("BEGIN");
-  try {
-    // Upsert book
-    await db.execute(
-      `INSERT OR REPLACE INTO books (
-        id, title, subtitle, author_name, description, genre, language,
-        cover_image_path, cover_data, word_count, target_word_count, status,
-        created_at, updated_at, last_opened_at, last_chapter_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        book.id,
-        book.title,
-        book.subtitle,
-        book.authorName,
-        book.description,
-        book.genre,
-        book.language,
-        book.coverImagePath,
-        book.coverData,
-        book.wordCount,
-        book.targetWordCount,
-        book.status,
-        book.createdAt,
-        book.updatedAt,
-        book.lastOpenedAt,
-        book.lastChapterId,
-      ],
-    );
+  // Each statement is auto-committed individually. The pre-sync backup
+  // is the safety net if something fails mid-apply (tauri-plugin-sql uses
+  // a connection pool, so BEGIN/COMMIT across separate execute() calls
+  // cannot be relied upon).
 
-    // Delete existing chapters for this book, then insert fresh
-    await db.execute("DELETE FROM chapters WHERE book_id = ?", [book.id]);
+  // Upsert book
+  await db.execute(
+    `INSERT OR REPLACE INTO books (
+      id, title, subtitle, author_name, description, genre, language,
+      cover_image_path, cover_data, word_count, target_word_count, status,
+      created_at, updated_at, last_opened_at, last_chapter_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      book.id,
+      book.title,
+      book.subtitle,
+      book.authorName,
+      book.description,
+      book.genre,
+      book.language,
+      book.coverImagePath,
+      book.coverData,
+      book.wordCount,
+      book.targetWordCount,
+      book.status,
+      book.createdAt,
+      book.updatedAt,
+      book.lastOpenedAt,
+      book.lastChapterId,
+    ],
+  );
 
-    for (const ch of chapters) {
+  // Delete existing chapters for this book, then insert fresh
+  await db.execute("DELETE FROM chapters WHERE book_id = ?", [book.id]);
+
+  for (let i = 0; i < chapters.length; i++) {
+    const ch = chapters[i];
+    try {
       await db.execute(
         `INSERT INTO chapters (
           id, book_id, title, content, synopsis, "order", parent_id,
@@ -156,15 +161,15 @@ export async function applyBookSnapshot(
           ch.updatedAt,
         ],
       );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Sync apply failed on chapter ${i + 1}/${chapters.length} ("${ch.title}"): ${detail}`,
+      );
     }
-
-    await db.execute("COMMIT");
-  } catch (error) {
-    await db.execute("ROLLBACK");
-    throw error;
   }
 
-  // Reload stores so UI reflects the new data (outside transaction)
+  // Reload stores so UI reflects the new data
   await useBookStore.getState().loadBooks();
   const currentBookId = useChapterStore.getState().currentBookId;
   if (currentBookId === book.id) {

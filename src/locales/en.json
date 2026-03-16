@@ -306,9 +306,11 @@
     "importDatabase": "Import Database",
     "importDatabaseDescription": "Import data from a SQL backup file",
     "importDatabaseButton": "Import",
+    "importDatabaseFailed": "Import failed. Check that the file is a valid Maibuk database export.",
     "resetDatabase": "Reset Database",
     "resetDatabaseDescription": "Delete all books, chapters, and settings",
     "resetDatabaseButton": "Reset",
+    "resetDatabaseFailed": "Could not reset the database. Try restarting the app.",
     "resetDatabaseConfirm": "Are you sure you want to reset the database? This will permanently delete all your books, chapters, and settings. This action cannot be undone.",
     "confirmReset": "Yes, reset everything"
   },
