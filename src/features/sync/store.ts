@@ -1,16 +1,16 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AuthStatus, SyncStatus, SyncItemMeta } from "./types";
+import type { AuthStatus, SyncStatus, SyncItemMeta, ConflictResolver, SyncOutcome } from "./types";
 import {
   initClient,
   restoreAuth,
+  refreshAuth as pbRefreshAuth,
   login as pbLogin,
   register as pbRegister,
   loginWithOAuth as pbLoginWithOAuth,
   logout as pbLogout,
-  isAuthenticated,
 } from "./client";
-import { clearPassphrase } from "./crypto";
+import { clearPassphrase, setPassphrase as cryptoSetPassphrase } from "./crypto";
 import { syncAllBooks, syncBook } from "./sync-engine";
 
 const STORAGE_KEY = "maibuk-sync";
@@ -24,15 +24,35 @@ interface SyncStore {
   syncError: string | null;
   apiUrl: string;
   bookSyncMeta: Record<string, SyncItemMeta>;
+  authVerified: boolean;
+  passphrase: string | null;
 
   setApiUrl: (url: string) => void;
+  setPassphrase: (passphrase: string | null) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   loginWithOAuth: (provider: string) => Promise<void>;
   logout: () => void;
-  syncAll: (passphrase: string) => Promise<void>;
-  syncSingleBook: (bookId: string, passphrase: string) => Promise<void>;
+  verifyAuth: () => Promise<void>;
+  syncAll: (passphrase: string, onConflict: ConflictResolver) => Promise<void>;
+  syncSingleBook: (bookId: string, passphrase: string, onConflict: ConflictResolver) => Promise<void>;
   updateBookMeta: (bookId: string, meta: SyncItemMeta) => void;
+}
+
+function applySyncOutcome(
+  outcome: SyncOutcome,
+  set: (partial: Partial<SyncStore>) => void,
+): void {
+  if (outcome === "cancelled") {
+    set({ syncStatus: "cancelled", syncError: null });
+    return;
+  }
+
+  set({
+    syncStatus: outcome === "partial" ? "partial" : "success",
+    syncError: null,
+    lastSyncedAt: Math.floor(Date.now() / 1000),
+  });
 }
 
 export const useSyncStore = create<SyncStore>()(
@@ -46,10 +66,17 @@ export const useSyncStore = create<SyncStore>()(
       syncError: null,
       apiUrl: "",
       bookSyncMeta: {},
+      authVerified: false,
+      passphrase: null,
 
       setApiUrl: (apiUrl) => {
         initClient(apiUrl);
         set({ apiUrl });
+      },
+
+      setPassphrase: (passphrase) => {
+        cryptoSetPassphrase(passphrase as string);
+        set({ passphrase });
       },
 
       login: async (email, password) => {
@@ -58,6 +85,7 @@ export const useSyncStore = create<SyncStore>()(
           authStatus: "logged-in",
           userEmail: result.email,
           authToken: result.token,
+          authVerified: true,
         });
       },
 
@@ -67,6 +95,7 @@ export const useSyncStore = create<SyncStore>()(
           authStatus: "logged-in",
           userEmail: result.email,
           authToken: result.token,
+          authVerified: true,
         });
       },
 
@@ -76,6 +105,7 @@ export const useSyncStore = create<SyncStore>()(
           authStatus: "logged-in",
           userEmail: result.email,
           authToken: result.token,
+          authVerified: true,
         });
       },
 
@@ -86,35 +116,72 @@ export const useSyncStore = create<SyncStore>()(
           authStatus: "logged-out",
           userEmail: null,
           authToken: null,
+          authVerified: false,
+          passphrase: null,
           syncStatus: "idle",
           syncError: null,
           bookSyncMeta: {},
         });
       },
 
-      syncAll: async (passphrase) => {
+      verifyAuth: async () => {
+        const { authToken, apiUrl } = useSyncStore.getState();
+        if (!authToken || !apiUrl) return;
+        if (!navigator.onLine) return;
+
+        try {
+          const result = await pbRefreshAuth();
+          set({
+            authStatus: "logged-in",
+            userEmail: result.email,
+            authToken: result.token,
+            authVerified: true,
+          });
+
+          // Auto-sync if passphrase is available
+          const { passphrase } = useSyncStore.getState();
+          if (passphrase) {
+            const skipConflicts: ConflictResolver = async () => "cancel";
+            try {
+              await useSyncStore.getState().syncAll(passphrase, skipConflicts);
+            } catch {
+              // syncAll already sets error status in the store
+            }
+          }
+        } catch (error: unknown) {
+          const status = (error as { status?: number }).status;
+          if (status === 401) {
+            set({
+              authStatus: "logged-out",
+              userEmail: null,
+              authToken: null,
+              authVerified: false,
+              syncError: "sync.sessionExpired",
+            });
+          }
+          // Network errors: keep optimistic state, authVerified stays false
+        }
+      },
+
+      syncAll: async (passphrase, onConflict) => {
         set({ syncStatus: "syncing", syncError: null });
         try {
-          await syncAllBooks(passphrase);
-          const now = Math.floor(Date.now() / 1000);
-          set({ syncStatus: "success", lastSyncedAt: now });
+          const result = await syncAllBooks(passphrase, onConflict);
+          applySyncOutcome(result.outcome, set);
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Sync failed";
+          const message = error instanceof Error ? error.message : "Sync failed";
           set({ syncStatus: "error", syncError: message });
           throw error;
         }
       },
 
-      syncSingleBook: async (bookId, passphrase) => {
+      syncSingleBook: async (bookId, passphrase, onConflict) => {
         set({ syncStatus: "syncing", syncError: null });
         try {
-          await syncBook(bookId, passphrase);
-          const now = Math.floor(Date.now() / 1000);
-          set({ syncStatus: "success", lastSyncedAt: now });
+          const result = await syncBook(bookId, passphrase, onConflict);
+          applySyncOutcome(result.outcome, set);
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Sync failed";
+          const message = error instanceof Error ? error.message : "Sync failed";
           set({ syncStatus: "error", syncError: message });
           throw error;
         }
@@ -134,34 +201,23 @@ export const useSyncStore = create<SyncStore>()(
         authToken: state.authToken,
         lastSyncedAt: state.lastSyncedAt,
         apiUrl: state.apiUrl,
+        passphrase: state.passphrase,
         bookSyncMeta: state.bookSyncMeta,
       }),
       onRehydrateStorage: () => {
         return (state) => {
           if (!state) return;
 
-          // Restore PocketBase client and auth on rehydration
           if (state.apiUrl) {
             initClient(state.apiUrl);
           }
+          if (state.passphrase) {
+            cryptoSetPassphrase(state.passphrase);
+          }
           if (state.authToken && state.apiUrl) {
-            try {
-              restoreAuth(state.authToken);
-              // Verify token is still valid
-              if (!isAuthenticated()) {
-                useSyncStore.setState({
-                  authStatus: "logged-out",
-                  userEmail: null,
-                  authToken: null,
-                });
-              }
-            } catch {
-              useSyncStore.setState({
-                authStatus: "logged-out",
-                userEmail: null,
-                authToken: null,
-              });
-            }
+            restoreAuth(state.authToken);
+            // Fire-and-forget: validate token with server
+            useSyncStore.getState().verifyAuth();
           }
         };
       },

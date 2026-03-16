@@ -1,6 +1,28 @@
 export type AuthStatus = "logged-out" | "logged-in";
 
-export type SyncStatus = "idle" | "syncing" | "error" | "success";
+export type SyncStatus = "idle" | "syncing" | "awaiting-confirmation" | "error" | "success" | "cancelled" | "partial";
+
+export type SyncAction = "pushed" | "pulled" | "skipped" | "cancelled";
+export type SyncOutcome = "success" | "cancelled" | "partial";
+
+export interface SingleSyncResult {
+  outcome: SyncOutcome;
+  action: SyncAction;
+}
+
+export interface BatchSyncResult {
+  outcome: SyncOutcome;
+  actions: SyncAction[];
+}
+
+export interface SyncConflict {
+  bookId: string;
+  bookTitle: string;
+  localUpdatedAt: number;
+  remoteUpdatedAt: number;
+}
+
+export type ConflictResolver = (conflict: SyncConflict) => Promise<"push" | "pull" | "cancel">;
 
 export interface SyncItemMeta {
   remoteId: string;

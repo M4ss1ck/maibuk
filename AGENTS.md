@@ -89,11 +89,13 @@ src/
 │   │   └── extensions/  # Custom TipTap extensions
 │   ├── cover-editor/    # Fabric.js cover canvas and toolbar
 │   ├── export/          # Export dialogs and previews
-│   ├── sync/            # Sync status button, auth/passphrase dialogs, sync panel
+│   ├── sync/            # Sync status button, auth/passphrase dialogs, conflict dialog, sync panel
+│   ├── settings/        # BackupSection
 │   ├── project/         # Book card, new book dialog
 │   ├── book/            # Book settings dialog
 │   └── icons/           # Custom SVG icon components
 ├── features/            # Feature modules (business logic + state)
+│   ├── backup/          # backup-service.ts, generate-sql-dump.ts, lifecycle.ts, types.ts
 │   ├── books/           # store.ts, types.ts
 │   ├── chapters/        # store.ts, types.ts
 │   ├── covers/          # types.ts
@@ -207,30 +209,37 @@ Every store follows this structure (see `src/features/books/store.ts`):
 
 ### Existing Shared Utilities — CHECK BEFORE WRITING NEW ONES
 
-| What                                                               | Where                                    |
-| ------------------------------------------------------------------ | ---------------------------------------- |
-| `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`               |
-| `useDebouncedCallback(callback, delay)`                            | `src/hooks/useAutoSave.ts`               |
-| `useShortcuts(shortcuts, options)`                                 | `src/lib/shortcuts.ts`                   |
-| `getDatabase()`                                                    | `src/lib/db/index.ts`                    |
-| `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                    |
-| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`              |
-| `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`              |
-| `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts`  |
-| `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                   |
-| `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                       |
-| `detectSystemLocale()`                                             | `src/i18n.ts`                            |
-| Font/size/language option arrays                                   | `src/features/settings/types.ts`         |
-| `encrypt()` / `decrypt()` / `computeChecksum()`                    | `src/features/sync/crypto.ts`            |
-| `serializeBook()` / `applyBookSnapshot()`                          | `src/features/sync/serializer.ts`        |
-| `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`       |
-| PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`            |
-| `useSyncStore`                                                     | `src/features/sync/store.ts`             |
-| `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`            |
-| `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx` |
-| `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`           |
-| `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`    |
-| `isTypingTarget()` / `isModKey()`                                  | `src/lib/keyboard.ts`                    |
+| What                                                               | Where                                      |
+| ------------------------------------------------------------------ | ------------------------------------------ |
+| `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`                 |
+| `useDebouncedCallback(callback, delay)`                            | `src/hooks/useAutoSave.ts`                 |
+| `useShortcuts(shortcuts, options)`                                 | `src/lib/shortcuts.ts`                     |
+| `getDatabase()`                                                    | `src/lib/db/index.ts`                      |
+| `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                      |
+| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`                |
+| `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`                |
+| `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts`    |
+| `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                     |
+| `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                         |
+| `detectSystemLocale()`                                             | `src/i18n.ts`                              |
+| Font/size/language option arrays                                   | `src/features/settings/types.ts`           |
+| `encrypt()` / `decrypt()`                                          | `src/features/sync/crypto.ts`              |
+| `serializeBook()` / `applyBookSnapshot()`                          | `src/features/sync/serializer.ts`          |
+| `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`         |
+| PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`              |
+| `useSyncStore`                                                     | `src/features/sync/store.ts`               |
+| `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
+| `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |
+| `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`             |
+| `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`      |
+| `isTypingTarget()` / `isModKey()`                                  | `src/lib/keyboard.ts`                      |
+| `BackupService` (create, prune, verify)                            | `src/features/backup/backup-service.ts`    |
+| `generateSqlDump()`                                                | `src/features/backup/generate-sql-dump.ts` |
+| `createLaunchBackup()` / `createCloseBackup()`                     | `src/features/backup/lifecycle.ts`         |
+| `parseSqlStatements()`                                             | `src/lib/db/sql-parser.ts`                 |
+| `createBackup()` (platform factory)                                | `src/lib/platform/index.ts`                |
+| `computeChecksum()`                                                | `src/lib/checksum.ts`                      |
+| `parseTriggerFromFilename()`                                       | `src/features/backup/utils.ts`             |
 
 ---
 
@@ -444,6 +453,27 @@ act(() => {
 1. Write a failing test
 2. Implement the minimum code to pass
 3. Refactor safely with tests green
+
+### Feature-Critical Test Gate (current scope: sync safety + backups)
+
+For changes in `src/features/backup/`, `src/features/sync/`, `src/lib/platform/*/backup.ts`, `src/lib/db/sql-parser.ts`, or the backup/sync UI that triggers destructive behavior, the feature is **not done** until tests cover the spec-critical paths.
+
+Required coverage for the current sync-safety / backup feature:
+
+1. **Pre-sync backup aborts sync** with the exact user-facing error required by the spec.
+2. **Restore order is correct**: create `pre-restore` backup before verifying or mutating data.
+3. **Invalid or empty backup inputs are safe**: restore must leave existing data untouched when checksum verification fails, parsing fails, or no allowed INSERT statements are found.
+4. **Platform defaults and settings agree**: retention defaults, backup directory behavior, and platform-specific capabilities must be tested for both web and Tauri code paths where applicable.
+5. **Adapter integrity rules are enforced**: checksum verification, orphan metadata handling, and quota-retry failure messaging must be covered by direct adapter tests.
+6. **Conflict outcomes are truthful**: equal-timestamp conflicts, remote-only pulls, cancel behavior, and final sync status must be tested end-to-end through the store/UI flow.
+7. **Lifecycle triggers are covered**: launch, close, manual, pre-sync, and pre-restore backup triggers must be tested at the orchestration layer.
+8. **Shared destructive helpers are tested directly**: if a helper is extracted and used by restore/import/sync, it needs its own unit tests and must be added to `coverage.include`.
+
+Rules for this feature:
+
+- Do **not** let tests codify spec drift. If the implementation intentionally changes the contract, update the design doc / plan and the tests in the same change.
+- Do **not** keep destructive restore/sync orchestration only inside React components. Put it in feature services/stores so it can be tested without UI wiring.
+- For this feature, passing tests should be enough to recreate confidence from scratch: every data-loss prevention guarantee must have at least one test that fails if the guarantee regresses.
 
 ### Linting & Formatting
 

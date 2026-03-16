@@ -15,6 +15,7 @@ export interface SaveDialogOptions {
 
 export interface OpenDialogOptions {
   multiple?: boolean;
+  directory?: boolean;
   filters?: { name: string; extensions: string[] }[];
 }
 
@@ -41,4 +42,21 @@ export interface WebDialogAdapter extends DialogAdapter {
 
 export interface OSAdapter {
   locale(): Promise<string | null>;
+}
+
+export interface BackupEntry {
+  filename: string;
+  trigger: "daily" | "pre-sync" | "pre-restore" | "manual" | "unknown";
+  createdAt: Date;
+  /** Stored as metadata alongside the backup content, not computed on read. */
+  sizeBytes: number;
+  /** SHA-256 hash of the SQL content, computed at save time. */
+  checksum: string;
+}
+
+export interface BackupAdapter {
+  saveBackup(filename: string, sqlContent: string): Promise<void>;
+  listBackups(): Promise<BackupEntry[]>;
+  readBackup(filename: string): Promise<string>;
+  deleteBackup(filename: string): Promise<void>;
 }

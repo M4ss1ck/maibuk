@@ -306,9 +306,11 @@
     "importDatabase": "Import Database",
     "importDatabaseDescription": "Import data from a SQL backup file",
     "importDatabaseButton": "Import",
+    "importDatabaseFailed": "Import failed. Check that the file is a valid Maibuk database export.",
     "resetDatabase": "Reset Database",
     "resetDatabaseDescription": "Delete all books, chapters, and settings",
     "resetDatabaseButton": "Reset",
+    "resetDatabaseFailed": "Could not reset the database. Try restarting the app.",
     "resetDatabaseConfirm": "Are you sure you want to reset the database? This will permanently delete all your books, chapters, and settings. This action cannot be undone.",
     "confirmReset": "Yes, reset everything"
   },
@@ -370,7 +372,15 @@
     "loggedInAs": "Logged in as {{email}}",
     "encryptionInfo": "All data is encrypted on your device before syncing. The server never sees your plaintext data.",
     "infoCardText": "Sync requires a server. You can use the official one or your own.",
-    "infoCardLearnMore": "Learn more about sync setup"
+    "infoCardLearnMore": "Learn more about sync setup",
+    "conflictTitle": "Sync Conflict",
+    "conflictDescription": "The book \"{{title}}\" has different versions locally and on the server.",
+    "localLastModified": "Local last modified: {{date}}",
+    "remoteLastSynced": "Remote last synced: {{date}}",
+    "keepLocal": "Keep Local & Push",
+    "useRemote": "Use Remote & Pull",
+    "cancelSync": "Cancel",
+    "sessionExpired": "Your session has expired. Please log in again."
   },
   "errors": {
     "titleRequired": "Title is required",
@@ -385,6 +395,7 @@
     "gotoSettings": "Go to Settings",
     "toggleTheme": "Cycle theme",
     "toggleShortcutHints": "Toggle shortcut hints",
+    "syncNow": "Sync now",
     "newBook": "Create new book",
     "jumpBooks": "Jump to book by number",
     "moveSelection": "Move card selection",
@@ -394,5 +405,41 @@
     "toggleSidebar": "Toggle sidebar",
     "backFromEditor": "Back from editor",
     "deleteSelection": "Delete selected object"
+  },
+  "backup": {
+    "title": "Backups",
+    "description": "A daily backup is created automatically (once per day), plus before sync and before restore.",
+    "directoryLabel": "Backup directory",
+    "directoryPlaceholder": "Use the default app backup directory",
+    "chooseDirectory": "Choose folder",
+    "loadFailed": "Could not load backups.",
+    "retentionLimit": "Maximum backups to keep",
+    "createBackup": "Create Backup Now",
+    "restoreBackup": "Restore",
+    "deleteBackup": "Delete",
+    "noBackups": "No backups yet",
+    "restoreConfirm": "This will replace all book and chapter data. App settings will be preserved. A pre-restore backup will be created first.",
+    "restoreSuccess": "Backup restored successfully",
+    "restoreFailed": "Restore failed. Your original data was not modified.",
+    "restoreInvalid": "This backup contains no book or chapter data to restore.",
+    "backupCorrupt": "Backup is corrupted and cannot be restored.",
+    "backupCreated": "Backup created",
+    "backupEmpty": "No backup created — the database has no data to back up.",
+    "createFailed": "Could not create backup. Check available disk space.",
+    "deleteFailed": "Could not delete the backup.",
+    "sizeWarning": "Total backup size exceeds 500MB. Consider deleting old backups.",
+    "columnDate": "Date",
+    "columnTrigger": "Trigger",
+    "columnSize": "Size",
+    "columnActions": "Actions",
+    "ok": "OK",
+    "cancel": "Cancel",
+    "trigger": {
+      "daily": "Daily",
+      "pre-sync": "Pre-sync",
+      "pre-restore": "Pre-restore",
+      "manual": "Manual",
+      "unknown": "Unknown"
+    }
   }
 }

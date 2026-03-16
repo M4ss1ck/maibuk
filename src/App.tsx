@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
@@ -8,8 +9,13 @@ import { StartupRedirect } from "./components/StartupRedirect";
 import { PathTracker } from "./components/PathTracker";
 import { ToastViewport } from "./components/ui";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
+import { runDailyBackupOnce } from "./features/backup/lifecycle";
 
 function App() {
+  useEffect(() => {
+    void runDailyBackupOnce();
+  }, []);
+
   return (
     <StartupRedirect>
       <PathTracker />

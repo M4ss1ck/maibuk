@@ -101,6 +101,11 @@ export async function applyBookSnapshot(
   const db = await getDatabase();
   const { book, chapters } = snapshot;
 
+  // Each statement is auto-committed individually. The pre-sync backup
+  // is the safety net if something fails mid-apply (tauri-plugin-sql uses
+  // a connection pool, so BEGIN/COMMIT across separate execute() calls
+  // cannot be relied upon).
+
   // Upsert book
   await db.execute(
     `INSERT OR REPLACE INTO books (
@@ -131,29 +136,37 @@ export async function applyBookSnapshot(
   // Delete existing chapters for this book, then insert fresh
   await db.execute("DELETE FROM chapters WHERE book_id = ?", [book.id]);
 
-  for (const ch of chapters) {
-    await db.execute(
-      `INSERT INTO chapters (
-        id, book_id, title, content, synopsis, "order", parent_id,
-        chapter_type, word_count, status, is_included_in_export,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        ch.id,
-        ch.bookId,
-        ch.title,
-        ch.content,
-        ch.synopsis,
-        ch.order,
-        ch.parentId,
-        ch.chapterType,
-        ch.wordCount,
-        ch.status,
-        ch.isIncludedInExport ? 1 : 0,
-        ch.createdAt,
-        ch.updatedAt,
-      ],
-    );
+  for (let i = 0; i < chapters.length; i++) {
+    const ch = chapters[i];
+    try {
+      await db.execute(
+        `INSERT INTO chapters (
+          id, book_id, title, content, synopsis, "order", parent_id,
+          chapter_type, word_count, status, is_included_in_export,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ch.id,
+          ch.bookId,
+          ch.title,
+          ch.content,
+          ch.synopsis,
+          ch.order,
+          ch.parentId,
+          ch.chapterType,
+          ch.wordCount,
+          ch.status,
+          ch.isIncludedInExport ? 1 : 0,
+          ch.createdAt,
+          ch.updatedAt,
+        ],
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Sync apply failed on chapter ${i + 1}/${chapters.length} ("${ch.title}"): ${detail}`,
+      );
+    }
   }
 
   // Reload stores so UI reflects the new data

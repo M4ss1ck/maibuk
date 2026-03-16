@@ -8,6 +8,7 @@ export const tauriDialog: DialogAdapter = {
 
   async open(options: OpenDialogOptions): Promise<string | null> {
     const result = await open({
+      directory: options.directory,
       multiple: options.multiple,
       filters: options.filters,
     });

@@ -1,15 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PRIMARY_COLOR,
+  DEFAULT_TAURI_BACKUP_RETENTION,
+  DEFAULT_WEB_BACKUP_RETENTION,
   FONT_SIZE_OPTIONS,
   FONT_OPTIONS,
   EXPORT_FORMAT_OPTIONS,
   LANGUAGE_OPTIONS,
+  getDefaultBackupRetention,
 } from "../../../../features/settings/types";
 
 describe("DEFAULT_PRIMARY_COLOR", () => {
   it("is a valid hex color", () => {
     expect(DEFAULT_PRIMARY_COLOR).toMatch(/^#[0-9a-fA-F]{6}$/);
+  });
+});
+
+describe("backup retention defaults", () => {
+  it("exports the expected platform defaults", () => {
+    expect(DEFAULT_TAURI_BACKUP_RETENTION).toBe(20);
+    expect(DEFAULT_WEB_BACKUP_RETENTION).toBe(5);
+  });
+
+  it("returns the web default when running on web", () => {
+    expect(getDefaultBackupRetention(true)).toBe(5);
+  });
+
+  it("returns the Tauri default when not running on web", () => {
+    expect(getDefaultBackupRetention(false)).toBe(20);
   });
 });
 

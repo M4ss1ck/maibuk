@@ -58,6 +58,16 @@ export default defineConfig(() => ({
         "src/components/ThemeToggle.tsx",
         "src/components/StartupRedirect.tsx",
         "src/components/Layout.tsx",
+        // Phase 5: Backup + sync safety
+        "src/features/backup/backup-service.ts",
+        "src/features/backup/generate-sql-dump.ts",
+        "src/features/backup/lifecycle.ts",
+        "src/lib/db/sql-parser.ts",
+        "src/lib/db/index.ts",
+        "src/lib/platform/tauri/backup.ts",
+        "src/lib/platform/web/backup.ts",
+        "src/features/sync/sync-engine.ts",
+        "src/features/sync/client.ts",
       ],
       exclude: [
         "src/**/*.d.ts",

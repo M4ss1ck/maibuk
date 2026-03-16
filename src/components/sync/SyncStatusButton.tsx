@@ -1,20 +1,28 @@
 import { useState, useRef } from "react";
-import { Cloud, CloudOff, Loader2, CloudAlert } from "lucide-react";
+import { Cloud, CloudOff, CloudUpload, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
 import { useSyncStore } from "../../features/sync/store";
+import { useBookStore } from "../../features/books/store";
 import { useSyncFlow } from "../../features/sync/useSyncFlow";
 import { AuthDialog } from "./AuthDialog";
 import { SyncPanel } from "./SyncPanel";
 import { PassphraseDialog } from "./PassphraseDialog";
+import { ConflictDialog } from "./ConflictDialog";
 
 export function SyncStatusButton() {
-  const { authStatus, syncStatus } = useSyncStore();
+  const { authStatus, syncStatus, lastSyncedAt } = useSyncStore();
+  const { books } = useBookStore();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showSyncPanel, setShowSyncPanel] = useState(false);
+
+  const hasPendingChanges = authStatus === "logged-in" && lastSyncedAt != null
+    && books.some((b) => Math.floor(b.updatedAt.getTime() / 1000) > lastSyncedAt);
   const {
     showPassphraseDialog,
     closePassphraseDialog,
     syncAllWithSessionPassphrase,
     completePassphraseFlow,
+    activeConflict,
+    resolveConflict,
   } = useSyncFlow();
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -30,11 +38,23 @@ export function SyncStatusButton() {
     if (authStatus === "logged-out") {
       return <CloudOff className="w-5 h-5" />;
     }
+    if (syncStatus === "awaiting-confirmation") {
+      return <AlertTriangle className="w-5 h-5" />;
+    }
+    if (syncStatus === "cancelled") {
+      return <AlertTriangle className="w-5 h-5" />;
+    }
     if (syncStatus === "syncing") {
       return <Loader2 className="w-5 h-5 animate-spin" />;
     }
+    if (syncStatus === "partial") {
+      return <CloudAlert className="w-5 h-5" />;
+    }
     if (syncStatus === "error") {
       return <CloudAlert className="w-5 h-5" />;
+    }
+    if (hasPendingChanges) {
+      return <CloudUpload className="w-5 h-5" />;
     }
     return <Cloud className="w-5 h-5" />;
   };
@@ -42,13 +62,23 @@ export function SyncStatusButton() {
   const statusClass =
     authStatus === "logged-out"
       ? "text-muted-foreground"
-      : syncStatus === "syncing"
-        ? "text-primary"
-        : syncStatus === "error"
-          ? "text-destructive"
-          : syncStatus === "success"
-            ? "text-success"
-            : "text-muted-foreground";
+      : syncStatus === "awaiting-confirmation"
+        ? "text-warning-text"
+        : syncStatus === "cancelled"
+          ? "text-warning-text"
+          : syncStatus === "syncing"
+            ? "text-primary"
+            : syncStatus === "partial"
+              ? "text-warning-text"
+              : syncStatus === "error"
+                ? "text-destructive"
+                : syncStatus === "success"
+                  ? "text-success"
+                  : hasPendingChanges
+                    ? "text-primary"
+                    : lastSyncedAt
+                      ? "text-success"
+                      : "text-muted-foreground";
 
   return (
     <div className="relative">
@@ -92,6 +122,13 @@ export function SyncStatusButton() {
           }
         }}
       />
+
+      {activeConflict && (
+        <ConflictDialog
+          conflict={activeConflict}
+          onResolve={resolveConflict}
+        />
+      )}
     </div>
   );
 }

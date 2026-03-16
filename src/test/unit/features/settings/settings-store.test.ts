@@ -37,6 +37,10 @@ describe("useSettingsStore", () => {
       showNotesChapter: false,
       hideKeyboardHints: false,
       defaultExportFormat: "epub",
+      backupRetention: 20,
+      backupDirectory: null,
+      sidebarWidth: 256,
+      toolbarExpanded: false,
       lastPath: null,
     });
   });
@@ -52,7 +56,32 @@ describe("useSettingsStore", () => {
       expect(state.customDictionary).toEqual([]);
       expect(state.hideKeyboardHints).toBe(false);
       expect(state.defaultExportFormat).toBe("epub");
+      expect(state.backupRetention).toBe(20);
+      expect(state.backupDirectory).toBeNull();
       expect(state.lastPath).toBeNull();
+    });
+  });
+
+  describe("backup settings", () => {
+    it("updates backup retention", () => {
+      useSettingsStore.getState().setBackupRetention(12);
+      expect(useSettingsStore.getState().backupRetention).toBe(12);
+    });
+
+    it("clamps backup retention to at least 1", () => {
+      useSettingsStore.getState().setBackupRetention(0);
+      expect(useSettingsStore.getState().backupRetention).toBe(1);
+    });
+
+    it("updates backup directory", () => {
+      useSettingsStore.getState().setBackupDirectory("/tmp/maibuk-backups");
+      expect(useSettingsStore.getState().backupDirectory).toBe("/tmp/maibuk-backups");
+    });
+
+    it("clears backup directory with null", () => {
+      useSettingsStore.getState().setBackupDirectory("/tmp/maibuk-backups");
+      useSettingsStore.getState().setBackupDirectory(null);
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
     });
   });
 

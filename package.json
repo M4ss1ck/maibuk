@@ -83,6 +83,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "@vitest/coverage-v8": "^4.0.18",
     "drizzle-kit": "^0.31.8",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^28.1.0",
     "tailwindcss": "^4.0.0",
     "typescript": "~5.8.3",

@@ -1,5 +1,6 @@
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import type { DatabaseAdapter } from "../types";
+import { parseSqlStatements } from "../../db/sql-parser";
 
 const DB_STORAGE_KEY = "maibuk-database";
 
@@ -33,14 +34,14 @@ function generateInsertStatements(
     const columns = Object.keys(row);
     const values = columns.map((col) => escapeSQL(row[col]));
     statements.push(
-      `INSERT INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
+      `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
     );
   }
   return statements.join("\n");
 }
 
 class WebDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: SqlJsDatabase) {}
+  constructor(private db: SqlJsDatabase) { }
 
   async execute(
     sql: string,
@@ -103,7 +104,7 @@ class WebDatabaseAdapter implements DatabaseAdapter {
 
   async importData(sqlContent: string): Promise<void> {
     // Parse SQL statements properly handling semicolons inside quoted strings
-    const statements = this.parseSqlStatements(sqlContent);
+    const statements = parseSqlStatements(sqlContent);
 
     for (const statement of statements) {
       if (statement.length > 0) {
@@ -112,68 +113,6 @@ class WebDatabaseAdapter implements DatabaseAdapter {
     }
 
     this.persist();
-  }
-
-  private parseSqlStatements(sqlContent: string): string[] {
-    const statements: string[] = [];
-    let current = "";
-    let inString = false;
-    let stringChar = "";
-
-    for (let i = 0; i < sqlContent.length; i++) {
-      const char = sqlContent[i];
-
-      // Handle string boundaries
-      if ((char === "'" || char === '"') && sqlContent[i - 1] !== "\\") {
-        if (!inString) {
-          inString = true;
-          stringChar = char;
-        } else if (char === stringChar) {
-          // Check for escaped quotes ('')
-          if (char === "'" && sqlContent[i + 1] === "'") {
-            current += char;
-            i++; // Skip the next quote
-            current += sqlContent[i];
-            continue;
-          }
-          inString = false;
-          stringChar = "";
-        }
-      }
-
-      // Statement terminator (only outside strings)
-      if (char === ";" && !inString) {
-        const trimmed = current.trim();
-        // Filter out comments and empty statements
-        const cleanStatement = trimmed
-          .split("\n")
-          .filter((line) => !line.trim().startsWith("--"))
-          .join("\n")
-          .trim();
-
-        if (cleanStatement.length > 0 && !cleanStatement.startsWith("--")) {
-          statements.push(cleanStatement);
-        }
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-
-    // Handle last statement without trailing semicolon
-    const trimmed = current.trim();
-    if (trimmed.length > 0 && !trimmed.startsWith("--")) {
-      const cleanStatement = trimmed
-        .split("\n")
-        .filter((line) => !line.trim().startsWith("--"))
-        .join("\n")
-        .trim();
-      if (cleanStatement.length > 0) {
-        statements.push(cleanStatement);
-      }
-    }
-
-    return statements;
   }
 
   private persist(): void {

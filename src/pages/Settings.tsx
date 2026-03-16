@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTheme } from "../features/theme";
 import {
   useSettings,
+  useSettingsStore,
   DEFAULT_PRIMARY_COLOR,
   FONT_SIZE_OPTIONS,
   FONT_OPTIONS,
@@ -18,9 +19,11 @@ import { useVersionCheck } from "../features/version";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "../components/icons";
 import { exportDatabase, importDatabase, resetDatabase } from "../lib/db";
-import { getFileSystem, IS_TAURI, getDialog, getWebDialog } from "../lib/platform";
+import { getFileSystem, IS_TAURI, getDialog, getWebDialog, createBackup } from "../lib/platform";
+import { BackupService } from "../features/backup/backup-service";
 import { useSyncStore } from "../features/sync/store";
 import { AuthDialog } from "../components/sync/AuthDialog";
+import { BackupSection } from "../components/settings/BackupSection";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -118,11 +121,21 @@ export function Settings() {
       }
 
       if (sqlContent) {
+        // Create a pre-import backup before overwriting data
+        try {
+          const { backupDirectory } = useSettingsStore.getState();
+          const adapter = await createBackup(backupDirectory);
+          const backupService = new BackupService(adapter);
+          await backupService.createBackup("pre-restore");
+        } catch {
+          // Empty DB has nothing to back up — safe to continue
+        }
         await importDatabase(sqlContent);
         window.location.reload();
       }
     } catch (error) {
       console.error("Failed to import database:", error);
+      alert(t("settings.importDatabaseFailed"));
     } finally {
       setIsImporting(false);
     }
@@ -131,11 +144,21 @@ export function Settings() {
   const handleResetDatabase = async () => {
     setIsResetting(true);
     try {
+      // Create a pre-reset backup before wiping everything
+      try {
+        const { backupDirectory } = useSettingsStore.getState();
+        const adapter = await createBackup(backupDirectory);
+        const backupService = new BackupService(adapter);
+        await backupService.createBackup("pre-restore");
+      } catch {
+        // Empty DB has nothing to back up — safe to continue
+      }
       await resetDatabase();
       setResetModalOpen(false);
       window.location.reload();
     } catch (error) {
       console.error("Failed to reset database:", error);
+      alert(t("settings.resetDatabaseFailed"));
     } finally {
       setIsResetting(false);
     }
@@ -314,6 +337,11 @@ export function Settings() {
               {t("sync.encryptionInfo")}
             </p>
           </div>
+        </section>
+
+        {/* Backups */}
+        <section className="pt-4 border-t border-border mb-6">
+          <BackupSection />
         </section>
 
         <AuthDialog

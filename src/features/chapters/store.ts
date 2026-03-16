@@ -230,12 +230,19 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
     const db = await getDatabase();
     const now = Math.floor(Date.now() / 1000);
 
-    // Update each chapter's order
+    // Update each chapter's order — each statement auto-commits individually
     for (let i = 0; i < chapterIds.length; i++) {
-      await db.execute(
-        'UPDATE chapters SET "order" = ?, updated_at = ? WHERE id = ?',
-        [i, now, chapterIds[i]]
-      );
+      try {
+        await db.execute(
+          'UPDATE chapters SET "order" = ?, updated_at = ? WHERE id = ?',
+          [i, now, chapterIds[i]]
+        );
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Failed to reorder chapter ${i + 1}/${chapterIds.length}: ${detail}`,
+        );
+      }
     }
 
     // Update local state

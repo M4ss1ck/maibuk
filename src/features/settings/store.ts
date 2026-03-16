@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import i18n, { detectSystemLocale } from "../../i18n";
 import {
   DEFAULT_PRIMARY_COLOR,
+  getDefaultBackupRetention,
   type Settings,
   type FontSize,
   type FontFamily,
@@ -11,6 +12,7 @@ import {
 } from "./types";
 
 const STORAGE_KEY = "maibuk-settings";
+const isWebBuild = import.meta.env.VITE_BUILD_TARGET === "web";
 
 // Check if this is first load (no persisted settings) - evaluated once at module load
 const isFirstLoad = !localStorage.getItem(STORAGE_KEY);
@@ -21,6 +23,8 @@ interface SettingsStore extends Settings {
   setPrimaryColor: (color: string) => void;
   setAutoSave: (enabled: boolean) => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
+  setBackupRetention: (retention: number) => void;
+  setBackupDirectory: (directory: string | null) => void;
   setLanguage: (language: Language) => void;
   setSpellCheckEnabled: (enabled: boolean) => void;
   addCustomWord: (word: string) => void;
@@ -48,6 +52,8 @@ const defaultSettings: Settings = {
   showNotesChapter: false,
   hideKeyboardHints: false,
   defaultExportFormat: "epub",
+  backupRetention: getDefaultBackupRetention(isWebBuild),
+  backupDirectory: null,
   sidebarWidth: 256,
   toolbarExpanded: false,
 };
@@ -74,6 +80,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setPrimaryColor: (primaryColor) => set({ primaryColor: normalizeHexColor(primaryColor) }),
       setAutoSave: (autoSave) => set({ autoSave }),
       setDefaultExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
+      setBackupRetention: (backupRetention) => set({ backupRetention: Math.max(1, Math.floor(backupRetention)) }),
+      setBackupDirectory: (backupDirectory) => set({ backupDirectory: backupDirectory?.trim() || null }),
       setLanguage: (language) => {
         i18n.changeLanguage(language);
         set({ language });
