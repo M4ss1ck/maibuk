@@ -377,6 +377,84 @@ describe("useSyncStore", () => {
       expect(state.authStatus).toBe("logged-in");
     });
 
+    it("triggers auto-sync when passphrase is available after successful refresh", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+        passphrase: "my-secret",
+      });
+      mockRefreshAuth.mockResolvedValue({
+        email: "user@test.com",
+        token: "new-token",
+      });
+      mockSyncAllBooks.mockResolvedValue({ outcome: "success", actions: ["pushed"] });
+
+      await useSyncStore.getState().verifyAuth();
+
+      expect(mockSyncAllBooks).toHaveBeenCalledWith("my-secret", expect.any(Function));
+      expect(useSyncStore.getState().syncStatus).toBe("success");
+    });
+
+    it("does not auto-sync when no passphrase is stored", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+        passphrase: null,
+      });
+      mockRefreshAuth.mockResolvedValue({
+        email: "user@test.com",
+        token: "new-token",
+      });
+
+      await useSyncStore.getState().verifyAuth();
+
+      expect(mockSyncAllBooks).not.toHaveBeenCalled();
+    });
+
+    it("auto-sync cancels on conflict without error", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+        passphrase: "my-secret",
+      });
+      mockRefreshAuth.mockResolvedValue({
+        email: "user@test.com",
+        token: "new-token",
+      });
+      // Simulate conflict: the onConflict resolver should return "cancel"
+      mockSyncAllBooks.mockImplementation(async (_pass: string, onConflict: (conflict: unknown) => Promise<string>) => {
+        const choice = await onConflict({ bookId: "b1", bookTitle: "Book", localUpdatedAt: 1, remoteUpdatedAt: 2 });
+        expect(choice).toBe("cancel");
+        return { outcome: "cancelled", actions: ["cancelled"] };
+      });
+
+      await useSyncStore.getState().verifyAuth();
+
+      expect(useSyncStore.getState().syncStatus).toBe("cancelled");
+    });
+
+    it("sets error status when auto-sync fails", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+        passphrase: "my-secret",
+      });
+      mockRefreshAuth.mockResolvedValue({
+        email: "user@test.com",
+        token: "new-token",
+      });
+      mockSyncAllBooks.mockRejectedValue(new Error("Network error"));
+
+      await useSyncStore.getState().verifyAuth();
+
+      expect(useSyncStore.getState().syncStatus).toBe("error");
+      expect(useSyncStore.getState().syncError).toBe("Network error");
+    });
+
     it("clears auth on 401 error", async () => {
       useSyncStore.setState({
         authStatus: "logged-in",

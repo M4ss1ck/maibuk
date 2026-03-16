@@ -137,6 +137,19 @@ export const useSyncStore = create<SyncStore>()(
             authToken: result.token,
             authVerified: true,
           });
+
+          // Auto-sync if passphrase is available
+          const { passphrase } = useSyncStore.getState();
+          if (passphrase) {
+            const skipConflicts: ConflictResolver = async () => "cancel";
+            try {
+              const syncResult = await syncAllBooks(passphrase, skipConflicts);
+              applySyncOutcome(syncResult.outcome, set);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "Sync failed";
+              set({ syncStatus: "error", syncError: message });
+            }
+          }
         } catch (error: unknown) {
           const status = (error as { status?: number }).status;
           if (status === 401) {
