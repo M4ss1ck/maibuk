@@ -434,7 +434,6 @@
     "cancel": "Cancelar",
     "trigger": {
       "daily": "Diaria",
-      "close": "Cierre",
       "pre-sync": "Pre-sincronización",
       "pre-restore": "Pre-restauración",
       "manual": "Manual",

@@ -46,7 +46,7 @@ export interface OSAdapter {
 
 export interface BackupEntry {
   filename: string;
-  trigger: "daily" | "close" | "pre-sync" | "pre-restore" | "manual" | "unknown";
+  trigger: "daily" | "pre-sync" | "pre-restore" | "manual" | "unknown";
   createdAt: Date;
   /** Stored as metadata alongside the backup content, not computed on read. */
   sizeBytes: number;

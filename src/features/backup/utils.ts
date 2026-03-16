@@ -4,7 +4,7 @@ export function parseTriggerFromFilename(
   filename: string,
 ): BackupEntry["trigger"] {
   const match = filename.match(
-    /^maibuk-backup-(daily|close|pre-sync|pre-restore|manual)-/,
+    /^maibuk-backup-(daily|pre-sync|pre-restore|manual)-/,
   );
 
   return (match?.[1] as BackupEntry["trigger"]) ?? "unknown";

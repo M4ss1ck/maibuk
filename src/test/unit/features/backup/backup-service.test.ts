@@ -207,7 +207,7 @@ describe("BackupService", () => {
 
     it("returns false when today has a different trigger", async () => {
       const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "-");
-      const filename = `maibuk-backup-close-${todayStr}T10-00-00.sql`;
+      const filename = `maibuk-backup-manual-${todayStr}T10-00-00.sql`;
       await mockAdapter.saveBackup(filename, "INSERT INTO books ...");
 
       const result = await service.hasBackupForToday("daily");

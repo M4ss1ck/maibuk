@@ -434,7 +434,6 @@
     "cancel": "Cancel",
     "trigger": {
       "daily": "Daily",
-      "close": "Close",
       "pre-sync": "Pre-sync",
       "pre-restore": "Pre-restore",
       "manual": "Manual",

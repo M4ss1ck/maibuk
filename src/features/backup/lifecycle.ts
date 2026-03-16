@@ -4,7 +4,6 @@ import { useSettingsStore } from "../settings/store";
 import { BackupService } from "./backup-service";
 
 let dailyBackupStarted = false;
-let closeBackupRegistered = false;
 
 function getRetention(): number {
   return useSettingsStore.getState().backupRetention;
@@ -33,17 +32,6 @@ export async function createDailyBackup(): Promise<void> {
   }
 }
 
-export async function createCloseBackup(): Promise<void> {
-  try {
-    const service = await createConfiguredBackupService();
-    await service.createBackup("close");
-    const retention = getRetention();
-    await service.pruneBackups(retention);
-  } catch (error) {
-    console.warn("Failed to create close backup:", error);
-  }
-}
-
 export async function runDailyBackupOnce(): Promise<void> {
   if (dailyBackupStarted) {
     return;
@@ -54,24 +42,6 @@ export async function runDailyBackupOnce(): Promise<void> {
   await createDailyBackup();
 }
 
-export async function registerCloseBackupHandlerOnce(): Promise<void> {
-  if (closeBackupRegistered) {
-    return;
-  }
-
-  closeBackupRegistered = true;
-
-  const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  const currentWindow = getCurrentWindow();
-
-  await currentWindow.onCloseRequested(async (event) => {
-    event.preventDefault();
-    await createCloseBackup();
-    currentWindow.destroy();
-  });
-}
-
 export function resetBackupLifecycleForTests(): void {
   dailyBackupStarted = false;
-  closeBackupRegistered = false;
 }

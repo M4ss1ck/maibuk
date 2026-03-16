@@ -9,18 +9,11 @@ import { StartupRedirect } from "./components/StartupRedirect";
 import { PathTracker } from "./components/PathTracker";
 import { ToastViewport } from "./components/ui";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
-import { IS_TAURI } from "./lib/platform";
-import { runDailyBackupOnce, registerCloseBackupHandlerOnce } from "./features/backup/lifecycle";
+import { runDailyBackupOnce } from "./features/backup/lifecycle";
 
 function App() {
   useEffect(() => {
     void runDailyBackupOnce();
-  }, []);
-
-  useEffect(() => {
-    if (!IS_TAURI) return;
-
-    void registerCloseBackupHandlerOnce();
   }, []);
 
   return (
