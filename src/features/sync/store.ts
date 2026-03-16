@@ -4,11 +4,11 @@ import type { AuthStatus, SyncStatus, SyncItemMeta, ConflictResolver, SyncOutcom
 import {
   initClient,
   restoreAuth,
+  refreshAuth as pbRefreshAuth,
   login as pbLogin,
   register as pbRegister,
   loginWithOAuth as pbLoginWithOAuth,
   logout as pbLogout,
-  isAuthenticated,
 } from "./client";
 import { clearPassphrase } from "./crypto";
 import { syncAllBooks, syncBook } from "./sync-engine";
@@ -24,12 +24,14 @@ interface SyncStore {
   syncError: string | null;
   apiUrl: string;
   bookSyncMeta: Record<string, SyncItemMeta>;
+  authVerified: boolean;
 
   setApiUrl: (url: string) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   loginWithOAuth: (provider: string) => Promise<void>;
   logout: () => void;
+  verifyAuth: () => Promise<void>;
   syncAll: (passphrase: string, onConflict: ConflictResolver) => Promise<void>;
   syncSingleBook: (bookId: string, passphrase: string, onConflict: ConflictResolver) => Promise<void>;
   updateBookMeta: (bookId: string, meta: SyncItemMeta) => void;
@@ -62,6 +64,7 @@ export const useSyncStore = create<SyncStore>()(
       syncError: null,
       apiUrl: "",
       bookSyncMeta: {},
+      authVerified: false,
 
       setApiUrl: (apiUrl) => {
         initClient(apiUrl);
@@ -74,6 +77,7 @@ export const useSyncStore = create<SyncStore>()(
           authStatus: "logged-in",
           userEmail: result.email,
           authToken: result.token,
+          authVerified: true,
         });
       },
 
@@ -83,6 +87,7 @@ export const useSyncStore = create<SyncStore>()(
           authStatus: "logged-in",
           userEmail: result.email,
           authToken: result.token,
+          authVerified: true,
         });
       },
 
@@ -92,6 +97,7 @@ export const useSyncStore = create<SyncStore>()(
           authStatus: "logged-in",
           userEmail: result.email,
           authToken: result.token,
+          authVerified: true,
         });
       },
 
@@ -102,10 +108,39 @@ export const useSyncStore = create<SyncStore>()(
           authStatus: "logged-out",
           userEmail: null,
           authToken: null,
+          authVerified: false,
           syncStatus: "idle",
           syncError: null,
           bookSyncMeta: {},
         });
+      },
+
+      verifyAuth: async () => {
+        const { authToken, apiUrl } = useSyncStore.getState();
+        if (!authToken || !apiUrl) return;
+        if (!navigator.onLine) return;
+
+        try {
+          const result = await pbRefreshAuth();
+          set({
+            authStatus: "logged-in",
+            userEmail: result.email,
+            authToken: result.token,
+            authVerified: true,
+          });
+        } catch (error: unknown) {
+          const status = (error as { status?: number }).status;
+          if (status === 401) {
+            set({
+              authStatus: "logged-out",
+              userEmail: null,
+              authToken: null,
+              authVerified: false,
+              syncError: "sync.sessionExpired",
+            });
+          }
+          // Network errors: keep optimistic state, authVerified stays false
+        }
       },
 
       syncAll: async (passphrase, onConflict) => {
@@ -152,28 +187,13 @@ export const useSyncStore = create<SyncStore>()(
         return (state) => {
           if (!state) return;
 
-          // Restore PocketBase client and auth on rehydration
           if (state.apiUrl) {
             initClient(state.apiUrl);
           }
           if (state.authToken && state.apiUrl) {
-            try {
-              restoreAuth(state.authToken);
-              // Verify token is still valid
-              if (!isAuthenticated()) {
-                useSyncStore.setState({
-                  authStatus: "logged-out",
-                  userEmail: null,
-                  authToken: null,
-                });
-              }
-            } catch {
-              useSyncStore.setState({
-                authStatus: "logged-out",
-                userEmail: null,
-                authToken: null,
-              });
-            }
+            restoreAuth(state.authToken);
+            // Fire-and-forget: validate token with server
+            useSyncStore.getState().verifyAuth();
           }
         };
       },

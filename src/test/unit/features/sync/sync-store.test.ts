@@ -4,22 +4,22 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const {
   mockInitClient,
   mockRestoreAuth,
+  mockRefreshAuth,
   mockPbLogin,
   mockPbRegister,
   mockPbLoginWithOAuth,
   mockPbLogout,
-  mockIsAuthenticated,
   mockClearPassphrase,
   mockSyncAllBooks,
   mockSyncBook,
 } = vi.hoisted(() => ({
   mockInitClient: vi.fn(),
   mockRestoreAuth: vi.fn(),
+  mockRefreshAuth: vi.fn(),
   mockPbLogin: vi.fn(),
   mockPbRegister: vi.fn(),
   mockPbLoginWithOAuth: vi.fn(),
   mockPbLogout: vi.fn(),
-  mockIsAuthenticated: vi.fn(() => true),
   mockClearPassphrase: vi.fn(),
   mockSyncAllBooks: vi.fn(),
   mockSyncBook: vi.fn(),
@@ -28,11 +28,11 @@ const {
 vi.mock("../../../../features/sync/client", () => ({
   initClient: mockInitClient,
   restoreAuth: mockRestoreAuth,
+  refreshAuth: mockRefreshAuth,
   login: mockPbLogin,
   register: mockPbRegister,
   loginWithOAuth: mockPbLoginWithOAuth,
   logout: mockPbLogout,
-  isAuthenticated: mockIsAuthenticated,
 }));
 
 vi.mock("../../../../features/sync/crypto", () => ({
@@ -51,6 +51,7 @@ function resetSyncStore() {
     authStatus: "logged-out",
     userEmail: null,
     authToken: null,
+    authVerified: false,
     syncStatus: "idle",
     lastSyncedAt: null,
     syncError: null,
@@ -77,6 +78,7 @@ describe("useSyncStore", () => {
       expect(state.syncError).toBeNull();
       expect(state.apiUrl).toBe("");
       expect(state.bookSyncMeta).toEqual({});
+      expect(state.authVerified).toBe(false);
     });
   });
 
@@ -111,6 +113,12 @@ describe("useSyncStore", () => {
         useSyncStore.getState().login("bad@test.com", "wrong")
       ).rejects.toThrow("Invalid credentials");
     });
+
+    it("sets authVerified true on successful login", async () => {
+      mockPbLogin.mockResolvedValue({ email: "user@test.com", token: "jwt" });
+      await useSyncStore.getState().login("user@test.com", "password");
+      expect(useSyncStore.getState().authVerified).toBe(true);
+    });
   });
 
   describe("register()", () => {
@@ -124,6 +132,12 @@ describe("useSyncStore", () => {
 
       expect(useSyncStore.getState().authStatus).toBe("logged-in");
       expect(useSyncStore.getState().userEmail).toBe("new@test.com");
+    });
+
+    it("sets authVerified true on successful registration", async () => {
+      mockPbRegister.mockResolvedValue({ email: "new@test.com", token: "jwt" });
+      await useSyncStore.getState().register("new@test.com", "password");
+      expect(useSyncStore.getState().authVerified).toBe(true);
     });
   });
 
@@ -139,6 +153,12 @@ describe("useSyncStore", () => {
       expect(useSyncStore.getState().authStatus).toBe("logged-in");
       expect(useSyncStore.getState().userEmail).toBe("oauth@test.com");
       expect(mockPbLoginWithOAuth).toHaveBeenCalledWith("google");
+    });
+
+    it("sets authVerified true after OAuth flow", async () => {
+      mockPbLoginWithOAuth.mockResolvedValue({ email: "o@test.com", token: "jwt" });
+      await useSyncStore.getState().loginWithOAuth("google");
+      expect(useSyncStore.getState().authVerified).toBe(true);
     });
   });
 
@@ -169,6 +189,7 @@ describe("useSyncStore", () => {
       expect(state.syncStatus).toBe("idle");
       expect(state.syncError).toBeNull();
       expect(state.bookSyncMeta).toEqual({});
+      expect(state.authVerified).toBe(false);
 
       expect(mockPbLogout).toHaveBeenCalled();
       expect(mockClearPassphrase).toHaveBeenCalled();
@@ -309,6 +330,110 @@ describe("useSyncStore", () => {
       expect(useSyncStore.getState().bookSyncMeta["book-1"].checksum).toBe(
         "new"
       );
+    });
+  });
+
+  describe("verifyAuth()", () => {
+    it("sets authVerified true on successful refresh", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+      });
+      mockRefreshAuth.mockResolvedValue({
+        email: "user@test.com",
+        token: "new-token",
+      });
+
+      await useSyncStore.getState().verifyAuth();
+
+      const state = useSyncStore.getState();
+      expect(state.authVerified).toBe(true);
+      expect(state.authToken).toBe("new-token");
+      expect(state.userEmail).toBe("user@test.com");
+      expect(state.authStatus).toBe("logged-in");
+    });
+
+    it("clears auth on 401 error", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "expired-token",
+        apiUrl: "https://sync.example.com",
+      });
+      const error = new Error("Token expired");
+      (error as { status?: number }).status = 401;
+      mockRefreshAuth.mockRejectedValue(error);
+
+      await useSyncStore.getState().verifyAuth();
+
+      const state = useSyncStore.getState();
+      expect(state.authStatus).toBe("logged-out");
+      expect(state.authToken).toBeNull();
+      expect(state.userEmail).toBeNull();
+      expect(state.authVerified).toBe(false);
+    });
+
+    it("keeps optimistic state on network error", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "valid-token",
+        userEmail: "user@test.com",
+        apiUrl: "https://sync.example.com",
+      });
+      mockRefreshAuth.mockRejectedValue(new Error("Failed to fetch"));
+
+      await useSyncStore.getState().verifyAuth();
+
+      const state = useSyncStore.getState();
+      expect(state.authStatus).toBe("logged-in");
+      expect(state.authToken).toBe("valid-token");
+      expect(state.userEmail).toBe("user@test.com");
+      expect(state.authVerified).toBe(false);
+    });
+
+    it("keeps optimistic state when offline", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "valid-token",
+        userEmail: "user@test.com",
+        apiUrl: "https://sync.example.com",
+      });
+      Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+
+      await useSyncStore.getState().verifyAuth();
+
+      const state = useSyncStore.getState();
+      expect(state.authStatus).toBe("logged-in");
+      expect(state.authVerified).toBe(false);
+      expect(mockRefreshAuth).not.toHaveBeenCalled();
+
+      // Restore
+      Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+    });
+
+    it("does nothing when no token exists", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-out",
+        authToken: null,
+        apiUrl: "https://sync.example.com",
+      });
+
+      await useSyncStore.getState().verifyAuth();
+
+      expect(mockRefreshAuth).not.toHaveBeenCalled();
+      expect(useSyncStore.getState().authVerified).toBe(false);
+    });
+
+    it("does nothing when no apiUrl exists", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "token",
+        apiUrl: "",
+      });
+
+      await useSyncStore.getState().verifyAuth();
+
+      expect(mockRefreshAuth).not.toHaveBeenCalled();
     });
   });
 });
