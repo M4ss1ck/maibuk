@@ -396,6 +396,28 @@ describe("useSyncStore", () => {
       expect(useSyncStore.getState().syncStatus).toBe("success");
     });
 
+    it("sets syncing status during auto-sync", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+        passphrase: "my-secret",
+      });
+      mockRefreshAuth.mockResolvedValue({
+        email: "user@test.com",
+        token: "new-token",
+      });
+      let capturedStatus: string | undefined;
+      mockSyncAllBooks.mockImplementation(async () => {
+        capturedStatus = useSyncStore.getState().syncStatus;
+        return { outcome: "success", actions: ["pushed"] };
+      });
+
+      await useSyncStore.getState().verifyAuth();
+
+      expect(capturedStatus).toBe("syncing");
+    });
+
     it("does not auto-sync when no passphrase is stored", async () => {
       useSyncStore.setState({
         authStatus: "logged-in",

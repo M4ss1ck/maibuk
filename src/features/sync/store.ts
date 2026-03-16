@@ -143,11 +143,9 @@ export const useSyncStore = create<SyncStore>()(
           if (passphrase) {
             const skipConflicts: ConflictResolver = async () => "cancel";
             try {
-              const syncResult = await syncAllBooks(passphrase, skipConflicts);
-              applySyncOutcome(syncResult.outcome, set);
-            } catch (error) {
-              const message = error instanceof Error ? error.message : "Sync failed";
-              set({ syncStatus: "error", syncError: message });
+              await useSyncStore.getState().syncAll(passphrase, skipConflicts);
+            } catch {
+              // syncAll already sets error status in the store
             }
           }
         } catch (error: unknown) {
