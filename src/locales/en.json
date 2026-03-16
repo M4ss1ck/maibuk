@@ -395,6 +395,7 @@
     "gotoSettings": "Go to Settings",
     "toggleTheme": "Cycle theme",
     "toggleShortcutHints": "Toggle shortcut hints",
+    "syncNow": "Sync now",
     "newBook": "Create new book",
     "jumpBooks": "Jump to book by number",
     "moveSelection": "Move card selection",

@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
 import { useThemeStore } from "../features/theme";
 import { useSettingsStore } from "../features/settings/store";
+import { useSyncStore } from "../features/sync/store";
+import { getPassphrase } from "../features/sync/crypto";
 
 export function GlobalShortcuts() {
   const { t } = useTranslation();
@@ -36,6 +38,7 @@ export function GlobalShortcuts() {
       { id: "global.gotoSettings", label: t("shortcuts.gotoSettings"), keys: ["g", "s"] },
       { id: "global.toggleTheme", label: t("shortcuts.toggleTheme"), keys: ["g", "t"] },
       { id: "global.toggleShortcutHints", label: t("shortcuts.toggleShortcutHints"), keys: ["g", "h"] },
+      { id: "global.syncNow", label: t("shortcuts.syncNow"), keys: ["Ctrl+Shift+Y"] },
       { id: "global.showHelp", label: t("shortcuts.showHelp"), keys: ["?"] },
     ];
 
@@ -94,6 +97,18 @@ export function GlobalShortcuts() {
       sequence: ["g", "h"],
       onTrigger: () => {
         setHideKeyboardHints(!hideKeyboardHints);
+      },
+    },
+    {
+      keys: ["ctrl+shift+y", "meta+shift+y"],
+      allowInInput: true,
+      onTrigger: () => {
+        const { authStatus, syncStatus } = useSyncStore.getState();
+        if (authStatus !== "logged-in" || syncStatus === "syncing") return;
+        const passphrase = getPassphrase();
+        if (!passphrase) return;
+        const skipConflicts = async () => "cancel" as const;
+        useSyncStore.getState().syncAll(passphrase, skipConflicts).catch(() => {});
       },
     },
     {
