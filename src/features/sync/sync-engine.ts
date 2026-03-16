@@ -5,12 +5,14 @@ import {
   pushBookBlob,
   pullBookBlob,
   listRemoteBooks,
+  refreshAuth as pbRefreshAuth,
 } from "./client";
 import type { BookSnapshot, SyncItemMeta, SingleSyncResult, BatchSyncResult } from "./types";
 import type { SyncAction, ConflictResolver } from "./types";
 import { createBackup } from "../../lib/platform";
 import { BackupService } from "../backup/backup-service";
 import { useSettingsStore } from "../settings/store";
+import { useSyncStore } from "./store";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR = "Could not create a safety backup. Sync aborted. Free up disk space and try again.";
@@ -78,6 +80,32 @@ async function createPreSyncBackupOrThrow(): Promise<void> {
     await backupService.createBackup("pre-sync");
   } catch {
     throw new Error(PRE_SYNC_BACKUP_ERROR);
+  }
+}
+
+async function ensureAuth(): Promise<void> {
+  if (useSyncStore.getState().authVerified) return;
+
+  try {
+    const result = await pbRefreshAuth();
+    useSyncStore.setState({
+      authStatus: "logged-in",
+      userEmail: result.email,
+      authToken: result.token,
+      authVerified: true,
+    });
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status === 401) {
+      useSyncStore.setState({
+        authStatus: "logged-out",
+        userEmail: null,
+        authToken: null,
+        authVerified: false,
+      });
+      throw new Error("sync.sessionExpired");
+    }
+    throw error;
   }
 }
 
@@ -153,6 +181,7 @@ export async function syncBook(
   assertNotSyncing();
   isSyncing = true;
   try {
+    await ensureAuth();
     await createPreSyncBackupOrThrow();
 
     const action = await syncBookInBatch(bookId, passphrase, onConflict);
@@ -177,6 +206,7 @@ export async function syncAllBooks(
   assertNotSyncing();
   isSyncing = true;
   try {
+    await ensureAuth();
     assertOnline();
     const actions: SyncAction[] = [];
 
