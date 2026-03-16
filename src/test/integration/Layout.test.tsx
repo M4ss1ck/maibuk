@@ -17,6 +17,7 @@ vi.mock("react-i18next", () => ({
       return map[key] ?? key;
     },
   }),
+  initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
 import { Layout } from "../../components/Layout";

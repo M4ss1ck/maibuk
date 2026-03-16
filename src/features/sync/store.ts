@@ -10,7 +10,7 @@ import {
   loginWithOAuth as pbLoginWithOAuth,
   logout as pbLogout,
 } from "./client";
-import { clearPassphrase } from "./crypto";
+import { clearPassphrase, setPassphrase as cryptoSetPassphrase } from "./crypto";
 import { syncAllBooks, syncBook } from "./sync-engine";
 
 const STORAGE_KEY = "maibuk-sync";
@@ -25,8 +25,10 @@ interface SyncStore {
   apiUrl: string;
   bookSyncMeta: Record<string, SyncItemMeta>;
   authVerified: boolean;
+  passphrase: string | null;
 
   setApiUrl: (url: string) => void;
+  setPassphrase: (passphrase: string | null) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   loginWithOAuth: (provider: string) => Promise<void>;
@@ -65,10 +67,16 @@ export const useSyncStore = create<SyncStore>()(
       apiUrl: "",
       bookSyncMeta: {},
       authVerified: false,
+      passphrase: null,
 
       setApiUrl: (apiUrl) => {
         initClient(apiUrl);
         set({ apiUrl });
+      },
+
+      setPassphrase: (passphrase) => {
+        cryptoSetPassphrase(passphrase as string);
+        set({ passphrase });
       },
 
       login: async (email, password) => {
@@ -109,6 +117,7 @@ export const useSyncStore = create<SyncStore>()(
           userEmail: null,
           authToken: null,
           authVerified: false,
+          passphrase: null,
           syncStatus: "idle",
           syncError: null,
           bookSyncMeta: {},
@@ -181,6 +190,7 @@ export const useSyncStore = create<SyncStore>()(
         authToken: state.authToken,
         lastSyncedAt: state.lastSyncedAt,
         apiUrl: state.apiUrl,
+        passphrase: state.passphrase,
         bookSyncMeta: state.bookSyncMeta,
       }),
       onRehydrateStorage: () => {

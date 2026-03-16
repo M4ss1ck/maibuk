@@ -9,6 +9,7 @@ const {
   mockPbRegister,
   mockPbLoginWithOAuth,
   mockPbLogout,
+  mockSetPassphrase,
   mockClearPassphrase,
   mockSyncAllBooks,
   mockSyncBook,
@@ -20,6 +21,7 @@ const {
   mockPbRegister: vi.fn(),
   mockPbLoginWithOAuth: vi.fn(),
   mockPbLogout: vi.fn(),
+  mockSetPassphrase: vi.fn(),
   mockClearPassphrase: vi.fn(),
   mockSyncAllBooks: vi.fn(),
   mockSyncBook: vi.fn(),
@@ -36,6 +38,7 @@ vi.mock("../../../../features/sync/client", () => ({
 }));
 
 vi.mock("../../../../features/sync/crypto", () => ({
+  setPassphrase: mockSetPassphrase,
   clearPassphrase: mockClearPassphrase,
 }));
 
@@ -52,6 +55,7 @@ function resetSyncStore() {
     userEmail: null,
     authToken: null,
     authVerified: false,
+    passphrase: null,
     syncStatus: "idle",
     lastSyncedAt: null,
     syncError: null,
@@ -79,6 +83,24 @@ describe("useSyncStore", () => {
       expect(state.apiUrl).toBe("");
       expect(state.bookSyncMeta).toEqual({});
       expect(state.authVerified).toBe(false);
+      expect(state.passphrase).toBeNull();
+    });
+  });
+
+  describe("setPassphrase()", () => {
+    it("persists passphrase and calls crypto.setPassphrase", () => {
+      useSyncStore.getState().setPassphrase("my-secret");
+
+      expect(useSyncStore.getState().passphrase).toBe("my-secret");
+      expect(mockSetPassphrase).toHaveBeenCalledWith("my-secret");
+    });
+
+    it("clears passphrase when called with null", () => {
+      useSyncStore.setState({ passphrase: "old" });
+      useSyncStore.getState().setPassphrase(null);
+
+      expect(useSyncStore.getState().passphrase).toBeNull();
+      expect(mockSetPassphrase).toHaveBeenCalledWith(null);
     });
   });
 
@@ -190,6 +212,7 @@ describe("useSyncStore", () => {
       expect(state.syncError).toBeNull();
       expect(state.bookSyncMeta).toEqual({});
       expect(state.authVerified).toBe(false);
+      expect(state.passphrase).toBeNull();
 
       expect(mockPbLogout).toHaveBeenCalled();
       expect(mockClearPassphrase).toHaveBeenCalled();
