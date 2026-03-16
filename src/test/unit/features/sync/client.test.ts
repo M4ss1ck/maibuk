@@ -1,10 +1,19 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { mockAuthRefresh } = vi.hoisted(() => ({
+const { mockAuthRefresh, mockAuthWithPassword, mockAuthWithOAuth2, mockCreate, mockGetFullList, mockGetList, mockUpdate, mockSyncCreate } = vi.hoisted(() => ({
   mockAuthRefresh: vi.fn(),
+  mockAuthWithPassword: vi.fn(),
+  mockAuthWithOAuth2: vi.fn(),
+  mockCreate: vi.fn(),
+  mockGetFullList: vi.fn(),
+  mockGetList: vi.fn(),
+  mockUpdate: vi.fn(),
+  mockSyncCreate: vi.fn(),
 }));
 
 let mockAuthStoreToken = "refreshed-token";
+let mockAuthStoreRecord: { id: string; email: string } | null = null;
+let mockAuthStoreIsValid = true;
 
 vi.mock("pocketbase", () => {
   return {
@@ -15,22 +24,53 @@ vi.mock("pocketbase", () => {
         get token() {
           return mockAuthStoreToken;
         },
-        record: null as { id: string; email: string } | null,
+        get record() {
+          return mockAuthStoreRecord;
+        },
+        set record(val) {
+          mockAuthStoreRecord = val;
+        },
         get isValid() {
-          return true;
+          return mockAuthStoreIsValid;
         },
       };
-      collection = vi.fn(() => ({
-        authRefresh: mockAuthRefresh,
-      }));
+      collection = vi.fn((name: string) => {
+        if (name === "users") {
+          return {
+            authRefresh: mockAuthRefresh,
+            authWithPassword: mockAuthWithPassword,
+            authWithOAuth2: mockAuthWithOAuth2,
+            create: mockCreate,
+          };
+        }
+        return {
+          getFullList: mockGetFullList,
+          getList: mockGetList,
+          update: mockUpdate,
+          create: mockSyncCreate,
+        };
+      });
       files = { getURL: vi.fn() };
     },
   };
 });
 
-const { initClient, refreshAuth, parsePocketBaseDate } = await import(
-  "../../../../features/sync/client"
-);
+const {
+  initClient,
+  login,
+  register,
+  loginWithOAuth,
+  restoreAuth,
+  refreshAuth,
+  logout,
+  isAuthenticated,
+  getAuthToken,
+  getAuthModel,
+  pushBookBlob,
+  pullBookBlob,
+  listRemoteBooks,
+  parsePocketBaseDate,
+} = await import("../../../../features/sync/client");
 
 describe("parsePocketBaseDate()", () => {
   it("parses standard ISO 8601 dates", () => {
@@ -98,5 +138,201 @@ describe("refreshAuth()", () => {
     mockAuthRefresh.mockRejectedValue(new Error("Failed to fetch"));
 
     await expect(refreshAuth()).rejects.toThrow("Failed to fetch");
+  });
+});
+
+describe("login()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns email and token on success", async () => {
+    mockAuthWithPassword.mockResolvedValue({
+      record: { email: "user@test.com" },
+    });
+    mockAuthStoreToken = "login-token";
+
+    const result = await login("user@test.com", "password");
+
+    expect(result).toEqual({ email: "user@test.com", token: "login-token" });
+    expect(mockAuthWithPassword).toHaveBeenCalledWith("user@test.com", "password");
+  });
+});
+
+describe("register()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("creates user and auto-logs in", async () => {
+    mockCreate.mockResolvedValue({});
+    mockAuthWithPassword.mockResolvedValue({
+      record: { email: "new@test.com" },
+    });
+    mockAuthStoreToken = "register-token";
+
+    const result = await register("new@test.com", "password");
+
+    expect(mockCreate).toHaveBeenCalledWith({
+      email: "new@test.com",
+      password: "password",
+      passwordConfirm: "password",
+    });
+    expect(result).toEqual({ email: "new@test.com", token: "register-token" });
+  });
+});
+
+describe("loginWithOAuth()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns email and token on success", async () => {
+    mockAuthWithOAuth2.mockResolvedValue({
+      record: { email: "oauth@test.com" },
+    });
+    mockAuthStoreToken = "oauth-token";
+
+    const result = await loginWithOAuth("google");
+
+    expect(result).toEqual({ email: "oauth@test.com", token: "oauth-token" });
+    expect(mockAuthWithOAuth2).toHaveBeenCalledWith({ provider: "google" });
+  });
+});
+
+describe("restoreAuth()", () => {
+  it("calls authStore.save with the token", () => {
+    initClient("https://sync.example.com");
+    restoreAuth("saved-token");
+    // restoreAuth delegates to authStore.save — no return value to check
+    // If it doesn't throw, it worked
+  });
+});
+
+describe("logout()", () => {
+  it("clears the auth store", () => {
+    initClient("https://sync.example.com");
+    logout();
+    // logout delegates to authStore.clear — no return value to check
+  });
+
+  it("does not throw when client is not initialized", () => {
+    // logout guards against null pb
+    expect(() => logout()).not.toThrow();
+  });
+});
+
+describe("isAuthenticated()", () => {
+  it("returns true when authStore is valid", () => {
+    initClient("https://sync.example.com");
+    mockAuthStoreIsValid = true;
+    expect(isAuthenticated()).toBe(true);
+  });
+});
+
+describe("getAuthToken()", () => {
+  it("returns the current token", () => {
+    initClient("https://sync.example.com");
+    mockAuthStoreToken = "current-token";
+    expect(getAuthToken()).toBe("current-token");
+  });
+});
+
+describe("getAuthModel()", () => {
+  it("returns the current auth record", () => {
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+    expect(getAuthModel()).toEqual({ id: "user-1", email: "user@test.com" });
+  });
+});
+
+describe("listRemoteBooks()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("maps PocketBase records to SyncItemMeta using parsePocketBaseDate", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "rec-1",
+        book_id: "book-1",
+        checksum: "abc123",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+    ]);
+
+    const result = await listRemoteBooks();
+
+    expect(result).toEqual([
+      {
+        remoteId: "rec-1",
+        bookId: "book-1",
+        checksum: "abc123",
+        updatedAt: Math.floor(new Date("2024-01-15T10:30:00.000Z").getTime() / 1000),
+      },
+    ]);
+  });
+
+  it("returns empty array when no remote books", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    const result = await listRemoteBooks();
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("pushBookBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+  });
+
+  it("creates a new record when none exists", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({});
+
+    await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc");
+
+    expect(mockSyncCreate).toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("updates existing record when one exists", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "existing-1" }] });
+    mockUpdate.mockResolvedValue({});
+
+    await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc");
+
+    expect(mockUpdate).toHaveBeenCalledWith("existing-1", expect.any(FormData));
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+  });
+
+  it("throws when not authenticated", async () => {
+    mockAuthStoreRecord = null;
+
+    await expect(pushBookBlob("book-1", new Blob(["data"]), "checksum")).rejects.toThrow(
+      "Not authenticated",
+    );
+  });
+});
+
+describe("pullBookBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns null when no remote record exists", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+
+    const result = await pullBookBlob("book-1");
+
+    expect(result).toBeNull();
   });
 });

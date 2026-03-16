@@ -121,6 +121,29 @@ describe("syncBook — timestamp fix", () => {
     expect(result).toEqual({ outcome: "cancelled", action: "cancelled" });
   });
 
+  it("pulls and applies remote data when user chooses pull", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+    noopConflict.mockResolvedValue("pull");
+    mockPullBookBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
+    mockDecrypt.mockResolvedValue('{"book":{"id":"book-1"}}');
+
+    const result = await syncBook("book-1", "pass", noopConflict);
+
+    expect(result).toEqual({ outcome: "success", action: "pulled" });
+    expect(mockApplyBookSnapshot).toHaveBeenCalled();
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+  });
+
   it("calls onConflict when timestamps are equal but checksums differ", async () => {
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 3000 }];
