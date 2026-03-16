@@ -4,7 +4,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
-import { setPassphrase } from "../../features/sync/crypto";
+import { useSyncStore } from "../../features/sync/store";
 import { getDialog, getFileSystem, IS_TAURI } from "../../lib/platform";
 
 interface PassphraseDialogProps {
@@ -19,6 +19,7 @@ export function PassphraseDialog({
   onSuccess,
 }: PassphraseDialogProps) {
   const { t } = useTranslation();
+  const { setPassphrase } = useSyncStore();
   const [passphrase, setPassphraseValue] = useState("");
   const [isPassphraseVisible, setIsPassphraseVisible] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
