@@ -28,7 +28,7 @@ vi.mock("pocketbase", () => {
   };
 });
 
-const { initClient, parsePocketBaseDate } = await import(
+const { initClient, refreshAuth, parsePocketBaseDate } = await import(
   "../../../../features/sync/client"
 );
 
@@ -63,5 +63,40 @@ describe("parsePocketBaseDate()", () => {
 
   it("returns 0 for undefined coerced to string", () => {
     expect(parsePocketBaseDate(undefined as unknown as string)).toBe(0);
+  });
+});
+
+describe("refreshAuth()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns email and token on success", async () => {
+    mockAuthRefresh.mockResolvedValue({
+      record: { id: "user-1", email: "user@test.com" },
+    });
+    mockAuthStoreToken = "new-jwt-token";
+
+    const result = await refreshAuth();
+
+    expect(result).toEqual({
+      email: "user@test.com",
+      token: "new-jwt-token",
+    });
+  });
+
+  it("throws on 401 (expired token)", async () => {
+    const error = new Error("Token expired");
+    (error as { status?: number }).status = 401;
+    mockAuthRefresh.mockRejectedValue(error);
+
+    await expect(refreshAuth()).rejects.toThrow("Token expired");
+  });
+
+  it("throws on network error", async () => {
+    mockAuthRefresh.mockRejectedValue(new Error("Failed to fetch"));
+
+    await expect(refreshAuth()).rejects.toThrow("Failed to fetch");
   });
 });

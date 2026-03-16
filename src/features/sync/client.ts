@@ -56,6 +56,15 @@ export function restoreAuth(token: string): void {
   client.authStore.save(token);
 }
 
+export async function refreshAuth(): Promise<{ email: string; token: string }> {
+  const client = getClient();
+  const authData = await client.collection("users").authRefresh();
+  return {
+    email: authData.record.email,
+    token: client.authStore.token,
+  };
+}
+
 export function logout(): void {
   if (pb) {
     pb.authStore.clear();
