@@ -59,7 +59,7 @@ export function BookCard({ book, onClick, indexHint, isFocused = false, index = 
         <h3 className="font-semibold text-lg truncate text-foreground">{book.title}</h3>
         <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
 
-        <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
           <span className={`text-xs px-2 py-1 rounded-full capitalize ${statusColors[book.status]}`}>
             {t(`common.${book.status}`)}
           </span>
