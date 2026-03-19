@@ -382,7 +382,7 @@ export function BookEditor() {
       )}
 
       {/* Main editor area */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Header bar - hidden in focus mode */}
         {!focusMode && (
           <div className="h-12 border-b border-border flex items-center px-2 sm:px-4 gap-1 sm:gap-2 md:gap-4">

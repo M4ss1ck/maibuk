@@ -226,7 +226,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   return (
     <div className="border-b border-border bg-background sticky top-0 z-10">
       {/* Compact toolbar — always visible */}
-      <div className="flex items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1 overflow-x-auto">
+      <div className="flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1">
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editorState.canUndo} title={t("editor.undo")}>
           <Undo2 className="w-4 h-4" />
         </ToolbarButton>

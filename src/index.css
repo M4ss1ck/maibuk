@@ -166,6 +166,8 @@ option {
   font-family: var(--editor-font-family, var(--font-serif));
   font-size: var(--editor-font-size, 18px);
   line-height: 1.75;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Tiptap editor styles */
