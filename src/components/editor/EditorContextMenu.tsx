@@ -9,6 +9,7 @@ interface EditorContextMenuProps {
   editor: Editor;
   onInspect: (blockIndex: number) => void;
   onLookup: (word: string) => void;
+  onOpenChange?: (open: boolean) => void;
 }
 
 type MenuState = {
@@ -28,10 +29,15 @@ type MenuState = {
  * Uses bubble phase — runs after ImageContextMenu (capture phase).
  * If ImageContextMenu claims the event, this menu is skipped.
  */
-export function EditorContextMenu({ editor, onInspect, onLookup }: EditorContextMenuProps) {
+export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }: EditorContextMenuProps) {
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+
+  // Notify parent when open state changes
+  useEffect(() => {
+    onOpenChange?.(menu !== null);
+  }, [menu, onOpenChange]);
 
   const close = useCallback(() => setMenu(null), []);
 
@@ -129,7 +135,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup }: EditorContext
   useEffect(() => {
     if (!menu) return;
 
-    const handleMouseDown = (event: MouseEvent) => {
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
       if (
         menuRef.current &&
         menuRef.current.contains(event.target as Node)
@@ -143,12 +149,14 @@ export function EditorContextMenu({ editor, onInspect, onLookup }: EditorContext
       if (event.key === "Escape") close();
     };
 
-    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
     document.addEventListener("scroll", handleScroll, true);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
       document.removeEventListener("scroll", handleScroll, true);
       document.removeEventListener("keydown", handleKeyDown);
     };

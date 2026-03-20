@@ -219,9 +219,11 @@ export function Editor({
     );
   }
 
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+
   return (
     <div className={`flex-1 flex flex-col min-h-0 ${focusMode ? "focus-mode" : ""}`}>
-      {!focusMode && <EditorToolbar editor={editor} />}
+      {!focusMode && <EditorToolbar editor={editor} onContextMenuOpenChange={setIsContextMenuOpen} />}
 
       <div className="flex-1 overflow-auto min-h-0" onClick={handleFocus}>
         <div className="max-w-editor-max mx-auto p-8">
@@ -233,8 +235,8 @@ export function Editor({
       <LinkClickHandler editor={editor} />
       <ImageContextMenu editor={editor} />
 
-      {/* Floating selection toolbar */}
-      {!focusMode && (
+      {/* Floating selection toolbar — hidden when the context menu is open */}
+      {!focusMode && !isContextMenuOpen && (
         <SelectionToolbar editor={editor} onLinkClick={() => setShowBubbleLinkDialog(true)} />
       )}
       <LinkDialog editor={editor} isOpen={showBubbleLinkDialog} onClose={() => setShowBubbleLinkDialog(false)} />

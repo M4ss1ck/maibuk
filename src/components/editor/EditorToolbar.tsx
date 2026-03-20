@@ -61,6 +61,7 @@ import {
 
 interface EditorToolbarProps {
   editor: Editor;
+  onContextMenuOpenChange?: (open: boolean) => void;
 }
 
 const HEADING_SIZES: Record<1 | 2 | 3, string> = {
@@ -70,7 +71,7 @@ const HEADING_SIZES: Record<1 | 2 | 3, string> = {
 };
 const DEFAULT_FONT_SIZE = "18";
 
-export function EditorToolbar({ editor }: EditorToolbarProps) {
+export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showImageDialog, setShowImageDialog] = useState(false);
@@ -508,7 +509,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         htmlPanelHandleRef.current = null;
         pendingInspectRef.current = null;
       }} onReady={handleHtmlPanelReady} />}
-      <EditorContextMenu editor={editor} onInspect={handleInspect} onLookup={handleLookupWord} />
+      <EditorContextMenu editor={editor} onInspect={handleInspect} onLookup={handleLookupWord} onOpenChange={onContextMenuOpenChange} />
       <FindReplace editor={editor} isOpen={showFindReplace} onClose={() => setShowFindReplace(false)} />
       <ImageInsertDialog editor={editor} isOpen={showImageDialog} onClose={() => setShowImageDialog(false)} />
       <FootnoteDialog editor={editor} isOpen={showFootnoteDialog} onClose={() => setShowFootnoteDialog(false)} />
