@@ -187,6 +187,8 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
             plugins: [htmlPlugin.default ?? htmlPlugin],
             printWidth: 80,
             tabWidth: 2,
+            htmlWhitespaceSensitivity: "ignore",
+            bracketSameLine: false,
           });
           // Apply as transaction so Ctrl+Z reverts it
           view.dispatch({
