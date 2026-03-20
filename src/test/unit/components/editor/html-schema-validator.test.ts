@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { validateHtml } from "../../../../components/editor/html-schema-validator";
+import { describe, it, expect, vi } from "vitest";
+import { validateHtml, createHtmlLinter } from "../../../../components/editor/html-schema-validator";
 import { findBlockOffsetInHtml } from "../../../../components/editor/HtmlInspectMenu";
 
 describe("validateHtml", () => {
@@ -71,6 +71,29 @@ describe("validateHtml", () => {
       "<div><ul><li><p><strong><em>deep</em></strong></p></li></ul></div>"
     );
     expect(diagnostics).toEqual([]);
+  });
+});
+
+describe("createHtmlLinter", () => {
+  it("calls the linter factory with a callback and options", () => {
+    const fakeLinter = vi.fn().mockReturnValue("linter-extension");
+    const result = createHtmlLinter(fakeLinter);
+
+    expect(result).toBe("linter-extension");
+    expect(fakeLinter).toHaveBeenCalledWith(expect.any(Function), { delay: 300 });
+  });
+
+  it("linter callback returns diagnostics from validateHtml", () => {
+    let capturedCallback: (view: any) => any;
+    const fakeLinter = vi.fn().mockImplementation((cb: any) => {
+      capturedCallback = cb;
+      return "linter-extension";
+    });
+    createHtmlLinter(fakeLinter);
+
+    const mockView = { state: { doc: { toString: () => "<p>Hello <strong>world</p>" } } };
+    const diagnostics = capturedCallback!(mockView);
+    expect(diagnostics.length).toBeGreaterThan(0);
   });
 });
 

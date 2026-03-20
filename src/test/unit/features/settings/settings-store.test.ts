@@ -220,6 +220,56 @@ describe("useSettingsStore", () => {
     });
   });
 
+  describe("setSidebarWidth()", () => {
+    it("updates sidebar width within bounds", () => {
+      useSettingsStore.getState().setSidebarWidth(300);
+      expect(useSettingsStore.getState().sidebarWidth).toBe(300);
+    });
+
+    it("clamps to minimum of 200", () => {
+      useSettingsStore.getState().setSidebarWidth(100);
+      expect(useSettingsStore.getState().sidebarWidth).toBe(200);
+    });
+
+    it("clamps to maximum of 480", () => {
+      useSettingsStore.getState().setSidebarWidth(600);
+      expect(useSettingsStore.getState().sidebarWidth).toBe(480);
+    });
+  });
+
+  describe("setToolbarExpanded()", () => {
+    it("toggles toolbar expanded state", () => {
+      useSettingsStore.getState().setToolbarExpanded(true);
+      expect(useSettingsStore.getState().toolbarExpanded).toBe(true);
+    });
+  });
+
+  describe("setHtmlEditorLightTheme()", () => {
+    it("sets HTML editor light theme", () => {
+      useSettingsStore.getState().setHtmlEditorLightTheme("solarized" as any);
+      expect(useSettingsStore.getState().htmlEditorLightTheme).toBe("solarized");
+    });
+  });
+
+  describe("setHtmlEditorDarkTheme()", () => {
+    it("sets HTML editor dark theme", () => {
+      useSettingsStore.getState().setHtmlEditorDarkTheme("dracula" as any);
+      expect(useSettingsStore.getState().htmlEditorDarkTheme).toBe("dracula");
+    });
+  });
+
+  describe("setHtmlPanelHeight()", () => {
+    it("updates HTML panel height", () => {
+      useSettingsStore.getState().setHtmlPanelHeight(300);
+      expect(useSettingsStore.getState().htmlPanelHeight).toBe(300);
+    });
+
+    it("clamps to minimum of 100", () => {
+      useSettingsStore.getState().setHtmlPanelHeight(50);
+      expect(useSettingsStore.getState().htmlPanelHeight).toBe(100);
+    });
+  });
+
   describe("setLastPath()", () => {
     it("sets the last visited path", () => {
       useSettingsStore.getState().setLastPath("/book/123");

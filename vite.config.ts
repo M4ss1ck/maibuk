@@ -70,7 +70,6 @@ export default defineConfig(() => ({
         "src/features/sync/client.ts",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
-        "src/components/editor/useCodeMirror.ts",
       ],
       exclude: [
         "src/**/*.d.ts",
