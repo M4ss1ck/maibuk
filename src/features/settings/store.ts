@@ -9,6 +9,7 @@ import {
   type FontFamily,
   type ExportFormat,
   type Language,
+  type HtmlEditorTheme,
 } from "./types";
 
 const STORAGE_KEY = "maibuk-settings";
@@ -35,6 +36,9 @@ interface SettingsStore extends Settings {
   setHideKeyboardHints: (enabled: boolean) => void;
   setSidebarWidth: (width: number) => void;
   setToolbarExpanded: (expanded: boolean) => void;
+  setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
+  setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
+  setHtmlPanelHeight: (height: number) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -56,6 +60,9 @@ const defaultSettings: Settings = {
   backupDirectory: null,
   sidebarWidth: 256,
   toolbarExpanded: false,
+  htmlEditorLightTheme: "default" as HtmlEditorTheme,
+  htmlEditorDarkTheme: "default" as HtmlEditorTheme,
+  htmlPanelHeight: 200,
 };
 
 function normalizeHexColor(color: string): string {
@@ -93,6 +100,9 @@ export const useSettingsStore = create<SettingsStore>()(
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
       setSidebarWidth: (sidebarWidth) => set({ sidebarWidth: Math.max(200, Math.min(480, sidebarWidth)) }),
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
+      setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
+      setHtmlEditorDarkTheme: (htmlEditorDarkTheme) => set({ htmlEditorDarkTheme }),
+      setHtmlPanelHeight: (htmlPanelHeight) => set({ htmlPanelHeight: Math.max(100, Math.min(window.innerHeight * 0.6, htmlPanelHeight)) }),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;

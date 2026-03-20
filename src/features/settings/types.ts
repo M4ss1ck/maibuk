@@ -2,6 +2,7 @@ export type FontSize = 14 | 16 | 18 | 20;
 export type FontFamily = "serif" | "sans" | "mono";
 export type ExportFormat = "epub" | "pdf";
 export type Language = "en" | "es";
+export type HtmlEditorTheme = "default" | "one-dark" | "dracula" | "one-light";
 
 export const DEFAULT_PRIMARY_COLOR = "#3B82F6";
 export const DEFAULT_TAURI_BACKUP_RETENTION = 20;
@@ -39,6 +40,9 @@ export interface Settings {
   // Editor layout settings
   sidebarWidth: number;
   toolbarExpanded: boolean;
+  htmlEditorLightTheme: HtmlEditorTheme;
+  htmlEditorDarkTheme: HtmlEditorTheme;
+  htmlPanelHeight: number;
 }
 
 export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
