@@ -91,11 +91,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
   // Track editor focus with a delayed blur so toolbar clicks still read it as focused
   const editorWasFocusedRef = useRef(false);
-  const toolbarStateBeforeHtmlRef = useRef<boolean | null>(null);
   const showHtmlPanelRef = useRef(showHtmlPanel);
   showHtmlPanelRef.current = showHtmlPanel;
-  const isToolbarExpandedRef = useRef(isToolbarExpanded);
-  isToolbarExpandedRef.current = isToolbarExpanded;
   const htmlPanelHandleRef = useRef<{
     highlightRange: (from: number, to: number) => void;
   } | null>(null);
@@ -105,8 +102,6 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     (blockIndex: number) => {
       // Open panel if not already open
       if (!showHtmlPanelRef.current) {
-        toolbarStateBeforeHtmlRef.current = isToolbarExpandedRef.current;
-        setIsToolbarExpanded(false);
         setShowHtmlPanel(true);
       }
 
@@ -264,17 +259,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       if (event.shiftKey && key === "u") {
         event.preventDefault();
-        if (showHtmlPanelRef.current) {
-          setShowHtmlPanel(false);
-          if (toolbarStateBeforeHtmlRef.current !== null) {
-            setIsToolbarExpanded(toolbarStateBeforeHtmlRef.current);
-            toolbarStateBeforeHtmlRef.current = null;
-          }
-        } else {
-          toolbarStateBeforeHtmlRef.current = isToolbarExpandedRef.current;
-          setIsToolbarExpanded(false);
-          setShowHtmlPanel(true);
-        }
+        setShowHtmlPanel(!showHtmlPanelRef.current);
         return;
       }
     };
@@ -502,9 +487,6 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           </ToolbarButton>
 
           <ToolbarButton onClick={() => {
-            // Stash current toolbar state and collapse
-            toolbarStateBeforeHtmlRef.current = isToolbarExpanded;
-            setIsToolbarExpanded(false);
             setShowHtmlPanel(true);
           }} title={t("editor.viewHtml")}>
             <Code2 className="w-4 h-4" />
@@ -517,11 +499,6 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         setShowHtmlPanel(false);
         htmlPanelHandleRef.current = null;
         pendingInspectRef.current = null;
-        // Restore toolbar state
-        if (toolbarStateBeforeHtmlRef.current !== null) {
-          setIsToolbarExpanded(toolbarStateBeforeHtmlRef.current);
-          toolbarStateBeforeHtmlRef.current = null;
-        }
       }} onReady={handleHtmlPanelReady} />}
       <HtmlInspectMenu editor={editor} onInspect={handleInspect} />
       <FindReplace editor={editor} isOpen={showFindReplace} onClose={() => setShowFindReplace(false)} />
