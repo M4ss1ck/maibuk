@@ -163,14 +163,14 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizingRef.current) return;
-      const delta = startY - e.clientY;
+      const delta = e.clientY - startY;
       const newHeight = Math.max(MIN_HEIGHT, Math.min(maxHeight, startHeight + delta));
       setPanelHeight(newHeight);
     };
 
     const handleMouseUp = (e: MouseEvent) => {
       isResizingRef.current = false;
-      const delta = startY - e.clientY;
+      const delta = e.clientY - startY;
       const finalHeight = Math.max(MIN_HEIGHT, Math.min(maxHeight, startHeight + delta));
       setPersistedHeight(finalHeight);
       document.removeEventListener("mousemove", handleMouseMove);
@@ -185,12 +185,6 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
 
   return (
     <div className="border-t border-border bg-muted/30">
-      {/* Resize handle */}
-      <div
-        className="h-1 cursor-ns-resize bg-transparent hover:bg-primary/20 transition-colors"
-        onMouseDown={handleResizeStart}
-      />
-
       {/* Panel header */}
       <div className="flex items-center justify-between px-4 py-1.5 border-b border-border bg-background">
         <div className="flex items-center gap-2">
@@ -259,6 +253,12 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
           className={`h-full overflow-auto ${isLoading ? "hidden" : ""}`}
         />
       </div>
+
+      {/* Resize handle */}
+      <div
+        className="h-1 cursor-ns-resize bg-transparent hover:bg-primary/20 transition-colors"
+        onMouseDown={handleResizeStart}
+      />
     </div>
   );
 }
