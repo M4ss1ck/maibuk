@@ -38,6 +38,7 @@ interface SettingsStore extends Settings {
   setToolbarExpanded: (expanded: boolean) => void;
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
+  setHtmlPanelHeight: (height: number) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -61,6 +62,7 @@ const defaultSettings: Settings = {
   toolbarExpanded: false,
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
+  htmlPanelHeight: 200,
 };
 
 function normalizeHexColor(color: string): string {
@@ -100,6 +102,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
       setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
       setHtmlEditorDarkTheme: (htmlEditorDarkTheme) => set({ htmlEditorDarkTheme }),
+      setHtmlPanelHeight: (htmlPanelHeight) => set({ htmlPanelHeight: Math.max(100, Math.min(window.innerHeight * 0.6, htmlPanelHeight)) }),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;

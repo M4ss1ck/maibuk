@@ -99,6 +99,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const htmlPanelHandleRef = useRef<{
     highlightRange: (from: number, to: number) => void;
   } | null>(null);
+  const pendingInspectRef = useRef<number | null>(null);
 
   const handleInspect = useCallback(
     (blockIndex: number) => {
@@ -109,14 +110,29 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         setShowHtmlPanel(true);
       }
 
-      // Find the offset and highlight (needs a small delay for panel to open and CM to initialize)
-      setTimeout(() => {
+      // If handle is ready, highlight immediately; otherwise queue it for onReady
+      const html = editor.getHTML();
+      const range = findBlockOffsetInHtml(html, blockIndex);
+      if (range && htmlPanelHandleRef.current) {
+        htmlPanelHandleRef.current.highlightRange(range.from, range.to);
+      } else {
+        pendingInspectRef.current = blockIndex;
+      }
+    },
+    [editor],
+  );
+
+  const handleHtmlPanelReady = useCallback(
+    (handle: { highlightRange: (from: number, to: number) => void } | null) => {
+      htmlPanelHandleRef.current = handle;
+      if (handle && pendingInspectRef.current !== null) {
         const html = editor.getHTML();
-        const range = findBlockOffsetInHtml(html, blockIndex);
-        if (range && htmlPanelHandleRef.current) {
-          htmlPanelHandleRef.current.highlightRange(range.from, range.to);
+        const range = findBlockOffsetInHtml(html, pendingInspectRef.current);
+        if (range) {
+          handle.highlightRange(range.from, range.to);
         }
-      }, 100);
+        pendingInspectRef.current = null;
+      }
     },
     [editor],
   );
@@ -500,12 +516,13 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       {showHtmlPanel && <HtmlViewPanel editor={editor} isOpen={showHtmlPanel} onClose={() => {
         setShowHtmlPanel(false);
         htmlPanelHandleRef.current = null;
+        pendingInspectRef.current = null;
         // Restore toolbar state
         if (toolbarStateBeforeHtmlRef.current !== null) {
           setIsToolbarExpanded(toolbarStateBeforeHtmlRef.current);
           toolbarStateBeforeHtmlRef.current = null;
         }
-      }} onReady={(handle) => { htmlPanelHandleRef.current = handle; }} />}
+      }} onReady={handleHtmlPanelReady} />}
       <HtmlInspectMenu editor={editor} onInspect={handleInspect} />
       <FindReplace editor={editor} isOpen={showFindReplace} onClose={() => setShowFindReplace(false)} />
       <ImageInsertDialog editor={editor} isOpen={showImageDialog} onClose={() => setShowImageDialog(false)} />

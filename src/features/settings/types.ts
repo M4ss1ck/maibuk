@@ -42,6 +42,7 @@ export interface Settings {
   toolbarExpanded: boolean;
   htmlEditorLightTheme: HtmlEditorTheme;
   htmlEditorDarkTheme: HtmlEditorTheme;
+  htmlPanelHeight: number;
 }
 
 export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [

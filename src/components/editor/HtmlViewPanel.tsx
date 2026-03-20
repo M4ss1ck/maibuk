@@ -4,6 +4,7 @@ import { Button } from "../ui/Button";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, XIcon } from "../icons";
 import { useCodeMirror, type CodeMirrorHandle } from "./useCodeMirror";
+import type { Extension } from "@codemirror/state";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { useSettingsStore } from "../../features/settings/store";
 import { useThemeStore } from "../../features/theme/store";
@@ -19,13 +20,14 @@ interface HtmlViewPanelProps {
   ) => void;
 }
 
-const DEFAULT_HEIGHT = 200;
 const MIN_HEIGHT = 100;
 const MAX_HEIGHT_RATIO = 0.6;
 
 export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPanelProps) {
   const { t } = useTranslation();
-  const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
+  const persistedHeight = useSettingsStore((s) => s.htmlPanelHeight);
+  const setPersistedHeight = useSettingsStore((s) => s.setHtmlPanelHeight);
+  const [panelHeight, setPanelHeight] = useState(persistedHeight);
   const [error, setError] = useState("");
   const [warningCount, setWarningCount] = useState(0);
   const activeSourceRef = useRef<"wysiwyg" | "html">("wysiwyg");
@@ -45,8 +47,10 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
   const currentThemeSetting = resolvedDark ? darkTheme : lightTheme;
   const setThemeSetting = resolvedDark ? setDark : setLight;
 
-  // Use a ref for the handle to avoid circular dependency with callbacks
+  // Use refs to avoid circular dependency with callbacks
   const cmHandleRef = useRef<CodeMirrorHandle | null>(null);
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   const syncWysiwygToHtml = useCallback(() => {
     if (activeSourceRef.current === "wysiwyg" && cmHandleRef.current) {
@@ -86,14 +90,14 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
     cmHandleRef.current = cmHandle;
   }, [cmHandle]);
 
-  // Expose highlightRange to parent
+  // Expose highlightRange to parent (use ref to avoid re-firing on every render)
   useEffect(() => {
-    onReady?.(cmHandle ? { highlightRange: cmHandle.highlightRange } : null);
-  }, [cmHandle, onReady]);
+    onReadyRef.current?.(cmHandle ? { highlightRange: cmHandle.highlightRange } : null);
+  }, [cmHandle]);
 
   useEffect(() => {
-    if (!isOpen) onReady?.(null);
-  }, [isOpen, onReady]);
+    if (!isOpen) onReadyRef.current?.(null);
+  }, [isOpen]);
 
   // Listen to TipTap updates → sync to CodeMirror
   useEffect(() => {
@@ -124,14 +128,14 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
       cmHandle.setContent(editor.getHTML());
       activeSourceRef.current = "wysiwyg";
     }
-  }, [isOpen, cmHandle]);
+  }, [isOpen, cmHandle, editor]);
 
   // Apply editor theme
   useEffect(() => {
     if (!cmHandle) return;
 
     (async () => {
-      let themeExtension: any = [];
+      let themeExtension: Extension = [];
 
       if (currentThemeSetting === "one-dark") {
         const { atomone } = await import("@uiw/codemirror-theme-atomone");
@@ -164,8 +168,11 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
       setPanelHeight(newHeight);
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
       isResizingRef.current = false;
+      const delta = startY - e.clientY;
+      const finalHeight = Math.max(MIN_HEIGHT, Math.min(maxHeight, startHeight + delta));
+      setPersistedHeight(finalHeight);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };

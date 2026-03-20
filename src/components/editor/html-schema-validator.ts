@@ -1,13 +1,7 @@
-import type { Diagnostic } from "@codemirror/lint";
-import type { linter as linterFn } from "@codemirror/lint";
+import type { Diagnostic, linter as linterFn } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 
-type HtmlDiagnostic = {
-  from: number;
-  to: number;
-  severity: "error" | "warning" | "info";
-  message: string;
-};
+type HtmlDiagnostic = Pick<Diagnostic, "from" | "to" | "severity" | "message">;
 
 /**
  * Validate HTML string and return diagnostics.
@@ -55,6 +49,7 @@ export function validateHtml(html: string): HtmlDiagnostic[] {
   const autoClosing = new Set([
     "p", "li", "td", "th", "tr", "thead", "tbody", "tfoot",
     "dt", "dd", "option", "optgroup",
+    "colgroup", "caption", "rt", "rp",
   ]);
 
   const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*\/?>/g;
@@ -120,13 +115,7 @@ export function validateHtml(html: string): HtmlDiagnostic[] {
 export function createHtmlLinter(linter: typeof linterFn) {
   return linter(
     (view: EditorView): Diagnostic[] => {
-      const content = view.state.doc.toString();
-      return validateHtml(content).map((d) => ({
-        from: d.from,
-        to: d.to,
-        severity: d.severity,
-        message: d.message,
-      }));
+      return validateHtml(view.state.doc.toString());
     },
     { delay: 300 },
   );

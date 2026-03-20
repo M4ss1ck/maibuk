@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import type { EditorView } from "@codemirror/view";
+import type { Extension } from "@codemirror/state";
 
 export type CodeMirrorHandle = {
   /** Get current editor content */
@@ -17,7 +18,7 @@ export type CodeMirrorHandle = {
   /** Get current warning count from linter */
   getWarningCount: () => number;
   /** Apply a CodeMirror theme extension */
-  setTheme: (themeExtension: any) => void;
+  setTheme: (themeExtension: Extension) => void;
 };
 
 type UseCodeMirrorOptions = {
@@ -219,7 +220,7 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
 
         getWarningCount: () => warningCount,
 
-        setTheme: (themeExtension: any) => {
+        setTheme: (themeExtension: Extension) => {
           view.dispatch({
             effects: themeCompartment.reconfigure(themeExtension || []),
           });

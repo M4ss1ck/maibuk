@@ -19,6 +19,9 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const handleContextMenu = useCallback((event: MouseEvent) => {
+    // Skip if another handler already claimed this event (e.g. ImageContextMenu)
+    if (event.defaultPrevented) return;
+
     // Get the ProseMirror position from click coordinates
     const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
     if (!pos) return;
@@ -54,7 +57,6 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
     });
 
     setBlockIndex(count);
-    // Prevent the browser's native context menu from appearing on top
     event.preventDefault();
     setMenuPos({ x: event.clientX, y: event.clientY });
   }, [editor]);
@@ -88,13 +90,14 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
       style={{ left: menuPos.x, top: menuPos.y }}
     >
       <button
-        className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors"
+        className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-4"
         onClick={() => {
           onInspect(blockIndex);
           setMenuPos(null);
         }}
       >
-        {t("editor.inspectInHtml")}
+        <span>{t("editor.inspectInHtml")}</span>
+        <span className="text-xs text-muted-foreground">Ctrl+Shift+U</span>
       </button>
     </div>
   );
@@ -108,8 +111,10 @@ export function findBlockOffsetInHtml(html: string, blockIndex: number): { from:
   const blockTags = new Set([
     "p", "h1", "h2", "h3", "h4", "h5", "h6",
     "ul", "ol", "li", "blockquote", "table",
-    "tr", "td", "th", "thead", "tbody",
+    "tr", "td", "th", "thead", "tbody", "tfoot",
     "div", "section", "article", "pre",
+    "figure", "figcaption", "details", "summary",
+    "dl", "dt", "dd", "nav", "aside", "main", "header", "footer",
   ]);
 
   const tagRegex = /<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/g;
