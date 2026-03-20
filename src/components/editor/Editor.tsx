@@ -22,7 +22,6 @@ import { EditorToolbar } from "./EditorToolbar";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
 import { LinkDialog } from "./LinkDialog";
-import { SpellCheckPopover } from "./SpellCheckPopover";
 import { ImageContextMenu } from "./ImageContextMenu";
 import { FootnoteList } from "./FootnoteList";
 import { SceneBreak } from "./extensions/SceneBreak";
@@ -232,7 +231,6 @@ export function Editor({
       </div>
 
       <LinkClickHandler editor={editor} />
-      <SpellCheckPopover editor={editor} />
       <ImageContextMenu editor={editor} />
 
       {/* Floating selection toolbar */}
