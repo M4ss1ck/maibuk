@@ -8,7 +8,6 @@ export { FootnoteDialog } from "./FootnoteDialog";
 export { FootnoteList } from "./FootnoteList";
 export { NotesPanel } from "./NotesPanel";
 export { LinkDialog } from "./LinkDialog";
-export { HtmlViewDialog } from "./HtmlViewDialog";
 export { HtmlViewPanel } from "./HtmlViewPanel";
 export { ColorPicker } from "./ColorPicker";
 export { LinkClickHandler } from "./LinkClickHandler";

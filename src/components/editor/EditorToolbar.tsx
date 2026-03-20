@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { TableMenu } from "./TableMenu";
@@ -7,6 +7,7 @@ import { ImageInsertDialog } from "./ImageInsertDialog";
 import { FootnoteDialog } from "./FootnoteDialog";
 import { LinkDialog } from "./LinkDialog";
 import { HtmlViewPanel } from "./HtmlViewPanel";
+import { HtmlInspectMenu, findBlockOffsetInHtml } from "./HtmlInspectMenu";
 import { ColorPicker } from "./ColorPicker";
 import { ToolbarButton, Divider } from "./ToolbarButton";
 import { TextCaseMenu } from "./TextCaseMenu";
@@ -74,7 +75,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [showFootnoteDialog, setShowFootnoteDialog] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
-  const [showHtmlDialog, setShowHtmlDialog] = useState(false);
+  const [showHtmlPanel, setShowHtmlPanel] = useState(false);
   const [showDictionaryDialog, setShowDictionaryDialog] = useState(false);
   const [dictionaryWord, setDictionaryWord] = useState("");
   const [isToolbarExpanded, setIsToolbarExpanded] = [
@@ -90,6 +91,35 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
   // Track editor focus with a delayed blur so toolbar clicks still read it as focused
   const editorWasFocusedRef = useRef(false);
+  const toolbarStateBeforeHtmlRef = useRef<boolean | null>(null);
+  const showHtmlPanelRef = useRef(showHtmlPanel);
+  showHtmlPanelRef.current = showHtmlPanel;
+  const isToolbarExpandedRef = useRef(isToolbarExpanded);
+  isToolbarExpandedRef.current = isToolbarExpanded;
+  const htmlPanelHandleRef = useRef<{
+    highlightRange: (from: number, to: number) => void;
+  } | null>(null);
+
+  const handleInspect = useCallback(
+    (blockIndex: number) => {
+      // Open panel if not already open
+      if (!showHtmlPanelRef.current) {
+        toolbarStateBeforeHtmlRef.current = isToolbarExpandedRef.current;
+        setIsToolbarExpanded(false);
+        setShowHtmlPanel(true);
+      }
+
+      // Find the offset and highlight (needs a small delay for panel to open and CM to initialize)
+      setTimeout(() => {
+        const html = editor.getHTML();
+        const range = findBlockOffsetInHtml(html, blockIndex);
+        if (range && htmlPanelHandleRef.current) {
+          htmlPanelHandleRef.current.highlightRange(range.from, range.to);
+        }
+      }, 100);
+    },
+    [editor],
+  );
   useEffect(() => {
     const dom = editor.view.dom;
     const onFocus = () => { editorWasFocusedRef.current = true; };
@@ -214,6 +244,22 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       if (event.altKey && key === "n") {
         event.preventDefault();
         setShowFootnoteDialog(true);
+      }
+
+      if (event.shiftKey && key === "u") {
+        event.preventDefault();
+        if (showHtmlPanelRef.current) {
+          setShowHtmlPanel(false);
+          if (toolbarStateBeforeHtmlRef.current !== null) {
+            setIsToolbarExpanded(toolbarStateBeforeHtmlRef.current);
+            toolbarStateBeforeHtmlRef.current = null;
+          }
+        } else {
+          toolbarStateBeforeHtmlRef.current = isToolbarExpandedRef.current;
+          setIsToolbarExpanded(false);
+          setShowHtmlPanel(true);
+        }
+        return;
       }
     };
 
@@ -439,14 +485,28 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             <BookOpen className="w-4 h-4" />
           </ToolbarButton>
 
-          <ToolbarButton onClick={() => setShowHtmlDialog(true)} title={t("editor.viewHtml")}>
+          <ToolbarButton onClick={() => {
+            // Stash current toolbar state and collapse
+            toolbarStateBeforeHtmlRef.current = isToolbarExpanded;
+            setIsToolbarExpanded(false);
+            setShowHtmlPanel(true);
+          }} title={t("editor.viewHtml")}>
             <Code2 className="w-4 h-4" />
           </ToolbarButton>
         </div>
       )}
 
       {/* Panels and Dialogs */}
-      <HtmlViewPanel editor={editor} isOpen={showHtmlDialog} onClose={() => setShowHtmlDialog(false)} />
+      {showHtmlPanel && <HtmlViewPanel editor={editor} isOpen={showHtmlPanel} onClose={() => {
+        setShowHtmlPanel(false);
+        htmlPanelHandleRef.current = null;
+        // Restore toolbar state
+        if (toolbarStateBeforeHtmlRef.current !== null) {
+          setIsToolbarExpanded(toolbarStateBeforeHtmlRef.current);
+          toolbarStateBeforeHtmlRef.current = null;
+        }
+      }} onReady={(handle) => { htmlPanelHandleRef.current = handle; }} />}
+      <HtmlInspectMenu editor={editor} onInspect={handleInspect} />
       <FindReplace editor={editor} isOpen={showFindReplace} onClose={() => setShowFindReplace(false)} />
       <ImageInsertDialog editor={editor} isOpen={showImageDialog} onClose={() => setShowImageDialog(false)} />
       <FootnoteDialog editor={editor} isOpen={showFootnoteDialog} onClose={() => setShowFootnoteDialog(false)} />
