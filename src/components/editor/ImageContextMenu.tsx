@@ -38,7 +38,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleOutsideInteraction = (event: MouseEvent | TouchEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenu(null);
       }
@@ -50,11 +50,13 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handleOutsideInteraction);
+    document.addEventListener("touchstart", handleOutsideInteraction);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("mousedown", handleOutsideInteraction);
+      document.removeEventListener("touchstart", handleOutsideInteraction);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen]);
@@ -304,9 +306,8 @@ function MenuItem({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors ${
-        variant === "destructive" ? "text-destructive" : ""
-      }`}
+      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors ${variant === "destructive" ? "text-destructive" : ""
+        }`}
       type="button"
     >
       <span className="w-4 h-4 shrink-0">{icon}</span>

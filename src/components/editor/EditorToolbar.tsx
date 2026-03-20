@@ -7,7 +7,8 @@ import { ImageInsertDialog } from "./ImageInsertDialog";
 import { FootnoteDialog } from "./FootnoteDialog";
 import { LinkDialog } from "./LinkDialog";
 import { HtmlViewPanel } from "./HtmlViewPanel";
-import { HtmlInspectMenu, findBlockOffsetInHtml } from "./HtmlInspectMenu";
+import { EditorContextMenu } from "./EditorContextMenu";
+import { findBlockOffsetInHtml } from "./HtmlInspectMenu";
 import { ColorPicker } from "./ColorPicker";
 import { ToolbarButton, Divider } from "./ToolbarButton";
 import { TextCaseMenu } from "./TextCaseMenu";
@@ -60,6 +61,7 @@ import {
 
 interface EditorToolbarProps {
   editor: Editor;
+  onContextMenuOpenChange?: (open: boolean) => void;
 }
 
 const HEADING_SIZES: Record<1 | 2 | 3, string> = {
@@ -69,7 +71,7 @@ const HEADING_SIZES: Record<1 | 2 | 3, string> = {
 };
 const DEFAULT_FONT_SIZE = "18";
 
-export function EditorToolbar({ editor }: EditorToolbarProps) {
+export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showImageDialog, setShowImageDialog] = useState(false);
@@ -221,14 +223,21 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
     if (!selectedText) return;
     const word = selectedText.split(/\s+/)[0];
     if (!word) return;
-    if (dictionaryOpenInBrowser) {
-      const url = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
-      openExternal(url);
-      return;
-    }
-    setDictionaryWord(word);
-    setShowDictionaryDialog(true);
+    handleLookupWord(word);
   };
+
+  const handleLookupWord = useCallback(
+    (word: string) => {
+      if (dictionaryOpenInBrowser) {
+        const url = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
+        openExternal(url);
+        return;
+      }
+      setDictionaryWord(word);
+      setShowDictionaryDialog(true);
+    },
+    [dictionaryOpenInBrowser, language],
+  );
 
   useEffect(() => {
     const dom = editor.view.dom;
@@ -500,7 +509,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         htmlPanelHandleRef.current = null;
         pendingInspectRef.current = null;
       }} onReady={handleHtmlPanelReady} />}
-      <HtmlInspectMenu editor={editor} onInspect={handleInspect} />
+      <EditorContextMenu editor={editor} onInspect={handleInspect} onLookup={handleLookupWord} onOpenChange={onContextMenuOpenChange} />
       <FindReplace editor={editor} isOpen={showFindReplace} onClose={() => setShowFindReplace(false)} />
       <ImageInsertDialog editor={editor} isOpen={showImageDialog} onClose={() => setShowImageDialog(false)} />
       <FootnoteDialog editor={editor} isOpen={showFootnoteDialog} onClose={() => setShowFootnoteDialog(false)} />
