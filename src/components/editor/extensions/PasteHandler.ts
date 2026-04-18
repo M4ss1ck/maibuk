@@ -1,6 +1,7 @@
 import { Slice, Fragment, Node } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Extension } from "@tiptap/core";
+import type { EditorView } from "@tiptap/pm/view";
 
 /**
  * PasteHandler extension to properly handle pasted content from external sources
@@ -24,31 +25,39 @@ export const PasteHandler = Extension.create({
             if (!clipboardData) return false;
 
             const items = Array.from(clipboardData.items);
-            const imageItem = items.find((item) => item.type.startsWith("image/"));
-            if (!imageItem) return false;
+            const imageItem = items.find((item) =>
+              item.type.startsWith("image/"),
+            );
 
-            const file = imageItem.getAsFile();
-            if (!file) return false;
+            if (imageItem) {
+              const file = imageItem.getAsFile();
+              if (file) {
+                readImageAsDataUrl(file, view);
+                return true;
+              }
+            }
 
-            const reader = new FileReader();
-            reader.onload = () => {
-              const src = typeof reader.result === "string" ? reader.result : null;
-              if (!src) return;
+            // Handle HTML paste containing blob: URLs (e.g. screenshots in
+            // Tauri webview where image/* clipboard items aren't exposed).
+            const html = clipboardData.getData("text/html");
+            if (html && /\bblob:/.test(html)) {
+              convertBlobImagesInHtml(html, view);
+              return true;
+            }
 
-              const imageType = view.state.schema.nodes.image;
-              if (!imageType) return;
+            return false;
+          },
 
-              const node = imageType.create({
-                src,
-                alt: null,
-                title: null,
-              });
+          handleDrop(view, event) {
+            if (!event.dataTransfer?.files?.length) return false;
 
-              const tr = view.state.tr.replaceSelectionWith(node);
-              view.dispatch(tr.scrollIntoView());
-            };
+            const imageFile = Array.from(event.dataTransfer.files).find((f) =>
+              f.type.startsWith("image/"),
+            );
+            if (!imageFile) return false;
 
-            reader.readAsDataURL(file);
+            event.preventDefault();
+            readImageAsDataUrl(imageFile, view, event);
             return true;
           },
           transformPastedHTML(html: string) {
@@ -142,6 +151,91 @@ export const PasteHandler = Extension.create({
     ];
   },
 });
+
+/**
+ * Read an image file as a data URL and insert it into the editor.
+ * Used by both paste and drop handlers to avoid blob: URLs that don't persist.
+ */
+function readImageAsDataUrl(
+  file: File,
+  view: EditorView,
+  dropEvent?: DragEvent,
+): void {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const src = typeof reader.result === "string" ? reader.result : null;
+    if (!src) return;
+
+    const imageType = view.state.schema.nodes.image;
+    if (!imageType) return;
+
+    const node = imageType.create({ src, alt: null, title: null });
+
+    if (dropEvent) {
+      const coordinates = view.posAtCoords({
+        left: dropEvent.clientX,
+        top: dropEvent.clientY,
+      });
+      if (coordinates) {
+        const tr = view.state.tr.insert(coordinates.pos, node);
+        view.dispatch(tr.scrollIntoView());
+        return;
+      }
+    }
+
+    const tr = view.state.tr.replaceSelectionWith(node);
+    view.dispatch(tr.scrollIntoView());
+  };
+  reader.readAsDataURL(file);
+}
+
+/**
+ * Fetch blob: URLs in pasted HTML, convert them to data URLs, and insert
+ * the resulting image nodes.  Blob URLs are ephemeral — they don't survive
+ * a page reload, so we must materialise the data before saving.
+ */
+async function convertBlobImagesInHtml(
+  html: string,
+  view: EditorView,
+): Promise<void> {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const blobImages = Array.from(
+    doc.querySelectorAll<HTMLImageElement>('img[src^="blob:"]'),
+  );
+
+  if (blobImages.length === 0) return;
+
+  const dataUrls = await Promise.all(
+    blobImages.map(async (img) => {
+      try {
+        const response = await fetch(img.src);
+        const blob = await response.blob();
+        return await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve("");
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return "";
+      }
+    }),
+  );
+
+  const imageType = view.state.schema.nodes.image;
+  if (!imageType) return;
+
+  let tr = view.state.tr;
+  for (const src of dataUrls) {
+    if (!src) continue;
+    const node = imageType.create({ src, alt: null, title: null });
+    tr = tr.replaceSelectionWith(node);
+  }
+
+  if (tr.docChanged) {
+    view.dispatch(tr.scrollIntoView());
+  }
+}
 
 /**
  * Unwrap Google Docs wrapper elements that can cause the first paragraph to be
