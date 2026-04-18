@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 import { ToolbarButton, Divider } from "./ToolbarButton";
 import { useTranslation } from "react-i18next";
 import {
@@ -44,7 +45,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
       isH1: e.isActive("heading", { level: 1 }),
       isH2: e.isActive("heading", { level: 2 }),
       isH3: e.isActive("heading", { level: 3 }),
-      hasSelection: !e.state.selection.empty,
+      hasSelection: !e.state.selection.empty && !(e.state.selection instanceof NodeSelection),
     }),
   });
 

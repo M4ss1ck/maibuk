@@ -51,6 +51,36 @@ export function ImageView({
     editor.view.dispatch(tr);
   }, [editor, getPos, node.attrs, node.textContent]);
 
+  // Convert ephemeral blob: URLs to persistent data URLs.
+  useEffect(() => {
+    const src = node.attrs.src as string | null;
+    if (!src || !src.startsWith("blob:")) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await fetch(src);
+        const blob = await response.blob();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        if (!cancelled) {
+          updateAttributes({ src: dataUrl });
+        }
+      } catch {
+        // Blob URL is already expired — nothing we can do
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [node.attrs.src, updateAttributes]);
+
   const handleCaptionKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       // Prevent Enter from creating newlines in caption

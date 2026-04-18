@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Editor } from "@tiptap/react";
 import { Button } from "../ui/Button";
+import { Select } from "../ui/Select";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, XIcon } from "../icons";
 import { useCodeMirror, type CodeMirrorHandle } from "./useCodeMirror";
@@ -219,22 +220,22 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
           >
             <WrapText className="w-4 h-4" />
           </Button>
-          <select
+          <Select
             value={currentThemeSetting}
-            onChange={(e) => setThemeSetting(e.target.value as HtmlEditorTheme)}
-            className="text-xs bg-transparent border border-border rounded px-1.5 py-0.5"
-            title={t("editor.editorTheme")}
-          >
-            <option value="default">{t("editor.themeDefault")}</option>
-            {resolvedDark ? (
-              <>
-                <option value="one-dark">{t("editor.themeOneDark")}</option>
-                <option value="dracula">{t("editor.themeDracula")}</option>
-              </>
-            ) : (
-              <option value="one-light">{t("editor.themeOneLight")}</option>
-            )}
-          </select>
+            onChange={(v) => setThemeSetting(v as HtmlEditorTheme)}
+            options={
+              resolvedDark
+                ? [
+                  { value: "default", label: t("editor.themeDefault") },
+                  { value: "one-dark", label: t("editor.themeOneDark") },
+                  { value: "dracula", label: t("editor.themeDracula") },
+                ]
+                : [
+                  { value: "default", label: t("editor.themeDefault") },
+                  { value: "one-light", label: t("editor.themeOneLight") },
+                ]
+            }
+          />
           <Button size="sm" variant="ghost" onClick={onClose}>
             <XIcon className="w-4 h-4" />
           </Button>
