@@ -394,6 +394,9 @@
     "authorNameRequired": "Author name is required",
     "URLRequired": "URL is required"
   },
+  "embed": {
+    "placeholder": "Start writing..."
+  },
   "shortcuts": {
     "title": "Keyboard shortcuts",
     "none": "No shortcuts available for this screen",

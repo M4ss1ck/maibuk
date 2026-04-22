@@ -1,0 +1,3 @@
+# Allow cross-origin framing of the embed route from the portfolio domain.
+/embed
+  Content-Security-Policy: frame-ancestors 'self' https://www.massick.dev

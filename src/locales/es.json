@@ -394,6 +394,9 @@
     "authorNameRequired": "El nombre del autor es obligatorio",
     "URLRequired": "La URL es obligatoria"
   },
+  "embed": {
+    "placeholder": "Empieza a escribir..."
+  },
   "shortcuts": {
     "title": "Atajos de teclado",
     "none": "No hay atajos disponibles para esta pantalla",

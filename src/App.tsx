@@ -1,20 +1,37 @@
 import { useEffect } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
 import { BookEditor } from "./pages/BookEditor";
 import { CoverDesigner } from "./pages/CoverDesigner";
 import { Settings } from "./pages/Settings";
+import { Embed } from "./pages/Embed";
 import { StartupRedirect } from "./components/StartupRedirect";
 import { PathTracker } from "./components/PathTracker";
 import { ToastViewport } from "./components/ui";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
 import { runDailyBackupOnce } from "./features/backup/lifecycle";
 
+function isEmbedPath(pathname: string): boolean {
+  return pathname === "/embed";
+}
+
 function App() {
+  const { pathname } = useLocation();
+  const embedMode = isEmbedPath(pathname);
+
   useEffect(() => {
+    if (embedMode) return;
     void runDailyBackupOnce();
-  }, []);
+  }, [embedMode]);
+
+  if (embedMode) {
+    return (
+      <Routes>
+        <Route path="embed" element={<Embed />} />
+      </Routes>
+    );
+  }
 
   return (
     <StartupRedirect>

@@ -68,6 +68,43 @@ pnpm build:android
 pnpm build:web
 ```
 
+## Embed Mode (iframe)
+
+`/embed` is a **standalone Tiptap editor playground** — a chrome-less page for iframe embedding on external sites. It shares nothing stateful with the rest of the app: no books, no sync, no persistence. Reloading the iframe resets the editor.
+
+- URL: `/embed`
+- Optional query param: `theme=light` · `theme=dark` · `theme=system` (default `system`). Theme is applied locally to the iframe document only; it does **not** write to the app's persisted theme.
+
+### Frame/CSP headers (Cloudflare Pages)
+
+The production `frame-ancestors` policy lives in `public/_headers`:
+
+```txt
+/embed
+  Content-Security-Policy: frame-ancestors 'self' https://www.massick.dev
+```
+
+Notes:
+
+- Cloudflare Pages requires header lines to be indented under the path.
+- Do not send `X-Frame-Options` on `/embed` — it would conflict with `frame-ancestors`.
+- `public/_headers` is applied by Cloudflare Pages only; `pnpm dev:web` does not enforce CSP, so local iframe verification will succeed from any origin.
+
+### Local iframe verification
+
+1. Start the web app: `pnpm dev:web`
+2. Open an HTML page containing:
+
+```html
+<!doctype html>
+<iframe
+  src="http://localhost:5173/embed"
+  style="width: 800px; height: 450px; border: 1px solid #ccc;"
+  sandbox="allow-scripts allow-same-origin"
+  loading="lazy"
+></iframe>
+```
+
 ## Testing (TDD)
 
 This project now uses **Vitest + Testing Library** and follows a **test-driven development workflow**:
