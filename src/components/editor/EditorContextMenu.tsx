@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
-import { DOMSerializer } from "@tiptap/pm/model";
 import { useTranslation } from "react-i18next";
 import { Code2, BookOpen, ClipboardCopy, ClipboardPaste } from "lucide-react";
 import { spellCheckService } from "../../lib/spellcheck";
@@ -15,13 +14,17 @@ interface EditorContextMenuProps {
   onOpenChange?: (open: boolean) => void;
 }
 
+let menuIdCounter = 0;
+
 type MenuState = {
+  id: number;
   position: { top: number; left: number };
   blockIndex: number;
   misspelling: { word: string; from: number; to: number } | null;
   suggestions: string[];
   isLoadingSuggestions: boolean;
   wordUnderCursor: string | null;
+  canPaste: boolean;
 };
 
 /**
@@ -41,6 +44,7 @@ export function EditorContextMenu({
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const clipboardProbeRef = useRef<Promise<boolean> | null>(null);
 
   // Notify parent when open state changes
   useEffect(() => {
@@ -104,13 +108,29 @@ export function EditorContextMenu({
 
       const menuPosition = clampPosition(event.clientX, event.clientY);
 
+      const menuId = ++menuIdCounter;
       setMenu({
+        id: menuId,
         position: menuPosition,
         blockIndex: blockCount,
         misspelling,
         suggestions: [],
         isLoadingSuggestions: !!misspelling,
         wordUnderCursor,
+        canPaste: false,
+      });
+
+      // Use clipboard probe started during pointerdown (when user activation
+      // is still valid). WebKitGTK rejects clipboard reads in the contextmenu
+      // event itself, so we can't probe here.
+      const probe = clipboardProbeRef.current ?? Promise.resolve(false);
+      clipboardProbeRef.current = null;
+      void probe.then((canPaste) => {
+        if (!canPaste) return;
+        setMenu((prev) => {
+          if (!prev || prev.id !== menuId) return prev;
+          return { ...prev, canPaste: true };
+        });
       });
 
       // Async fetch suggestions if misspelled
@@ -132,12 +152,26 @@ export function EditorContextMenu({
     [editor],
   );
 
+  const handlePointerDown = useCallback((event: PointerEvent) => {
+    // Right-click (mouse) or long-press (touch/pen). Kick off the clipboard
+    // probe here so it runs inside a valid user-activation window.
+    const isRightClick = event.pointerType === "mouse" && event.button === 2;
+    const isTouchOrPen =
+      event.pointerType === "touch" || event.pointerType === "pen";
+    if (!isRightClick && !isTouchOrPen) return;
+    clipboardProbeRef.current = probeClipboard();
+  }, []);
+
   // Register event listener (bubble phase)
   useEffect(() => {
     const dom = editor.view.dom;
     dom.addEventListener("contextmenu", handleContextMenu);
-    return () => dom.removeEventListener("contextmenu", handleContextMenu);
-  }, [editor, handleContextMenu]);
+    dom.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      dom.removeEventListener("contextmenu", handleContextMenu);
+      dom.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [editor, handleContextMenu, handlePointerDown]);
 
   // Close on outside click, scroll, or escape
   useEffect(() => {
@@ -201,23 +235,12 @@ export function EditorContextMenu({
             const { from, to } = editor.state.selection;
             const hasSelection = from !== to;
             if (hasSelection) {
-              const slice = editor.state.doc.slice(from, to);
-              const serializer = DOMSerializer.fromSchema(editor.state.schema);
-              const fragment = serializer.serializeFragment(slice.content);
-              const container = document.createElement("div");
-              container.appendChild(fragment);
-              const html = container.innerHTML;
-              const text = editor.state.doc.textBetween(from, to, "\n\n");
-              navigator.clipboard.write([
-                new ClipboardItem({
-                  "text/html": new Blob([html], { type: "text/html" }),
-                  "text/plain": new Blob([text], { type: "text/plain" }),
-                }),
-              ]);
+              // Trigger the same path as Ctrl+C
+              editor.commands.focus();
+              document.execCommand("copy");
             } else {
               navigator.clipboard.writeText(menu.wordUnderCursor ?? "");
             }
-            toast.success(t("common.copied"));
             close();
           }}
           className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
@@ -227,29 +250,18 @@ export function EditorContextMenu({
         </button>
         <button
           type="button"
-          onClick={async () => {
-            try {
-              const items = await navigator.clipboard.read();
-              for (const item of items) {
-                if (item.types.includes("text/html")) {
-                  const blob = await item.getType("text/html");
-                  const html = await blob.text();
-                  editor.chain().focus().insertContent(html).run();
-                  close();
-                  return;
-                }
-              }
-              // Fallback to plain text
-              const text = await navigator.clipboard.readText();
-              editor.chain().focus().insertContent(text).run();
-            } catch {
-              // clipboard.read() may not be available; fall back to readText
-              const text = await navigator.clipboard.readText();
-              editor.chain().focus().insertContent(text).run();
+          disabled={!menu.canPaste}
+          onClick={() => {
+            // Trigger the same path as Ctrl+V: PasteHandler/default
+            // ProseMirror paste runs via the synchronous paste event.
+            editor.commands.focus();
+            const ok = document.execCommand("paste");
+            if (!ok) {
+              void fallbackPaste(editor);
             }
             close();
           }}
-          className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
         >
           <ClipboardPaste className="w-4 h-4 shrink-0" />
           <span className="truncate">{t("common.paste")}</span>
@@ -273,6 +285,7 @@ export function EditorContextMenu({
             ) : topSuggestions.length > 0 ? (
               topSuggestions.map((suggestion) => (
                 <button
+                  type="button"
                   key={suggestion}
                   onClick={() => {
                     editor
@@ -301,6 +314,7 @@ export function EditorContextMenu({
           </div>
 
           <button
+            type="button"
             onClick={() => {
               editor.commands.addToDictionary(menu.misspelling!.word);
               close();
@@ -351,6 +365,51 @@ export function EditorContextMenu({
 }
 
 // --- Helpers ---
+
+async function fallbackPaste(editor: Editor): Promise<void> {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      if (item.types.includes("text/html")) {
+        const blob = await item.getType("text/html");
+        const html = await blob.text();
+        editor.chain().focus().insertContent(html).run();
+        return;
+      }
+    }
+    const text = await navigator.clipboard.readText();
+    editor.chain().focus().insertContent(text).run();
+  } catch {
+    try {
+      const text = await navigator.clipboard.readText();
+      editor.chain().focus().insertContent(text).run();
+    } catch {
+      // give up silently
+    }
+  }
+}
+
+async function probeClipboard(): Promise<boolean> {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      if (
+        item.types.includes("text/html") ||
+        item.types.includes("text/plain")
+      ) {
+        return true;
+      }
+    }
+  } catch {
+    // fall through to readText
+  }
+  try {
+    const text = await navigator.clipboard.readText();
+    return text.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Extract the word at a given ProseMirror position.
