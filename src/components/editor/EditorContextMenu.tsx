@@ -4,8 +4,13 @@ import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { Code2, BookOpen, ClipboardCopy, ClipboardPaste } from "lucide-react";
 import { spellCheckService } from "../../lib/spellcheck";
-import { toast } from "../ui";
 import { Divider } from "./ToolbarButton";
+import {
+  adjustPosition,
+  clampPosition,
+  getWordAtPosition,
+} from "./editor-context-menu-utils";
+import { fallbackPaste, useClipboardProbe } from "./useClipboardProbe";
 
 interface EditorContextMenuProps {
   editor: Editor;
@@ -44,7 +49,7 @@ export function EditorContextMenu({
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
-  const clipboardProbeRef = useRef<Promise<boolean> | null>(null);
+  const consumeProbe = useClipboardProbe(editor);
 
   // Notify parent when open state changes
   useEffect(() => {
@@ -120,12 +125,7 @@ export function EditorContextMenu({
         canPaste: false,
       });
 
-      // Use clipboard probe started during pointerdown (when user activation
-      // is still valid). WebKitGTK rejects clipboard reads in the contextmenu
-      // event itself, so we can't probe here.
-      const probe = clipboardProbeRef.current ?? Promise.resolve(false);
-      clipboardProbeRef.current = null;
-      void probe.then((canPaste) => {
+      void consumeProbe().then((canPaste) => {
         if (!canPaste) return;
         setMenu((prev) => {
           if (!prev || prev.id !== menuId) return prev;
@@ -149,29 +149,16 @@ export function EditorContextMenu({
         });
       }
     },
-    [editor],
+    [editor, consumeProbe],
   );
 
-  const handlePointerDown = useCallback((event: PointerEvent) => {
-    // Right-click (mouse) or long-press (touch/pen). Kick off the clipboard
-    // probe here so it runs inside a valid user-activation window.
-    const isRightClick = event.pointerType === "mouse" && event.button === 2;
-    const isTouchOrPen =
-      event.pointerType === "touch" || event.pointerType === "pen";
-    if (!isRightClick && !isTouchOrPen) return;
-    clipboardProbeRef.current = probeClipboard();
-  }, []);
-
-  // Register event listener (bubble phase)
+  // Register contextmenu listener (bubble phase). The pointerdown listener for
+  // the clipboard probe is owned by useClipboardProbe.
   useEffect(() => {
     const dom = editor.view.dom;
     dom.addEventListener("contextmenu", handleContextMenu);
-    dom.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      dom.removeEventListener("contextmenu", handleContextMenu);
-      dom.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [editor, handleContextMenu, handlePointerDown]);
+    return () => dom.removeEventListener("contextmenu", handleContextMenu);
+  }, [editor, handleContextMenu]);
 
   // Close on outside click, scroll, or escape
   useEffect(() => {
@@ -362,111 +349,4 @@ export function EditorContextMenu({
     </div>,
     document.body,
   );
-}
-
-// --- Helpers ---
-
-async function fallbackPaste(editor: Editor): Promise<void> {
-  try {
-    const items = await navigator.clipboard.read();
-    for (const item of items) {
-      if (item.types.includes("text/html")) {
-        const blob = await item.getType("text/html");
-        const html = await blob.text();
-        editor.chain().focus().insertContent(html).run();
-        return;
-      }
-    }
-    const text = await navigator.clipboard.readText();
-    editor.chain().focus().insertContent(text).run();
-  } catch {
-    try {
-      const text = await navigator.clipboard.readText();
-      editor.chain().focus().insertContent(text).run();
-    } catch {
-      // give up silently
-    }
-  }
-}
-
-async function probeClipboard(): Promise<boolean> {
-  try {
-    const items = await navigator.clipboard.read();
-    for (const item of items) {
-      if (
-        item.types.includes("text/html") ||
-        item.types.includes("text/plain")
-      ) {
-        return true;
-      }
-    }
-  } catch {
-    // fall through to readText
-  }
-  try {
-    const text = await navigator.clipboard.readText();
-    return text.length > 0;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Extract the word at a given ProseMirror position.
- * Uses Unicode-aware matching to support accented characters (Spanish, etc.).
- */
-function getWordAtPosition(
-  doc: import("@tiptap/pm/model").Node,
-  pos: number,
-): { word: string } | null {
-  const $pos = doc.resolve(pos);
-  const parent = $pos.parent;
-  if (!parent.isTextblock) return null;
-
-  const offset = $pos.parentOffset;
-  const text = parent.textContent;
-
-  const isWordChar = (ch: string) => /[\p{L}\p{M}'-]/u.test(ch);
-
-  let start = offset;
-  let end = offset;
-
-  while (start > 0 && isWordChar(text[start - 1])) start--;
-  while (end < text.length && isWordChar(text[end])) end++;
-
-  if (start === end) return null;
-
-  const word = text.slice(start, end);
-  // Skip single-char punctuation-only results
-  if (/^['-]+$/.test(word)) return null;
-
-  return { word };
-}
-
-function clampPosition(clientX: number, clientY: number) {
-  const width = 224;
-  const height = 300;
-  const padding = 8;
-  const maxLeft = window.innerWidth - width - padding;
-  const maxTop = window.innerHeight - height - padding;
-  return {
-    left: Math.min(Math.max(clientX, padding), Math.max(maxLeft, padding)),
-    top: Math.min(Math.max(clientY, padding), Math.max(maxTop, padding)),
-  };
-}
-
-function adjustPosition(
-  position: { top: number; left: number },
-  rect: DOMRect,
-) {
-  const padding = 8;
-  const maxLeft = window.innerWidth - rect.width - padding;
-  const maxTop = window.innerHeight - rect.height - padding;
-  return {
-    left: Math.min(
-      Math.max(position.left, padding),
-      Math.max(maxLeft, padding),
-    ),
-    top: Math.min(Math.max(position.top, padding), Math.max(maxTop, padding)),
-  };
 }
