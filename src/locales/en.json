@@ -32,7 +32,9 @@
     "chaptersCount": "Chapters:",
     "projects": "Projects",
     "settings": "Settings",
-    "copied": "Copied!"
+    "copied": "Copied!",
+    "paste": "Paste",
+    "copy": "Copy"
   },
   "nav": {
     "backToHome": "Back to Home",

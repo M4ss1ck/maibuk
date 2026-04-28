@@ -2,8 +2,15 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
-import { Code2, BookOpen } from "lucide-react";
+import { Code2, BookOpen, ClipboardCopy, ClipboardPaste } from "lucide-react";
 import { spellCheckService } from "../../lib/spellcheck";
+import { Divider } from "./ToolbarButton";
+import {
+  adjustPosition,
+  clampPosition,
+  getWordAtPosition,
+} from "./editor-context-menu-utils";
+import { fallbackPaste, useClipboardProbe } from "./useClipboardProbe";
 
 interface EditorContextMenuProps {
   editor: Editor;
@@ -12,13 +19,17 @@ interface EditorContextMenuProps {
   onOpenChange?: (open: boolean) => void;
 }
 
+let menuIdCounter = 0;
+
 type MenuState = {
+  id: number;
   position: { top: number; left: number };
   blockIndex: number;
   misspelling: { word: string; from: number; to: number } | null;
   suggestions: string[];
   isLoadingSuggestions: boolean;
   wordUnderCursor: string | null;
+  canPaste: boolean;
 };
 
 /**
@@ -29,10 +40,16 @@ type MenuState = {
  * Uses bubble phase — runs after ImageContextMenu (capture phase).
  * If ImageContextMenu claims the event, this menu is skipped.
  */
-export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }: EditorContextMenuProps) {
+export function EditorContextMenu({
+  editor,
+  onInspect,
+  onLookup,
+  onOpenChange,
+}: EditorContextMenuProps) {
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const consumeProbe = useClipboardProbe(editor);
 
   // Notify parent when open state changes
   useEffect(() => {
@@ -96,13 +113,24 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
 
       const menuPosition = clampPosition(event.clientX, event.clientY);
 
+      const menuId = ++menuIdCounter;
       setMenu({
+        id: menuId,
         position: menuPosition,
         blockIndex: blockCount,
         misspelling,
         suggestions: [],
         isLoadingSuggestions: !!misspelling,
         wordUnderCursor,
+        canPaste: false,
+      });
+
+      void consumeProbe().then((canPaste) => {
+        if (!canPaste) return;
+        setMenu((prev) => {
+          if (!prev || prev.id !== menuId) return prev;
+          return { ...prev, canPaste: true };
+        });
       });
 
       // Async fetch suggestions if misspelled
@@ -121,10 +149,11 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
         });
       }
     },
-    [editor],
+    [editor, consumeProbe],
   );
 
-  // Register event listener (bubble phase)
+  // Register contextmenu listener (bubble phase). The pointerdown listener for
+  // the clipboard probe is owned by useClipboardProbe.
   useEffect(() => {
     const dom = editor.view.dom;
     dom.addEventListener("contextmenu", handleContextMenu);
@@ -136,10 +165,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
     if (!menu) return;
 
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
-      if (
-        menuRef.current &&
-        menuRef.current.contains(event.target as Node)
-      ) {
+      if (menuRef.current?.contains(event.target as Node)) {
         return;
       }
       close();
@@ -188,6 +214,47 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
       className="fixed z-50 w-56 max-h-[60vh] rounded-lg border border-border bg-card shadow-lg flex flex-col py-1"
       style={{ top: menu.position.top, left: menu.position.left }}
     >
+      {/* Paste & Copy buttons */}
+      <div className="flex justify-between">
+        <button
+          type="button"
+          onClick={() => {
+            const { from, to } = editor.state.selection;
+            const hasSelection = from !== to;
+            if (hasSelection) {
+              // Trigger the same path as Ctrl+C
+              editor.commands.focus();
+              document.execCommand("copy");
+            } else {
+              navigator.clipboard.writeText(menu.wordUnderCursor ?? "");
+            }
+            close();
+          }}
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
+        >
+          <ClipboardCopy className="w-4 h-4 shrink-0" />
+          <span className="truncate">{t("common.copy")}</span>
+        </button>
+        <button
+          type="button"
+          disabled={!menu.canPaste}
+          onClick={() => {
+            // Trigger the same path as Ctrl+V: PasteHandler/default
+            // ProseMirror paste runs via the synchronous paste event.
+            editor.commands.focus();
+            const ok = document.execCommand("paste");
+            if (!ok) {
+              void fallbackPaste(editor);
+            }
+            close();
+          }}
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+        >
+          <ClipboardPaste className="w-4 h-4 shrink-0" />
+          <span className="truncate">{t("common.paste")}</span>
+        </button>
+      </div>
+      <Divider />
       {/* Spelling section */}
       {hasMisspelling && (
         <>
@@ -205,6 +272,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
             ) : topSuggestions.length > 0 ? (
               topSuggestions.map((suggestion) => (
                 <button
+                  type="button"
                   key={suggestion}
                   onClick={() => {
                     editor
@@ -233,6 +301,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
           </div>
 
           <button
+            type="button"
             onClick={() => {
               editor.commands.addToDictionary(menu.misspelling!.word);
               close();
@@ -249,6 +318,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
       {/* Dictionary lookup */}
       {menu.wordUnderCursor && (
         <button
+          type="button"
           onClick={() => {
             onLookup(menu.wordUnderCursor!);
             close();
@@ -264,6 +334,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
 
       {/* Inspect in HTML */}
       <button
+        type="button"
         className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2"
         onClick={() => {
           onInspect(menu.blockIndex);
@@ -278,69 +349,4 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
     </div>,
     document.body,
   );
-}
-
-// --- Helpers ---
-
-/**
- * Extract the word at a given ProseMirror position.
- * Uses Unicode-aware matching to support accented characters (Spanish, etc.).
- */
-function getWordAtPosition(
-  doc: import("@tiptap/pm/model").Node,
-  pos: number,
-): { word: string } | null {
-  const $pos = doc.resolve(pos);
-  const parent = $pos.parent;
-  if (!parent.isTextblock) return null;
-
-  const offset = $pos.parentOffset;
-  const text = parent.textContent;
-
-  const isWordChar = (ch: string) => /[\p{L}\p{M}'-]/u.test(ch);
-
-  let start = offset;
-  let end = offset;
-
-  while (start > 0 && isWordChar(text[start - 1])) start--;
-  while (end < text.length && isWordChar(text[end])) end++;
-
-  if (start === end) return null;
-
-  const word = text.slice(start, end);
-  // Skip single-char punctuation-only results
-  if (/^['-]+$/.test(word)) return null;
-
-  return { word };
-}
-
-function clampPosition(clientX: number, clientY: number) {
-  const width = 224;
-  const height = 300;
-  const padding = 8;
-  const maxLeft = window.innerWidth - width - padding;
-  const maxTop = window.innerHeight - height - padding;
-  return {
-    left: Math.min(Math.max(clientX, padding), Math.max(maxLeft, padding)),
-    top: Math.min(Math.max(clientY, padding), Math.max(maxTop, padding)),
-  };
-}
-
-function adjustPosition(
-  position: { top: number; left: number },
-  rect: DOMRect,
-) {
-  const padding = 8;
-  const maxLeft = window.innerWidth - rect.width - padding;
-  const maxTop = window.innerHeight - rect.height - padding;
-  return {
-    left: Math.min(
-      Math.max(position.left, padding),
-      Math.max(maxLeft, padding),
-    ),
-    top: Math.min(
-      Math.max(position.top, padding),
-      Math.max(maxTop, padding),
-    ),
-  };
 }
