@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
+import { DOMSerializer } from "@tiptap/pm/model";
 import { useTranslation } from "react-i18next";
-import { Code2, BookOpen } from "lucide-react";
+import { Code2, BookOpen, ClipboardCopy, ClipboardPaste } from "lucide-react";
 import { spellCheckService } from "../../lib/spellcheck";
+import { toast } from "../ui";
+import { Divider } from "./ToolbarButton";
 
 interface EditorContextMenuProps {
   editor: Editor;
@@ -29,7 +32,12 @@ type MenuState = {
  * Uses bubble phase — runs after ImageContextMenu (capture phase).
  * If ImageContextMenu claims the event, this menu is skipped.
  */
-export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }: EditorContextMenuProps) {
+export function EditorContextMenu({
+  editor,
+  onInspect,
+  onLookup,
+  onOpenChange,
+}: EditorContextMenuProps) {
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -136,10 +144,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
     if (!menu) return;
 
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
-      if (
-        menuRef.current &&
-        menuRef.current.contains(event.target as Node)
-      ) {
+      if (menuRef.current?.contains(event.target as Node)) {
         return;
       }
       close();
@@ -188,6 +193,69 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
       className="fixed z-50 w-56 max-h-[60vh] rounded-lg border border-border bg-card shadow-lg flex flex-col py-1"
       style={{ top: menu.position.top, left: menu.position.left }}
     >
+      {/* Paste & Copy buttons */}
+      <div className="flex justify-between">
+        <button
+          type="button"
+          onClick={() => {
+            const { from, to } = editor.state.selection;
+            const hasSelection = from !== to;
+            if (hasSelection) {
+              const slice = editor.state.doc.slice(from, to);
+              const serializer = DOMSerializer.fromSchema(editor.state.schema);
+              const fragment = serializer.serializeFragment(slice.content);
+              const container = document.createElement("div");
+              container.appendChild(fragment);
+              const html = container.innerHTML;
+              const text = editor.state.doc.textBetween(from, to, "\n\n");
+              navigator.clipboard.write([
+                new ClipboardItem({
+                  "text/html": new Blob([html], { type: "text/html" }),
+                  "text/plain": new Blob([text], { type: "text/plain" }),
+                }),
+              ]);
+            } else {
+              navigator.clipboard.writeText(menu.wordUnderCursor ?? "");
+            }
+            toast.success(t("common.copied"));
+            close();
+          }}
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
+        >
+          <ClipboardCopy className="w-4 h-4 shrink-0" />
+          <span className="truncate">{t("common.copy")}</span>
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const items = await navigator.clipboard.read();
+              for (const item of items) {
+                if (item.types.includes("text/html")) {
+                  const blob = await item.getType("text/html");
+                  const html = await blob.text();
+                  editor.chain().focus().insertContent(html).run();
+                  close();
+                  return;
+                }
+              }
+              // Fallback to plain text
+              const text = await navigator.clipboard.readText();
+              editor.chain().focus().insertContent(text).run();
+            } catch {
+              // clipboard.read() may not be available; fall back to readText
+              const text = await navigator.clipboard.readText();
+              editor.chain().focus().insertContent(text).run();
+            }
+            close();
+          }}
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
+        >
+          <ClipboardPaste className="w-4 h-4 shrink-0" />
+          <span className="truncate">{t("common.paste")}</span>
+        </button>
+      </div>
+      <Divider />
       {/* Spelling section */}
       {hasMisspelling && (
         <>
@@ -249,6 +317,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
       {/* Dictionary lookup */}
       {menu.wordUnderCursor && (
         <button
+          type="button"
           onClick={() => {
             onLookup(menu.wordUnderCursor!);
             close();
@@ -264,6 +333,7 @@ export function EditorContextMenu({ editor, onInspect, onLookup, onOpenChange }:
 
       {/* Inspect in HTML */}
       <button
+        type="button"
         className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2"
         onClick={() => {
           onInspect(menu.blockIndex);
@@ -338,9 +408,6 @@ function adjustPosition(
       Math.max(position.left, padding),
       Math.max(maxLeft, padding),
     ),
-    top: Math.min(
-      Math.max(position.top, padding),
-      Math.max(maxTop, padding),
-    ),
+    top: Math.min(Math.max(position.top, padding), Math.max(maxTop, padding)),
   };
 }

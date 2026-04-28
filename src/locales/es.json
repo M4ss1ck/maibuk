@@ -32,7 +32,9 @@
     "chaptersCount": "Capítulos:",
     "projects": "Proyectos",
     "settings": "Configuración",
-    "copied": "¡Copiado!"
+    "copied": "¡Copiado!",
+    "paste": "Pegar",
+    "copy": "Copiar"
   },
   "nav": {
     "backToHome": "Inicio",
