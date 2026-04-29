@@ -11,10 +11,7 @@ function escapeSQL(value: unknown): string {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
-function generateInsertStatements(
-  tableName: string,
-  rows: Record<string, unknown>[]
-): string {
+function generateInsertStatements(tableName: string, rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "";
 
   const statements: string[] = [];
@@ -29,12 +26,9 @@ function generateInsertStatements(
 }
 
 class TauriDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: Database) { }
+  constructor(private db: Database) {}
 
-  async execute(
-    sql: string,
-    params?: unknown[]
-  ): Promise<{ rowsAffected: number }> {
+  async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
     const result = await this.db.execute(sql, params);
     return { rowsAffected: result.rowsAffected };
   }
@@ -88,12 +82,9 @@ class TauriDatabaseAdapter implements DatabaseAdapter {
       }
     }
   }
-
 }
 
-export async function createTauriDatabase(
-  path: string
-): Promise<DatabaseAdapter> {
+export async function createTauriDatabase(path: string): Promise<DatabaseAdapter> {
   const db = await Database.load(path);
   return new TauriDatabaseAdapter(db);
 }

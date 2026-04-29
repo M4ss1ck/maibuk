@@ -12,12 +12,12 @@ const options = [
 describe("Select", () => {
   describe("rendering", () => {
     it("renders a listbox button", () => {
-      render(<Select value="apple" onChange={() => { }} options={options} />);
+      render(<Select value="apple" onChange={() => {}} options={options} />);
       expect(screen.getByRole("button")).toBeInTheDocument();
     });
 
     it("displays the selected option label", () => {
-      render(<Select value="banana" onChange={() => { }} options={options} />);
+      render(<Select value="banana" onChange={() => {}} options={options} />);
       expect(screen.getByText("Banana")).toBeInTheDocument();
     });
   });
@@ -25,7 +25,7 @@ describe("Select", () => {
   describe("interaction", () => {
     it("opens dropdown on click", async () => {
       const user = userEvent.setup();
-      render(<Select value="apple" onChange={() => { }} options={options} />);
+      render(<Select value="apple" onChange={() => {}} options={options} />);
 
       await user.click(screen.getByRole("button"));
 
@@ -58,7 +58,7 @@ describe("Select", () => {
         { value: 20, label: "20px" },
       ];
 
-      render(<Select value={16} onChange={() => { }} options={numOptions} />);
+      render(<Select value={16} onChange={() => {}} options={numOptions} />);
       expect(screen.getByText("16px")).toBeInTheDocument();
     });
   });
@@ -66,7 +66,7 @@ describe("Select", () => {
   describe("className", () => {
     it("applies custom className to wrapper", () => {
       const { container } = render(
-        <Select value="apple" onChange={() => { }} options={options} className="w-40" />
+        <Select value="apple" onChange={() => {}} options={options} className="w-40" />
       );
       // className is applied to the inner div: Listbox > div[data-headlessui-state] > div.relative
       const wrapper = container.querySelector(".w-40");

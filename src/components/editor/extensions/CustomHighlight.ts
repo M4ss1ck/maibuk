@@ -61,16 +61,9 @@ export const CustomHighlight = Mark.create<HighlightOptions>({
 
           // Try to get from style background
           const bg = element.style.background;
-          if (
-            bg &&
-            !bg.includes("url") &&
-            bg !== "transparent" &&
-            bg !== "inherit"
-          ) {
+          if (bg && !bg.includes("url") && bg !== "transparent" && bg !== "inherit") {
             // Extract color from background shorthand
-            const colorMatch = bg.match(
-              /^(#[0-9a-f]{3,8}|rgba?\([^)]+\)|[a-z]+)/i
-            );
+            const colorMatch = bg.match(/^(#[0-9a-f]{3,8}|rgba?\([^)]+\)|[a-z]+)/i);
             if (colorMatch) {
               return colorMatch[1];
             }
@@ -111,10 +104,7 @@ export const CustomHighlight = Mark.create<HighlightOptions>({
           // Check if this span has a background color
           if (
             (bgColor && bgColor !== "transparent" && bgColor !== "inherit") ||
-            (bg &&
-              !bg.includes("url") &&
-              bg !== "transparent" &&
-              bg !== "inherit")
+            (bg && !bg.includes("url") && bg !== "transparent" && bg !== "inherit")
           ) {
             return {};
           }
@@ -126,11 +116,7 @@ export const CustomHighlight = Mark.create<HighlightOptions>({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return [
-      "mark",
-      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes),
-      0,
-    ];
+    return ["mark", mergeAttributes(this.options.HTMLAttributes, HTMLAttributes), 0];
   },
 
   addCommands() {

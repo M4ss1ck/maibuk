@@ -12,7 +12,13 @@ interface TextCaseMenuProps {
 export function TextCaseMenu({ editor }: TextCaseMenuProps) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [menuPosition, setMenuPosition] = useState<{
+    top: number;
+    left: number;
+  }>({
+    top: 0,
+    left: 0,
+  });
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const getSelectedText = (): string => {
@@ -24,21 +30,36 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
     const { from, to } = editor.state.selection;
     const text = getSelectedText();
     if (text) {
-      editor.chain().focus().deleteRange({ from, to }).insertContent(transformer(text)).run();
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from, to })
+        .insertContent(transformer(text))
+        .run();
     }
   };
 
   const toUpperCase = () => transformSelectedText((text) => text.toUpperCase());
   const toLowerCase = () => transformSelectedText((text) => text.toLowerCase());
-  const toAlternatingCase = () => transformSelectedText((text) =>
-    text.split("").map((char, i) => i % 2 === 0 ? char.toLowerCase() : char.toUpperCase()).join("")
-  );
-  const toSentenceCase = () => transformSelectedText((text) =>
-    text.toLowerCase().replace(/(^\s*\w|[.!?]\s+\w)/g, (c) => c.toUpperCase())
-  );
-  const toTitleCase = () => transformSelectedText((text) =>
-    text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
-  );
+  const toAlternatingCase = () =>
+    transformSelectedText((text) =>
+      text
+        .split("")
+        .map((char, i) =>
+          i % 2 === 0 ? char.toLowerCase() : char.toUpperCase(),
+        )
+        .join(""),
+    );
+  const toSentenceCase = () =>
+    transformSelectedText((text) =>
+      text
+        .toLowerCase()
+        .replace(/(^\s*\w|[.!?]\s+\w)/g, (c) => c.toUpperCase()),
+    );
+  const toTitleCase = () =>
+    transformSelectedText((text) =>
+      text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()),
+    );
 
   const handleShowMenu = () => {
     if (buttonRef.current) {
@@ -57,7 +78,10 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
       if (
         buttonRef.current &&
         !buttonRef.current.contains(e.target as Node) &&
-        !(e.target instanceof HTMLElement && e.target.closest('.text-case-menu-portal'))
+        !(
+          e.target instanceof HTMLElement &&
+          e.target.closest(".text-case-menu-portal")
+        )
       ) {
         setShowMenu(false);
       }
@@ -78,7 +102,8 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
 
       <button
         ref={buttonRef}
-        onClick={() => showMenu ? setShowMenu(false) : handleShowMenu()}
+        type="button"
+        onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
         title={t("editor.textCase")}
         className={`p-2 rounded transition-colors flex items-center gap-0.5 ${showMenu ? "bg-primary text-white" : "hover:bg-muted"}`}
       >
@@ -86,32 +111,45 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
         <ChevronDown className="w-3 h-3" />
       </button>
 
-      {showMenu && createPortal(
-        <div
-          className="text-case-menu-portal fixed bg-card border border-border rounded-lg shadow-lg py-1 z-50 max-w-min"
-          style={{ top: menuPosition.top, left: menuPosition.left }}
-        >
-          <button
-            onClick={() => { toAlternatingCase(); setShowMenu(false); }}
-            className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
+      {showMenu &&
+        createPortal(
+          <div
+            className="text-case-menu-portal fixed bg-card border border-border rounded-lg shadow-lg py-1 z-50 max-w-min"
+            style={{ top: menuPosition.top, left: menuPosition.left }}
           >
-            {t("editor.alternatingCase")}
-          </button>
-          <button
-            onClick={() => { toSentenceCase(); setShowMenu(false); }}
-            className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
-          >
-            {t("editor.sentenceCase")}
-          </button>
-          <button
-            onClick={() => { toTitleCase(); setShowMenu(false); }}
-            className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
-          >
-            {t("editor.titleCase")}
-          </button>
-        </div>,
-        document.body
-      )}
+            <button
+              type="button"
+              onClick={() => {
+                toAlternatingCase();
+                setShowMenu(false);
+              }}
+              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
+            >
+              {t("editor.alternatingCase")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                toSentenceCase();
+                setShowMenu(false);
+              }}
+              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
+            >
+              {t("editor.sentenceCase")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                toTitleCase();
+                setShowMenu(false);
+              }}
+              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
+            >
+              {t("editor.titleCase")}
+            </button>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

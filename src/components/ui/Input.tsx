@@ -13,10 +13,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full">
         {label && (
-          <label
-            htmlFor={inputId}
-            className="block text-sm font-medium mb-1.5"
-          >
+          <label htmlFor={inputId} className="block text-sm font-medium mb-1.5">
             {label}
           </label>
         )}
@@ -25,10 +22,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground transition-colors
-            ${error
+            ${
+              error
                 ? "border-destructive focus:ring-destructive"
                 : "border-border focus:border-primary focus:ring-primary"
-              }
+            }
             focus:outline-none focus:ring-2 focus:ring-offset-0
             placeholder:text-muted-foreground
             ${endAdornment ? "pr-10" : ""}
@@ -36,14 +34,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {endAdornment && (
-            <div className="absolute inset-y-0 right-2 flex items-center">
-              {endAdornment}
-            </div>
+            <div className="absolute inset-y-0 right-2 flex items-center">{endAdornment}</div>
           )}
         </div>
-        {error && (
-          <p className="mt-1 text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
       </div>
     );
   }

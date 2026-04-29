@@ -71,9 +71,7 @@ export default defineConfig(() => ({
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
       ],
-      exclude: [
-        "src/**/*.d.ts",
-      ],
+      exclude: ["src/**/*.d.ts"],
       thresholds: {
         lines: 80,
         functions: 90,
@@ -90,25 +88,25 @@ export default defineConfig(() => ({
   ...(isWeb
     ? {}
     : {
-      // Vite options tailored for Tauri development
-      // 1. prevent Vite from obscuring rust errors
-      clearScreen: false,
-      // 2. tauri expects a fixed port, fail if that port is not available
-      server: {
-        port: 1420,
-        strictPort: true,
-        host: host || false,
-        hmr: host
-          ? {
-            protocol: "ws",
-            host,
-            port: 1421,
-          }
-          : undefined,
-        watch: {
-          // 3. tell Vite to ignore watching `src-tauri`
-          ignored: ["**/src-tauri/**"],
+        // Vite options tailored for Tauri development
+        // 1. prevent Vite from obscuring rust errors
+        clearScreen: false,
+        // 2. tauri expects a fixed port, fail if that port is not available
+        server: {
+          port: 1420,
+          strictPort: true,
+          host: host || false,
+          hmr: host
+            ? {
+                protocol: "ws",
+                host,
+                port: 1421,
+              }
+            : undefined,
+          watch: {
+            // 3. tell Vite to ignore watching `src-tauri`
+            ignored: ["**/src-tauri/**"],
+          },
         },
-      },
-    }),
+      }),
 }));

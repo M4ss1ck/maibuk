@@ -30,11 +30,7 @@ interface ParsedInlineStyles {
 export function mapCssFontToPdf(cssFontFamily: string): string {
   const lower = cssFontFamily.toLowerCase();
 
-  if (
-    lower.includes("mono") ||
-    lower.includes("courier") ||
-    lower.includes("consolas")
-  ) {
+  if (lower.includes("mono") || lower.includes("courier") || lower.includes("consolas")) {
     return "Courier";
   }
 
@@ -66,7 +62,10 @@ function parseInlineStyles(el: Element): ParsedInlineStyles {
   if (!styleStr) return {};
 
   const result: ParsedInlineStyles = {};
-  const props = styleStr.split(";").map((p) => p.trim()).filter(Boolean);
+  const props = styleStr
+    .split(";")
+    .map((p) => p.trim())
+    .filter(Boolean);
 
   for (const prop of props) {
     const colonIdx = prop.indexOf(":");
@@ -103,9 +102,7 @@ function parseInlineStyles(el: Element): ParsedInlineStyles {
  * Converts a ParsedInlineStyles object into a react-pdf style object,
  * omitting undefined values.
  */
-function toReactPdfStyle(
-  parsed: ParsedInlineStyles
-): Record<string, string | number> | null {
+function toReactPdfStyle(parsed: ParsedInlineStyles): Record<string, string | number> | null {
   const style: Record<string, string | number> = {};
   if (parsed.color) style.color = parsed.color;
   if (parsed.fontFamily) style.fontFamily = parsed.fontFamily;
@@ -118,10 +115,7 @@ function toReactPdfStyle(
  * Parses an HTML string and returns React-PDF elements.
  * The HTML is expected to be pre-sanitized by processChapterHtml().
  */
-export function renderHtmlContent(
-  html: string,
-  styles: PdfStyles
-): ReactNode[] {
+export function renderHtmlContent(html: string, styles: PdfStyles): ReactNode[] {
   if (!html) return [];
 
   const parser = new DOMParser();
@@ -137,11 +131,7 @@ export function renderHtmlContent(
 // Block-level rendering
 // ---------------------------------------------------------------------------
 
-function renderBlockChildren(
-  node: Element,
-  styles: PdfStyles,
-  keyPrefix = "b"
-): ReactNode[] {
+function renderBlockChildren(node: Element, styles: PdfStyles, keyPrefix = "b"): ReactNode[] {
   const result: ReactNode[] = [];
 
   for (let i = 0; i < node.childNodes.length; i++) {
@@ -155,11 +145,7 @@ function renderBlockChildren(
   return result;
 }
 
-function renderBlockNode(
-  node: Node,
-  styles: PdfStyles,
-  key: string
-): ReactNode {
+function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode {
   // Skip bare text nodes at block level (whitespace between elements)
   if (node.nodeType === Node.TEXT_NODE) {
     const text = node.textContent?.trim();
@@ -220,16 +206,8 @@ function renderBlockNode(
 // Specific block renderers
 // ---------------------------------------------------------------------------
 
-function renderParagraph(
-  el: Element,
-  styles: PdfStyles,
-  key: string
-): ReactNode {
-  return createElement(
-    Text,
-    { key, style: styles.paragraph },
-    ...renderInlineChildren(el, styles)
-  );
+function renderParagraph(el: Element, styles: PdfStyles, key: string): ReactNode {
+  return createElement(Text, { key, style: styles.paragraph }, ...renderInlineChildren(el, styles));
 }
 
 function renderHeading(
@@ -238,11 +216,7 @@ function renderHeading(
   level: "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6",
   key: string
 ): ReactNode {
-  return createElement(
-    Text,
-    { key, style: styles[level] },
-    ...renderInlineChildren(el, styles)
-  );
+  return createElement(Text, { key, style: styles[level] }, ...renderInlineChildren(el, styles));
 }
 
 function renderList(
@@ -277,11 +251,7 @@ function renderList(
   return createElement(View, { key, style: styles.list }, ...items);
 }
 
-function renderBlockquote(
-  el: Element,
-  styles: PdfStyles,
-  key: string
-): ReactNode {
+function renderBlockquote(el: Element, styles: PdfStyles, key: string): ReactNode {
   // Blockquote may contain <p> elements or raw text
   const children = el.querySelectorAll("p");
   if (children.length > 0) {
@@ -302,11 +272,7 @@ function renderBlockquote(
   return createElement(
     View,
     { key, style: styles.blockquote },
-    createElement(
-      Text,
-      { style: styles.blockquoteText },
-      ...renderInlineChildren(el, styles)
-    )
+    createElement(Text, { style: styles.blockquoteText }, ...renderInlineChildren(el, styles))
   );
 }
 
@@ -318,22 +284,14 @@ function renderSceneBreak(styles: PdfStyles, key: string): ReactNode {
   );
 }
 
-function renderImage(
-  el: Element,
-  styles: PdfStyles,
-  key: string
-): ReactNode {
+function renderImage(el: Element, styles: PdfStyles, key: string): ReactNode {
   const src = el.getAttribute("src");
   if (!src) return null;
 
   return createElement(Image, { key, src, style: styles.image });
 }
 
-function renderTable(
-  el: Element,
-  styles: PdfStyles,
-  key: string
-): ReactNode {
+function renderTable(el: Element, styles: PdfStyles, key: string): ReactNode {
   const rows: ReactNode[] = [];
 
   // Gather rows from <thead>, <tbody>, or directly under <table>
@@ -347,19 +305,13 @@ function renderTable(
       const cell = tr.children[c];
       const isHeader = cell.tagName.toLowerCase() === "th";
       const cellStyle = isHeader ? styles.tableCellHeader : styles.tableCell;
-      const textStyle = isHeader
-        ? [styles.tableCellText, styles.bold]
-        : styles.tableCellText;
+      const textStyle = isHeader ? [styles.tableCellText, styles.bold] : styles.tableCellText;
 
       cells.push(
         createElement(
           View,
           { key: `c-${c}`, style: cellStyle },
-          createElement(
-            Text,
-            { style: textStyle },
-            ...renderInlineChildren(cell, styles)
-          )
+          createElement(Text, { style: textStyle }, ...renderInlineChildren(cell, styles))
         )
       );
     }
@@ -370,11 +322,7 @@ function renderTable(
   return createElement(View, { key, style: styles.table }, ...rows);
 }
 
-function renderEndnotes(
-  el: Element,
-  styles: PdfStyles,
-  key: string
-): ReactNode {
+function renderEndnotes(el: Element, styles: PdfStyles, key: string): ReactNode {
   const children: ReactNode[] = [];
 
   // Title
@@ -409,10 +357,7 @@ function renderEndnotes(
 // Inline rendering
 // ---------------------------------------------------------------------------
 
-function renderInlineChildren(
-  node: Element,
-  styles: PdfStyles
-): ReactNode[] {
+function renderInlineChildren(node: Element, styles: PdfStyles): ReactNode[] {
   const result: ReactNode[] = [];
   let keyCounter = 0;
 

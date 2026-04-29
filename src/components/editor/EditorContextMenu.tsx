@@ -5,11 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Code2, BookOpen, ClipboardCopy, ClipboardPaste } from "lucide-react";
 import { spellCheckService } from "../../lib/spellcheck";
 import { Divider } from "./ToolbarButton";
-import {
-  adjustPosition,
-  clampPosition,
-  getWordAtPosition,
-} from "./editor-context-menu-utils";
+import { adjustPosition, clampPosition, getWordAtPosition } from "./editor-context-menu-utils";
 import { fallbackPaste, useClipboardProbe } from "./useClipboardProbe";
 
 interface EditorContextMenuProps {
@@ -99,8 +95,7 @@ export function EditorContextMenu({
       });
 
       // --- Check misspelling ---
-      const misspelling =
-        editor.storage.spellCheck?.getMisspellingAt?.(pos.pos) ?? null;
+      const misspelling = editor.storage.spellCheck?.getMisspellingAt?.(pos.pos) ?? null;
 
       // --- Word under cursor (for dictionary lookup) ---
       let wordUnderCursor: string | null = null;
@@ -149,7 +144,7 @@ export function EditorContextMenu({
         });
       }
     },
-    [editor, consumeProbe],
+    [editor, consumeProbe]
   );
 
   // Register contextmenu listener (bubble phase). The pointerdown listener for
@@ -195,10 +190,7 @@ export function EditorContextMenu({
     const rect = menuRef.current.getBoundingClientRect();
     const adjusted = adjustPosition(menu.position, rect);
 
-    if (
-      adjusted.left !== menu.position.left ||
-      adjusted.top !== menu.position.top
-    ) {
+    if (adjusted.left !== menu.position.left || adjusted.top !== menu.position.top) {
       setMenu((prev) => (prev ? { ...prev, position: adjusted } : prev));
     }
   }, [menu]);
@@ -259,16 +251,12 @@ export function EditorContextMenu({
       {hasMisspelling && (
         <>
           <div className="px-3 py-1.5 border-b border-border">
-            <p className="text-xs text-muted-foreground truncate">
-              {menu.misspelling!.word}
-            </p>
+            <p className="text-xs text-muted-foreground truncate">{menu.misspelling!.word}</p>
           </div>
 
           <div className="py-1">
             {menu.isLoadingSuggestions ? (
-              <div className="px-3 py-1.5 text-sm text-muted-foreground">
-                {t("common.loading")}
-              </div>
+              <div className="px-3 py-1.5 text-sm text-muted-foreground">{t("common.loading")}</div>
             ) : topSuggestions.length > 0 ? (
               topSuggestions.map((suggestion) => (
                 <button
@@ -283,7 +271,7 @@ export function EditorContextMenu({
                           from: menu.misspelling!.from,
                           to: menu.misspelling!.to,
                         },
-                        suggestion,
+                        suggestion
                       )
                       .run();
                     close();
@@ -326,9 +314,7 @@ export function EditorContextMenu({
           className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
         >
           <BookOpen className="w-4 h-4 shrink-0" />
-          <span className="truncate">
-            {t("editor.lookUp", { word: menu.wordUnderCursor })}
-          </span>
+          <span className="truncate">{t("editor.lookUp", { word: menu.wordUnderCursor })}</span>
         </button>
       )}
 
@@ -347,6 +333,6 @@ export function EditorContextMenu({
         </span>
       </button>
     </div>,
-    document.body,
+    document.body
   );
 }

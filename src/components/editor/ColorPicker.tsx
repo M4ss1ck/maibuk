@@ -14,13 +14,37 @@ interface ColorPickerProps {
 }
 
 const PRESET_COLORS = [
-  "#000000", "#374151", "#6B7280", "#9CA3AF", "#D1D5DB",
-  "#EF4444", "#F97316", "#EAB308", "#22C55E", "#14B8A6",
-  "#3B82F6", "#6366F1", "#8B5CF6", "#EC4899", "#F43F5E",
-  "#7C2D12", "#713F12", "#365314", "#164E63", "#1E3A8A",
+  "#000000",
+  "#374151",
+  "#6B7280",
+  "#9CA3AF",
+  "#D1D5DB",
+  "#EF4444",
+  "#F97316",
+  "#EAB308",
+  "#22C55E",
+  "#14B8A6",
+  "#3B82F6",
+  "#6366F1",
+  "#8B5CF6",
+  "#EC4899",
+  "#F43F5E",
+  "#7C2D12",
+  "#713F12",
+  "#365314",
+  "#164E63",
+  "#1E3A8A",
 ];
 
-export function ColorPicker({ value, onChange, onClear, onToggle, isActive, title, icon }: ColorPickerProps) {
+export function ColorPicker({
+  value,
+  onChange,
+  onClear,
+  onToggle,
+  isActive,
+  title,
+  icon,
+}: ColorPickerProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -78,10 +102,12 @@ export function ColorPicker({ value, onChange, onClear, onToggle, isActive, titl
       <div ref={containerRef} className="flex items-center">
         {/* Main button - triggers toggle action */}
         <button
+          type="button"
           onClick={onToggle}
           title={title}
-          className={`p-2 rounded-l transition-colors ${isActive ? "bg-primary text-white" : "hover:bg-muted"
-            }`}
+          className={`p-2 rounded-l transition-colors ${
+            isActive ? "bg-primary text-white" : "hover:bg-muted"
+          }`}
         >
           <span className="relative">
             {icon}
@@ -95,63 +121,71 @@ export function ColorPicker({ value, onChange, onClear, onToggle, isActive, titl
         </button>
         {/* Dropdown arrow button - opens color picker */}
         <button
+          type="button"
           onClick={handleDropdownToggle}
           title={`${title} options`}
-          className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${isOpen ? "bg-muted" : "hover:bg-muted"
-            }`}
+          className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${
+            isOpen ? "bg-muted" : "hover:bg-muted"
+          }`}
         >
           <ChevronDownIcon className="w-2 h-2" />
         </button>
       </div>
 
-      {isOpen && createPortal(
-        <div
-          ref={dropdownRef}
-          className="fixed p-2 bg-background border border-border rounded-lg shadow-lg z-50 w-48"
-          style={{ top: position.top, left: position.left }}
-        >
-          <div className="grid grid-cols-5 gap-1 mb-2">
-            {PRESET_COLORS.map((color) => (
-              <button
-                key={color}
-                onClick={() => {
-                  onChange(color);
-                  setIsOpen(false);
-                }}
-                className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${value === color ? "border-primary" : "border-transparent"
+      {isOpen &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="fixed p-2 bg-background border border-border rounded-lg shadow-lg z-50 w-48"
+            style={{ top: position.top, left: position.left }}
+          >
+            <div className="grid grid-cols-5 gap-1 mb-2">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => {
+                    onChange(color);
+                    setIsOpen(false);
+                  }}
+                  className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${
+                    value === color ? "border-primary" : "border-transparent"
                   }`}
-                style={{ backgroundColor: color }}
-                title={color}
-              />
-            ))}
-          </div>
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
 
-          <div className="flex items-center gap-2 pt-2 border-t border-border">
-            <input
-              type="color"
-              value={value || "#000000"}
-              onChange={(e) => {
-                onChange(e.target.value);
-              }}
-              className="w-8 h-8 cursor-pointer rounded border border-border"
-              title={t("editor.customColor")}
-            />
-            <span className="text-xs text-muted-foreground flex-1">{t("cover.custom")}</span>
-            {onClear && (
-              <button
-                onClick={() => {
-                  onClear();
-                  setIsOpen(false);
+            <div className="flex items-center gap-2 pt-2 border-t border-border">
+              <input
+                type="color"
+                value={value || "#000000"}
+                onChange={(e) => {
+                  onChange(e.target.value);
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted"
-              >
-                {t("editor.clear")}
-              </button>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+                className="w-8 h-8 cursor-pointer rounded border border-border"
+                title={t("editor.customColor")}
+              />
+              <span className="text-xs text-muted-foreground flex-1">
+                {t("cover.custom")}
+              </span>
+              {onClear && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClear();
+                    setIsOpen(false);
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted"
+                >
+                  {t("editor.clear")}
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

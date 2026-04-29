@@ -23,10 +23,7 @@ function escapeSQL(value: unknown): string {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
-function generateInsertStatements(
-  tableName: string,
-  rows: Record<string, unknown>[]
-): string {
+function generateInsertStatements(tableName: string, rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "";
 
   const statements: string[] = [];
@@ -41,12 +38,9 @@ function generateInsertStatements(
 }
 
 class WebDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: SqlJsDatabase) { }
+  constructor(private db: SqlJsDatabase) {}
 
-  async execute(
-    sql: string,
-    params?: unknown[]
-  ): Promise<{ rowsAffected: number }> {
+  async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
     this.db.run(sql, params as (string | number | null | Uint8Array)[]);
     this.persist();
     return { rowsAffected: this.db.getRowsModified() };
@@ -182,9 +176,7 @@ async function loadFromIndexedDB(): Promise<Uint8Array | null> {
   });
 }
 
-export async function createWebDatabase(
-  _path: string
-): Promise<DatabaseAdapter> {
+export async function createWebDatabase(_path: string): Promise<DatabaseAdapter> {
   const SQL = await initSqlJs({
     // Load sql.js WASM from CDN
     locateFile: (file: string) => `https://sql.js.org/dist/${file}`,

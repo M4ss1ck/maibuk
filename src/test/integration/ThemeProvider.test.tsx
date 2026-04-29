@@ -81,14 +81,8 @@ describe("ThemeProvider", () => {
         <div>content</div>
       </ThemeProvider>
     );
-    expect(addEventListenerMock).toHaveBeenCalledWith(
-      "change",
-      expect.any(Function)
-    );
+    expect(addEventListenerMock).toHaveBeenCalledWith("change", expect.any(Function));
     unmount();
-    expect(removeEventListenerMock).toHaveBeenCalledWith(
-      "change",
-      expect.any(Function)
-    );
+    expect(removeEventListenerMock).toHaveBeenCalledWith("change", expect.any(Function));
   });
 });

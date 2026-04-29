@@ -10,7 +10,11 @@ interface FootnoteDialogProps {
   onClose: () => void;
 }
 
-export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps) {
+export function FootnoteDialog({
+  editor,
+  isOpen,
+  onClose,
+}: FootnoteDialogProps) {
   const { t } = useTranslation();
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
@@ -53,8 +57,14 @@ export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps)
         </p>
 
         <div>
-          <label className="block text-sm font-medium mb-1">{t("editor.footnoteContent")}</label>
+          <label
+            htmlFor="footnote-content"
+            className="block text-sm font-medium mb-1"
+          >
+            {t("editor.footnoteContent")}
+          </label>
           <textarea
+            id="footnote-content"
             value={content}
             onChange={(e) => {
               setContent(e.target.value);

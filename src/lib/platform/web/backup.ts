@@ -15,7 +15,8 @@ interface StoredBackup {
   checksum: string;
 }
 
-const STORAGE_FULL_MESSAGE = "Backup storage full. Delete old backups in Settings or reduce retention limit.";
+const STORAGE_FULL_MESSAGE =
+  "Backup storage full. Delete old backups in Settings or reduce retention limit.";
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -52,12 +53,15 @@ class WebBackupAdapter implements BackupAdapter {
     };
 
     try {
-      await withDB((db) => new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).put(entry);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      }));
+      await withDB(
+        (db) =>
+          new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            tx.objectStore(STORE_NAME).put(entry);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          })
+      );
     } catch (error) {
       // Handle IndexedDB quota exceeded — auto-prune oldest eligible backup and retry once
       if (error instanceof DOMException && error.name === "QuotaExceededError") {
@@ -74,12 +78,15 @@ class WebBackupAdapter implements BackupAdapter {
         await this.deleteBackup(oldest.filename);
         // Retry once
         try {
-          await withDB((db) => new Promise<void>((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, "readwrite");
-            tx.objectStore(STORE_NAME).put(entry);
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-          }));
+          await withDB(
+            (db) =>
+              new Promise<void>((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, "readwrite");
+                tx.objectStore(STORE_NAME).put(entry);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+              })
+          );
         } catch {
           throw new Error(STORAGE_FULL_MESSAGE);
         }
@@ -90,32 +97,38 @@ class WebBackupAdapter implements BackupAdapter {
   }
 
   async listBackups(): Promise<BackupEntry[]> {
-    return withDB((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const request = tx.objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => {
-        const entries = (request.result as StoredBackup[]).map((stored) => ({
-          filename: stored.filename,
-          trigger: stored.trigger,
-          createdAt: new Date(stored.createdAt),
-          sizeBytes: stored.sizeBytes,
-          checksum: stored.checksum,
-        }));
-        // Sort newest first
-        entries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        resolve(entries);
-      };
-      request.onerror = () => reject(request.error);
-    }));
+    return withDB(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const request = tx.objectStore(STORE_NAME).getAll();
+          request.onsuccess = () => {
+            const entries = (request.result as StoredBackup[]).map((stored) => ({
+              filename: stored.filename,
+              trigger: stored.trigger,
+              createdAt: new Date(stored.createdAt),
+              sizeBytes: stored.sizeBytes,
+              checksum: stored.checksum,
+            }));
+            // Sort newest first
+            entries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            resolve(entries);
+          };
+          request.onerror = () => reject(request.error);
+        })
+    );
   }
 
   async readBackup(filename: string): Promise<string> {
-    const stored = await withDB<StoredBackup | undefined>((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const request = tx.objectStore(STORE_NAME).get(filename);
-      request.onsuccess = () => resolve(request.result as StoredBackup | undefined);
-      request.onerror = () => reject(request.error);
-    }));
+    const stored = await withDB<StoredBackup | undefined>(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const request = tx.objectStore(STORE_NAME).get(filename);
+          request.onsuccess = () => resolve(request.result as StoredBackup | undefined);
+          request.onerror = () => reject(request.error);
+        })
+    );
 
     if (!stored) {
       throw new Error(`Backup not found: ${filename}`);
@@ -130,12 +143,15 @@ class WebBackupAdapter implements BackupAdapter {
   }
 
   async deleteBackup(filename: string): Promise<void> {
-    await withDB((db) => new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).delete(filename);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    }));
+    await withDB(
+      (db) =>
+        new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readwrite");
+          tx.objectStore(STORE_NAME).delete(filename);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        })
+    );
   }
 }
 

@@ -34,7 +34,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
         if (href) {
           setLinkInfo({
             url: href,
-            position: { x: event.clientX, y: event.clientY }
+            position: { x: event.clientX, y: event.clientY },
           });
           setShowConfirmDialog(true);
         }
@@ -101,9 +101,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          {t("editor.externalLinkConfirm")}
-        </p>
+        <p className="text-sm text-muted-foreground">{t("editor.externalLinkConfirm")}</p>
         <div className="p-3 bg-muted rounded-lg break-all">
           <code className="text-sm text-foreground">{linkInfo.url}</code>
         </div>

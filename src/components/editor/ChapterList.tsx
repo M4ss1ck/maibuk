@@ -43,7 +43,8 @@ export function ChapterList({
     if (selectedItemRef.current) {
       selectedItemRef.current.scrollIntoView({ block: "nearest" });
     } else if (listContainerRef.current) {
-      listContainerRef.current.scrollTop = listContainerRef.current.scrollHeight;
+      listContainerRef.current.scrollTop =
+        listContainerRef.current.scrollHeight;
     }
   }, [currentChapterId, chapters.length]);
 
@@ -128,6 +129,7 @@ export function ChapterList({
       <div className="p-4 pt-12 md:pt-4 border-b border-border flex items-center justify-between bg-background z-10 shrink-0">
         <h3 className="font-medium">{t("chapters.title")}</h3>
         <button
+          type="button"
           onClick={() => setShowNewDialog(true)}
           className="p-1 hover:bg-muted rounded transition-colors"
           title={t("chapters.addChapter")}
@@ -155,13 +157,16 @@ export function ChapterList({
             value={newType}
             onChange={(value) => setNewType(value)}
             className="mb-2"
-            options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
-              value: value as ChapterType,
-              label,
-            }))}
+            options={Object.entries(chapterTypeLabels).map(
+              ([value, label]) => ({
+                value: value as ChapterType,
+                label,
+              }),
+            )}
           />
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={handleCreate}
               disabled={!newTitle.trim()}
               className="flex-1 px-3 py-1.5 text-sm bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50 transition-colors"
@@ -169,6 +174,7 @@ export function ChapterList({
               {t("common.create")}
             </button>
             <button
+              type="button"
               onClick={() => setShowNewDialog(false)}
               className="px-3 py-1.5 text-sm border border-border rounded hover:bg-muted transition-colors"
             >
@@ -195,11 +201,13 @@ export function ChapterList({
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, chapter.id)}
                 onDragEnd={handleDragEnd}
-                className={`group relative rounded transition-colors cursor-pointer ${draggedId === chapter.id ? "opacity-50" : ""
-                  } ${currentChapterId === chapter.id
+                className={`group relative rounded transition-colors cursor-pointer ${
+                  draggedId === chapter.id ? "opacity-50" : ""
+                } ${
+                  currentChapterId === chapter.id
                     ? "bg-primary/10 border-l-2 border-primary"
                     : "hover:bg-muted/50"
-                  }`}
+                }`}
               >
                 {/* Edit form overlay */}
                 {editingId === chapter.id ? (
@@ -218,14 +226,17 @@ export function ChapterList({
                     <Select
                       value={editType}
                       onChange={(value) => setEditType(value)}
-                      options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
-                        value: value as ChapterType,
-                        label,
-                      }))}
+                      options={Object.entries(chapterTypeLabels).map(
+                        ([value, label]) => ({
+                          value: value as ChapterType,
+                          label,
+                        }),
+                      )}
                       className="mb-2"
                     />
                     <div className="flex gap-2">
                       <button
+                        type="button"
                         onClick={handleUpdate}
                         disabled={!editTitle.trim()}
                         className="flex-1 px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
@@ -233,6 +244,7 @@ export function ChapterList({
                         {t("common.save")}
                       </button>
                       <button
+                        type="button"
                         onClick={cancelEditing}
                         className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
                       >
@@ -243,16 +255,22 @@ export function ChapterList({
                 ) : (
                   <>
                     <button
+                      type="button"
                       draggable={false}
                       onClick={() => onSelectChapter(chapter)}
                       className="w-full text-left p-3 pr-16"
                     >
                       <div className="flex items-center gap-2">
                         <ChapterIcon className="w-4 h-4 text-muted-foreground" />
-                        <span className="font-medium text-sm truncate">{chapter.title}</span>
+                        <span className="font-medium text-sm truncate">
+                          {chapter.title}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                        <span>{chapter.wordCount.toLocaleString()} {t("common.words")}</span>
+                        <span>
+                          {chapter.wordCount.toLocaleString()}{" "}
+                          {t("common.words")}
+                        </span>
                         <span>•</span>
                         <span className="capitalize">{chapter.status}</span>
                       </div>
@@ -262,6 +280,7 @@ export function ChapterList({
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                       {/* Edit button */}
                       <button
+                        type="button"
                         draggable={false}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -275,6 +294,7 @@ export function ChapterList({
 
                       {/* Delete button */}
                       <button
+                        type="button"
                         draggable={false}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -290,14 +310,18 @@ export function ChapterList({
                     {/* Delete confirmation */}
                     {deleteConfirmId === chapter.id && (
                       <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
-                        <span className="text-xs">{t("common.deleteConfirm")}</span>
+                        <span className="text-xs">
+                          {t("common.deleteConfirm")}
+                        </span>
                         <button
+                          type="button"
                           onClick={() => handleDelete(chapter.id)}
                           className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
                         >
                           {t("common.yes")}
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeleteConfirmId(null)}
                           className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
                         >
@@ -319,7 +343,9 @@ export function ChapterList({
           <div className="flex justify-between">
             <span>{t("common.totalWords")}</span>
             <span className="font-medium">
-              {chapters.reduce((sum, c) => sum + c.wordCount, 0).toLocaleString()}
+              {chapters
+                .reduce((sum, c) => sum + c.wordCount, 0)
+                .toLocaleString()}
             </span>
           </div>
           <div className="flex justify-between mt-1">

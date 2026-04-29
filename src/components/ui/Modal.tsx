@@ -9,7 +9,13 @@ interface ModalProps {
   footer?: ReactNode;
 }
 
-export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) {
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  footer,
+}: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,7 +41,8 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
-      <div
+      <button
+        type="button"
         className="absolute inset-0 bg-black/50 modal-backdrop-enter"
         onClick={onClose}
       />
@@ -54,6 +61,7 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
             {title}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 hover:bg-muted rounded-lg transition-colors"
             aria-label="Close"
@@ -63,9 +71,7 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
         </div>
 
         {/* Content */}
-        <div className="px-4 sm:px-6 py-4 overflow-auto flex-1">
-          {children}
-        </div>
+        <div className="px-4 sm:px-6 py-4 overflow-auto flex-1">{children}</div>
 
         {/* Footer */}
         {footer && (

@@ -1,6 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { mockAuthRefresh, mockAuthWithPassword, mockAuthWithOAuth2, mockCreate, mockGetFullList, mockGetList, mockUpdate, mockSyncCreate } = vi.hoisted(() => ({
+const {
+  mockAuthRefresh,
+  mockAuthWithPassword,
+  mockAuthWithOAuth2,
+  mockCreate,
+  mockGetFullList,
+  mockGetList,
+  mockUpdate,
+  mockSyncCreate,
+} = vi.hoisted(() => ({
   mockAuthRefresh: vi.fn(),
   mockAuthWithPassword: vi.fn(),
   mockAuthWithOAuth2: vi.fn(),
@@ -75,21 +84,21 @@ const {
 describe("parsePocketBaseDate()", () => {
   it("parses standard ISO 8601 dates", () => {
     expect(parsePocketBaseDate("2024-01-15T10:30:00.000Z")).toBe(
-      Math.floor(new Date("2024-01-15T10:30:00.000Z").getTime() / 1000),
+      Math.floor(new Date("2024-01-15T10:30:00.000Z").getTime() / 1000)
     );
   });
 
   it("parses PocketBase space-separated dates", () => {
     // PocketBase returns "2024-01-15 10:30:00.000Z" (space instead of T)
     expect(parsePocketBaseDate("2024-01-15 10:30:00.000Z")).toBe(
-      Math.floor(new Date("2024-01-15T10:30:00.000Z").getTime() / 1000),
+      Math.floor(new Date("2024-01-15T10:30:00.000Z").getTime() / 1000)
     );
   });
 
   it("parses dates without timezone suffix as UTC", () => {
     // Some PocketBase configs omit the Z
     expect(parsePocketBaseDate("2024-01-15 10:30:00.000")).toBe(
-      Math.floor(new Date("2024-01-15T10:30:00.000Z").getTime() / 1000),
+      Math.floor(new Date("2024-01-15T10:30:00.000Z").getTime() / 1000)
     );
   });
 
@@ -317,7 +326,7 @@ describe("pushBookBlob()", () => {
     mockAuthStoreRecord = null;
 
     await expect(pushBookBlob("book-1", new Blob(["data"]), "checksum")).rejects.toThrow(
-      "Not authenticated",
+      "Not authenticated"
     );
   });
 });

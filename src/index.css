@@ -113,7 +113,9 @@ body {
   min-height: 100vh;
   background-color: var(--color-background);
   color: var(--color-foreground);
-  transition: background-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
   font-size: 1rem;
 }
 
@@ -134,19 +136,23 @@ textarea {
   border-color: var(--color-border);
 }
 
-input::-webkit-input-placeholder, textarea::-webkit-input-placeholder {
+input::-webkit-input-placeholder,
+textarea::-webkit-input-placeholder {
   color: var(--color-muted-foreground);
 }
 
-input::-moz-placeholder, textarea::-moz-placeholder {
+input::-moz-placeholder,
+textarea::-moz-placeholder {
   color: var(--color-muted-foreground);
 }
 
-input:-ms-input-placeholder, textarea:-ms-input-placeholder {
+input:-ms-input-placeholder,
+textarea:-ms-input-placeholder {
   color: var(--color-muted-foreground);
 }
 
-input::-ms-input-placeholder, textarea::-ms-input-placeholder {
+input::-ms-input-placeholder,
+textarea::-ms-input-placeholder {
   color: var(--color-muted-foreground);
 }
 
@@ -264,9 +270,9 @@ option {
 
 .spellcheck-error {
   -webkit-text-decoration: underline wavy;
-          text-decoration: underline wavy;
+  text-decoration: underline wavy;
   -webkit-text-decoration-color: var(--color-destructive);
-          text-decoration-color: var(--color-destructive);
+  text-decoration-color: var(--color-destructive);
   text-underline-offset: 3px;
 }
 
@@ -323,7 +329,6 @@ option {
 
 .editor-content table tr:hover td {
   background-color: var(--color-table-border);
-  background-opacity: 0.5;
 }
 
 /* Table column resize feedback */
@@ -351,7 +356,8 @@ option {
 
 .editor-content table th:hover,
 .editor-content table td:hover {
-  box-shadow: inset -2px 0 0 color-mix(in srgb, var(--color-primary) 60%, transparent);
+  box-shadow: inset -2px 0 0
+    color-mix(in srgb, var(--color-primary) 60%, transparent);
 }
 
 /* Selected cell */
@@ -448,10 +454,26 @@ option {
   z-index: 5;
 }
 
-.image-resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
-.image-resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
-.image-resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
-.image-resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+.image-resize-handle.nw {
+  top: -5px;
+  left: -5px;
+  cursor: nw-resize;
+}
+.image-resize-handle.ne {
+  top: -5px;
+  right: -5px;
+  cursor: ne-resize;
+}
+.image-resize-handle.sw {
+  bottom: -5px;
+  left: -5px;
+  cursor: sw-resize;
+}
+.image-resize-handle.se {
+  bottom: -5px;
+  right: -5px;
+  cursor: se-resize;
+}
 
 /* Floating toolbar */
 .image-floating-toolbar {
@@ -500,9 +522,9 @@ option {
   align-items: center;
   margin: 2.5em 0;
   -webkit-user-select: none;
-     -moz-user-select: none;
-      -ms-user-select: none;
-          user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .scene-break-symbols {
@@ -654,38 +676,76 @@ option {
 /* ─── Animation keyframes ─── */
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(16px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes slide-down-out {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(8px) scale(0.98); }
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes toast-out {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-4px); }
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 @keyframes logo-entrance {
-  0% { opacity: 0; transform: scale(0.8); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Modal animations (custom Modal component) */

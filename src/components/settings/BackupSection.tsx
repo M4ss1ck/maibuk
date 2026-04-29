@@ -13,12 +13,8 @@ const SIZE_WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
 
 export function BackupSection() {
   const { t } = useTranslation();
-  const {
-    backupRetention,
-    backupDirectory,
-    setBackupRetention,
-    setBackupDirectory,
-  } = useSettingsStore();
+  const { backupRetention, backupDirectory, setBackupRetention, setBackupDirectory } =
+    useSettingsStore();
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [service, setService] = useState<BackupService | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +74,7 @@ export function BackupSection() {
         setErrorMessage(t("backup.createFailed"));
       }
     } finally {
-      await refresh().catch(() => { });
+      await refresh().catch(() => {});
     }
   }, [service, backupRetention, refresh, t]);
 
@@ -90,47 +86,53 @@ export function BackupSection() {
     }
   }, [setBackupDirectory]);
 
-  const handleDelete = useCallback(async (filename: string) => {
-    if (!service) return;
-    setErrorMessage(null);
-    try {
-      await service.deleteBackup(filename);
-    } catch (error) {
-      console.error("Failed to delete backup:", error);
-      setErrorMessage(t("backup.deleteFailed"));
-    } finally {
-      await refresh().catch(() => { });
-    }
-  }, [service, refresh, t]);
+  const handleDelete = useCallback(
+    async (filename: string) => {
+      if (!service) return;
+      setErrorMessage(null);
+      try {
+        await service.deleteBackup(filename);
+      } catch (error) {
+        console.error("Failed to delete backup:", error);
+        setErrorMessage(t("backup.deleteFailed"));
+      } finally {
+        await refresh().catch(() => {});
+      }
+    },
+    [service, refresh, t]
+  );
 
-  const handleRestore = useCallback(async (filename: string) => {
-    if (!service) return;
-    setErrorMessage(null);
-    try {
-      await service.restoreBackup(filename);
-      toast.success(t("backup.restoreSuccess"));
-    } catch (error) {
-      console.error("Backup restore failed:", error);
-      if (error instanceof Error) {
-        if (error.message === "BACKUP_CORRUPT") {
-          setErrorMessage(t("backup.backupCorrupt"));
-        } else if (error.message === "RESTORE_INVALID") {
-          setErrorMessage(t("backup.restoreInvalid"));
-        } else if (error.message.startsWith("RESTORE_FAILED:")) {
-          // Show the real error detail so the user (or developer) can diagnose
-          const detail = error.message.slice("RESTORE_FAILED: ".length);
-          setErrorMessage(`${t("backup.restoreFailed")}\n\n${detail}`);
+  const handleRestore = useCallback(
+    async (filename: string) => {
+      if (!service) return;
+      setErrorMessage(null);
+      try {
+        await service.restoreBackup(filename);
+        toast.success(t("backup.restoreSuccess"));
+      } catch (error) {
+        console.error("Backup restore failed:", error);
+        if (error instanceof Error) {
+          if (error.message === "BACKUP_CORRUPT") {
+            setErrorMessage(t("backup.backupCorrupt"));
+          } else if (error.message === "RESTORE_INVALID") {
+            setErrorMessage(t("backup.restoreInvalid"));
+          } else if (error.message.startsWith("RESTORE_FAILED:")) {
+            // Show the real error detail so the user (or developer) can diagnose
+            const detail = error.message.slice("RESTORE_FAILED: ".length);
+            setErrorMessage(`${t("backup.restoreFailed")}\n\n${detail}`);
+          } else {
+            setErrorMessage(t("backup.restoreFailed"));
+          }
         } else {
           setErrorMessage(t("backup.restoreFailed"));
         }
-      } else {
-        setErrorMessage(t("backup.restoreFailed"));
+      } finally {
+        setConfirmRestore(null);
+        await refresh().catch(() => {});
       }
-    } finally {
-      setConfirmRestore(null);
-      await refresh().catch(() => { });
-    }
-  }, [refresh, service, t]);
+    },
+    [refresh, service, t]
+  );
 
   const totalSize = backups.reduce((sum, b) => sum + b.sizeBytes, 0);
 
@@ -138,7 +140,9 @@ export function BackupSection() {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t("backup.title")}</h3>
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        {t("backup.title")}
+      </h3>
       <div>
         <p className="text-sm text-muted-foreground">{t("backup.description")}</p>
       </div>
@@ -184,18 +188,24 @@ export function BackupSection() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50">
-                <th className="px-3 py-2 text-left font-medium text-foreground">{t("backup.columnDate")}</th>
-                <th className="px-3 py-2 text-left font-medium text-foreground">{t("backup.columnTrigger")}</th>
-                <th className="px-3 py-2 text-left font-medium text-foreground">{t("backup.columnSize")}</th>
-                <th className="px-3 py-2 text-right font-medium text-foreground">{t("backup.columnActions")}</th>
+                <th className="px-3 py-2 text-left font-medium text-foreground">
+                  {t("backup.columnDate")}
+                </th>
+                <th className="px-3 py-2 text-left font-medium text-foreground">
+                  {t("backup.columnTrigger")}
+                </th>
+                <th className="px-3 py-2 text-left font-medium text-foreground">
+                  {t("backup.columnSize")}
+                </th>
+                <th className="px-3 py-2 text-right font-medium text-foreground">
+                  {t("backup.columnActions")}
+                </th>
               </tr>
             </thead>
             <tbody>
               {backups.map((backup) => (
                 <tr key={backup.filename} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2 text-foreground">
-                    {backup.createdAt.toLocaleString()}
-                  </td>
+                  <td className="px-3 py-2 text-foreground">{backup.createdAt.toLocaleString()}</td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {t(`backup.trigger.${backup.trigger}`)}
                   </td>

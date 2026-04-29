@@ -40,11 +40,9 @@ export const SceneBreak = Node.create<SceneBreakOptions>({
     return {
       setSceneBreak:
         () =>
-          ({ chain }: { chain: () => any }) => {
-            return chain()
-              .insertContent({ type: this.name })
-              .run();
-          },
+        ({ chain }: { chain: () => any }) => {
+          return chain().insertContent({ type: this.name }).run();
+        },
     };
   },
 });

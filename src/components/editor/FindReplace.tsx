@@ -55,19 +55,23 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
     return matches;
   }, [editor, searchTerm, currentMatch]);
 
-  const goToMatch = useCallback((matchIndex: number) => {
-    const matches = findMatches();
-    if (matches.length === 0 || matchIndex < 1 || matchIndex > matches.length) return;
+  const goToMatch = useCallback(
+    (matchIndex: number) => {
+      const matches = findMatches();
+      if (matches.length === 0 || matchIndex < 1 || matchIndex > matches.length)
+        return;
 
-    const match = matches[matchIndex - 1];
-    editor.commands.setTextSelection(match);
+      const match = matches[matchIndex - 1];
+      editor.commands.setTextSelection(match);
 
-    // Scroll to selection
-    const element = editor.view.domAtPos(match.from);
-    if (element.node instanceof Element) {
-      element.node.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [editor, findMatches]);
+      // Scroll to selection
+      const element = editor.view.domAtPos(match.from);
+      if (element.node instanceof Element) {
+        element.node.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    },
+    [editor, findMatches],
+  );
 
   const findNext = useCallback(() => {
     const newMatch = currentMatch < matchCount ? currentMatch + 1 : 1;
@@ -168,8 +172,11 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
   return (
     <div className="absolute top-14 right-4 bg-card border border-border rounded-lg shadow-lg p-4 z-50 w-80">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-medium text-foreground">{t("editor.findReplace")}</h3>
+        <h3 className="font-medium text-foreground">
+          {t("editor.findReplace")}
+        </h3>
         <button
+          type="button"
           onClick={onClose}
           className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
         >
@@ -187,16 +194,31 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
           />
           {searchTerm && (
             <div className="text-xs text-muted-foreground mt-1">
-              {matchCount > 0 ? t("editor.matchesOf", { current: currentMatch, total: matchCount }) : t("editor.noMatches")}
+              {matchCount > 0
+                ? t("editor.matchesOf", {
+                    current: currentMatch,
+                    total: matchCount,
+                  })
+                : t("editor.noMatches")}
             </div>
           )}
         </div>
 
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={findPrev} disabled={matchCount === 0}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={findPrev}
+            disabled={matchCount === 0}
+          >
             <ChevronDownIcon className="w-4 h-4" />
           </Button>
-          <Button variant="secondary" size="sm" onClick={findNext} disabled={matchCount === 0}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={findNext}
+            disabled={matchCount === 0}
+          >
             <ChevronDownIcon className="w-4 h-4" />
           </Button>
         </div>
@@ -208,10 +230,20 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
         />
 
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={replaceOne} disabled={matchCount === 0}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={replaceOne}
+            disabled={matchCount === 0}
+          >
             {t("editor.replace")}
           </Button>
-          <Button variant="secondary" size="sm" onClick={replaceAll} disabled={matchCount === 0}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={replaceAll}
+            disabled={matchCount === 0}
+          >
             {t("editor.replaceAll")}
           </Button>
         </div>

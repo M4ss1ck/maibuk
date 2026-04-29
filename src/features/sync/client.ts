@@ -16,7 +16,7 @@ function getClient(): PocketBase {
 
 export async function login(
   email: string,
-  password: string,
+  password: string
 ): Promise<{ email: string; token: string }> {
   const client = getClient();
   const authData = await client.collection("users").authWithPassword(email, password);
@@ -28,7 +28,7 @@ export async function login(
 
 export async function register(
   email: string,
-  password: string,
+  password: string
 ): Promise<{ email: string; token: string }> {
   const client = getClient();
   await client.collection("users").create({
@@ -40,9 +40,7 @@ export async function register(
   return login(email, password);
 }
 
-export async function loginWithOAuth(
-  provider: string,
-): Promise<{ email: string; token: string }> {
+export async function loginWithOAuth(provider: string): Promise<{ email: string; token: string }> {
   const client = getClient();
   const authData = await client.collection("users").authWithOAuth2({ provider });
   return {
@@ -86,7 +84,7 @@ export function getAuthModel(): unknown {
 export async function pushBookBlob(
   bookId: string,
   encryptedData: Blob,
-  checksum: string,
+  checksum: string
 ): Promise<void> {
   const client = getClient();
   const userId = client.authStore.record?.id;
@@ -104,16 +102,14 @@ export async function pushBookBlob(
   formData.append("book_id", bookId);
 
   if (existing.items.length > 0) {
-    await client
-      .collection("sync_items")
-      .update(existing.items[0].id, formData);
+    await client.collection("sync_items").update(existing.items[0].id, formData);
   } else {
     await client.collection("sync_items").create(formData);
   }
 }
 
 export async function pullBookBlob(
-  bookId: string,
+  bookId: string
 ): Promise<{ data: Uint8Array; checksum: string } | null> {
   const client = getClient();
 

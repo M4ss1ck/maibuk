@@ -82,7 +82,15 @@ describe("Button", () => {
     it("calls onClick handler when clicked", async () => {
       const user = userEvent.setup();
       let clicked = false;
-      render(<Button onClick={() => { clicked = true; }}>Click</Button>);
+      render(
+        <Button
+          onClick={() => {
+            clicked = true;
+          }}
+        >
+          Click
+        </Button>
+      );
 
       await user.click(screen.getByRole("button"));
 
@@ -92,7 +100,16 @@ describe("Button", () => {
     it("does not call onClick when disabled", async () => {
       const user = userEvent.setup();
       let clicked = false;
-      render(<Button disabled onClick={() => { clicked = true; }}>Click</Button>);
+      render(
+        <Button
+          disabled
+          onClick={() => {
+            clicked = true;
+          }}
+        >
+          Click
+        </Button>
+      );
 
       await user.click(screen.getByRole("button"));
 

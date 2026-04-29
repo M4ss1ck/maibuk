@@ -81,7 +81,9 @@ describe("WebBackupAdapter", () => {
         tx.onerror = () => reject(tx.error);
       });
 
-      await expect(adapter.readBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql")).rejects.toThrow(/checksum/i);
+      await expect(
+        adapter.readBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql")
+      ).rejects.toThrow(/checksum/i);
     });
   });
 
@@ -123,7 +125,9 @@ describe("WebBackupAdapter", () => {
             });
 
             return {
-              objectStore: vi.fn().mockReturnValue({ getAll: vi.fn().mockReturnValue(getAllRequest) }),
+              objectStore: vi
+                .fn()
+                .mockReturnValue({ getAll: vi.fn().mockReturnValue(getAllRequest) }),
             };
           }
 
@@ -167,7 +171,7 @@ describe("WebBackupAdapter", () => {
       });
 
       await expect(
-        adapter.saveBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql", "sql"),
+        adapter.saveBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql", "sql")
       ).rejects.toThrow(/storage full/i);
 
       openSpy.mockRestore();

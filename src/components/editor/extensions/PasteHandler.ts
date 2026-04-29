@@ -350,7 +350,7 @@ function transformParagraphSpacing(element: HTMLElement): void {
       const normalizeMargin = (margin: string): string => {
         if (!margin) return "";
         const value = parseFloat(margin);
-        if (isNaN(value)) return margin;
+        if (Number.isNaN(value)) return margin;
         // Cap at reasonable values (24px = ~1.5em)
         const maxMargin = 24;
         if (value > maxMargin) {
@@ -415,7 +415,7 @@ function transformSpanStyles(span: HTMLElement): void {
   if (
     fontWeight === "bold" ||
     fontWeight === "700" ||
-    parseInt(fontWeight) >= 600
+    parseInt(fontWeight, 10) >= 600
   ) {
     // The Bold extension should pick this up, but ensure the style is present
     span.style.fontWeight = "bold";
@@ -502,7 +502,10 @@ function cleanupGoogleDocsAttributes(element: HTMLElement): void {
 
   // Remove all data-docs-* attributes
   Array.from(element.attributes).forEach((attr) => {
-    if (attr.name.startsWith("data-docs-") || attr.name.startsWith("data-kix-")) {
+    if (
+      attr.name.startsWith("data-docs-") ||
+      attr.name.startsWith("data-kix-")
+    ) {
       element.removeAttribute(attr.name);
     }
   });

@@ -29,7 +29,12 @@ describe("TauriBackupAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAppConfigDir.mockResolvedValue("/config/");
-    mockJoin.mockImplementation(async (...parts: string[]) => parts.join("/").replace(/\/+/, "/").replace(/([^:]\/)\/+/, "$1"));
+    mockJoin.mockImplementation(async (...parts: string[]) =>
+      parts
+        .join("/")
+        .replace(/\/+/, "/")
+        .replace(/([^:]\/)\/+/, "$1")
+    );
     mockMkdir.mockResolvedValue(undefined);
     mockRemove.mockResolvedValue(undefined);
     mockWriteTextFile.mockResolvedValue(undefined);
@@ -49,7 +54,9 @@ describe("TauriBackupAdapter", () => {
     const adapter = await createTauriBackup("/safe/backups");
 
     await expect(adapter.readBackup("../escape.sql")).rejects.toThrow(/invalid backup filename/i);
-    await expect(adapter.deleteBackup("nested/file.sql")).rejects.toThrow(/invalid backup filename/i);
+    await expect(adapter.deleteBackup("nested/file.sql")).rejects.toThrow(
+      /invalid backup filename/i
+    );
   });
 
   it("verifies checksum before returning SQL content", async () => {
@@ -66,7 +73,9 @@ describe("TauriBackupAdapter", () => {
       return "INSERT INTO books VALUES ('1');";
     });
 
-    await expect(adapter.readBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql")).rejects.toThrow(/checksum/i);
+    await expect(
+      adapter.readBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql")
+    ).rejects.toThrow(/checksum/i);
   });
 
   it("repairs orphan sql metadata on first read", async () => {
@@ -84,7 +93,7 @@ describe("TauriBackupAdapter", () => {
     expect(content).toBe(sql);
     expect(mockWriteTextFile).toHaveBeenCalledWith(
       "/safe/backups/maibuk-backup-pre-sync-2026-03-15T14-30-00.meta.json",
-      expect.stringContaining(`"sizeBytes":${new Blob([sql]).size}`),
+      expect.stringContaining(`"sizeBytes":${new Blob([sql]).size}`)
     );
   });
 
@@ -97,12 +106,14 @@ describe("TauriBackupAdapter", () => {
       { name: "orphan.meta.json" },
       { name: "notes.txt" },
     ]);
-    mockReadTextFile.mockResolvedValue(JSON.stringify({
-      trigger: "daily",
-      createdAt: "2026-03-15T14:30:00.000Z",
-      sizeBytes: 12,
-      checksum: "abcd",
-    }));
+    mockReadTextFile.mockResolvedValue(
+      JSON.stringify({
+        trigger: "daily",
+        createdAt: "2026-03-15T14:30:00.000Z",
+        sizeBytes: 12,
+        checksum: "abcd",
+      })
+    );
 
     const list = await adapter.listBackups();
 
@@ -118,20 +129,22 @@ describe("TauriBackupAdapter", () => {
       { name: "maibuk-backup-daily-2026-03-15T14-30-00.meta.json" },
       { name: "maibuk-backup-manual-2026-03-15T12-00-00.meta.json" },
     ]);
-    mockReadTextFile.mockResolvedValue(JSON.stringify({
-      trigger: "daily",
-      createdAt: "2026-03-15T14:30:00.000Z",
-      sizeBytes: 12,
-      checksum: "abcd",
-    }));
+    mockReadTextFile.mockResolvedValue(
+      JSON.stringify({
+        trigger: "daily",
+        createdAt: "2026-03-15T14:30:00.000Z",
+        sizeBytes: 12,
+        checksum: "abcd",
+      })
+    );
 
     await adapter.listBackups();
 
     expect(mockRemove).toHaveBeenCalledWith(
-      "/safe/backups/maibuk-backup-manual-2026-03-15T12-00-00.meta.json",
+      "/safe/backups/maibuk-backup-manual-2026-03-15T12-00-00.meta.json"
     );
     expect(mockRemove).not.toHaveBeenCalledWith(
-      "/safe/backups/maibuk-backup-daily-2026-03-15T14-30-00.meta.json",
+      "/safe/backups/maibuk-backup-daily-2026-03-15T14-30-00.meta.json"
     );
   });
 });

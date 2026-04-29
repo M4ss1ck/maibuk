@@ -32,9 +32,9 @@ function extractFootnotes(chapters: Chapter[]): FootnoteEntry[] {
 
     // Reset regex state
     FOOTNOTE_REGEX.lastIndex = 0;
-    let match: RegExpExecArray | null;
+    let match = FOOTNOTE_REGEX.exec(chapter.content);
 
-    while ((match = FOOTNOTE_REGEX.exec(chapter.content)) !== null) {
+    while (match !== null) {
       globalCount++;
       entries.push({
         id: match[2],
@@ -43,6 +43,7 @@ function extractFootnotes(chapters: Chapter[]): FootnoteEntry[] {
         chapterTitle: chapter.title,
         chapterId: chapter.id,
       });
+      match = FOOTNOTE_REGEX.exec(chapter.content);
     }
   }
 
@@ -55,7 +56,12 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
-export function NotesPanel({ chapters, currentChapterId, onSelectChapter, onClose }: NotesPanelProps) {
+export function NotesPanel({
+  chapters,
+  currentChapterId,
+  onSelectChapter,
+  onClose,
+}: NotesPanelProps) {
   const { t } = useTranslation();
 
   const footnotes = useMemo(() => extractFootnotes(chapters), [chapters]);
@@ -65,17 +71,40 @@ export function NotesPanel({ chapters, currentChapterId, onSelectChapter, onClos
       <div className="notes-panel">
         <div className="notes-panel-header">
           <h3 className="notes-panel-title">{t("editor.notesPanel")}</h3>
-          <button onClick={onClose} className="notes-panel-close" title={t("common.close")}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          <button
+            type="button"
+            onClick={onClose}
+            className="notes-panel-close"
+            title={t("common.close")}
+          >
+            <svg
+              aria-label={t("common.close")}
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
         </div>
-        <p className="text-sm text-muted-foreground px-4 py-3">{t("editor.noFootnotes")}</p>
+        <p className="text-sm text-muted-foreground px-4 py-3">
+          {t("editor.noFootnotes")}
+        </p>
       </div>
     );
   }
 
   // Group by chapter
-  const grouped = new Map<string, { title: string; chapter: Chapter; items: FootnoteEntry[] }>();
+  const grouped = new Map<
+    string,
+    { title: string; chapter: Chapter; items: FootnoteEntry[] }
+  >();
   for (const fn of footnotes) {
     if (!grouped.has(fn.chapterId)) {
       const chapter = chapters.find((c) => c.id === fn.chapterId)!;
@@ -108,8 +137,26 @@ export function NotesPanel({ chapters, currentChapterId, onSelectChapter, onClos
     <div className="notes-panel">
       <div className="notes-panel-header">
         <h3 className="notes-panel-title">{t("editor.notesPanel")}</h3>
-        <button onClick={onClose} className="notes-panel-close" title={t("common.close")}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        <button
+          type="button"
+          onClick={onClose}
+          className="notes-panel-close"
+          title={t("common.close")}
+        >
+          <svg
+            aria-label={t("common.close")}
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
         </button>
       </div>
       <div className="notes-panel-content">

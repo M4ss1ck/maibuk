@@ -122,7 +122,9 @@ export function Home() {
           <div className="w-20 h-20 mb-8 text-muted-foreground/60">
             <BookStackIcon className="w-full h-full" />
           </div>
-          <h3 className="text-2xl sm:text-3xl font-semibold mb-3 tracking-tight">{t("books.noBooks")}</h3>
+          <h3 className="text-2xl sm:text-3xl font-semibold mb-3 tracking-tight">
+            {t("books.noBooks")}
+          </h3>
           <p className="text-muted-foreground mb-8 max-w-sm leading-relaxed">
             {t("books.noBooksFull")}
           </p>

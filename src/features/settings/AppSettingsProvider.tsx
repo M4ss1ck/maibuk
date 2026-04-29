@@ -11,9 +11,13 @@ const FONT_FAMILY_MAP: Record<FontFamily, string> = {
 
 function hexToRgb(hex: string) {
   const normalized = hex.replace("#", "");
-  const safeHex = normalized.length === 3
-    ? normalized.split("").map((ch) => `${ch}${ch}`).join("")
-    : normalized;
+  const safeHex =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((ch) => `${ch}${ch}`)
+          .join("")
+      : normalized;
 
   const r = Number.parseInt(safeHex.slice(0, 2), 16);
   const g = Number.parseInt(safeHex.slice(2, 4), 16);

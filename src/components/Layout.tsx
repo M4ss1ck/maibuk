@@ -32,6 +32,7 @@ export function Layout() {
       {/* Mobile header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-background border-b border-border flex items-center px-4 z-40">
         <button
+          type="button"
           onClick={() => setIsMobileMenuOpen(true)}
           className="p-2 hover:bg-muted rounded-lg transition-colors"
           aria-label="Open menu"
@@ -47,9 +48,11 @@ export function Layout() {
 
       {/* Mobile menu overlay */}
       {isMobileMenuOpen && (
-        <div
+        <button
+          type="button"
           className="md:hidden fixed inset-0 bg-black/50 z-40"
           onClick={closeMobileMenu}
+          aria-label="Close menu"
         />
       )}
 
@@ -68,6 +71,7 @@ export function Layout() {
           <h1 className="text-3xl mb-1 font-semibold">{t("app.title")}</h1>
           {/* Close button for mobile */}
           <button
+            type="button"
             onClick={closeMobileMenu}
             className="md:hidden ml-auto p-2 hover:bg-muted rounded-lg transition-colors mb-1"
             aria-label="Close menu"
@@ -81,30 +85,38 @@ export function Layout() {
             to="/"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                isActive
+                  ? "bg-primary text-white"
+                  : "hover:bg-muted text-foreground"
               }`
             }
           >
             <ProjectsIcon className="w-5 h-5" />
             <span className="flex-1">{t("common.projects")}</span>
-            <KeyboardShortcut keys={["g", "p"]} className="ml-auto hidden lg:inline-flex" />
+            <KeyboardShortcut
+              keys={["g", "p"]}
+              className="ml-auto hidden lg:inline-flex"
+            />
           </NavLink>
 
           <NavLink
             to="/settings"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${
+                isActive
+                  ? "bg-primary text-white"
+                  : "hover:bg-muted text-foreground"
               }`
             }
           >
             <SettingsIcon className="w-5 h-5" />
             <span className="flex-1">{t("common.settings")}</span>
-            <KeyboardShortcut keys={["g", "s"]} className="ml-auto hidden lg:inline-flex" />
+            <KeyboardShortcut
+              keys={["g", "s"]}
+              className="ml-auto hidden lg:inline-flex"
+            />
           </NavLink>
         </nav>
 

@@ -65,7 +65,10 @@ export function useShortcuts(shortcuts: Shortcut[], options: UseShortcutsOptions
           const sequenceMatch = activeShortcuts.find((shortcut) => {
             if (!shortcut.sequence) return false;
             if (shortcut.allowInInput !== true && isTyping) return false;
-            return shortcut.sequence[0].toLowerCase() === key && shortcut.sequence[1].toLowerCase() === secondKey;
+            return (
+              shortcut.sequence[0].toLowerCase() === key &&
+              shortcut.sequence[1].toLowerCase() === secondKey
+            );
           });
 
           if (sequenceMatch) {

@@ -1,6 +1,7 @@
 export function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg
+      aria-label="Chevron"
       className={className}
       fill="none"
       stroke="currentColor"

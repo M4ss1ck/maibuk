@@ -30,7 +30,9 @@ export const books = sqliteTable("books", {
 // Chapters table
 export const chapters = sqliteTable("chapters", {
   id: text("id").primaryKey(),
-  bookId: text("book_id").notNull().references(() => books.id, { onDelete: "cascade" }),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
 
   title: text("title").notNull(),
   content: text("content"), // Tiptap JSON string

@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import {
-  useDebouncedCallback,
-  useAutoSave,
-} from "../../../hooks/useAutoSave";
+import { useDebouncedCallback, useAutoSave } from "../../../hooks/useAutoSave";
 
 describe("useDebouncedCallback()", () => {
   beforeEach(() => {
@@ -75,9 +72,7 @@ describe("useDebouncedCallback()", () => {
 
   it("cleans up timer on unmount", () => {
     const callback = vi.fn();
-    const { result, unmount } = renderHook(() =>
-      useDebouncedCallback(callback, 300)
-    );
+    const { result, unmount } = renderHook(() => useDebouncedCallback(callback, 300));
 
     act(() => {
       result.current("arg");
@@ -94,16 +89,13 @@ describe("useDebouncedCallback()", () => {
 
   it("uses the latest callback reference", () => {
     let counter = 0;
-    const { result, rerender } = renderHook(
-      ({ cb }) => useDebouncedCallback(cb, 300),
-      {
-        initialProps: {
-          cb: () => {
-            counter = 1;
-          },
+    const { result, rerender } = renderHook(({ cb }) => useDebouncedCallback(cb, 300), {
+      initialProps: {
+        cb: () => {
+          counter = 1;
         },
-      }
-    );
+      },
+    });
 
     // Update the callback
     rerender({
@@ -191,7 +183,7 @@ describe("useAutoSave()", () => {
 
   it("sets status to error on save failure", async () => {
     const saveFn = vi.fn().mockRejectedValue(new Error("Save failed"));
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { result } = renderHook(() => useAutoSave(saveFn, 500));
 
     act(() => {

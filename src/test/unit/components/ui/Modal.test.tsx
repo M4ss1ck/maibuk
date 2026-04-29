@@ -7,18 +7,18 @@ describe("Modal", () => {
   describe("visibility", () => {
     it("renders nothing when isOpen is false", () => {
       const { container } = render(
-        <Modal isOpen={false} onClose={() => { }} title="Test">
+        <Modal isOpen={false} onClose={() => {}} title="Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(container.innerHTML).toBe("");
     });
 
     it("renders modal content when isOpen is true", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="My Modal">
+        <Modal isOpen={true} onClose={() => {}} title="My Modal">
           <p>Hello World</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Hello World")).toBeInTheDocument();
     });
@@ -27,18 +27,18 @@ describe("Modal", () => {
   describe("title", () => {
     it("renders the title text", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="Dialog Title">
+        <Modal isOpen={true} onClose={() => {}} title="Dialog Title">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Dialog Title")).toBeInTheDocument();
     });
 
     it("has correct accessible role and label", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="Accessible">
+        <Modal isOpen={true} onClose={() => {}} title="Accessible">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       const dialog = screen.getByRole("dialog");
       expect(dialog).toHaveAttribute("aria-modal", "true");
@@ -54,10 +54,10 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={onClose} title="Close Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
 
-      await user.click(screen.getByLabelText("Close"));
+      await user.click(screen.getByRole("button", { name: "Close" }));
 
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -69,7 +69,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={onClose} title="Backdrop Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
 
       // The backdrop is the div with bg-black/50 class
@@ -86,7 +86,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={onClose} title="Escape Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
 
       fireEvent.keyDown(document, { key: "Escape" });
@@ -98,18 +98,18 @@ describe("Modal", () => {
   describe("body scroll lock", () => {
     it("sets overflow hidden on body when open", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="Scroll Lock">
+        <Modal isOpen={true} onClose={() => {}} title="Scroll Lock">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(document.body.style.overflow).toBe("hidden");
     });
 
     it("restores body overflow on unmount", () => {
       const { unmount } = render(
-        <Modal isOpen={true} onClose={() => { }} title="Restore">
+        <Modal isOpen={true} onClose={() => {}} title="Restore">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       unmount();
       expect(document.body.style.overflow).toBe("");
@@ -121,21 +121,21 @@ describe("Modal", () => {
       render(
         <Modal
           isOpen={true}
-          onClose={() => { }}
+          onClose={() => {}}
           title="Footer Test"
-          footer={<button>Save</button>}
+          footer={<button type="button">Save</button>}
         >
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Save")).toBeInTheDocument();
     });
 
     it("does not render footer section when not provided", () => {
       const { container } = render(
-        <Modal isOpen={true} onClose={() => { }} title="No Footer">
+        <Modal isOpen={true} onClose={() => {}} title="No Footer">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       // The footer has border-t border-border bg-muted/30 class
       expect(container.querySelector(".bg-muted\\/30")).toBeNull();
@@ -145,12 +145,12 @@ describe("Modal", () => {
   describe("children", () => {
     it("renders complex children content", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="Complex">
+        <Modal isOpen={true} onClose={() => {}} title="Complex">
           <div data-testid="form">
             <input placeholder="Name" />
             <textarea placeholder="Description" />
           </div>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByTestId("form")).toBeInTheDocument();
       expect(screen.getByPlaceholderText("Name")).toBeInTheDocument();

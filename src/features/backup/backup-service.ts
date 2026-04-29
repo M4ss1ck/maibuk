@@ -7,7 +7,10 @@ import { generateSqlDump } from "./generate-sql-dump";
 
 function buildFilename(trigger: BackupEntry["trigger"]): string {
   const now = new Date();
-  const ts = now.toISOString().replace(/:/g, "-").replace(/\.\d{3}Z$/, "");
+  const ts = now
+    .toISOString()
+    .replace(/:/g, "-")
+    .replace(/\.\d{3}Z$/, "");
   return `maibuk-backup-${trigger}-${ts}.sql`;
 }
 
@@ -18,7 +21,8 @@ const MIN_PROTECTED = 2;
  * Multi-statement injection is blocked by `parseSqlStatements()` splitting on
  * unquoted semicolons, and this regex requires a concrete VALUES clause.
  */
-const RESTORE_TABLE_PATTERN = /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
+const RESTORE_TABLE_PATTERN =
+  /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
 
 function isRestoreStatement(statement: string): boolean {
   return RESTORE_TABLE_PATTERN.test(statement.trim());
@@ -34,10 +38,7 @@ function dumpHasData(sql: string): boolean {
   return parseSqlStatements(sql).some((s) => INSERT_PATTERN.test(s.trim()));
 }
 
-async function replaceRestoreData(
-  db: DatabaseAdapter,
-  statements: string[],
-): Promise<void> {
+async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Promise<void> {
   // Delete existing data first, then insert from backup.
   // Each statement is auto-committed. If an INSERT fails, the database
   // will be in a partial state — the pre-restore backup is the safety net.
@@ -49,20 +50,15 @@ async function replaceRestoreData(
       await db.execute(statements[i]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        `Restore failed on statement ${i + 1}/${statements.length}: ${detail}`,
-      );
+      throw new Error(`Restore failed on statement ${i + 1}/${statements.length}: ${detail}`);
     }
   }
 }
 
 export class BackupService {
-  constructor(private adapter: BackupAdapter) { }
+  constructor(private adapter: BackupAdapter) {}
 
-  private async saveBackupSnapshot(
-    trigger: BackupEntry["trigger"],
-    sql: string,
-  ): Promise<string> {
+  private async saveBackupSnapshot(trigger: BackupEntry["trigger"], sql: string): Promise<string> {
     const filename = buildFilename(trigger);
     await this.adapter.saveBackup(filename, sql);
     return filename;
@@ -82,8 +78,7 @@ export class BackupService {
     const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
     return list.some(
       (entry) =>
-        entry.trigger === trigger &&
-        entry.createdAt.toISOString().slice(0, 10) === todayStr,
+        entry.trigger === trigger && entry.createdAt.toISOString().slice(0, 10) === todayStr
     );
   }
 
@@ -200,7 +195,11 @@ export class BackupService {
       }
       for (const entry of remainingOldest) {
         if (toDelete <= 0) break;
-        if (PROTECTED_TRIGGERS.has(entry.trigger) && (remainingCounts.get(entry.trigger) ?? 0) <= MIN_PROTECTED) continue;
+        if (
+          PROTECTED_TRIGGERS.has(entry.trigger) &&
+          (remainingCounts.get(entry.trigger) ?? 0) <= MIN_PROTECTED
+        )
+          continue;
         await this.adapter.deleteBackup(entry.filename);
         remainingCounts.set(entry.trigger, (remainingCounts.get(entry.trigger) ?? 0) - 1);
         toDelete--;

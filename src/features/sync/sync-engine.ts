@@ -15,12 +15,10 @@ import { useSettingsStore } from "../settings/store";
 import { useSyncStore } from "./store";
 
 let isSyncing = false;
-const PRE_SYNC_BACKUP_ERROR = "Could not create a safety backup. Sync aborted. Free up disk space and try again.";
+const PRE_SYNC_BACKUP_ERROR =
+  "Could not create a safety backup. Sync aborted. Free up disk space and try again.";
 
-async function decryptSnapshot(
-  data: Uint8Array,
-  passphrase: string,
-): Promise<BookSnapshot> {
+async function decryptSnapshot(data: Uint8Array, passphrase: string): Promise<BookSnapshot> {
   const decrypted = await decrypt(data, passphrase);
   try {
     return JSON.parse(decrypted) as BookSnapshot;
@@ -53,17 +51,16 @@ async function getLocalUpdatedAt(bookId: string): Promise<number> {
       UNION ALL
       SELECT updated_at AS ts FROM chapters WHERE book_id = ?
     )`,
-    [bookId, bookId],
+    [bookId, bookId]
   );
   return rows[0]?.updated_at ?? 0;
 }
 
 async function getBookTitle(bookId: string): Promise<string> {
   const db = await getDatabase();
-  const rows = await db.select<{ title: string }[]>(
-    "SELECT title FROM books WHERE id = ?",
-    [bookId],
-  );
+  const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [
+    bookId,
+  ]);
   return rows[0]?.title ?? bookId;
 }
 
@@ -115,7 +112,7 @@ async function syncBookInBatch(
   passphrase: string,
   onConflict: ConflictResolver,
   remoteBooks?: SyncItemMeta[],
-  precomputedLocalUpdatedAt?: number,
+  precomputedLocalUpdatedAt?: number
 ): Promise<SyncAction> {
   assertOnline();
 
@@ -123,9 +120,9 @@ async function syncBookInBatch(
   const localChecksum = await computeChecksum(json);
   // Reuse the timestamp from syncAllBooks' GROUP BY query when available,
   // avoiding a redundant per-book MAX query.
-  const localUpdatedAt = precomputedLocalUpdatedAt ?? await getLocalUpdatedAt(bookId);
+  const localUpdatedAt = precomputedLocalUpdatedAt ?? (await getLocalUpdatedAt(bookId));
 
-  const remotes = remoteBooks ?? await listRemoteBooks();
+  const remotes = remoteBooks ?? (await listRemoteBooks());
   const remote = remotes.find((r) => r.bookId === bookId);
 
   if (!remote) {
@@ -177,7 +174,7 @@ async function syncBookInBatch(
 export async function syncBook(
   bookId: string,
   passphrase: string,
-  onConflict: ConflictResolver,
+  onConflict: ConflictResolver
 ): Promise<SingleSyncResult> {
   assertNotSyncing();
   isSyncing = true;
@@ -202,7 +199,7 @@ interface BookTimestampRow {
 
 export async function syncAllBooks(
   passphrase: string,
-  onConflict: ConflictResolver,
+  onConflict: ConflictResolver
 ): Promise<BatchSyncResult> {
   assertNotSyncing();
   isSyncing = true;
@@ -225,7 +222,13 @@ export async function syncAllBooks(
     const remoteBooks = await listRemoteBooks();
 
     for (const book of localBooks) {
-      const action = await syncBookInBatch(book.id, passphrase, onConflict, remoteBooks, book.updated_at);
+      const action = await syncBookInBatch(
+        book.id,
+        passphrase,
+        onConflict,
+        remoteBooks,
+        book.updated_at
+      );
       actions.push(action);
       if (action === "cancelled") {
         return {

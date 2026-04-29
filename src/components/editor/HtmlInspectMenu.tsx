@@ -18,48 +18,54 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
   const [blockIndex, setBlockIndex] = useState<number>(-1);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const handleContextMenu = useCallback((event: MouseEvent) => {
-    // Skip if another handler already claimed this event (e.g. ImageContextMenu)
-    if (event.defaultPrevented) return;
+  const handleContextMenu = useCallback(
+    (event: MouseEvent) => {
+      // Skip if another handler already claimed this event (e.g. ImageContextMenu)
+      if (event.defaultPrevented) return;
 
-    // Get the ProseMirror position from click coordinates
-    const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
-    if (!pos) return;
+      // Get the ProseMirror position from click coordinates
+      const pos = editor.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      });
+      if (!pos) return;
 
-    // Walk up to nearest block node and count block index
-    const resolved = editor.state.doc.resolve(pos.pos);
-    let blockNode = resolved;
+      // Walk up to nearest block node and count block index
+      const resolved = editor.state.doc.resolve(pos.pos);
+      let blockNode = resolved;
 
-    // Find the nearest block-level ancestor
-    for (let depth = resolved.depth; depth > 0; depth--) {
-      const node = resolved.node(depth);
-      if (node.isBlock) {
-        blockNode = editor.state.doc.resolve(resolved.before(depth));
-        break;
-      }
-    }
-
-    // Count block nodes in document order up to this position
-    let count = 0;
-    let found = false;
-    editor.state.doc.descendants((node, nodePos) => {
-      if (found) return false;
-      if (node.isBlock && node.isLeaf === false && node.childCount >= 0) {
-        // Count top-level and nested block nodes
-        if (nodePos <= blockNode.pos) {
-          count++;
-        }
-        if (nodePos === blockNode.pos) {
-          found = true;
-          return false;
+      // Find the nearest block-level ancestor
+      for (let depth = resolved.depth; depth > 0; depth--) {
+        const node = resolved.node(depth);
+        if (node.isBlock) {
+          blockNode = editor.state.doc.resolve(resolved.before(depth));
+          break;
         }
       }
-    });
 
-    setBlockIndex(count);
-    event.preventDefault();
-    setMenuPos({ x: event.clientX, y: event.clientY });
-  }, [editor]);
+      // Count block nodes in document order up to this position
+      let count = 0;
+      let found = false;
+      editor.state.doc.descendants((node, nodePos) => {
+        if (found) return false;
+        if (node.isBlock && node.isLeaf === false && node.childCount >= 0) {
+          // Count top-level and nested block nodes
+          if (nodePos <= blockNode.pos) {
+            count++;
+          }
+          if (nodePos === blockNode.pos) {
+            found = true;
+            return false;
+          }
+        }
+      });
+
+      setBlockIndex(count);
+      event.preventDefault();
+      setMenuPos({ x: event.clientX, y: event.clientY });
+    },
+    [editor],
+  );
 
   useEffect(() => {
     const dom = editor.view.dom;
@@ -90,6 +96,7 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
       style={{ left: menuPos.x, top: menuPos.y }}
     >
       <button
+        type="button"
         className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-4"
         onClick={() => {
           onInspect(blockIndex);
@@ -107,21 +114,52 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
  * Given a block index (from document order) and raw HTML string,
  * find the character offset of the corresponding tag.
  */
-export function findBlockOffsetInHtml(html: string, blockIndex: number): { from: number; to: number } | null {
+export function findBlockOffsetInHtml(
+  html: string,
+  blockIndex: number,
+): { from: number; to: number } | null {
   const blockTags = new Set([
-    "p", "h1", "h2", "h3", "h4", "h5", "h6",
-    "ul", "ol", "li", "blockquote", "table",
-    "tr", "td", "th", "thead", "tbody", "tfoot",
-    "div", "section", "article", "pre",
-    "figure", "figcaption", "details", "summary",
-    "dl", "dt", "dd", "nav", "aside", "main", "header", "footer",
+    "p",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "ul",
+    "ol",
+    "li",
+    "blockquote",
+    "table",
+    "tr",
+    "td",
+    "th",
+    "thead",
+    "tbody",
+    "tfoot",
+    "div",
+    "section",
+    "article",
+    "pre",
+    "figure",
+    "figcaption",
+    "details",
+    "summary",
+    "dl",
+    "dt",
+    "dd",
+    "nav",
+    "aside",
+    "main",
+    "header",
+    "footer",
   ]);
 
   const tagRegex = /<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/g;
-  let match: RegExpExecArray | null;
+  let match = tagRegex.exec(html);
   let count = 0;
 
-  while ((match = tagRegex.exec(html)) !== null) {
+  while (match !== null) {
     const tagName = match[1].toLowerCase();
     if (blockTags.has(tagName)) {
       count++;
@@ -129,10 +167,14 @@ export function findBlockOffsetInHtml(html: string, blockIndex: number): { from:
         // Find the end of this block (closing tag or next block)
         const closeTag = `</${tagName}>`;
         const closeIdx = html.indexOf(closeTag, match.index);
-        const to = closeIdx !== -1 ? closeIdx + closeTag.length : match.index + match[0].length;
+        const to =
+          closeIdx !== -1
+            ? closeIdx + closeTag.length
+            : match.index + match[0].length;
         return { from: match.index, to };
       }
     }
+    match = tagRegex.exec(html);
   }
 
   return null;

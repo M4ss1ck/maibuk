@@ -78,10 +78,7 @@ describe("useVersionCheck()", () => {
   });
 
   it("handles fetch errors gracefully", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("Network error"))
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
 
     const { result } = renderHook(() => useVersionCheck("v1.0.0"));
 

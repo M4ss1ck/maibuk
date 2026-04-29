@@ -15,9 +15,7 @@ export function StartupRedirect({ children }: StartupRedirectProps) {
   const setLastPath = useSettingsStore((s) => s.setLastPath);
 
   // Track hydration state locally
-  const [hasHydrated, setHasHydrated] = useState(
-    useSettingsStore.persist.hasHydrated()
-  );
+  const [hasHydrated, setHasHydrated] = useState(useSettingsStore.persist.hasHydrated());
   // Start as checked=true if not at root (no redirect check needed)
   const [checked, setChecked] = useState(location.pathname !== "/");
 
@@ -53,10 +51,9 @@ export function StartupRedirect({ children }: StartupRedirectProps) {
         const bookId = bookMatch[1];
         try {
           const db = await getDatabase();
-          const result = await db.select<{ id: string }[]>(
-            "SELECT id FROM books WHERE id = ?",
-            [bookId]
-          );
+          const result = await db.select<{ id: string }[]>("SELECT id FROM books WHERE id = ?", [
+            bookId,
+          ]);
           if (result.length === 0) {
             // Book was deleted, clear the saved path
             setLastPath(null);

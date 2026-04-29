@@ -39,7 +39,7 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
     // Validate URL format
     let finalUrl = url.trim();
     if (!/^https?:\/\//i.test(finalUrl) && !finalUrl.startsWith("mailto:")) {
-      finalUrl = "https://" + finalUrl;
+      finalUrl = `https://${finalUrl}`;
     }
 
     if (text.trim()) {
@@ -86,7 +86,11 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
       footer={
         <>
           {isEditing && (
-            <Button variant="secondary" onClick={handleRemove} className="text-destructive hover:bg-destructive hover:text-white">
+            <Button
+              variant="secondary"
+              onClick={handleRemove}
+              className="text-destructive hover:bg-destructive hover:text-white"
+            >
               {t("editor.removeLink")}
             </Button>
           )}
@@ -101,8 +105,11 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
     >
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-1">URL</label>
+          <label htmlFor="link-url" className="block text-sm font-medium mb-1">
+            URL
+          </label>
           <Input
+            id="link-url"
             value={url}
             onChange={(e) => {
               setUrl(e.target.value);
@@ -115,10 +122,14 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">
-            {t("editor.displayText")} <span className="text-muted-foreground">{t("editor.optional")}</span>
+          <label htmlFor="link-text" className="block text-sm font-medium mb-1">
+            {t("editor.displayText")}{" "}
+            <span className="text-muted-foreground">
+              {t("editor.optional")}
+            </span>
           </label>
           <Input
+            id="link-text"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={t("editor.linkText")}

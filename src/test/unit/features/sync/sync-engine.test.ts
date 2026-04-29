@@ -60,7 +60,9 @@ vi.mock("../../../../features/backup/backup-service", () => ({
   },
 }));
 
-const { syncBook, syncAllBooks, resetSyncEngineForTests } = await import("../../../../features/sync/sync-engine");
+const { syncBook, syncAllBooks, resetSyncEngineForTests } = await import(
+  "../../../../features/sync/sync-engine"
+);
 
 describe("syncBook — timestamp fix", () => {
   const mockDb = {
@@ -166,9 +168,10 @@ describe("syncBook — timestamp fix", () => {
   it("throws if called while already syncing (concurrency guard)", async () => {
     // Set up a sync that blocks indefinitely on onConflict
     let resolveConflict: ((choice: "push" | "pull" | "cancel") => void) | null = null;
-    const blockedConflict = () => new Promise<"push" | "pull" | "cancel">((resolve) => {
-      resolveConflict = resolve;
-    });
+    const blockedConflict = () =>
+      new Promise<"push" | "pull" | "cancel">((resolve) => {
+        resolveConflict = resolve;
+      });
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
       if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
@@ -197,7 +200,7 @@ describe("syncBook — timestamp fix", () => {
     mockBackupServiceCreateBackup.mockRejectedValue(new Error("disk full"));
 
     await expect(syncBook("book-1", "pass", noopConflict)).rejects.toThrow(
-      "Could not create a safety backup. Sync aborted. Free up disk space and try again.",
+      "Could not create a safety backup. Sync aborted. Free up disk space and try again."
     );
 
     expect(mockPushBookBlob).not.toHaveBeenCalled();
@@ -291,7 +294,7 @@ describe("syncAllBooks — truthful outcomes", () => {
     mockBackupServiceCreateBackup.mockRejectedValue(new Error("quota exceeded"));
 
     await expect(syncAllBooks("pass", vi.fn())).rejects.toThrow(
-      "Could not create a safety backup. Sync aborted. Free up disk space and try again.",
+      "Could not create a safety backup. Sync aborted. Free up disk space and try again."
     );
   });
 });
@@ -344,7 +347,7 @@ describe("ensureAuth — pre-sync auth guard", () => {
 
     expect(mockRefreshAuth).toHaveBeenCalled();
     expect(mockSyncStoreSetState).toHaveBeenCalledWith(
-      expect.objectContaining({ authVerified: true }),
+      expect.objectContaining({ authVerified: true })
     );
   });
 
@@ -354,14 +357,12 @@ describe("ensureAuth — pre-sync auth guard", () => {
     (error as { status?: number }).status = 401;
     mockRefreshAuth.mockRejectedValue(error);
 
-    await expect(syncBook("book-1", "pass", vi.fn())).rejects.toThrow(
-      "sync.sessionExpired",
-    );
+    await expect(syncBook("book-1", "pass", vi.fn())).rejects.toThrow("sync.sessionExpired");
     expect(mockSyncStoreSetState).toHaveBeenCalledWith(
       expect.objectContaining({
         authStatus: "logged-out",
         authVerified: false,
-      }),
+      })
     );
   });
 
@@ -369,12 +370,10 @@ describe("ensureAuth — pre-sync auth guard", () => {
     mockSyncStoreGetState.mockReturnValue({ authVerified: false });
     mockRefreshAuth.mockRejectedValue(new Error("Failed to fetch"));
 
-    await expect(syncBook("book-1", "pass", vi.fn())).rejects.toThrow(
-      "Failed to fetch",
-    );
+    await expect(syncBook("book-1", "pass", vi.fn())).rejects.toThrow("Failed to fetch");
     // Should NOT have cleared auth state
     expect(mockSyncStoreSetState).not.toHaveBeenCalledWith(
-      expect.objectContaining({ authStatus: "logged-out" }),
+      expect.objectContaining({ authStatus: "logged-out" })
     );
   });
 

@@ -6,16 +6,22 @@ interface ToolbarButtonProps {
   children: React.ReactNode;
 }
 
-export function ToolbarButton({ onClick, isActive, disabled, title, children }: ToolbarButtonProps) {
+export function ToolbarButton({
+  onClick,
+  isActive,
+  disabled,
+  title,
+  children,
+}: ToolbarButtonProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`p-2 rounded transition-colors ${isActive
-        ? "bg-primary text-white"
-        : "hover:bg-muted"
-        } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      className={`p-2 rounded transition-colors ${
+        isActive ? "bg-primary text-white" : "hover:bg-muted"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
     >
       {children}
     </button>

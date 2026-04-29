@@ -20,9 +20,7 @@ function unwrapGoogleDocsWrapper(container: HTMLElement): void {
     wrapper.remove();
   }
 
-  const spanWrapper = container.querySelector(
-    'span[id*="docs-internal-guid"]',
-  );
+  const spanWrapper = container.querySelector('span[id*="docs-internal-guid"]');
   if (spanWrapper && spanWrapper.parentElement) {
     const parent = spanWrapper.parentElement;
     while (spanWrapper.firstChild) {
@@ -90,7 +88,7 @@ function transformParagraphSpacing(element: HTMLElement): void {
     const normalizeMargin = (margin: string): string => {
       if (!margin) return "";
       const value = parseFloat(margin);
-      if (isNaN(value)) return margin;
+      if (Number.isNaN(value)) return margin;
       const maxMargin = 24;
       if (value > maxMargin) {
         return `${maxMargin}px`;

@@ -41,10 +41,7 @@ interface ChapterRow {
 export async function serializeBook(bookId: string): Promise<string> {
   const db = await getDatabase();
 
-  const books = await db.select<BookRow[]>(
-    "SELECT * FROM books WHERE id = ?",
-    [bookId],
-  );
+  const books = await db.select<BookRow[]>("SELECT * FROM books WHERE id = ?", [bookId]);
 
   if (books.length === 0) {
     throw new Error(`Book not found: ${bookId}`);
@@ -53,7 +50,7 @@ export async function serializeBook(bookId: string): Promise<string> {
   const bookRow = books[0];
   const chapters = await db.select<ChapterRow[]>(
     'SELECT * FROM chapters WHERE book_id = ? ORDER BY "order" ASC',
-    [bookId],
+    [bookId]
   );
 
   const snapshot: BookSnapshot = {
@@ -95,9 +92,7 @@ export async function serializeBook(bookId: string): Promise<string> {
   return JSON.stringify(snapshot);
 }
 
-export async function applyBookSnapshot(
-  snapshot: BookSnapshot,
-): Promise<void> {
+export async function applyBookSnapshot(snapshot: BookSnapshot): Promise<void> {
   const db = await getDatabase();
   const { book, chapters } = snapshot;
 
@@ -130,7 +125,7 @@ export async function applyBookSnapshot(
       book.updatedAt,
       book.lastOpenedAt,
       book.lastChapterId,
-    ],
+    ]
   );
 
   // Delete existing chapters for this book, then insert fresh
@@ -159,12 +154,12 @@ export async function applyBookSnapshot(
           ch.isIncludedInExport ? 1 : 0,
           ch.createdAt,
           ch.updatedAt,
-        ],
+        ]
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `Sync apply failed on chapter ${i + 1}/${chapters.length} ("${ch.title}"): ${detail}`,
+        `Sync apply failed on chapter ${i + 1}/${chapters.length} ("${ch.title}"): ${detail}`
       );
     }
   }

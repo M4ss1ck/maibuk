@@ -36,11 +36,10 @@ export function ExportDialog({
   const { t } = useTranslation();
   const [format, setFormat] = useState<"epub" | "pdf">("epub");
   const [epubOptions, setEpubOptions] = useState<EpubExportOptions>(
-    DEFAULT_EXPORT_OPTIONS
+    DEFAULT_EXPORT_OPTIONS,
   );
-  const [pdfOptions, setPdfOptions] = useState<PdfExportOptions>(
-    DEFAULT_PDF_OPTIONS
-  );
+  const [pdfOptions, setPdfOptions] =
+    useState<PdfExportOptions>(DEFAULT_PDF_OPTIONS);
 
   const [progress, setProgress] = useState<ExportProgress>({
     status: "idle",
@@ -49,7 +48,10 @@ export function ExportDialog({
 
   const handleExport = useCallback(async () => {
     try {
-      setProgress({ status: "preparing", message: t("export.preparingStatus") });
+      setProgress({
+        status: "preparing",
+        message: t("export.preparingStatus"),
+      });
 
       let blob: Blob;
       let suggestedFilename: string;
@@ -58,9 +60,14 @@ export function ExportDialog({
       let filterExtension: string;
 
       if (format === "pdf") {
-        blob = await generatePdf(book, chapters, pdfOptions, (message: string) => {
-          setProgress((prev) => ({ ...prev, message }));
-        });
+        blob = await generatePdf(
+          book,
+          chapters,
+          pdfOptions,
+          (message: string) => {
+            setProgress((prev) => ({ ...prev, message }));
+          },
+        );
         suggestedFilename = getPdfFilename(book);
         mimeType = "application/pdf";
         filterName = "PDF";
@@ -112,7 +119,8 @@ export function ExportDialog({
       console.error("Export failed:", error);
       setProgress({
         status: "error",
-        message: error instanceof Error ? error.message : t("export.exportFailed"),
+        message:
+          error instanceof Error ? error.message : t("export.exportFailed"),
       });
     }
   }, [book, chapters, epubOptions, pdfOptions, format, onClose, t]);
@@ -144,15 +152,24 @@ export function ExportDialog({
   ];
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
+    <Dialog
+      open={isOpen}
+      onClose={handleClose}
+      className="relative z-50"
+      transition
+    >
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0" aria-hidden="true" />
+      <div
+        className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0"
+        aria-hidden="true"
+      />
 
       {/* Dialog container */}
       <div className="fixed inset-0 flex items-end sm:items-center justify-center sm:p-4">
         <DialogPanel
           transition
-          className="bg-background rounded-t-xl sm:rounded-lg shadow-xl max-w-md w-full p-4 sm:p-6 border border-border max-h-[90vh] overflow-auto transition duration-200 ease-out data-closed:translate-y-4 data-closed:opacity-0 data-closed:sm:scale-95 data-closed:sm:translate-y-0">
+          className="bg-background rounded-t-xl sm:rounded-lg shadow-xl max-w-md w-full p-4 sm:p-6 border border-border max-h-[90vh] overflow-auto transition duration-200 ease-out data-closed:translate-y-4 data-closed:opacity-0 data-closed:sm:scale-95 data-closed:sm:translate-y-0"
+        >
           <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground mb-4">
             {t("export.title")}
           </DialogTitle>
@@ -170,24 +187,31 @@ export function ExportDialog({
 
           {/* Format selector */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <label
+              htmlFor="export-format"
+              className="block text-sm font-medium text-foreground mb-2"
+            >
               {t("export.format")}
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-2" id="export-format">
               <button
-                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${format === "epub"
-                  ? "bg-accent text-accent-foreground border-accent"
-                  : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
-                  }`}
+                type="button"
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
+                  format === "epub"
+                    ? "bg-accent text-accent-foreground border-accent"
+                    : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+                }`}
                 onClick={() => setFormat("epub")}
               >
                 {t("export.epub")}
               </button>
               <button
-                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${format === "pdf"
-                  ? "bg-accent text-accent-foreground border-accent"
-                  : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
-                  }`}
+                type="button"
+                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
+                  format === "pdf"
+                    ? "bg-accent text-accent-foreground border-accent"
+                    : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+                }`}
                 onClick={() => setFormat("pdf")}
               >
                 {t("export.pdf")}
@@ -200,41 +224,59 @@ export function ExportDialog({
             {format === "epub" ? (
               <>
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
+                  <label
+                    htmlFor="include-toc"
+                    className="text-sm text-foreground"
+                  >
                     {t("export.includeTOC")}
                   </label>
                   <Switch
+                    id="include-toc"
                     checked={epubOptions.includeTableOfContents}
-                    onChange={(checked) => setEpubOptions((prev) => ({
-                      ...prev,
-                      includeTableOfContents: checked,
-                    }))}
+                    onChange={(checked) =>
+                      setEpubOptions((prev) => ({
+                        ...prev,
+                        includeTableOfContents: checked,
+                      }))
+                    }
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
+                  <label
+                    htmlFor="number-chapters"
+                    className="text-sm text-foreground"
+                  >
                     {t("export.numberedTOC")}
                   </label>
                   <Switch
+                    id="number-chapters"
                     checked={epubOptions.numberChapters}
-                    onChange={(checked) => setEpubOptions((prev) => ({
-                      ...prev,
-                      numberChapters: checked,
-                    }))}
+                    onChange={(checked) =>
+                      setEpubOptions((prev) => ({
+                        ...prev,
+                        numberChapters: checked,
+                      }))
+                    }
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
+                  <label
+                    htmlFor="prepend-chapter-titles"
+                    className="text-sm text-foreground"
+                  >
                     {t("export.prependChapterTitles")}
                   </label>
                   <Switch
+                    id="prepend-chapter-titles"
                     checked={epubOptions.prependChapterTitles}
-                    onChange={(checked) => setEpubOptions((prev) => ({
-                      ...prev,
-                      prependChapterTitles: checked,
-                    }))}
+                    onChange={(checked) =>
+                      setEpubOptions((prev) => ({
+                        ...prev,
+                        prependChapterTitles: checked,
+                      }))
+                    }
                   />
                 </div>
               </>
@@ -242,68 +284,98 @@ export function ExportDialog({
               // PDF Options
               <>
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
+                  <label
+                    htmlFor="include-toc"
+                    className="text-sm text-foreground"
+                  >
                     {t("export.includeTOC")}
                   </label>
                   <Switch
+                    id="include-toc"
                     checked={pdfOptions.includeTableOfContents}
-                    onChange={(checked) => setPdfOptions((prev) => ({
-                      ...prev,
-                      includeTableOfContents: checked,
-                    }))}
+                    onChange={(checked) =>
+                      setPdfOptions((prev) => ({
+                        ...prev,
+                        includeTableOfContents: checked,
+                      }))
+                    }
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
+                  <label
+                    htmlFor="number-chapters"
+                    className="text-sm text-foreground"
+                  >
                     {t("export.numberChapters")}
                   </label>
                   <Switch
+                    id="number-chapters"
                     checked={pdfOptions.numberChapters}
-                    onChange={(checked) => setPdfOptions((prev) => ({
-                      ...prev,
-                      numberChapters: checked,
-                    }))}
+                    onChange={(checked) =>
+                      setPdfOptions((prev) => ({
+                        ...prev,
+                        numberChapters: checked,
+                      }))
+                    }
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
+                  <label
+                    htmlFor="include-page-numbers"
+                    className="text-sm text-foreground"
+                  >
                     {t("export.includePageNumbers")}
                   </label>
                   <Switch
+                    id="include-page-numbers"
                     checked={pdfOptions.includePageNumbers}
-                    onChange={(checked) => setPdfOptions((prev) => ({
-                      ...prev,
-                      includePageNumbers: checked,
-                    }))}
+                    onChange={(checked) =>
+                      setPdfOptions((prev) => ({
+                        ...prev,
+                        includePageNumbers: checked,
+                      }))
+                    }
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
+                  <label
+                    htmlFor="page-size"
+                    className="text-sm text-foreground"
+                  >
                     {t("export.pageSize")}
                   </label>
                   <Select
+                    id="page-size"
                     value={pdfOptions.pageSize}
-                    onChange={(value) => setPdfOptions((prev) => ({
-                      ...prev,
-                      pageSize: value,
-                    }))}
+                    onChange={(value) =>
+                      setPdfOptions((prev) => ({
+                        ...prev,
+                        pageSize: value,
+                      }))
+                    }
                     options={pageSizeOptions}
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-foreground">
+                  <label
+                    htmlFor="margin-presets"
+                    className="text-sm text-foreground"
+                  >
                     {t("export.marginPreset")}
                   </label>
                   <Select
+                    id="margin-presets"
                     value={pdfOptions.margins}
-                    onChange={(value) => setPdfOptions((prev) => ({
-                      ...prev,
-                      margins: value,
-                    }))}
+                    onChange={(value) =>
+                      setPdfOptions((prev) => ({
+                        ...prev,
+                        margins: value,
+                      }))
+                    }
                     options={marginOptions}
                   />
                 </div>
@@ -314,18 +386,23 @@ export function ExportDialog({
           {/* Progress / Status */}
           {progress.status !== "idle" && (
             <div
-              className={`mb-4 p-3 rounded-md text-sm ${progress.status === "error"
-                ? "bg-feedback-error-bg text-feedback-error-text"
-                : progress.status === "complete"
-                  ? "bg-feedback-success-bg text-feedback-success-text"
-                  : "bg-feedback-progress-bg text-feedback-progress-text"
-                }`}
+              className={`mb-4 p-3 rounded-md text-sm ${
+                progress.status === "error"
+                  ? "bg-feedback-error-bg text-feedback-error-text"
+                  : progress.status === "complete"
+                    ? "bg-feedback-success-bg text-feedback-success-text"
+                    : "bg-feedback-progress-bg text-feedback-progress-text"
+              }`}
             >
               <div className="flex items-center gap-2">
-                {(progress.status === "preparing" || progress.status === "generating" || progress.status === "saving") && (
+                {(progress.status === "preparing" ||
+                  progress.status === "generating" ||
+                  progress.status === "saving") && (
                   <SpinnerIcon className="h-4 w-4" />
                 )}
-                {progress.status === "complete" && <CheckIcon className="h-4 w-4" />}
+                {progress.status === "complete" && (
+                  <CheckIcon className="h-4 w-4" />
+                )}
                 {progress.status === "error" && <XIcon className="h-4 w-4" />}
                 <span>{progress.message}</span>
               </div>

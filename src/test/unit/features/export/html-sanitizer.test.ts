@@ -69,8 +69,7 @@ describe("sanitizeHtmlForEpub()", () => {
   });
 
   it("strips editor and ProseMirror classes", () => {
-    const html =
-      '<p class="editor-selected">A</p><p class="ProseMirror-focused">B</p>';
+    const html = '<p class="editor-selected">A</p><p class="ProseMirror-focused">B</p>';
 
     const result = sanitizeHtmlForEpub(html);
 
@@ -90,8 +89,7 @@ describe("sanitizeHtmlForEpub()", () => {
   });
 
   it("removes generic data-* attributes and empty class attributes", () => {
-    const html =
-      '<p data-test="x" class="">A</p><p data-scene-break="1" class="   ">B</p>';
+    const html = '<p data-test="x" class="">A</p><p data-scene-break="1" class="   ">B</p>';
 
     const result = sanitizeHtmlForEpub(html);
 
@@ -114,7 +112,7 @@ describe("generateEndnotesHtml()", () => {
     ]);
 
     expect(html).toContain('<section class="endnotes">');
-    expect(html).toContain('<h2>Notes</h2>');
+    expect(html).toContain("<h2>Notes</h2>");
     expect(html).toContain('id="fn-1"');
     expect(html).toContain('href="#fnref-2"');
   });

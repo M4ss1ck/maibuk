@@ -1,5 +1,12 @@
 import { useState, useRef } from "react";
-import { Cloud, CloudOff, CloudUpload, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
+import {
+  Cloud,
+  CloudOff,
+  CloudUpload,
+  Loader2,
+  CloudAlert,
+  AlertTriangle,
+} from "lucide-react";
 import { useSyncStore } from "../../features/sync/store";
 import { useBookStore } from "../../features/books/store";
 import { useSyncFlow } from "../../features/sync/useSyncFlow";
@@ -14,8 +21,10 @@ export function SyncStatusButton() {
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showSyncPanel, setShowSyncPanel] = useState(false);
 
-  const hasPendingChanges = authStatus === "logged-in" && lastSyncedAt != null
-    && books.some((b) => Math.floor(b.updatedAt.getTime() / 1000) > lastSyncedAt);
+  const hasPendingChanges =
+    authStatus === "logged-in" &&
+    lastSyncedAt != null &&
+    books.some((b) => Math.floor(b.updatedAt.getTime() / 1000) > lastSyncedAt);
   const {
     showPassphraseDialog,
     closePassphraseDialog,
@@ -84,6 +93,7 @@ export function SyncStatusButton() {
     <div className="relative">
       <button
         ref={buttonRef}
+        type="button"
         onClick={handleClick}
         className={`p-2 rounded transition-colors hover:bg-muted ${statusClass}`}
         aria-label="Sync status"
@@ -124,10 +134,7 @@ export function SyncStatusButton() {
       />
 
       {activeConflict && (
-        <ConflictDialog
-          conflict={activeConflict}
-          onResolve={resolveConflict}
-        />
+        <ConflictDialog conflict={activeConflict} onResolve={resolveConflict} />
       )}
     </div>
   );

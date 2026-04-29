@@ -22,8 +22,17 @@ export function TableMenu({ editor }: TableMenuProps) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
   const [addheaderRow, setAddHeaderRow] = useState(true);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{
+    top: number;
+    left: number;
+  }>({
+    top: 0,
+    left: 0,
+  });
+  const [hoveredCell, setHoveredCell] = useState<{
+    row: number;
+    col: number;
+  } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const insertTable = (rows: number, cols: number) => {
@@ -45,7 +54,10 @@ export function TableMenu({ editor }: TableMenuProps) {
       if (
         buttonRef.current &&
         !buttonRef.current.contains(e.target as Node) &&
-        !(e.target instanceof HTMLElement && e.target.closest('.tiptap-table-menu-portal'))
+        !(
+          e.target instanceof HTMLElement &&
+          e.target.closest(".tiptap-table-menu-portal")
+        )
       ) {
         setShowMenu(false);
       }
@@ -69,6 +81,7 @@ export function TableMenu({ editor }: TableMenuProps) {
     return (
       <button
         ref={buttonRef}
+        type="button"
         onClick={handleShowMenu}
         title={t("editor.insertTable")}
         className="p-2 rounded transition-colors hover:bg-muted"
@@ -83,6 +96,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <>
         <button
           ref={buttonRef}
+          type="button"
           onClick={() => setShowMenu(false)}
           title={t("editor.insertTable")}
           className="p-2 rounded transition-colors bg-primary text-white"
@@ -94,14 +108,20 @@ export function TableMenu({ editor }: TableMenuProps) {
             className="tiptap-table-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50"
             style={{ top: menuPosition.top, left: menuPosition.left }}
           >
-            <p className="text-sm text-muted-foreground mb-2">{t("editor.selectTableSize")}:</p>
+            <p className="text-sm text-muted-foreground mb-2">
+              {t("editor.selectTableSize")}:
+            </p>
             <div className="grid grid-cols-5 gap-0.5">
               {[1, 2, 3, 4, 5].map((row) =>
                 [1, 2, 3, 4, 5].map((col) => {
-                  const isActive = hoveredCell && row <= hoveredCell.row && col <= hoveredCell.col;
+                  const isActive =
+                    hoveredCell &&
+                    row <= hoveredCell.row &&
+                    col <= hoveredCell.col;
                   return (
                     <button
                       key={`${row}-${col}`}
+                      type="button"
                       onClick={() => insertTable(row, col)}
                       onMouseEnter={() => setHoveredCell({ row, col })}
                       onMouseLeave={() => setHoveredCell(null)}
@@ -109,11 +129,13 @@ export function TableMenu({ editor }: TableMenuProps) {
                       title={`${t("editor.table", { dimensions: `${row}x${col}` })}`}
                     />
                   );
-                })
+                }),
               )}
             </div>
             <div className="flex items-center justify-center mt-2">
-              <p className="mr-auto text-sm text-muted-foreground">{t("editor.addHeaderRow")}</p>
+              <p className="mr-auto text-sm text-muted-foreground">
+                {t("editor.addHeaderRow")}
+              </p>
               <Switch
                 checked={addheaderRow}
                 onChange={setAddHeaderRow}
@@ -121,10 +143,12 @@ export function TableMenu({ editor }: TableMenuProps) {
               />
             </div>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              {hoveredCell ? `${t("editor.insertTable")} (${hoveredCell.row}x${hoveredCell.col})` : t("editor.insertTable")}
+              {hoveredCell
+                ? `${t("editor.insertTable")} (${hoveredCell.row}x${hoveredCell.col})`
+                : t("editor.insertTable")}
             </p>
           </div>,
-          document.body
+          document.body,
         )}
       </>
     );
@@ -134,6 +158,7 @@ export function TableMenu({ editor }: TableMenuProps) {
   return (
     <div className="flex items-center gap-1">
       <button
+        type="button"
         onClick={() => editor.chain().focus().addColumnBefore().run()}
         disabled={!editor.can().addColumnBefore()}
         title={t("editor.addColumnBefore")}
@@ -143,6 +168,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       </button>
 
       <button
+        type="button"
         onClick={() => editor.chain().focus().addColumnAfter().run()}
         disabled={!editor.can().addColumnAfter()}
         title={t("editor.addColumnAfter")}
@@ -152,6 +178,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       </button>
 
       <button
+        type="button"
         onClick={() => editor.chain().focus().addRowBefore().run()}
         disabled={!editor.can().addRowBefore()}
         title={t("editor.addRowBefore")}
@@ -161,6 +188,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       </button>
 
       <button
+        type="button"
         onClick={() => editor.chain().focus().addRowAfter().run()}
         disabled={!editor.can().addRowAfter()}
         title={t("editor.addRowAfter")}
@@ -172,6 +200,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       <div className="w-px h-4 bg-border mx-1" />
 
       <button
+        type="button"
         onClick={() => editor.chain().focus().deleteColumn().run()}
         disabled={!editor.can().deleteColumn()}
         title={t("editor.deleteColumn")}
@@ -181,6 +210,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       </button>
 
       <button
+        type="button"
         onClick={() => editor.chain().focus().deleteRow().run()}
         disabled={!editor.can().deleteRow()}
         title={t("editor.deleteRow")}
@@ -190,6 +220,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       </button>
 
       <button
+        type="button"
         onClick={() => editor.chain().focus().deleteTable().run()}
         disabled={!editor.can().deleteTable()}
         title={t("editor.deleteTable")}

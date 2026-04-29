@@ -12,20 +12,11 @@ interface SyncPanelProps {
 export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
   const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
-  const {
-    userEmail,
-    syncStatus,
-    lastSyncedAt,
-    syncError,
-    logout,
-  } = useSyncStore();
+  const { userEmail, syncStatus, lastSyncedAt, syncError, logout } = useSyncStore();
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(e.target as Node)
-      ) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
@@ -63,16 +54,12 @@ export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
       {/* Header */}
       <div className="px-4 py-3 border-b border-border">
         <p className="text-sm font-medium truncate">{userEmail}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {formatLastSynced()}
-        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">{formatLastSynced()}</p>
       </div>
 
       {/* Error */}
       {syncError && (
-        <div className="px-4 py-2 bg-destructive/10 text-destructive text-xs">
-          {syncError}
-        </div>
+        <div className="px-4 py-2 bg-destructive/10 text-destructive text-xs">{syncError}</div>
       )}
 
       {/* Actions */}
@@ -84,12 +71,8 @@ export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
           onClick={handleSync}
           disabled={syncStatus === "syncing"}
         >
-          <RefreshCw
-            className={`w-4 h-4 ${syncStatus === "syncing" ? "animate-spin" : ""}`}
-          />
-          {syncStatus === "syncing"
-            ? t("sync.syncing")
-            : t("sync.syncAll")}
+          <RefreshCw className={`w-4 h-4 ${syncStatus === "syncing" ? "animate-spin" : ""}`} />
+          {syncStatus === "syncing" ? t("sync.syncing") : t("sync.syncAll")}
         </Button>
 
         <Button

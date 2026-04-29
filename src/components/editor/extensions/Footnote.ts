@@ -35,16 +35,14 @@ export const Footnote = Node.create<FootnoteOptions>({
     return {
       content: {
         default: "",
-        parseHTML: (element: HTMLElement) =>
-          element.getAttribute("data-footnote-content") || "",
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-footnote-content") || "",
         renderHTML: (attributes: { content: string }) => ({
           "data-footnote-content": attributes.content,
         }),
       },
       id: {
         default: null,
-        parseHTML: (element: HTMLElement) =>
-          element.getAttribute("data-footnote-id"),
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-footnote-id"),
         renderHTML: (attributes: { id: string }) => ({
           "data-footnote-id": attributes.id,
         }),
@@ -53,9 +51,7 @@ export const Footnote = Node.create<FootnoteOptions>({
   },
 
   parseHTML() {
-    return [
-      { tag: "sup[data-footnote]", priority: 51 },
-    ];
+    return [{ tag: "sup[data-footnote]", priority: 51 }];
   },
 
   renderHTML({ HTMLAttributes }: { HTMLAttributes: Record<string, unknown> }) {
@@ -76,13 +72,13 @@ export const Footnote = Node.create<FootnoteOptions>({
     return {
       insertFootnote:
         (attributes: { content: string }) =>
-          ({ commands }: { commands: any }) => {
-            const id = `fn-${Date.now()}`;
-            return commands.insertContent({
-              type: this.name,
-              attrs: { ...attributes, id },
-            });
-          },
+        ({ commands }: { commands: any }) => {
+          const id = `fn-${Date.now()}`;
+          return commands.insertContent({
+            type: this.name,
+            attrs: { ...attributes, id },
+          });
+        },
     };
   },
 });

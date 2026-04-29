@@ -58,11 +58,11 @@ describe("applyTheme()", () => {
       ({
         matches: query === "(prefers-color-scheme: dark)",
         media: query,
-        addEventListener: () => { },
-        removeEventListener: () => { },
+        addEventListener: () => {},
+        removeEventListener: () => {},
         onchange: null,
-        addListener: () => { },
-        removeListener: () => { },
+        addListener: () => {},
+        removeListener: () => {},
         dispatchEvent: () => false,
       }) as MediaQueryList;
 
@@ -80,11 +80,11 @@ describe("applyTheme()", () => {
       ({
         matches: false,
         media: query,
-        addEventListener: () => { },
-        removeEventListener: () => { },
+        addEventListener: () => {},
+        removeEventListener: () => {},
         onchange: null,
-        addListener: () => { },
-        removeListener: () => { },
+        addListener: () => {},
+        removeListener: () => {},
         dispatchEvent: () => false,
       }) as MediaQueryList;
 

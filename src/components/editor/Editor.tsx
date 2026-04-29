@@ -238,7 +238,11 @@ export function Editor({
         />
       )}
 
-      <div className="flex-1 overflow-auto min-h-0" onClick={handleFocus}>
+      <div
+        className="flex-1 overflow-auto min-h-0"
+        onClick={handleFocus}
+        onKeyDown={handleFocus}
+      >
         <div className="max-w-editor-max mx-auto p-8">
           <EditorContent editor={editor} />
           {showInlineFootnotes && (

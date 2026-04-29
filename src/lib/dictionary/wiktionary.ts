@@ -6,7 +6,10 @@ import type {
   DictionaryTranslation,
 } from "./types";
 
-export async function lookupWord(word: string, language: Language): Promise<DictionaryEntry | null> {
+export async function lookupWord(
+  word: string,
+  language: Language
+): Promise<DictionaryEntry | null> {
   const normalized = word.trim();
   if (!normalized) return null;
 
@@ -151,7 +154,10 @@ function extractDefinitionsFromList(list: Element): DictionaryDefinition[] {
 
 function cleanText(text: string): string {
   const stripped = htmlToText(text);
-  return stripped.replace(/\s+/g, " ").replace(/\[\d+\]/g, "").trim();
+  return stripped
+    .replace(/\s+/g, " ")
+    .replace(/\[\d+\]/g, "")
+    .trim();
 }
 
 function htmlToText(text: string): string {
@@ -162,7 +168,10 @@ function htmlToText(text: string): string {
   return text.replace(/<[^>]*>/g, "");
 }
 
-async function fetchTranslations(word: string, language: Language): Promise<DictionaryTranslation[]> {
+async function fetchTranslations(
+  word: string,
+  language: Language
+): Promise<DictionaryTranslation[]> {
   const container = await fetchParsedContainer(word, language);
   if (!container) return [];
   return extractTranslations(container, language === "es" ? "Traducciones" : "Translations");

@@ -5,9 +5,7 @@ import type {
   FileWithData,
 } from "../types";
 
-function getAcceptString(
-  filters?: { name: string; extensions: string[] }[]
-): string {
+function getAcceptString(filters?: { name: string; extensions: string[] }[]): string {
   if (!filters) return "*";
   return filters.flatMap((f) => f.extensions.map((e) => `.${e}`)).join(",");
 }

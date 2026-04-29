@@ -88,9 +88,7 @@ export function DictionaryDialog({ isOpen, word, language, onClose }: Dictionary
                   <li key={`${definition.definition}-${defIndex}`}>
                     <p>{definition.definition}</p>
                     {definition.example && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        “{definition.example}”
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">“{definition.example}”</p>
                     )}
                   </li>
                 ))}

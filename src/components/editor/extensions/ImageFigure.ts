@@ -78,8 +78,7 @@ export const ImageFigure = Node.create<ImageFigureOptions>({
       },
       alignment: {
         default: "center",
-        parseHTML: (el: HTMLElement) =>
-          el.getAttribute("data-alignment") || "center",
+        parseHTML: (el: HTMLElement) => el.getAttribute("data-alignment") || "center",
         renderHTML: (attributes: { alignment: string }) => ({
           "data-alignment": attributes.alignment || "center",
         }),

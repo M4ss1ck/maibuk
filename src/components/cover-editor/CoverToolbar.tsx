@@ -16,7 +16,7 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   TrashIcon,
-  ExportIcon
+  ExportIcon,
 } from "../icons";
 
 interface CoverToolbarProps {
@@ -117,16 +117,20 @@ export function CoverToolbar({
           <div className="absolute top-full left-0 mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50">
             {COVER_DIMENSIONS.map((dim) => (
               <button
+                type="button"
                 key={dim.id}
                 onClick={() => {
                   onDimensionChange(dim);
                   setShowDimensions(false);
                 }}
-                className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${dim.id === dimension.id ? "bg-muted" : ""
-                  }`}
+                className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${
+                  dim.id === dimension.id ? "bg-muted" : ""
+                }`}
               >
                 <span className="font-medium">{dim.name}</span>
-                <span className="text-xs text-muted-foreground">{dim.description}</span>
+                <span className="text-xs text-muted-foreground">
+                  {dim.description}
+                </span>
               </button>
             ))}
           </div>
@@ -150,18 +154,21 @@ export function CoverToolbar({
         {showTextMenu && (
           <div className="absolute top-full left-0 mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50">
             <button
+              type="button"
               onClick={handleAddTitle}
               className="w-full px-4 py-2 text-left hover:bg-muted"
             >
               {t("cover.toolbar.title")}
             </button>
             <button
+              type="button"
               onClick={handleAddSubtitle}
               className="w-full px-4 py-2 text-left hover:bg-muted"
             >
               {t("cover.toolbar.subtitle")}
             </button>
             <button
+              type="button"
               onClick={handleAddAuthor}
               className="w-full px-4 py-2 text-left hover:bg-muted"
             >
@@ -208,11 +215,14 @@ export function CoverToolbar({
 
         {showBackgroundMenu && (
           <div className="absolute top-full left-0 mt-1 w-64 bg-popover border border-border rounded-lg shadow-lg z-50 p-3">
-            <p className="text-sm font-medium mb-2">{t("cover.backgroundColor")}</p>
+            <p className="text-sm font-medium mb-2">
+              {t("cover.backgroundColor")}
+            </p>
             <div className="grid grid-cols-8 gap-1 mb-3">
               {PRESET_COLORS.map((color) => (
                 <button
                   key={color}
+                  type="button"
                   onClick={() => handleColorChange(color)}
                   className="w-6 h-6 rounded border border-border hover:scale-110 transition-transform"
                   style={{ backgroundColor: color }}
@@ -298,6 +308,7 @@ export function CoverToolbar({
         {showExportMenu && (
           <div className="absolute top-full right-0 mt-1 w-40 bg-popover border border-border rounded-lg shadow-lg z-50">
             <button
+              type="button"
               onClick={() => {
                 onExport("png");
                 setShowExportMenu(false);
@@ -307,6 +318,7 @@ export function CoverToolbar({
               {t("cover.pngExport")}
             </button>
             <button
+              type="button"
               onClick={() => {
                 onExport("jpeg");
                 setShowExportMenu(false);

@@ -66,23 +66,19 @@ describe("sync crypto", () => {
   it("throws INVALID_PASSPHRASE when decrypting with the wrong passphrase", async () => {
     const encrypted = await encrypt("secret", "passphrase-a");
 
-    await expect(decrypt(encrypted, "passphrase-b")).rejects.toSatisfy(
-      (error: unknown) => {
-        expect(isSyncCryptoError(error)).toBe(true);
-        if (!isSyncCryptoError(error)) {
-          return false;
-        }
-        return error.code === "INVALID_PASSPHRASE";
-      },
-    );
+    await expect(decrypt(encrypted, "passphrase-b")).rejects.toSatisfy((error: unknown) => {
+      expect(isSyncCryptoError(error)).toBe(true);
+      if (!isSyncCryptoError(error)) {
+        return false;
+      }
+      return error.code === "INVALID_PASSPHRASE";
+    });
   });
 
   it("computes a deterministic sha-256 checksum", async () => {
     const hash = await computeChecksum("hello world");
 
-    expect(hash).toBe(
-      "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
-    );
+    expect(hash).toBe("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
     expect(hash).toHaveLength(64);
   });
 

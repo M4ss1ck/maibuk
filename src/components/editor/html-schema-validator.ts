@@ -47,15 +47,27 @@ export function validateHtml(html: string): HtmlDiagnostic[] {
 
   // Tags that auto-close when nested inside themselves
   const autoClosing = new Set([
-    "p", "li", "td", "th", "tr", "thead", "tbody", "tfoot",
-    "dt", "dd", "option", "optgroup",
-    "colgroup", "caption", "rt", "rp",
+    "p",
+    "li",
+    "td",
+    "th",
+    "tr",
+    "thead",
+    "tbody",
+    "tfoot",
+    "dt",
+    "dd",
+    "option",
+    "optgroup",
+    "colgroup",
+    "caption",
+    "rt",
+    "rp",
   ]);
 
   const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*\/?>/g;
-  let match: RegExpExecArray | null;
 
-  while ((match = tagRegex.exec(html)) !== null) {
+  for (const match of html.matchAll(tagRegex)) {
     const fullMatch = match[0];
     const tagName = match[1].toLowerCase();
     const pos = match.index;

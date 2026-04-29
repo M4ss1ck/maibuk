@@ -131,9 +131,9 @@ describe("useSyncStore", () => {
     it("propagates login errors", async () => {
       mockPbLogin.mockRejectedValue(new Error("Invalid credentials"));
 
-      await expect(
-        useSyncStore.getState().login("bad@test.com", "wrong")
-      ).rejects.toThrow("Invalid credentials");
+      await expect(useSyncStore.getState().login("bad@test.com", "wrong")).rejects.toThrow(
+        "Invalid credentials"
+      );
     });
 
     it("sets authVerified true on successful login", async () => {
@@ -235,9 +235,9 @@ describe("useSyncStore", () => {
     it("sets error status on failure and rethrows", async () => {
       mockSyncAllBooks.mockRejectedValue(new Error("Network error"));
 
-      await expect(
-        useSyncStore.getState().syncAll("passphrase", vi.fn())
-      ).rejects.toThrow("Network error");
+      await expect(useSyncStore.getState().syncAll("passphrase", vi.fn())).rejects.toThrow(
+        "Network error"
+      );
 
       expect(useSyncStore.getState().syncStatus).toBe("error");
       expect(useSyncStore.getState().syncError).toBe("Network error");
@@ -350,9 +350,7 @@ describe("useSyncStore", () => {
         updatedAt: 200,
       });
 
-      expect(useSyncStore.getState().bookSyncMeta["book-1"].checksum).toBe(
-        "new"
-      );
+      expect(useSyncStore.getState().bookSyncMeta["book-1"].checksum).toBe("new");
     });
   });
 
@@ -447,11 +445,18 @@ describe("useSyncStore", () => {
         token: "new-token",
       });
       // Simulate conflict: the onConflict resolver should return "cancel"
-      mockSyncAllBooks.mockImplementation(async (_pass: string, onConflict: (conflict: unknown) => Promise<string>) => {
-        const choice = await onConflict({ bookId: "b1", bookTitle: "Book", localUpdatedAt: 1, remoteUpdatedAt: 2 });
-        expect(choice).toBe("cancel");
-        return { outcome: "cancelled", actions: ["cancelled"] };
-      });
+      mockSyncAllBooks.mockImplementation(
+        async (_pass: string, onConflict: (conflict: unknown) => Promise<string>) => {
+          const choice = await onConflict({
+            bookId: "b1",
+            bookTitle: "Book",
+            localUpdatedAt: 1,
+            remoteUpdatedAt: 2,
+          });
+          expect(choice).toBe("cancel");
+          return { outcome: "cancelled", actions: ["cancelled"] };
+        }
+      );
 
       await useSyncStore.getState().verifyAuth();
 

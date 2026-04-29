@@ -11,7 +11,13 @@ interface BookCardProps {
   index?: number;
 }
 
-export function BookCard({ book, onClick, indexHint, isFocused = false, index = 0 }: BookCardProps) {
+export function BookCard({
+  book,
+  onClick,
+  indexHint,
+  isFocused = false,
+  index = 0,
+}: BookCardProps) {
   const { t, i18n } = useTranslation();
 
   const formatDate = (date: Date) => {
@@ -30,6 +36,7 @@ export function BookCard({ book, onClick, indexHint, isFocused = false, index = 
 
   return (
     <button
+      type="button"
       onClick={onClick}
       style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
       className={`book-card-enter relative flex flex-col bg-card border rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200 text-left w-full ${isFocused ? "border-primary ring-1 ring-primary/30" : "border-border"}`}
@@ -56,11 +63,17 @@ export function BookCard({ book, onClick, indexHint, isFocused = false, index = 
 
       {/* Info */}
       <div className="p-4">
-        <h3 className="font-semibold text-lg truncate text-foreground">{book.title}</h3>
-        <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
+        <h3 className="font-semibold text-lg truncate text-foreground">
+          {book.title}
+        </h3>
+        <p className="text-sm text-muted-foreground truncate">
+          {book.authorName}
+        </p>
 
         <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-          <span className={`text-xs px-2 py-1 rounded-full capitalize ${statusColors[book.status]}`}>
+          <span
+            className={`text-xs px-2 py-1 rounded-full capitalize ${statusColors[book.status]}`}
+          >
             {t(`common.${book.status}`)}
           </span>
           <span className="text-xs text-muted-foreground">

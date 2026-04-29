@@ -10,10 +10,7 @@ async function probeClipboard(): Promise<boolean> {
   try {
     const items = await navigator.clipboard.read();
     for (const item of items) {
-      if (
-        item.types.includes("text/html") ||
-        item.types.includes("text/plain")
-      ) {
+      if (item.types.includes("text/html") || item.types.includes("text/plain")) {
         return true;
       }
     }
@@ -69,10 +66,8 @@ export function useClipboardProbe(editor: Editor): () => Promise<boolean> {
   useEffect(() => {
     const dom = editor.view.dom;
     const onPointerDown = (event: PointerEvent) => {
-      const isRightClick =
-        event.pointerType === "mouse" && event.button === 2;
-      const isTouchOrPen =
-        event.pointerType === "touch" || event.pointerType === "pen";
+      const isRightClick = event.pointerType === "mouse" && event.button === 2;
+      const isTouchOrPen = event.pointerType === "touch" || event.pointerType === "pen";
       if (!isRightClick && !isTouchOrPen) return;
       probeRef.current = probeClipboard();
     };
