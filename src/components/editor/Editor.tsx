@@ -65,9 +65,7 @@ export function Editor({
   showInlineFootnotes = true,
 }: EditorProps) {
   const { t } = useTranslation();
-  const spellCheckEnabled = useSettingsStore(
-    (state) => state.spellCheckEnabled,
-  );
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const editor = useEditor({
@@ -220,30 +218,21 @@ export function Editor({
   if (!editor) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">
-          {t("editor.loadingEditor")}
-        </div>
+        <div className="animate-pulse text-muted-foreground">{t("editor.loadingEditor")}</div>
       </div>
     );
   }
 
   return (
-    <div
-      className={`flex-1 flex flex-col min-h-0 ${focusMode ? "focus-mode" : ""}`}
-    >
+    <div className={`flex-1 flex flex-col min-h-0 ${focusMode ? "focus-mode" : ""}`}>
       {!focusMode && (
-        <EditorToolbar
-          editor={editor}
-          onContextMenuOpenChange={setIsContextMenuOpen}
-        />
+        <EditorToolbar editor={editor} onContextMenuOpenChange={setIsContextMenuOpen} />
       )}
 
       <div className="flex-1 overflow-auto min-h-0" onClick={handleFocus}>
         <div className="max-w-editor-max mx-auto p-8">
           <EditorContent editor={editor} />
-          {showInlineFootnotes && (
-            <FootnoteList editor={editor} startIndex={footnoteStartIndex} />
-          )}
+          {showInlineFootnotes && <FootnoteList editor={editor} startIndex={footnoteStartIndex} />}
         </div>
       </div>
 
@@ -252,10 +241,7 @@ export function Editor({
 
       {/* Floating selection toolbar — hidden when the context menu is open */}
       {!focusMode && !isContextMenuOpen && (
-        <SelectionToolbar
-          editor={editor}
-          onLinkClick={() => setShowBubbleLinkDialog(true)}
-        />
+        <SelectionToolbar editor={editor} onLinkClick={() => setShowBubbleLinkDialog(true)} />
       )}
       <LinkDialog
         editor={editor}

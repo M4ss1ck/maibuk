@@ -19,10 +19,7 @@ function prefersDark(): boolean {
 export function Embed() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
-  const theme = useMemo(
-    () => asEmbedTheme(searchParams.get("theme")),
-    [searchParams],
-  );
+  const theme = useMemo(() => asEmbedTheme(searchParams.get("theme")), [searchParams]);
   const [content, setContent] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,11 +42,7 @@ export function Embed() {
 
   return (
     <div className="h-dvh w-full flex flex-col bg-background text-foreground">
-      <Editor
-        content={content}
-        onUpdate={setContent}
-        placeholder={t("embed.placeholder")}
-      />
+      <Editor content={content} onUpdate={setContent} placeholder={t("embed.placeholder")} />
     </div>
   );
 }

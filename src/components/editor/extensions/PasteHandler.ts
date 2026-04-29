@@ -25,9 +25,7 @@ export const PasteHandler = Extension.create({
             if (!clipboardData) return false;
 
             const items = Array.from(clipboardData.items);
-            const imageItem = items.find((item) =>
-              item.type.startsWith("image/"),
-            );
+            const imageItem = items.find((item) => item.type.startsWith("image/"));
 
             if (imageItem) {
               const file = imageItem.getAsFile();
@@ -52,7 +50,7 @@ export const PasteHandler = Extension.create({
             if (!event.dataTransfer?.files?.length) return false;
 
             const imageFile = Array.from(event.dataTransfer.files).find((f) =>
-              f.type.startsWith("image/"),
+              f.type.startsWith("image/")
             );
             if (!imageFile) return false;
 
@@ -134,8 +132,7 @@ export const PasteHandler = Extension.create({
               // Check for indent-related attributes
               const hasIndentAttrs =
                 (firstNode.attrs.indent && firstNode.attrs.indent > 0) ||
-                (firstNode.attrs.firstLineIndent &&
-                  firstNode.attrs.firstLineIndent !== null);
+                (firstNode.attrs.firstLineIndent && firstNode.attrs.firstLineIndent !== null);
 
               if (hasIndentAttrs) {
                 // Set openStart to 0 to prevent merging with existing paragraph
@@ -156,11 +153,7 @@ export const PasteHandler = Extension.create({
  * Read an image file as a data URL and insert it into the editor.
  * Used by both paste and drop handlers to avoid blob: URLs that don't persist.
  */
-function readImageAsDataUrl(
-  file: File,
-  view: EditorView,
-  dropEvent?: DragEvent,
-): void {
+function readImageAsDataUrl(file: File, view: EditorView, dropEvent?: DragEvent): void {
   const reader = new FileReader();
   reader.onload = () => {
     const src = typeof reader.result === "string" ? reader.result : null;
@@ -194,14 +187,9 @@ function readImageAsDataUrl(
  * the resulting image nodes.  Blob URLs are ephemeral — they don't survive
  * a page reload, so we must materialise the data before saving.
  */
-async function convertBlobImagesInHtml(
-  html: string,
-  view: EditorView,
-): Promise<void> {
+async function convertBlobImagesInHtml(html: string, view: EditorView): Promise<void> {
   const doc = new DOMParser().parseFromString(html, "text/html");
-  const blobImages = Array.from(
-    doc.querySelectorAll<HTMLImageElement>('img[src^="blob:"]'),
-  );
+  const blobImages = Array.from(doc.querySelectorAll<HTMLImageElement>('img[src^="blob:"]'));
 
   if (blobImages.length === 0) return;
 
@@ -219,7 +207,7 @@ async function convertBlobImagesInHtml(
       } catch {
         return "";
       }
-    }),
+    })
   );
 
   const imageType = view.state.schema.nodes.image;
@@ -395,12 +383,7 @@ function transformIndentation(element: HTMLElement): void {
 
   // Keep text-indent for first-line indentation (separate attribute)
   // This is commonly used in Google Docs for paragraph first-line indents
-  if (
-    textIndent &&
-    textIndent !== "0" &&
-    textIndent !== "0px" &&
-    textIndent !== "0pt"
-  ) {
+  if (textIndent && textIndent !== "0" && textIndent !== "0px" && textIndent !== "0pt") {
     element.style.textIndent = textIndent;
   }
 }
@@ -412,11 +395,7 @@ function transformIndentation(element: HTMLElement): void {
 function transformSpanStyles(span: HTMLElement): void {
   // Handle font-weight
   const fontWeight = span.style.fontWeight;
-  if (
-    fontWeight === "bold" ||
-    fontWeight === "700" ||
-    parseInt(fontWeight) >= 600
-  ) {
+  if (fontWeight === "bold" || fontWeight === "700" || parseInt(fontWeight) >= 600) {
     // The Bold extension should pick this up, but ensure the style is present
     span.style.fontWeight = "bold";
   }
@@ -428,8 +407,7 @@ function transformSpanStyles(span: HTMLElement): void {
   }
 
   // Handle text-decoration (underline, strikethrough)
-  const textDecoration =
-    span.style.textDecoration || span.style.textDecorationLine;
+  const textDecoration = span.style.textDecoration || span.style.textDecorationLine;
   if (textDecoration) {
     if (textDecoration.includes("underline")) {
       span.style.textDecoration = "underline";
@@ -441,12 +419,7 @@ function transformSpanStyles(span: HTMLElement): void {
 
   // Handle color
   const color = span.style.color;
-  if (
-    color &&
-    color !== "inherit" &&
-    color !== "rgb(0, 0, 0)" &&
-    color !== "#000000"
-  ) {
+  if (color && color !== "inherit" && color !== "rgb(0, 0, 0)" && color !== "#000000") {
     span.style.color = color;
   }
 
@@ -469,22 +442,13 @@ function transformSpanStyles(span: HTMLElement): void {
  */
 function cleanupGoogleDocsAttributes(element: HTMLElement): void {
   // Remove Google Docs specific attributes
-  const attributesToRemove = [
-    "id",
-    "class",
-    "data-docs-internal-guid",
-    "dir",
-    "role",
-  ];
+  const attributesToRemove = ["id", "class", "data-docs-internal-guid", "dir", "role"];
 
   attributesToRemove.forEach((attr) => {
     // Only remove class if it's a Google Docs specific class
     if (attr === "class") {
       const className = element.getAttribute("class");
-      if (
-        className &&
-        (className.includes("docs-") || className.includes("kix-"))
-      ) {
+      if (className && (className.includes("docs-") || className.includes("kix-"))) {
         element.removeAttribute("class");
       }
     } else if (attr === "id") {

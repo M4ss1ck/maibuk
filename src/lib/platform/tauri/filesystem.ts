@@ -12,8 +12,6 @@ export const tauriFileSystem: FileSystemAdapter = {
 
   downloadFile(_filename: string, _data: Uint8Array, _mimeType: string): void {
     // Not used in Tauri - use writeFile with save dialog instead
-    throw new Error(
-      "downloadFile is not supported in Tauri. Use save dialog + writeFile instead."
-    );
+    throw new Error("downloadFile is not supported in Tauri. Use save dialog + writeFile instead.");
   },
 };

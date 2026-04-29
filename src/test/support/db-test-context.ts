@@ -9,12 +9,9 @@ import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
 import type { DatabaseAdapter } from "../../lib/platform/types";
 
 class InMemoryDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: SqlJsDatabase) { }
+  constructor(private db: SqlJsDatabase) {}
 
-  async execute(
-    sql: string,
-    params?: unknown[]
-  ): Promise<{ rowsAffected: number }> {
+  async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
     this.db.run(sql, params as (string | number | null | Uint8Array)[]);
     return { rowsAffected: this.db.getRowsModified() };
   }
@@ -115,9 +112,7 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     )
   `);
 
-  await adapter.execute(
-    `CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)`
-  );
+  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)`);
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_chapters_order ON chapters(book_id, "order")`
   );

@@ -7,10 +7,7 @@ const GCM_TAG_LENGTH = 16;
 
 let sessionPassphrase: string | null = null;
 
-export type SyncCryptoErrorCode =
-  | "MISSING_PASSPHRASE"
-  | "INVALID_PAYLOAD"
-  | "INVALID_PASSPHRASE";
+export type SyncCryptoErrorCode = "MISSING_PASSPHRASE" | "INVALID_PAYLOAD" | "INVALID_PASSPHRASE";
 
 export class SyncCryptoError extends Error {
   readonly code: SyncCryptoErrorCode;
@@ -28,10 +25,7 @@ export function isSyncCryptoError(error: unknown): error is SyncCryptoError {
 
 function assertPassphrase(passphrase: string): void {
   if (!passphrase) {
-    throw new SyncCryptoError(
-      "MISSING_PASSPHRASE",
-      "Passphrase is required for sync encryption",
-    );
+    throw new SyncCryptoError("MISSING_PASSPHRASE", "Passphrase is required for sync encryption");
   }
 }
 
@@ -47,10 +41,7 @@ export function clearPassphrase(): void {
   sessionPassphrase = null;
 }
 
-async function deriveKey(
-  passphrase: string,
-  salt: Uint8Array,
-): Promise<CryptoKey> {
+async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const normalizedSalt = new Uint8Array(salt);
   const keyMaterial = await crypto.subtle.importKey(
@@ -58,7 +49,7 @@ async function deriveKey(
     encoder.encode(passphrase),
     "PBKDF2",
     false,
-    ["deriveKey"],
+    ["deriveKey"]
   );
 
   return crypto.subtle.deriveKey(
@@ -71,14 +62,11 @@ async function deriveKey(
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     false,
-    ["encrypt", "decrypt"],
+    ["encrypt", "decrypt"]
   );
 }
 
-export async function encrypt(
-  plaintext: string,
-  passphrase: string,
-): Promise<Uint8Array> {
+export async function encrypt(plaintext: string, passphrase: string): Promise<Uint8Array> {
   assertPassphrase(passphrase);
 
   const encoder = new TextEncoder();
@@ -89,13 +77,11 @@ export async function encrypt(
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
-    encoder.encode(plaintext),
+    encoder.encode(plaintext)
   );
 
   // Format: [salt (16B)][iv (12B)][ciphertext]
-  const result = new Uint8Array(
-    SALT_LENGTH + IV_LENGTH + ciphertext.byteLength,
-  );
+  const result = new Uint8Array(SALT_LENGTH + IV_LENGTH + ciphertext.byteLength);
   result.set(salt, 0);
   result.set(iv, SALT_LENGTH);
   result.set(new Uint8Array(ciphertext), SALT_LENGTH + IV_LENGTH);
@@ -103,18 +89,12 @@ export async function encrypt(
   return result;
 }
 
-export async function decrypt(
-  blob: Uint8Array,
-  passphrase: string,
-): Promise<string> {
+export async function decrypt(blob: Uint8Array, passphrase: string): Promise<string> {
   assertPassphrase(passphrase);
 
   const minPayloadLength = SALT_LENGTH + IV_LENGTH + GCM_TAG_LENGTH;
   if (blob.length < minPayloadLength) {
-    throw new SyncCryptoError(
-      "INVALID_PAYLOAD",
-      "Encrypted payload is invalid or corrupted",
-    );
+    throw new SyncCryptoError("INVALID_PAYLOAD", "Encrypted payload is invalid or corrupted");
   }
 
   const salt = blob.slice(0, SALT_LENGTH);
@@ -123,18 +103,10 @@ export async function decrypt(
   const key = await deriveKey(passphrase, salt);
 
   try {
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      key,
-      ciphertext,
-    );
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
 
     return new TextDecoder().decode(decrypted);
   } catch {
-    throw new SyncCryptoError(
-      "INVALID_PASSPHRASE",
-      "Invalid passphrase or corrupted synced data",
-    );
+    throw new SyncCryptoError("INVALID_PASSPHRASE", "Invalid passphrase or corrupted synced data");
   }
 }
-

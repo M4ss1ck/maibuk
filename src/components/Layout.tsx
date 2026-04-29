@@ -47,10 +47,7 @@ export function Layout() {
 
       {/* Mobile menu overlay */}
       {isMobileMenuOpen && (
-        <div
-          className="md:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={closeMobileMenu}
-        />
+        <div className="md:hidden fixed inset-0 bg-black/50 z-40" onClick={closeMobileMenu} />
       )}
 
       {/* Sidebar - hidden on mobile, shown as drawer when menu is open */}
@@ -81,9 +78,8 @@ export function Layout() {
             to="/"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                isActive ? "bg-primary text-white" : "hover:bg-muted text-foreground"
               }`
             }
           >
@@ -96,9 +92,8 @@ export function Layout() {
             to="/settings"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${
+                isActive ? "bg-primary text-white" : "hover:bg-muted text-foreground"
               }`
             }
           >

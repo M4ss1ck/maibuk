@@ -13,11 +13,7 @@ interface PassphraseDialogProps {
   onSuccess: () => void | Promise<void>;
 }
 
-export function PassphraseDialog({
-  isOpen,
-  onClose,
-  onSuccess,
-}: PassphraseDialogProps) {
+export function PassphraseDialog({ isOpen, onClose, onSuccess }: PassphraseDialogProps) {
   const { t } = useTranslation();
   const { setPassphrase } = useSyncStore();
   const [passphrase, setPassphraseValue] = useState("");
@@ -117,24 +113,14 @@ export function PassphraseDialog({
               type="button"
               className="p-1 text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setIsPassphraseVisible((prev) => !prev)}
-              aria-label={t(
-                isPassphraseVisible
-                  ? "sync.hidePassphrase"
-                  : "sync.showPassphrase"
-              )}
+              aria-label={t(isPassphraseVisible ? "sync.hidePassphrase" : "sync.showPassphrase")}
             >
-              {isPassphraseVisible ? (
-                <EyeOff className="w-4 h-4" />
-              ) : (
-                <Eye className="w-4 h-4" />
-              )}
+              {isPassphraseVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           }
         />
 
-        <p className="text-sm text-muted-foreground">
-          {t("sync.passphraseHint")}
-        </p>
+        <p className="text-sm text-muted-foreground">{t("sync.passphraseHint")}</p>
 
         {isConfirmed && (
           <Button

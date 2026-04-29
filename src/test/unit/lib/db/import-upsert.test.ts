@@ -5,28 +5,26 @@ describe("normaliseToUpsert()", () => {
   it("converts INSERT INTO to INSERT OR REPLACE INTO", () => {
     const input = 'INSERT INTO "books" ("id", "title") VALUES (\'1\', \'Test\');';
     expect(normaliseToUpsert(input)).toBe(
-      'INSERT OR REPLACE INTO "books" ("id", "title") VALUES (\'1\', \'Test\');',
+      'INSERT OR REPLACE INTO "books" ("id", "title") VALUES (\'1\', \'Test\');'
     );
   });
 
   it("preserves existing INSERT OR REPLACE INTO", () => {
     const input = 'INSERT OR REPLACE INTO "books" ("id") VALUES (\'1\');';
-    expect(normaliseToUpsert(input)).toBe(
-      'INSERT OR REPLACE INTO "books" ("id") VALUES (\'1\');',
-    );
+    expect(normaliseToUpsert(input)).toBe('INSERT OR REPLACE INTO "books" ("id") VALUES (\'1\');');
   });
 
   it("handles INSERT OR IGNORE INTO by converting to INSERT OR REPLACE INTO", () => {
     const input = 'INSERT OR IGNORE INTO "settings" ("key") VALUES (\'theme\');';
     expect(normaliseToUpsert(input)).toBe(
-      'INSERT OR REPLACE INTO "settings" ("key") VALUES (\'theme\');',
+      'INSERT OR REPLACE INTO "settings" ("key") VALUES (\'theme\');'
     );
   });
 
   it("is case-insensitive", () => {
     const input = 'insert into "chapters" ("id") values (\'1\');';
     expect(normaliseToUpsert(input)).toBe(
-      'INSERT OR REPLACE INTO "chapters" ("id") values (\'1\');',
+      'INSERT OR REPLACE INTO "chapters" ("id") values (\'1\');'
     );
   });
 

@@ -5,9 +5,9 @@ import { afterEach } from "vitest";
 // Polyfill ResizeObserver for Headless UI components in jsdom
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class ResizeObserver {
-    observe() { }
-    unobserve() { }
-    disconnect() { }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   } as unknown as typeof globalThis.ResizeObserver;
 }
 
@@ -17,11 +17,11 @@ if (typeof window.matchMedia === "undefined") {
     ({
       matches: false,
       media: query,
-      addEventListener: () => { },
-      removeEventListener: () => { },
+      addEventListener: () => {},
+      removeEventListener: () => {},
       onchange: null,
-      addListener: () => { },
-      removeListener: () => { },
+      addListener: () => {},
+      removeListener: () => {},
       dispatchEvent: () => false,
     }) as MediaQueryList;
 }

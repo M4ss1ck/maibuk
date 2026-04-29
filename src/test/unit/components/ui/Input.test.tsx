@@ -91,7 +91,9 @@ describe("Input", () => {
       render(
         <Input
           value={value}
-          onChange={(e) => { value = e.target.value; }}
+          onChange={(e) => {
+            value = e.target.value;
+          }}
         />
       );
       expect(screen.getByRole("textbox")).toHaveValue("");

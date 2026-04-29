@@ -35,14 +35,15 @@ interface SyncStore {
   logout: () => void;
   verifyAuth: () => Promise<void>;
   syncAll: (passphrase: string, onConflict: ConflictResolver) => Promise<void>;
-  syncSingleBook: (bookId: string, passphrase: string, onConflict: ConflictResolver) => Promise<void>;
+  syncSingleBook: (
+    bookId: string,
+    passphrase: string,
+    onConflict: ConflictResolver
+  ) => Promise<void>;
   updateBookMeta: (bookId: string, meta: SyncItemMeta) => void;
 }
 
-function applySyncOutcome(
-  outcome: SyncOutcome,
-  set: (partial: Partial<SyncStore>) => void,
-): void {
+function applySyncOutcome(outcome: SyncOutcome, set: (partial: Partial<SyncStore>) => void): void {
   if (outcome === "cancelled") {
     set({ syncStatus: "cancelled", syncError: null });
     return;
@@ -221,6 +222,6 @@ export const useSyncStore = create<SyncStore>()(
           }
         };
       },
-    },
-  ),
+    }
+  )
 );

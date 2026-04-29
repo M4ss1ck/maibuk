@@ -7,7 +7,7 @@ describe("Modal", () => {
   describe("visibility", () => {
     it("renders nothing when isOpen is false", () => {
       const { container } = render(
-        <Modal isOpen={false} onClose={() => { }} title="Test">
+        <Modal isOpen={false} onClose={() => {}} title="Test">
           <p>Content</p>
         </Modal>
       );
@@ -16,7 +16,7 @@ describe("Modal", () => {
 
     it("renders modal content when isOpen is true", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="My Modal">
+        <Modal isOpen={true} onClose={() => {}} title="My Modal">
           <p>Hello World</p>
         </Modal>
       );
@@ -27,7 +27,7 @@ describe("Modal", () => {
   describe("title", () => {
     it("renders the title text", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="Dialog Title">
+        <Modal isOpen={true} onClose={() => {}} title="Dialog Title">
           <p>Content</p>
         </Modal>
       );
@@ -36,7 +36,7 @@ describe("Modal", () => {
 
     it("has correct accessible role and label", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="Accessible">
+        <Modal isOpen={true} onClose={() => {}} title="Accessible">
           <p>Content</p>
         </Modal>
       );
@@ -98,7 +98,7 @@ describe("Modal", () => {
   describe("body scroll lock", () => {
     it("sets overflow hidden on body when open", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="Scroll Lock">
+        <Modal isOpen={true} onClose={() => {}} title="Scroll Lock">
           <p>Content</p>
         </Modal>
       );
@@ -107,7 +107,7 @@ describe("Modal", () => {
 
     it("restores body overflow on unmount", () => {
       const { unmount } = render(
-        <Modal isOpen={true} onClose={() => { }} title="Restore">
+        <Modal isOpen={true} onClose={() => {}} title="Restore">
           <p>Content</p>
         </Modal>
       );
@@ -119,12 +119,7 @@ describe("Modal", () => {
   describe("footer", () => {
     it("renders footer when provided", () => {
       render(
-        <Modal
-          isOpen={true}
-          onClose={() => { }}
-          title="Footer Test"
-          footer={<button>Save</button>}
-        >
+        <Modal isOpen={true} onClose={() => {}} title="Footer Test" footer={<button>Save</button>}>
           <p>Content</p>
         </Modal>
       );
@@ -133,7 +128,7 @@ describe("Modal", () => {
 
     it("does not render footer section when not provided", () => {
       const { container } = render(
-        <Modal isOpen={true} onClose={() => { }} title="No Footer">
+        <Modal isOpen={true} onClose={() => {}} title="No Footer">
           <p>Content</p>
         </Modal>
       );
@@ -145,7 +140,7 @@ describe("Modal", () => {
   describe("children", () => {
     it("renders complex children content", () => {
       render(
-        <Modal isOpen={true} onClose={() => { }} title="Complex">
+        <Modal isOpen={true} onClose={() => {}} title="Complex">
           <div data-testid="form">
             <input placeholder="Name" />
             <textarea placeholder="Description" />

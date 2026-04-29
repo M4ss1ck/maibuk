@@ -22,9 +22,7 @@ function toBook(row: Record<string, unknown>): Book {
     status: row.status as "draft" | "in-progress" | "completed",
     createdAt: new Date((row.created_at as number) * 1000),
     updatedAt: new Date((row.updated_at as number) * 1000),
-    lastOpenedAt: row.last_opened_at
-      ? new Date((row.last_opened_at as number) * 1000)
-      : undefined,
+    lastOpenedAt: row.last_opened_at ? new Date((row.last_opened_at as number) * 1000) : undefined,
     lastChapterId: row.last_chapter_id as string | undefined,
   };
 }
@@ -79,10 +77,7 @@ export const useBookStore = create<BookStore>((set) => ({
 
       // Update last opened timestamp
       const now = Math.floor(Date.now() / 1000);
-      await db.execute("UPDATE books SET last_opened_at = ? WHERE id = ?", [
-        now,
-        id,
-      ]);
+      await db.execute("UPDATE books SET last_opened_at = ? WHERE id = ?", [now, id]);
 
       set({ currentBook: { ...book, lastOpenedAt: new Date() }, isLoading: false });
     } catch (error) {
@@ -182,16 +177,11 @@ export const useBookStore = create<BookStore>((set) => ({
 
     values.push(id);
 
-    await db.execute(
-      `UPDATE books SET ${updates.join(", ")} WHERE id = ?`,
-      values
-    );
+    await db.execute(`UPDATE books SET ${updates.join(", ")} WHERE id = ?`, values);
 
     set((state) => ({
       books: state.books.map((book) =>
-        book.id === id
-          ? { ...book, ...input, updatedAt: new Date() }
-          : book
+        book.id === id ? { ...book, ...input, updatedAt: new Date() } : book
       ),
       currentBook:
         state.currentBook?.id === id
@@ -214,10 +204,11 @@ export const useBookStore = create<BookStore>((set) => ({
     const db = await getDatabase();
     const now = Math.floor(Date.now() / 1000);
 
-    await db.execute(
-      "UPDATE books SET word_count = ?, updated_at = ? WHERE id = ?",
-      [wordCount, now, id]
-    );
+    await db.execute("UPDATE books SET word_count = ?, updated_at = ? WHERE id = ?", [
+      wordCount,
+      now,
+      id,
+    ]);
 
     set((state) => ({
       books: state.books.map((book) =>

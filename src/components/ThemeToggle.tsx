@@ -49,7 +49,7 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
         </button>
 
         {isOpen && (
-            <div className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg py-1 min-w-30 z-50 dropdown-enter">
+          <div className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg py-1 min-w-30 z-50 dropdown-enter">
             {themes.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}
@@ -57,10 +57,11 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
                   setTheme(value);
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${theme === value
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-                  }`}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                  theme === value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
                 <Icon className="w-4 h-4" />
                 {label}
@@ -79,10 +80,11 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
         <button
           key={value}
           onClick={() => setTheme(value)}
-          className={`p-2 rounded-md transition-colors ${theme === value
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground"
-            }`}
+          className={`p-2 rounded-md transition-colors ${
+            theme === value
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
           title={label}
         >
           <Icon className="w-4 h-4" />

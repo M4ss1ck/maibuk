@@ -6,19 +6,19 @@ import { Switch } from "../../../../components/ui/Switch";
 describe("Switch", () => {
   describe("rendering", () => {
     it("renders a switch element", () => {
-      render(<Switch checked={false} onChange={() => { }} />);
+      render(<Switch checked={false} onChange={() => {}} />);
       expect(screen.getByRole("switch")).toBeInTheDocument();
     });
   });
 
   describe("checked state", () => {
     it("reflects unchecked state", () => {
-      render(<Switch checked={false} onChange={() => { }} />);
+      render(<Switch checked={false} onChange={() => {}} />);
       expect(screen.getByRole("switch")).not.toBeChecked();
     });
 
     it("reflects checked state", () => {
-      render(<Switch checked={true} onChange={() => { }} />);
+      render(<Switch checked={true} onChange={() => {}} />);
       expect(screen.getByRole("switch")).toBeChecked();
     });
   });
@@ -47,14 +47,14 @@ describe("Switch", () => {
 
   describe("label", () => {
     it("renders a screen-reader label when provided", () => {
-      render(<Switch checked={false} onChange={() => { }} label="Enable notifications" />);
+      render(<Switch checked={false} onChange={() => {}} label="Enable notifications" />);
       expect(screen.getByRole("switch")).toHaveAccessibleName("Enable notifications");
     });
   });
 
   describe("className", () => {
     it("appends custom className", () => {
-      render(<Switch checked={false} onChange={() => { }} className="my-switch" />);
+      render(<Switch checked={false} onChange={() => {}} className="my-switch" />);
       const el = screen.getByRole("switch");
       expect(el.className).toContain("my-switch");
     });

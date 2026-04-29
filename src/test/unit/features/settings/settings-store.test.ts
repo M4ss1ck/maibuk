@@ -13,9 +13,7 @@ vi.mock("../../../../i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
-const { useSettingsStore } = await import(
-  "../../../../features/settings/store"
-);
+const { useSettingsStore } = await import("../../../../features/settings/store");
 
 describe("useSettingsStore", () => {
   beforeEach(() => {

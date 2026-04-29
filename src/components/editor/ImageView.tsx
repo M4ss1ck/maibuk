@@ -2,12 +2,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { NodeViewWrapper, NodeViewContent } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
-import {
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Trash2,
-} from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Trash2 } from "lucide-react";
 import { NodeSelection } from "@tiptap/pm/state";
 
 const HANDLES = ["nw", "ne", "sw", "se"] as const;
@@ -81,16 +76,13 @@ export function ImageView({
     };
   }, [node.attrs.src, updateAttributes]);
 
-  const handleCaptionKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      // Prevent Enter from creating newlines in caption
-      if (e.key === "Enter") {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    },
-    []
-  );
+  const handleCaptionKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Prevent Enter from creating newlines in caption
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, []);
 
   const handleResizeStart = useCallback(
     (handle: (typeof HANDLES)[number], e: React.MouseEvent) => {
@@ -112,14 +104,8 @@ export function ImageView({
         const dx = moveEvent.clientX - startX;
         const effectiveDx = isLeft ? -dx : dx;
         // Multiply by 2 because the image is centered, so moving one side effectively doubles the visual change
-        const newWidthPx = Math.max(
-          startWidth + effectiveDx * 2,
-          containerWidth * 0.1
-        );
-        const newWidthPercent = Math.min(
-          Math.round((newWidthPx / containerWidth) * 100),
-          100
-        );
+        const newWidthPx = Math.max(startWidth + effectiveDx * 2, containerWidth * 0.1);
+        const newWidthPercent = Math.min(Math.round((newWidthPx / containerWidth) * 100), 100);
         const widthStr = `${newWidthPercent}%`;
         setResizingWidth(widthStr);
         resizingWidthRef.current = widthStr;
@@ -156,9 +142,7 @@ export function ImageView({
       const pos = typeof getPos === "function" ? getPos() : null;
       if (typeof pos !== "number") return;
 
-      const tr = editor.state.tr.setSelection(
-        NodeSelection.create(editor.state.doc, pos)
-      );
+      const tr = editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, pos));
       editor.view.dispatch(tr);
     },
     [editor, getPos]
@@ -204,22 +188,14 @@ export function ImageView({
             <AlignRight className="w-4 h-4" />
           </button>
           <div className="toolbar-divider" />
-          <button
-            onClick={() => deleteNode()}
-            title={t("common.delete")}
-            type="button"
-          >
+          <button onClick={() => deleteNode()} title={t("common.delete")} type="button">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {/* Image container with resize handles */}
-      <div
-        className="image-view-container"
-        ref={containerRef}
-        onMouseDown={handleImageMouseDown}
-      >
+      <div className="image-view-container" ref={containerRef} onMouseDown={handleImageMouseDown}>
         <img
           src={node.attrs.src}
           alt={node.attrs.alt || ""}

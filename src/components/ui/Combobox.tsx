@@ -30,9 +30,7 @@ export function Combobox({
   const filteredOptions =
     query === ""
       ? options
-      : options.filter((option) =>
-        option.toLowerCase().includes(query.toLowerCase())
-      );
+      : options.filter((option) => option.toLowerCase().includes(query.toLowerCase()));
 
   // Check if query is a valid custom value (not in options)
   const isCustomValue = query !== "" && !options.includes(query);
@@ -82,12 +80,7 @@ export function Combobox({
           )}
           {filteredOptions.map((option, i) => {
             if (option === "divider") {
-              return (
-                <hr
-                  key={option + i}
-                  className="my-1 border-t border-border"
-                />
-              );
+              return <hr key={option + i} className="my-1 border-t border-border" />;
             }
             return (
               <ComboboxOption
@@ -97,7 +90,7 @@ export function Combobox({
               >
                 {option}
               </ComboboxOption>
-            )
+            );
           })}
         </ComboboxOptions>
       </div>

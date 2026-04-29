@@ -9,10 +9,7 @@ function respond(message: WorkerResponse) {
 
 async function handleInit(lang: string, affUrl: string, dicUrl: string) {
   try {
-    const [affResponse, dicResponse] = await Promise.all([
-      fetch(affUrl),
-      fetch(dicUrl),
-    ]);
+    const [affResponse, dicResponse] = await Promise.all([fetch(affUrl), fetch(dicUrl)]);
 
     const aff = await affResponse.text();
     const dic = await dicResponse.text();

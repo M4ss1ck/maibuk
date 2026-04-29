@@ -44,7 +44,11 @@ vi.mock("../../../../features/export/pdf-document", () => ({
   PdfDocument: () => null,
 }));
 
-import { generatePdf, getPdfFilename, sanitizePdfText } from "../../../../features/export/pdf-generator";
+import {
+  generatePdf,
+  getPdfFilename,
+  sanitizePdfText,
+} from "../../../../features/export/pdf-generator";
 import { DEFAULT_PDF_OPTIONS } from "../../../../features/export/types";
 
 describe("sanitizePdfText()", () => {
@@ -91,9 +95,9 @@ describe("generatePdf()", () => {
     const book = buildBook();
     const chapters = [buildChapter({ isIncludedInExport: false })];
 
-    await expect(
-      generatePdf(book, chapters, DEFAULT_PDF_OPTIONS)
-    ).rejects.toThrow("No chapters selected for export");
+    await expect(generatePdf(book, chapters, DEFAULT_PDF_OPTIONS)).rejects.toThrow(
+      "No chapters selected for export"
+    );
   });
 
   it("returns a Blob when chapters exist", async () => {

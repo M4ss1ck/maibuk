@@ -37,7 +37,11 @@ export function GlobalShortcuts() {
       { id: "global.gotoProjects", label: t("shortcuts.gotoProjects"), keys: ["g", "p"] },
       { id: "global.gotoSettings", label: t("shortcuts.gotoSettings"), keys: ["g", "s"] },
       { id: "global.toggleTheme", label: t("shortcuts.toggleTheme"), keys: ["g", "t"] },
-      { id: "global.toggleShortcutHints", label: t("shortcuts.toggleShortcutHints"), keys: ["g", "h"] },
+      {
+        id: "global.toggleShortcutHints",
+        label: t("shortcuts.toggleShortcutHints"),
+        keys: ["g", "h"],
+      },
       { id: "global.syncNow", label: t("shortcuts.syncNow"), keys: ["Ctrl+Shift+Y"] },
       { id: "global.showHelp", label: t("shortcuts.showHelp"), keys: ["?"] },
     ];
@@ -47,7 +51,7 @@ export function GlobalShortcuts() {
         { id: "home.newBook", label: t("shortcuts.newBook"), keys: ["Ctrl+N"] },
         { id: "home.jumpBooks", label: t("shortcuts.jumpBooks"), keys: ["1-9"] },
         { id: "home.moveSelection", label: t("shortcuts.moveSelection"), keys: ["↑/↓", "j/k"] },
-        { id: "home.openSelected", label: t("shortcuts.openSelected"), keys: ["Enter"] },
+        { id: "home.openSelected", label: t("shortcuts.openSelected"), keys: ["Enter"] }
       );
     }
 
@@ -56,14 +60,14 @@ export function GlobalShortcuts() {
         { id: "editor.save", label: t("shortcuts.save"), keys: ["Ctrl+S"] },
         { id: "editor.focusMode", label: t("shortcuts.toggleFocusMode"), keys: ["F11"] },
         { id: "editor.toggleSidebar", label: t("shortcuts.toggleSidebar"), keys: ["Ctrl+\\"] },
-        { id: "editor.back", label: t("shortcuts.backFromEditor"), keys: ["Backspace"] },
+        { id: "editor.back", label: t("shortcuts.backFromEditor"), keys: ["Backspace"] }
       );
     }
 
     if (/^\/book\/[^/]+\/cover$/.test(location.pathname)) {
       list.push(
         { id: "cover.save", label: t("shortcuts.save"), keys: ["Ctrl+S"] },
-        { id: "cover.delete", label: t("shortcuts.deleteSelection"), keys: ["Delete"] },
+        { id: "cover.delete", label: t("shortcuts.deleteSelection"), keys: ["Delete"] }
       );
     }
 
@@ -108,7 +112,10 @@ export function GlobalShortcuts() {
         const passphrase = getPassphrase();
         if (!passphrase) return;
         const skipConflicts = async () => "cancel" as const;
-        useSyncStore.getState().syncAll(passphrase, skipConflicts).catch(() => { });
+        useSyncStore
+          .getState()
+          .syncAll(passphrase, skipConflicts)
+          .catch(() => {});
       },
     },
     {

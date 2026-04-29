@@ -10,7 +10,18 @@ import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ExportDialog } from "../components/export";
 import { useTranslation } from "react-i18next";
-import { SpinnerIcon, CheckIcon, BackIcon, SaveIcon, ExportIcon, CoverDesignIcon, FocusModeIcon, DocumentIcon, SettingsIcon, CloseIcon } from "../components/icons";
+import {
+  SpinnerIcon,
+  CheckIcon,
+  BackIcon,
+  SaveIcon,
+  ExportIcon,
+  CoverDesignIcon,
+  FocusModeIcon,
+  DocumentIcon,
+  SettingsIcon,
+  CloseIcon,
+} from "../components/icons";
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { useSettingsStore } from "../features/settings/store";
 import { Menu, MoreVertical, PanelLeftClose, PanelLeftOpen } from "lucide-react";
@@ -126,21 +137,18 @@ export function BookEditor() {
   }, [currentChapter, updateChapter]);
 
   // Debounced auto-save
-  const debouncedSave = useDebouncedCallback(
-    async (chapterId: string, content: string) => {
-      setSaveStatus("saving");
-      try {
-        await updateChapter(chapterId, { content });
-        setSaveStatus("saved");
-        // Reset to idle after 2 seconds
-        setTimeout(() => setSaveStatus("idle"), 2000);
-      } catch (error) {
-        console.error("Failed to save:", error);
-        setSaveStatus("idle");
-      }
-    },
-    1000
-  );
+  const debouncedSave = useDebouncedCallback(async (chapterId: string, content: string) => {
+    setSaveStatus("saving");
+    try {
+      await updateChapter(chapterId, { content });
+      setSaveStatus("saved");
+      // Reset to idle after 2 seconds
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch (error) {
+      console.error("Failed to save:", error);
+      setSaveStatus("idle");
+    }
+  }, 1000);
 
   // Handle content changes
   const handleContentUpdate = useCallback(
@@ -226,31 +234,34 @@ export function BookEditor() {
   }, []);
 
   // Sidebar drag-resize handler
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizing.current = true;
-    const startX = e.clientX;
-    const startWidth = sidebarWidth;
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizing.current = true;
+      const startX = e.clientX;
+      const startWidth = sidebarWidth;
 
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!isResizing.current) return;
-      const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
-      setSidebarWidth(newWidth);
-    };
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        if (!isResizing.current) return;
+        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
+        setSidebarWidth(newWidth);
+      };
 
-    const onMouseUp = () => {
-      isResizing.current = false;
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
+      const onMouseUp = () => {
+        isResizing.current = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
 
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  }, [sidebarWidth]);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [sidebarWidth]
+  );
 
   // Handle book info update
   const handleUpdateBookInfo = useCallback(
@@ -360,7 +371,10 @@ export function BookEditor() {
           {/* Desktop sidebar — width controlled by drag */}
           <div
             className="hidden md:flex h-full relative shrink-0"
-            style={{ width: showSidebar ? `${sidebarWidth}px` : 0, overflow: showSidebar ? undefined : "hidden" }}
+            style={{
+              width: showSidebar ? `${sidebarWidth}px` : 0,
+              overflow: showSidebar ? undefined : "hidden",
+            }}
           >
             <ChapterList
               chapters={chapters}
@@ -405,22 +419,26 @@ export function BookEditor() {
 
             {/* Desktop sidebar toggle */}
             <button
-              onClick={() => setShowSidebar((prev) => {
-                if (!prev) setSidebarWidth(256);
-                return !prev;
-              })}
+              onClick={() =>
+                setShowSidebar((prev) => {
+                  if (!prev) setSidebarWidth(256);
+                  return !prev;
+                })
+              }
               className="hidden md:block p-2 hover:bg-muted rounded transition-colors"
               title={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
             >
-              {showSidebar ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+              {showSidebar ? (
+                <PanelLeftClose className="w-5 h-5" />
+              ) : (
+                <PanelLeftOpen className="w-5 h-5" />
+              )}
             </button>
 
             <div className="flex-1 min-w-0">
               <h1 className="font-medium truncate text-sm sm:text-base">{currentBook.title}</h1>
               {currentChapter && (
-                <p className="text-xs text-muted-foreground truncate">
-                  {currentChapter.title}
-                </p>
+                <p className="text-xs text-muted-foreground truncate">{currentChapter.title}</p>
               )}
             </div>
 
@@ -459,10 +477,13 @@ export function BookEditor() {
             <div className="hidden sm:block text-sm text-muted-foreground">
               {editorStats?.hasSelection ? (
                 <span title={t("editor.selectionStats")}>
-                  {editorStats.words.toLocaleString()} {t("common.words")} / {editorStats.characters.toLocaleString()} {t("common.chars")}
+                  {editorStats.words.toLocaleString()} {t("common.words")} /{" "}
+                  {editorStats.characters.toLocaleString()} {t("common.chars")}
                 </span>
               ) : (
-                <span>{wordCount.toLocaleString()} {t("common.words")}</span>
+                <span>
+                  {wordCount.toLocaleString()} {t("common.words")}
+                </span>
               )}
             </div>
 
@@ -520,10 +541,7 @@ export function BookEditor() {
 
               {showMobileMenu && (
                 <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowMobileMenu(false)}
-                  />
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMobileMenu(false)} />
                   <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border rounded-lg shadow-lg z-50 dropdown-enter">
                     <button
                       onClick={() => {
@@ -601,7 +619,9 @@ export function BookEditor() {
         {/* Focus mode exit hint */}
         {focusMode && !hideKeyboardHints && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm opacity-0 hover:opacity-100 transition-opacity">
-            {t("editor.press")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">Esc</kbd> {t("editor.or")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">F11</kbd> {t("editor.exitFocus")}
+            {t("editor.press")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">Esc</kbd>{" "}
+            {t("editor.or")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">F11</kbd>{" "}
+            {t("editor.exitFocus")}
           </div>
         )}
       </div>

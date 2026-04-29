@@ -13,8 +13,7 @@ interface AuthDialogProps {
 
 export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
   const { t } = useTranslation();
-  const { apiUrl, setApiUrl, login, register } =
-    useSyncStore();
+  const { apiUrl, setApiUrl, login, register } = useSyncStore();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [serverUrl, setServerUrl] = useState(apiUrl);
   const [email, setEmail] = useState("");
@@ -50,9 +49,7 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
       setPassword("");
       onClose();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("sync.syncError"),
-      );
+      setError(err instanceof Error ? err.message : t("sync.syncError"));
     } finally {
       setLoading(false);
     }
@@ -68,15 +65,8 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={loading || !serverUrl || !email || !password}
-          >
-            {loading
-              ? t("sync.syncing")
-              : mode === "login"
-                ? t("sync.login")
-                : t("sync.register")}
+          <Button onClick={handleSubmit} disabled={loading || !serverUrl || !email || !password}>
+            {loading ? t("sync.syncing") : mode === "login" ? t("sync.login") : t("sync.register")}
           </Button>
         </div>
       }
@@ -114,26 +104,18 @@ export function AuthDialog({ isOpen, onClose }: AuthDialogProps) {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          autoComplete={
-            mode === "login" ? "current-password" : "new-password"
-          }
+          autoComplete={mode === "login" ? "current-password" : "new-password"}
         />
 
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex items-center justify-between pt-1">
           <button
             type="button"
-            onClick={() =>
-              setMode(mode === "login" ? "register" : "login")
-            }
+            onClick={() => setMode(mode === "login" ? "register" : "login")}
             className="text-sm text-primary hover:underline"
           >
-            {mode === "login"
-              ? t("sync.switchToRegister")
-              : t("sync.switchToLogin")}
+            {mode === "login" ? t("sync.switchToRegister") : t("sync.switchToLogin")}
           </button>
         </div>
       </form>

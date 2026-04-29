@@ -13,9 +13,9 @@ function hexToRgb(hex: string) {
   const safeHex =
     normalized.length === 3
       ? normalized
-        .split("")
-        .map((ch) => `${ch}${ch}`)
-        .join("")
+          .split("")
+          .map((ch) => `${ch}${ch}`)
+          .join("")
       : normalized;
 
   const r = Number.parseInt(safeHex.slice(0, 2), 16);
@@ -25,8 +25,7 @@ function hexToRgb(hex: string) {
 }
 
 function rgbToHex(r: number, g: number, b: number) {
-  const clamp = (value: number) =>
-    Math.max(0, Math.min(255, Math.round(value)));
+  const clamp = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
   return `#${clamp(r).toString(16).padStart(2, "0")}${clamp(g).toString(16).padStart(2, "0")}${clamp(b).toString(16).padStart(2, "0")}`.toUpperCase();
 }
 

@@ -3,7 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import { IS_WEB, getDialog, getFileSystem } from "../lib/platform";
 import { CoverCanvas, CoverToolbar, type CoverCanvasRef } from "../components/cover-editor";
 import { useBookStore } from "../features/books/store";
-import { COVER_DIMENSIONS, DEFAULT_TEXT_STYLES, type CoverDimension, type TextStyle } from "../features/covers/types";
+import {
+  COVER_DIMENSIONS,
+  DEFAULT_TEXT_STYLES,
+  type CoverDimension,
+  type TextStyle,
+} from "../features/covers/types";
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
 import { BackIcon } from "../components/icons";
@@ -52,21 +57,13 @@ export function CoverDesigner() {
       const { title, authorName } = currentBook;
 
       // Add title
-      canvasRef.current.addText(
-        title,
-        DEFAULT_TEXT_STYLES.title,
-        "title"
-      );
+      canvasRef.current.addText(title, DEFAULT_TEXT_STYLES.title, "title");
 
       // Add author name below title
       const authorStyle = {
         ...DEFAULT_TEXT_STYLES.author,
       };
-      canvasRef.current.addText(
-        authorName,
-        authorStyle,
-        "author"
-      );
+      canvasRef.current.addText(authorName, authorStyle, "author");
 
       // Don't mark as having changes for initial setup
       setTimeout(() => setHasChanges(false), 100);
@@ -111,47 +108,49 @@ export function CoverDesigner() {
     canvasRef.current?.sendBackward();
   }, []);
 
-  const handleExport = useCallback(async (format: "png" | "jpeg") => {
-    if (!canvasRef.current) return;
+  const handleExport = useCallback(
+    async (format: "png" | "jpeg") => {
+      if (!canvasRef.current) return;
 
-    const dataUrl = format === "png"
-      ? canvasRef.current.exportToPNG()
-      : canvasRef.current.exportToJPEG(0.9);
+      const dataUrl =
+        format === "png" ? canvasRef.current.exportToPNG() : canvasRef.current.exportToJPEG(0.9);
 
-    // Convert data URL to binary
-    const base64 = dataUrl.split(",")[1];
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-
-    const filename = `${currentBook?.title || "cover"}.${format}`;
-    const mimeType = format === "png" ? "image/png" : "image/jpeg";
-
-    if (IS_WEB) {
-      // On web, directly download the file
-      const fs = await getFileSystem();
-      fs.downloadFile(filename, bytes, mimeType);
-    } else {
-      // On Tauri, show save dialog
-      const dialog = await getDialog();
-      const filePath = await dialog.save({
-        defaultPath: filename,
-        filters: [
-          {
-            name: format.toUpperCase(),
-            extensions: [format],
-          },
-        ],
-      });
-
-      if (filePath) {
-        const fs = await getFileSystem();
-        await fs.writeFile(filePath, bytes);
+      // Convert data URL to binary
+      const base64 = dataUrl.split(",")[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
       }
-    }
-  }, [currentBook?.title]);
+
+      const filename = `${currentBook?.title || "cover"}.${format}`;
+      const mimeType = format === "png" ? "image/png" : "image/jpeg";
+
+      if (IS_WEB) {
+        // On web, directly download the file
+        const fs = await getFileSystem();
+        fs.downloadFile(filename, bytes, mimeType);
+      } else {
+        // On Tauri, show save dialog
+        const dialog = await getDialog();
+        const filePath = await dialog.save({
+          defaultPath: filename,
+          filters: [
+            {
+              name: format.toUpperCase(),
+              extensions: [format],
+            },
+          ],
+        });
+
+        if (filePath) {
+          const fs = await getFileSystem();
+          await fs.writeFile(filePath, bytes);
+        }
+      }
+    },
+    [currentBook?.title]
+  );
 
   const handleSave = useCallback(async () => {
     if (!bookId || !canvasRef.current) return;

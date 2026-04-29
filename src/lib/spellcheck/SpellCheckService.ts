@@ -32,10 +32,9 @@ class SpellCheckService {
 
     this.destroy();
 
-    this.worker = new Worker(
-      new URL("./spellcheck.worker.ts", import.meta.url),
-      { type: "module" }
-    );
+    this.worker = new Worker(new URL("./spellcheck.worker.ts", import.meta.url), {
+      type: "module",
+    });
 
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       this.handleMessage(event.data);

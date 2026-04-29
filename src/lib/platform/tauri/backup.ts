@@ -11,7 +11,8 @@ interface BackupMeta {
   checksum: string;
 }
 
-const BACKUP_FILENAME_PATTERN = /^maibuk-backup-(daily|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/;
+const BACKUP_FILENAME_PATTERN =
+  /^maibuk-backup-(daily|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/;
 
 function ensureSafeFilename(filename: string): string {
   if (!BACKUP_FILENAME_PATTERN.test(filename)) {
@@ -25,8 +26,12 @@ function isManagedSqlFile(name: string | undefined): name is string {
 }
 
 function isManagedMetaFile(name: string | undefined): name is string {
-  return typeof name === "string"
-    && /^maibuk-backup-(daily|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.meta\.json$/.test(name);
+  return (
+    typeof name === "string" &&
+    /^maibuk-backup-(daily|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.meta\.json$/.test(
+      name
+    )
+  );
 }
 
 async function getBackupDir(customDir?: string): Promise<string> {
@@ -43,7 +48,11 @@ function metaPath(sqlPath: string): string {
   return sqlPath.replace(/\.sql$/, ".meta.json");
 }
 
-async function buildMetaFromSql(sqlPath: string, filename: string, sqlContent: string): Promise<BackupMeta> {
+async function buildMetaFromSql(
+  sqlPath: string,
+  filename: string,
+  sqlContent: string
+): Promise<BackupMeta> {
   const fileStat = await stat(sqlPath);
   return {
     trigger: parseTriggerFromFilename(filename),
@@ -54,7 +63,7 @@ async function buildMetaFromSql(sqlPath: string, filename: string, sqlContent: s
 }
 
 class TauriBackupAdapter implements BackupAdapter {
-  constructor(private backupDir: string) { }
+  constructor(private backupDir: string) {}
 
   async saveBackup(filename: string, sqlContent: string): Promise<void> {
     const safeFilename = ensureSafeFilename(filename);
@@ -73,9 +82,7 @@ class TauriBackupAdapter implements BackupAdapter {
       return [];
     }
 
-    const sqlFiles = files
-      .map((file) => file.name)
-      .filter(isManagedSqlFile);
+    const sqlFiles = files.map((file) => file.name).filter(isManagedSqlFile);
     const entries: BackupEntry[] = [];
 
     for (const file of sqlFiles) {
@@ -110,14 +117,12 @@ class TauriBackupAdapter implements BackupAdapter {
     }
 
     // Clean up orphan .meta.json files (no matching .sql)
-    const metaFiles = files
-      .map((file) => file.name)
-      .filter(isManagedMetaFile);
+    const metaFiles = files.map((file) => file.name).filter(isManagedMetaFile);
     const sqlNames = new Set(sqlFiles);
     for (const meta of metaFiles) {
       const expectedSql = meta.replace(/\.meta\.json$/, ".sql");
       if (!sqlNames.has(expectedSql)) {
-        await remove(`${this.backupDir}/${meta}`).catch(() => { });
+        await remove(`${this.backupDir}/${meta}`).catch(() => {});
       }
     }
 
@@ -150,8 +155,8 @@ class TauriBackupAdapter implements BackupAdapter {
   async deleteBackup(filename: string): Promise<void> {
     const safeFilename = ensureSafeFilename(filename);
     const sqlPath = `${this.backupDir}/${safeFilename}`;
-    await remove(sqlPath).catch(() => { });
-    await remove(metaPath(sqlPath)).catch(() => { });
+    await remove(sqlPath).catch(() => {});
+    await remove(metaPath(sqlPath)).catch(() => {});
   }
 }
 

@@ -22,9 +22,7 @@ export function PdfDocument({ book, chapters, options }: PdfDocumentProps) {
   const styles = createPdfStyles(options);
 
   // Chapters that have chapterType === "chapter" only (for numbering)
-  const chapterTypeOnly = chapters.filter(
-    (ch) => ch.chapterType === "chapter"
-  );
+  const chapterTypeOnly = chapters.filter((ch) => ch.chapterType === "chapter");
 
   return createElement(
     Document,
@@ -51,9 +49,7 @@ export function PdfDocument({ book, chapters, options }: PdfDocumentProps) {
       },
 
       // Table of Contents
-      ...(options.includeTableOfContents
-        ? [renderToc(chapters, styles)]
-        : []),
+      ...(options.includeTableOfContents ? [renderToc(chapters, styles)] : []),
 
       // Chapters
       ...chapters.map((chapter, index) =>
@@ -85,30 +81,16 @@ function renderCover(book: Book, styles: ReturnType<typeof createPdfStyles>) {
 
   // Text-only cover
   const children: ReactNode[] = [
-    createElement(
-      Text,
-      { key: "title", style: styles.coverTitle },
-      book.title
-    ),
+    createElement(Text, { key: "title", style: styles.coverTitle }, book.title),
   ];
 
   if (book.subtitle) {
     children.push(
-      createElement(
-        Text,
-        { key: "subtitle", style: styles.coverSubtitle },
-        book.subtitle
-      )
+      createElement(Text, { key: "subtitle", style: styles.coverSubtitle }, book.subtitle)
     );
   }
 
-  children.push(
-    createElement(
-      Text,
-      { key: "author", style: styles.coverAuthor },
-      book.authorName
-    )
-  );
+  children.push(createElement(Text, { key: "author", style: styles.coverAuthor }, book.authorName));
 
   return createElement(View, null, ...children);
 }
@@ -117,13 +99,8 @@ function renderCover(book: Book, styles: ReturnType<typeof createPdfStyles>) {
 // Table of Contents
 // ---------------------------------------------------------------------------
 
-function renderToc(
-  chapters: Chapter[],
-  styles: ReturnType<typeof createPdfStyles>
-) {
-  const tocChapters = chapters.filter(
-    (ch) => ch.chapterType !== "frontmatter"
-  );
+function renderToc(chapters: Chapter[], styles: ReturnType<typeof createPdfStyles>) {
+  const tocChapters = chapters.filter((ch) => ch.chapterType !== "frontmatter");
 
   const entries = tocChapters.map((ch, i) =>
     createElement(
@@ -140,11 +117,7 @@ function renderToc(
   return createElement(
     View,
     { key: "toc", style: styles.tocContainer },
-    createElement(
-      Text,
-      { key: "toc-title", style: styles.tocTitle },
-      "Table of Contents"
-    ),
+    createElement(Text, { key: "toc-title", style: styles.tocTitle }, "Table of Contents"),
     ...entries
   );
 }
@@ -161,9 +134,7 @@ function renderChapter(
   styles: ReturnType<typeof createPdfStyles>,
   addBreak: boolean
 ) {
-  const content = chapter.content
-    ? processChapterHtml(chapter.content)
-    : "<p></p>";
+  const content = chapter.content ? processChapterHtml(chapter.content) : "<p></p>";
 
   const contentNodes = renderHtmlContent(content, styles);
 
@@ -197,12 +168,12 @@ function renderChapter(
       // Chapter number label
       ...(chapterNumber !== null
         ? [
-          createElement(
-            Text,
-            { key: "ch-num", style: styles.chapterNumber },
-            `Chapter ${chapterNumber}`
-          ),
-        ]
+            createElement(
+              Text,
+              { key: "ch-num", style: styles.chapterNumber },
+              `Chapter ${chapterNumber}`
+            ),
+          ]
         : []),
 
       // Chapter title

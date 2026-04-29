@@ -32,11 +32,9 @@ vi.mock("../../../../features/backup/backup-service", () => ({
   },
 }));
 
-const {
-  createDailyBackup,
-  runDailyBackupOnce,
-  resetBackupLifecycleForTests,
-} = await import("../../../../features/backup/lifecycle");
+const { createDailyBackup, runDailyBackupOnce, resetBackupLifecycleForTests } = await import(
+  "../../../../features/backup/lifecycle"
+);
 
 describe("backup lifecycle", () => {
   beforeEach(() => {

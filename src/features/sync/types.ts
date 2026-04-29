@@ -1,6 +1,13 @@
 export type AuthStatus = "logged-out" | "logged-in";
 
-export type SyncStatus = "idle" | "syncing" | "awaiting-confirmation" | "error" | "success" | "cancelled" | "partial";
+export type SyncStatus =
+  | "idle"
+  | "syncing"
+  | "awaiting-confirmation"
+  | "error"
+  | "success"
+  | "cancelled"
+  | "partial";
 
 export type SyncAction = "pushed" | "pulled" | "skipped" | "cancelled";
 export type SyncOutcome = "success" | "cancelled" | "partial";

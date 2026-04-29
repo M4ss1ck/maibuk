@@ -35,10 +35,7 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 modal-backdrop-enter"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/50 modal-backdrop-enter" onClick={onClose} />
 
       {/* Modal */}
       <div
@@ -63,9 +60,7 @@ export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) 
         </div>
 
         {/* Content */}
-        <div className="px-4 sm:px-6 py-4 overflow-auto flex-1">
-          {children}
-        </div>
+        <div className="px-4 sm:px-6 py-4 overflow-auto flex-1">{children}</div>
 
         {/* Footer */}
         {footer && (

@@ -53,10 +53,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
     const rect = popoverRef.current.getBoundingClientRect();
     const adjusted = adjustPopoverPosition(popover.position, rect);
 
-    if (
-      adjusted.left !== popover.position.left ||
-      adjusted.top !== popover.position.top
-    ) {
+    if (adjusted.left !== popover.position.left || adjusted.top !== popover.position.top) {
       setPopover((prev) => (prev ? { ...prev, position: adjusted } : prev));
     }
   }, [isOpen, popover]);
@@ -175,10 +172,7 @@ function clampPopoverPosition(clientX: number, clientY: number) {
   };
 }
 
-function adjustPopoverPosition(
-  position: { top: number; left: number },
-  rect: DOMRect
-) {
+function adjustPopoverPosition(position: { top: number; left: number }, rect: DOMRect) {
   const padding = 8;
   const maxLeft = window.innerWidth - rect.width - padding;
   const maxTop = window.innerHeight - rect.height - padding;

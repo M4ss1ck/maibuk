@@ -87,8 +87,10 @@ export const useSettingsStore = create<SettingsStore>()(
       setPrimaryColor: (primaryColor) => set({ primaryColor: normalizeHexColor(primaryColor) }),
       setAutoSave: (autoSave) => set({ autoSave }),
       setDefaultExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
-      setBackupRetention: (backupRetention) => set({ backupRetention: Math.max(1, Math.floor(backupRetention)) }),
-      setBackupDirectory: (backupDirectory) => set({ backupDirectory: backupDirectory?.trim() || null }),
+      setBackupRetention: (backupRetention) =>
+        set({ backupRetention: Math.max(1, Math.floor(backupRetention)) }),
+      setBackupDirectory: (backupDirectory) =>
+        set({ backupDirectory: backupDirectory?.trim() || null }),
       setLanguage: (language) => {
         i18n.changeLanguage(language);
         set({ language });
@@ -98,11 +100,15 @@ export const useSettingsStore = create<SettingsStore>()(
       setShowInlineFootnotes: (showInlineFootnotes) => set({ showInlineFootnotes }),
       setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
-      setSidebarWidth: (sidebarWidth) => set({ sidebarWidth: Math.max(200, Math.min(480, sidebarWidth)) }),
+      setSidebarWidth: (sidebarWidth) =>
+        set({ sidebarWidth: Math.max(200, Math.min(480, sidebarWidth)) }),
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
       setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
       setHtmlEditorDarkTheme: (htmlEditorDarkTheme) => set({ htmlEditorDarkTheme }),
-      setHtmlPanelHeight: (htmlPanelHeight) => set({ htmlPanelHeight: Math.max(100, Math.min(window.innerHeight * 0.6, htmlPanelHeight)) }),
+      setHtmlPanelHeight: (htmlPanelHeight) =>
+        set({
+          htmlPanelHeight: Math.max(100, Math.min(window.innerHeight * 0.6, htmlPanelHeight)),
+        }),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;

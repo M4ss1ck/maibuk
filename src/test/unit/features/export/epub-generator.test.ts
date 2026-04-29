@@ -70,17 +70,17 @@ describe("generateEpub()", () => {
       const book = buildBook();
       const chapters = [buildChapter({ isIncludedInExport: false })];
 
-      await expect(
-        generateEpub(book, chapters, defaultOptions),
-      ).rejects.toThrow("No chapters selected for export");
+      await expect(generateEpub(book, chapters, defaultOptions)).rejects.toThrow(
+        "No chapters selected for export"
+      );
     });
 
     it("throws when chapters array is empty", async () => {
       const book = buildBook();
 
-      await expect(
-        generateEpub(book, [], defaultOptions),
-      ).rejects.toThrow("No chapters selected for export");
+      await expect(generateEpub(book, [], defaultOptions)).rejects.toThrow(
+        "No chapters selected for export"
+      );
     });
 
     it("filters out chapters not included in export", async () => {
@@ -109,9 +109,7 @@ describe("generateEpub()", () => {
 
       const epubChapters = mockEpub.mock.calls[0][1];
       // Skip cover page if present, check order of content chapters
-      const contentChapters = epubChapters.filter(
-        (ch: { title: string }) => ch.title !== "",
-      );
+      const contentChapters = epubChapters.filter((ch: { title: string }) => ch.title !== "");
       expect(contentChapters[0].title).toBe("First");
       expect(contentChapters[1].title).toBe("Second");
     });
@@ -134,9 +132,7 @@ describe("generateEpub()", () => {
       await generateEpub(book, chapters, defaultOptions);
 
       const epubChapters = mockEpub.mock.calls[0][1];
-      const contentChapter = epubChapters.find(
-        (ch: { title: string }) => ch.title !== "",
-      );
+      const contentChapter = epubChapters.find((ch: { title: string }) => ch.title !== "");
       expect(contentChapter.content).toBe("<p></p>");
     });
 
@@ -150,9 +146,7 @@ describe("generateEpub()", () => {
       await generateEpub(book, chapters, defaultOptions);
 
       const epubChapters = mockEpub.mock.calls[0][1];
-      const contentChapters = epubChapters.filter(
-        (ch: { title: string }) => ch.title !== "",
-      );
+      const contentChapters = epubChapters.filter((ch: { title: string }) => ch.title !== "");
       expect(contentChapters[0].filename).toBe("chapter-1.xhtml");
       expect(contentChapters[1].filename).toBe("chapter-2.xhtml");
     });
@@ -169,9 +163,7 @@ describe("generateEpub()", () => {
       await generateEpub(book, chapters, defaultOptions);
 
       const epubChapters = mockEpub.mock.calls[0][1];
-      const contentChapters = epubChapters.filter(
-        (ch: { title: string }) => ch.title !== "",
-      );
+      const contentChapters = epubChapters.filter((ch: { title: string }) => ch.title !== "");
       expect(contentChapters[0].beforeToc).toBe(true);
       expect(contentChapters[1].beforeToc).toBe(false);
     });
@@ -187,9 +179,7 @@ describe("generateEpub()", () => {
       await generateEpub(book, chapters, defaultOptions);
 
       const epubChapters = mockEpub.mock.calls[0][1];
-      const contentChapters = epubChapters.filter(
-        (ch: { title: string }) => ch.title !== "",
-      );
+      const contentChapters = epubChapters.filter((ch: { title: string }) => ch.title !== "");
       contentChapters.forEach((ch: { beforeToc: boolean }) => {
         expect(ch.beforeToc).toBe(false);
       });
@@ -208,9 +198,7 @@ describe("generateEpub()", () => {
       await generateEpub(book, chapters, options);
 
       const epubChapters = mockEpub.mock.calls[0][1];
-      const contentChapters = epubChapters.filter(
-        (ch: { title: string }) => ch.title !== "",
-      );
+      const contentChapters = epubChapters.filter((ch: { title: string }) => ch.title !== "");
       expect(contentChapters[0].title).toBe("Chapter 1: Opening");
       expect(contentChapters[1].title).toBe("Chapter 2: Rising");
     });
@@ -227,9 +215,7 @@ describe("generateEpub()", () => {
       await generateEpub(book, chapters, options);
 
       const epubChapters = mockEpub.mock.calls[0][1];
-      const contentChapters = epubChapters.filter(
-        (ch: { title: string }) => ch.title !== "",
-      );
+      const contentChapters = epubChapters.filter((ch: { title: string }) => ch.title !== "");
       expect(contentChapters[0].title).toBe("Prologue"); // no number
       expect(contentChapters[1].title).toBe("Chapter 1: Opening");
       expect(contentChapters[2].title).toBe("Chapter 2: Rising");
@@ -237,16 +223,12 @@ describe("generateEpub()", () => {
 
     it("does not number chapters when option is disabled", async () => {
       const book = buildBook();
-      const chapters = [
-        buildChapter({ title: "Opening", chapterType: "chapter" }),
-      ];
+      const chapters = [buildChapter({ title: "Opening", chapterType: "chapter" })];
 
       await generateEpub(book, chapters, defaultOptions);
 
       const epubChapters = mockEpub.mock.calls[0][1];
-      const contentChapter = epubChapters.find(
-        (ch: { title: string }) => ch.title !== "",
-      );
+      const contentChapter = epubChapters.find((ch: { title: string }) => ch.title !== "");
       expect(contentChapter.title).toBe("Opening");
     });
   });
@@ -378,9 +360,7 @@ describe("generateEpub()", () => {
       const chapters = [buildChapter()];
 
       // Should not throw
-      await expect(
-        generateEpub(book, chapters, defaultOptions),
-      ).resolves.toBeInstanceOf(Blob);
+      await expect(generateEpub(book, chapters, defaultOptions)).resolves.toBeInstanceOf(Blob);
     });
   });
 

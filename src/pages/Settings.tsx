@@ -181,28 +181,31 @@ export function Settings() {
               <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
                 <button
                   onClick={() => setTheme("light")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "light"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                    }`}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    theme === "light"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   {t("settings.light")}
                 </button>
                 <button
                   onClick={() => setTheme("dark")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "dark"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                    }`}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    theme === "dark"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   {t("settings.dark")}
                 </button>
                 <button
                   onClick={() => setTheme("system")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "system"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                    }`}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    theme === "system"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   {t("settings.system")}
                 </button>
@@ -226,17 +229,15 @@ export function Settings() {
                 <p className="font-medium">{t("settings.font")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.fontDescription")}</p>
               </div>
-              <Select<FontFamily>
-                value={appFont}
-                onChange={setAppFont}
-                options={FONT_OPTIONS}
-              />
+              <Select<FontFamily> value={appFont} onChange={setAppFont} options={FONT_OPTIONS} />
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.primaryColor")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.primaryColorDescription")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.primaryColorDescription")}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -261,7 +262,9 @@ export function Settings() {
 
         {/* General Settings */}
         <section className="mb-6 sm:mb-8">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">{t("settings.general")}</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            {t("settings.general")}
+          </h3>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
@@ -291,7 +294,9 @@ export function Settings() {
 
         {/* Sync Settings */}
         <section className="mb-6 sm:mb-8">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">{t("sync.title")}</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            {t("sync.title")}
+          </h3>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div className="flex-1">
@@ -333,9 +338,7 @@ export function Settings() {
               )}
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              {t("sync.encryptionInfo")}
-            </p>
+            <p className="text-xs text-muted-foreground">{t("sync.encryptionInfo")}</p>
           </div>
         </section>
 
@@ -344,10 +347,7 @@ export function Settings() {
           <BackupSection />
         </section>
 
-        <AuthDialog
-          isOpen={showAuthDialog}
-          onClose={() => setShowAuthDialog(false)}
-        />
+        <AuthDialog isOpen={showAuthDialog} onClose={() => setShowAuthDialog(false)} />
 
         {/* Editor Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
@@ -356,7 +356,9 @@ export function Settings() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.spellCheck")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.spellCheckDescription")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.spellCheckDescription")}
+                </p>
               </div>
               <Switch
                 checked={spellCheckEnabled}
@@ -368,7 +370,9 @@ export function Settings() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.dictionaryOpenInBrowser")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.dictionaryOpenInBrowserDescription")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.dictionaryOpenInBrowserDescription")}
+                </p>
               </div>
               <Switch
                 checked={dictionaryOpenInBrowser}
@@ -380,7 +384,9 @@ export function Settings() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.customDictionary")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.customDictionaryDescription")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.customDictionaryDescription")}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {t("settings.customDictionaryCount", { count: customDictionary.length })}
                 </p>
@@ -393,7 +399,9 @@ export function Settings() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.showInlineFootnotes")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.showInlineFootnotesDescription")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.showInlineFootnotesDescription")}
+                </p>
               </div>
               <Switch
                 checked={showInlineFootnotes}
@@ -405,7 +413,9 @@ export function Settings() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.showNotesChapter")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.showNotesChapterDescription")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.showNotesChapterDescription")}
+                </p>
               </div>
               <Switch
                 checked={showNotesChapter}
@@ -417,7 +427,9 @@ export function Settings() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.hideKeyboardHints")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.hideKeyboardHintsDescription")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.hideKeyboardHintsDescription")}
+                </p>
               </div>
               <Switch
                 checked={hideKeyboardHints}
@@ -430,12 +442,16 @@ export function Settings() {
 
         {/* Export Settings */}
         <section className="mb-6 sm:mb-8">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">{t("settings.export")}</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            {t("settings.export")}
+          </h3>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.defaultFormat")}</p>
-                <p className="text-sm text-muted-foreground">{t("settings.defaultFormatDescription")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.defaultFormatDescription")}
+                </p>
               </div>
               <Select<ExportFormat>
                 value={defaultExportFormat}
@@ -463,7 +479,9 @@ export function Settings() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
                 <div>
                   <p className="font-medium">{t("settings.exportDatabase")}</p>
-                  <p className="text-sm text-muted-foreground">{t("settings.exportDatabaseDescription")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("settings.exportDatabaseDescription")}
+                  </p>
                 </div>
                 <Button
                   variant="primary"
@@ -478,7 +496,9 @@ export function Settings() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
                 <div>
                   <p className="font-medium">{t("settings.importDatabase")}</p>
-                  <p className="text-sm text-muted-foreground">{t("settings.importDatabaseDescription")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("settings.importDatabaseDescription")}
+                  </p>
                 </div>
                 <Button
                   variant="primary"
@@ -493,13 +513,11 @@ export function Settings() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
                 <div>
                   <p className="font-medium text-destructive">{t("settings.resetDatabase")}</p>
-                  <p className="text-sm text-muted-foreground">{t("settings.resetDatabaseDescription")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("settings.resetDatabaseDescription")}
+                  </p>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setResetModalOpen(true)}
-                >
+                <Button variant="destructive" size="sm" onClick={() => setResetModalOpen(true)}>
                   {t("settings.resetDatabaseButton")}
                 </Button>
               </div>
@@ -517,11 +535,7 @@ export function Settings() {
               <Button variant="ghost" onClick={() => setResetModalOpen(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button
-                variant="destructive"
-                onClick={handleResetDatabase}
-                disabled={isResetting}
-              >
+              <Button variant="destructive" onClick={handleResetDatabase} disabled={isResetting}>
                 {isResetting ? t("common.loading") : t("settings.confirmReset")}
               </Button>
             </>
@@ -551,11 +565,7 @@ export function Settings() {
                   className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-border"
                 >
                   <span className="text-sm">{word}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeCustomWord(word)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => removeCustomWord(word)}>
                     {t("settings.removeWord")}
                   </Button>
                 </div>

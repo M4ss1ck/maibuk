@@ -16,8 +16,7 @@ function compareVersions(current: string, latest: string): boolean {
 
   if (latMajor > currMajor) return true;
   if (latMajor === currMajor && latMinor > currMinor) return true;
-  if (latMajor === currMajor && latMinor === currMinor && latPatch > currPatch)
-    return true;
+  if (latMajor === currMajor && latMinor === currMinor && latPatch > currPatch) return true;
   return false;
 }
 

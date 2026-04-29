@@ -47,42 +47,42 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
  * A hook that creates an auto-save function with debouncing.
  * Includes a status indicator for save state.
  */
-export function useAutoSave<T>(
-  saveFunction: (data: T) => Promise<void>,
-  delay: number = 1000
-) {
+export function useAutoSave<T>(saveFunction: (data: T) => Promise<void>, delay: number = 1000) {
   const statusRef = useRef<"idle" | "saving" | "saved" | "error">("idle");
   const pendingDataRef = useRef<T | null>(null);
   const isSavingRef = useRef(false);
 
-  const save = useCallback(async (data: T) => {
-    // If already saving, queue this data for next save
-    if (isSavingRef.current) {
-      pendingDataRef.current = data;
-      return;
-    }
-
-    isSavingRef.current = true;
-    statusRef.current = "saving";
-
-    try {
-      await saveFunction(data);
-      statusRef.current = "saved";
-
-      // Check if there's pending data to save
-      if (pendingDataRef.current !== null) {
-        const pending = pendingDataRef.current;
-        pendingDataRef.current = null;
-        isSavingRef.current = false;
-        await save(pending);
+  const save = useCallback(
+    async (data: T) => {
+      // If already saving, queue this data for next save
+      if (isSavingRef.current) {
+        pendingDataRef.current = data;
+        return;
       }
-    } catch (error) {
-      console.error("Auto-save error:", error);
-      statusRef.current = "error";
-    } finally {
-      isSavingRef.current = false;
-    }
-  }, [saveFunction]);
+
+      isSavingRef.current = true;
+      statusRef.current = "saving";
+
+      try {
+        await saveFunction(data);
+        statusRef.current = "saved";
+
+        // Check if there's pending data to save
+        if (pendingDataRef.current !== null) {
+          const pending = pendingDataRef.current;
+          pendingDataRef.current = null;
+          isSavingRef.current = false;
+          await save(pending);
+        }
+      } catch (error) {
+        console.error("Auto-save error:", error);
+        statusRef.current = "error";
+      } finally {
+        isSavingRef.current = false;
+      }
+    },
+    [saveFunction]
+  );
 
   const debouncedSave = useDebouncedCallback(save, delay);
 

@@ -22,17 +22,16 @@ export function TableMenu({ editor }: TableMenuProps) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
   const [addheaderRow, setAddHeaderRow] = useState(true);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const insertTable = (rows: number, cols: number) => {
     console.log("Inserting table:", rows, "rows x", cols, "cols");
-    editor
-      .chain()
-      .focus()
-      .insertTable({ rows, cols, withHeaderRow: addheaderRow })
-      .run();
+    editor.chain().focus().insertTable({ rows, cols, withHeaderRow: addheaderRow }).run();
     setShowMenu(false);
   };
 
@@ -45,7 +44,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       if (
         buttonRef.current &&
         !buttonRef.current.contains(e.target as Node) &&
-        !(e.target instanceof HTMLElement && e.target.closest('.tiptap-table-menu-portal'))
+        !(e.target instanceof HTMLElement && e.target.closest(".tiptap-table-menu-portal"))
       ) {
         setShowMenu(false);
       }
@@ -114,14 +113,12 @@ export function TableMenu({ editor }: TableMenuProps) {
             </div>
             <div className="flex items-center justify-center mt-2">
               <p className="mr-auto text-sm text-muted-foreground">{t("editor.addHeaderRow")}</p>
-              <Switch
-                checked={addheaderRow}
-                onChange={setAddHeaderRow}
-                className="h-2"
-              />
+              <Switch checked={addheaderRow} onChange={setAddHeaderRow} className="h-2" />
             </div>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              {hoveredCell ? `${t("editor.insertTable")} (${hoveredCell.row}x${hoveredCell.col})` : t("editor.insertTable")}
+              {hoveredCell
+                ? `${t("editor.insertTable")} (${hoveredCell.row}x${hoveredCell.col})`
+                : t("editor.insertTable")}
             </p>
           </div>,
           document.body

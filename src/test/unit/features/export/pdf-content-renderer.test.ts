@@ -20,8 +20,8 @@ import { DEFAULT_PDF_OPTIONS } from "../../../../features/export/types";
  */
 function extractKeys(nodes: unknown[]): (string | number | null)[] {
   return nodes
-    .filter((n): n is { key: string | number | null } =>
-      n !== null && typeof n === "object" && "key" in n
+    .filter(
+      (n): n is { key: string | number | null } => n !== null && typeof n === "object" && "key" in n
     )
     .map((n) => n.key);
 }
@@ -39,8 +39,9 @@ function collectSiblingKeys(node: unknown): (string | number | null)[][] {
   const children = el.props?.children;
   if (Array.isArray(children)) {
     const childKeys = children
-      .filter((c): c is { key: string | number | null } =>
-        c !== null && typeof c === "object" && "key" in c
+      .filter(
+        (c): c is { key: string | number | null } =>
+          c !== null && typeof c === "object" && "key" in c
       )
       .map((c) => c.key);
     if (childKeys.length > 0) {
@@ -68,7 +69,9 @@ function assertNoDuplicateSiblingKeys(nodes: unknown[]) {
     const groups = collectSiblingKeys(node);
     for (const group of groups) {
       const dupes = group.filter((k, idx) => group.indexOf(k) !== idx);
-      expect(dupes, `Duplicate sibling keys: ${dupes} in group ${JSON.stringify(group)}`).toEqual([]);
+      expect(dupes, `Duplicate sibling keys: ${dupes} in group ${JSON.stringify(group)}`).toEqual(
+        []
+      );
     }
   }
 }
@@ -97,15 +100,13 @@ describe("renderHtmlContent() key uniqueness", () => {
   });
 
   it("assigns unique keys with nested spans containing multiple elements", () => {
-    const html =
-      "<p><strong>A</strong> <span><em>B</em> <u>C</u></span> <em>D</em></p>";
+    const html = "<p><strong>A</strong> <span><em>B</em> <u>C</u></span> <em>D</em></p>";
     const nodes = renderHtmlContent(html, styles);
     assertNoDuplicateSiblingKeys(nodes);
   });
 
   it("assigns unique keys with deeply nested pass-through spans", () => {
-    const html =
-      "<p><em>A</em><span><span><strong>B</strong></span></span></p>";
+    const html = "<p><em>A</em><span><span><strong>B</strong></span></span></p>";
     const nodes = renderHtmlContent(html, styles);
     assertNoDuplicateSiblingKeys(nodes);
   });
@@ -120,15 +121,13 @@ describe("renderHtmlContent() key uniqueness", () => {
   });
 
   it("assigns unique keys in lists with inline formatting", () => {
-    const html =
-      "<ul><li><em>A</em> text</li><li><strong>B</strong> text</li></ul>";
+    const html = "<ul><li><em>A</em> text</li><li><strong>B</strong> text</li></ul>";
     const nodes = renderHtmlContent(html, styles);
     assertNoDuplicateSiblingKeys(nodes);
   });
 
   it("assigns unique keys in blockquotes with inline elements", () => {
-    const html =
-      "<blockquote><p><em>first</em> <strong>second</strong></p></blockquote>";
+    const html = "<blockquote><p><em>first</em> <strong>second</strong></p></blockquote>";
     const nodes = renderHtmlContent(html, styles);
     assertNoDuplicateSiblingKeys(nodes);
   });
@@ -204,7 +203,10 @@ describe("renderHtmlContent() inline style preservation", () => {
     // First child that is an element (skip plain text)
     const inlineEl = children.find(
       (c): c is { props: { style: Record<string, unknown> } } =>
-        c !== null && typeof c === "object" && "props" in c && !!(c as { props?: { style?: unknown } }).props?.style
+        c !== null &&
+        typeof c === "object" &&
+        "props" in c &&
+        !!(c as { props?: { style?: unknown } }).props?.style
     );
     return inlineEl?.props?.style;
   }
@@ -243,7 +245,8 @@ describe("renderHtmlContent() inline style preservation", () => {
   });
 
   it("preserves multiple inline styles on a single span", () => {
-    const html = '<p><span style="color: #3B82F6; font-family: Arial, sans-serif; font-size: 16px">styled</span></p>';
+    const html =
+      '<p><span style="color: #3B82F6; font-family: Arial, sans-serif; font-size: 16px">styled</span></p>';
     const nodes = renderHtmlContent(html, styles);
     const inlineStyle = getFirstInlineStyle(nodes);
     expect(inlineStyle).toBeDefined();
@@ -262,7 +265,10 @@ describe("renderHtmlContent() inline style preservation", () => {
     expect(children.length).toBeGreaterThan(0);
     // Should contain plain text, not a styled Text element
     const hasStyledChild = children.some(
-      (c) => c !== null && typeof c === "object" && "props" in c &&
+      (c) =>
+        c !== null &&
+        typeof c === "object" &&
+        "props" in c &&
         !!(c as { props?: { style?: unknown } }).props?.style
     );
     expect(hasStyledChild).toBe(false);
@@ -291,7 +297,8 @@ describe("renderHtmlContent() inline style preservation", () => {
   });
 
   it("assigns unique keys with mixed styled spans and plain formatting", () => {
-    const html = '<p><em>italic</em> <span style="color: #EF4444"><strong>red bold</strong></span> plain</p>';
+    const html =
+      '<p><em>italic</em> <span style="color: #EF4444"><strong>red bold</strong></span> plain</p>';
     const nodes = renderHtmlContent(html, styles);
     assertNoDuplicateSiblingKeys(nodes);
   });

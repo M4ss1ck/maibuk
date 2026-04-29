@@ -14,8 +14,10 @@ export function SyncStatusButton() {
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showSyncPanel, setShowSyncPanel] = useState(false);
 
-  const hasPendingChanges = authStatus === "logged-in" && lastSyncedAt != null
-    && books.some((b) => Math.floor(b.updatedAt.getTime() / 1000) > lastSyncedAt);
+  const hasPendingChanges =
+    authStatus === "logged-in" &&
+    lastSyncedAt != null &&
+    books.some((b) => Math.floor(b.updatedAt.getTime() / 1000) > lastSyncedAt);
   const {
     showPassphraseDialog,
     closePassphraseDialog,
@@ -103,10 +105,7 @@ export function SyncStatusButton() {
         />
       )}
 
-      <AuthDialog
-        isOpen={showAuthDialog}
-        onClose={() => setShowAuthDialog(false)}
-      />
+      <AuthDialog isOpen={showAuthDialog} onClose={() => setShowAuthDialog(false)} />
 
       <PassphraseDialog
         isOpen={showPassphraseDialog}
@@ -123,12 +122,7 @@ export function SyncStatusButton() {
         }}
       />
 
-      {activeConflict && (
-        <ConflictDialog
-          conflict={activeConflict}
-          onResolve={resolveConflict}
-        />
-      )}
+      {activeConflict && <ConflictDialog conflict={activeConflict} onResolve={resolveConflict} />}
     </div>
   );
 }

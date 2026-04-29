@@ -8,18 +8,18 @@ const options = ["Arial", "Georgia", "Helvetica", "Times New Roman"];
 describe("Combobox", () => {
   describe("rendering", () => {
     it("renders an input element", () => {
-      render(<Combobox value="Arial" onChange={() => { }} options={options} />);
+      render(<Combobox value="Arial" onChange={() => {}} options={options} />);
       expect(screen.getByRole("combobox")).toBeInTheDocument();
     });
 
     it("displays the current value", () => {
-      render(<Combobox value="Georgia" onChange={() => { }} options={options} />);
+      render(<Combobox value="Georgia" onChange={() => {}} options={options} />);
       expect(screen.getByRole("combobox")).toHaveValue("Georgia");
     });
 
     it("renders a placeholder when provided", () => {
       render(
-        <Combobox value="" onChange={() => { }} options={options} placeholder="Select font..." />
+        <Combobox value="" onChange={() => {}} options={options} placeholder="Select font..." />
       );
       expect(screen.getByPlaceholderText("Select font...")).toBeInTheDocument();
     });
@@ -28,7 +28,7 @@ describe("Combobox", () => {
   describe("filtering", () => {
     it("filters options as user types", async () => {
       const user = userEvent.setup();
-      render(<Combobox value="" onChange={() => { }} options={options} />);
+      render(<Combobox value="" onChange={() => {}} options={options} />);
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -60,7 +60,7 @@ describe("Combobox", () => {
   describe("custom value", () => {
     it("shows custom value option when typing a non-matching value", async () => {
       const user = userEvent.setup();
-      render(<Combobox value="" onChange={() => { }} options={options} />);
+      render(<Combobox value="" onChange={() => {}} options={options} />);
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -88,9 +88,7 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const optionsWithDivider = ["Arial", "divider", "Courier"];
 
-      render(
-        <Combobox value="" onChange={() => { }} options={optionsWithDivider} />
-      );
+      render(<Combobox value="" onChange={() => {}} options={optionsWithDivider} />);
 
       // Click the button to open the dropdown (portal-rendered)
       const button = screen.getByRole("button");

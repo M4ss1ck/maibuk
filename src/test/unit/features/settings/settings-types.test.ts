@@ -38,9 +38,7 @@ describe("FONT_SIZE_OPTIONS", () => {
 
   it("values are ascending", () => {
     for (let i = 1; i < FONT_SIZE_OPTIONS.length; i++) {
-      expect(FONT_SIZE_OPTIONS[i].value).toBeGreaterThan(
-        FONT_SIZE_OPTIONS[i - 1].value,
-      );
+      expect(FONT_SIZE_OPTIONS[i].value).toBeGreaterThan(FONT_SIZE_OPTIONS[i - 1].value);
     }
   });
 

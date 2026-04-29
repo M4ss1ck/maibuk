@@ -146,188 +146,188 @@ export const Indent = Extension.create<IndentOptions>({
       // Paragraph indent commands (margin-left)
       increaseIndent:
         () =>
-          ({ tr, state, dispatch }) => {
-            const { selection } = state;
-            const { from, to } = selection;
+        ({ tr, state, dispatch }) => {
+          const { selection } = state;
+          const { from, to } = selection;
 
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (this.options.types.includes(node.type.name)) {
-                const currentIndent = node.attrs.indent || 0;
-                const newIndent = Math.min(
-                  currentIndent + this.options.defaultIndent,
-                  this.options.maxIndent
-                );
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (this.options.types.includes(node.type.name)) {
+              const currentIndent = node.attrs.indent || 0;
+              const newIndent = Math.min(
+                currentIndent + this.options.defaultIndent,
+                this.options.maxIndent
+              );
 
-                if (dispatch) {
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    indent: newIndent,
-                  });
-                }
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  indent: newIndent,
+                });
               }
-            });
+            }
+          });
 
-            return true;
-          },
+          return true;
+        },
 
       decreaseIndent:
         () =>
-          ({ tr, state, dispatch }) => {
-            const { selection } = state;
-            const { from, to } = selection;
+        ({ tr, state, dispatch }) => {
+          const { selection } = state;
+          const { from, to } = selection;
 
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (this.options.types.includes(node.type.name)) {
-                const currentIndent = node.attrs.indent || 0;
-                const newIndent = Math.max(
-                  currentIndent - this.options.defaultIndent,
-                  this.options.minIndent
-                );
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (this.options.types.includes(node.type.name)) {
+              const currentIndent = node.attrs.indent || 0;
+              const newIndent = Math.max(
+                currentIndent - this.options.defaultIndent,
+                this.options.minIndent
+              );
 
-                if (dispatch) {
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    indent: newIndent || null,
-                  });
-                }
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  indent: newIndent || null,
+                });
               }
-            });
+            }
+          });
 
-            return true;
-          },
+          return true;
+        },
 
       setIndent:
         (indent: number) =>
-          ({ tr, state, dispatch }) => {
-            const { selection } = state;
-            const { from, to } = selection;
+        ({ tr, state, dispatch }) => {
+          const { selection } = state;
+          const { from, to } = selection;
 
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (this.options.types.includes(node.type.name)) {
-                if (dispatch) {
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    indent: indent || null,
-                  });
-                }
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (this.options.types.includes(node.type.name)) {
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  indent: indent || null,
+                });
               }
-            });
+            }
+          });
 
-            return true;
-          },
+          return true;
+        },
 
       unsetIndent:
         () =>
-          ({ tr, state, dispatch }) => {
-            const { selection } = state;
-            const { from, to } = selection;
+        ({ tr, state, dispatch }) => {
+          const { selection } = state;
+          const { from, to } = selection;
 
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (this.options.types.includes(node.type.name)) {
-                if (dispatch) {
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    indent: null,
-                  });
-                }
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (this.options.types.includes(node.type.name)) {
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  indent: null,
+                });
               }
-            });
+            }
+          });
 
-            return true;
-          },
+          return true;
+        },
 
       // First-line indent commands (text-indent)
       increaseFirstLineIndent:
         () =>
-          ({ tr, state, dispatch }) => {
-            const { selection } = state;
-            const { from, to } = selection;
+        ({ tr, state, dispatch }) => {
+          const { selection } = state;
+          const { from, to } = selection;
 
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (this.options.types.includes(node.type.name)) {
-                const currentIndent = node.attrs.firstLineIndent || 0;
-                const newIndent = Math.min(
-                  currentIndent + this.options.defaultIndent,
-                  this.options.maxIndent
-                );
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (this.options.types.includes(node.type.name)) {
+              const currentIndent = node.attrs.firstLineIndent || 0;
+              const newIndent = Math.min(
+                currentIndent + this.options.defaultIndent,
+                this.options.maxIndent
+              );
 
-                if (dispatch) {
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    firstLineIndent: newIndent,
-                  });
-                }
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  firstLineIndent: newIndent,
+                });
               }
-            });
+            }
+          });
 
-            return true;
-          },
+          return true;
+        },
 
       decreaseFirstLineIndent:
         () =>
-          ({ tr, state, dispatch }) => {
-            const { selection } = state;
-            const { from, to } = selection;
+        ({ tr, state, dispatch }) => {
+          const { selection } = state;
+          const { from, to } = selection;
 
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (this.options.types.includes(node.type.name)) {
-                const currentIndent = node.attrs.firstLineIndent || 0;
-                const newIndent = Math.max(
-                  currentIndent - this.options.defaultIndent,
-                  this.options.minIndent
-                );
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (this.options.types.includes(node.type.name)) {
+              const currentIndent = node.attrs.firstLineIndent || 0;
+              const newIndent = Math.max(
+                currentIndent - this.options.defaultIndent,
+                this.options.minIndent
+              );
 
-                if (dispatch) {
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    firstLineIndent: newIndent || null,
-                  });
-                }
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  firstLineIndent: newIndent || null,
+                });
               }
-            });
+            }
+          });
 
-            return true;
-          },
+          return true;
+        },
 
       setFirstLineIndent:
         (indent: number) =>
-          ({ tr, state, dispatch }) => {
-            const { selection } = state;
-            const { from, to } = selection;
+        ({ tr, state, dispatch }) => {
+          const { selection } = state;
+          const { from, to } = selection;
 
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (this.options.types.includes(node.type.name)) {
-                if (dispatch) {
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    firstLineIndent: indent || null,
-                  });
-                }
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (this.options.types.includes(node.type.name)) {
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  firstLineIndent: indent || null,
+                });
               }
-            });
+            }
+          });
 
-            return true;
-          },
+          return true;
+        },
 
       unsetFirstLineIndent:
         () =>
-          ({ tr, state, dispatch }) => {
-            const { selection } = state;
-            const { from, to } = selection;
+        ({ tr, state, dispatch }) => {
+          const { selection } = state;
+          const { from, to } = selection;
 
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (this.options.types.includes(node.type.name)) {
-                if (dispatch) {
-                  tr.setNodeMarkup(pos, undefined, {
-                    ...node.attrs,
-                    firstLineIndent: null,
-                  });
-                }
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (this.options.types.includes(node.type.name)) {
+              if (dispatch) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  firstLineIndent: null,
+                });
               }
-            });
+            }
+          });
 
-            return true;
-          },
+          return true;
+        },
     };
   },
 

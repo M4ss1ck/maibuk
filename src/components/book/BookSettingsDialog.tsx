@@ -49,9 +49,7 @@ export function BookSettingsDialog({
   const [targetWordCount, setTargetWordCount] = useState<string>(
     book.targetWordCount?.toString() || ""
   );
-  const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(
-    book.status
-  );
+  const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(book.status);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const hasChanges =
@@ -65,9 +63,7 @@ export function BookSettingsDialog({
     status !== book.status;
 
   const handleSave = useCallback(() => {
-    const parsedTargetWordCount = targetWordCount
-      ? parseInt(targetWordCount, 10)
-      : undefined;
+    const parsedTargetWordCount = targetWordCount ? parseInt(targetWordCount, 10) : undefined;
 
     onUpdateBookInfo({
       title,
@@ -77,9 +73,7 @@ export function BookSettingsDialog({
       genre: genre || undefined,
       language,
       targetWordCount:
-        parsedTargetWordCount && !isNaN(parsedTargetWordCount)
-          ? parsedTargetWordCount
-          : undefined,
+        parsedTargetWordCount && !isNaN(parsedTargetWordCount) ? parsedTargetWordCount : undefined,
       status,
     });
     onClose();
@@ -121,13 +115,17 @@ export function BookSettingsDialog({
   return (
     <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0" aria-hidden="true" />
+      <div
+        className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0"
+        aria-hidden="true"
+      />
 
       {/* Dialog container */}
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel
           transition
-          className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto transition duration-200 ease-out data-closed:translate-y-4 data-closed:opacity-0 data-closed:sm:scale-95 data-closed:sm:translate-y-0">
+          className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto transition duration-200 ease-out data-closed:translate-y-4 data-closed:opacity-0 data-closed:sm:scale-95 data-closed:sm:translate-y-0"
+        >
           <DialogTitle className="text-xl font-semibold text-foreground mb-4">
             {t("bookSettings.title")}
           </DialogTitle>
@@ -234,10 +232,11 @@ export function BookSettingsDialog({
               {(["draft", "in-progress", "completed"] as const).map((s) => (
                 <button
                   key={s}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${status === s
-                    ? "bg-accent text-accent-foreground border-accent"
-                    : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
-                    }`}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
+                    status === s
+                      ? "bg-accent text-accent-foreground border-accent"
+                      : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+                  }`}
                   onClick={() => setStatus(s)}
                 >
                   {t(`common.${s}`)}
@@ -253,8 +252,7 @@ export function BookSettingsDialog({
                 <DisclosureButton className="flex w-full items-center justify-between text-sm font-medium text-destructive">
                   {t("bookSettings.dangerZone")}
                   <ChevronDownIcon
-                    className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""
-                      }`}
+                    className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}
                   />
                 </DisclosureButton>
                 <DisclosurePanel className="mt-3">
@@ -272,11 +270,7 @@ export function BookSettingsDialog({
                         {t("bookSettings.deleteConfirmMessage")}
                       </p>
                       <div className="flex gap-2">
-                        <Button
-                          variant="destructive"
-                          onClick={handleDelete}
-                          className="flex-1"
-                        >
+                        <Button variant="destructive" onClick={handleDelete} className="flex-1">
                           {t("bookSettings.confirmDelete")}
                         </Button>
                         <Button

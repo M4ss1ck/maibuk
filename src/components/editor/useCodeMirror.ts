@@ -66,12 +66,7 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
           foldGutter,
           foldKeymap,
         },
-        {
-          closeBrackets,
-          closeBracketsKeymap,
-          autocompletion,
-          completionKeymap,
-        },
+        { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap },
         { html },
         { linter, lintGutter, diagnosticCount },
         { searchKeymap, highlightSelectionMatches },
@@ -199,9 +194,7 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
         toggleWrap: () => {
           isWrapped = !isWrapped;
           view.dispatch({
-            effects: wrapCompartment.reconfigure(
-              isWrapped ? EditorView.lineWrapping : [],
-            ),
+            effects: wrapCompartment.reconfigure(isWrapped ? EditorView.lineWrapping : []),
           });
         },
 

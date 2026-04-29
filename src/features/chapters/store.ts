@@ -55,7 +55,13 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   error: null,
 
   loadChapters: async (bookId: string) => {
-    set({ isLoading: true, error: null, chapters: [], currentChapter: null, currentBookId: bookId });
+    set({
+      isLoading: true,
+      error: null,
+      chapters: [],
+      currentChapter: null,
+      currentBookId: bookId,
+    });
     try {
       const db = await getDatabase();
       const result = await db.select<Record<string, unknown>[]>(
@@ -180,10 +186,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
 
     values.push(id);
 
-    await db.execute(
-      `UPDATE chapters SET ${updates.join(", ")} WHERE id = ?`,
-      values
-    );
+    await db.execute(`UPDATE chapters SET ${updates.join(", ")} WHERE id = ?`, values);
 
     // Calculate word count if content was updated
     let wordCount: number | undefined;
@@ -196,21 +199,21 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
       chapters: state.chapters.map((chapter) =>
         chapter.id === id
           ? {
-            ...chapter,
-            ...input,
-            ...(wordCount !== undefined ? { wordCount } : {}),
-            updatedAt: new Date(),
-          }
+              ...chapter,
+              ...input,
+              ...(wordCount !== undefined ? { wordCount } : {}),
+              updatedAt: new Date(),
+            }
           : chapter
       ),
       currentChapter:
         state.currentChapter?.id === id
           ? {
-            ...state.currentChapter,
-            ...input,
-            ...(wordCount !== undefined ? { wordCount } : {}),
-            updatedAt: new Date(),
-          }
+              ...state.currentChapter,
+              ...input,
+              ...(wordCount !== undefined ? { wordCount } : {}),
+              updatedAt: new Date(),
+            }
           : state.currentChapter,
     }));
   },
@@ -221,8 +224,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
 
     set((state) => ({
       chapters: state.chapters.filter((chapter) => chapter.id !== id),
-      currentChapter:
-        state.currentChapter?.id === id ? null : state.currentChapter,
+      currentChapter: state.currentChapter?.id === id ? null : state.currentChapter,
     }));
   },
 
@@ -233,15 +235,14 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
     // Update each chapter's order — each statement auto-commits individually
     for (let i = 0; i < chapterIds.length; i++) {
       try {
-        await db.execute(
-          'UPDATE chapters SET "order" = ?, updated_at = ? WHERE id = ?',
-          [i, now, chapterIds[i]]
-        );
+        await db.execute('UPDATE chapters SET "order" = ?, updated_at = ? WHERE id = ?', [
+          i,
+          now,
+          chapterIds[i],
+        ]);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
-        throw new Error(
-          `Failed to reorder chapter ${i + 1}/${chapterIds.length}: ${detail}`,
-        );
+        throw new Error(`Failed to reorder chapter ${i + 1}/${chapterIds.length}: ${detail}`);
       }
     }
 

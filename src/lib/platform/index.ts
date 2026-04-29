@@ -27,9 +27,7 @@ export type {
 } from "./types";
 
 // Database factory
-export async function createDatabase(
-  path: string
-): Promise<DatabaseAdapter> {
+export async function createDatabase(path: string): Promise<DatabaseAdapter> {
   if (IS_WEB) {
     const { createWebDatabase } = await import("./web/database");
     return createWebDatabase(path);

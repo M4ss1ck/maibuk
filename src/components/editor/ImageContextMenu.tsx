@@ -2,15 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
-import {
-  Type,
-  Copy,
-  Download,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Trash2,
-} from "lucide-react";
+import { Type, Copy, Download, AlignLeft, AlignCenter, AlignRight, Trash2 } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
@@ -136,9 +128,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
     const src = menu.nodeAttrs.src as string;
     try {
       const blob = await srcToBlob(src);
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob }),
-      ]);
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       toast.success(t("common.copied"));
     } catch (err) {
       console.error("Failed to copy image:", err);
@@ -188,12 +178,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
 
   const handleDelete = () => {
     if (!menu) return;
-    editor
-      .chain()
-      .focus()
-      .setNodeSelection(menu.pos)
-      .deleteSelection()
-      .run();
+    editor.chain().focus().setNodeSelection(menu.pos).deleteSelection().run();
     closeMenu();
   };
 
@@ -306,8 +291,9 @@ function MenuItem({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors ${variant === "destructive" ? "text-destructive" : ""
-        }`}
+      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors ${
+        variant === "destructive" ? "text-destructive" : ""
+      }`}
       type="button"
     >
       <span className="w-4 h-4 shrink-0">{icon}</span>
@@ -330,10 +316,7 @@ function clampPosition(clientX: number, clientY: number) {
   };
 }
 
-function adjustPosition(
-  position: { top: number; left: number },
-  rect: DOMRect
-) {
+function adjustPosition(position: { top: number; left: number }, rect: DOMRect) {
   const padding = 8;
   const maxLeft = window.innerWidth - rect.width - padding;
   const maxTop = window.innerHeight - rect.height - padding;

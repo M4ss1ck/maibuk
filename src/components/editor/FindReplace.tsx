@@ -55,19 +55,22 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
     return matches;
   }, [editor, searchTerm, currentMatch]);
 
-  const goToMatch = useCallback((matchIndex: number) => {
-    const matches = findMatches();
-    if (matches.length === 0 || matchIndex < 1 || matchIndex > matches.length) return;
+  const goToMatch = useCallback(
+    (matchIndex: number) => {
+      const matches = findMatches();
+      if (matches.length === 0 || matchIndex < 1 || matchIndex > matches.length) return;
 
-    const match = matches[matchIndex - 1];
-    editor.commands.setTextSelection(match);
+      const match = matches[matchIndex - 1];
+      editor.commands.setTextSelection(match);
 
-    // Scroll to selection
-    const element = editor.view.domAtPos(match.from);
-    if (element.node instanceof Element) {
-      element.node.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [editor, findMatches]);
+      // Scroll to selection
+      const element = editor.view.domAtPos(match.from);
+      if (element.node instanceof Element) {
+        element.node.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    },
+    [editor, findMatches]
+  );
 
   const findNext = useCallback(() => {
     const newMatch = currentMatch < matchCount ? currentMatch + 1 : 1;
@@ -113,10 +116,7 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
     let chain = editor.chain().focus();
 
     for (const match of sortedMatches) {
-      chain = chain
-        .setTextSelection(match)
-        .deleteSelection()
-        .insertContent(replaceTerm);
+      chain = chain.setTextSelection(match).deleteSelection().insertContent(replaceTerm);
     }
 
     chain.run();
@@ -187,7 +187,9 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
           />
           {searchTerm && (
             <div className="text-xs text-muted-foreground mt-1">
-              {matchCount > 0 ? t("editor.matchesOf", { current: currentMatch, total: matchCount }) : t("editor.noMatches")}
+              {matchCount > 0
+                ? t("editor.matchesOf", { current: currentMatch, total: matchCount })
+                : t("editor.noMatches")}
             </div>
           )}
         </div>

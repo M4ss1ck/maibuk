@@ -17,7 +17,7 @@ const mockChapterState = vi.hoisted(
   (): { currentBookId: string | null; loadChapters: typeof mockLoadChapters } => ({
     currentBookId: "book-1",
     loadChapters: mockLoadChapters,
-  }),
+  })
 );
 
 vi.mock("../../../../features/backup/generate-sql-dump", () => ({
@@ -50,9 +50,7 @@ vi.mock("../../../../features/chapters/store", () => ({
   },
 }));
 
-const { BackupService } = await import(
-  "../../../../features/backup/backup-service"
-);
+const { BackupService } = await import("../../../../features/backup/backup-service");
 
 function createMockAdapter(): BackupAdapter {
   const store = new Map<string, { sql: string; entry: BackupEntry }>();
@@ -249,9 +247,9 @@ describe("BackupService", () => {
         throw new Error("Backup checksum mismatch");
       });
 
-      await expect(service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")).rejects.toThrow(
-        "BACKUP_CORRUPT",
-      );
+      await expect(
+        service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
+      ).rejects.toThrow("BACKUP_CORRUPT");
 
       expect(calls).toEqual(["saveBackup", "readBackup"]);
       expect(mockDb.execute).not.toHaveBeenCalled();
@@ -266,9 +264,9 @@ describe("BackupService", () => {
         return ["INSERT INTO settings VALUES ('x')"];
       });
 
-      await expect(service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")).rejects.toThrow(
-        "RESTORE_INVALID",
-      );
+      await expect(
+        service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
+      ).rejects.toThrow("RESTORE_INVALID");
 
       expect(mockDb.execute).not.toHaveBeenCalled();
       expect(mockLoadBooks).not.toHaveBeenCalled();
@@ -298,8 +296,14 @@ describe("BackupService", () => {
       expect(mockDb.execute).toHaveBeenNthCalledWith(1, "DELETE FROM chapters");
       expect(mockDb.execute).toHaveBeenNthCalledWith(2, "DELETE FROM books");
       expect(mockDb.execute).toHaveBeenNthCalledWith(3, 'INSERT INTO "books" VALUES ("book-1")');
-      expect(mockDb.execute).toHaveBeenNthCalledWith(4, 'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")');
-      expect(mockDb.execute).toHaveBeenNthCalledWith(5, 'INSERT INTO "chapters" VALUES ("chapter-1")');
+      expect(mockDb.execute).toHaveBeenNthCalledWith(
+        4,
+        'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")'
+      );
+      expect(mockDb.execute).toHaveBeenNthCalledWith(
+        5,
+        'INSERT INTO "chapters" VALUES ("chapter-1")'
+      );
       expect(mockDb.execute).toHaveBeenCalledTimes(5);
       expect(mockLoadBooks).toHaveBeenCalled();
       expect(mockLoadChapters).toHaveBeenCalledWith("book-1");
@@ -353,9 +357,9 @@ describe("BackupService", () => {
         return [];
       });
 
-      await expect(service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")).rejects.toThrow(
-        "RESTORE_INVALID",
-      );
+      await expect(
+        service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
+      ).rejects.toThrow("RESTORE_INVALID");
 
       expect(mockDb.execute).not.toHaveBeenCalled();
     });
@@ -372,7 +376,9 @@ describe("BackupService", () => {
 
       await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
 
-      expect(mockDb.execute).toHaveBeenCalledWith('INSERT OR REPLACE INTO "books" VALUES ("book-1")');
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        'INSERT OR REPLACE INTO "books" VALUES ("book-1")'
+      );
     });
 
     it("surfaces statement-level error when an INSERT fails", async () => {
@@ -388,8 +394,10 @@ describe("BackupService", () => {
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM books
         .mockRejectedValueOnce(new Error("UNIQUE constraint failed")); // INSERT fails
 
-      await expect(service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")).rejects.toThrow(
-        "RESTORE_FAILED: Restore failed on statement 1/1: UNIQUE constraint failed",
+      await expect(
+        service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
+      ).rejects.toThrow(
+        "RESTORE_FAILED: Restore failed on statement 1/1: UNIQUE constraint failed"
       );
 
       expect(mockDb.execute).toHaveBeenCalledTimes(3);

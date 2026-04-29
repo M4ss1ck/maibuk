@@ -50,11 +50,13 @@ async function initializeSchema(): Promise<void> {
   `);
 
   // Migration: Add last_chapter_id column for existing databases
-  await db.execute(`
+  await db
+    .execute(`
     ALTER TABLE books ADD COLUMN last_chapter_id TEXT
-  `).catch(() => {
-    // Column already exists, ignore error
-  });
+  `)
+    .catch(() => {
+      // Column already exists, ignore error
+    });
 
   // Create chapters table
   await db.execute(`

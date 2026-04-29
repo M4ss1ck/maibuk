@@ -47,9 +47,22 @@ export function validateHtml(html: string): HtmlDiagnostic[] {
 
   // Tags that auto-close when nested inside themselves
   const autoClosing = new Set([
-    "p", "li", "td", "th", "tr", "thead", "tbody", "tfoot",
-    "dt", "dd", "option", "optgroup",
-    "colgroup", "caption", "rt", "rp",
+    "p",
+    "li",
+    "td",
+    "th",
+    "tr",
+    "thead",
+    "tbody",
+    "tfoot",
+    "dt",
+    "dd",
+    "option",
+    "optgroup",
+    "colgroup",
+    "caption",
+    "rt",
+    "rp",
   ]);
 
   const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*\/?>/g;
@@ -117,6 +130,6 @@ export function createHtmlLinter(linter: typeof linterFn) {
     (view: EditorView): Diagnostic[] => {
       return validateHtml(view.state.doc.toString());
     },
-    { delay: 300 },
+    { delay: 300 }
   );
 }

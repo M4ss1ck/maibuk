@@ -16,9 +16,7 @@ interface HtmlViewPanelProps {
   editor: Editor;
   isOpen: boolean;
   onClose: () => void;
-  onReady?: (
-    handle: { highlightRange: (from: number, to: number) => void } | null,
-  ) => void;
+  onReady?: (handle: { highlightRange: (from: number, to: number) => void } | null) => void;
 }
 
 const MIN_HEIGHT = 100;
@@ -37,8 +35,7 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
   const appTheme = useThemeStore((s) => s.theme);
   const resolvedDark =
     appTheme === "dark" ||
-    (appTheme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
+    (appTheme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   const lightTheme = useSettingsStore((s) => s.htmlEditorLightTheme);
   const darkTheme = useSettingsStore((s) => s.htmlEditorDarkTheme);
@@ -60,21 +57,28 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
     }
   }, [editor]);
 
-  const syncHtmlToWysiwyg = useCallback((content: string) => {
-    if (activeSourceRef.current === "html") {
-      try {
-        editor.commands.setContent(content);
-        setError("");
-      } catch {
-        setError(t("editor.invalidHtml"));
+  const syncHtmlToWysiwyg = useCallback(
+    (content: string) => {
+      if (activeSourceRef.current === "html") {
+        try {
+          editor.commands.setContent(content);
+          setError("");
+        } catch {
+          setError(t("editor.invalidHtml"));
+        }
       }
-    }
-  }, [editor, t]);
+    },
+    [editor, t]
+  );
 
   const debouncedSyncToHtml = useDebouncedCallback(syncWysiwygToHtml, 300);
   const debouncedSyncToWysiwyg = useDebouncedCallback(syncHtmlToWysiwyg, 500);
 
-  const { containerRef, isLoading, handle: cmHandle } = useCodeMirror({
+  const {
+    containerRef,
+    isLoading,
+    handle: cmHandle,
+  } = useCodeMirror({
     initialContent: isOpen ? editor.getHTML() : "",
     onChange: (content) => {
       debouncedSyncToWysiwyg(content);
@@ -82,8 +86,12 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
         setWarningCount(cmHandleRef.current.getWarningCount());
       }
     },
-    onFocus: () => { activeSourceRef.current = "html"; },
-    onBlur: () => { /* keep activeSource as-is until wysiwyg focuses */ },
+    onFocus: () => {
+      activeSourceRef.current = "html";
+    },
+    onBlur: () => {
+      /* keep activeSource as-is until wysiwyg focuses */
+    },
   });
 
   // Keep ref in sync with handle state
@@ -111,16 +119,22 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
     };
 
     editor.on("update", handleUpdate);
-    return () => { editor.off("update", handleUpdate); };
+    return () => {
+      editor.off("update", handleUpdate);
+    };
   }, [isOpen, cmHandle, editor, debouncedSyncToHtml]);
 
   // Track WYSIWYG focus
   useEffect(() => {
     if (!isOpen) return;
     const dom = editor.view.dom;
-    const onFocus = () => { activeSourceRef.current = "wysiwyg"; };
+    const onFocus = () => {
+      activeSourceRef.current = "wysiwyg";
+    };
     dom.addEventListener("focus", onFocus);
-    return () => { dom.removeEventListener("focus", onFocus); };
+    return () => {
+      dom.removeEventListener("focus", onFocus);
+    };
   }, [isOpen, editor]);
 
   // Initialize content when panel opens
@@ -155,32 +169,35 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
   }, [currentThemeSetting, resolvedDark, cmHandle]);
 
   // Resize handling
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizingRef.current = true;
-    const startY = e.clientY;
-    const startHeight = panelHeight;
-    const maxHeight = window.innerHeight * MAX_HEIGHT_RATIO;
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizingRef.current = true;
+      const startY = e.clientY;
+      const startHeight = panelHeight;
+      const maxHeight = window.innerHeight * MAX_HEIGHT_RATIO;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizingRef.current) return;
-      const delta = e.clientY - startY;
-      const newHeight = Math.max(MIN_HEIGHT, Math.min(maxHeight, startHeight + delta));
-      setPanelHeight(newHeight);
-    };
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!isResizingRef.current) return;
+        const delta = e.clientY - startY;
+        const newHeight = Math.max(MIN_HEIGHT, Math.min(maxHeight, startHeight + delta));
+        setPanelHeight(newHeight);
+      };
 
-    const handleMouseUp = (e: MouseEvent) => {
-      isResizingRef.current = false;
-      const delta = e.clientY - startY;
-      const finalHeight = Math.max(MIN_HEIGHT, Math.min(maxHeight, startHeight + delta));
-      setPersistedHeight(finalHeight);
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
+      const handleMouseUp = (e: MouseEvent) => {
+        isResizingRef.current = false;
+        const delta = e.clientY - startY;
+        const finalHeight = Math.max(MIN_HEIGHT, Math.min(maxHeight, startHeight + delta));
+        setPersistedHeight(finalHeight);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
 
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  }, [panelHeight]);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [panelHeight]
+  );
 
   if (!isOpen) return null;
 
@@ -226,14 +243,14 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
             options={
               resolvedDark
                 ? [
-                  { value: "default", label: t("editor.themeDefault") },
-                  { value: "one-dark", label: t("editor.themeOneDark") },
-                  { value: "dracula", label: t("editor.themeDracula") },
-                ]
+                    { value: "default", label: t("editor.themeDefault") },
+                    { value: "one-dark", label: t("editor.themeOneDark") },
+                    { value: "dracula", label: t("editor.themeDracula") },
+                  ]
                 : [
-                  { value: "default", label: t("editor.themeDefault") },
-                  { value: "one-light", label: t("editor.themeOneLight") },
-                ]
+                    { value: "default", label: t("editor.themeDefault") },
+                    { value: "one-light", label: t("editor.themeOneLight") },
+                  ]
             }
           />
           <Button size="sm" variant="ghost" onClick={onClose}>
@@ -249,10 +266,7 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
             <SpinnerIcon className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
         )}
-        <div
-          ref={containerRef}
-          className={`h-full overflow-auto ${isLoading ? "hidden" : ""}`}
-        />
+        <div ref={containerRef} className={`h-full overflow-auto ${isLoading ? "hidden" : ""}`} />
       </div>
 
       {/* Resize handle */}

@@ -48,9 +48,7 @@ export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps)
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          {t("editor.footnoteDescription")}
-        </p>
+        <p className="text-sm text-muted-foreground">{t("editor.footnoteDescription")}</p>
 
         <div>
           <label className="block text-sm font-medium mb-1">{t("editor.footnoteContent")}</label>

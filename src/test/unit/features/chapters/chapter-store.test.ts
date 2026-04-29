@@ -13,9 +13,7 @@ vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
 }));
 
-const { useChapterStore } = await import(
-  "../../../../features/chapters/store"
-);
+const { useChapterStore } = await import("../../../../features/chapters/store");
 
 // Helper: seed a book row so FK constraints pass
 async function seedBook(db: DatabaseAdapter, bookId = "book-1") {
@@ -204,9 +202,7 @@ describe("useChapterStore", () => {
         status: "revised",
       });
 
-      const chapter = useChapterStore
-        .getState()
-        .chapters.find((c) => c.id === created.id);
+      const chapter = useChapterStore.getState().chapters.find((c) => c.id === created.id);
       expect(chapter?.title).toBe("Updated");
       expect(chapter?.status).toBe("revised");
     });
@@ -221,9 +217,7 @@ describe("useChapterStore", () => {
         content: "<p>Hello world this is a test</p>",
       });
 
-      const chapter = useChapterStore
-        .getState()
-        .chapters.find((c) => c.id === created.id);
+      const chapter = useChapterStore.getState().chapters.find((c) => c.id === created.id);
       expect(chapter?.wordCount).toBe(6);
     });
 
@@ -237,9 +231,7 @@ describe("useChapterStore", () => {
         content: "<h1>Title</h1><p>One <strong>bold</strong> word</p>",
       });
 
-      const chapter = useChapterStore
-        .getState()
-        .chapters.find((c) => c.id === created.id);
+      const chapter = useChapterStore.getState().chapters.find((c) => c.id === created.id);
       // "Title One bold word" = 4 words
       expect(chapter?.wordCount).toBe(4);
     });
@@ -255,9 +247,7 @@ describe("useChapterStore", () => {
         title: "Updated Current",
       });
 
-      expect(useChapterStore.getState().currentChapter?.title).toBe(
-        "Updated Current"
-      );
+      expect(useChapterStore.getState().currentChapter?.title).toBe("Updated Current");
     });
 
     it("persists update in the database", async () => {
@@ -327,9 +317,7 @@ describe("useChapterStore", () => {
       });
 
       // Reverse the order
-      await useChapterStore
-        .getState()
-        .reorderChapters("book-1", [ch3.id, ch2.id, ch1.id]);
+      await useChapterStore.getState().reorderChapters("book-1", [ch3.id, ch2.id, ch1.id]);
 
       const { chapters } = useChapterStore.getState();
       expect(chapters[0].title).toBe("Third");
@@ -347,9 +335,7 @@ describe("useChapterStore", () => {
         title: "B",
       });
 
-      await useChapterStore
-        .getState()
-        .reorderChapters("book-1", [ch2.id, ch1.id]);
+      await useChapterStore.getState().reorderChapters("book-1", [ch2.id, ch1.id]);
 
       const rows = await testDb.select<Record<string, unknown>[]>(
         'SELECT id, "order" FROM chapters ORDER BY "order" ASC'

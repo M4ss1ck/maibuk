@@ -16,7 +16,7 @@ import {
   ArrowUpIcon,
   ArrowDownIcon,
   TrashIcon,
-  ExportIcon
+  ExportIcon,
 } from "../icons";
 
 interface CoverToolbarProps {
@@ -122,8 +122,9 @@ export function CoverToolbar({
                   onDimensionChange(dim);
                   setShowDimensions(false);
                 }}
-                className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${dim.id === dimension.id ? "bg-muted" : ""
-                  }`}
+                className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${
+                  dim.id === dimension.id ? "bg-muted" : ""
+                }`}
               >
                 <span className="font-medium">{dim.name}</span>
                 <span className="text-xs text-muted-foreground">{dim.description}</span>
@@ -149,10 +150,7 @@ export function CoverToolbar({
 
         {showTextMenu && (
           <div className="absolute top-full left-0 mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50">
-            <button
-              onClick={handleAddTitle}
-              className="w-full px-4 py-2 text-left hover:bg-muted"
-            >
+            <button onClick={handleAddTitle} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.toolbar.title")}
             </button>
             <button
@@ -161,10 +159,7 @@ export function CoverToolbar({
             >
               {t("cover.toolbar.subtitle")}
             </button>
-            <button
-              onClick={handleAddAuthor}
-              className="w-full px-4 py-2 text-left hover:bg-muted"
-            >
+            <button onClick={handleAddAuthor} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.toolbar.author")}
             </button>
           </div>
@@ -199,10 +194,7 @@ export function CoverToolbar({
           className="gap-1 sm:gap-2 text-xs sm:text-sm"
           title={t("cover.background")}
         >
-          <div
-            className="w-4 h-4 rounded border border-border"
-            style={{ backgroundColor }}
-          />
+          <div className="w-4 h-4 rounded border border-border" style={{ backgroundColor }} />
           <span className="hidden sm:inline">{t("cover.background")}</span>
         </Button>
 

@@ -195,11 +195,13 @@ export function ChapterList({
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, chapter.id)}
                 onDragEnd={handleDragEnd}
-                className={`group relative rounded transition-colors cursor-pointer ${draggedId === chapter.id ? "opacity-50" : ""
-                  } ${currentChapterId === chapter.id
+                className={`group relative rounded transition-colors cursor-pointer ${
+                  draggedId === chapter.id ? "opacity-50" : ""
+                } ${
+                  currentChapterId === chapter.id
                     ? "bg-primary/10 border-l-2 border-primary"
                     : "hover:bg-muted/50"
-                  }`}
+                }`}
               >
                 {/* Edit form overlay */}
                 {editingId === chapter.id ? (
@@ -252,7 +254,9 @@ export function ChapterList({
                         <span className="font-medium text-sm truncate">{chapter.title}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                        <span>{chapter.wordCount.toLocaleString()} {t("common.words")}</span>
+                        <span>
+                          {chapter.wordCount.toLocaleString()} {t("common.words")}
+                        </span>
                         <span>•</span>
                         <span className="capitalize">{chapter.status}</span>
                       </div>
