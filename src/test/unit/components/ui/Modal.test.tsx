@@ -57,7 +57,7 @@ describe("Modal", () => {
         </Modal>,
       );
 
-      await user.click(screen.getByLabelText("Close"));
+      await user.click(screen.getByRole("button", { name: "Close" }));
 
       expect(onClose).toHaveBeenCalledTimes(1);
     });

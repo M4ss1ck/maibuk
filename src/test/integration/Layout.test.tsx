@@ -70,7 +70,7 @@ describe("Layout", () => {
     const menuButton = screen.getByLabelText("Open menu");
     await user.click(menuButton);
 
-    // Close button should now be visible
-    expect(screen.getByLabelText("Close menu")).toBeInTheDocument();
+    // Backdrop + sidebar close button both render when the menu is open
+    expect(screen.getAllByLabelText("Close menu")).toHaveLength(2);
   });
 });

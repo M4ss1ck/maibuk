@@ -66,9 +66,8 @@ export function validateHtml(html: string): HtmlDiagnostic[] {
   ]);
 
   const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*\/?>/g;
-  let match = tagRegex.exec(html);
 
-  while (match !== null) {
+  for (const match of html.matchAll(tagRegex)) {
     const fullMatch = match[0];
     const tagName = match[1].toLowerCase();
     const pos = match.index;
@@ -107,7 +106,6 @@ export function validateHtml(html: string): HtmlDiagnostic[] {
       }
       tagStack.push({ tag: tagName, pos });
     }
-    match = tagRegex.exec(html);
   }
 
   // Report unclosed tags
