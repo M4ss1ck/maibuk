@@ -66,9 +66,9 @@ export function validateHtml(html: string): HtmlDiagnostic[] {
   ]);
 
   const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*\/?>/g;
-  let match: RegExpExecArray | null;
+  let match = tagRegex.exec(html);
 
-  while ((match = tagRegex.exec(html)) !== null) {
+  while (match !== null) {
     const fullMatch = match[0];
     const tagName = match[1].toLowerCase();
     const pos = match.index;
@@ -107,6 +107,7 @@ export function validateHtml(html: string): HtmlDiagnostic[] {
       }
       tagStack.push({ tag: tagName, pos });
     }
+    match = tagRegex.exec(html);
   }
 
   // Report unclosed tags
@@ -130,6 +131,6 @@ export function createHtmlLinter(linter: typeof linterFn) {
     (view: EditorView): Diagnostic[] => {
       return validateHtml(view.state.doc.toString());
     },
-    { delay: 300 }
+    { delay: 300 },
   );
 }

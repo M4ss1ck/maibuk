@@ -8,9 +8,8 @@ export function FootnoteView({ node, editor, getPos }: NodeViewProps) {
     selector: ({ editor: e }): number => {
       const startIndex: number =
         (
-          e.extensionManager.extensions.find((ext) => ext.name === "footnote")?.options as
-            | { startIndex?: number }
-            | undefined
+          e.extensionManager.extensions.find((ext) => ext.name === "footnote")
+            ?.options as { startIndex?: number } | undefined
         )?.startIndex ?? 1;
 
       let count = 0;
@@ -32,14 +31,15 @@ export function FootnoteView({ node, editor, getPos }: NodeViewProps) {
 
   return (
     <NodeViewWrapper as="sup" className="footnote-ref">
-      <a
+      <button
+        type="button"
         id={`fnref-${node.attrs.id}`}
         className="footnote-ref-link"
         onClick={handleClick}
         title={node.attrs.content}
       >
         {number}
-      </a>
+      </button>
     </NodeViewWrapper>
   );
 }

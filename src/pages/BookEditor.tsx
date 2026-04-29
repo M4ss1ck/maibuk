@@ -24,7 +24,12 @@ import {
 } from "../components/icons";
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { useSettingsStore } from "../features/settings/store";
-import { Menu, MoreVertical, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  Menu,
+  MoreVertical,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { SyncStatusButton } from "../components/sync/SyncStatusButton";
 import { useShortcuts } from "../lib/shortcuts";
 
@@ -34,7 +39,8 @@ export function BookEditor() {
   const navigate = useNavigate();
 
   // Stores
-  const { currentBook, loadBook, updateWordCount, updateBook, deleteBook } = useBookStore();
+  const { currentBook, loadBook, updateWordCount, updateBook, deleteBook } =
+    useBookStore();
   const {
     chapters,
     currentChapter,
@@ -52,7 +58,9 @@ export function BookEditor() {
   const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">(
+    "idle",
+  );
   const [showMobileChapters, setShowMobileChapters] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -78,7 +86,12 @@ export function BookEditor() {
   // Auto-select chapter: restore last edited or default to last chapter
   useEffect(() => {
     // Wait for both book and chapters to be loaded for the correct book
-    if (chapters.length > 0 && !currentChapter && currentBook && currentBook.id === bookId) {
+    if (
+      chapters.length > 0 &&
+      !currentChapter &&
+      currentBook &&
+      currentBook.id === bookId
+    ) {
       const lastEditedChapter = currentBook.lastChapterId
         ? chapters.find((c) => c.id === currentBook.lastChapterId)
         : null;
@@ -137,18 +150,21 @@ export function BookEditor() {
   }, [currentChapter, updateChapter]);
 
   // Debounced auto-save
-  const debouncedSave = useDebouncedCallback(async (chapterId: string, content: string) => {
-    setSaveStatus("saving");
-    try {
-      await updateChapter(chapterId, { content });
-      setSaveStatus("saved");
-      // Reset to idle after 2 seconds
-      setTimeout(() => setSaveStatus("idle"), 2000);
-    } catch (error) {
-      console.error("Failed to save:", error);
-      setSaveStatus("idle");
-    }
-  }, 1000);
+  const debouncedSave = useDebouncedCallback(
+    async (chapterId: string, content: string) => {
+      setSaveStatus("saving");
+      try {
+        await updateChapter(chapterId, { content });
+        setSaveStatus("saved");
+        // Reset to idle after 2 seconds
+        setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch (error) {
+        console.error("Failed to save:", error);
+        setSaveStatus("idle");
+      }
+    },
+    1000,
+  );
 
   // Handle content changes
   const handleContentUpdate = useCallback(
@@ -159,7 +175,7 @@ export function BookEditor() {
         debouncedSave(currentChapter.id, content);
       }
     },
-    [currentChapter, debouncedSave]
+    [currentChapter, debouncedSave],
   );
 
   // Handle word count changes
@@ -181,7 +197,7 @@ export function BookEditor() {
         updateBook(bookId, { lastChapterId: chapter.id });
       }
     },
-    [bookId, setCurrentChapter, updateBook]
+    [bookId, setCurrentChapter, updateBook],
   );
 
   const handleCreateChapter = useCallback(
@@ -197,7 +213,7 @@ export function BookEditor() {
         updateBook(bookId, { lastChapterId: newChapter.id });
       }
     },
-    [bookId, createChapter, setCurrentChapter, updateBook]
+    [bookId, createChapter, setCurrentChapter, updateBook],
   );
 
   const handleDeleteChapter = useCallback(
@@ -209,7 +225,7 @@ export function BookEditor() {
         setCurrentChapter(remaining.length > 0 ? remaining[0] : null);
       }
     },
-    [deleteChapter, currentChapter, chapters, setCurrentChapter]
+    [deleteChapter, currentChapter, chapters, setCurrentChapter],
   );
 
   const handleReorderChapters = useCallback(
@@ -218,14 +234,14 @@ export function BookEditor() {
         await reorderChapters(bookId, chapterIds);
       }
     },
-    [bookId, reorderChapters]
+    [bookId, reorderChapters],
   );
 
   const handleUpdateChapter = useCallback(
     async (id: string, title: string, chapterType: ChapterType) => {
       await updateChapter(id, { title, chapterType });
     },
-    [updateChapter]
+    [updateChapter],
   );
 
   // Toggle focus mode
@@ -243,7 +259,10 @@ export function BookEditor() {
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         if (!isResizing.current) return;
-        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
+        const newWidth = Math.max(
+          200,
+          Math.min(480, startWidth + moveEvent.clientX - startX),
+        );
         setSidebarWidth(newWidth);
       };
 
@@ -260,7 +279,7 @@ export function BookEditor() {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [sidebarWidth]
+    [sidebarWidth],
   );
 
   // Handle book info update
@@ -270,7 +289,7 @@ export function BookEditor() {
         await updateBook(bookId, input);
       }
     },
-    [bookId, updateBook]
+    [bookId, updateBook],
   );
 
   // Handle book deletion
@@ -327,12 +346,15 @@ export function BookEditor() {
   }
 
   return (
-    <div className={`flex h-dvh overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
+    <div
+      className={`flex h-dvh overflow-hidden ${focusMode ? "focus-mode" : ""}`}
+    >
       {/* Mobile chapter drawer overlay */}
       {showMobileChapters && !focusMode && (
         <div
           className="md:hidden fixed inset-0 bg-black/50 z-40"
           onClick={() => setShowMobileChapters(false)}
+          onKeyDown={() => setShowMobileChapters(false)}
         />
       )}
 
@@ -348,6 +370,7 @@ export function BookEditor() {
             `}
           >
             <button
+              type="button"
               onClick={() => setShowMobileChapters(false)}
               className="absolute top-3 right-3 z-10 p-2 hover:bg-muted rounded-lg transition-colors"
               aria-label="Close chapters"
@@ -402,6 +425,7 @@ export function BookEditor() {
           <div className="h-12 border-b border-border flex items-center px-2 sm:px-4 gap-1 sm:gap-2 md:gap-4">
             {/* Mobile chapter toggle */}
             <button
+              type="button"
               onClick={() => setShowMobileChapters(true)}
               className="md:hidden p-2 hover:bg-muted rounded transition-colors"
               title={t("chapters.title")}
@@ -410,6 +434,7 @@ export function BookEditor() {
             </button>
 
             <button
+              type="button"
               onClick={() => navigate("/")}
               className="p-2 hover:bg-muted rounded transition-colors"
               title={t("nav.backToHome")}
@@ -419,6 +444,7 @@ export function BookEditor() {
 
             {/* Desktop sidebar toggle */}
             <button
+              type="button"
               onClick={() =>
                 setShowSidebar((prev) => {
                   if (!prev) setSidebarWidth(256);
@@ -426,7 +452,11 @@ export function BookEditor() {
                 })
               }
               className="hidden md:block p-2 hover:bg-muted rounded transition-colors"
-              title={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
+              title={
+                showSidebar
+                  ? t("chapters.hideSidebar")
+                  : t("chapters.showSidebar")
+              }
             >
               {showSidebar ? (
                 <PanelLeftClose className="w-5 h-5" />
@@ -436,9 +466,13 @@ export function BookEditor() {
             </button>
 
             <div className="flex-1 min-w-0">
-              <h1 className="font-medium truncate text-sm sm:text-base">{currentBook.title}</h1>
+              <h1 className="font-medium truncate text-sm sm:text-base">
+                {currentBook.title}
+              </h1>
               {currentChapter && (
-                <p className="text-xs text-muted-foreground truncate">{currentChapter.title}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {currentChapter.title}
+                </p>
               )}
             </div>
 
@@ -458,6 +492,7 @@ export function BookEditor() {
               )}
               {!["saving", "saved"].includes(saveStatus) && (
                 <button
+                  type="button"
                   onClick={() => {
                     handleSaveNow();
                   }}
@@ -491,6 +526,7 @@ export function BookEditor() {
             <div className="hidden md:flex items-center gap-1">
               {/* Export button */}
               <button
+                type="button"
                 onClick={() => setShowExportDialog(true)}
                 className="p-2 hover:bg-muted rounded transition-colors"
                 title={t("nav.exportBook")}
@@ -500,6 +536,7 @@ export function BookEditor() {
 
               {/* Design Cover button */}
               <button
+                type="button"
                 onClick={() => navigate(`/book/${bookId}/cover`)}
                 className="p-2 hover:bg-muted rounded transition-colors"
                 title={t("nav.designCover")}
@@ -509,6 +546,7 @@ export function BookEditor() {
 
               {/* Book Settings button */}
               <button
+                type="button"
                 onClick={() => setShowSettingsDialog(true)}
                 className="p-2 hover:bg-muted rounded transition-colors"
                 title={t("bookSettings.title")}
@@ -521,6 +559,7 @@ export function BookEditor() {
 
               {/* Focus mode toggle */}
               <button
+                type="button"
                 onClick={toggleFocusMode}
                 className="p-2 hover:bg-muted rounded transition-colors"
                 title={t("nav.focusMode")}
@@ -532,6 +571,7 @@ export function BookEditor() {
             {/* Mobile more menu */}
             <div className="md:hidden relative">
               <button
+                type="button"
                 onClick={() => setShowMobileMenu(!showMobileMenu)}
                 className="p-2 hover:bg-muted rounded transition-colors"
                 title={t("common.more")}
@@ -541,9 +581,14 @@ export function BookEditor() {
 
               {showMobileMenu && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMobileMenu(false)} />
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowMobileMenu(false)}
+                    onKeyDown={() => setShowMobileMenu(false)}
+                  />
                   <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border rounded-lg shadow-lg z-50 dropdown-enter">
                     <button
+                      type="button"
                       onClick={() => {
                         setShowExportDialog(true);
                         setShowMobileMenu(false);
@@ -554,6 +599,7 @@ export function BookEditor() {
                       {t("nav.exportBook")}
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         navigate(`/book/${bookId}/cover`);
                         setShowMobileMenu(false);
@@ -564,6 +610,7 @@ export function BookEditor() {
                       {t("nav.designCover")}
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         setShowSettingsDialog(true);
                         setShowMobileMenu(false);
@@ -574,6 +621,7 @@ export function BookEditor() {
                       {t("bookSettings.title")}
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         toggleFocusMode();
                         setShowMobileMenu(false);
@@ -619,8 +667,10 @@ export function BookEditor() {
         {/* Focus mode exit hint */}
         {focusMode && !hideKeyboardHints && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm opacity-0 hover:opacity-100 transition-opacity">
-            {t("editor.press")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">Esc</kbd>{" "}
-            {t("editor.or")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">F11</kbd>{" "}
+            {t("editor.press")}{" "}
+            <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">Esc</kbd>{" "}
+            {t("editor.or")}{" "}
+            <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">F11</kbd>{" "}
             {t("editor.exitFocus")}
           </div>
         )}

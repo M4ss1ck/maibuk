@@ -1,4 +1,10 @@
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useRef,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { Canvas, IText, FabricImage } from "fabric";
 import type { CoverDimension, TextStyle } from "../../features/covers/types";
 
@@ -26,7 +32,10 @@ interface CoverCanvasProps {
 }
 
 export const CoverCanvas = forwardRef<CoverCanvasRef, CoverCanvasProps>(
-  ({ dimension, onSelectionChange, onModified, onCanvasReady, className = "" }, ref) => {
+  (
+    { dimension, onSelectionChange, onModified, onCanvasReady, className = "" },
+    ref,
+  ) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fabricRef = useRef<Canvas | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -154,12 +163,18 @@ export const CoverCanvas = forwardRef<CoverCanvasRef, CoverCanvasProps>(
         const canvas = fabricRef.current;
         if (!canvas) return;
 
-        const img = await FabricImage.fromURL(url, { crossOrigin: "anonymous" });
+        const img = await FabricImage.fromURL(url, {
+          crossOrigin: "anonymous",
+        });
 
         // Scale image to fit canvas width while maintaining aspect ratio
         const maxWidth = dimension.width * 0.8;
         const maxHeight = dimension.height * 0.8;
-        const scale = Math.min(maxWidth / img.width!, maxHeight / img.height!, 1);
+        const scale = Math.min(
+          maxWidth / img.width!,
+          maxHeight / img.height!,
+          1,
+        );
 
         img.set({
           left: dimension.width / 2,
@@ -188,7 +203,9 @@ export const CoverCanvas = forwardRef<CoverCanvasRef, CoverCanvasProps>(
         const canvas = fabricRef.current;
         if (!canvas) return;
 
-        const img = await FabricImage.fromURL(url, { crossOrigin: "anonymous" });
+        const img = await FabricImage.fromURL(url, {
+          crossOrigin: "anonymous",
+        });
 
         // Scale to cover entire canvas
         const scaleX = dimension.width / img.width!;
@@ -283,7 +300,7 @@ export const CoverCanvas = forwardRef<CoverCanvasRef, CoverCanvasProps>(
 
         const active = canvas.getActiveObjects();
         if (active.length > 0) {
-          active.forEach((obj) => canvas.remove(obj));
+          active.forEach((obj) => void canvas.remove(obj));
           canvas.discardActiveObject();
           canvas.requestRenderAll();
           onModifiedRef.current?.();
@@ -335,7 +352,7 @@ export const CoverCanvas = forwardRef<CoverCanvasRef, CoverCanvasProps>(
         </div>
       </div>
     );
-  }
+  },
 );
 
 CoverCanvas.displayName = "CoverCanvas";

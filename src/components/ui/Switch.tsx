@@ -5,11 +5,19 @@ interface SwitchProps {
   onChange: (checked: boolean) => void;
   label?: string;
   className?: string;
+  id?: string;
 }
 
-export function Switch({ checked, onChange, label, className = "" }: SwitchProps) {
+export function Switch({
+  checked,
+  onChange,
+  label,
+  className = "",
+  id,
+}: SwitchProps) {
   return (
     <HeadlessSwitch
+      id={id}
       checked={checked}
       onChange={onChange}
       className={`group relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-muted transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 data-checked:bg-primary ${className}`}

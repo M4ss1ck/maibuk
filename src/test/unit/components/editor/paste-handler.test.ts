@@ -31,12 +31,21 @@ function unwrapGoogleDocsWrapper(container: HTMLElement): void {
 }
 
 function cleanupGoogleDocsAttributes(element: HTMLElement): void {
-  const attributesToRemove = ["id", "class", "data-docs-internal-guid", "dir", "role"];
+  const attributesToRemove = [
+    "id",
+    "class",
+    "data-docs-internal-guid",
+    "dir",
+    "role",
+  ];
 
   attributesToRemove.forEach((attr) => {
     if (attr === "class") {
       const className = element.getAttribute("class");
-      if (className && (className.includes("docs-") || className.includes("kix-"))) {
+      if (
+        className &&
+        (className.includes("docs-") || className.includes("kix-"))
+      ) {
         element.removeAttribute("class");
       }
     } else if (attr === "id") {
@@ -52,7 +61,10 @@ function cleanupGoogleDocsAttributes(element: HTMLElement): void {
   });
 
   Array.from(element.attributes).forEach((attr) => {
-    if (attr.name.startsWith("data-docs-") || attr.name.startsWith("data-kix-")) {
+    if (
+      attr.name.startsWith("data-docs-") ||
+      attr.name.startsWith("data-kix-")
+    ) {
       element.removeAttribute(attr.name);
     }
   });
@@ -76,7 +88,7 @@ function transformParagraphSpacing(element: HTMLElement): void {
     const normalizeMargin = (margin: string): string => {
       if (!margin) return "";
       const value = parseFloat(margin);
-      if (isNaN(value)) return margin;
+      if (Number.isNaN(value)) return margin;
       const maxMargin = 24;
       if (value > maxMargin) {
         return `${maxMargin}px`;
@@ -102,7 +114,9 @@ function parseHtml(html: string): HTMLElement {
 
 describe("unwrapGoogleDocsWrapper()", () => {
   it("unwraps a <b> with docs-internal-guid id", () => {
-    const body = parseHtml('<b id="docs-internal-guid-abc123"><p>Hello</p><p>World</p></b>');
+    const body = parseHtml(
+      '<b id="docs-internal-guid-abc123"><p>Hello</p><p>World</p></b>',
+    );
 
     unwrapGoogleDocsWrapper(body);
 
@@ -113,7 +127,9 @@ describe("unwrapGoogleDocsWrapper()", () => {
   });
 
   it("unwraps a <span> with docs-internal-guid id", () => {
-    const body = parseHtml('<span id="docs-internal-guid-xyz"><p>Content</p></span>');
+    const body = parseHtml(
+      '<span id="docs-internal-guid-xyz"><p>Content</p></span>',
+    );
 
     unwrapGoogleDocsWrapper(body);
 

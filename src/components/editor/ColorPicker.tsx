@@ -102,6 +102,7 @@ export function ColorPicker({
       <div ref={containerRef} className="flex items-center">
         {/* Main button - triggers toggle action */}
         <button
+          type="button"
           onClick={onToggle}
           title={title}
           className={`p-2 rounded-l transition-colors ${
@@ -120,6 +121,7 @@ export function ColorPicker({
         </button>
         {/* Dropdown arrow button - opens color picker */}
         <button
+          type="button"
           onClick={handleDropdownToggle}
           title={`${title} options`}
           className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${
@@ -141,6 +143,7 @@ export function ColorPicker({
               {PRESET_COLORS.map((color) => (
                 <button
                   key={color}
+                  type="button"
                   onClick={() => {
                     onChange(color);
                     setIsOpen(false);
@@ -164,9 +167,12 @@ export function ColorPicker({
                 className="w-8 h-8 cursor-pointer rounded border border-border"
                 title={t("editor.customColor")}
               />
-              <span className="text-xs text-muted-foreground flex-1">{t("cover.custom")}</span>
+              <span className="text-xs text-muted-foreground flex-1">
+                {t("cover.custom")}
+              </span>
               {onClear && (
                 <button
+                  type="button"
                   onClick={() => {
                     onClear();
                     setIsOpen(false);
@@ -178,7 +184,7 @@ export function ColorPicker({
               )}
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </>
   );

@@ -329,7 +329,6 @@ option {
 
 .editor-content table tr:hover td {
   background-color: var(--color-table-border);
-  background-opacity: 0.5;
 }
 
 /* Table column resize feedback */
@@ -357,7 +356,8 @@ option {
 
 .editor-content table th:hover,
 .editor-content table td:hover {
-  box-shadow: inset -2px 0 0 color-mix(in srgb, var(--color-primary) 60%, transparent);
+  box-shadow: inset -2px 0 0
+    color-mix(in srgb, var(--color-primary) 60%, transparent);
 }
 
 /* Selected cell */

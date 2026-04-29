@@ -39,7 +39,7 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
     // Validate URL format
     let finalUrl = url.trim();
     if (!/^https?:\/\//i.test(finalUrl) && !finalUrl.startsWith("mailto:")) {
-      finalUrl = "https://" + finalUrl;
+      finalUrl = `https://${finalUrl}`;
     }
 
     if (text.trim()) {
@@ -47,7 +47,11 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
       const { from, to } = editor.state.selection;
       if (from === to) {
         // No selection, insert text with link
-        editor.chain().focus().insertContent(`<a href="${finalUrl}">${text.trim()}</a>`).run();
+        editor
+          .chain()
+          .focus()
+          .insertContent(`<a href="${finalUrl}">${text.trim()}</a>`)
+          .run();
       } else {
         // Has selection, set link on selection
         editor.chain().focus().setLink({ href: finalUrl }).run();
@@ -101,8 +105,11 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
     >
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-1">URL</label>
+          <label htmlFor="link-url" className="block text-sm font-medium mb-1">
+            URL
+          </label>
           <Input
+            id="link-url"
             value={url}
             onChange={(e) => {
               setUrl(e.target.value);
@@ -115,16 +122,21 @@ export function LinkDialog({ editor, isOpen, onClose }: LinkDialogProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">
+          <label htmlFor="link-text" className="block text-sm font-medium mb-1">
             {t("editor.displayText")}{" "}
-            <span className="text-muted-foreground">{t("editor.optional")}</span>
+            <span className="text-muted-foreground">
+              {t("editor.optional")}
+            </span>
           </label>
           <Input
+            id="link-text"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={t("editor.linkText")}
           />
-          <p className="text-xs text-muted-foreground mt-1">{t("editor.leaveEmpty")}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {t("editor.leaveEmpty")}
+          </p>
         </div>
       </div>
     </Modal>

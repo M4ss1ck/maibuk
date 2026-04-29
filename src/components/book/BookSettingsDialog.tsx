@@ -47,9 +47,11 @@ export function BookSettingsDialog({
   const [genre, setGenre] = useState(book.genre || "");
   const [language, setLanguage] = useState(book.language);
   const [targetWordCount, setTargetWordCount] = useState<string>(
-    book.targetWordCount?.toString() || ""
+    book.targetWordCount?.toString() || "",
   );
-  const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(book.status);
+  const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(
+    book.status,
+  );
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const hasChanges =
@@ -63,7 +65,9 @@ export function BookSettingsDialog({
     status !== book.status;
 
   const handleSave = useCallback(() => {
-    const parsedTargetWordCount = targetWordCount ? parseInt(targetWordCount, 10) : undefined;
+    const parsedTargetWordCount = targetWordCount
+      ? parseInt(targetWordCount, 10)
+      : undefined;
 
     onUpdateBookInfo({
       title,
@@ -73,7 +77,9 @@ export function BookSettingsDialog({
       genre: genre || undefined,
       language,
       targetWordCount:
-        parsedTargetWordCount && !isNaN(parsedTargetWordCount) ? parsedTargetWordCount : undefined,
+        parsedTargetWordCount && !Number.isNaN(parsedTargetWordCount)
+          ? parsedTargetWordCount
+          : undefined,
       status,
     });
     onClose();
@@ -113,7 +119,12 @@ export function BookSettingsDialog({
     "w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-accent";
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
+    <Dialog
+      open={isOpen}
+      onClose={handleClose}
+      className="relative z-50"
+      transition
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0"
@@ -133,10 +144,14 @@ export function BookSettingsDialog({
           {/* Book info */}
           <div className="mb-6 space-y-3">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="book-title"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t("books.bookTitle")}
               </label>
               <input
+                id="book-title"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -145,10 +160,14 @@ export function BookSettingsDialog({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="book-subtitle"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t("books.subtitle")}
               </label>
               <input
+                id="book-subtitle"
                 type="text"
                 value={subtitle}
                 onChange={(e) => setSubtitle(e.target.value)}
@@ -158,10 +177,14 @@ export function BookSettingsDialog({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="book-author-name"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t("books.authorName")}
               </label>
               <input
+                id="book-author-name"
                 type="text"
                 value={authorName}
                 onChange={(e) => setAuthorName(e.target.value)}
@@ -170,24 +193,32 @@ export function BookSettingsDialog({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="book-description"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t("books.description")}
               </label>
               <textarea
+                id="book-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={t("books.descriptionPlaceholder")}
                 rows={3}
-                className={inputClassName + " resize-none"}
+                className={`${inputClassName} resize-none`}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label
+                  htmlFor="book-genre"
+                  className="block text-sm font-medium text-foreground mb-1"
+                >
                   {t("books.genre")}
                 </label>
                 <input
+                  id="book-genre"
                   type="text"
                   value={genre}
                   onChange={(e) => setGenre(e.target.value)}
@@ -197,22 +228,32 @@ export function BookSettingsDialog({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label
+                  htmlFor="book-language"
+                  className="block text-sm font-medium text-foreground mb-1"
+                >
                   {t("books.language")}
                 </label>
                 <Select
                   value={language}
                   onChange={setLanguage}
-                  options={LANGUAGES.map((lang) => ({ value: lang.code, label: lang.name }))}
+                  options={LANGUAGES.map((lang) => ({
+                    value: lang.code,
+                    label: lang.name,
+                  }))}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="book-target-word-count"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t("books.targetWordCount")}
               </label>
               <input
+                id="book-target-word-count"
                 type="number"
                 value={targetWordCount}
                 onChange={(e) => setTargetWordCount(e.target.value)}
@@ -225,13 +266,17 @@ export function BookSettingsDialog({
 
           {/* Status selector */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <label
+              htmlFor="book-status"
+              className="block text-sm font-medium text-foreground mb-2"
+            >
               {t("bookSettings.status")}
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-2" id="book-status">
               {(["draft", "in-progress", "completed"] as const).map((s) => (
                 <button
                   key={s}
+                  type="button"
                   className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
                     status === s
                       ? "bg-accent text-accent-foreground border-accent"
@@ -258,6 +303,7 @@ export function BookSettingsDialog({
                 <DisclosurePanel className="mt-3">
                   {!showDeleteConfirm ? (
                     <button
+                      type="button"
                       onClick={() => setShowDeleteConfirm(true)}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-destructive border border-destructive rounded-md hover:bg-destructive/10 transition-colors"
                     >
@@ -270,7 +316,11 @@ export function BookSettingsDialog({
                         {t("bookSettings.deleteConfirmMessage")}
                       </p>
                       <div className="flex gap-2">
-                        <Button variant="destructive" onClick={handleDelete} className="flex-1">
+                        <Button
+                          variant="destructive"
+                          onClick={handleDelete}
+                          className="flex-1"
+                        >
                           {t("bookSettings.confirmDelete")}
                         </Button>
                         <Button

@@ -24,7 +24,10 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
       if (event.defaultPrevented) return;
 
       // Get the ProseMirror position from click coordinates
-      const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
+      const pos = editor.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      });
       if (!pos) return;
 
       // Walk up to nearest block node and count block index
@@ -61,7 +64,7 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
       event.preventDefault();
       setMenuPos({ x: event.clientX, y: event.clientY });
     },
-    [editor]
+    [editor],
   );
 
   useEffect(() => {
@@ -93,6 +96,7 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
       style={{ left: menuPos.x, top: menuPos.y }}
     >
       <button
+        type="button"
         className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-4"
         onClick={() => {
           onInspect(blockIndex);
@@ -112,7 +116,7 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
  */
 export function findBlockOffsetInHtml(
   html: string,
-  blockIndex: number
+  blockIndex: number,
 ): { from: number; to: number } | null {
   const blockTags = new Set([
     "p",
@@ -152,10 +156,10 @@ export function findBlockOffsetInHtml(
   ]);
 
   const tagRegex = /<([a-zA-Z][a-zA-Z0-9]*)[^>]*>/g;
-  let match: RegExpExecArray | null;
+  let match = tagRegex.exec(html);
   let count = 0;
 
-  while ((match = tagRegex.exec(html)) !== null) {
+  while (match !== null) {
     const tagName = match[1].toLowerCase();
     if (blockTags.has(tagName)) {
       count++;
@@ -163,10 +167,14 @@ export function findBlockOffsetInHtml(
         // Find the end of this block (closing tag or next block)
         const closeTag = `</${tagName}>`;
         const closeIdx = html.indexOf(closeTag, match.index);
-        const to = closeIdx !== -1 ? closeIdx + closeTag.length : match.index + match[0].length;
+        const to =
+          closeIdx !== -1
+            ? closeIdx + closeTag.length
+            : match.index + match[0].length;
         return { from: match.index, to };
       }
     }
+    match = tagRegex.exec(html);
   }
 
   return null;

@@ -15,6 +15,7 @@ export function ToolbarButton({
 }: ToolbarButtonProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}

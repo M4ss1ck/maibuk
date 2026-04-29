@@ -71,7 +71,10 @@ const HEADING_SIZES: Record<1 | 2 | 3, string> = {
 };
 const DEFAULT_FONT_SIZE = "18";
 
-export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbarProps) {
+export function EditorToolbar({
+  editor,
+  onContextMenuOpenChange,
+}: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showImageDialog, setShowImageDialog] = useState(false);
@@ -84,12 +87,20 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
     useSettingsStore((state) => state.toolbarExpanded),
     useSettingsStore((state) => state.setToolbarExpanded),
   ];
-  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
-  const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
+  const spellCheckEnabled = useSettingsStore(
+    (state) => state.spellCheckEnabled,
+  );
+  const setSpellCheckEnabled = useSettingsStore(
+    (state) => state.setSpellCheckEnabled,
+  );
   const showNotesChapter = useSettingsStore((state) => state.showNotesChapter);
-  const setShowNotesChapter = useSettingsStore((state) => state.setShowNotesChapter);
+  const setShowNotesChapter = useSettingsStore(
+    (state) => state.setShowNotesChapter,
+  );
   const language = useSettingsStore((state) => state.language);
-  const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
+  const dictionaryOpenInBrowser = useSettingsStore(
+    (state) => state.dictionaryOpenInBrowser,
+  );
 
   // Track editor focus with a delayed blur so toolbar clicks still read it as focused
   const editorWasFocusedRef = useRef(false);
@@ -116,7 +127,7 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
         pendingInspectRef.current = blockIndex;
       }
     },
-    [editor]
+    [editor],
   );
 
   const handleHtmlPanelReady = useCallback(
@@ -131,7 +142,7 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
         pendingInspectRef.current = null;
       }
     },
-    [editor]
+    [editor],
   );
   useEffect(() => {
     const dom = editor.view.dom;
@@ -158,7 +169,9 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
       const highlightAttrs = e.getAttributes("highlight");
 
       return {
-        fontSize: attrs.fontSize ? attrs.fontSize.replace("px", "") : DEFAULT_FONT_SIZE,
+        fontSize: attrs.fontSize
+          ? attrs.fontSize.replace("px", "")
+          : DEFAULT_FONT_SIZE,
         lineHeight: attrs.lineHeight || "1.5",
         fontFamily: attrs.fontFamily || "Literata, serif",
         color: attrs.color || "",
@@ -240,7 +253,7 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
       setDictionaryWord(word);
       setShowDictionaryDialog(true);
     },
-    [dictionaryOpenInBrowser, language]
+    [dictionaryOpenInBrowser, language],
   );
 
   useEffect(() => {
@@ -381,9 +394,14 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
         {/* Expand/collapse toggle */}
         <div className="ml-auto">
           <button
+            type="button"
             onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
             className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
-            title={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
+            title={
+              isToolbarExpanded
+                ? t("editor.hideToolbar")
+                : t("editor.showToolbar")
+            }
           >
             {isToolbarExpanded ? (
               <ChevronUp className="w-4 h-4" />
@@ -403,13 +421,17 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
 
           <ColorPicker
             value={editorState.highlightColor}
-            onChange={(color) => editor.chain().focus().setHighlight({ color }).run()}
+            onChange={(color) =>
+              editor.chain().focus().setHighlight({ color }).run()
+            }
             onClear={() => editor.chain().focus().unsetHighlight().run()}
             onToggle={() =>
               editor
                 .chain()
                 .focus()
-                .toggleHighlight({ color: editorState.highlightColor || "#FFFF00" })
+                .toggleHighlight({
+                  color: editorState.highlightColor || "#FFFF00",
+                })
                 .run()
             }
             isActive={editorState.isHighlight}
@@ -522,14 +544,18 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
           </ToolbarButton>
 
           <ToolbarButton
-            onClick={() => editor.chain().focus().increaseFirstLineIndent().run()}
+            onClick={() =>
+              editor.chain().focus().increaseFirstLineIndent().run()
+            }
             title={t("editor.increaseFirstLineIndent")}
           >
             <WrapText className="w-4 h-4" />
           </ToolbarButton>
 
           <ToolbarButton
-            onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()}
+            onClick={() =>
+              editor.chain().focus().decreaseFirstLineIndent().run()
+            }
             title={t("editor.decreaseFirstLineIndent")}
           >
             <WrapText className="w-4 h-4 scale-x-[-1]" />
@@ -564,7 +590,9 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
           <Divider />
 
           <ToolbarButton
-            onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+            onClick={() =>
+              editor.chain().focus().unsetAllMarks().clearNodes().run()
+            }
             title={t("editor.removeFormatting")}
           >
             <RemoveFormatting className="w-4 h-4" />
@@ -578,7 +606,10 @@ export function EditorToolbar({ editor, onContextMenuOpenChange }: EditorToolbar
 
           <TableMenu editor={editor} />
 
-          <ToolbarButton onClick={() => setShowImageDialog(true)} title={t("editor.insertImage")}>
+          <ToolbarButton
+            onClick={() => setShowImageDialog(true)}
+            title={t("editor.insertImage")}
+          >
             <Image className="w-4 h-4" />
           </ToolbarButton>
 

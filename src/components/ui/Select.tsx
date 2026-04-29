@@ -1,4 +1,9 @@
-import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
+import {
+  Listbox,
+  ListboxButton,
+  ListboxOption,
+  ListboxOptions,
+} from "@headlessui/react";
 import { ChevronIcon } from "../icons";
 
 interface SelectOption<T> {
@@ -11,6 +16,7 @@ interface SelectProps<T> {
   onChange: (value: T) => void;
   options: SelectOption<T>[];
   className?: string;
+  id?: string;
 }
 
 export function Select<T extends string | number>({
@@ -18,12 +24,13 @@ export function Select<T extends string | number>({
   onChange,
   options,
   className = "",
+  id,
 }: SelectProps<T>) {
   const selectedOption = options.find((opt) => opt.value === value);
 
   return (
     <Listbox value={value} onChange={onChange}>
-      <div className={`relative ${className}`}>
+      <div className={`relative ${className}`} id={id}>
         <ListboxButton className="relative w-full min-w-35 px-3 py-1.5 text-sm text-left border border-border rounded-lg bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1">
           <span className="block truncate">{selectedOption?.label}</span>
           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
@@ -42,7 +49,9 @@ export function Select<T extends string | number>({
               className="relative cursor-pointer select-none py-1.5 px-3 text-sm text-foreground data-focus:bg-muted data-selected:bg-primary/10 data-selected:text-primary"
             >
               {({ selected }) => (
-                <span className={`block truncate ${selected ? "font-medium" : "font-normal"}`}>
+                <span
+                  className={`block truncate ${selected ? "font-medium" : "font-normal"}`}
+                >
                   {option.label}
                 </span>
               )}
