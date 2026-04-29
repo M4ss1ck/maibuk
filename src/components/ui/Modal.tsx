@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useRef } from "react";
 import { CloseIcon } from "../icons";
+import { useModalStore } from "./modal-store";
 
 interface ModalProps {
   isOpen: boolean;
@@ -35,6 +36,13 @@ export function Modal({
       document.body.style.overflow = "";
     };
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const { register, unregister } = useModalStore.getState();
+    register();
+    return unregister;
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

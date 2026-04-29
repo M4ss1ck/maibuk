@@ -3,6 +3,7 @@ import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { ToolbarButton, Divider } from "./ToolbarButton";
+import { useModalStore } from "../ui/modal-store";
 import { useTranslation } from "react-i18next";
 import {
   Bold,
@@ -49,6 +50,8 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     }),
   });
 
+  const isAnyModalOpen = useModalStore((s) => s.openCount > 0);
+
   const updatePosition = useCallback(() => {
     if (!editor || editor.state.selection.empty) {
       setPosition(null);
@@ -60,8 +63,20 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     const end = editor.view.coordsAtPos(to);
 
     // Position above the selection, centered
-    const editorRect = editor.view.dom.closest(".overflow-auto")?.getBoundingClientRect();
-    if (!editorRect) {
+    const containerRect = editor.view.dom
+      .closest(".overflow-auto")
+      ?.getBoundingClientRect();
+    if (!containerRect) {
+      setPosition(null);
+      return;
+    }
+
+    const bubbleTop = start.top - 48;
+
+    // Hide when the bubble would render above the editor's visible area
+    // (which would put it under the sticky EditorToolbar) or when the
+    // selection has scrolled below the visible area.
+    if (bubbleTop < containerRect.top || start.top > containerRect.bottom) {
       setPosition(null);
       return;
     }
@@ -69,12 +84,12 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     const toolbarWidth = toolbarRef.current?.offsetWidth || 320;
     const centerX = (start.left + end.left) / 2;
     const left = Math.max(
-      editorRect.left + 8,
-      Math.min(centerX - toolbarWidth / 2, editorRect.right - toolbarWidth - 8)
+      containerRect.left + 8,
+      Math.min(centerX - toolbarWidth / 2, containerRect.right - toolbarWidth - 8)
     );
 
     setPosition({
-      top: start.top - 48,
+      top: bubbleTop,
       left,
     });
   }, [editor]);
@@ -93,20 +108,17 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     };
   }, [editor, updatePosition]);
 
-  // Hide on scroll
+  // Re-evaluate position on scroll: hides when selection leaves view,
+  // re-shows when it scrolls back in.
   useEffect(() => {
     const scrollContainer = editor?.view.dom.closest(".overflow-auto");
     if (!scrollContainer) return;
 
-    const onScroll = () => {
-      if (position) updatePosition();
-    };
+    scrollContainer.addEventListener("scroll", updatePosition, { passive: true });
+    return () => scrollContainer.removeEventListener("scroll", updatePosition);
+  }, [editor, updatePosition]);
 
-    scrollContainer.addEventListener("scroll", onScroll, { passive: true });
-    return () => scrollContainer.removeEventListener("scroll", onScroll);
-  }, [editor, position, updatePosition]);
-
-  if (!editorState.hasSelection || !position) return null;
+  if (!editorState.hasSelection || !position || isAnyModalOpen) return null;
 
   return (
     <div
