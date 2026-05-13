@@ -10,6 +10,7 @@ import {
   type ExportFormat,
   type Language,
   type HtmlEditorTheme,
+  type ChapterListView,
 } from "./types";
 
 const STORAGE_KEY = "maibuk-settings";
@@ -36,6 +37,7 @@ interface SettingsStore extends Settings {
   setHideKeyboardHints: (enabled: boolean) => void;
   setSidebarWidth: (width: number) => void;
   setToolbarExpanded: (expanded: boolean) => void;
+  setChapterListView: (view: ChapterListView) => void;
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
   setHtmlPanelHeight: (height: number) => void;
@@ -60,6 +62,7 @@ const defaultSettings: Settings = {
   backupDirectory: null,
   sidebarWidth: 256,
   toolbarExpanded: false,
+  chapterListView: "normal",
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
   htmlPanelHeight: 200,
@@ -103,6 +106,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setSidebarWidth: (sidebarWidth) =>
         set({ sidebarWidth: Math.max(200, Math.min(480, sidebarWidth)) }),
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
+      setChapterListView: (chapterListView) => set({ chapterListView }),
       setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
       setHtmlEditorDarkTheme: (htmlEditorDarkTheme) => set({ htmlEditorDarkTheme }),
       setHtmlPanelHeight: (htmlPanelHeight) =>

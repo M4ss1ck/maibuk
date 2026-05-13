@@ -3,6 +3,7 @@ export type FontFamily = "serif" | "sans" | "mono";
 export type ExportFormat = "epub" | "pdf";
 export type Language = "en" | "es";
 export type HtmlEditorTheme = "default" | "one-dark" | "dracula" | "one-light";
+export type ChapterListView = "normal" | "compact";
 
 export const DEFAULT_PRIMARY_COLOR = "#3B82F6";
 export const DEFAULT_TAURI_BACKUP_RETENTION = 20;
@@ -40,6 +41,7 @@ export interface Settings {
   // Editor layout settings
   sidebarWidth: number;
   toolbarExpanded: boolean;
+  chapterListView: ChapterListView;
   htmlEditorLightTheme: HtmlEditorTheme;
   htmlEditorDarkTheme: HtmlEditorTheme;
   htmlPanelHeight: number;

@@ -39,6 +39,7 @@ describe("useSettingsStore", () => {
       backupDirectory: null,
       sidebarWidth: 256,
       toolbarExpanded: false,
+      chapterListView: "normal",
       lastPath: null,
     });
   });
@@ -56,6 +57,7 @@ describe("useSettingsStore", () => {
       expect(state.defaultExportFormat).toBe("epub");
       expect(state.backupRetention).toBe(20);
       expect(state.backupDirectory).toBeNull();
+      expect(state.chapterListView).toBe("normal");
       expect(state.lastPath).toBeNull();
     });
   });
@@ -239,6 +241,16 @@ describe("useSettingsStore", () => {
     it("toggles toolbar expanded state", () => {
       useSettingsStore.getState().setToolbarExpanded(true);
       expect(useSettingsStore.getState().toolbarExpanded).toBe(true);
+    });
+  });
+
+  describe("setChapterListView()", () => {
+    it("updates the chapter list view", () => {
+      useSettingsStore.getState().setChapterListView("compact");
+      expect(useSettingsStore.getState().chapterListView).toBe("compact");
+
+      useSettingsStore.getState().setChapterListView("normal");
+      expect(useSettingsStore.getState().chapterListView).toBe("normal");
     });
   });
 
