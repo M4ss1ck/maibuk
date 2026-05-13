@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import type { Chapter, ChapterType } from "../../features/chapters/types";
 import { Select } from "../ui/Select";
 import { useTranslation } from "react-i18next";
+import { List, Rows3 } from "lucide-react";
 import { ChapterIcon, EditIcon } from "../icons";
 import { DeleteIcon } from "../icons/DeleteIcon";
 import { AddIcon } from "../icons/AddIcon";
+import { useSettingsStore } from "../../features/settings/store";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -35,8 +37,15 @@ export function ChapterList({
   onReorderChapters,
 }: ChapterListProps) {
   const { t } = useTranslation();
+  const chapterListView = useSettingsStore((state) => state.chapterListView);
+  const setChapterListView = useSettingsStore((state) => state.setChapterListView);
+  const isCompactView = chapterListView === "compact";
   const listContainerRef = useRef<HTMLDivElement>(null);
   const selectedItemRef = useRef<HTMLLIElement>(null);
+
+  const toggleChapterListView = () => {
+    setChapterListView(isCompactView ? "normal" : "compact");
+  };
 
   // Scroll to selected chapter or bottom of list on mount/change
   useEffect(() => {
@@ -128,14 +137,38 @@ export function ChapterList({
       {/* Sticky header */}
       <div className="p-4 pt-12 md:pt-4 border-b border-border flex items-center justify-between bg-background z-10 shrink-0">
         <h3 className="font-medium">{t("chapters.title")}</h3>
-        <button
-          type="button"
-          onClick={() => setShowNewDialog(true)}
-          className="p-1 hover:bg-muted rounded transition-colors"
-          title={t("chapters.addChapter")}
-        >
-          <AddIcon className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleChapterListView}
+            className="p-1 hover:bg-muted rounded transition-colors"
+            title={
+              isCompactView
+                ? t("chapters.switchToNormalView")
+                : t("chapters.switchToCompactView")
+            }
+            aria-label={
+              isCompactView
+                ? t("chapters.switchToNormalView")
+                : t("chapters.switchToCompactView")
+            }
+            aria-pressed={isCompactView}
+          >
+            {isCompactView ? (
+              <Rows3 className="w-5 h-5" />
+            ) : (
+              <List className="w-5 h-5" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNewDialog(true)}
+            className="p-1 hover:bg-muted rounded transition-colors"
+            title={t("chapters.addChapter")}
+          >
+            <AddIcon className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* New chapter dialog */}
@@ -258,22 +291,34 @@ export function ChapterList({
                       type="button"
                       draggable={false}
                       onClick={() => onSelectChapter(chapter)}
-                      className="w-full text-left p-3 pr-16"
+                      className={`w-full text-left pr-16 ${
+                        isCompactView ? "px-2 py-1.5" : "p-3"
+                      }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <ChapterIcon className="w-4 h-4 text-muted-foreground" />
-                        <span className="font-medium text-sm truncate">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <ChapterIcon
+                          className={`shrink-0 text-muted-foreground ${
+                            isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
+                          }`}
+                        />
+                        <span
+                          className={`min-w-0 truncate font-medium ${
+                            isCompactView ? "text-xs" : "text-sm"
+                          }`}
+                        >
                           {chapter.title}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                        <span>
-                          {chapter.wordCount.toLocaleString()}{" "}
-                          {t("common.words")}
-                        </span>
-                        <span>•</span>
-                        <span className="capitalize">{chapter.status}</span>
-                      </div>
+                      {!isCompactView && (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                          <span>
+                            {chapter.wordCount.toLocaleString()}{" "}
+                            {t("common.words")}
+                          </span>
+                          <span>•</span>
+                          <span className="capitalize">{chapter.status}</span>
+                        </div>
+                      )}
                     </button>
 
                     {/* Action buttons - visible on hover and focus for accessibility */}

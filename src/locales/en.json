@@ -77,7 +77,11 @@
     "addChapter": "Add Chapter",
     "chapterTitlePlaceholder": "Chapter title...",
     "showSidebar": "Show chapters",
-    "hideSidebar": "Hide chapters"
+    "hideSidebar": "Hide chapters",
+    "normalView": "Normal view",
+    "compactView": "Compact view",
+    "switchToNormalView": "Switch to normal view",
+    "switchToCompactView": "Switch to compact view"
   },
   "editor": {
     "loading": "Loading book...",
