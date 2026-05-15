@@ -7,6 +7,31 @@
  */
 import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
 import type { DatabaseAdapter } from "../../lib/platform/types";
+import { parseSqlStatements } from "../../lib/db/sql-parser";
+
+function escapeSQL(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "1" : "0";
+  if (typeof value === "string") {
+    return `'${value.replace(/'/g, "''")}'`;
+  }
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function generateInsertStatements(tableName: string, rows: Record<string, unknown>[]): string {
+  if (rows.length === 0) return "";
+
+  const statements: string[] = [];
+  for (const row of rows) {
+    const columns = Object.keys(row);
+    const values = columns.map((col) => escapeSQL(row[col]));
+    statements.push(
+      `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
+    );
+  }
+  return statements.join("\n");
+}
 
 class InMemoryDatabaseAdapter implements DatabaseAdapter {
   constructor(private db: SqlJsDatabase) {}
@@ -35,11 +60,46 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
   }
 
   async exportData(): Promise<Uint8Array> {
-    return this.db.export();
+    const [books, chapters, bookVersions, coverTemplates, settings] = await Promise.all([
+      this.select<Record<string, unknown>[]>("SELECT * FROM books"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM book_versions"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
+    ]);
+
+    const lines: string[] = [
+      "-- Maibuk Database Export (SQL Dump)",
+      `-- Exported at: ${new Date().toISOString()}`,
+      "-- Import this file into a SQLite database after creating the schema",
+      "",
+      "-- Books",
+      generateInsertStatements("books", books),
+      "",
+      "-- Chapters",
+      generateInsertStatements("chapters", chapters),
+      "",
+      "-- Book Versions",
+      generateInsertStatements("book_versions", bookVersions),
+      "",
+      "-- Cover Templates",
+      generateInsertStatements("cover_templates", coverTemplates),
+      "",
+      "-- Settings",
+      generateInsertStatements("settings", settings),
+    ];
+
+    const sqlDump = lines.join("\n");
+    return new TextEncoder().encode(sqlDump);
   }
 
-  async importData(_sqlContent: string): Promise<void> {
-    // No-op for tests
+  async importData(sqlContent: string): Promise<void> {
+    const statements = parseSqlStatements(sqlContent);
+    for (const statement of statements) {
+      if (statement.length > 0) {
+        this.db.run(statement);
+      }
+    }
   }
 }
 
@@ -93,6 +153,20 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   `);
 
   await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS book_versions (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      name TEXT,
+      snapshot TEXT NOT NULL,
+      word_count INTEGER NOT NULL DEFAULT 0,
+      checksum TEXT NOT NULL,
+      trigger_type TEXT NOT NULL DEFAULT 'manual',
+      created_at INTEGER NOT NULL,
+      synced_at INTEGER
+    )
+  `);
+
+  await adapter.execute(`
     CREATE TABLE IF NOT EXISTS cover_templates (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -115,6 +189,9 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)`);
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_chapters_order ON chapters(book_id, "order")`
+  );
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_book_versions_book ON book_versions(book_id, created_at DESC)`
   );
 
   return adapter;
