@@ -56,6 +56,21 @@ export const chapters = sqliteTable("chapters", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// Book versions table (point-in-time snapshots)
+export const bookVersions = sqliteTable("book_versions", {
+  id: text("id").primaryKey(),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
+  name: text("name"), // NULL = auto checkpoint, set = named milestone
+  snapshot: text("snapshot").notNull(), // serializeBook() JSON, verbatim
+  wordCount: integer("word_count").notNull().default(0),
+  checksum: text("checksum").notNull(),
+  triggerType: text("trigger_type").notNull().default("manual"),
+  createdAt: integer("created_at").notNull(),
+  syncedAt: integer("synced_at"),
+});
+
 // Cover templates table
 export const coverTemplates = sqliteTable("cover_templates", {
   id: text("id").primaryKey(),
@@ -81,3 +96,5 @@ export type Chapter = typeof chapters.$inferSelect;
 export type NewChapter = typeof chapters.$inferInsert;
 export type CoverTemplate = typeof coverTemplates.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
+export type BookVersionRow = typeof bookVersions.$inferSelect;
+export type NewBookVersionRow = typeof bookVersions.$inferInsert;
