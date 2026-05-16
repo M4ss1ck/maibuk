@@ -78,7 +78,7 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
         const snapshot = JSON.parse(snapshotJson) as BookSnapshot;
         setPreviewSnapshot(snapshot);
       } catch {
-        toast.success(t("common.error"));
+        toast.error(t("common.error"));
       }
     },
     [getVersionSnapshot, t]
@@ -94,7 +94,7 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
         toast.success(t("versions.restoreSuccess"));
         setConfirmAction(null);
       } catch {
-        toast.success(t("common.error"));
+        toast.error(t("common.error"));
       }
     },
     [restoreVersion, t]
@@ -104,10 +104,9 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
     async (versionId: string) => {
       try {
         await deleteVersion(versionId);
-        toast.success(t("common.success"));
         setConfirmAction(null);
       } catch {
-        toast.success(t("common.error"));
+        toast.error(t("common.error"));
       }
     },
     [deleteVersion, t]
@@ -124,7 +123,7 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
         await renameVersion(versionId, renameValue);
         setRenamingId(null);
       } catch {
-        toast.success(t("common.error"));
+        toast.error(t("common.error"));
       }
     },
     [renameVersion, renameValue, t]

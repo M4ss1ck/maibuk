@@ -348,24 +348,28 @@ export function BookEditor() {
     if (created) {
       toast.success(t("versions.saveVersion"));
     } else {
-      toast.success(t("versions.alreadyUpToDate") ?? "Already up to date");
+      toast.success(t("versions.alreadyUpToDate"));
     }
   }, [bookId, saveVersionName, t]);
 
-  // Close trigger: on unmount, flush then checkpoint
+  // Close trigger: keyed on bookId only so it fires on book change/unmount,
+  // not on chapter switches (which would otherwise re-run via flushEditorContent's identity).
+  const flushEditorContentRef = useRef(flushEditorContent);
+  useEffect(() => {
+    flushEditorContentRef.current = flushEditorContent;
+  }, [flushEditorContent]);
   useEffect(() => {
     return () => {
       if (!bookId) return;
-      // Fire-and-forget: the unmount cleanup cannot await reliably
+      // Fire-and-forget: the unmount cleanup cannot await reliably.
       void (async () => {
-        await flushEditorContent();
+        await flushEditorContentRef.current();
         await useVersionStore
           .getState()
           .createVersion({ bookId, triggerType: "close" });
       })();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId, flushEditorContent]);
+  }, [bookId]);
 
   useShortcuts([
     {
