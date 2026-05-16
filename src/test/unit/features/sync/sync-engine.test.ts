@@ -9,10 +9,14 @@ const mockDecrypt = vi.hoisted(() => vi.fn());
 const mockPushBookBlob = vi.hoisted(() => vi.fn());
 const mockPullBookBlob = vi.hoisted(() => vi.fn());
 const mockListRemoteBooks = vi.hoisted(() => vi.fn());
+const mockListRemoteVersions = vi.hoisted(() => vi.fn());
+const mockPushVersionBlob = vi.hoisted(() => vi.fn());
+const mockPullVersionBlob = vi.hoisted(() => vi.fn());
 const mockApplyBookSnapshot = vi.hoisted(() => vi.fn());
 const mockRefreshAuth = vi.hoisted(() => vi.fn());
 const mockSyncStoreGetState = vi.hoisted(() => vi.fn());
 const mockSyncStoreSetState = vi.hoisted(() => vi.fn());
+const mockCreateVersion = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
@@ -33,6 +37,9 @@ vi.mock("../../../../features/sync/client", () => ({
   pushBookBlob: mockPushBookBlob,
   pullBookBlob: mockPullBookBlob,
   listRemoteBooks: mockListRemoteBooks,
+  listRemoteVersions: mockListRemoteVersions,
+  pushVersionBlob: mockPushVersionBlob,
+  pullVersionBlob: mockPullVersionBlob,
   refreshAuth: mockRefreshAuth,
 }));
 
@@ -47,6 +54,12 @@ vi.mock("../../../../features/sync/store", () => ({
   useSyncStore: {
     getState: mockSyncStoreGetState,
     setState: mockSyncStoreSetState,
+  },
+}));
+
+vi.mock("../../../../features/versions/store", () => ({
+  useVersionStore: {
+    getState: () => ({ createVersion: mockCreateVersion }),
   },
 }));
 
@@ -86,12 +99,18 @@ describe("syncBook — timestamp fix", () => {
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
     mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockCreateVersion.mockResolvedValue(null);
+    mockListRemoteVersions.mockResolvedValue([]);
+    mockPushVersionBlob.mockResolvedValue(undefined);
+    mockPullVersionBlob.mockResolvedValue(null);
     // Distinguish between timestamp query and title query to avoid false positives
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 5000 }];
       if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      if (sql.includes("book_versions")) return [];
       return [];
     });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
   });
 
   it("uses MAX of book and chapter updated_at for local timestamp", async () => {
@@ -229,6 +248,10 @@ describe("syncAllBooks — truthful outcomes", () => {
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
     mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockCreateVersion.mockResolvedValue(null);
+    mockListRemoteVersions.mockResolvedValue([]);
+    mockPushVersionBlob.mockResolvedValue(undefined);
+    mockPullVersionBlob.mockResolvedValue(null);
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("GROUP BY b.id")) {
         return [
@@ -239,8 +262,10 @@ describe("syncAllBooks — truthful outcomes", () => {
       if (sql.includes("SELECT title") && sql.includes("book-2")) {
         return [{ title: "Book Two" }];
       }
+      if (sql.includes("book_versions")) return [];
       return [];
     });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
   });
 
   it("returns cancelled when the first conflict is cancelled before any sync work lands", async () => {
@@ -320,12 +345,18 @@ describe("ensureAuth — pre-sync auth guard", () => {
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
     mockListRemoteBooks.mockResolvedValue([]);
+    mockCreateVersion.mockResolvedValue(null);
+    mockListRemoteVersions.mockResolvedValue([]);
+    mockPushVersionBlob.mockResolvedValue(undefined);
+    mockPullVersionBlob.mockResolvedValue(null);
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 5000 }];
       if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
       if (sql.includes("GROUP BY b.id")) return [{ id: "book-1", updated_at: 5000 }];
+      if (sql.includes("book_versions")) return [];
       return [];
     });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
   });
 
   it("skips refresh when authVerified is true", async () => {
@@ -387,5 +418,283 @@ describe("ensureAuth — pre-sync auth guard", () => {
     await syncAllBooks("pass", vi.fn());
 
     expect(mockRefreshAuth).toHaveBeenCalled();
+  });
+});
+
+describe("syncVersions — pure union", () => {
+  const mockDb = {
+    select: vi.fn(),
+    execute: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSyncEngineForTests();
+    mockGetDatabase.mockResolvedValue(mockDb);
+    mockCreateBackupAdapter.mockResolvedValue({
+      saveBackup: vi.fn(),
+      listBackups: vi.fn().mockResolvedValue([]),
+      readBackup: vi.fn(),
+      deleteBackup: vi.fn(),
+    });
+    mockBackupServiceCreateBackup.mockResolvedValue("mock-backup.sql");
+    mockSerializeBook.mockResolvedValue('{"book":{}}');
+    mockComputeChecksum.mockResolvedValue("local-checksum");
+    mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockCreateVersion.mockResolvedValue(null);
+    mockListRemoteVersions.mockResolvedValue([]);
+    mockPushVersionBlob.mockResolvedValue(undefined);
+    mockPullVersionBlob.mockResolvedValue(null);
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      if (sql.includes("GROUP BY b.id")) return [{ id: "book-1", updated_at: 1000 }];
+      return [];
+    });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
+  });
+
+  it("pushes only local-only versions and pulls only remote-only versions", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("book_versions")) {
+        return [
+          { id: "ver-local", checksum: "chk-local", name: "Local", trigger_type: "manual", created_at: 1000, word_count: 500, snapshot: "{}" },
+        ];
+      }
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+    mockListRemoteVersions.mockResolvedValue([
+      {
+        remoteId: "rem-1",
+        versionId: "ver-remote",
+        bookId: "book-1",
+        checksum: "chk-remote",
+        name: "Remote",
+        triggerType: "manual",
+        createdAt: 2000,
+        wordCount: 600,
+      },
+    ]);
+    mockPullVersionBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+    });
+    mockDecrypt.mockResolvedValue('{"book":{}}');
+    mockComputeChecksum
+      .mockResolvedValueOnce("local-checksum") // for syncBookInBatch
+      .mockResolvedValueOnce("chk-remote"); // for pulled version verification
+
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+
+    // Use "pull" so syncBookInBatch doesn't cancel and syncVersions runs
+    const onConflict = vi.fn().mockResolvedValue("pull");
+    mockPullBookBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
+
+    await syncBook("book-1", "pass", onConflict);
+
+    // Should push the local-only version
+    expect(mockPushVersionBlob).toHaveBeenCalledTimes(1);
+    expect(mockPushVersionBlob).toHaveBeenCalledWith(
+      expect.objectContaining({ versionId: "ver-local" }),
+      expect.any(Blob)
+    );
+
+    // Should pull the remote-only version
+    expect(mockPullVersionBlob).toHaveBeenCalledWith("rem-1");
+  });
+
+  it("does not push or pull when version is present on both sides", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("book_versions")) {
+        return [
+          { id: "ver-shared", checksum: "chk-shared", name: "Shared", trigger_type: "manual", created_at: 1000, word_count: 500, snapshot: "{}" },
+        ];
+      }
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+    mockListRemoteVersions.mockResolvedValue([
+      {
+        remoteId: "rem-1",
+        versionId: "ver-shared",
+        bookId: "book-1",
+        checksum: "chk-shared",
+        name: "Shared",
+        triggerType: "manual",
+        createdAt: 1000,
+        wordCount: 500,
+      },
+    ]);
+
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+
+    const onConflict = vi.fn().mockResolvedValue("cancel");
+    await syncBook("book-1", "pass", onConflict);
+
+    expect(mockPushVersionBlob).not.toHaveBeenCalled();
+    expect(mockPullVersionBlob).not.toHaveBeenCalled();
+  });
+
+  it("inserts pulled version with metadata from RemoteVersionMeta", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("book_versions")) return [];
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+    mockListRemoteVersions.mockResolvedValue([
+      {
+        remoteId: "rem-1",
+        versionId: "ver-remote",
+        bookId: "book-1",
+        checksum: "chk-remote",
+        name: "Remote Draft",
+        triggerType: "manual",
+        createdAt: 2000,
+        wordCount: 600,
+      },
+    ]);
+    mockPullVersionBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+    });
+    mockDecrypt.mockResolvedValue('{"book":{"title":"Remote"}}');
+    mockComputeChecksum
+      .mockResolvedValueOnce("local-checksum")
+      .mockResolvedValueOnce("chk-remote");
+
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+
+    const onConflict = vi.fn().mockResolvedValue("pull");
+    mockPullBookBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
+
+    await syncBook("book-1", "pass", onConflict);
+
+    const insertCall = mockDb.execute.mock.calls.find((call) =>
+      (call[0] as string).includes("INSERT OR IGNORE INTO book_versions")
+    );
+    expect(insertCall).toBeDefined();
+    expect(insertCall![1]).toEqual(
+      expect.arrayContaining([
+        "ver-remote",
+        "book-1",
+        "Remote Draft",
+        "manual",
+        2000,
+        600,
+      ])
+    );
+  });
+
+  it("skips pulled version when decrypted checksum does not match remote checksum", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("book_versions")) return [];
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+    mockListRemoteVersions.mockResolvedValue([
+      {
+        remoteId: "rem-1",
+        versionId: "ver-remote",
+        bookId: "book-1",
+        checksum: "chk-remote",
+        name: null,
+        triggerType: "auto-idle",
+        createdAt: 2000,
+        wordCount: 600,
+      },
+    ]);
+    mockPullVersionBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+    });
+    mockDecrypt.mockResolvedValue('{"book":{}}');
+    mockComputeChecksum
+      .mockResolvedValueOnce("local-checksum")
+      .mockResolvedValueOnce("tampered-checksum"); // mismatch
+
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+
+    const onConflict = vi.fn().mockResolvedValue("cancel");
+    await syncBook("book-1", "pass", onConflict);
+
+    const insertCall = mockDb.execute.mock.calls.find((call) =>
+      (call[0] as string).includes("INSERT OR IGNORE INTO book_versions")
+    );
+    expect(insertCall).toBeUndefined();
+  });
+
+  it("creates pre-sync version before applyBookSnapshot on a conflict-resolved pull", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+
+    const onConflict = vi.fn().mockResolvedValue("pull");
+    mockPullBookBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
+    mockDecrypt.mockResolvedValue('{"book":{"id":"book-1"}}');
+
+    await syncBook("book-1", "pass", onConflict);
+
+    const preSyncCall = mockCreateVersion.mock.calls.find(
+      (call) => call[0].triggerType === "pre-sync"
+    );
+    expect(preSyncCall).toBeDefined();
+    expect(mockApplyBookSnapshot).toHaveBeenCalled();
+  });
+
+  it("stamps synced_at on pushed versions", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("book_versions")) {
+        return [
+          { id: "ver-local", checksum: "chk-local", name: null, trigger_type: "manual", created_at: 1000, word_count: 500, snapshot: "{}" },
+        ];
+      }
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+
+    const onConflict = vi.fn().mockResolvedValue("pull");
+    mockPullBookBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
+    mockDecrypt.mockResolvedValue('{"book":{"id":"book-1"}}');
+
+    await syncBook("book-1", "pass", onConflict);
+
+    const updateCall = mockDb.execute.mock.calls.find((call) =>
+      (call[0] as string).includes("UPDATE book_versions SET synced_at")
+    );
+    expect(updateCall).toBeDefined();
+    expect(updateCall![1]).toEqual(expect.arrayContaining(["ver-local"]));
   });
 });

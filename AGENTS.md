@@ -103,7 +103,8 @@ src/
 │   ├── settings/        # store.ts, types.ts, AppSettingsProvider.tsx
 │   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts
 │   ├── theme/           # store.ts
-│   └── version/         # useVersionCheck.ts
+│   ├── version/         # useVersionCheck.ts (app update checker)
+│   └── versions/        # store.ts, types.ts, useAutoCheckpoint.ts (book version control)
 ├── hooks/               # Shared React hooks
 ├── test/                # Test suites (unit/integration) + setup
 ├── lib/                 # Low-level infrastructure
@@ -228,6 +229,8 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`         |
 | PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`              |
 | `useSyncStore`                                                     | `src/features/sync/store.ts`               |
+| `useVersionStore`                                                  | `src/features/versions/store.ts`           |
+| `useAutoCheckpoint`                                                | `src/features/versions/useAutoCheckpoint.ts` |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
 | `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |
 | `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`             |
@@ -456,9 +459,9 @@ act(() => {
 
 ### Feature-Critical Test Gate (current scope: sync safety + backups)
 
-For changes in `src/features/backup/`, `src/features/sync/`, `src/lib/platform/*/backup.ts`, `src/lib/db/sql-parser.ts`, or the backup/sync UI that triggers destructive behavior, the feature is **not done** until tests cover the spec-critical paths.
+For changes in `src/features/backup/`, `src/features/sync/`, `src/features/versions/`, `src/lib/platform/*/backup.ts`, `src/lib/db/sql-parser.ts`, or the backup/sync/version UI that triggers destructive behavior, the feature is **not done** until tests cover the spec-critical paths.
 
-Required coverage for the current sync-safety / backup feature:
+Required coverage for the current sync-safety / backup / version-control feature:
 
 1. **Pre-sync backup aborts sync** with the exact user-facing error required by the spec.
 2. **Restore order is correct**: create `pre-restore` backup before verifying or mutating data.
@@ -468,6 +471,7 @@ Required coverage for the current sync-safety / backup feature:
 6. **Conflict outcomes are truthful**: equal-timestamp conflicts, remote-only pulls, cancel behavior, and final sync status must be tested end-to-end through the store/UI flow.
 7. **Lifecycle triggers are covered**: launch, close, manual, pre-sync, and pre-restore backup triggers must be tested at the orchestration layer.
 8. **Shared destructive helpers are tested directly**: if a helper is extracted and used by restore/import/sync, it needs its own unit tests and must be added to `coverage.include`.
+9. **Version restore and version sync are safe**: `restoreVersion` creates a `pre-restore` version before applying the snapshot, bumps `updated_at` to now, and `syncVersions` verifies checksums before inserting pulled blobs; pure-union sync with no duplicates.
 
 Rules for this feature:
 

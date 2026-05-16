@@ -155,3 +155,85 @@ export async function listRemoteBooks(): Promise<SyncItemMeta[]> {
     updatedAt: parsePocketBaseDate(record.updated as string),
   }));
 }
+
+export interface RemoteVersionMeta {
+  remoteId: string;
+  versionId: string;
+  bookId: string;
+  checksum: string;
+  name: string | null;
+  triggerType: string;
+  createdAt: number;
+  wordCount: number;
+}
+
+export async function listRemoteVersions(bookId?: string): Promise<RemoteVersionMeta[]> {
+  const client = getClient();
+
+  const filter = bookId ? `book_id = "${bookId}"` : "";
+  const records = await client
+    .collection("version_items")
+    .getFullList({
+      filter,
+      fields: "id,version_id,book_id,checksum,version_name,version_trigger,version_created_at,word_count",
+    });
+
+  return records.map((record) => ({
+    remoteId: record.id,
+    versionId: record.version_id as string,
+    bookId: record.book_id as string,
+    checksum: record.checksum as string,
+    name: (record.version_name as string | null) ?? null,
+    triggerType: (record.version_trigger as string) ?? "manual",
+    createdAt: (record.version_created_at as number) ?? 0,
+    wordCount: (record.word_count as number) ?? 0,
+  }));
+}
+
+export async function pushVersionBlob(
+  meta: {
+    versionId: string;
+    bookId: string;
+    checksum: string;
+    name: string | null;
+    triggerType: string;
+    createdAt: number;
+    wordCount: number;
+  },
+  encryptedData: Blob
+): Promise<void> {
+  const client = getClient();
+  const userId = client.authStore.record?.id;
+  if (!userId) throw new Error("Not authenticated");
+
+  const formData = new FormData();
+  formData.append("encrypted_data", encryptedData, `${meta.versionId}.bin`);
+  formData.append("version_id", meta.versionId);
+  formData.append("book_id", meta.bookId);
+  formData.append("checksum", meta.checksum);
+  formData.append("user", userId);
+  if (meta.name !== null) {
+    formData.append("version_name", meta.name);
+  }
+  formData.append("version_trigger", meta.triggerType);
+  formData.append("version_created_at", String(meta.createdAt));
+  formData.append("word_count", String(meta.wordCount));
+
+  await client.collection("version_items").create(formData);
+}
+
+export async function pullVersionBlob(
+  remoteId: string
+): Promise<{ data: Uint8Array } | null> {
+  const client = getClient();
+
+  try {
+    const record = await client.collection("version_items").getOne(remoteId);
+    const fileUrl = client.files.getURL(record, record.encrypted_data);
+    const response = await fetch(fileUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    return { data: new Uint8Array(arrayBuffer) };
+  } catch {
+    return null;
+  }
+}

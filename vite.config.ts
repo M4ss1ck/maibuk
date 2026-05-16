@@ -70,13 +70,16 @@ export default defineConfig(() => ({
         "src/features/sync/client.ts",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
+        // Phase 7: Version control
+        "src/features/versions/store.ts",
+        "src/features/versions/useAutoCheckpoint.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {
-        lines: 80,
+        lines: 85,
         functions: 90,
-        statements: 80,
-        branches: 60,
+        statements: 85,
+        branches: 70,
       },
     },
   },

@@ -6,6 +6,9 @@ import {
   pullBookBlob,
   listRemoteBooks,
   refreshAuth as pbRefreshAuth,
+  listRemoteVersions,
+  pushVersionBlob,
+  pullVersionBlob,
 } from "./client";
 import type { BookSnapshot, SyncItemMeta, SingleSyncResult, BatchSyncResult } from "./types";
 import type { SyncAction, ConflictResolver } from "./types";
@@ -13,6 +16,7 @@ import { createBackup } from "../../lib/platform";
 import { BackupService } from "../backup/backup-service";
 import { useSettingsStore } from "../settings/store";
 import { useSyncStore } from "./store";
+import { useVersionStore } from "../versions/store";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR =
@@ -163,12 +167,90 @@ async function syncBookInBatch(
   }
 
   // choice === "pull"
+  await useVersionStore.getState().createVersion({ bookId, triggerType: "pre-sync" });
+
   const pulled = await pullBookBlob(bookId);
   if (!pulled) return "skipped";
 
   const snapshot = await decryptSnapshot(pulled.data, passphrase);
   await applyBookSnapshot(snapshot);
   return "pulled";
+}
+
+async function syncVersions(bookId: string, passphrase: string): Promise<void> {
+  const db = await getDatabase();
+
+  const localRows = await db.select<
+    { id: string; checksum: string; name: string | null; trigger_type: string; created_at: number; word_count: number; snapshot: string }[]
+  >(
+    `SELECT id, checksum, name, trigger_type, created_at, word_count, snapshot
+     FROM book_versions WHERE book_id = ?`,
+    [bookId]
+  );
+
+  const remotes = await listRemoteVersions(bookId);
+  const remoteIds = new Set(remotes.map((r) => r.versionId));
+  const localIds = new Set(localRows.map((r) => r.id));
+
+  // Push local-only versions
+  for (const local of localRows) {
+    if (remoteIds.has(local.id)) continue;
+
+    const encrypted = await encrypt(local.snapshot, passphrase);
+    await pushVersionBlob(
+      {
+        versionId: local.id,
+        bookId,
+        checksum: local.checksum,
+        name: local.name,
+        triggerType: local.trigger_type,
+        createdAt: local.created_at,
+        wordCount: local.word_count,
+      },
+      new Blob([toBlobPart(new Uint8Array(encrypted))])
+    );
+
+    const now = Math.floor(Date.now() / 1000);
+    await db.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [
+      now,
+      local.id,
+    ]);
+  }
+
+  // Pull remote-only versions
+  for (const remote of remotes) {
+    if (localIds.has(remote.versionId)) continue;
+
+    const blob = await pullVersionBlob(remote.remoteId);
+    if (!blob) continue;
+
+    const decrypted = await decrypt(blob.data, passphrase);
+
+    const decryptedChecksum = await computeChecksum(decrypted);
+    if (decryptedChecksum !== remote.checksum) {
+      console.warn(
+        `Version sync: checksum mismatch for ${remote.versionId}, skipping`
+      );
+      continue;
+    }
+
+    await db.execute(
+      `INSERT OR IGNORE INTO book_versions
+       (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        remote.versionId,
+        bookId,
+        remote.name,
+        decrypted,
+        remote.wordCount,
+        remote.checksum,
+        remote.triggerType,
+        remote.createdAt,
+        Math.floor(Date.now() / 1000),
+      ]
+    );
+  }
 }
 
 export async function syncBook(
@@ -183,6 +265,9 @@ export async function syncBook(
     await createPreSyncBackupOrThrow();
 
     const action = await syncBookInBatch(bookId, passphrase, onConflict);
+    if (action !== "cancelled") {
+      await syncVersions(bookId, passphrase);
+    }
     return {
       outcome: action === "cancelled" ? "cancelled" : "success",
       action,
@@ -229,6 +314,9 @@ export async function syncAllBooks(
         remoteBooks,
         book.updated_at
       );
+      if (action !== "cancelled") {
+        await syncVersions(book.id, passphrase);
+      }
       actions.push(action);
       if (action === "cancelled") {
         return {
@@ -248,6 +336,7 @@ export async function syncAllBooks(
       const snapshot = await decryptSnapshot(pulled.data, passphrase);
       await applyBookSnapshot(snapshot);
       actions.push("pulled");
+      await syncVersions(remote.bookId, passphrase);
     }
 
     return { outcome: "success", actions };
