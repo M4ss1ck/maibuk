@@ -73,10 +73,10 @@ describe("BackupSection", () => {
   it("renders the total page count as an end adornment inside the page selector", async () => {
     render(<BackupSection />);
 
-    await waitFor(() => expect(screen.getByText("/3")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("/ 3")).toBeInTheDocument());
     const pageSelector = screen
       .getAllByRole("button")
-      .find((button) => button.textContent === "1/3");
+      .find((button) => button.textContent === "1/ 3");
 
     expect(pageSelector).toBeInTheDocument();
   });
