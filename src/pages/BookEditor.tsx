@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
@@ -37,11 +37,16 @@ import { useShortcuts } from "../lib/shortcuts";
 import { isMac } from "../lib/platform";
 import { useAutoCheckpoint } from "../features/versions/useAutoCheckpoint";
 import { useVersionStore } from "../features/versions/store";
-import { VersionPanel } from "../components/versions/VersionPanel";
 import { Modal } from "../components/ui/Modal";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { toast } from "../components/ui/Toast";
+
+const VersionPanel = lazy(() =>
+  import("../components/versions/VersionPanel").then((module) => ({
+    default: module.VersionPanel,
+  }))
+);
 
 export function BookEditor() {
   const { t } = useTranslation();
@@ -823,13 +828,15 @@ export function BookEditor() {
       />
 
       {/* Version Panel */}
-      {bookId && (
-        <VersionPanel
-          isOpen={showVersionPanel}
-          onClose={() => setShowVersionPanel(false)}
-          bookId={bookId}
-          flushBeforeCompare={flushEditorContent}
-        />
+      {bookId && showVersionPanel && (
+        <Suspense fallback={null}>
+          <VersionPanel
+            isOpen={showVersionPanel}
+            onClose={() => setShowVersionPanel(false)}
+            bookId={bookId}
+            flushBeforeCompare={flushEditorContent}
+          />
+        </Suspense>
       )}
 
       {/* Save Version Name Dialog */}

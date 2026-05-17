@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { BookSnapshot } from "../../features/sync/types";
 import { diffSnapshots, type ChapterDiff, type ChapterDiffStatus } from "../../features/versions";
 
@@ -58,6 +59,7 @@ function ChapterBanner({ selectedChapter }: { selectedChapter: ChapterDiff }) {
 export function VersionCompare({ current, target }: VersionCompareProps) {
   const { t } = useTranslation();
   const diff = useMemo(() => diffSnapshots(current, target), [current, target]);
+  const [showChapterList, setShowChapterList] = useState(true);
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(
     diff.chapters[0]?.chapterId ?? null
   );
@@ -67,28 +69,53 @@ export function VersionCompare({ current, target }: VersionCompareProps) {
 
   return (
     <div className="flex flex-col gap-3 h-full min-h-0">
-      <h3 className="text-sm font-semibold text-foreground shrink-0">{target.book.title}</h3>
+      <div className="flex items-center justify-between gap-3 shrink-0">
+        <h3 className="min-w-0 truncate text-sm font-semibold text-foreground">
+          {target.book.title}
+        </h3>
+        <button
+          type="button"
+          onClick={() => setShowChapterList((show) => !show)}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          aria-label={t(showChapterList ? "versions.hideChapterList" : "versions.showChapterList")}
+          title={t(showChapterList ? "versions.hideChapterList" : "versions.showChapterList")}
+        >
+          {showChapterList ? (
+            <PanelLeftClose className="h-4 w-4" />
+          ) : (
+            <PanelLeftOpen className="h-4 w-4" />
+          )}
+        </button>
+      </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)] gap-3">
-        <div className="min-h-0 overflow-auto rounded-lg border border-border bg-background p-1">
-          {diff.chapters.map((chapter) => (
-            <button
-              key={chapter.chapterId}
-              type="button"
-              onClick={() => setSelectedChapterId(chapter.chapterId)}
-              className={`w-full rounded px-2 py-1.5 text-left transition-colors ${
-                selectedChapter?.chapterId === chapter.chapterId
-                  ? "bg-primary/10 text-primary"
-                  : "text-foreground hover:bg-muted"
-              }`}
-            >
-              <span className="block truncate text-sm font-medium">{chapter.title}</span>
-              <span className="mt-1 block">
-                <StatusBadge status={chapter.status} />
-              </span>
-            </button>
-          ))}
-        </div>
+      <div
+        className={`grid min-h-0 flex-1 gap-3 ${
+          showChapterList
+            ? "grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]"
+            : "grid-cols-1"
+        }`}
+      >
+        {showChapterList && (
+          <div className="min-h-0 overflow-auto rounded-lg border border-border bg-background p-1">
+            {diff.chapters.map((chapter) => (
+              <button
+                key={chapter.chapterId}
+                type="button"
+                onClick={() => setSelectedChapterId(chapter.chapterId)}
+                className={`w-full rounded px-2 py-1.5 text-left transition-colors ${
+                  selectedChapter?.chapterId === chapter.chapterId
+                    ? "bg-primary/10 text-primary"
+                    : "text-foreground hover:bg-muted"
+                }`}
+              >
+                <span className="block truncate text-sm font-medium">{chapter.title}</span>
+                <span className="mt-1 block">
+                  <StatusBadge status={chapter.status} />
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="min-h-0 overflow-auto rounded-lg border border-border bg-background p-3">
           {selectedChapter ? (

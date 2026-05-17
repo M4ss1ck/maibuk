@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -159,9 +159,22 @@ describe("BookEditor shortcuts", () => {
     );
   });
 
-  it("passes a flush callback to the version panel before compare", () => {
+  it("does not mount the version panel until history is opened", () => {
     render(<BookEditor />);
 
+    expect(mockVersionPanel).not.toHaveBeenCalled();
+  });
+
+  it("passes a flush callback to the version panel before compare when opened", async () => {
+    render(<BookEditor />);
+
+    const shortcuts = mockUseShortcuts.mock.calls[0][0];
+    const historyShortcut = shortcuts.find(
+      (shortcut: { sequence?: string[] }) => shortcut.sequence?.join(" ") === "g v"
+    );
+    historyShortcut.onTrigger();
+
+    await waitFor(() => expect(mockVersionPanel).toHaveBeenCalled());
     expect(mockVersionPanel).toHaveBeenCalledWith(
       expect.objectContaining({
         flushBeforeCompare: expect.any(Function),

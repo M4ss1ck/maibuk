@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookSnapshot } from "../../../../features/sync/types";
@@ -35,6 +35,19 @@ const versions: BookVersion[] = [
   },
 ];
 
+const manyVersions: BookVersion[] = Array.from({ length: 65 }, (_, index) => ({
+  id: `version-${index + 1}`,
+  bookId: "book-1",
+  name: `Version ${index + 1}`,
+  wordCount: 100 + index,
+  checksum: `checksum-${index + 1}`,
+  triggerType: "manual",
+  createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+  syncedAt: null,
+}));
+
+let storeVersions = versions;
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     i18n: { language: "en" },
@@ -54,6 +67,7 @@ vi.mock("react-i18next", () => ({
         "versions.restoreConfirm": "Restore this version?",
         "versions.restoreSuccess": "Version restored",
         "versions.restoredName": "Before restore",
+        "versions.showMore": "Show more",
         "versions.title": "Version history",
         "versions.trigger.manual": "Named",
       };
@@ -66,7 +80,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("../../../../features/versions/store", () => ({
   useVersionStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      versions,
+      versions: storeVersions,
       isLoading: false,
       loadVersions: mockLoadVersions,
       getVersionSnapshot: mockGetVersionSnapshot,
@@ -124,6 +138,7 @@ describe("VersionPanel compare", () => {
     mockRenameVersion.mockReset();
     mockRestoreVersion.mockReset();
     mockSerializeBook.mockReset();
+    storeVersions = versions;
   });
 
   it("flushes current content, serializes current book, then compares with the saved version", async () => {
@@ -172,5 +187,26 @@ describe("VersionPanel compare", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
 
     await waitFor(() => expect(mockFlushBeforeCompare).toHaveBeenCalledTimes(1));
+  });
+
+  it("renders version rows in batches so opening a large history stays responsive", async () => {
+    storeVersions = manyVersions;
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    expect(screen.getByText("Version 1")).toBeInTheDocument();
+    expect(screen.getByText("Version 50")).toBeInTheDocument();
+    expect(screen.queryByText("Version 51")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+
+    expect(screen.getByText("Version 65")).toBeInTheDocument();
   });
 });

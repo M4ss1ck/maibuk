@@ -436,6 +436,8 @@
     "chapterAdded": "Este capítulo solo existe en la versión comparada",
     "chapterRemoved": "Este capítulo no está en la versión comparada",
     "compareUnavailable": "La comparación no está disponible para este capítulo; se muestra solo la versión guardada",
+    "hideChapterList": "Ocultar lista de capítulos",
+    "showChapterList": "Mostrar lista de capítulos",
     "namePrompt": "Nombra esta versión",
     "namePlaceholder": "ej. Primer borrador completo",
     "autoCheckpoint": "Punto de control automático",
@@ -447,6 +449,7 @@
     "delete": "Eliminar",
     "deleteConfirm": "¿Eliminar esta versión permanentemente?",
     "empty": "Aún no hay versiones. Guarda una con Ctrl+Alt+S.",
+    "showMore": "Mostrar más",
     "alreadyUpToDate": "Ya está actualizado",
     "words": "palabras",
     "status": {

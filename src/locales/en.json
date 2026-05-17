@@ -436,6 +436,8 @@
     "chapterAdded": "This chapter only exists in the version being compared",
     "chapterRemoved": "This chapter is not in the version being compared",
     "compareUnavailable": "Compare unavailable for this chapter — showing the saved version only",
+    "hideChapterList": "Hide chapter list",
+    "showChapterList": "Show chapter list",
     "namePrompt": "Name this version",
     "namePlaceholder": "e.g. First full draft",
     "autoCheckpoint": "Auto checkpoint",
@@ -447,6 +449,7 @@
     "delete": "Delete",
     "deleteConfirm": "Delete this version permanently?",
     "empty": "No versions yet. Save one with Ctrl+Alt+S.",
+    "showMore": "Show more",
     "alreadyUpToDate": "Already up to date",
     "words": "words",
     "status": {

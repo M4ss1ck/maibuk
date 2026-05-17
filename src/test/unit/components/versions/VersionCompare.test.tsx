@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { VersionCompare } from "../../../../components/versions/VersionCompare";
 import type { BookSnapshot } from "../../../../features/sync/types";
@@ -24,7 +25,9 @@ vi.mock("react-i18next", () => ({
         "versions.chapterRemoved": "This chapter is not in the version being compared",
         "versions.compareUnavailable":
           "Compare unavailable for this chapter — showing the saved version only",
+        "versions.hideChapterList": "Hide chapter list",
         "versions.noChanges": "No changes",
+        "versions.showChapterList": "Show chapter list",
         "versions.status.added": "Added",
         "versions.status.modified": "Modified",
         "versions.status.removed": "Removed",
@@ -123,5 +126,25 @@ describe("VersionCompare", () => {
       screen.getByText("Compare unavailable for this chapter — showing the saved version only")
     ).toBeInTheDocument();
     expect(screen.getByText("Saved version")).toBeInTheDocument();
+  });
+
+  it("can collapse and restore the chapter list", async () => {
+    const user = userEvent.setup();
+    renderCompare({
+      chapters: [
+        { chapterId: "chapter-1", title: "Chapter 1", status: "unchanged", html: null },
+        { chapterId: "chapter-2", title: "Chapter 2", status: "modified", html: "<p>Edit</p>" },
+      ],
+    });
+
+    expect(screen.getByRole("button", { name: /Chapter 2/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Hide chapter list" }));
+
+    expect(screen.queryByRole("button", { name: /Chapter 2/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show chapter list" }));
+
+    expect(screen.getByRole("button", { name: /Chapter 2/ })).toBeInTheDocument();
   });
 });

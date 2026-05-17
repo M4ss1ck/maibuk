@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   GitCompareArrows,
@@ -49,6 +49,7 @@ function formatRelativeTime(date: Date, locale: string): string {
 }
 
 type ConfirmAction = { type: "restore" | "delete"; versionId: string } | null;
+const VERSION_BATCH_SIZE = 50;
 
 export function VersionPanel({
   isOpen,
@@ -70,6 +71,7 @@ export function VersionPanel({
     target: BookSnapshot;
   } | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [visibleVersionCount, setVisibleVersionCount] = useState(VERSION_BATCH_SIZE);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
@@ -79,10 +81,16 @@ export function VersionPanel({
       loadVersions(bookId);
       setCompare(null);
       setFocusedIndex(0);
+      setVisibleVersionCount(VERSION_BATCH_SIZE);
       setRenamingId(null);
       setConfirmAction(null);
     }
   }, [isOpen, bookId, loadVersions]);
+
+  const visibleVersions = useMemo(
+    () => versions.slice(0, visibleVersionCount),
+    [versions, visibleVersionCount]
+  );
 
   const handleCompare = useCallback(
     async (version: BookVersion) => {
@@ -160,7 +168,7 @@ export function VersionPanel({
       switch (e.key) {
         case "ArrowDown":
           e.preventDefault();
-          setFocusedIndex((i) => Math.min(i + 1, versions.length - 1));
+          setFocusedIndex((i) => Math.min(i + 1, visibleVersions.length - 1));
           break;
         case "ArrowUp":
           e.preventDefault();
@@ -168,26 +176,26 @@ export function VersionPanel({
           break;
         case "Enter": {
           e.preventDefault();
-          const v = versions[focusedIndex];
+          const v = visibleVersions[focusedIndex];
           if (v) void handleCompare(v);
           break;
         }
         case "r":
         case "R": {
           e.preventDefault();
-          const v = versions[focusedIndex];
+          const v = visibleVersions[focusedIndex];
           if (v) setConfirmAction({ type: "restore", versionId: v.id });
           break;
         }
         case "Delete": {
           e.preventDefault();
-          const v = versions[focusedIndex];
+          const v = visibleVersions[focusedIndex];
           if (v) setConfirmAction({ type: "delete", versionId: v.id });
           break;
         }
         case "F2": {
           e.preventDefault();
-          const v = versions[focusedIndex];
+          const v = visibleVersions[focusedIndex];
           if (v) startRename(v);
           break;
         }
@@ -202,7 +210,16 @@ export function VersionPanel({
 
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isOpen, compare, versions, focusedIndex, renamingId, confirmAction, handleCompare, startRename]);
+  }, [
+    isOpen,
+    compare,
+    visibleVersions,
+    focusedIndex,
+    renamingId,
+    confirmAction,
+    handleCompare,
+    startRename,
+  ]);
 
   // Scroll focused row into view
   useEffect(() => {
@@ -212,7 +229,7 @@ export function VersionPanel({
   }, [focusedIndex, isOpen, compare]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t("versions.title")}>
+    <Modal isOpen={isOpen} onClose={onClose} title={t("versions.title")} size="wide">
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">
           {t("common.loading")}
@@ -246,118 +263,119 @@ export function VersionPanel({
           {t("versions.empty")}
         </div>
       ) : (
-        <div className="flex flex-col gap-1" role="list">
-          {versions.map((version, index) => {
-            const isFocused = focusedIndex === index;
-            const isConfirming =
-              confirmAction?.versionId === version.id;
-            const isRenaming = renamingId === version.id;
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1" role="list">
+            {visibleVersions.map((version, index) => {
+              const isFocused = focusedIndex === index;
+              const isConfirming =
+                confirmAction?.versionId === version.id;
+              const isRenaming = renamingId === version.id;
 
-            return (
-              <div
-                key={version.id}
-                id={`version-row-${index}`}
-                role="listitem"
-                className={`flex items-center gap-2 px-2 py-2 rounded-lg transition-colors ${
-                  isFocused
-                    ? "bg-muted ring-1 ring-primary/30"
-                    : "hover:bg-muted/50"
-                }`}
-                onMouseEnter={() => setFocusedIndex(index)}
-              >
-                {isRenaming ? (
-                  <div className="flex-1 flex gap-2 items-center">
-                    <Input
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void handleRename(version.id);
-                        }
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          setRenamingId(null);
-                        }
-                      }}
-                      autoFocus
-                      className="flex-1"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void handleRename(version.id)}
-                    >
-                      <Check className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setRenamingId(null)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ) : isConfirming ? (
-                  <div className="flex-1 flex items-center gap-2">
-                    <span className="text-sm flex-1">
-                      {confirmAction?.type === "restore"
-                        ? t("versions.restoreConfirm")
-                        : t("versions.deleteConfirm")}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setConfirmAction(null)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant={
-                        confirmAction?.type === "restore"
-                          ? "primary"
-                          : "destructive"
-                      }
-                      size="sm"
-                      onClick={() => {
-                        if (confirmAction?.type === "restore") {
-                          void handleRestore(version);
-                        } else {
-                          void handleDelete(version.id);
-                        }
-                      }}
-                    >
-                      <Check className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium truncate">
-                          {version.name ?? t("versions.autoCheckpoint")}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
-                          {t(`versions.trigger.${version.triggerType}`)}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatRelativeTime(version.createdAt, i18n.language)} ·{" "}
-                        {version.wordCount} {t("common.words")}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-0.5 shrink-0">
+              return (
+                <div
+                  key={version.id}
+                  id={`version-row-${index}`}
+                  role="listitem"
+                  className={`flex items-center gap-2 px-2 py-2 rounded-lg transition-colors ${
+                    isFocused
+                      ? "bg-muted ring-1 ring-primary/30"
+                      : "hover:bg-muted/50"
+                  }`}
+                  onMouseEnter={() => setFocusedIndex(index)}
+                >
+                  {isRenaming ? (
+                    <div className="flex-1 flex gap-2 items-center">
+                      <Input
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleRename(version.id);
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setRenamingId(null);
+                          }
+                        }}
+                        autoFocus
+                        className="flex-1"
+                      />
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => void handleCompare(version)}
-                        title={t("versions.compare")}
-                        className="px-1.5"
+                        onClick={() => void handleRename(version.id)}
                       >
-                        <GitCompareArrows className="w-4 h-4" />
+                        <Check className="w-4 h-4" />
                       </Button>
                       <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRenamingId(null)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : isConfirming ? (
+                    <div className="flex-1 flex items-center gap-2">
+                      <span className="text-sm flex-1">
+                        {confirmAction?.type === "restore"
+                          ? t("versions.restoreConfirm")
+                          : t("versions.deleteConfirm")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmAction(null)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant={
+                          confirmAction?.type === "restore"
+                            ? "primary"
+                            : "destructive"
+                        }
+                        size="sm"
+                        onClick={() => {
+                          if (confirmAction?.type === "restore") {
+                            void handleRestore(version);
+                          } else {
+                            void handleDelete(version.id);
+                          }
+                        }}
+                      >
+                        <Check className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium truncate">
+                            {version.name ?? t("versions.autoCheckpoint")}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                            {t(`versions.trigger.${version.triggerType}`)}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatRelativeTime(version.createdAt, i18n.language)} ·{" "}
+                          {version.wordCount} {t("common.words")}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void handleCompare(version)}
+                          title={t("versions.compare")}
+                          className="px-1.5"
+                        >
+                          <GitCompareArrows className="w-4 h-4" />
+                        </Button>
+                        <Button
                         variant="ghost"
                         size="sm"
                         onClick={() =>
@@ -400,6 +418,21 @@ export function VersionPanel({
               </div>
             );
           })}
+          </div>
+          {visibleVersionCount < versions.length && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setVisibleVersionCount((count) =>
+                  Math.min(count + VERSION_BATCH_SIZE, versions.length)
+                )
+              }
+              className="self-center"
+            >
+              {t("versions.showMore")}
+            </Button>
+          )}
         </div>
       )}
     </Modal>
