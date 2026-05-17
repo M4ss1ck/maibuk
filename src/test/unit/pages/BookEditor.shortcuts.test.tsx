@@ -1,4 +1,5 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { mockUseShortcuts } = vi.hoisted(() => ({
@@ -6,6 +7,12 @@ const { mockUseShortcuts } = vi.hoisted(() => ({
 }));
 const { mockVersionPanel } = vi.hoisted(() => ({
   mockVersionPanel: vi.fn(() => null),
+}));
+const { mockHistoryMenuButton } = vi.hoisted(() => ({
+  mockHistoryMenuButton: vi.fn(() => <button type="button">history menu</button>),
+}));
+const { mockIsMac } = vi.hoisted(() => ({
+  mockIsMac: vi.fn(() => false),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -22,6 +29,10 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("../../../lib/shortcuts", () => ({
   useShortcuts: mockUseShortcuts,
+}));
+
+vi.mock("../../../lib/platform", () => ({
+  isMac: mockIsMac,
 }));
 
 vi.mock("../../../hooks/useAutoSave", () => ({
@@ -113,12 +124,18 @@ vi.mock("../../../components/versions/VersionPanel", () => ({
   VersionPanel: mockVersionPanel,
 }));
 
+vi.mock("../../../components/versions/HistoryMenuButton", () => ({
+  HistoryMenuButton: mockHistoryMenuButton,
+}));
+
 import { BookEditor } from "../../../pages/BookEditor";
 
 describe("BookEditor shortcuts", () => {
   beforeEach(() => {
     mockUseShortcuts.mockClear();
     mockVersionPanel.mockClear();
+    mockHistoryMenuButton.mockClear();
+    mockIsMac.mockReturnValue(false);
   });
 
   it("registers Ctrl+Alt+S as the save-version shortcut", () => {
@@ -151,5 +168,29 @@ describe("BookEditor shortcuts", () => {
       }),
       undefined
     );
+  });
+
+  it("mounts the history menu button with save and panel actions", () => {
+    render(<BookEditor />);
+
+    expect(mockHistoryMenuButton).toHaveBeenCalledWith(
+      expect.objectContaining({
+        onOpenPanel: expect.any(Function),
+        onSaveVersion: expect.any(Function),
+        saveVersionShortcut: "Ctrl+Alt+S",
+        panelShortcut: "g v",
+      }),
+      undefined
+    );
+  });
+
+  it("adds save-version and history actions to the mobile menu", async () => {
+    const user = userEvent.setup();
+    render(<BookEditor />);
+
+    await user.click(screen.getByTitle("common.more"));
+
+    expect(screen.getByText("versions.saveVersion")).toBeInTheDocument();
+    expect(screen.getByText("versions.showHistory")).toBeInTheDocument();
   });
 });

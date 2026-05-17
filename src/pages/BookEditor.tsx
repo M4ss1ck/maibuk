@@ -25,13 +25,16 @@ import {
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { useSettingsStore } from "../features/settings/store";
 import {
+  History,
   Menu,
   MoreVertical,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 import { SyncStatusButton } from "../components/sync/SyncStatusButton";
+import { HistoryMenuButton } from "../components/versions/HistoryMenuButton";
 import { useShortcuts } from "../lib/shortcuts";
+import { isMac } from "../lib/platform";
 import { useAutoCheckpoint } from "../features/versions/useAutoCheckpoint";
 import { useVersionStore } from "../features/versions/store";
 import { VersionPanel } from "../components/versions/VersionPanel";
@@ -81,6 +84,8 @@ export function BookEditor() {
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
   const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
   const hideKeyboardHints = useSettingsStore((s) => s.hideKeyboardHints);
+  const saveVersionShortcut = isMac() ? "⌘⌥S" : "Ctrl+Alt+S";
+  const panelShortcut = "g v";
 
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
@@ -591,6 +596,14 @@ export function BookEditor() {
 
             {/* Sync */}
             <SyncStatusButton />
+            <div className="hidden md:block">
+              <HistoryMenuButton
+                onOpenPanel={() => setShowVersionPanel(true)}
+                onSaveVersion={() => void handleSaveVersion()}
+                saveVersionShortcut={saveVersionShortcut}
+                panelShortcut={panelShortcut}
+              />
+            </div>
 
             {/* Word count - hidden on mobile */}
             <div className="hidden sm:block text-sm text-muted-foreground">
@@ -703,6 +716,28 @@ export function BookEditor() {
                     >
                       <SettingsIcon className="w-4 h-4" />
                       {t("bookSettings.title")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleSaveVersion();
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                    >
+                      <History className="w-4 h-4" />
+                      {t("versions.saveVersion")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVersionPanel(true);
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                    >
+                      <History className="w-4 h-4" />
+                      {t("versions.showHistory")}
                     </button>
                     <button
                       type="button"
