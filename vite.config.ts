@@ -75,6 +75,8 @@ export default defineConfig(() => ({
         "src/features/versions/useAutoCheckpoint.ts",
         "src/features/versions/sanitize.ts",
         "src/features/versions/compare.ts",
+        "src/components/versions/HistoryMenuButton.tsx",
+        "src/lib/platform/detect.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

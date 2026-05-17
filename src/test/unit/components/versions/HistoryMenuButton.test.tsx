@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { HistoryMenuButton } from "../../../../components/versions/HistoryMenuButton";
@@ -100,6 +100,55 @@ describe("HistoryMenuButton", () => {
 
     await user.click(screen.getByRole("button", { name: "More" }));
     await user.click(screen.getByRole("button", { name: "Outside" }));
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("opens the menu and focuses the first item from ArrowDown", async () => {
+    const user = userEvent.setup();
+    renderButton();
+    const requestAnimationFrame = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        window.setTimeout(() => callback(0), 0);
+        return 1;
+      });
+
+    await user.tab();
+    await user.keyboard("{ArrowDown}");
+
+    const saveItem = screen.getByRole("menuitem", { name: /Save version/ });
+    await waitFor(() => expect(saveItem).toHaveFocus());
+
+    requestAnimationFrame.mockRestore();
+  });
+
+  it("moves focus between menu items with arrow keys", async () => {
+    const user = userEvent.setup();
+    renderButton();
+
+    await user.click(screen.getByRole("button", { name: "More" }));
+    const saveItem = screen.getByRole("menuitem", { name: /Save version/ });
+    const historyItem = screen.getByRole("menuitem", { name: /Show history/ });
+    saveItem.focus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(historyItem).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(saveItem).toHaveFocus();
+
+    await user.keyboard("{ArrowUp}");
+    expect(historyItem).toHaveFocus();
+  });
+
+  it("closes the menu from a menu item with Escape", async () => {
+    const user = userEvent.setup();
+    renderButton();
+
+    await user.click(screen.getByRole("button", { name: "More" }));
+    screen.getByRole("menuitem", { name: /Save version/ }).focus();
+    await user.keyboard("{Escape}");
 
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });

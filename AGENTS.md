@@ -15,6 +15,7 @@
 | State            | Zustand 5 (with `persist` middleware for settings/theme)    |
 | Routing          | React Router v7 (`react-router-dom`)                        |
 | Rich Text Editor | TipTap 3.15                                                 |
+| Version Diff/Sanitization | node-htmldiff + DOMPurify                         |
 | Cover Designer   | Fabric.js 7                                                 |
 | Database         | SQLite (Tauri plugin) / sql.js (web) via Drizzle ORM schema |
 | i18n             | i18next + react-i18next (English, Spanish)                  |
@@ -219,7 +220,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                      |
 | `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`                |
 | `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`                |
-| `isMac()`                                                          | `src/lib/platform/index.ts`                |
+| `isMac()`                                                          | `src/lib/platform/detect.ts`               |
 | `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts`    |
 | `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                     |
 | `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                         |
