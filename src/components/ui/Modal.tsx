@@ -9,6 +9,7 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: "md" | "wide";
+  contentClassName?: string;
 }
 
 export function Modal({
@@ -18,6 +19,7 @@ export function Modal({
   children,
   footer,
   size = "md",
+  contentClassName = "overflow-auto",
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const sizeClass = size === "wide" ? "sm:max-w-5xl" : "sm:max-w-md";
@@ -82,7 +84,9 @@ export function Modal({
         </div>
 
         {/* Content */}
-        <div className="px-4 sm:px-6 py-4 overflow-auto flex-1">{children}</div>
+        <div className={`px-4 sm:px-6 py-4 flex-1 min-h-0 ${contentClassName}`}>
+          {children}
+        </div>
 
         {/* Footer */}
         {footer && (

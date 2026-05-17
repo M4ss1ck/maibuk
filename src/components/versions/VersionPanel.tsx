@@ -258,34 +258,48 @@ export function VersionPanel({
   const isInitialLoading = isLoading && visibleVersions.length === 0 && totalCount === 0;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t("versions.title")} size="wide">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t("versions.title")}
+      size="wide"
+      contentClassName={compare ? "overflow-hidden" : undefined}
+    >
       {isInitialLoading ? (
         <div className="text-center py-8 text-muted-foreground">
           {t("common.loading")}
         </div>
       ) : compare ? (
-        <div className="flex flex-col gap-3 h-full min-h-0">
+        <div
+          data-testid="version-compare-layout"
+          className="flex h-[min(36rem,calc(90vh-9rem))] min-h-0 flex-col gap-3 overflow-hidden"
+        >
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setCompare(null)}
-            className="self-start"
+            className="self-start shrink-0"
           >
             <ArrowLeft className="w-4 h-4 mr-1" />
             {t("common.back")}
           </Button>
-          <p className="text-sm text-muted-foreground">
+          <p className="shrink-0 text-sm text-muted-foreground">
             {t("versions.compareToCurrent")}
           </p>
-          <Suspense
-            fallback={
-              <div className="text-center py-8 text-muted-foreground">
-                {t("common.loading")}
-              </div>
-            }
+          <div
+            data-testid="version-compare-body"
+            className="min-h-0 flex-1 overflow-hidden"
           >
-            <VersionCompare current={compare.current} target={compare.target} />
-          </Suspense>
+            <Suspense
+              fallback={
+                <div className="text-center py-8 text-muted-foreground">
+                  {t("common.loading")}
+                </div>
+              }
+            >
+              <VersionCompare current={compare.current} target={compare.target} />
+            </Suspense>
+          </div>
         </div>
       ) : totalCount === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
