@@ -438,7 +438,7 @@
     "rename": "Renombrar",
     "delete": "Eliminar",
     "deleteConfirm": "¿Eliminar esta versión permanentemente?",
-    "empty": "Aún no hay versiones. Guarda una con Ctrl+Shift+S.",
+    "empty": "Aún no hay versiones. Guarda una con Ctrl+Alt+S.",
     "alreadyUpToDate": "Ya está actualizado",
     "words": "palabras",
     "trigger": {

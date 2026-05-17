@@ -58,7 +58,7 @@ export function GlobalShortcuts() {
     if (/^\/book\/[^/]+$/.test(location.pathname)) {
       list.push(
         { id: "editor.save", label: t("shortcuts.save"), keys: ["Ctrl+S"] },
-        { id: "editor.saveVersion", label: t("shortcuts.saveVersion"), keys: ["Ctrl+Shift+S"] },
+        { id: "editor.saveVersion", label: t("shortcuts.saveVersion"), keys: ["Ctrl+Alt+S"] },
         { id: "editor.versionHistory", label: t("shortcuts.versionHistory"), keys: ["g v"] },
         { id: "editor.focusMode", label: t("shortcuts.toggleFocusMode"), keys: ["F11"] },
         { id: "editor.toggleSidebar", label: t("shortcuts.toggleSidebar"), keys: ["Ctrl+\\"] },

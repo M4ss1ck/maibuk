@@ -404,7 +404,7 @@ export function BookEditor() {
       },
     },
     {
-      keys: ["ctrl+shift+s", "meta+shift+s"],
+      keys: ["ctrl+alt+s", "meta+alt+s"],
       onTrigger: () => {
         void handleSaveVersion();
       },
