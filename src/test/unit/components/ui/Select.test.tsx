@@ -20,6 +20,32 @@ describe("Select", () => {
       render(<Select value="banana" onChange={() => {}} options={options} />);
       expect(screen.getByText("Banana")).toBeInTheDocument();
     });
+
+    it("renders an end adornment inside the trigger", () => {
+      render(
+        <Select
+          value="banana"
+          onChange={() => {}}
+          options={options}
+          endAdornment="/3"
+        />
+      );
+
+      expect(screen.getByRole("button")).toHaveTextContent("Banana/3");
+    });
+
+    it("can opt out of the default minimum trigger width", () => {
+      render(
+        <Select
+          value="banana"
+          onChange={() => {}}
+          options={options}
+          minWidth="none"
+        />
+      );
+
+      expect(screen.getByRole("button")).not.toHaveClass("min-w-35");
+    });
   });
 
   describe("interaction", () => {

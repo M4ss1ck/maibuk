@@ -1,10 +1,11 @@
-import type { BackupAdapter, BackupEntry } from "../types";
+import type { BackupAdapter, BackupEntry, BackupPage, BackupPageOptions } from "../types";
 import { computeChecksum } from "../../checksum";
 import { parseTriggerFromFilename } from "../../../features/backup/utils";
 
 const DB_NAME = "maibuk-backups";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "backups";
+const CREATED_AT_INDEX = "createdAt";
 
 interface StoredBackup {
   filename: string;
@@ -18,6 +19,23 @@ interface StoredBackup {
 const STORAGE_FULL_MESSAGE =
   "Backup storage full. Delete old backups in Settings or reduce retention limit.";
 
+function toBackupEntry(stored: StoredBackup): BackupEntry {
+  return {
+    filename: stored.filename,
+    trigger: stored.trigger,
+    createdAt: new Date(stored.createdAt),
+    sizeBytes: stored.sizeBytes,
+    checksum: stored.checksum,
+  };
+}
+
+function normalizePageOptions(options: BackupPageOptions): BackupPageOptions {
+  return {
+    page: Math.max(1, Math.floor(options.page)),
+    pageSize: Math.max(1, Math.floor(options.pageSize)),
+  };
+}
+
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -25,7 +43,14 @@ function openDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "filename" });
+        const store = db.createObjectStore(STORE_NAME, { keyPath: "filename" });
+        store.createIndex(CREATED_AT_INDEX, "createdAt");
+        return;
+      }
+
+      const store = request.transaction?.objectStore(STORE_NAME);
+      if (store && !store.indexNames.contains(CREATED_AT_INDEX)) {
+        store.createIndex(CREATED_AT_INDEX, "createdAt");
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -103,16 +128,65 @@ class WebBackupAdapter implements BackupAdapter {
           const tx = db.transaction(STORE_NAME, "readonly");
           const request = tx.objectStore(STORE_NAME).getAll();
           request.onsuccess = () => {
-            const entries = (request.result as StoredBackup[]).map((stored) => ({
-              filename: stored.filename,
-              trigger: stored.trigger,
-              createdAt: new Date(stored.createdAt),
-              sizeBytes: stored.sizeBytes,
-              checksum: stored.checksum,
-            }));
+            const entries = (request.result as StoredBackup[]).map(toBackupEntry);
             // Sort newest first
             entries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
             resolve(entries);
+          };
+          request.onerror = () => reject(request.error);
+        })
+    );
+  }
+
+  async listBackupsPage(options: BackupPageOptions): Promise<BackupPage> {
+    const { page, pageSize } = normalizePageOptions(options);
+
+    const totalCount = await withDB(
+      (db) =>
+        new Promise<number>((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const request = tx.objectStore(STORE_NAME).count();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        })
+    );
+
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const clampedPage = Math.min(page, totalPages);
+    const offset = (clampedPage - 1) * pageSize;
+
+    return withDB(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const entries: BackupEntry[] = [];
+          let seen = 0;
+          let totalSizeBytes = 0;
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const request = tx
+            .objectStore(STORE_NAME)
+            .index(CREATED_AT_INDEX)
+            .openCursor(null, "prev");
+
+          request.onsuccess = () => {
+            const cursor = request.result;
+            if (!cursor) {
+              resolve({
+                entries,
+                totalCount,
+                totalSizeBytes,
+                page: clampedPage,
+                pageSize,
+              });
+              return;
+            }
+
+            const stored = cursor.value as StoredBackup;
+            if (seen >= offset && entries.length < pageSize) {
+              entries.push(toBackupEntry(stored));
+            }
+            seen += 1;
+            totalSizeBytes += stored.sizeBytes;
+            cursor.continue();
           };
           request.onerror = () => reject(request.error);
         })

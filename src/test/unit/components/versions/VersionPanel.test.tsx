@@ -244,6 +244,30 @@ describe("VersionPanel", () => {
     );
   });
 
+  it("keeps compare controls fixed while the compare body owns scrolling", async () => {
+    const user = userEvent.setup();
+    mockFlushBeforeCompare.mockResolvedValue(undefined);
+    mockSerializeBook.mockResolvedValue(JSON.stringify(snapshot("Current")));
+    mockGetVersionSnapshot.mockResolvedValue(JSON.stringify(snapshot("Saved")));
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    await user.click(screen.getByTitle("Compare"));
+
+    const compareLayout = await screen.findByTestId("version-compare-layout");
+    const compareBody = screen.getByTestId("version-compare-body");
+
+    expect(compareLayout).toHaveClass("overflow-hidden", "min-h-0");
+    expect(compareBody).toHaveClass("flex-1", "min-h-0", "overflow-hidden");
+  });
+
   it("opens compare from the focused row when Enter is pressed", async () => {
     mockFlushBeforeCompare.mockResolvedValue(undefined);
     mockSerializeBook.mockResolvedValue(JSON.stringify(snapshot("Current")));

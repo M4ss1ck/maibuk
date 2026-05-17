@@ -4,10 +4,14 @@ export type ExportFormat = "epub" | "pdf";
 export type Language = "en" | "es";
 export type HtmlEditorTheme = "default" | "one-dark" | "dracula" | "one-light";
 export type ChapterListView = "normal" | "compact";
+export type BackupListPageSize = 5 | 10 | 25 | 50;
 
 export const DEFAULT_PRIMARY_COLOR = "#3B82F6";
 export const DEFAULT_TAURI_BACKUP_RETENTION = 20;
 export const DEFAULT_WEB_BACKUP_RETENTION = 5;
+export const DEFAULT_BACKUP_LIST_PAGE = 1;
+export const DEFAULT_BACKUP_LIST_PAGE_SIZE: BackupListPageSize = 10;
+export const BACKUP_LIST_PAGE_SIZE_OPTIONS: BackupListPageSize[] = [5, 10, 25, 50];
 
 export function getDefaultBackupRetention(isWeb: boolean): number {
   return isWeb ? DEFAULT_WEB_BACKUP_RETENTION : DEFAULT_TAURI_BACKUP_RETENTION;
@@ -37,6 +41,8 @@ export interface Settings {
   // Backup settings
   backupRetention: number;
   backupDirectory: string | null;
+  backupListPage: number;
+  backupListPageSize: BackupListPageSize;
 
   // Editor layout settings
   sidebarWidth: number;

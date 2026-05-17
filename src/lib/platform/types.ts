@@ -54,9 +54,23 @@ export interface BackupEntry {
   checksum: string;
 }
 
+export interface BackupPageOptions {
+  page: number;
+  pageSize: number;
+}
+
+export interface BackupPage {
+  entries: BackupEntry[];
+  totalCount: number;
+  totalSizeBytes: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface BackupAdapter {
   saveBackup(filename: string, sqlContent: string): Promise<void>;
   listBackups(): Promise<BackupEntry[]>;
+  listBackupsPage(options: BackupPageOptions): Promise<BackupPage>;
   readBackup(filename: string): Promise<string>;
   deleteBackup(filename: string): Promise<void>;
 }

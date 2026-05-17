@@ -4,6 +4,7 @@ import {
   ListboxOption,
   ListboxOptions,
 } from "@headlessui/react";
+import type { ReactNode } from "react";
 import { ChevronIcon } from "../icons";
 
 interface SelectOption<T> {
@@ -15,6 +16,8 @@ interface SelectProps<T> {
   value: T;
   onChange: (value: T) => void;
   options: SelectOption<T>[];
+  endAdornment?: ReactNode;
+  minWidth?: "default" | "none";
   className?: string;
   id?: string;
 }
@@ -23,16 +26,22 @@ export function Select<T extends string | number>({
   value,
   onChange,
   options,
+  endAdornment,
+  minWidth = "default",
   className = "",
   id,
 }: SelectProps<T>) {
   const selectedOption = options.find((opt) => opt.value === value);
+  const minWidthClass = minWidth === "default" ? "min-w-35" : "";
 
   return (
     <Listbox value={value} onChange={onChange}>
       <div className={`relative ${className}`} id={id}>
-        <ListboxButton className="relative w-full min-w-35 px-3 py-1.5 text-sm text-left border border-border rounded-lg bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1">
-          <span className="block truncate">{selectedOption?.label}</span>
+        <ListboxButton className={`relative flex w-full ${minWidthClass} items-center gap-1 px-3 py-1.5 pr-8 text-sm text-left border border-border rounded-lg bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1`}>
+          <span className="min-w-0 flex-1 truncate">{selectedOption?.label}</span>
+          {endAdornment && (
+            <span className="shrink-0 text-muted-foreground">{endAdornment}</span>
+          )}
           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
             <ChevronIcon className="h-4 w-4 text-muted-foreground" />
           </span>

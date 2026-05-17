@@ -37,6 +37,8 @@ describe("useSettingsStore", () => {
       defaultExportFormat: "epub",
       backupRetention: 20,
       backupDirectory: null,
+      backupListPage: 1,
+      backupListPageSize: 10,
       sidebarWidth: 256,
       toolbarExpanded: false,
       chapterListView: "normal",
@@ -57,6 +59,8 @@ describe("useSettingsStore", () => {
       expect(state.defaultExportFormat).toBe("epub");
       expect(state.backupRetention).toBe(20);
       expect(state.backupDirectory).toBeNull();
+      expect(state.backupListPage).toBe(1);
+      expect(state.backupListPageSize).toBe(10);
       expect(state.chapterListView).toBe("normal");
       expect(state.lastPath).toBeNull();
     });
@@ -82,6 +86,28 @@ describe("useSettingsStore", () => {
       useSettingsStore.getState().setBackupDirectory("/tmp/maibuk-backups");
       useSettingsStore.getState().setBackupDirectory(null);
       expect(useSettingsStore.getState().backupDirectory).toBeNull();
+    });
+
+    it("stores the selected backup list page", () => {
+      useSettingsStore.getState().setBackupListPage(3);
+      expect(useSettingsStore.getState().backupListPage).toBe(3);
+    });
+
+    it("clamps backup list page to at least 1", () => {
+      useSettingsStore.getState().setBackupListPage(0);
+      expect(useSettingsStore.getState().backupListPage).toBe(1);
+    });
+
+    it("stores allowed backup list page sizes", () => {
+      for (const size of [5, 10, 25, 50] as const) {
+        useSettingsStore.getState().setBackupListPageSize(size);
+        expect(useSettingsStore.getState().backupListPageSize).toBe(size);
+      }
+    });
+
+    it("falls back to 10 for unsupported backup list page sizes", () => {
+      useSettingsStore.getState().setBackupListPageSize(12);
+      expect(useSettingsStore.getState().backupListPageSize).toBe(10);
     });
   });
 

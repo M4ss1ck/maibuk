@@ -3,6 +3,9 @@ import { persist } from "zustand/middleware";
 import i18n, { detectSystemLocale } from "../../i18n";
 import {
   DEFAULT_PRIMARY_COLOR,
+  DEFAULT_BACKUP_LIST_PAGE,
+  DEFAULT_BACKUP_LIST_PAGE_SIZE,
+  BACKUP_LIST_PAGE_SIZE_OPTIONS,
   getDefaultBackupRetention,
   type Settings,
   type FontSize,
@@ -11,6 +14,7 @@ import {
   type Language,
   type HtmlEditorTheme,
   type ChapterListView,
+  type BackupListPageSize,
 } from "./types";
 
 const STORAGE_KEY = "maibuk-settings";
@@ -27,6 +31,8 @@ interface SettingsStore extends Settings {
   setDefaultExportFormat: (format: ExportFormat) => void;
   setBackupRetention: (retention: number) => void;
   setBackupDirectory: (directory: string | null) => void;
+  setBackupListPage: (page: number) => void;
+  setBackupListPageSize: (pageSize: number) => void;
   setLanguage: (language: Language) => void;
   setSpellCheckEnabled: (enabled: boolean) => void;
   addCustomWord: (word: string) => void;
@@ -60,6 +66,8 @@ const defaultSettings: Settings = {
   defaultExportFormat: "epub",
   backupRetention: getDefaultBackupRetention(isWebBuild),
   backupDirectory: null,
+  backupListPage: DEFAULT_BACKUP_LIST_PAGE,
+  backupListPageSize: DEFAULT_BACKUP_LIST_PAGE_SIZE,
   sidebarWidth: 256,
   toolbarExpanded: false,
   chapterListView: "normal",
@@ -94,6 +102,19 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ backupRetention: Math.max(1, Math.floor(backupRetention)) }),
       setBackupDirectory: (backupDirectory) =>
         set({ backupDirectory: backupDirectory?.trim() || null }),
+      setBackupListPage: (backupListPage) =>
+        set({ backupListPage: Math.max(1, Math.floor(backupListPage)) }),
+      setBackupListPageSize: (backupListPageSize) => {
+        const allowed = BACKUP_LIST_PAGE_SIZE_OPTIONS.includes(
+          backupListPageSize as BackupListPageSize
+        );
+        set({
+          backupListPage: DEFAULT_BACKUP_LIST_PAGE,
+          backupListPageSize: allowed
+            ? (backupListPageSize as BackupListPageSize)
+            : DEFAULT_BACKUP_LIST_PAGE_SIZE,
+        });
+      },
       setLanguage: (language) => {
         i18n.changeLanguage(language);
         set({ language });
