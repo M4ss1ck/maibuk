@@ -12,6 +12,8 @@ import type {
 export const IS_WEB = import.meta.env.VITE_BUILD_TARGET === "web";
 export const IS_TAURI = !IS_WEB;
 
+export { isMac } from "./detect";
+
 // Re-export types
 export type {
   DatabaseAdapter,

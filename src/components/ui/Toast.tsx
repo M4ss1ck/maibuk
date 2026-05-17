@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import { CheckIcon } from "../icons";
+import { CheckIcon, XIcon } from "../icons";
 
 const DEFAULT_DURATION_MS = 2000;
 const MAX_TOASTS = 3;
 
-type ToastVariant = "success";
+type ToastVariant = "success" | "error";
 
 type Toast = {
   id: string;
@@ -72,6 +72,8 @@ function showToast(input: ToastInput): void {
 export const toast = {
   success: (message: string, options: Omit<ToastInput, "message" | "variant"> = {}) =>
     showToast({ message, variant: "success", ...options }),
+  error: (message: string, options: Omit<ToastInput, "message" | "variant"> = {}) =>
+    showToast({ message, variant: "error", ...options }),
 };
 
 export function ToastViewport() {
@@ -89,6 +91,7 @@ export function ToastViewport() {
           role="status"
         >
           {toast.variant === "success" && <CheckIcon className="h-4 w-4 text-success" />}
+          {toast.variant === "error" && <XIcon className="h-4 w-4 text-destructive" />}
           <span>{toast.message}</span>
         </div>
       ))}

@@ -8,6 +8,7 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  size?: "md" | "wide";
 }
 
 export function Modal({
@@ -16,8 +17,10 @@ export function Modal({
   title,
   children,
   footer,
+  size = "md",
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const sizeClass = size === "wide" ? "sm:max-w-5xl" : "sm:max-w-md";
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -58,7 +61,7 @@ export function Modal({
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-md sm:mx-4 max-h-[90vh] overflow-hidden flex flex-col modal-panel-enter"
+        className={`relative bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full ${sizeClass} sm:mx-4 max-h-[90vh] overflow-hidden flex flex-col modal-panel-enter`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"

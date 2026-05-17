@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
@@ -25,13 +25,28 @@ import {
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { useSettingsStore } from "../features/settings/store";
 import {
+  History,
   Menu,
   MoreVertical,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 import { SyncStatusButton } from "../components/sync/SyncStatusButton";
+import { HistoryMenuButton } from "../components/versions/HistoryMenuButton";
 import { useShortcuts } from "../lib/shortcuts";
+import { isMac } from "../lib/platform";
+import { useAutoCheckpoint } from "../features/versions/useAutoCheckpoint";
+import { useVersionStore } from "../features/versions/store";
+import { Modal } from "../components/ui/Modal";
+import { Input } from "../components/ui/Input";
+import { Button } from "../components/ui/Button";
+import { toast } from "../components/ui/Toast";
+
+const VersionPanel = lazy(() =>
+  import("../components/versions/VersionPanel").then((module) => ({
+    default: module.VersionPanel,
+  }))
+);
 
 export function BookEditor() {
   const { t } = useTranslation();
@@ -64,6 +79,9 @@ export function BookEditor() {
   const [showMobileChapters, setShowMobileChapters] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showVersionPanel, setShowVersionPanel] = useState(false);
+  const [showSaveVersionDialog, setShowSaveVersionDialog] = useState(false);
+  const [saveVersionName, setSaveVersionName] = useState("");
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const isResizing = useRef(false);
@@ -71,6 +89,8 @@ export function BookEditor() {
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
   const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
   const hideKeyboardHints = useSettingsStore((s) => s.hideKeyboardHints);
+  const saveVersionShortcut = isMac() ? "⌘⌥S" : "Ctrl+Alt+S";
+  const panelShortcut = "g v";
 
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
@@ -132,22 +152,39 @@ export function BookEditor() {
     return count + 1;
   }, [chapters, currentChapter]);
 
-  // triggered save - uses ref to get latest editor content
-  const handleSaveNow = useCallback(async () => {
+  // Total book word count for auto-checkpoint
+  const totalBookWordCount = useMemo(
+    () => chapters.reduce((sum, c) => sum + c.wordCount, 0),
+    [chapters]
+  );
+
+  useAutoCheckpoint({
+    bookId,
+    wordCount: totalBookWordCount,
+    enabled: !!currentBook,
+  });
+
+  // Flush latest editor content to the database immediately
+  const flushEditorContent = useCallback(async () => {
     const content = editorContentRef.current;
     if (currentChapter && content) {
-      setSaveStatus("saving");
-      try {
-        await updateChapter(currentChapter.id, { content });
-        setSaveStatus("saved");
-        // Reset to idle after 2 seconds
-        setTimeout(() => setSaveStatus("idle"), 2000);
-      } catch (error) {
-        console.error("Failed to save:", error);
-        setSaveStatus("idle");
-      }
+      await updateChapter(currentChapter.id, { content });
     }
   }, [currentChapter, updateChapter]);
+
+  // triggered save - uses ref to get latest editor content
+  const handleSaveNow = useCallback(async () => {
+    setSaveStatus("saving");
+    try {
+      await flushEditorContent();
+      setSaveStatus("saved");
+      // Reset to idle after 2 seconds
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch (error) {
+      console.error("Failed to save:", error);
+      setSaveStatus("idle");
+    }
+  }, [flushEditorContent]);
 
   // Debounced auto-save
   const debouncedSave = useDebouncedCallback(
@@ -300,6 +337,50 @@ export function BookEditor() {
     }
   }, [bookId, deleteBook, navigate]);
 
+  // Manual save-version: flush then create a named version
+  const handleSaveVersion = useCallback(async () => {
+    if (!bookId) return;
+    await flushEditorContent();
+    setSaveVersionName("");
+    setShowSaveVersionDialog(true);
+  }, [bookId, flushEditorContent]);
+
+  const handleConfirmSaveVersion = useCallback(async () => {
+    if (!bookId) return;
+    const created = await useVersionStore
+      .getState()
+      .createVersion({
+        bookId,
+        name: saveVersionName.trim() || undefined,
+        triggerType: "manual",
+      });
+    setShowSaveVersionDialog(false);
+    if (created) {
+      toast.success(t("versions.saveVersion"));
+    } else {
+      toast.success(t("versions.alreadyUpToDate"));
+    }
+  }, [bookId, saveVersionName, t]);
+
+  // Close trigger: keyed on bookId only so it fires on book change/unmount,
+  // not on chapter switches (which would otherwise re-run via flushEditorContent's identity).
+  const flushEditorContentRef = useRef(flushEditorContent);
+  useEffect(() => {
+    flushEditorContentRef.current = flushEditorContent;
+  }, [flushEditorContent]);
+  useEffect(() => {
+    return () => {
+      if (!bookId) return;
+      // Fire-and-forget: the unmount cleanup cannot await reliably.
+      void (async () => {
+        await flushEditorContentRef.current();
+        await useVersionStore
+          .getState()
+          .createVersion({ bookId, triggerType: "close" });
+      })();
+    };
+  }, [bookId]);
+
   useShortcuts([
     {
       keys: "escape",
@@ -330,6 +411,19 @@ export function BookEditor() {
       keys: "backspace",
       onTrigger: () => {
         navigate("/");
+      },
+    },
+    {
+      keys: ["ctrl+alt+s", "meta+alt+s"],
+      onTrigger: () => {
+        void handleSaveVersion();
+      },
+      allowInInput: true,
+    },
+    {
+      sequence: ["g", "v"],
+      onTrigger: () => {
+        setShowVersionPanel(true);
       },
     },
   ]);
@@ -507,6 +601,14 @@ export function BookEditor() {
 
             {/* Sync */}
             <SyncStatusButton />
+            <div className="hidden md:block">
+              <HistoryMenuButton
+                onOpenPanel={() => setShowVersionPanel(true)}
+                onSaveVersion={() => void handleSaveVersion()}
+                saveVersionShortcut={saveVersionShortcut}
+                panelShortcut={panelShortcut}
+              />
+            </div>
 
             {/* Word count - hidden on mobile */}
             <div className="hidden sm:block text-sm text-muted-foreground">
@@ -623,6 +725,28 @@ export function BookEditor() {
                     <button
                       type="button"
                       onClick={() => {
+                        void handleSaveVersion();
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                    >
+                      <History className="w-4 h-4" />
+                      {t("versions.saveVersion")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVersionPanel(true);
+                        setShowMobileMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                    >
+                      <History className="w-4 h-4" />
+                      {t("versions.showHistory")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
                         toggleFocusMode();
                         setShowMobileMenu(false);
                       }}
@@ -702,6 +826,54 @@ export function BookEditor() {
         onUpdateBookInfo={handleUpdateBookInfo}
         onDelete={handleDeleteBook}
       />
+
+      {/* Version Panel */}
+      {bookId && showVersionPanel && (
+        <Suspense fallback={null}>
+          <VersionPanel
+            isOpen={showVersionPanel}
+            onClose={() => setShowVersionPanel(false)}
+            bookId={bookId}
+            flushBeforeCompare={flushEditorContent}
+          />
+        </Suspense>
+      )}
+
+      {/* Save Version Name Dialog */}
+      <Modal
+        isOpen={showSaveVersionDialog}
+        onClose={() => setShowSaveVersionDialog(false)}
+        title={t("versions.namePrompt")}
+        footer={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setShowSaveVersionDialog(false)}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => void handleConfirmSaveVersion()}
+            >
+              {t("versions.saveVersion")}
+            </Button>
+          </div>
+        }
+      >
+        <Input
+          value={saveVersionName}
+          onChange={(e) => setSaveVersionName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void handleConfirmSaveVersion();
+            }
+          }}
+          placeholder={t("versions.namePlaceholder")}
+          autoFocus
+        />
+      </Modal>
     </div>
   );
 }

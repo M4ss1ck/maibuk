@@ -44,6 +44,16 @@ describe("Modal", () => {
       expect(dialog).toHaveAttribute("aria-modal", "true");
       expect(dialog).toHaveAttribute("aria-labelledby", "modal-title");
     });
+
+    it("supports a wide layout for dense tool panels", () => {
+      render(
+        <Modal isOpen={true} onClose={() => {}} title="Wide" size="wide">
+          <p>Content</p>
+        </Modal>,
+      );
+
+      expect(screen.getByRole("dialog")).toHaveClass("sm:max-w-5xl");
+    });
   });
 
   describe("close behavior", () => {

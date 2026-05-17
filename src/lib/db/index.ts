@@ -77,6 +77,21 @@ async function initializeSchema(): Promise<void> {
     )
   `);
 
+  // Create book_versions table
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS book_versions (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      name TEXT,
+      snapshot TEXT NOT NULL,
+      word_count INTEGER NOT NULL DEFAULT 0,
+      checksum TEXT NOT NULL,
+      trigger_type TEXT NOT NULL DEFAULT 'manual',
+      created_at INTEGER NOT NULL,
+      synced_at INTEGER
+    )
+  `);
+
   // Create cover_templates table
   await db.execute(`
     CREATE TABLE IF NOT EXISTS cover_templates (
@@ -107,6 +122,10 @@ async function initializeSchema(): Promise<void> {
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_chapters_order ON chapters(book_id, "order")
   `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_book_versions_book ON book_versions(book_id, created_at DESC)
+  `);
 }
 
 export async function closeDatabase(): Promise<void> {
@@ -127,6 +146,7 @@ export async function resetDatabase(): Promise<void> {
 
   // Delete all data from tables (order matters due to foreign keys)
   await database.execute("DELETE FROM chapters");
+  await database.execute("DELETE FROM book_versions");
   await database.execute("DELETE FROM books");
   await database.execute("DELETE FROM cover_templates");
   await database.execute("DELETE FROM settings");
