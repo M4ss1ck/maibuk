@@ -430,6 +430,12 @@
     "saveVersion": "Guardar versión",
     "showHistory": "Mostrar historial",
     "openHistory": "Abrir historial de versiones",
+    "compare": "Comparar",
+    "compareToCurrent": "Comparando esta versión con el documento actual",
+    "noChanges": "Sin cambios",
+    "chapterAdded": "Este capítulo solo existe en la versión comparada",
+    "chapterRemoved": "Este capítulo no está en la versión comparada",
+    "compareUnavailable": "La comparación no está disponible para este capítulo; se muestra solo la versión guardada",
     "namePrompt": "Nombra esta versión",
     "namePlaceholder": "ej. Primer borrador completo",
     "autoCheckpoint": "Punto de control automático",
@@ -443,6 +449,12 @@
     "empty": "Aún no hay versiones. Guarda una con Ctrl+Alt+S.",
     "alreadyUpToDate": "Ya está actualizado",
     "words": "palabras",
+    "status": {
+      "added": "Agregado",
+      "removed": "Eliminado",
+      "modified": "Modificado",
+      "unchanged": "Sin cambios"
+    },
     "trigger": {
       "manual": "Nombrada",
       "auto-idle": "Punto de control automático",

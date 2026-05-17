@@ -9,6 +9,7 @@ export interface ChapterDiff {
   title: string;
   status: ChapterDiffStatus;
   html: string | null;
+  fallback?: true;
 }
 
 export interface BookDiff {
@@ -37,6 +38,7 @@ function buildModifiedDiff(current: SnapshotChapter, target: SnapshotChapter): C
       title: target.title,
       status: "modified",
       html: sanitizeChapterHtml(targetHtml),
+      fallback: true,
     };
   }
 }

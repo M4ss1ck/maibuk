@@ -240,6 +240,23 @@ option {
   border-radius: 0.125em;
 }
 
+.editor-content ins,
+.editor-content del {
+  text-decoration: none;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.editor-content ins {
+  background-color: color-mix(in srgb, var(--color-success) 18%, transparent);
+}
+
+.editor-content del {
+  background-color: color-mix(in srgb, var(--color-destructive) 18%, transparent);
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+
 .dark .editor-content mark {
   background-color: #854d0e;
   color: #fef9c3;

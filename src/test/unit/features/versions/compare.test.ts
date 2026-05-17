@@ -167,6 +167,7 @@ describe("diffSnapshots()", () => {
       title: "One",
       status: "modified",
       html: "<p>New</p>",
+      fallback: true,
     });
 
     vi.doUnmock("node-htmldiff");

@@ -430,6 +430,12 @@
     "saveVersion": "Save version",
     "showHistory": "Show history",
     "openHistory": "Open version history",
+    "compare": "Compare",
+    "compareToCurrent": "Comparing this version to the current document",
+    "noChanges": "No changes",
+    "chapterAdded": "This chapter only exists in the version being compared",
+    "chapterRemoved": "This chapter is not in the version being compared",
+    "compareUnavailable": "Compare unavailable for this chapter — showing the saved version only",
     "namePrompt": "Name this version",
     "namePlaceholder": "e.g. First full draft",
     "autoCheckpoint": "Auto checkpoint",
@@ -443,6 +449,12 @@
     "empty": "No versions yet. Save one with Ctrl+Alt+S.",
     "alreadyUpToDate": "Already up to date",
     "words": "words",
+    "status": {
+      "added": "Added",
+      "removed": "Removed",
+      "modified": "Modified",
+      "unchanged": "Unchanged"
+    },
     "trigger": {
       "manual": "Named",
       "auto-idle": "Auto checkpoint",
