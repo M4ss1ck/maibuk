@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
 import { Input } from "../../../../components/ui/Input";
 
@@ -68,6 +69,47 @@ describe("Input", () => {
       render(<Input endAdornment={<span>X</span>} />);
       const input = screen.getByRole("textbox");
       expect(input.className).toContain("pr-10");
+    });
+  });
+
+  describe("number controls", () => {
+    it("renders themed step controls for number inputs", () => {
+      render(<Input type="number" />);
+
+      const input = screen.getByRole("spinbutton");
+
+      expect(input.className).toContain("[appearance:textfield]");
+      expect(screen.getByRole("button", { name: "Increase value" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Decrease value" })).toBeInTheDocument();
+    });
+
+    it("steps the input value when themed controls are clicked", async () => {
+      const user = userEvent.setup();
+      render(<Input type="number" defaultValue="1" step="2" />);
+
+      await user.click(screen.getByRole("button", { name: "Increase value" }));
+      expect(screen.getByRole("spinbutton")).toHaveValue(3);
+
+      await user.click(screen.getByRole("button", { name: "Decrease value" }));
+      expect(screen.getByRole("spinbutton")).toHaveValue(1);
+    });
+
+    it("emits change events when themed controls are clicked", async () => {
+      const user = userEvent.setup();
+      const handleChange = vi.fn();
+      render(<Input type="number" defaultValue="1" onChange={handleChange} />);
+
+      await user.click(screen.getByRole("button", { name: "Increase value" }));
+
+      expect(handleChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to whole-number steps when native stepping is unavailable", async () => {
+      const user = userEvent.setup();
+      render(<Input type="number" defaultValue="1" step="any" />);
+
+      await user.click(screen.getByRole("button", { name: "Increase value" }));
+      expect(screen.getByRole("spinbutton")).toHaveValue(2);
     });
   });
 
