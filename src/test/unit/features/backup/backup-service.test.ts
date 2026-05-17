@@ -73,6 +73,20 @@ function createMockAdapter(): BackupAdapter {
         .map((v) => v.entry)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     }),
+    listBackupsPage: vi.fn(async ({ page, pageSize }) => {
+      const entries = Array.from(store.values())
+        .map((v) => v.entry)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const totalPages = Math.max(1, Math.ceil(entries.length / pageSize));
+      const clampedPage = Math.min(Math.max(1, page), totalPages);
+      return {
+        entries: entries.slice((clampedPage - 1) * pageSize, clampedPage * pageSize),
+        totalCount: entries.length,
+        totalSizeBytes: entries.reduce((sum, entry) => sum + entry.sizeBytes, 0),
+        page: clampedPage,
+        pageSize,
+      };
+    }),
     readBackup: vi.fn(async (filename) => {
       const item = store.get(filename);
       if (!item) throw new Error("Not found");

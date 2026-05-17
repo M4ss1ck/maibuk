@@ -1,4 +1,10 @@
-import type { BackupAdapter, BackupEntry, DatabaseAdapter } from "../../lib/platform/types";
+import type {
+  BackupAdapter,
+  BackupEntry,
+  BackupPage,
+  BackupPageOptions,
+  DatabaseAdapter,
+} from "../../lib/platform/types";
 import { getDatabase } from "../../lib/db";
 import { parseSqlStatements } from "../../lib/db/sql-parser";
 import { useBookStore } from "../books/store";
@@ -85,6 +91,10 @@ export class BackupService {
 
   async listBackups(): Promise<BackupEntry[]> {
     return this.adapter.listBackups();
+  }
+
+  async listBackupsPage(options: BackupPageOptions): Promise<BackupPage> {
+    return this.adapter.listBackupsPage(options);
   }
 
   async readBackup(filename: string): Promise<string> {

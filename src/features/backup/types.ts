@@ -1,1 +1,6 @@
-export type { BackupAdapter, BackupEntry } from "../../lib/platform/types";
+export type {
+  BackupAdapter,
+  BackupEntry,
+  BackupPage,
+  BackupPageOptions,
+} from "../../lib/platform/types";

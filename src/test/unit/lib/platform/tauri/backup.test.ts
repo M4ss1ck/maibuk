@@ -147,4 +147,43 @@ describe("TauriBackupAdapter", () => {
       "/safe/backups/maibuk-backup-daily-2026-03-15T14-30-00.meta.json"
     );
   });
+
+  it("loads only the requested backup metadata page while returning totals", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    mockReadDir.mockResolvedValue(
+      Array.from({ length: 12 }, (_, index) => ({
+        name: `maibuk-backup-manual-2026-03-15T14-30-${String(index).padStart(2, "0")}.sql`,
+      }))
+    );
+    mockReadTextFile.mockImplementation(async (path: string) => {
+      const match = path.match(/T14-30-(\d{2})\.meta\.json$/);
+      const second = match?.[1] ?? "00";
+      return JSON.stringify({
+        trigger: "manual",
+        createdAt: `2026-03-15T14:30:${second}.000Z`,
+        sizeBytes: Number(second) + 1,
+        checksum: `hash-${second}`,
+      });
+    });
+    mockStat.mockImplementation(async (path: string) => {
+      const match = path.match(/T14-30-(\d{2})\.sql$/);
+      return {
+        size: Number(match?.[1] ?? "0") + 1,
+        mtime: `2026-03-15T14:30:${match?.[1] ?? "00"}.000Z`,
+      };
+    });
+
+    const page = await adapter.listBackupsPage({ page: 2, pageSize: 5 });
+
+    expect(page.totalCount).toBe(12);
+    expect(page.totalSizeBytes).toBe(78);
+    expect(page.entries.map((entry) => entry.filename)).toEqual([
+      "maibuk-backup-manual-2026-03-15T14-30-06.sql",
+      "maibuk-backup-manual-2026-03-15T14-30-05.sql",
+      "maibuk-backup-manual-2026-03-15T14-30-04.sql",
+      "maibuk-backup-manual-2026-03-15T14-30-03.sql",
+      "maibuk-backup-manual-2026-03-15T14-30-02.sql",
+    ]);
+    expect(mockReadTextFile).toHaveBeenCalledTimes(5);
+  });
 });

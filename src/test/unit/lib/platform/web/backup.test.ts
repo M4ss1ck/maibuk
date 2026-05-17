@@ -39,6 +39,29 @@ describe("WebBackupAdapter", () => {
       expect(list[0].filename).toBe("maibuk-backup-pre-sync-2026-03-15T14-30-10.sql");
       expect(list[1].filename).toBe("maibuk-backup-daily-2026-03-15T14-30-00.sql");
     });
+
+    it("loads a requested page with total count and total size", async () => {
+      for (let index = 0; index < 12; index += 1) {
+        await adapter.saveBackup(
+          `maibuk-backup-manual-2026-03-15T14-30-${String(index).padStart(2, "0")}.sql`,
+          `sql-${index}`
+        );
+        await new Promise((r) => setTimeout(r, 2));
+      }
+
+      const page = await adapter.listBackupsPage({ page: 2, pageSize: 5 });
+
+      expect(page.totalCount).toBe(12);
+      expect(page.totalSizeBytes).toBeGreaterThan(0);
+      expect(page.entries).toHaveLength(5);
+      expect(page.entries.map((entry) => entry.filename)).toEqual([
+        "maibuk-backup-manual-2026-03-15T14-30-06.sql",
+        "maibuk-backup-manual-2026-03-15T14-30-05.sql",
+        "maibuk-backup-manual-2026-03-15T14-30-04.sql",
+        "maibuk-backup-manual-2026-03-15T14-30-03.sql",
+        "maibuk-backup-manual-2026-03-15T14-30-02.sql",
+      ]);
+    });
   });
 
   describe("readBackup", () => {
@@ -59,7 +82,7 @@ describe("WebBackupAdapter", () => {
       await adapter.saveBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql", sql);
 
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open("maibuk-backups", 1);
+        const request = indexedDB.open("maibuk-backups", 2);
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
