@@ -139,6 +139,158 @@ describe("useVersionStore", () => {
       expect(useVersionStore.getState().versions).toHaveLength(1);
       expect(useVersionStore.getState().versions[0].name).toBe("First");
     });
+
+    describe("auto-idle retention", () => {
+      const MAX_KEEP = 20;
+
+      async function seedAutoIdle(count: number) {
+        const baseTime = Math.floor(Date.now() / 1000) - count * 60;
+        for (let i = 0; i < count; i++) {
+          await testDb.execute(
+            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              `auto-${String(i).padStart(4, "0")}`,
+              "book-1",
+              null,
+              "{}",
+              i,
+              `seed-${i}`,
+              "auto-idle",
+              baseTime + i,
+            ]
+          );
+        }
+      }
+
+      it("prunes older auto-idle checkpoints when one is created beyond the cap", async () => {
+        await seedAutoIdle(MAX_KEEP); // already at the cap with seeded rows
+
+        // The new auto-idle insert must keep the count at MAX_KEEP (insert + prune one).
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+
+        await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+
+        const rows = await testDb.select<Record<string, unknown>[]>(
+          `SELECT COUNT(*) AS c FROM book_versions
+           WHERE book_id = ? AND trigger_type = 'auto-idle'`,
+          ["book-1"]
+        );
+        expect(Number(rows[0].c)).toBe(MAX_KEEP);
+      });
+
+      it("prunes a large backlog of auto-idle rows down to the cap in one insert", async () => {
+        await seedAutoIdle(100);
+
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+
+        await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+
+        const rows = await testDb.select<Record<string, unknown>[]>(
+          `SELECT COUNT(*) AS c FROM book_versions
+           WHERE book_id = ? AND trigger_type = 'auto-idle'`,
+          ["book-1"]
+        );
+        expect(Number(rows[0].c)).toBe(MAX_KEEP);
+      });
+
+      it("never prunes manual, pre-restore, or pre-sync versions", async () => {
+        const baseTime = Math.floor(Date.now() / 1000) - 10000;
+        for (const trigger of ["manual", "pre-restore", "pre-sync"] as const) {
+          await testDb.execute(
+            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              `keep-${trigger}`,
+              "book-1",
+              `keep-${trigger}`,
+              "{}",
+              0,
+              `keep-${trigger}`,
+              trigger,
+              baseTime,
+            ]
+          );
+        }
+        await seedAutoIdle(MAX_KEEP + 5);
+
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+
+        await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+
+        for (const trigger of ["manual", "pre-restore", "pre-sync"]) {
+          const rows = await testDb.select<Record<string, unknown>[]>(
+            "SELECT id FROM book_versions WHERE id = ?",
+            [`keep-${trigger}`]
+          );
+          expect(rows).toHaveLength(1);
+        }
+      });
+
+      it("does not prune when the trigger type is not auto-idle", async () => {
+        await seedAutoIdle(MAX_KEEP + 5);
+
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+
+        await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          name: "Important draft",
+          triggerType: "manual",
+        });
+
+        const rows = await testDb.select<Record<string, unknown>[]>(
+          `SELECT COUNT(*) AS c FROM book_versions
+           WHERE book_id = ? AND trigger_type = 'auto-idle'`,
+          ["book-1"]
+        );
+        expect(Number(rows[0].c)).toBe(MAX_KEEP + 5);
+      });
+
+      it("only prunes auto-idle rows belonging to the same book", async () => {
+        await seedBook(testDb, "book-2");
+        const baseTime = Math.floor(Date.now() / 1000) - 100;
+        for (let i = 0; i < 3; i++) {
+          await testDb.execute(
+            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              `other-${i}`,
+              "book-2",
+              null,
+              "{}",
+              i,
+              `o-${i}`,
+              "auto-idle",
+              baseTime + i,
+            ]
+          );
+        }
+        await seedAutoIdle(MAX_KEEP + 10);
+
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+
+        await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+
+        const otherRows = await testDb.select<Record<string, unknown>[]>(
+          `SELECT COUNT(*) AS c FROM book_versions
+           WHERE book_id = ? AND trigger_type = 'auto-idle'`,
+          ["book-2"]
+        );
+        expect(Number(otherRows[0].c)).toBe(3);
+      });
+    });
   });
 
   describe("loadVersions", () => {
@@ -205,6 +357,75 @@ describe("useVersionStore", () => {
       await useVersionStore.getState().loadVersions("book-1", 99, 10);
       expect(useVersionStore.getState().currentPage).toBe(2);
       expect(useVersionStore.getState().versions).toHaveLength(5);
+    });
+
+    it("opportunistically prunes auto-idle backlog on the first load per book", async () => {
+      const baseTime = Math.floor(Date.now() / 1000) - 100000;
+      for (let i = 0; i < 100; i++) {
+        await testDb.execute(
+          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            `legacy-${String(i).padStart(4, "0")}`,
+            "book-1",
+            null,
+            "{}",
+            i,
+            `chk-legacy-${i}`,
+            "auto-idle",
+            baseTime + i,
+          ]
+        );
+      }
+
+      await useVersionStore.getState().loadVersions("book-1", 1, 10);
+
+      const remaining = await testDb.select<Record<string, unknown>[]>(
+        `SELECT COUNT(*) AS c FROM book_versions
+         WHERE book_id = ? AND trigger_type = 'auto-idle'`,
+        ["book-1"]
+      );
+      expect(Number(remaining[0].c)).toBe(20);
+      expect(useVersionStore.getState().totalCount).toBe(20);
+    });
+
+    it("does not re-prune on subsequent page navigation for the same book", async () => {
+      const baseTime = Math.floor(Date.now() / 1000) - 1000;
+      // Seed exactly at the cap so the prune is a no-op on first load.
+      for (let i = 0; i < 20; i++) {
+        await testDb.execute(
+          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            `auto-${String(i).padStart(4, "0")}`,
+            "book-1",
+            null,
+            "{}",
+            i,
+            `chk-${i}`,
+            "auto-idle",
+            baseTime + i,
+          ]
+        );
+      }
+      // Add one extra auto-idle row AFTER the first load: page navigation must NOT prune it.
+      await useVersionStore.getState().loadVersions("book-1", 1, 10);
+
+      await testDb.execute(
+        `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["extra", "book-1", null, "{}", 999, "chk-extra", "auto-idle", baseTime + 9999]
+      );
+
+      // Page navigation through setPage → loadVersions(currentBookId, …). Should not prune.
+      await useVersionStore.getState().setPage(2);
+
+      const remaining = await testDb.select<Record<string, unknown>[]>(
+        `SELECT COUNT(*) AS c FROM book_versions
+         WHERE book_id = ? AND trigger_type = 'auto-idle'`,
+        ["book-1"]
+      );
+      expect(Number(remaining[0].c)).toBe(21);
     });
 
     it("never exposes the snapshot field", async () => {

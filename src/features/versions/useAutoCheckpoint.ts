@@ -12,17 +12,35 @@ export function useAutoCheckpoint(params: {
   enabled?: boolean;
 }): void {
   const { bookId, wordCount, enabled = true } = params;
-  const lastCheckpointWordCount = useRef<number>(wordCount);
+  const lastCheckpointWordCount = useRef<number>(0);
   const lastCheckpointAt = useRef<number>(0);
+  const baselineInitialized = useRef<boolean>(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Initialize from first observed wordCount so initial load is not a change
+  // Reset baseline when the active book changes — wordCount jumps that come
+  // from switching books, or from chapters loading asynchronously after mount,
+  // must not be counted as user edits.
   useEffect(() => {
-    lastCheckpointWordCount.current = wordCount;
-  }, []); // only on mount
+    baselineInitialized.current = false;
+    lastCheckpointAt.current = 0;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [bookId]);
 
   useEffect(() => {
     if (!enabled || !bookId) return;
+
+    // Anchor the baseline at the first non-zero wordCount we see for this book.
+    // This treats the initial chapters-load (0 → N) as the starting point, not as an edit.
+    if (!baselineInitialized.current) {
+      if (wordCount > 0) {
+        lastCheckpointWordCount.current = wordCount;
+        baselineInitialized.current = true;
+      }
+      return;
+    }
 
     const delta = Math.abs(wordCount - lastCheckpointWordCount.current);
     const now = Date.now();
@@ -31,7 +49,6 @@ export function useAutoCheckpoint(params: {
       delta >= VERSION_CHECKPOINT_WORD_THRESHOLD &&
       now - lastCheckpointAt.current >= VERSION_CHECKPOINT_MIN_INTERVAL_MS
     ) {
-      // Clear any existing timer before re-arming
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }

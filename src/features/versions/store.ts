@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
 import { serializeBook, applyBookSnapshot } from "../sync/serializer";
 import { computeChecksum } from "../../lib/checksum";
+import { VERSION_AUTO_PRUNE_KEEP } from "../../constants";
 import type {
   BookVersion,
   CreateVersionInput,
@@ -47,6 +48,42 @@ interface VersionStore {
   deleteVersion: (versionId: string) => Promise<void>;
 }
 
+async function pruneAutoCheckpoints(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  bookId: string,
+  keep: number
+): Promise<number> {
+  // Step 1: find the cutoff — the (keep+1)th most-recent auto-idle row.
+  // Anything older than this (or tied at the same created_at with a smaller id)
+  // is excess and must be deleted.
+  //
+  // We avoid `DELETE … WHERE id IN (SELECT … LIMIT … OFFSET …)` because the
+  // `LIMIT -1` idiom for "unlimited" is a SQLite-ism that some drivers
+  // (notably tauri-plugin-sql via sqlx) handle inconsistently.
+  const cutoffRows = await db.select<Array<{ created_at: number; id: string }>>(
+    `SELECT created_at, id FROM book_versions
+     WHERE book_id = ? AND trigger_type = 'auto-idle'
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1 OFFSET ?`,
+    [bookId, keep]
+  );
+
+  if (cutoffRows.length === 0) {
+    // Fewer than `keep` rows — nothing to prune.
+    return 0;
+  }
+
+  const cutoff = cutoffRows[0];
+  const result = await db.execute(
+    `DELETE FROM book_versions
+     WHERE book_id = ?
+       AND trigger_type = 'auto-idle'
+       AND (created_at < ? OR (created_at = ? AND id <= ?))`,
+    [bookId, cutoff.created_at, cutoff.created_at, cutoff.id]
+  );
+  return result.rowsAffected ?? 0;
+}
+
 async function fetchPage(
   bookId: string,
   page: number,
@@ -89,12 +126,32 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   error: null,
 
   loadVersions: async (bookId, page = 1, pageSize = DEFAULT_VERSIONS_PAGE_SIZE) => {
+    // First load of this book in the session → opportunistically prune the
+    // auto-idle backlog. Page navigation (same currentBookId) skips this.
+    const isFirstLoad = get().currentBookId !== bookId;
+
     set({
       isLoading: true,
       error: null,
       currentBookId: bookId,
       pageSize,
     });
+
+    // Prune is non-fatal: if it fails we still want to render the page.
+    if (isFirstLoad) {
+      try {
+        const db = await getDatabase();
+        const pruned = await pruneAutoCheckpoints(db, bookId, VERSION_AUTO_PRUNE_KEEP);
+        if (pruned > 0) {
+          console.info(
+            `[versions] Pruned ${pruned} auto-checkpoint(s) for book ${bookId}`
+          );
+        }
+      } catch (err) {
+        console.warn("[versions] Auto-checkpoint prune failed:", err);
+      }
+    }
+
     try {
       const { versions, totalCount, clampedPage } = await fetchPage(
         bookId,
@@ -156,6 +213,17 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
       ]
     );
 
+    // Retention: cap auto-idle checkpoints per book. Manual / pre-restore / pre-sync
+    // are never pruned — they represent explicit user intent or safety boundaries.
+    let prunedCount = 0;
+    if (input.triggerType === "auto-idle") {
+      prunedCount = await pruneAutoCheckpoints(
+        db,
+        input.bookId,
+        VERSION_AUTO_PRUNE_KEEP
+      );
+    }
+
     const version: BookVersion = {
       id,
       bookId: input.bookId,
@@ -168,11 +236,11 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     };
 
     // Keep the visible page in sync when the user is browsing this book's history.
-    // We only mutate state if the new row would land on the currently visible page
-    // (i.e. page 1, since rows are sorted newest-first).
+    // We only mutate the visible slice when the new row would land on page 1
+    // (rows are sorted newest-first); other pages get refreshed lazily on navigation.
     set((state) => {
       if (state.currentBookId !== input.bookId) return {};
-      const newTotal = state.totalCount + 1;
+      const newTotal = state.totalCount + 1 - prunedCount;
       if (state.currentPage === 1) {
         const next = [version, ...state.versions].slice(0, state.pageSize);
         return { versions: next, totalCount: newTotal };
