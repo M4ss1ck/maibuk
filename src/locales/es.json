@@ -449,7 +449,9 @@
     "delete": "Eliminar",
     "deleteConfirm": "¿Eliminar esta versión permanentemente?",
     "empty": "Aún no hay versiones. Guarda una con Ctrl+Alt+S.",
-    "showMore": "Mostrar más",
+    "page": "Página {{page}} de {{total}}",
+    "previousPage": "Anterior",
+    "nextPage": "Siguiente",
     "alreadyUpToDate": "Ya está actualizado",
     "words": "palabras",
     "status": {

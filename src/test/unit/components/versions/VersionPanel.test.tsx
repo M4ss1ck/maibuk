@@ -35,7 +35,7 @@ const versions: BookVersion[] = [
   },
 ];
 
-const manyVersions: BookVersion[] = Array.from({ length: 65 }, (_, index) => ({
+const manyVersions: BookVersion[] = Array.from({ length: 25 }, (_, index) => ({
   id: `version-${index + 1}`,
   bookId: "book-1",
   name: `Version ${index + 1}`,
@@ -51,7 +51,10 @@ let storeVersions = versions;
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     i18n: { language: "en" },
-    t: (key: string) => {
+    t: (key: string, vars?: Record<string, unknown>) => {
+      if (key === "versions.page") {
+        return `Page ${vars?.page} of ${vars?.total}`;
+      }
       const map: Record<string, string> = {
         "common.back": "Back",
         "common.error": "Error",
@@ -67,7 +70,8 @@ vi.mock("react-i18next", () => ({
         "versions.restoreConfirm": "Restore this version?",
         "versions.restoreSuccess": "Version restored",
         "versions.restoredName": "Before restore",
-        "versions.showMore": "Show more",
+        "versions.previousPage": "Previous",
+        "versions.nextPage": "Next",
         "versions.title": "Version history",
         "versions.trigger.manual": "Named",
       };
@@ -189,7 +193,7 @@ describe("VersionPanel compare", () => {
     await waitFor(() => expect(mockFlushBeforeCompare).toHaveBeenCalledTimes(1));
   });
 
-  it("renders version rows in batches so opening a large history stays responsive", async () => {
+  it("paginates the list to 10 versions per page", () => {
     storeVersions = manyVersions;
 
     render(
@@ -202,11 +206,60 @@ describe("VersionPanel compare", () => {
     );
 
     expect(screen.getByText("Version 1")).toBeInTheDocument();
-    expect(screen.getByText("Version 50")).toBeInTheDocument();
-    expect(screen.queryByText("Version 51")).not.toBeInTheDocument();
+    expect(screen.getByText("Version 10")).toBeInTheDocument();
+    expect(screen.queryByText("Version 11")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+  it("advances and retreats through pages via the footer", () => {
+    storeVersions = manyVersions;
 
-    expect(screen.getByText("Version 65")).toBeInTheDocument();
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    const prev = screen.getByRole("button", { name: "Previous" });
+    const next = screen.getByRole("button", { name: "Next" });
+    expect(prev).toBeDisabled();
+    expect(next).not.toBeDisabled();
+
+    fireEvent.click(next);
+
+    expect(screen.queryByText("Version 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Version 11")).toBeInTheDocument();
+    expect(screen.getByText("Version 20")).toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Version 21")).toBeInTheDocument();
+    expect(screen.getByText("Version 25")).toBeInTheDocument();
+    expect(screen.queryByText("Version 20")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 3 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
+  });
+
+  it("hides the pagination footer when there is only one page", () => {
+    storeVersions = versions;
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Previous" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument();
   });
 });

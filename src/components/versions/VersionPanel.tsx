@@ -8,6 +8,8 @@ import {
   ArrowLeft,
   Check,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
@@ -49,7 +51,7 @@ function formatRelativeTime(date: Date, locale: string): string {
 }
 
 type ConfirmAction = { type: "restore" | "delete"; versionId: string } | null;
-const VERSION_BATCH_SIZE = 50;
+const VERSIONS_PER_PAGE = 10;
 
 export function VersionPanel({
   isOpen,
@@ -71,7 +73,7 @@ export function VersionPanel({
     target: BookSnapshot;
   } | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const [visibleVersionCount, setVisibleVersionCount] = useState(VERSION_BATCH_SIZE);
+  const [currentPage, setCurrentPage] = useState(1);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
@@ -81,15 +83,36 @@ export function VersionPanel({
       loadVersions(bookId);
       setCompare(null);
       setFocusedIndex(0);
-      setVisibleVersionCount(VERSION_BATCH_SIZE);
+      setCurrentPage(1);
       setRenamingId(null);
       setConfirmAction(null);
     }
   }, [isOpen, bookId, loadVersions]);
 
-  const visibleVersions = useMemo(
-    () => versions.slice(0, visibleVersionCount),
-    [versions, visibleVersionCount]
+  const totalPages = Math.max(1, Math.ceil(versions.length / VERSIONS_PER_PAGE));
+
+  // Clamp page if items were deleted (e.g., last item on the last page).
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+      setFocusedIndex(0);
+    }
+  }, [currentPage, totalPages]);
+
+  const visibleVersions = useMemo(() => {
+    const start = (currentPage - 1) * VERSIONS_PER_PAGE;
+    return versions.slice(start, start + VERSIONS_PER_PAGE);
+  }, [versions, currentPage]);
+
+  const goToPage = useCallback(
+    (page: number) => {
+      const clamped = Math.min(Math.max(1, page), totalPages);
+      setCurrentPage(clamped);
+      setFocusedIndex(0);
+      setConfirmAction(null);
+      setRenamingId(null);
+    },
+    [totalPages]
   );
 
   const handleCompare = useCallback(
@@ -174,6 +197,18 @@ export function VersionPanel({
           e.preventDefault();
           setFocusedIndex((i) => Math.max(i - 1, 0));
           break;
+        case "PageDown":
+          if (currentPage < totalPages) {
+            e.preventDefault();
+            goToPage(currentPage + 1);
+          }
+          break;
+        case "PageUp":
+          if (currentPage > 1) {
+            e.preventDefault();
+            goToPage(currentPage - 1);
+          }
+          break;
         case "Enter": {
           e.preventDefault();
           const v = visibleVersions[focusedIndex];
@@ -219,6 +254,9 @@ export function VersionPanel({
     confirmAction,
     handleCompare,
     startRename,
+    currentPage,
+    totalPages,
+    goToPage,
   ]);
 
   // Scroll focused row into view
@@ -419,19 +457,32 @@ export function VersionPanel({
             );
           })}
           </div>
-          {visibleVersionCount < versions.length && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                setVisibleVersionCount((count) =>
-                  Math.min(count + VERSION_BATCH_SIZE, versions.length)
-                )
-              }
-              className="self-center"
-            >
-              {t("versions.showMore")}
-            </Button>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                aria-label={t("versions.previousPage")}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                {t("versions.previousPage")}
+              </Button>
+              <span className="text-xs text-muted-foreground" aria-live="polite">
+                {t("versions.page", { page: currentPage, total: totalPages })}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                aria-label={t("versions.nextPage")}
+              >
+                {t("versions.nextPage")}
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
           )}
         </div>
       )}

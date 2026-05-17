@@ -449,7 +449,9 @@
     "delete": "Delete",
     "deleteConfirm": "Delete this version permanently?",
     "empty": "No versions yet. Save one with Ctrl+Alt+S.",
-    "showMore": "Show more",
+    "page": "Page {{page}} of {{total}}",
+    "previousPage": "Previous",
+    "nextPage": "Next",
     "alreadyUpToDate": "Already up to date",
     "words": "words",
     "status": {
