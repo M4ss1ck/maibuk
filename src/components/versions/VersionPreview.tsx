@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { BookSnapshot } from "../../features/sync/types";
+import { sanitizeChapterHtml } from "../../features/versions/sanitize";
 
 interface VersionPreviewProps {
   snapshot: BookSnapshot;
@@ -48,9 +49,8 @@ export function VersionPreview({ snapshot }: VersionPreviewProps) {
         <div className="flex-1 min-h-0 overflow-auto border border-border rounded-lg p-3 bg-background">
           <div
             className="editor-content"
-            // Chapter content is the user's own HTML from their database
             dangerouslySetInnerHTML={{
-              __html: selectedChapter.content ?? "",
+              __html: sanitizeChapterHtml(selectedChapter.content ?? ""),
             }}
           />
         </div>
