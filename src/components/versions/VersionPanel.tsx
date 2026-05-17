@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useCallback, useMemo } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   GitCompareArrows,
@@ -15,7 +15,7 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { toast } from "../ui/Toast";
-import { useVersionStore } from "../../features/versions/store";
+import { useVersionStore, DEFAULT_VERSIONS_PAGE_SIZE } from "../../features/versions/store";
 import type { BookVersion } from "../../features/versions/types";
 import type { BookSnapshot } from "../../features/sync/types";
 import { serializeBook } from "../../features/sync/serializer";
@@ -51,7 +51,6 @@ function formatRelativeTime(date: Date, locale: string): string {
 }
 
 type ConfirmAction = { type: "restore" | "delete"; versionId: string } | null;
-const VERSIONS_PER_PAGE = 10;
 
 export function VersionPanel({
   isOpen,
@@ -60,9 +59,13 @@ export function VersionPanel({
   flushBeforeCompare,
 }: VersionPanelProps) {
   const { t, i18n } = useTranslation();
-  const versions = useVersionStore((state) => state.versions);
+  const visibleVersions = useVersionStore((state) => state.versions);
+  const totalCount = useVersionStore((state) => state.totalCount);
+  const currentPage = useVersionStore((state) => state.currentPage);
+  const pageSize = useVersionStore((state) => state.pageSize);
   const isLoading = useVersionStore((state) => state.isLoading);
   const loadVersions = useVersionStore((state) => state.loadVersions);
+  const setPage = useVersionStore((state) => state.setPage);
   const getVersionSnapshot = useVersionStore((state) => state.getVersionSnapshot);
   const restoreVersion = useVersionStore((state) => state.restoreVersion);
   const renameVersion = useVersionStore((state) => state.renameVersion);
@@ -73,46 +76,32 @@ export function VersionPanel({
     target: BookSnapshot;
   } | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
   useEffect(() => {
     if (isOpen) {
-      loadVersions(bookId);
+      loadVersions(bookId, 1, DEFAULT_VERSIONS_PAGE_SIZE);
       setCompare(null);
       setFocusedIndex(0);
-      setCurrentPage(1);
       setRenamingId(null);
       setConfirmAction(null);
     }
   }, [isOpen, bookId, loadVersions]);
 
-  const totalPages = Math.max(1, Math.ceil(versions.length / VERSIONS_PER_PAGE));
-
-  // Clamp page if items were deleted (e.g., last item on the last page).
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-      setFocusedIndex(0);
-    }
-  }, [currentPage, totalPages]);
-
-  const visibleVersions = useMemo(() => {
-    const start = (currentPage - 1) * VERSIONS_PER_PAGE;
-    return versions.slice(start, start + VERSIONS_PER_PAGE);
-  }, [versions, currentPage]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const goToPage = useCallback(
     (page: number) => {
       const clamped = Math.min(Math.max(1, page), totalPages);
-      setCurrentPage(clamped);
+      if (clamped === currentPage) return;
       setFocusedIndex(0);
       setConfirmAction(null);
       setRenamingId(null);
+      void setPage(clamped);
     },
-    [totalPages]
+    [setPage, totalPages, currentPage]
   );
 
   const handleCompare = useCallback(
@@ -266,9 +255,11 @@ export function VersionPanel({
     el?.scrollIntoView({ block: "nearest" });
   }, [focusedIndex, isOpen, compare]);
 
+  const isInitialLoading = isLoading && visibleVersions.length === 0 && totalCount === 0;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t("versions.title")} size="wide">
-      {isLoading ? (
+      {isInitialLoading ? (
         <div className="text-center py-8 text-muted-foreground">
           {t("common.loading")}
         </div>
@@ -296,13 +287,19 @@ export function VersionPanel({
             <VersionCompare current={compare.current} target={compare.target} />
           </Suspense>
         </div>
-      ) : versions.length === 0 ? (
+      ) : totalCount === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
           {t("versions.empty")}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1" role="list">
+          <div
+            className={`flex flex-col gap-1 transition-opacity ${
+              isLoading ? "opacity-60" : ""
+            }`}
+            role="list"
+            aria-busy={isLoading}
+          >
             {visibleVersions.map((version, index) => {
               const isFocused = focusedIndex === index;
               const isConfirming =
@@ -463,7 +460,7 @@ export function VersionPanel({
                 variant="ghost"
                 size="sm"
                 onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage === 1}
+                disabled={currentPage === 1 || isLoading}
                 aria-label={t("versions.previousPage")}
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
@@ -476,7 +473,7 @@ export function VersionPanel({
                 variant="ghost"
                 size="sm"
                 onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || isLoading}
                 aria-label={t("versions.nextPage")}
               >
                 {t("versions.nextPage")}

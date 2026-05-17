@@ -10,6 +10,8 @@ import type {
 } from "./types";
 import type { BookSnapshot } from "../sync/types";
 
+export const DEFAULT_VERSIONS_PAGE_SIZE = 10;
+
 function generateId(): string {
   return crypto.randomUUID();
 }
@@ -29,11 +31,15 @@ function toVersion(row: Record<string, unknown>): BookVersion {
 
 interface VersionStore {
   versions: BookVersion[];
+  totalCount: number;
   currentBookId: string | null;
+  currentPage: number;
+  pageSize: number;
   isLoading: boolean;
   error: string | null;
 
-  loadVersions: (bookId: string) => Promise<void>;
+  loadVersions: (bookId: string, page?: number, pageSize?: number) => Promise<void>;
+  setPage: (page: number) => Promise<void>;
   createVersion: (input: CreateVersionInput) => Promise<BookVersion | null>;
   getVersionSnapshot: (versionId: string) => Promise<string>;
   restoreVersion: (versionId: string, options?: RestoreOptions) => Promise<void>;
@@ -41,28 +47,75 @@ interface VersionStore {
   deleteVersion: (versionId: string) => Promise<void>;
 }
 
-export const useVersionStore = create<VersionStore>((set) => ({
+async function fetchPage(
+  bookId: string,
+  page: number,
+  pageSize: number
+): Promise<{ versions: BookVersion[]; totalCount: number; clampedPage: number }> {
+  const db = await getDatabase();
+
+  const countRows = await db.select<Record<string, unknown>[]>(
+    "SELECT COUNT(*) AS count FROM book_versions WHERE book_id = ?",
+    [bookId]
+  );
+  const totalCount = Number(countRows[0]?.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const clampedPage = Math.min(Math.max(1, page), totalPages);
+  const offset = (clampedPage - 1) * pageSize;
+
+  const rows = await db.select<Record<string, unknown>[]>(
+    `SELECT id, book_id, name, word_count, checksum, trigger_type, created_at, synced_at
+     FROM book_versions
+     WHERE book_id = ?
+     ORDER BY created_at DESC, id DESC
+     LIMIT ? OFFSET ?`,
+    [bookId, pageSize, offset]
+  );
+
+  return {
+    versions: rows.map(toVersion),
+    totalCount,
+    clampedPage,
+  };
+}
+
+export const useVersionStore = create<VersionStore>((set, get) => ({
   versions: [],
+  totalCount: 0,
   currentBookId: null,
+  currentPage: 1,
+  pageSize: DEFAULT_VERSIONS_PAGE_SIZE,
   isLoading: false,
   error: null,
 
-  loadVersions: async (bookId: string) => {
-    set({ isLoading: true, error: null, currentBookId: bookId });
+  loadVersions: async (bookId, page = 1, pageSize = DEFAULT_VERSIONS_PAGE_SIZE) => {
+    set({
+      isLoading: true,
+      error: null,
+      currentBookId: bookId,
+      pageSize,
+    });
     try {
-      const db = await getDatabase();
-      const result = await db.select<Record<string, unknown>[]>(
-        `SELECT id, book_id, name, word_count, checksum, trigger_type, created_at, synced_at
-         FROM book_versions
-         WHERE book_id = ?
-         ORDER BY created_at DESC, id DESC`,
-        [bookId]
+      const { versions, totalCount, clampedPage } = await fetchPage(
+        bookId,
+        page,
+        pageSize
       );
-      const versions = result.map(toVersion);
-      set({ versions, isLoading: false });
+      set({
+        versions,
+        totalCount,
+        currentPage: clampedPage,
+        isLoading: false,
+      });
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
+  },
+
+  setPage: async (page) => {
+    const { currentBookId, pageSize } = get();
+    if (!currentBookId) return;
+    await get().loadVersions(currentBookId, page, pageSize);
   },
 
   createVersion: async (input: CreateVersionInput) => {
@@ -114,11 +167,17 @@ export const useVersionStore = create<VersionStore>((set) => ({
       syncedAt: null,
     };
 
+    // Keep the visible page in sync when the user is browsing this book's history.
+    // We only mutate state if the new row would land on the currently visible page
+    // (i.e. page 1, since rows are sorted newest-first).
     set((state) => {
-      if (state.currentBookId === input.bookId) {
-        return { versions: [version, ...state.versions] };
+      if (state.currentBookId !== input.bookId) return {};
+      const newTotal = state.totalCount + 1;
+      if (state.currentPage === 1) {
+        const next = [version, ...state.versions].slice(0, state.pageSize);
+        return { versions: next, totalCount: newTotal };
       }
-      return {};
+      return { totalCount: newTotal };
     });
 
     return version;
@@ -168,7 +227,8 @@ export const useVersionStore = create<VersionStore>((set) => ({
     });
 
     await applyBookSnapshot(snapshot);
-    await useVersionStore.getState().loadVersions(bookId);
+    // Re-fetch page 1 so the new pre-restore version is visible on top.
+    await useVersionStore.getState().loadVersions(bookId, 1);
   },
 
   renameVersion: async (versionId: string, name: string) => {
@@ -189,8 +249,16 @@ export const useVersionStore = create<VersionStore>((set) => ({
     const db = await getDatabase();
     await db.execute("DELETE FROM book_versions WHERE id = ?", [versionId]);
 
-    set((state) => ({
-      versions: state.versions.filter((v) => v.id !== versionId),
-    }));
+    // Reload the current page so totalCount and the visible slice stay correct
+    // (the page may now have one fewer row, or we may have dropped off the last page).
+    const { currentBookId, currentPage, pageSize } = get();
+    if (currentBookId) {
+      await get().loadVersions(currentBookId, currentPage, pageSize);
+    } else {
+      set((state) => ({
+        versions: state.versions.filter((v) => v.id !== versionId),
+        totalCount: Math.max(0, state.totalCount - 1),
+      }));
+    }
   },
 }));

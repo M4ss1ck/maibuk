@@ -66,7 +66,10 @@ describe("useVersionStore", () => {
 
     useVersionStore.setState({
       versions: [],
+      totalCount: 0,
       currentBookId: null,
+      currentPage: 1,
+      pageSize: 10,
       isLoading: false,
       error: null,
     });
@@ -139,6 +142,26 @@ describe("useVersionStore", () => {
   });
 
   describe("loadVersions", () => {
+    async function seedVersions(count: number) {
+      const baseTime = Math.floor(Date.now() / 1000);
+      for (let i = 0; i < count; i++) {
+        await testDb.execute(
+          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            `ver-${String(i).padStart(3, "0")}`,
+            "book-1",
+            `v${i}`,
+            "{}",
+            i,
+            `chk-${i}`,
+            "manual",
+            baseTime + i,
+          ]
+        );
+      }
+    }
+
     it("returns versions ordered by created_at DESC, id DESC", async () => {
       const now = Math.floor(Date.now() / 1000);
       await testDb.execute(
@@ -156,6 +179,32 @@ describe("useVersionStore", () => {
 
       const ids = useVersionStore.getState().versions.map((v) => v.id);
       expect(ids).toEqual(["ver-b", "ver-a"]);
+      expect(useVersionStore.getState().totalCount).toBe(2);
+      expect(useVersionStore.getState().currentPage).toBe(1);
+    });
+
+    it("loads only the requested page (LIMIT/OFFSET at SQL level)", async () => {
+      await seedVersions(25);
+
+      await useVersionStore.getState().loadVersions("book-1", 1, 10);
+      expect(useVersionStore.getState().versions).toHaveLength(10);
+      expect(useVersionStore.getState().totalCount).toBe(25);
+
+      await useVersionStore.getState().loadVersions("book-1", 2, 10);
+      expect(useVersionStore.getState().versions).toHaveLength(10);
+      expect(useVersionStore.getState().currentPage).toBe(2);
+
+      await useVersionStore.getState().loadVersions("book-1", 3, 10);
+      expect(useVersionStore.getState().versions).toHaveLength(5);
+      expect(useVersionStore.getState().currentPage).toBe(3);
+    });
+
+    it("clamps an out-of-range page to the last available page", async () => {
+      await seedVersions(15);
+
+      await useVersionStore.getState().loadVersions("book-1", 99, 10);
+      expect(useVersionStore.getState().currentPage).toBe(2);
+      expect(useVersionStore.getState().versions).toHaveLength(5);
     });
 
     it("never exposes the snapshot field", async () => {
@@ -303,6 +352,39 @@ describe("useVersionStore", () => {
       );
       expect(rows[0].name).toBe("New Name");
       expect(useVersionStore.getState().versions[0].name).toBe("New Name");
+    });
+  });
+
+  describe("setPage", () => {
+    it("loads the requested page for the current book", async () => {
+      const baseTime = Math.floor(Date.now() / 1000);
+      for (let i = 0; i < 15; i++) {
+        await testDb.execute(
+          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            `v-${String(i).padStart(3, "0")}`,
+            "book-1",
+            `v${i}`,
+            "{}",
+            i,
+            `c-${i}`,
+            "manual",
+            baseTime + i,
+          ]
+        );
+      }
+
+      await useVersionStore.getState().loadVersions("book-1", 1, 10);
+      await useVersionStore.getState().setPage(2);
+
+      expect(useVersionStore.getState().currentPage).toBe(2);
+      expect(useVersionStore.getState().versions).toHaveLength(5);
+    });
+
+    it("is a no-op when no book is loaded", async () => {
+      await useVersionStore.getState().setPage(3);
+      expect(useVersionStore.getState().currentPage).toBe(1);
     });
   });
 
