@@ -13,8 +13,57 @@ import type { BookSnapshot } from "../sync/types";
 
 export const DEFAULT_VERSIONS_PAGE_SIZE = 10;
 
+// Trigger types that represent automatic/system-generated snapshots and are
+// subject to the retention cap. Manual stays uncapped (explicit user intent);
+// pre-restore stays uncapped (safety breadcrumbs around destructive operations).
+const PRUNABLE_TRIGGERS = ["auto-idle", "close", "pre-sync"] as const;
+type PrunableTrigger = (typeof PRUNABLE_TRIGGERS)[number];
+
+function isPrunable(trigger: VersionTrigger): trigger is PrunableTrigger {
+  return (PRUNABLE_TRIGGERS as readonly string[]).includes(trigger);
+}
+
 function generateId(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Strip fields that change on every write but don't represent user-meaningful
+ * content. Two snapshots with identical text/structure must produce the same
+ * dedup hash regardless of when they were saved, otherwise triggers that flush
+ * the editor first (e.g. "close") create a fresh version on every fire.
+ */
+function contentHashInput(snapshot: BookSnapshot): string {
+  return JSON.stringify({
+    book: {
+      id: snapshot.book.id,
+      title: snapshot.book.title,
+      subtitle: snapshot.book.subtitle,
+      authorName: snapshot.book.authorName,
+      description: snapshot.book.description,
+      genre: snapshot.book.genre,
+      language: snapshot.book.language,
+      coverImagePath: snapshot.book.coverImagePath,
+      coverData: snapshot.book.coverData,
+      wordCount: snapshot.book.wordCount,
+      targetWordCount: snapshot.book.targetWordCount,
+      status: snapshot.book.status,
+      lastChapterId: snapshot.book.lastChapterId,
+    },
+    chapters: snapshot.chapters.map((c) => ({
+      id: c.id,
+      bookId: c.bookId,
+      title: c.title,
+      content: c.content,
+      synopsis: c.synopsis,
+      order: c.order,
+      parentId: c.parentId,
+      chapterType: c.chapterType,
+      wordCount: c.wordCount,
+      status: c.status,
+      isIncludedInExport: c.isIncludedInExport,
+    })),
+  });
 }
 
 function toVersion(row: Record<string, unknown>): BookVersion {
@@ -48,28 +97,27 @@ interface VersionStore {
   deleteVersion: (versionId: string) => Promise<void>;
 }
 
-async function pruneAutoCheckpoints(
+async function pruneTriggerType(
   db: Awaited<ReturnType<typeof getDatabase>>,
   bookId: string,
+  trigger: PrunableTrigger,
   keep: number
 ): Promise<number> {
-  // Step 1: find the cutoff — the (keep+1)th most-recent auto-idle row.
-  // Anything older than this (or tied at the same created_at with a smaller id)
-  // is excess and must be deleted.
+  // Find the cutoff — the (keep+1)th most-recent row of this trigger type.
+  // Anything older (or tied at the same created_at with a smaller id) is excess.
   //
-  // We avoid `DELETE … WHERE id IN (SELECT … LIMIT … OFFSET …)` because the
-  // `LIMIT -1` idiom for "unlimited" is a SQLite-ism that some drivers
-  // (notably tauri-plugin-sql via sqlx) handle inconsistently.
+  // Two-step (SELECT cutoff → DELETE everything past it) to avoid SQLite-isms
+  // like `LIMIT -1` or `DELETE … WHERE id IN (SELECT …)` patterns that some
+  // drivers (notably tauri-plugin-sql via sqlx) handle inconsistently.
   const cutoffRows = await db.select<Array<{ created_at: number; id: string }>>(
     `SELECT created_at, id FROM book_versions
-     WHERE book_id = ? AND trigger_type = 'auto-idle'
+     WHERE book_id = ? AND trigger_type = ?
      ORDER BY created_at DESC, id DESC
      LIMIT 1 OFFSET ?`,
-    [bookId, keep]
+    [bookId, trigger, keep]
   );
 
   if (cutoffRows.length === 0) {
-    // Fewer than `keep` rows — nothing to prune.
     return 0;
   }
 
@@ -77,11 +125,23 @@ async function pruneAutoCheckpoints(
   const result = await db.execute(
     `DELETE FROM book_versions
      WHERE book_id = ?
-       AND trigger_type = 'auto-idle'
+       AND trigger_type = ?
        AND (created_at < ? OR (created_at = ? AND id <= ?))`,
-    [bookId, cutoff.created_at, cutoff.created_at, cutoff.id]
+    [bookId, trigger, cutoff.created_at, cutoff.created_at, cutoff.id]
   );
   return result.rowsAffected ?? 0;
+}
+
+async function pruneAllAutoTriggers(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  bookId: string,
+  keep: number
+): Promise<number> {
+  let total = 0;
+  for (const trigger of PRUNABLE_TRIGGERS) {
+    total += await pruneTriggerType(db, bookId, trigger, keep);
+  }
+  return total;
 }
 
 async function fetchPage(
@@ -141,14 +201,14 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     if (isFirstLoad) {
       try {
         const db = await getDatabase();
-        const pruned = await pruneAutoCheckpoints(db, bookId, VERSION_AUTO_PRUNE_KEEP);
+        const pruned = await pruneAllAutoTriggers(db, bookId, VERSION_AUTO_PRUNE_KEEP);
         if (pruned > 0) {
           console.info(
-            `[versions] Pruned ${pruned} auto-checkpoint(s) for book ${bookId}`
+            `[versions] Pruned ${pruned} auto-version(s) for book ${bookId}`
           );
         }
       } catch (err) {
-        console.warn("[versions] Auto-checkpoint prune failed:", err);
+        console.warn("[versions] Auto-version prune failed:", err);
       }
     }
 
@@ -178,10 +238,13 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   createVersion: async (input: CreateVersionInput) => {
     const db = await getDatabase();
     const snapshotStr = await serializeBook(input.bookId);
-    const checksum = await computeChecksum(snapshotStr);
     const snapshot = JSON.parse(snapshotStr) as BookSnapshot;
+    // Hash the content-normalized snapshot so flushes that bump updatedAt
+    // without changing text don't create new versions.
+    const checksum = await computeChecksum(contentHashInput(snapshot));
 
-    // Dedup: check if the last version for this book has the same checksum
+    // Dedup: skip creation if the most recent version of this book has the
+    // same content checksum. Applies across all trigger types.
     const lastVersions = await db.select<Record<string, unknown>[]>(
       `SELECT checksum FROM book_versions
        WHERE book_id = ?
@@ -213,13 +276,15 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
       ]
     );
 
-    // Retention: cap auto-idle checkpoints per book. Manual / pre-restore / pre-sync
-    // are never pruned — they represent explicit user intent or safety boundaries.
+    // Retention: cap automatic trigger types per book. Each prunable type has
+    // its own quota (so heavy "close" activity can't starve "auto-idle" history).
+    // Manual and pre-restore are never pruned.
     let prunedCount = 0;
-    if (input.triggerType === "auto-idle") {
-      prunedCount = await pruneAutoCheckpoints(
+    if (isPrunable(input.triggerType)) {
+      prunedCount = await pruneTriggerType(
         db,
         input.bookId,
+        input.triggerType,
         VERSION_AUTO_PRUNE_KEEP
       );
     }

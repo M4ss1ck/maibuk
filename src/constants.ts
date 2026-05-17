@@ -7,4 +7,4 @@ export const DOWNLOAD_PAGE = "https://github.com/M4ss1ck/maibuk/releases";
 export const VERSION_CHECKPOINT_WORD_THRESHOLD = 300;
 export const VERSION_CHECKPOINT_IDLE_MS = 2 * 60 * 1000;
 export const VERSION_CHECKPOINT_MIN_INTERVAL_MS = 15 * 60 * 1000;
-export const VERSION_AUTO_PRUNE_KEEP = 20;
+export const VERSION_AUTO_PRUNE_KEEP = 5;
