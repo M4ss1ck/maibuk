@@ -493,7 +493,6 @@
     "sizeWarning": "El tamaño total de las copias supera los 500 MB. Considera eliminar copias antiguas.",
     "itemsPerPage": "Elementos por página",
     "pageLabel": "Página",
-    "pageStatus": "de {{total}}",
     "previousPage": "Página anterior",
     "nextPage": "Página siguiente",
     "columnDate": "Fecha",

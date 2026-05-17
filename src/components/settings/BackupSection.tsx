@@ -312,7 +312,8 @@ export function BackupSection() {
                 value={backupListPageSize}
                 onChange={setBackupListPageSize}
                 options={pageSizeOptions}
-                className="w-24"
+                minWidth="none"
+                className="w-20"
               />
             </div>
 
@@ -332,11 +333,10 @@ export function BackupSection() {
                   value={backupListPage}
                   onChange={setBackupListPage}
                   options={pageOptions}
-                  className="w-24"
+                  endAdornment={`/ ${totalPages}`}
+                  minWidth="none"
+                  className="w-20"
                 />
-                <span aria-live="polite">
-                  {t("backup.pageStatus", { page: backupListPage, total: totalPages })}
-                </span>
               </div>
               <Button
                 variant="ghost"

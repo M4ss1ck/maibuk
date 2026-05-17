@@ -493,7 +493,6 @@
     "sizeWarning": "Total backup size exceeds 500MB. Consider deleting old backups.",
     "itemsPerPage": "Items per page",
     "pageLabel": "Page",
-    "pageStatus": "of {{total}}",
     "previousPage": "Previous page",
     "nextPage": "Next page",
     "columnDate": "Date",
