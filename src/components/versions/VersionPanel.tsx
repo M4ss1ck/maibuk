@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Eye,
+  GitCompareArrows,
   RotateCcw,
   Pencil,
   Trash2,
@@ -15,13 +15,18 @@ import { Input } from "../ui/Input";
 import { toast } from "../ui/Toast";
 import { useVersionStore } from "../../features/versions/store";
 import type { BookVersion } from "../../features/versions/types";
-import { VersionPreview } from "./VersionPreview";
 import type { BookSnapshot } from "../../features/sync/types";
+import { serializeBook } from "../../features/sync/serializer";
+
+const VersionCompare = lazy(() =>
+  import("./VersionCompare").then((module) => ({ default: module.VersionCompare }))
+);
 
 interface VersionPanelProps {
   isOpen: boolean;
   onClose: () => void;
   bookId: string;
+  flushBeforeCompare: () => Promise<void>;
 }
 
 function formatRelativeTime(date: Date, locale: string): string {
@@ -45,7 +50,12 @@ function formatRelativeTime(date: Date, locale: string): string {
 
 type ConfirmAction = { type: "restore" | "delete"; versionId: string } | null;
 
-export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
+export function VersionPanel({
+  isOpen,
+  onClose,
+  bookId,
+  flushBeforeCompare,
+}: VersionPanelProps) {
   const { t, i18n } = useTranslation();
   const versions = useVersionStore((state) => state.versions);
   const isLoading = useVersionStore((state) => state.isLoading);
@@ -55,7 +65,10 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
   const renameVersion = useVersionStore((state) => state.renameVersion);
   const deleteVersion = useVersionStore((state) => state.deleteVersion);
 
-  const [previewSnapshot, setPreviewSnapshot] = useState<BookSnapshot | null>(null);
+  const [compare, setCompare] = useState<{
+    current: BookSnapshot;
+    target: BookSnapshot;
+  } | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -64,24 +77,26 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
   useEffect(() => {
     if (isOpen) {
       loadVersions(bookId);
-      setPreviewSnapshot(null);
+      setCompare(null);
       setFocusedIndex(0);
       setRenamingId(null);
       setConfirmAction(null);
     }
   }, [isOpen, bookId, loadVersions]);
 
-  const handlePreview = useCallback(
+  const handleCompare = useCallback(
     async (version: BookVersion) => {
       try {
-        const snapshotJson = await getVersionSnapshot(version.id);
-        const snapshot = JSON.parse(snapshotJson) as BookSnapshot;
-        setPreviewSnapshot(snapshot);
+        await flushBeforeCompare();
+        const currentJson = await serializeBook(bookId);
+        const current = JSON.parse(currentJson) as BookSnapshot;
+        const target = JSON.parse(await getVersionSnapshot(version.id)) as BookSnapshot;
+        setCompare({ current, target });
       } catch {
         toast.error(t("common.error"));
       }
     },
-    [getVersionSnapshot, t]
+    [bookId, flushBeforeCompare, getVersionSnapshot, t]
   );
 
   const handleRestore = useCallback(
@@ -131,7 +146,7 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
 
   // Keyboard shortcuts
   useEffect(() => {
-    if (!isOpen || previewSnapshot) return;
+    if (!isOpen || compare) return;
 
     const handler = (e: KeyboardEvent) => {
       if (renamingId) {
@@ -154,7 +169,7 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
         case "Enter": {
           e.preventDefault();
           const v = versions[focusedIndex];
-          if (v) void handlePreview(v);
+          if (v) void handleCompare(v);
           break;
         }
         case "r":
@@ -187,14 +202,14 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
 
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isOpen, previewSnapshot, versions, focusedIndex, renamingId, confirmAction, handlePreview, startRename]);
+  }, [isOpen, compare, versions, focusedIndex, renamingId, confirmAction, handleCompare, startRename]);
 
   // Scroll focused row into view
   useEffect(() => {
-    if (!isOpen || previewSnapshot) return;
+    if (!isOpen || compare) return;
     const el = document.getElementById(`version-row-${focusedIndex}`);
     el?.scrollIntoView({ block: "nearest" });
-  }, [focusedIndex, isOpen, previewSnapshot]);
+  }, [focusedIndex, isOpen, compare]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t("versions.title")}>
@@ -202,18 +217,29 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
         <div className="text-center py-8 text-muted-foreground">
           {t("common.loading")}
         </div>
-      ) : previewSnapshot ? (
+      ) : compare ? (
         <div className="flex flex-col gap-3 h-full min-h-0">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setPreviewSnapshot(null)}
+            onClick={() => setCompare(null)}
             className="self-start"
           >
             <ArrowLeft className="w-4 h-4 mr-1" />
             {t("common.back")}
           </Button>
-          <VersionPreview snapshot={previewSnapshot} />
+          <p className="text-sm text-muted-foreground">
+            {t("versions.compareToCurrent")}
+          </p>
+          <Suspense
+            fallback={
+              <div className="text-center py-8 text-muted-foreground">
+                {t("common.loading")}
+              </div>
+            }
+          >
+            <VersionCompare current={compare.current} target={compare.target} />
+          </Suspense>
         </div>
       ) : versions.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
@@ -325,11 +351,11 @@ export function VersionPanel({ isOpen, onClose, bookId }: VersionPanelProps) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => void handlePreview(version)}
-                        title={t("versions.preview")}
+                        onClick={() => void handleCompare(version)}
+                        title={t("versions.compare")}
                         className="px-1.5"
                       >
-                        <Eye className="w-4 h-4" />
+                        <GitCompareArrows className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"

@@ -793,6 +793,7 @@ export function BookEditor() {
           isOpen={showVersionPanel}
           onClose={() => setShowVersionPanel(false)}
           bookId={bookId}
+          flushBeforeCompare={flushEditorContent}
         />
       )}
 

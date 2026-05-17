@@ -4,6 +4,9 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const { mockUseShortcuts } = vi.hoisted(() => ({
   mockUseShortcuts: vi.fn(),
 }));
+const { mockVersionPanel } = vi.hoisted(() => ({
+  mockVersionPanel: vi.fn(() => null),
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -107,7 +110,7 @@ vi.mock("../../../components/sync/SyncStatusButton", () => ({
 }));
 
 vi.mock("../../../components/versions/VersionPanel", () => ({
-  VersionPanel: () => null,
+  VersionPanel: mockVersionPanel,
 }));
 
 import { BookEditor } from "../../../pages/BookEditor";
@@ -115,6 +118,7 @@ import { BookEditor } from "../../../pages/BookEditor";
 describe("BookEditor shortcuts", () => {
   beforeEach(() => {
     mockUseShortcuts.mockClear();
+    mockVersionPanel.mockClear();
   });
 
   it("registers Ctrl+Alt+S as the save-version shortcut", () => {
@@ -135,6 +139,17 @@ describe("BookEditor shortcuts", () => {
           keys: ["ctrl+shift+s", "meta+shift+s"],
         }),
       ])
+    );
+  });
+
+  it("passes a flush callback to the version panel before compare", () => {
+    render(<BookEditor />);
+
+    expect(mockVersionPanel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        flushBeforeCompare: expect.any(Function),
+      }),
+      undefined
     );
   });
 });
