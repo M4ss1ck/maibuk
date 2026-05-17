@@ -219,6 +219,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                      |
 | `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`                |
 | `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`                |
+| `isMac()`                                                          | `src/lib/platform/index.ts`                |
 | `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts`    |
 | `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                     |
 | `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                         |

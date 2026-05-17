@@ -428,6 +428,8 @@
   "versions": {
     "title": "Historial de versiones",
     "saveVersion": "Guardar versión",
+    "showHistory": "Mostrar historial",
+    "openHistory": "Abrir historial de versiones",
     "namePrompt": "Nombra esta versión",
     "namePlaceholder": "ej. Primer borrador completo",
     "autoCheckpoint": "Punto de control automático",

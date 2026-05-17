@@ -428,6 +428,8 @@
   "versions": {
     "title": "Version history",
     "saveVersion": "Save version",
+    "showHistory": "Show history",
+    "openHistory": "Open version history",
     "namePrompt": "Name this version",
     "namePlaceholder": "e.g. First full draft",
     "autoCheckpoint": "Auto checkpoint",

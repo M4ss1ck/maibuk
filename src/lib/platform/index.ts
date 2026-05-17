@@ -12,6 +12,15 @@ import type {
 export const IS_WEB = import.meta.env.VITE_BUILD_TARGET === "web";
 export const IS_TAURI = !IS_WEB;
 
+export function isMac(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = (navigator as Navigator & {
+    userAgentData?: { platform?: string };
+  }).userAgentData;
+  const platform = ua?.platform ?? navigator.platform ?? "";
+  return /Mac|iPhone|iPad/.test(platform);
+}
+
 // Re-export types
 export type {
   DatabaseAdapter,
