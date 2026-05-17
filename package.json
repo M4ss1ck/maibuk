@@ -79,6 +79,7 @@
     "fabric": "^7.1.0",
     "i18next": "^25.7.4",
     "lucide-react": "^0.562.0",
+    "node-htmldiff": "^0.9.4",
     "nspell": "^2.1.5",
     "pdf-lib": "^1.17.1",
     "pocketbase": "^0.26.8",

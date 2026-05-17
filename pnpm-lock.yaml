@@ -158,6 +158,9 @@ importers:
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)
+      node-htmldiff:
+        specifier: ^0.9.4
+        version: 0.9.4
       nspell:
         specifier: ^2.1.5
         version: 2.1.5
@@ -2690,6 +2693,10 @@ packages:
     peerDependenciesMeta:
       encoding:
         optional: true
+
+  node-htmldiff@0.9.4:
+    resolution: {integrity: sha512-Nvnv0bcehOFsH/TD+bi4ls3iWTRQiytqII5+I1iBUypO+GFMYLcyBJfS2U3DMRSIYzfZHysaYLYoCXx6Q148Hg==}
+    hasBin: true
 
   node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}
@@ -5608,6 +5615,8 @@ snapshots:
   node-fetch@2.7.0:
     dependencies:
       whatwg-url: 5.0.0
+
+  node-htmldiff@0.9.4: {}
 
   node-releases@2.0.27: {}
 
