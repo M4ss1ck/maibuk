@@ -73,6 +73,8 @@ export default defineConfig(() => ({
         // Phase 7: Version control
         "src/features/versions/store.ts",
         "src/features/versions/useAutoCheckpoint.ts",
+        "src/features/versions/sanitize.ts",
+        "src/features/versions/compare.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

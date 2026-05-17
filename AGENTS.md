@@ -104,7 +104,7 @@ src/
 │   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts
 │   ├── theme/           # store.ts
 │   ├── version/         # useVersionCheck.ts (app update checker)
-│   └── versions/        # store.ts, types.ts, useAutoCheckpoint.ts, sanitize.ts (book version control)
+│   └── versions/        # store.ts, types.ts, useAutoCheckpoint.ts, sanitize.ts, compare.ts (book version control)
 ├── hooks/               # Shared React hooks
 ├── test/                # Test suites (unit/integration) + setup
 ├── lib/                 # Low-level infrastructure
@@ -233,6 +233,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useVersionStore`                                                  | `src/features/versions/store.ts`           |
 | `useAutoCheckpoint`                                                | `src/features/versions/useAutoCheckpoint.ts` |
 | `sanitizeChapterHtml()`                                            | `src/features/versions/sanitize.ts`        |
+| `diffSnapshots()`                                                  | `src/features/versions/compare.ts`         |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
 | `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |
 | `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`             |
