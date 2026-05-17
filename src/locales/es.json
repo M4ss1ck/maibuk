@@ -419,7 +419,7 @@
     "openSelected": "Abrir libro seleccionado",
     "save": "Guardar",
     "saveVersion": "Guardar versión",
-    "versionHistory": "Historial de versiones",
+    "versionHistory": "Historial de versiones (fuera del editor)",
     "toggleFocusMode": "Alternar modo enfoque",
     "toggleSidebar": "Alternar barra lateral",
     "backFromEditor": "Volver desde el editor",
