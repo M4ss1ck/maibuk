@@ -17,6 +17,47 @@ export function getDefaultBackupRetention(isWeb: boolean): number {
   return isWeb ? DEFAULT_WEB_BACKUP_RETENTION : DEFAULT_TAURI_BACKUP_RETENTION;
 }
 
+export type PasteCleanupPreset = "keepAll" | "matchBook" | "plainText" | "custom";
+
+export interface PasteCleanupOptions {
+  removeTextColor: boolean;
+  removeHighlight: boolean;
+  removeFontFamily: boolean;
+  removeFontSize: boolean;
+  removeSourceSpacing: boolean;
+  removeSourceIndent: boolean;
+  demoteHeadings: boolean;
+  stripLinks: boolean;
+  flattenLists: boolean;
+  removeImages: boolean;
+  removeInlineFormatting: boolean;
+}
+
+export type PasteRuleTarget =
+  | "fontFamily"
+  | "textColor"
+  | "backgroundColor"
+  | "cssClass"
+  | "tag"
+  | "cssSelector";
+
+export type PasteRuleAction = "removeStyle" | "unwrap" | "delete";
+
+export interface PasteCleanupRule {
+  id: string;
+  enabled: boolean;
+  label: string;
+  target: PasteRuleTarget;
+  value: string;
+  action: PasteRuleAction;
+}
+
+export interface PasteCleanupSettings {
+  preset: PasteCleanupPreset;
+  options: PasteCleanupOptions;
+  rules: PasteCleanupRule[];
+}
+
 export interface Settings {
   // App UI settings
   appFontSize: FontSize;
@@ -51,7 +92,79 @@ export interface Settings {
   htmlEditorLightTheme: HtmlEditorTheme;
   htmlEditorDarkTheme: HtmlEditorTheme;
   htmlPanelHeight: number;
+
+  // Paste cleanup settings
+  pasteCleanup: PasteCleanupSettings;
 }
+
+export const PASTE_CLEANUP_OPTION_KEYS: (keyof PasteCleanupOptions)[] = [
+  "removeTextColor",
+  "removeHighlight",
+  "removeFontFamily",
+  "removeFontSize",
+  "removeSourceSpacing",
+  "removeSourceIndent",
+  "demoteHeadings",
+  "stripLinks",
+  "flattenLists",
+  "removeImages",
+  "removeInlineFormatting",
+];
+
+export const PASTE_CLEANUP_PRESET_VALUES: PasteCleanupPreset[] = [
+  "keepAll",
+  "matchBook",
+  "plainText",
+  "custom",
+];
+
+export const PASTE_RULE_TARGET_VALUES: PasteRuleTarget[] = [
+  "fontFamily",
+  "textColor",
+  "backgroundColor",
+  "cssClass",
+  "tag",
+  "cssSelector",
+];
+
+export const PASTE_RULE_ACTION_VALUES: PasteRuleAction[] = [
+  "removeStyle",
+  "unwrap",
+  "delete",
+];
+
+function buildPasteCleanupOptions(enabled: boolean): PasteCleanupOptions {
+  return {
+    removeTextColor: enabled,
+    removeHighlight: enabled,
+    removeFontFamily: enabled,
+    removeFontSize: enabled,
+    removeSourceSpacing: enabled,
+    removeSourceIndent: enabled,
+    demoteHeadings: enabled,
+    stripLinks: enabled,
+    flattenLists: enabled,
+    removeImages: enabled,
+    removeInlineFormatting: enabled,
+  };
+}
+
+export const PASTE_CLEANUP_PRESETS: Record<
+  Exclude<PasteCleanupPreset, "custom">,
+  PasteCleanupOptions
+> = {
+  keepAll: buildPasteCleanupOptions(false),
+  plainText: buildPasteCleanupOptions(true),
+  matchBook: {
+    ...buildPasteCleanupOptions(false),
+    removeTextColor: true,
+    removeHighlight: true,
+    removeFontFamily: true,
+    removeFontSize: true,
+    removeSourceSpacing: true,
+    removeSourceIndent: true,
+  },
+};
 
 export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: 14, label: "Small" },

@@ -8,6 +8,8 @@ import {
   EXPORT_FORMAT_OPTIONS,
   LANGUAGE_OPTIONS,
   getDefaultBackupRetention,
+  PASTE_CLEANUP_PRESETS,
+  PASTE_CLEANUP_OPTION_KEYS,
 } from "../../../../features/settings/types";
 
 describe("DEFAULT_PRIMARY_COLOR", () => {
@@ -78,6 +80,56 @@ describe("LANGUAGE_OPTIONS", () => {
   it("every option has a non-empty label", () => {
     for (const opt of LANGUAGE_OPTIONS) {
       expect(opt.label.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("PASTE_CLEANUP_OPTION_KEYS", () => {
+  it("has 11 option keys", () => {
+    expect(PASTE_CLEANUP_OPTION_KEYS).toHaveLength(11);
+  });
+
+  it("every key exists on the keepAll preset", () => {
+    for (const key of PASTE_CLEANUP_OPTION_KEYS) {
+      expect(PASTE_CLEANUP_PRESETS.keepAll).toHaveProperty(key);
+    }
+  });
+});
+
+describe("PASTE_CLEANUP_PRESETS", () => {
+  it("keepAll has every option disabled", () => {
+    for (const key of PASTE_CLEANUP_OPTION_KEYS) {
+      expect(PASTE_CLEANUP_PRESETS.keepAll[key]).toBe(false);
+    }
+  });
+
+  it("plainText has every option enabled", () => {
+    for (const key of PASTE_CLEANUP_OPTION_KEYS) {
+      expect(PASTE_CLEANUP_PRESETS.plainText[key]).toBe(true);
+    }
+  });
+
+  it("matchBook enables the six styling options only", () => {
+    const styling = [
+      "removeTextColor",
+      "removeHighlight",
+      "removeFontFamily",
+      "removeFontSize",
+      "removeSourceSpacing",
+      "removeSourceIndent",
+    ] as const;
+    const structural = [
+      "demoteHeadings",
+      "stripLinks",
+      "flattenLists",
+      "removeImages",
+      "removeInlineFormatting",
+    ] as const;
+    for (const key of styling) {
+      expect(PASTE_CLEANUP_PRESETS.matchBook[key]).toBe(true);
+    }
+    for (const key of structural) {
+      expect(PASTE_CLEANUP_PRESETS.matchBook[key]).toBe(false);
     }
   });
 });

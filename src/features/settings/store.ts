@@ -7,6 +7,7 @@ import {
   DEFAULT_BACKUP_LIST_PAGE_SIZE,
   BACKUP_LIST_PAGE_SIZE_OPTIONS,
   getDefaultBackupRetention,
+  PASTE_CLEANUP_PRESETS,
   type Settings,
   type FontSize,
   type FontFamily,
@@ -15,6 +16,9 @@ import {
   type HtmlEditorTheme,
   type ChapterListView,
   type BackupListPageSize,
+  type PasteCleanupPreset,
+  type PasteCleanupOptions,
+  type PasteCleanupRule,
 } from "./types";
 
 const STORAGE_KEY = "maibuk-settings";
@@ -47,6 +51,18 @@ interface SettingsStore extends Settings {
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
   setHtmlPanelHeight: (height: number) => void;
+  setPasteCleanupPreset: (preset: PasteCleanupPreset) => void;
+  setPasteCleanupOption: <K extends keyof PasteCleanupOptions>(
+    key: K,
+    value: PasteCleanupOptions[K]
+  ) => void;
+  addPasteCleanupRule: () => void;
+  updatePasteCleanupRule: (
+    id: string,
+    patch: Partial<Omit<PasteCleanupRule, "id">>
+  ) => void;
+  removePasteCleanupRule: (id: string) => void;
+  movePasteCleanupRule: (id: string, direction: "up" | "down") => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -74,6 +90,11 @@ const defaultSettings: Settings = {
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
   htmlPanelHeight: 200,
+  pasteCleanup: {
+    preset: "keepAll",
+    options: { ...PASTE_CLEANUP_PRESETS.keepAll },
+    rules: [],
+  },
 };
 
 function normalizeHexColor(color: string): string {
@@ -133,6 +154,70 @@ export const useSettingsStore = create<SettingsStore>()(
       setHtmlPanelHeight: (htmlPanelHeight) =>
         set({
           htmlPanelHeight: Math.max(100, Math.min(window.innerHeight * 0.6, htmlPanelHeight)),
+        }),
+      setPasteCleanupPreset: (preset) =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            preset,
+            options:
+              preset === "custom"
+                ? state.pasteCleanup.options
+                : { ...PASTE_CLEANUP_PRESETS[preset] },
+          },
+        })),
+      setPasteCleanupOption: (key, value) =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            preset: "custom",
+            options: { ...state.pasteCleanup.options, [key]: value },
+          },
+        })),
+      addPasteCleanupRule: () =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            rules: [
+              ...state.pasteCleanup.rules,
+              {
+                id: crypto.randomUUID(),
+                enabled: true,
+                label: "",
+                target: "fontFamily",
+                value: "",
+                action: "removeStyle",
+              },
+            ],
+          },
+        })),
+      updatePasteCleanupRule: (id, patch) =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            rules: state.pasteCleanup.rules.map((rule) =>
+              rule.id === id ? { ...rule, ...patch } : rule
+            ),
+          },
+        })),
+      removePasteCleanupRule: (id) =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            rules: state.pasteCleanup.rules.filter((rule) => rule.id !== id),
+          },
+        })),
+      movePasteCleanupRule: (id, direction) =>
+        set((state) => {
+          const rules = state.pasteCleanup.rules;
+          const index = rules.findIndex((rule) => rule.id === id);
+          if (index === -1) return state;
+          const target = direction === "up" ? index - 1 : index + 1;
+          if (target < 0 || target >= rules.length) return state;
+          const next = [...rules];
+          const [moved] = next.splice(index, 1);
+          next.splice(target, 0, moved);
+          return { pasteCleanup: { ...state.pasteCleanup, rules: next } };
         }),
       addCustomWord: (word) => {
         const normalized = word.trim();

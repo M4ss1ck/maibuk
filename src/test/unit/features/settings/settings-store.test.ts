@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { PASTE_CLEANUP_PRESETS } from "../../../../features/settings/types";
 
 // Mock i18n before importing the store
 const { mockChangeLanguage } = vi.hoisted(() => ({
@@ -42,6 +43,11 @@ describe("useSettingsStore", () => {
       sidebarWidth: 256,
       toolbarExpanded: false,
       chapterListView: "normal",
+      pasteCleanup: {
+        preset: "keepAll",
+        options: { ...PASTE_CLEANUP_PRESETS.keepAll },
+        rules: [],
+      },
       lastPath: null,
     });
   });
@@ -62,6 +68,8 @@ describe("useSettingsStore", () => {
       expect(state.backupListPage).toBe(1);
       expect(state.backupListPageSize).toBe(10);
       expect(state.chapterListView).toBe("normal");
+      expect(state.pasteCleanup.preset).toBe("keepAll");
+      expect(state.pasteCleanup.rules).toEqual([]);
       expect(state.lastPath).toBeNull();
     });
   });
@@ -303,6 +311,100 @@ describe("useSettingsStore", () => {
     it("clamps to minimum of 100", () => {
       useSettingsStore.getState().setHtmlPanelHeight(50);
       expect(useSettingsStore.getState().htmlPanelHeight).toBe(100);
+    });
+  });
+
+  describe("setPasteCleanupPreset()", () => {
+    it("applies the matchBook preset options", () => {
+      useSettingsStore.getState().setPasteCleanupPreset("matchBook");
+      const { pasteCleanup } = useSettingsStore.getState();
+      expect(pasteCleanup.preset).toBe("matchBook");
+      expect(pasteCleanup.options).toEqual(PASTE_CLEANUP_PRESETS.matchBook);
+    });
+
+    it("leaves options unchanged when selecting custom", () => {
+      useSettingsStore.getState().setPasteCleanupPreset("plainText");
+      const before = useSettingsStore.getState().pasteCleanup.options;
+      useSettingsStore.getState().setPasteCleanupPreset("custom");
+      const { pasteCleanup } = useSettingsStore.getState();
+      expect(pasteCleanup.preset).toBe("custom");
+      expect(pasteCleanup.options).toEqual(before);
+    });
+  });
+
+  describe("setPasteCleanupOption()", () => {
+    it("updates a single option and flips the preset to custom", () => {
+      useSettingsStore.getState().setPasteCleanupOption("removeTextColor", true);
+      const { pasteCleanup } = useSettingsStore.getState();
+      expect(pasteCleanup.options.removeTextColor).toBe(true);
+      expect(pasteCleanup.preset).toBe("custom");
+    });
+  });
+
+  describe("paste cleanup rule CRUD", () => {
+    it("appends a rule with an id and sensible defaults", () => {
+      useSettingsStore.getState().addPasteCleanupRule();
+      const { rules } = useSettingsStore.getState().pasteCleanup;
+      expect(rules).toHaveLength(1);
+      expect(rules[0].id).toBeTruthy();
+      expect(rules[0].enabled).toBe(true);
+      expect(rules[0].target).toBe("fontFamily");
+      expect(rules[0].action).toBe("removeStyle");
+    });
+
+    it("updates only the targeted rule", () => {
+      useSettingsStore.getState().addPasteCleanupRule();
+      useSettingsStore.getState().addPasteCleanupRule();
+      const [first, second] = useSettingsStore.getState().pasteCleanup.rules;
+      useSettingsStore.getState().updatePasteCleanupRule(second.id, {
+        label: "Kill Comic Sans",
+        value: "Comic Sans MS",
+      });
+      const rules = useSettingsStore.getState().pasteCleanup.rules;
+      expect(rules[0]).toEqual(first);
+      expect(rules[1].label).toBe("Kill Comic Sans");
+      expect(rules[1].value).toBe("Comic Sans MS");
+    });
+
+    it("removes a rule by id", () => {
+      useSettingsStore.getState().addPasteCleanupRule();
+      const { id } = useSettingsStore.getState().pasteCleanup.rules[0];
+      useSettingsStore.getState().removePasteCleanupRule(id);
+      expect(useSettingsStore.getState().pasteCleanup.rules).toHaveLength(0);
+    });
+  });
+
+  describe("movePasteCleanupRule()", () => {
+    function addThreeRules(): string[] {
+      const store = useSettingsStore.getState();
+      store.addPasteCleanupRule();
+      store.addPasteCleanupRule();
+      store.addPasteCleanupRule();
+      return useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id);
+    }
+
+    it("moves a rule up", () => {
+      const [a, b, c] = addThreeRules();
+      useSettingsStore.getState().movePasteCleanupRule(b, "up");
+      expect(
+        useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)
+      ).toEqual([b, a, c]);
+    });
+
+    it("does not move the first rule up", () => {
+      const [a, b, c] = addThreeRules();
+      useSettingsStore.getState().movePasteCleanupRule(a, "up");
+      expect(
+        useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)
+      ).toEqual([a, b, c]);
+    });
+
+    it("does not move the last rule down", () => {
+      const [a, b, c] = addThreeRules();
+      useSettingsStore.getState().movePasteCleanupRule(c, "down");
+      expect(
+        useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)
+      ).toEqual([a, b, c]);
     });
   });
 

@@ -326,7 +326,65 @@
     "resetDatabaseButton": "Reiniciar",
     "resetDatabaseFailed": "No se pudo reiniciar la base de datos. Intenta reiniciar la aplicación.",
     "resetDatabaseConfirm": "¿Estás seguro de que quieres reiniciar la base de datos? Esto eliminará permanentemente todos tus libros, capítulos y configuraciones. Esta acción no se puede deshacer.",
-    "confirmReset": "Sí, reiniciar todo"
+    "confirmReset": "Sí, reiniciar todo",
+    "pasteCleanup": {
+      "title": "Limpieza al pegar",
+      "description": "Controla cómo se elimina el formato del texto que pegas.",
+      "preset": {
+        "label": "Estilo al pegar",
+        "description": "Cómo adopta el texto pegado el formato de tu libro.",
+        "keepAll": "Mantener todo el formato",
+        "matchBook": "Adaptar a mi libro",
+        "plainText": "Solo texto sin formato",
+        "custom": "Personalizado"
+      },
+      "advanced": "Avanzado",
+      "option": {
+        "removeTextColor": "Quitar colores de texto",
+        "removeHighlight": "Quitar resaltados",
+        "removeFontFamily": "Quitar fuentes",
+        "removeFontSize": "Quitar tamaños de fuente",
+        "removeSourceSpacing": "Quitar espaciado de origen",
+        "removeSourceIndent": "Quitar sangría de origen",
+        "demoteHeadings": "Convertir títulos en párrafos",
+        "stripLinks": "Quitar enlaces",
+        "flattenLists": "Convertir listas en párrafos",
+        "removeImages": "Quitar imágenes",
+        "removeInlineFormatting": "Quitar negrita, cursiva y subrayado"
+      },
+      "rules": {
+        "title": "Reglas personalizadas",
+        "description": "Limpieza adicional aplicada después de las opciones anteriores, en orden.",
+        "manage": "Gestionar reglas",
+        "count_one": "{{count}} regla",
+        "count_other": "{{count}} reglas",
+        "empty": "Aún no hay reglas personalizadas.",
+        "add": "Añadir regla",
+        "label": "Nombre",
+        "labelPlaceholder": "Describe esta regla",
+        "value": "Valor",
+        "valuePlaceholder": "Qué buscar",
+        "target": "Coincidencia",
+        "action": "Acción",
+        "enabled": "Activada",
+        "remove": "Quitar",
+        "moveUp": "Subir",
+        "moveDown": "Bajar",
+        "targetOption": {
+          "fontFamily": "Fuente",
+          "textColor": "Color de texto",
+          "backgroundColor": "Color de resaltado",
+          "cssClass": "Clase CSS",
+          "tag": "Etiqueta HTML",
+          "cssSelector": "Selector CSS"
+        },
+        "actionOption": {
+          "removeStyle": "Quitar estilo",
+          "unwrap": "Desenvolver elemento",
+          "delete": "Eliminar elemento"
+        }
+      }
+    }
   },
   "cover": {
     "title": "Diseñador de Portada",

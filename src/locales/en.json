@@ -326,7 +326,65 @@
     "resetDatabaseButton": "Reset",
     "resetDatabaseFailed": "Could not reset the database. Try restarting the app.",
     "resetDatabaseConfirm": "Are you sure you want to reset the database? This will permanently delete all your books, chapters, and settings. This action cannot be undone.",
-    "confirmReset": "Yes, reset everything"
+    "confirmReset": "Yes, reset everything",
+    "pasteCleanup": {
+      "title": "Paste cleanup",
+      "description": "Control how formatting is stripped from text you paste in.",
+      "preset": {
+        "label": "Paste style",
+        "description": "How pasted text adopts your book's formatting.",
+        "keepAll": "Keep all formatting",
+        "matchBook": "Match my book",
+        "plainText": "Plain text only",
+        "custom": "Custom"
+      },
+      "advanced": "Advanced",
+      "option": {
+        "removeTextColor": "Remove text colors",
+        "removeHighlight": "Remove highlights",
+        "removeFontFamily": "Remove fonts",
+        "removeFontSize": "Remove font sizes",
+        "removeSourceSpacing": "Remove source spacing",
+        "removeSourceIndent": "Remove source indentation",
+        "demoteHeadings": "Convert headings to paragraphs",
+        "stripLinks": "Remove links",
+        "flattenLists": "Flatten lists to paragraphs",
+        "removeImages": "Remove images",
+        "removeInlineFormatting": "Remove bold, italic and underline"
+      },
+      "rules": {
+        "title": "Custom rules",
+        "description": "Extra cleanup applied after the options above, in order.",
+        "manage": "Manage rules",
+        "count_one": "{{count}} rule",
+        "count_other": "{{count}} rules",
+        "empty": "No custom rules yet.",
+        "add": "Add rule",
+        "label": "Name",
+        "labelPlaceholder": "Describe this rule",
+        "value": "Value",
+        "valuePlaceholder": "What to match",
+        "target": "Match",
+        "action": "Action",
+        "enabled": "Enabled",
+        "remove": "Remove",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "targetOption": {
+          "fontFamily": "Font",
+          "textColor": "Text color",
+          "backgroundColor": "Highlight color",
+          "cssClass": "CSS class",
+          "tag": "HTML tag",
+          "cssSelector": "CSS selector"
+        },
+        "actionOption": {
+          "removeStyle": "Remove styling",
+          "unwrap": "Unwrap element",
+          "delete": "Delete element"
+        }
+      }
+    }
   },
   "cover": {
     "title": "Cover Designer",

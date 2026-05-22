@@ -30,6 +30,7 @@ import { BackupService } from "../features/backup/backup-service";
 import { useSyncStore } from "../features/sync/store";
 import { AuthDialog } from "../components/sync/AuthDialog";
 import { BackupSection } from "../components/settings/BackupSection";
+import { PasteCleanupSection } from "../components/settings/PasteCleanupSection";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -486,6 +487,14 @@ export function Settings() {
                 onChange={setHideKeyboardHints}
                 label={t("settings.toggleHideKeyboardHints")}
               />
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <p className="font-medium">{t("settings.pasteCleanup.title")}</p>
+              <p className="text-sm text-muted-foreground mb-3">
+                {t("settings.pasteCleanup.description")}
+              </p>
+              <PasteCleanupSection />
             </div>
           </div>
         </section>
