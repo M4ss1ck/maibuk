@@ -340,17 +340,34 @@
       },
       "advanced": "Advanced",
       "option": {
-        "removeTextColor": "Remove text colors",
-        "removeHighlight": "Remove highlights",
-        "removeFontFamily": "Remove fonts",
-        "removeFontSize": "Remove font sizes",
-        "removeSourceSpacing": "Remove source spacing",
-        "removeSourceIndent": "Remove source indentation",
         "demoteHeadings": "Convert headings to paragraphs",
         "stripLinks": "Remove links",
         "flattenLists": "Flatten lists to paragraphs",
         "removeImages": "Remove images",
-        "removeInlineFormatting": "Remove bold, italic and underline"
+        "unwrapFormattingTags": "Remove bold, italic and underline"
+      },
+      "strip": {
+        "title": "Strip styles",
+        "description": "Remove these CSS properties from pasted content.",
+        "addProperty": "Add",
+        "addPropertyPlaceholder": "CSS property, e.g. word-spacing"
+      },
+      "property": {
+        "color": "Text color",
+        "background-color": "Highlight color",
+        "font-family": "Font",
+        "font-size": "Font size",
+        "font-weight": "Bold weight",
+        "font-style": "Italic style",
+        "line-height": "Line spacing",
+        "letter-spacing": "Letter spacing",
+        "text-decoration": "Underline & strikethrough",
+        "text-indent": "First-line indent",
+        "text-transform": "Letter case",
+        "margin-top": "Space above",
+        "margin-bottom": "Space below",
+        "margin-left": "Left margin",
+        "padding-left": "Left padding"
       },
       "rules": {
         "title": "Custom rules",
@@ -363,7 +380,6 @@
         "label": "Name",
         "labelPlaceholder": "Describe this rule",
         "value": "Value",
-        "valuePlaceholder": "What to match",
         "target": "Match",
         "action": "Action",
         "enabled": "Enabled",

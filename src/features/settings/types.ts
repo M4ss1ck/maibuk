@@ -19,18 +19,20 @@ export function getDefaultBackupRetention(isWeb: boolean): number {
 
 export type PasteCleanupPreset = "keepAll" | "matchBook" | "plainText" | "custom";
 
+export type PasteStructuralOptionKey =
+  | "demoteHeadings"
+  | "stripLinks"
+  | "flattenLists"
+  | "removeImages"
+  | "unwrapFormattingTags";
+
 export interface PasteCleanupOptions {
-  removeTextColor: boolean;
-  removeHighlight: boolean;
-  removeFontFamily: boolean;
-  removeFontSize: boolean;
-  removeSourceSpacing: boolean;
-  removeSourceIndent: boolean;
   demoteHeadings: boolean;
   stripLinks: boolean;
   flattenLists: boolean;
   removeImages: boolean;
-  removeInlineFormatting: boolean;
+  unwrapFormattingTags: boolean;
+  strippedProperties: string[];
 }
 
 export type PasteRuleTarget =
@@ -97,18 +99,12 @@ export interface Settings {
   pasteCleanup: PasteCleanupSettings;
 }
 
-export const PASTE_CLEANUP_OPTION_KEYS: (keyof PasteCleanupOptions)[] = [
-  "removeTextColor",
-  "removeHighlight",
-  "removeFontFamily",
-  "removeFontSize",
-  "removeSourceSpacing",
-  "removeSourceIndent",
+export const PASTE_STRUCTURAL_OPTION_KEYS: PasteStructuralOptionKey[] = [
   "demoteHeadings",
   "stripLinks",
   "flattenLists",
   "removeImages",
-  "removeInlineFormatting",
+  "unwrapFormattingTags",
 ];
 
 export const PASTE_CLEANUP_PRESET_VALUES: PasteCleanupPreset[] = [
@@ -133,19 +129,58 @@ export const PASTE_RULE_ACTION_VALUES: PasteRuleAction[] = [
   "delete",
 ];
 
-function buildPasteCleanupOptions(enabled: boolean): PasteCleanupOptions {
+/** A worked example for each rule target, shown as the value-input placeholder. */
+export const PASTE_RULE_TARGET_META: Record<PasteRuleTarget, { example: string }> =
+  {
+    fontFamily: { example: "-webkit-standard" },
+    textColor: { example: "rgb(51, 51, 51)" },
+    backgroundColor: { example: "yellow" },
+    cssClass: { example: "MsoNormal" },
+    tag: { example: "span" },
+    cssSelector: { example: 'span[style*="font-size"]' },
+  };
+
+/** CSS properties the matchBook preset strips from pasted content. */
+export const BOOK_STRIP_PROPERTIES: string[] = [
+  "color",
+  "background-color",
+  "font-family",
+  "font-size",
+  "line-height",
+  "letter-spacing",
+  "margin-top",
+  "margin-bottom",
+  "margin-left",
+  "padding-left",
+  "text-indent",
+];
+
+/** Curated properties surfaced as labelled toggles in the strip-styles UI. */
+export const PASTE_STRIP_COMMON_PROPERTIES = [
+  "color",
+  "background-color",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "font-style",
+  "line-height",
+  "letter-spacing",
+  "text-decoration",
+  "text-indent",
+  "text-transform",
+  "margin-top",
+  "margin-bottom",
+  "margin-left",
+  "padding-left",
+] as const;
+
+function buildStructuralOptions(enabled: boolean) {
   return {
-    removeTextColor: enabled,
-    removeHighlight: enabled,
-    removeFontFamily: enabled,
-    removeFontSize: enabled,
-    removeSourceSpacing: enabled,
-    removeSourceIndent: enabled,
     demoteHeadings: enabled,
     stripLinks: enabled,
     flattenLists: enabled,
     removeImages: enabled,
-    removeInlineFormatting: enabled,
+    unwrapFormattingTags: enabled,
   };
 }
 
@@ -153,16 +188,19 @@ export const PASTE_CLEANUP_PRESETS: Record<
   Exclude<PasteCleanupPreset, "custom">,
   PasteCleanupOptions
 > = {
-  keepAll: buildPasteCleanupOptions(false),
-  plainText: buildPasteCleanupOptions(true),
+  keepAll: { ...buildStructuralOptions(false), strippedProperties: [] },
   matchBook: {
-    ...buildPasteCleanupOptions(false),
-    removeTextColor: true,
-    removeHighlight: true,
-    removeFontFamily: true,
-    removeFontSize: true,
-    removeSourceSpacing: true,
-    removeSourceIndent: true,
+    ...buildStructuralOptions(false),
+    strippedProperties: [...BOOK_STRIP_PROPERTIES],
+  },
+  plainText: {
+    ...buildStructuralOptions(true),
+    strippedProperties: [
+      ...BOOK_STRIP_PROPERTIES,
+      "font-weight",
+      "font-style",
+      "text-decoration",
+    ],
   },
 };
 

@@ -340,17 +340,34 @@
       },
       "advanced": "Avanzado",
       "option": {
-        "removeTextColor": "Quitar colores de texto",
-        "removeHighlight": "Quitar resaltados",
-        "removeFontFamily": "Quitar fuentes",
-        "removeFontSize": "Quitar tamaños de fuente",
-        "removeSourceSpacing": "Quitar espaciado de origen",
-        "removeSourceIndent": "Quitar sangría de origen",
         "demoteHeadings": "Convertir títulos en párrafos",
         "stripLinks": "Quitar enlaces",
         "flattenLists": "Convertir listas en párrafos",
         "removeImages": "Quitar imágenes",
-        "removeInlineFormatting": "Quitar negrita, cursiva y subrayado"
+        "unwrapFormattingTags": "Quitar negrita, cursiva y subrayado"
+      },
+      "strip": {
+        "title": "Quitar estilos",
+        "description": "Elimina estas propiedades CSS del contenido pegado.",
+        "addProperty": "Añadir",
+        "addPropertyPlaceholder": "Propiedad CSS, p. ej. word-spacing"
+      },
+      "property": {
+        "color": "Color de texto",
+        "background-color": "Color de resaltado",
+        "font-family": "Fuente",
+        "font-size": "Tamaño de fuente",
+        "font-weight": "Grosor de negrita",
+        "font-style": "Estilo de cursiva",
+        "line-height": "Interlineado",
+        "letter-spacing": "Espaciado entre letras",
+        "text-decoration": "Subrayado y tachado",
+        "text-indent": "Sangría de primera línea",
+        "text-transform": "Mayúsculas y minúsculas",
+        "margin-top": "Espacio superior",
+        "margin-bottom": "Espacio inferior",
+        "margin-left": "Margen izquierdo",
+        "padding-left": "Relleno izquierdo"
       },
       "rules": {
         "title": "Reglas personalizadas",
@@ -363,7 +380,6 @@
         "label": "Nombre",
         "labelPlaceholder": "Describe esta regla",
         "value": "Valor",
-        "valuePlaceholder": "Qué buscar",
         "target": "Coincidencia",
         "action": "Acción",
         "enabled": "Activada",

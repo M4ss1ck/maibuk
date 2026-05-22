@@ -114,11 +114,10 @@ describe("cleanPastedHtml() — hygiene", () => {
     expect(p?.getAttribute("class")).toBe("my-class");
   });
 
-  it("removes empty span/font tags but keeps non-empty ones", () => {
-    const out = clean("<p><span></span><span>text</span><font></font></p>", settings());
-    expect(out.querySelectorAll("span")).toHaveLength(1);
+  it("removes empty span/font tags", () => {
+    const out = clean("<p><span></span><span>x</span><font></font></p>", settings());
     expect(out.querySelector("font")).toBeNull();
-    expect(out.textContent).toBe("text");
+    expect(out.textContent).toBe("x");
   });
 
   it("normalizes h4/h5/h6 to h3 and leaves h1-h3 untouched", () => {
@@ -175,107 +174,69 @@ describe("cleanPastedHtml() — keepAll preset", () => {
   });
 });
 
-// --- Group 3: category toggles (the "disabled parser" coverage) ---
+// --- Group 3: strip-list + structural categories ---
 
-describe("cleanPastedHtml() — category: removeTextColor", () => {
-  it("strips inline color when enabled", () => {
+describe("cleanPastedHtml() — strippedProperties", () => {
+  it("strips each listed property and keeps the rest", () => {
     const out = clean(
-      '<p style="color:red">x</p>',
-      withOptions({ removeTextColor: true }),
+      '<p style="color:red;font-size:24px;font-family:Georgia">x</p>',
+      withOptions({ strippedProperties: ["color", "font-size"] }),
     );
-    expect(out.querySelector("p")?.style.color).toBe("");
+    const p = out.querySelector("p");
+    expect(p?.style.color).toBe("");
+    expect(p?.style.fontSize).toBe("");
+    expect(p?.style.fontFamily).not.toBe("");
   });
 
-  it("keeps inline color when disabled", () => {
+  it("keeps every property when the list is empty", () => {
     const out = clean('<p style="color:red">x</p>', settings());
     expect(out.querySelector("p")?.style.color).not.toBe("");
   });
-});
 
-describe("cleanPastedHtml() — category: removeHighlight", () => {
-  it("strips background-color and data-color when enabled", () => {
+  it("removes data-color when background-color is stripped", () => {
     const out = clean(
-      '<span style="background-color:yellow" data-color="yellow">x</span>',
-      withOptions({ removeHighlight: true }),
+      '<span class="keep" style="background-color:yellow" data-color="yellow">x</span>',
+      withOptions({ strippedProperties: ["background-color"] }),
     );
-    const span = out.querySelector("span");
+    const span = out.querySelector<HTMLSpanElement>("span.keep");
     expect(span?.style.backgroundColor).toBe("");
     expect(span?.hasAttribute("data-color")).toBe(false);
   });
-
-  it("unwraps <mark> elements when enabled", () => {
-    const out = clean(
-      "<p><mark>marked</mark></p>",
-      withOptions({ removeHighlight: true }),
-    );
-    expect(out.querySelector("mark")).toBeNull();
-    expect(out.textContent).toBe("marked");
-  });
-
-  it("keeps the highlight when disabled", () => {
-    const out = clean(
-      '<span style="background-color:yellow">x</span>',
-      settings(),
-    );
-    expect(out.querySelector("span")?.style.backgroundColor).not.toBe("");
-  });
 });
 
-describe("cleanPastedHtml() — category: removeFontFamily / removeFontSize", () => {
-  it("strips font-family when enabled", () => {
-    const out = clean(
-      '<span style="font-family:Georgia">x</span>',
-      withOptions({ removeFontFamily: true }),
-    );
-    expect(out.querySelector("span")?.style.fontFamily).toBe("");
+describe("cleanPastedHtml() — unwrapBareInlineTags", () => {
+  it("unwraps a span that has no attributes", () => {
+    const out = clean("<p><span>text</span></p>", settings());
+    expect(out.querySelector("span")).toBeNull();
+    expect(out.querySelector("p")?.textContent).toBe("text");
   });
 
-  it("strips font-size when enabled", () => {
-    const out = clean(
-      '<span style="font-size:24px">x</span>',
-      withOptions({ removeFontSize: true }),
-    );
-    expect(out.querySelector("span")?.style.fontSize).toBe("");
-  });
-});
-
-describe("cleanPastedHtml() — category: removeSourceSpacing", () => {
-  it("strips margins and line-height when enabled", () => {
-    const out = clean(
-      '<p style="margin-top:12px;margin-bottom:8px;line-height:2">x</p>',
-      withOptions({ removeSourceSpacing: true }),
-    );
-    const p = out.querySelector("p");
-    expect(p?.style.marginTop).toBe("");
-    expect(p?.style.lineHeight).toBe("");
+  it("unwraps a bare <font> element", () => {
+    const out = clean("<p><font>text</font></p>", settings());
+    expect(out.querySelector("font")).toBeNull();
+    expect(out.textContent).toBe("text");
   });
 
-  it("keeps spacing when disabled", () => {
+  it("keeps spans that still carry attributes", () => {
     const out = clean(
-      '<p style="margin-top:12px">x</p>',
+      '<p><span class="keep">a</span><span style="color:red">b</span></p>',
       settings(),
     );
-    expect(out.querySelector("p")?.style.marginTop).toBe("12px");
-  });
-});
-
-describe("cleanPastedHtml() — category: removeSourceIndent", () => {
-  it("strips text-indent and margin-left when enabled", () => {
-    const out = clean(
-      '<p style="text-indent:40px;margin-left:20px">x</p>',
-      withOptions({ removeSourceIndent: true }),
-    );
-    const p = out.querySelector("p");
-    expect(p?.style.textIndent).toBe("");
-    expect(p?.style.marginLeft).toBe("");
+    expect(out.querySelectorAll("span")).toHaveLength(2);
   });
 
-  it("keeps indentation when disabled", () => {
+  it("leaves bare block elements alone", () => {
+    const out = clean("<div>text</div>", settings());
+    expect(out.querySelector("div")).not.toBeNull();
+  });
+
+  it("strips a junk span down to clean text (the end-to-end chain)", () => {
     const out = clean(
-      '<p style="text-indent:40px">x</p>',
-      settings(),
+      '<p><span style="font-family:-webkit-standard;font-size:medium">x</span></p>',
+      withOptions({ strippedProperties: ["font-family", "font-size"] }),
     );
-    expect(out.querySelector("p")?.style.textIndent).toBe("40px");
+    expect(out.querySelector("span")).toBeNull();
+    expect(out.querySelector("p")?.outerHTML).toBe("<p>x</p>");
   });
 });
 
@@ -355,11 +316,11 @@ describe("cleanPastedHtml() — category: removeImages", () => {
   });
 });
 
-describe("cleanPastedHtml() — category: removeInlineFormatting", () => {
-  it("unwraps bold/italic/underline when enabled", () => {
+describe("cleanPastedHtml() — category: unwrapFormattingTags", () => {
+  it("unwraps bold/italic/underline tags when enabled", () => {
     const out = clean(
       "<p><strong>b</strong><em>i</em><u>u</u></p>",
-      withOptions({ removeInlineFormatting: true }),
+      withOptions({ unwrapFormattingTags: true }),
     );
     expect(out.querySelector("strong")).toBeNull();
     expect(out.querySelector("em")).toBeNull();
@@ -367,7 +328,7 @@ describe("cleanPastedHtml() — category: removeInlineFormatting", () => {
     expect(out.textContent).toBe("biu");
   });
 
-  it("keeps inline formatting when disabled", () => {
+  it("keeps formatting tags when disabled", () => {
     const out = clean("<p><strong>b</strong></p>", settings());
     expect(out.querySelector("strong")).not.toBeNull();
   });
@@ -503,7 +464,7 @@ describe("cleanPastedHtml() — rule ordering", () => {
       cleanPastedHtml(
         '<p style="color:red">x</p>',
         settings({
-          options: { ...PASTE_CLEANUP_PRESETS.keepAll, removeTextColor: true },
+          options: { ...PASTE_CLEANUP_PRESETS.keepAll, strippedProperties: ["color"] },
           rules: [rule({ target: "textColor", value: "red", action: "removeStyle" })],
         }),
       ),
@@ -516,7 +477,7 @@ describe("cleanPastedHtml() — rule ordering", () => {
 describe("cleanPastedHtml() — invalid rule safety", () => {
   it("skips a rule with an invalid CSS selector and still applies later rules", () => {
     const out = clean(
-      "<div>x</div><span>y</span>",
+      '<div>x</div><span class="keep">y</span>',
       settings({
         rules: [
           rule({ target: "cssSelector", value: ">>>", action: "delete" }),
@@ -525,7 +486,7 @@ describe("cleanPastedHtml() — invalid rule safety", () => {
       }),
     );
     expect(out.querySelector("div")).toBeNull();
-    expect(out.querySelector("span")).not.toBeNull();
+    expect(out.querySelector("span.keep")).not.toBeNull();
   });
 
   it("does not throw on an invalid tag selector", () => {

@@ -8,10 +8,12 @@ import type {
 
 /**
  * Pure paste-cleanup engine. Given raw pasted HTML and the author's cleanup
- * settings, returns cleaned HTML in three stages:
- *   1. Hygiene — always on (Google Docs / Word junk, empty tags, heading levels)
- *   2. Category cleanup — driven by the effective options
+ * settings, returns cleaned HTML in four stages:
+ *   1. Hygiene — always on (Google Docs / Word junk, empty tags, heading levels,
+ *      highlight mirroring, margin/indent normalisation)
+ *   2. Category cleanup — strip the configured CSS properties + structural ops
  *   3. Custom rules — applied in array order, each guarded so a bad rule is skipped
+ *   4. Bare-tag cleanup — unwrap attributeless <span>/<font> left behind
  */
 export function cleanPastedHtml(
   html: string,
@@ -25,6 +27,7 @@ export function cleanPastedHtml(
   applyHygiene(body);
   applyCategoryCleanup(body, settings.options);
   applyCustomRules(body, settings.rules);
+  unwrapBareInlineTags(body);
 
   return body.innerHTML;
 }
@@ -39,6 +42,9 @@ function applyHygiene(body: HTMLElement): void {
   cleanupSourceAttributes(body);
   removeEmptyInlineTags(body);
   normalizeHeadingLevels(body);
+  mirrorHighlightColors(body);
+  capParagraphMargins(body);
+  normalizeIndentation(body);
 }
 
 function unwrapGoogleDocsWrapper(body: HTMLElement): void {
@@ -124,38 +130,7 @@ function normalizeHeadingLevels(body: HTMLElement): void {
   }
 }
 
-// --- Stage 2: category cleanup --------------------------------------------
-
-function applyCategoryCleanup(
-  body: HTMLElement,
-  options: PasteCleanupOptions,
-): void {
-  if (options.removeTextColor) removeStyleProperty(body, "color");
-  applyHighlightCategory(body, options.removeHighlight);
-  if (options.removeFontFamily) removeStyleProperty(body, "font-family");
-  if (options.removeFontSize) removeStyleProperty(body, "font-size");
-  applySpacingCategory(body, options.removeSourceSpacing);
-  applyIndentCategory(body, options.removeSourceIndent);
-
-  if (options.demoteHeadings) demoteHeadings(body);
-  if (options.stripLinks) unwrapAll(body, "a");
-  if (options.flattenLists) flattenLists(body);
-  if (options.removeImages) removeAll(body, "img");
-  if (options.removeInlineFormatting) removeInlineFormatting(body);
-}
-
-function applyHighlightCategory(body: HTMLElement, remove: boolean): void {
-  if (remove) {
-    for (const el of Array.from(body.querySelectorAll<HTMLElement>("*"))) {
-      el.style.removeProperty("background-color");
-      if (!el.getAttribute("style")) el.removeAttribute("style");
-      el.removeAttribute("data-color");
-    }
-    unwrapAll(body, "mark");
-    return;
-  }
-  // Keep: mirror the source highlight as data-color so the editor's Highlight
-  // extension picks it up on paste.
+function mirrorHighlightColors(body: HTMLElement): void {
   for (const span of Array.from(body.querySelectorAll<HTMLElement>("span"))) {
     const bg = span.style.backgroundColor;
     if (bg && bg !== "transparent" && bg !== "inherit") {
@@ -164,17 +139,7 @@ function applyHighlightCategory(body: HTMLElement, remove: boolean): void {
   }
 }
 
-function applySpacingCategory(body: HTMLElement, remove: boolean): void {
-  if (remove) {
-    for (const el of Array.from(body.querySelectorAll<HTMLElement>("[style]"))) {
-      el.style.removeProperty("margin-top");
-      el.style.removeProperty("margin-bottom");
-      el.style.removeProperty("line-height");
-      if (!el.getAttribute("style")) el.removeAttribute("style");
-    }
-    return;
-  }
-  // Keep: cap excessive paragraph margins from the source.
+function capParagraphMargins(body: HTMLElement): void {
   for (const p of Array.from(body.querySelectorAll<HTMLElement>("p"))) {
     if (p.style.marginTop) p.style.marginTop = capMargin(p.style.marginTop);
     if (p.style.marginBottom) {
@@ -183,23 +148,32 @@ function applySpacingCategory(body: HTMLElement, remove: boolean): void {
   }
 }
 
-function applyIndentCategory(body: HTMLElement, remove: boolean): void {
-  if (remove) {
-    for (const el of Array.from(body.querySelectorAll<HTMLElement>("[style]"))) {
-      el.style.removeProperty("text-indent");
-      el.style.removeProperty("margin-left");
-      el.style.removeProperty("padding-left");
-      if (!el.getAttribute("style")) el.removeAttribute("style");
-    }
-    return;
-  }
-  // Keep: normalise padding-left indentation to margin-left.
+function normalizeIndentation(body: HTMLElement): void {
   for (const el of Array.from(body.querySelectorAll<HTMLElement>("[style]"))) {
     if (!el.style.marginLeft && el.style.paddingLeft) {
       el.style.marginLeft = el.style.paddingLeft;
       el.style.removeProperty("padding-left");
     }
   }
+}
+
+// --- Stage 2: category cleanup --------------------------------------------
+
+const FORMATTING_TAGS =
+  "strong, b, em, i, u, s, strike, del, mark, sub, sup, code";
+
+function applyCategoryCleanup(
+  body: HTMLElement,
+  options: PasteCleanupOptions,
+): void {
+  for (const property of options.strippedProperties) {
+    removeStyleProperty(body, property);
+  }
+  if (options.demoteHeadings) demoteHeadings(body);
+  if (options.stripLinks) unwrapAll(body, "a");
+  if (options.flattenLists) flattenLists(body);
+  if (options.removeImages) removeAll(body, "img");
+  if (options.unwrapFormattingTags) unwrapAll(body, FORMATTING_TAGS);
 }
 
 function demoteHeadings(body: HTMLElement): void {
@@ -225,21 +199,6 @@ function flattenLists(body: HTMLElement): void {
       paragraphs.push(p);
     }
     list.replaceWith(...paragraphs);
-  }
-}
-
-const INLINE_FORMAT_TAGS =
-  "strong, b, em, i, u, s, strike, del, mark, sub, sup, span, code";
-
-function removeInlineFormatting(body: HTMLElement): void {
-  for (const el of Array.from(body.querySelectorAll(INLINE_FORMAT_TAGS))) {
-    unwrapElement(el);
-  }
-  for (const el of Array.from(body.querySelectorAll<HTMLElement>("[style]"))) {
-    el.style.removeProperty("font-weight");
-    el.style.removeProperty("font-style");
-    el.style.removeProperty("text-decoration");
-    if (!el.getAttribute("style")) el.removeAttribute("style");
   }
 }
 
@@ -330,12 +289,26 @@ function applyRuleAction(
   }
 }
 
+// --- Stage 4: bare-tag cleanup --------------------------------------------
+
+function unwrapBareInlineTags(body: HTMLElement): void {
+  for (const el of Array.from(body.querySelectorAll("span, font"))) {
+    if (el.attributes.length === 0) unwrapElement(el);
+  }
+}
+
 // --- Shared helpers -------------------------------------------------------
 
 function removeStyleProperty(body: HTMLElement, prop: string): void {
   for (const el of Array.from(body.querySelectorAll<HTMLElement>("[style]"))) {
     el.style.removeProperty(prop);
     if (!el.getAttribute("style")) el.removeAttribute("style");
+  }
+  // Stripping a highlight also drops the mirrored data-color attribute.
+  if (prop === "background-color") {
+    for (const el of Array.from(body.querySelectorAll("[data-color]"))) {
+      el.removeAttribute("data-color");
+    }
   }
 }
 

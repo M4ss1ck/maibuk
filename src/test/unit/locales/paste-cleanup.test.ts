@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import en from "../../../locales/en.json";
 import es from "../../../locales/es.json";
+import { PASTE_STRIP_COMMON_PROPERTIES } from "../../../features/settings/types";
 
 function keyPaths(value: unknown, prefix = ""): string[] {
   if (value === null || typeof value !== "object") return [prefix];
@@ -21,7 +22,7 @@ describe("paste cleanup i18n", () => {
     expect(esKeys).toEqual(enKeys);
   });
 
-  it("includes the expected preset, option and rule keys", () => {
+  it("includes the expected preset, option, strip and rule keys", () => {
     const pc = en.settings.pasteCleanup;
 
     expect(pc.title).toBeTruthy();
@@ -31,21 +32,18 @@ describe("paste cleanup i18n", () => {
     }
 
     const optionKeys = [
-      "removeTextColor",
-      "removeHighlight",
-      "removeFontFamily",
-      "removeFontSize",
-      "removeSourceSpacing",
-      "removeSourceIndent",
       "demoteHeadings",
       "stripLinks",
       "flattenLists",
       "removeImages",
-      "removeInlineFormatting",
+      "unwrapFormattingTags",
     ];
     for (const key of optionKeys) {
       expect((pc.option as Record<string, string>)[key]).toBeTruthy();
     }
+
+    expect(pc.strip.title).toBeTruthy();
+    expect(pc.strip.addProperty).toBeTruthy();
 
     for (const target of [
       "fontFamily",
@@ -62,6 +60,17 @@ describe("paste cleanup i18n", () => {
     for (const action of ["removeStyle", "unwrap", "delete"]) {
       expect(
         (pc.rules.actionOption as Record<string, string>)[action],
+      ).toBeTruthy();
+    }
+  });
+
+  it("labels every curated strip property in both locales", () => {
+    for (const prop of PASTE_STRIP_COMMON_PROPERTIES) {
+      expect(
+        (en.settings.pasteCleanup.property as Record<string, string>)[prop],
+      ).toBeTruthy();
+      expect(
+        (es.settings.pasteCleanup.property as Record<string, string>)[prop],
       ).toBeTruthy();
     }
   });
