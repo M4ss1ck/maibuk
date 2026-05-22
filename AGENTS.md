@@ -91,7 +91,7 @@ src/
 │   ├── cover-editor/    # Fabric.js cover canvas and toolbar
 │   ├── export/          # Export dialogs and previews
 │   ├── sync/            # Sync status button, auth/passphrase dialogs, conflict dialog, sync panel
-│   ├── settings/        # BackupSection
+│   ├── settings/        # BackupSection, PasteCleanupSection
 │   ├── project/         # Book card, new book dialog
 │   ├── book/            # Book settings dialog
 │   └── icons/           # Custom SVG icon components
@@ -222,6 +222,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`                |
 | `isMac()`                                                          | `src/lib/platform/detect.ts`               |
 | `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts`    |
+| `cleanPastedHtml()` (configurable paste-cleanup engine)            | `src/components/editor/paste-cleanup.ts`   |
 | `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                     |
 | `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                         |
 | `detectSystemLocale()`                                             | `src/i18n.ts`                              |

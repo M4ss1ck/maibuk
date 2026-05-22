@@ -8,6 +8,12 @@ import {
   EXPORT_FORMAT_OPTIONS,
   LANGUAGE_OPTIONS,
   getDefaultBackupRetention,
+  PASTE_CLEANUP_PRESETS,
+  PASTE_STRUCTURAL_OPTION_KEYS,
+  PASTE_RULE_TARGET_VALUES,
+  PASTE_RULE_TARGET_META,
+  BOOK_STRIP_PROPERTIES,
+  PASTE_STRIP_COMMON_PROPERTIES,
 } from "../../../../features/settings/types";
 
 describe("DEFAULT_PRIMARY_COLOR", () => {
@@ -78,6 +84,70 @@ describe("LANGUAGE_OPTIONS", () => {
   it("every option has a non-empty label", () => {
     for (const opt of LANGUAGE_OPTIONS) {
       expect(opt.label.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("PASTE_STRUCTURAL_OPTION_KEYS", () => {
+  it("has the 5 structural option keys, all boolean on the presets", () => {
+    expect(PASTE_STRUCTURAL_OPTION_KEYS).toHaveLength(5);
+    for (const key of PASTE_STRUCTURAL_OPTION_KEYS) {
+      expect(typeof PASTE_CLEANUP_PRESETS.keepAll[key]).toBe("boolean");
+    }
+  });
+});
+
+describe("PASTE_CLEANUP_PRESETS", () => {
+  it("keepAll strips nothing and runs no structural ops", () => {
+    expect(PASTE_CLEANUP_PRESETS.keepAll.strippedProperties).toEqual([]);
+    for (const key of PASTE_STRUCTURAL_OPTION_KEYS) {
+      expect(PASTE_CLEANUP_PRESETS.keepAll[key]).toBe(false);
+    }
+  });
+
+  it("matchBook strips the book property set with no structural ops", () => {
+    expect(PASTE_CLEANUP_PRESETS.matchBook.strippedProperties).toEqual(
+      BOOK_STRIP_PROPERTIES,
+    );
+    for (const key of PASTE_STRUCTURAL_OPTION_KEYS) {
+      expect(PASTE_CLEANUP_PRESETS.matchBook[key]).toBe(false);
+    }
+  });
+
+  it("plainText enables every structural op and strips the most", () => {
+    for (const key of PASTE_STRUCTURAL_OPTION_KEYS) {
+      expect(PASTE_CLEANUP_PRESETS.plainText[key]).toBe(true);
+    }
+    for (const prop of BOOK_STRIP_PROPERTIES) {
+      expect(PASTE_CLEANUP_PRESETS.plainText.strippedProperties).toContain(prop);
+    }
+    expect(PASTE_CLEANUP_PRESETS.plainText.strippedProperties).toContain(
+      "font-weight",
+    );
+  });
+});
+
+describe("BOOK_STRIP_PROPERTIES", () => {
+  it("includes the common book-relevant properties", () => {
+    for (const prop of ["color", "font-family", "font-size"]) {
+      expect(BOOK_STRIP_PROPERTIES).toContain(prop);
+    }
+  });
+});
+
+describe("PASTE_STRIP_COMMON_PROPERTIES", () => {
+  it("is a non-empty list of lowercase CSS property names", () => {
+    expect(PASTE_STRIP_COMMON_PROPERTIES.length).toBeGreaterThan(0);
+    for (const prop of PASTE_STRIP_COMMON_PROPERTIES) {
+      expect(prop).toBe(prop.toLowerCase());
+    }
+  });
+});
+
+describe("PASTE_RULE_TARGET_META", () => {
+  it("has a non-empty example for every rule target", () => {
+    for (const target of PASTE_RULE_TARGET_VALUES) {
+      expect(PASTE_RULE_TARGET_META[target].example.length).toBeGreaterThan(0);
     }
   });
 });

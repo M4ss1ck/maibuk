@@ -326,7 +326,81 @@
     "resetDatabaseButton": "Reset",
     "resetDatabaseFailed": "Could not reset the database. Try restarting the app.",
     "resetDatabaseConfirm": "Are you sure you want to reset the database? This will permanently delete all your books, chapters, and settings. This action cannot be undone.",
-    "confirmReset": "Yes, reset everything"
+    "confirmReset": "Yes, reset everything",
+    "pasteCleanup": {
+      "title": "Paste cleanup",
+      "description": "Control how formatting is stripped from text you paste in.",
+      "preset": {
+        "label": "Paste style",
+        "description": "How pasted text adopts your book's formatting.",
+        "keepAll": "Keep all formatting",
+        "matchBook": "Match my book",
+        "plainText": "Plain text only",
+        "custom": "Custom"
+      },
+      "advanced": "Advanced",
+      "option": {
+        "demoteHeadings": "Convert headings to paragraphs",
+        "stripLinks": "Remove links",
+        "flattenLists": "Flatten lists to paragraphs",
+        "removeImages": "Remove images",
+        "unwrapFormattingTags": "Remove bold, italic and underline"
+      },
+      "strip": {
+        "title": "Strip styles",
+        "description": "Remove these CSS properties from pasted content.",
+        "addProperty": "Add",
+        "addPropertyPlaceholder": "CSS property, e.g. word-spacing"
+      },
+      "property": {
+        "color": "Text color",
+        "background-color": "Highlight color",
+        "font-family": "Font",
+        "font-size": "Font size",
+        "font-weight": "Bold weight",
+        "font-style": "Italic style",
+        "line-height": "Line spacing",
+        "letter-spacing": "Letter spacing",
+        "text-decoration": "Underline & strikethrough",
+        "text-indent": "First-line indent",
+        "text-transform": "Letter case",
+        "margin-top": "Space above",
+        "margin-bottom": "Space below",
+        "margin-left": "Left margin",
+        "padding-left": "Left padding"
+      },
+      "rules": {
+        "title": "Custom rules",
+        "description": "Extra cleanup applied after the options above, in order.",
+        "manage": "Manage rules",
+        "count_one": "{{count}} rule",
+        "count_other": "{{count}} rules",
+        "empty": "No custom rules yet.",
+        "add": "Add rule",
+        "label": "Name",
+        "labelPlaceholder": "Describe this rule",
+        "value": "Value",
+        "target": "Match",
+        "action": "Action",
+        "enabled": "Enabled",
+        "remove": "Remove",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "targetOption": {
+          "fontFamily": "Font",
+          "textColor": "Text color",
+          "backgroundColor": "Highlight color",
+          "cssClass": "CSS class",
+          "tag": "HTML tag",
+          "cssSelector": "CSS selector"
+        },
+        "actionOption": {
+          "removeStyle": "Remove styling",
+          "unwrap": "Unwrap element",
+          "delete": "Delete element"
+        }
+      }
+    }
   },
   "cover": {
     "title": "Cover Designer",

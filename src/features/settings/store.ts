@@ -7,7 +7,10 @@ import {
   DEFAULT_BACKUP_LIST_PAGE_SIZE,
   BACKUP_LIST_PAGE_SIZE_OPTIONS,
   getDefaultBackupRetention,
+  PASTE_CLEANUP_PRESETS,
+  PASTE_CLEANUP_PRESET_VALUES,
   type Settings,
+  type PasteCleanupSettings,
   type FontSize,
   type FontFamily,
   type ExportFormat,
@@ -15,6 +18,10 @@ import {
   type HtmlEditorTheme,
   type ChapterListView,
   type BackupListPageSize,
+  type PasteCleanupPreset,
+  type PasteCleanupOptions,
+  type PasteStructuralOptionKey,
+  type PasteCleanupRule,
 } from "./types";
 
 const STORAGE_KEY = "maibuk-settings";
@@ -47,6 +54,20 @@ interface SettingsStore extends Settings {
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
   setHtmlPanelHeight: (height: number) => void;
+  setPasteCleanupPreset: (preset: PasteCleanupPreset) => void;
+  setPasteCleanupOption: <K extends PasteStructuralOptionKey>(
+    key: K,
+    value: PasteCleanupOptions[K]
+  ) => void;
+  addStrippedProperty: (property: string) => void;
+  removeStrippedProperty: (property: string) => void;
+  addPasteCleanupRule: () => void;
+  updatePasteCleanupRule: (
+    id: string,
+    patch: Partial<Omit<PasteCleanupRule, "id">>
+  ) => void;
+  removePasteCleanupRule: (id: string) => void;
+  movePasteCleanupRule: (id: string, direction: "up" | "down") => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -74,6 +95,11 @@ const defaultSettings: Settings = {
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
   htmlPanelHeight: 200,
+  pasteCleanup: {
+    preset: "keepAll",
+    options: { ...PASTE_CLEANUP_PRESETS.keepAll },
+    rules: [],
+  },
 };
 
 function normalizeHexColor(color: string): string {
@@ -86,6 +112,58 @@ function normalizeHexColor(color: string): string {
     return `#${r}${r}${g}${g}${b}${b}`;
   }
   return DEFAULT_PRIMARY_COLOR;
+}
+
+/**
+ * Coerce a persisted `pasteCleanup` blob into a valid PasteCleanupSettings.
+ * Older or malformed shapes (e.g. a pre-strip-list blob with no
+ * `strippedProperties`) self-heal here so a settings schema change can never
+ * crash the editor. For a non-custom preset the options are rebuilt from the
+ * preset table; a custom preset is coerced field by field.
+ */
+export function normalizePasteCleanup(value: unknown): PasteCleanupSettings {
+  const candidate = (value && typeof value === "object" ? value : {}) as Partial<
+    Record<keyof PasteCleanupSettings, unknown>
+  >;
+
+  const preset = PASTE_CLEANUP_PRESET_VALUES.includes(
+    candidate.preset as PasteCleanupPreset
+  )
+    ? (candidate.preset as PasteCleanupPreset)
+    : "keepAll";
+
+  const rules: PasteCleanupRule[] = Array.isArray(candidate.rules)
+    ? (candidate.rules.filter(
+        (rule) =>
+          typeof rule === "object" &&
+          rule !== null &&
+          typeof (rule as PasteCleanupRule).id === "string"
+      ) as PasteCleanupRule[])
+    : [];
+
+  if (preset !== "custom") {
+    return { preset, options: { ...PASTE_CLEANUP_PRESETS[preset] }, rules };
+  }
+
+  const raw = (candidate.options && typeof candidate.options === "object"
+    ? candidate.options
+    : {}) as Record<string, unknown>;
+  return {
+    preset,
+    options: {
+      demoteHeadings: raw.demoteHeadings === true,
+      stripLinks: raw.stripLinks === true,
+      flattenLists: raw.flattenLists === true,
+      removeImages: raw.removeImages === true,
+      unwrapFormattingTags: raw.unwrapFormattingTags === true,
+      strippedProperties: Array.isArray(raw.strippedProperties)
+        ? raw.strippedProperties.filter(
+            (item): item is string => typeof item === "string"
+          )
+        : [],
+    },
+    rules,
+  };
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -134,6 +212,102 @@ export const useSettingsStore = create<SettingsStore>()(
         set({
           htmlPanelHeight: Math.max(100, Math.min(window.innerHeight * 0.6, htmlPanelHeight)),
         }),
+      setPasteCleanupPreset: (preset) =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            preset,
+            options:
+              preset === "custom"
+                ? state.pasteCleanup.options
+                : { ...PASTE_CLEANUP_PRESETS[preset] },
+          },
+        })),
+      setPasteCleanupOption: (key, value) =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            preset: "custom",
+            options: { ...state.pasteCleanup.options, [key]: value },
+          },
+        })),
+      addStrippedProperty: (property) =>
+        set((state) => {
+          const normalized = property.trim().toLowerCase();
+          const current = state.pasteCleanup.options.strippedProperties;
+          if (!normalized || current.includes(normalized)) return state;
+          return {
+            pasteCleanup: {
+              ...state.pasteCleanup,
+              preset: "custom",
+              options: {
+                ...state.pasteCleanup.options,
+                strippedProperties: [...current, normalized],
+              },
+            },
+          };
+        }),
+      removeStrippedProperty: (property) =>
+        set((state) => {
+          const normalized = property.trim().toLowerCase();
+          const current = state.pasteCleanup.options.strippedProperties;
+          if (!current.includes(normalized)) return state;
+          return {
+            pasteCleanup: {
+              ...state.pasteCleanup,
+              preset: "custom",
+              options: {
+                ...state.pasteCleanup.options,
+                strippedProperties: current.filter((p) => p !== normalized),
+              },
+            },
+          };
+        }),
+      addPasteCleanupRule: () =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            rules: [
+              ...state.pasteCleanup.rules,
+              {
+                id: crypto.randomUUID(),
+                enabled: true,
+                label: "",
+                target: "fontFamily",
+                value: "",
+                action: "removeStyle",
+              },
+            ],
+          },
+        })),
+      updatePasteCleanupRule: (id, patch) =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            rules: state.pasteCleanup.rules.map((rule) =>
+              rule.id === id ? { ...rule, ...patch } : rule
+            ),
+          },
+        })),
+      removePasteCleanupRule: (id) =>
+        set((state) => ({
+          pasteCleanup: {
+            ...state.pasteCleanup,
+            rules: state.pasteCleanup.rules.filter((rule) => rule.id !== id),
+          },
+        })),
+      movePasteCleanupRule: (id, direction) =>
+        set((state) => {
+          const rules = state.pasteCleanup.rules;
+          const index = rules.findIndex((rule) => rule.id === id);
+          if (index === -1) return state;
+          const target = direction === "up" ? index - 1 : index + 1;
+          if (target < 0 || target >= rules.length) return state;
+          const next = [...rules];
+          const [moved] = next.splice(index, 1);
+          next.splice(target, 0, moved);
+          return { pasteCleanup: { ...state.pasteCleanup, rules: next } };
+        }),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;
@@ -160,6 +334,18 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: STORAGE_KEY,
+      // Normalise `pasteCleanup` on every rehydrate so a persisted blob from an
+      // older settings schema (the only nested-object setting) self-heals
+      // instead of crashing the editor. Other settings are flat primitives
+      // that the default shallow merge handles safely.
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState ?? {}) as Partial<SettingsStore>;
+        return {
+          ...currentState,
+          ...persisted,
+          pasteCleanup: normalizePasteCleanup(persisted.pasteCleanup),
+        };
+      },
       onRehydrateStorage: () => {
         return (state, error) => {
           if (error) {
