@@ -533,6 +533,7 @@
     "showHelp": "Mostrar ayuda de atajos",
     "gotoProjects": "Ir a Proyectos",
     "gotoSettings": "Ir a Configuración",
+    "gotoMetrics": "Ir a Métricas",
     "toggleTheme": "Cambiar tema",
     "toggleShortcutHints": "Alternar atajos visuales",
     "syncNow": "Sincronizar ahora",
