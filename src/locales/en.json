@@ -63,6 +63,8 @@
     "netWords": "Net words written",
     "loadingEvents": "Loading writing patterns",
     "noActivity": "No activity yet",
+    "disabledEmpty": "Metrics collection is disabled. Turn on a category in Settings → Metrics to start measuring again.",
+    "engagementDisabled": "Engagement tracking is disabled — turn it on in Settings → Metrics.",
     "wordsCount": "{{formattedCount}} words"
   },
   "books": {
@@ -348,6 +350,32 @@
     "resetDatabaseFailed": "Could not reset the database. Try restarting the app.",
     "resetDatabaseConfirm": "Are you sure you want to reset the database? This will permanently delete all your books, chapters, and settings. This action cannot be undone.",
     "confirmReset": "Yes, reset everything",
+    "metrics": {
+      "title": "Metrics",
+      "description": "Choose which local writing patterns Maibuk records on this device.",
+      "writing": {
+        "label": "Writing volume",
+        "description": "Typed, pasted, and deleted word events."
+      },
+      "time": {
+        "label": "Time tracking",
+        "description": "Session start, end, and active-time events."
+      },
+      "engagement": {
+        "label": "Engagement",
+        "description": "Edit ratio and deepest session views."
+      },
+      "sync": {
+        "label": "Sync metrics",
+        "description": "Share metrics across signed-in devices."
+      },
+      "syncUnavailable": "Available in the next release",
+      "measuringSince": "Measuring since {{date}}",
+      "notMeasuredYet": "Not measured yet",
+      "disableTitle": "Delete {{label}}?",
+      "disableDescription": "{{deletedData}} will be deleted from this device. This cannot be undone.",
+      "confirmDisable": "Delete {{label}}"
+    },
     "pasteCleanup": {
       "title": "Paste cleanup",
       "description": "Control how formatting is stripped from text you paste in.",

@@ -4,6 +4,7 @@ import { createTestDatabase } from "../../../support/db-test-context";
 import {
   ensureMetricsSchema,
   getSnapshotMetrics,
+  getCategoryMeasuringSince,
   getSourceHighWatermark,
   insertEvents,
   insertIfNotTombstoned,
@@ -142,6 +143,31 @@ describe("metrics events repository", () => {
     expect(secondPage.map((event) => event.id)).toEqual(["event-2"]);
     expect(await getSourceHighWatermark(testDb, "heatmap:2026")).toBe(
       "2026-05-23T12:01:00.000Z",
+    );
+  });
+
+  it("reports measuring-since dates by metrics category", async () => {
+    await insertEvents(testDb, [
+      buildEvent({
+        id: "typed-1",
+        eventType: "writing.typed",
+        timestamp: "2026-05-23T12:00:00.000Z",
+      }),
+      buildEvent({
+        id: "session-1",
+        eventType: "session.active",
+        timestamp: "2026-05-24T12:00:00.000Z",
+      }),
+    ]);
+
+    expect(await getCategoryMeasuringSince(testDb, "writing")).toBe(
+      "2026-05-23T12:00:00.000Z",
+    );
+    expect(await getCategoryMeasuringSince(testDb, "time")).toBe(
+      "2026-05-24T12:00:00.000Z",
+    );
+    expect(await getCategoryMeasuringSince(testDb, "engagement")).toBe(
+      "2026-05-23T12:00:00.000Z",
     );
   });
 });

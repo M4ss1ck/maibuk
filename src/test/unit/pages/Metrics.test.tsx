@@ -1,10 +1,21 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetSnapshotMetrics, mockGetAggregate, mockGetDatabase } = vi.hoisted(() => ({
+const {
+  mockGetSnapshotMetrics,
+  mockGetAggregate,
+  mockGetDatabase,
+  mockSettingsState,
+} = vi.hoisted(() => ({
   mockGetSnapshotMetrics: vi.fn(),
   mockGetAggregate: vi.fn(),
   mockGetDatabase: vi.fn(),
+  mockSettingsState: {
+    metrics: {
+      enabled: { writing: true, time: true, engagement: true },
+      streakDailyWordThreshold: 50,
+    },
+  },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -28,6 +39,9 @@ vi.mock("react-i18next", () => ({
         "metrics.netWords": "Net words written",
         "metrics.loadingEvents": "Loading writing patterns",
         "metrics.noActivity": "No activity yet",
+        "metrics.disabledEmpty": "Metrics collection is disabled.",
+        "metrics.engagementDisabled":
+          "Engagement tracking is disabled — turn it on in Settings → Metrics.",
         "metrics.wordsCount": `${params?.formattedCount ?? params?.count ?? 0} words`,
         "common.words": "words",
       };
@@ -52,8 +66,8 @@ vi.mock("../../../lib/metrics/MetricsService", () => ({
 }));
 
 vi.mock("../../../features/settings/store", () => ({
-  useSettingsStore: (selector: (state: { metrics: { streakDailyWordThreshold: number } }) => unknown) =>
-    selector({ metrics: { streakDailyWordThreshold: 50 } }),
+  useSettingsStore: (selector: (state: typeof mockSettingsState) => unknown) =>
+    selector(mockSettingsState),
 }));
 
 const { Metrics } = await import("../../../pages/Metrics");
@@ -61,6 +75,12 @@ const { Metrics } = await import("../../../pages/Metrics");
 describe("Metrics page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSettingsState.metrics.enabled = {
+      writing: true,
+      time: true,
+      engagement: true,
+    };
+    mockSettingsState.metrics.streakDailyWordThreshold = 50;
     mockGetDatabase.mockResolvedValue({});
     mockGetSnapshotMetrics.mockResolvedValue({
       totalWords: 12345,
@@ -116,5 +136,36 @@ describe("Metrics page", () => {
     expect(screen.getByText("15")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
+  });
+
+  it("shows a metrics-off empty state when every collection category is disabled", async () => {
+    mockSettingsState.metrics.enabled = {
+      writing: false,
+      time: false,
+      engagement: false,
+    };
+
+    render(<Metrics />);
+
+    expect(screen.getByText("Metrics collection is disabled.")).toBeInTheDocument();
+    expect(mockGetAggregate).not.toHaveBeenCalled();
+  });
+
+  it("replaces the engagement view when engagement tracking is disabled", async () => {
+    mockSettingsState.metrics.enabled = {
+      writing: true,
+      time: true,
+      engagement: false,
+    };
+
+    render(<Metrics />);
+
+    expect(
+      screen.getByText(
+        "Engagement tracking is disabled — turn it on in Settings → Metrics.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Edit ratio")).not.toBeInTheDocument();
+    expect(mockGetAggregate).toHaveBeenCalled();
   });
 });

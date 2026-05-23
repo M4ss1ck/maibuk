@@ -23,6 +23,7 @@ export function Metrics() {
   const threshold = useSettingsStore(
     (state) => state.metrics.streakDailyWordThreshold,
   );
+  const enabled = useSettingsStore((state) => state.metrics.enabled);
   const [snapshot, setSnapshot] = useState<SnapshotMetrics | null>(null);
   const [heatmap, setHeatmap] = useState<HeatmapAggregate | null>(null);
   const [streak, setStreak] = useState<StreakAggregate | null>(null);
@@ -44,6 +45,16 @@ export function Metrics() {
     const year = new Date().getFullYear();
     const today = formatLocalDate(new Date());
 
+    if (!enabled.writing && !enabled.time && !enabled.engagement) {
+      setHeatmap(null);
+      setStreak(null);
+      setDashboard(null);
+      setEventsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setEventsLoading(true);
     void Promise.all([
       metricsService.getAggregate(`heatmap:${year}`),
@@ -63,7 +74,12 @@ export function Metrics() {
     return () => {
       cancelled = true;
     };
-  }, [threshold]);
+  }, [enabled.engagement, enabled.time, enabled.writing, threshold]);
+
+  const allCategoriesDisabled =
+    !enabled.writing && !enabled.time && !enabled.engagement;
+  const displayedTotalWords = enabled.writing ? (snapshot?.totalWords ?? 0) : 0;
+  const displayedSnapshot = enabled.writing ? snapshot : { totalWords: 0, perWork: [] };
 
   return (
     <div className="h-full overflow-auto bg-background">
@@ -80,25 +96,52 @@ export function Metrics() {
           <div className="rounded-lg border border-border bg-card px-4 py-3 text-right">
             <p className="text-sm text-muted-foreground">{t("metrics.totalWords")}</p>
             <p className="text-3xl font-semibold tabular-nums">
-              {(snapshot?.totalWords ?? 0).toLocaleString()}
+              {displayedTotalWords.toLocaleString()}
             </p>
           </div>
         </header>
 
-        <StreakCard aggregate={streak} isLoading={eventsLoading} />
+        {allCategoriesDisabled ? (
+          <section className="rounded-lg border border-border bg-card p-6">
+            <p className="text-sm text-muted-foreground">
+              {t("metrics.disabledEmpty")}
+            </p>
+          </section>
+        ) : (
+          <>
+            {enabled.writing && (
+              <>
+                <StreakCard aggregate={streak} isLoading={eventsLoading} />
 
-        <Heatmap aggregate={heatmap} isLoading={eventsLoading} />
+                <Heatmap aggregate={heatmap} isLoading={eventsLoading} />
+              </>
+            )}
 
-        <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-          <WpmChart aggregate={dashboard} isLoading={eventsLoading} />
-          <TimeOfDay aggregate={dashboard} isLoading={eventsLoading} />
-        </div>
+            <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+              {enabled.engagement ? (
+                <WpmChart aggregate={dashboard} isLoading={eventsLoading} />
+              ) : (
+                <section className="rounded-lg border border-border bg-card p-4">
+                  <h2 className="text-lg font-semibold">
+                    {t("metrics.wpm")}
+                  </h2>
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    {t("metrics.engagementDisabled")}
+                  </p>
+                </section>
+              )}
+              {enabled.time && (
+                <TimeOfDay aggregate={dashboard} isLoading={eventsLoading} />
+              )}
+            </div>
 
-        <PerWorkList
-          snapshot={snapshot}
-          dashboard={dashboard}
-          isLoading={eventsLoading}
-        />
+            <PerWorkList
+              snapshot={displayedSnapshot}
+              dashboard={enabled.time ? dashboard : null}
+              isLoading={eventsLoading}
+            />
+          </>
+        )}
       </div>
     </div>
   );

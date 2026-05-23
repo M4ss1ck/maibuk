@@ -3,7 +3,7 @@ import type {
   AggregateKey,
   SnapshotMetrics,
 } from "./aggregates/types";
-import type { MetricEvent, MetricsCacheEntry } from "./types";
+import type { MetricEvent, MetricsCacheEntry, MetricsCategory } from "./types";
 
 interface MetricEventRow {
   id: string;
@@ -186,6 +186,18 @@ export async function getSourceHighWatermark(
   return rows[0]?.watermark ?? "";
 }
 
+export async function getCategoryMeasuringSince(
+  db: DatabaseAdapter,
+  category: MetricsCategory,
+): Promise<string | null> {
+  const { where, params } = buildCategoryWhere(category);
+  const rows = await db.select<{ timestamp: string | null }[]>(
+    `SELECT MIN(timestamp) AS timestamp FROM metrics_events ${where}`,
+    params,
+  );
+  return rows[0]?.timestamp ?? null;
+}
+
 export async function listEventsForAggregate(
   db: DatabaseAdapter,
   key: AggregateKey,
@@ -289,6 +301,25 @@ function buildAggregateWhere(key: AggregateKey): {
 
   return {
     where: "WHERE event_type = 'writing.typed'",
+    params: [],
+  };
+}
+
+function buildCategoryWhere(category: MetricsCategory): {
+  where: string;
+  params: unknown[];
+} {
+  if (category === "writing") {
+    return { where: "WHERE event_type LIKE 'writing.%'", params: [] };
+  }
+
+  if (category === "time") {
+    return { where: "WHERE event_type LIKE 'session.%'", params: [] };
+  }
+
+  return {
+    where:
+      "WHERE event_type LIKE 'writing.%' OR event_type LIKE 'session.%'",
     params: [],
   };
 }

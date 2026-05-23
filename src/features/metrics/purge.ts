@@ -7,6 +7,18 @@ export async function purgeMetricCategory(eventTypePrefix: string): Promise<numb
   const deviceId = getOrCreateDeviceId();
   const deletedAt = new Date().toISOString();
   const purged = await purgeEventsByPrefix(db, eventTypePrefix, deviceId, deletedAt);
-  await invalidateCache(db, [eventTypePrefix]);
+  await invalidateCache(db, getCachePrefixesForEventPrefix(eventTypePrefix));
   return purged;
+}
+
+function getCachePrefixesForEventPrefix(eventTypePrefix: string): string[] {
+  if (eventTypePrefix === "writing.") {
+    return ["heatmap:", "streak:", "dashboard:"];
+  }
+
+  if (eventTypePrefix === "session.") {
+    return ["dashboard:"];
+  }
+
+  return [eventTypePrefix];
 }

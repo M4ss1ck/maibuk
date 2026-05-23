@@ -30,6 +30,7 @@ import { BackupService } from "../features/backup/backup-service";
 import { useSyncStore } from "../features/sync/store";
 import { AuthDialog } from "../components/sync/AuthDialog";
 import { BackupSection } from "../components/settings/BackupSection";
+import { MetricsSection } from "../components/settings/MetricsSection";
 import { PasteCleanupSection } from "../components/settings/PasteCleanupSection";
 
 export function Settings() {
@@ -381,6 +382,11 @@ export function Settings() {
         {/* Backups */}
         <section className="pt-4 border-t border-border mb-6">
           <BackupSection />
+        </section>
+
+        {/* Metrics */}
+        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+          <MetricsSection />
         </section>
 
         <AuthDialog
