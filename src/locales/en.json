@@ -369,7 +369,7 @@
         "label": "Sync metrics",
         "description": "Share metrics across signed-in devices."
       },
-      "syncUnavailable": "Available in the next release",
+      "syncRequiresAuth": "Sign in to sync to enable metrics sharing",
       "measuringSince": "Measuring since {{date}}",
       "notMeasuredYet": "Not measured yet",
       "disableTitle": "Delete {{label}}?",

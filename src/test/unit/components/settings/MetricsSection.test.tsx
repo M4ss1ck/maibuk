@@ -9,12 +9,14 @@ const {
   mockGetCategoryMeasuringSince,
   mockPurgeMetricCategory,
   mockShutdown,
+  mockUseSyncStoreSelector,
 } = vi.hoisted(() => ({
   mockChangeLanguage: vi.fn(),
   mockGetDatabase: vi.fn(),
   mockGetCategoryMeasuringSince: vi.fn(),
   mockPurgeMetricCategory: vi.fn(),
   mockShutdown: vi.fn(),
+  mockUseSyncStoreSelector: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -34,7 +36,7 @@ vi.mock("react-i18next", () => ({
         "settings.metrics.sync.label": "Sync metrics",
         "settings.metrics.sync.description":
           "Share metrics across signed-in devices.",
-        "settings.metrics.syncUnavailable": "Available in the next release",
+        "settings.metrics.syncRequiresAuth": "Sign in to sync to enable metrics sharing",
         "settings.metrics.measuringSince": `Measuring since ${params?.date}`,
         "settings.metrics.notMeasuredYet": "Not measured yet",
         "settings.metrics.disableTitle": `Delete ${params?.label}?`,
@@ -58,6 +60,13 @@ vi.mock("../../../../i18n", () => ({
 
 vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
+}));
+
+vi.mock("../../../../features/sync/store", () => ({
+  useSyncStore: (selector?: (state: { authStatus: string }) => string) => {
+    const state = { authStatus: mockUseSyncStoreSelector() };
+    return selector ? selector(state) : state;
+  },
 }));
 
 vi.mock("../../../../features/metrics/events-repo", () => ({
@@ -89,6 +98,7 @@ describe("MetricsSection", () => {
         category === "writing" ? Promise.resolve("2026-05-23T12:00:00.000Z") : Promise.resolve(null),
     );
     mockPurgeMetricCategory.mockResolvedValue(1);
+    mockUseSyncStoreSelector.mockReturnValue("logged-out");
     useSettingsStore.setState({
       metrics: {
         ...DEFAULT_METRICS_SETTINGS,
@@ -148,13 +158,12 @@ describe("MetricsSection", () => {
     expect(mockShutdown).toHaveBeenCalledTimes(1);
   });
 
-  it("renders measuring-since state and a disabled sync toggle", async () => {
+  it("renders measuring-since state and a functional sync toggle with auth hint when signed out", async () => {
     render(<MetricsSection />);
 
     expect(await screen.findByText("Measuring since May 23, 2026")).toBeInTheDocument();
-    expect(
-      screen.getByRole("switch", { name: "Sync metrics" }),
-    ).toBeDisabled();
-    expect(screen.getByTitle("Available in the next release")).toBeDisabled();
+    const syncSwitch = screen.getByRole("switch", { name: "Sync metrics" });
+    expect(syncSwitch).not.toBeDisabled();
+    expect(screen.getByText("Sign in to sync to enable metrics sharing")).toBeInTheDocument();
   });
 });

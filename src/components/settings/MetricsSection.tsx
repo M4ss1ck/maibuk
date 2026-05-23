@@ -4,6 +4,7 @@ import { getCategoryMeasuringSince } from "../../features/metrics/events-repo";
 import { purgeMetricCategory } from "../../features/metrics/purge";
 import type { MetricsCategory } from "../../features/metrics/types";
 import { useSettingsStore } from "../../features/settings/store";
+import { useSyncStore } from "../../features/sync/store";
 import { getDatabase } from "../../lib/db";
 import { metricsService } from "../../lib/metrics/MetricsService";
 import { Button, Modal, Switch } from "../ui";
@@ -17,7 +18,8 @@ const CATEGORY_EVENT_PREFIX: Partial<Record<MetricsCategory, string>> = {
 
 export function MetricsSection() {
   const { t } = useTranslation();
-  const { metrics, setMetricsCategoryEnabled } = useSettingsStore();
+  const { metrics, setMetricsCategoryEnabled, setMetricsSyncEnabled } = useSettingsStore();
+  const authStatus = useSyncStore((state) => state.authStatus);
   const [pendingDisable, setPendingDisable] = useState<MetricsCategory | null>(
     null,
   );
@@ -137,24 +139,17 @@ export function MetricsSection() {
             <p className="text-sm text-muted-foreground">
               {t("settings.metrics.sync.description")}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("settings.metrics.syncUnavailable")}
-            </p>
+            {authStatus !== "logged-in" && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("settings.metrics.syncRequiresAuth")}
+              </p>
+            )}
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={metrics.syncMetrics}
-            disabled
-            title={t("settings.metrics.syncUnavailable")}
-            className="group relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed rounded-full border-2 border-transparent bg-muted opacity-50 transition-colors"
-          >
-            <span className="sr-only">{t("settings.metrics.sync.label")}</span>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0"
-            />
-          </button>
+          <Switch
+            checked={metrics.syncMetrics}
+            onChange={setMetricsSyncEnabled}
+            label={t("settings.metrics.sync.label")}
+          />
         </div>
       </div>
 

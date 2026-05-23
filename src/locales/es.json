@@ -369,7 +369,7 @@
         "label": "Sincronizar métricas",
         "description": "Comparte métricas entre dispositivos con sesión iniciada."
       },
-      "syncUnavailable": "Disponible en la próxima versión",
+      "syncRequiresAuth": "Inicia sesión para habilitar la sincronización de métricas",
       "measuringSince": "Midiendo desde {{date}}",
       "notMeasuredYet": "Aún no se mide",
       "disableTitle": "¿Eliminar {{label}}?",

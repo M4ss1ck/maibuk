@@ -85,6 +85,7 @@ export default defineConfig(() => ({
         "src/features/metrics/settings.ts",
         "src/features/metrics/purge.ts",
         "src/features/metrics/aggregates/compute.ts",
+        "src/features/metrics/metrics-sync.ts",
         "src/components/settings/MetricsSection.tsx",
         "src/pages/Metrics.tsx",
         "src/lib/metrics/MetricsService.ts",

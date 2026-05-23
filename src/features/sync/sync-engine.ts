@@ -9,14 +9,17 @@ import {
   listRemoteVersions,
   pushVersionBlob,
   pullVersionBlob,
+  pushMetricsBlob,
+  pullMetricsBlob,
 } from "./client";
-import type { BookSnapshot, SyncItemMeta, SingleSyncResult, BatchSyncResult } from "./types";
+import type { BookSnapshot, SyncItemMeta, SingleSyncResult, BatchSyncResult, MetricsSyncBlob } from "./types";
 import type { SyncAction, ConflictResolver } from "./types";
 import { createBackup } from "../../lib/platform";
 import { BackupService } from "../backup/backup-service";
 import { useSettingsStore } from "../settings/store";
 import { useSyncStore } from "./store";
 import { useVersionStore } from "../versions/store";
+import { serializeMetricsBatch, applyMetricsBatch } from "../metrics/metrics-sync";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR =
@@ -253,6 +256,30 @@ async function syncVersions(bookId: string, passphrase: string): Promise<void> {
   }
 }
 
+async function syncMetrics(passphrase: string): Promise<void> {
+  if (!useSettingsStore.getState().metrics.syncMetrics) return;
+
+  const localJson = await serializeMetricsBatch();
+  const localChecksum = await computeChecksum(localJson);
+
+  const remote = await pullMetricsBlob();
+  if (remote && remote.checksum === localChecksum) return;
+
+  const encrypted = await encrypt(localJson, passphrase);
+  await pushMetricsBlob(new Blob([toBlobPart(encrypted)]), localChecksum);
+
+  if (remote && remote.checksum !== localChecksum) {
+    const decrypted = await decrypt(remote.data, passphrase);
+    let snapshot: MetricsSyncBlob;
+    try {
+      snapshot = JSON.parse(decrypted) as MetricsSyncBlob;
+    } catch {
+      throw new Error("Synced metrics payload is invalid or corrupted");
+    }
+    await applyMetricsBatch(snapshot);
+  }
+}
+
 export async function syncBook(
   bookId: string,
   passphrase: string,
@@ -268,6 +295,7 @@ export async function syncBook(
     if (action !== "cancelled") {
       await syncVersions(bookId, passphrase);
     }
+    await syncMetrics(passphrase);
     return {
       outcome: action === "cancelled" ? "cancelled" : "success",
       action,
@@ -319,6 +347,7 @@ export async function syncAllBooks(
       }
       actions.push(action);
       if (action === "cancelled") {
+        await syncMetrics(passphrase);
         return {
           outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
           actions,
@@ -338,6 +367,8 @@ export async function syncAllBooks(
       actions.push("pulled");
       await syncVersions(remote.bookId, passphrase);
     }
+
+    await syncMetrics(passphrase);
 
     return { outcome: "success", actions };
   } finally {

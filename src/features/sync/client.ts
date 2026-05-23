@@ -141,6 +141,53 @@ export function parsePocketBaseDate(dateStr: string): number {
   return Math.floor(ms / 1000);
 }
 
+export async function pushMetricsBlob(
+  encryptedData: Blob,
+  checksum: string,
+): Promise<void> {
+  const client = getClient();
+  const userId = client.authStore.record?.id;
+  if (!userId) throw new Error("Not authenticated");
+
+  const existing = await client
+    .collection("metrics_sync")
+    .getList(1, 1, { filter: `user = "${userId}"` });
+
+  const formData = new FormData();
+  formData.append("encrypted_data", encryptedData, "metrics.bin");
+  formData.append("checksum", checksum);
+  formData.append("user", userId);
+
+  if (existing.items.length > 0) {
+    await client.collection("metrics_sync").update(existing.items[0].id, formData);
+  } else {
+    await client.collection("metrics_sync").create(formData);
+  }
+}
+
+export async function pullMetricsBlob(
+): Promise<{ data: Uint8Array; checksum: string } | null> {
+  const client = getClient();
+  const userId = client.authStore.record?.id;
+  if (!userId) return null;
+
+  const records = await client
+    .collection("metrics_sync")
+    .getList(1, 1, { filter: `user = "${userId}"` });
+
+  if (records.items.length === 0) return null;
+
+  const record = records.items[0];
+  const fileUrl = client.files.getURL(record, record.encrypted_data);
+  const response = await fetch(fileUrl);
+  const arrayBuffer = await response.arrayBuffer();
+
+  return {
+    data: new Uint8Array(arrayBuffer),
+    checksum: record.checksum as string,
+  };
+}
+
 export async function listRemoteBooks(): Promise<SyncItemMeta[]> {
   const client = getClient();
 

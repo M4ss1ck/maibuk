@@ -17,6 +17,11 @@ const mockRefreshAuth = vi.hoisted(() => vi.fn());
 const mockSyncStoreGetState = vi.hoisted(() => vi.fn());
 const mockSyncStoreSetState = vi.hoisted(() => vi.fn());
 const mockCreateVersion = vi.hoisted(() => vi.fn());
+const mockUseSettingsStoreGetState = vi.hoisted(() => vi.fn());
+const mockSerializeMetricsBatch = vi.hoisted(() => vi.fn());
+const mockApplyMetricsBatch = vi.hoisted(() => vi.fn());
+const mockPushMetricsBlob = vi.hoisted(() => vi.fn());
+const mockPullMetricsBlob = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
@@ -41,6 +46,8 @@ vi.mock("../../../../features/sync/client", () => ({
   pushVersionBlob: mockPushVersionBlob,
   pullVersionBlob: mockPullVersionBlob,
   refreshAuth: mockRefreshAuth,
+  pushMetricsBlob: mockPushMetricsBlob,
+  pullMetricsBlob: mockPullMetricsBlob,
 }));
 
 // Pre-mock backup module — Task 10 will add backup imports to sync-engine.ts.
@@ -54,6 +61,13 @@ vi.mock("../../../../features/sync/store", () => ({
   useSyncStore: {
     getState: mockSyncStoreGetState,
     setState: mockSyncStoreSetState,
+  },
+}));
+
+vi.mock("../../../../features/settings/store", () => ({
+  useSettingsStore: {
+    getState: mockUseSettingsStoreGetState,
+    setState: vi.fn(),
   },
 }));
 
@@ -71,6 +85,11 @@ vi.mock("../../../../features/backup/backup-service", () => ({
     deleteByTrigger = mockBackupServiceDeleteByTrigger;
     pruneBackups = vi.fn();
   },
+}));
+
+vi.mock("../../../../features/metrics/metrics-sync", () => ({
+  serializeMetricsBatch: mockSerializeMetricsBatch,
+  applyMetricsBatch: mockApplyMetricsBatch,
 }));
 
 const { syncBook, syncAllBooks, resetSyncEngineForTests } = await import(
@@ -99,6 +118,7 @@ describe("syncBook — timestamp fix", () => {
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
     mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
     mockCreateVersion.mockResolvedValue(null);
     mockListRemoteVersions.mockResolvedValue([]);
     mockPushVersionBlob.mockResolvedValue(undefined);
@@ -344,7 +364,8 @@ describe("ensureAuth — pre-sync auth guard", () => {
     mockSerializeBook.mockResolvedValue('{"book":{}}');
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
-    mockListRemoteBooks.mockResolvedValue([]);
+    mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
     mockCreateVersion.mockResolvedValue(null);
     mockListRemoteVersions.mockResolvedValue([]);
     mockPushVersionBlob.mockResolvedValue(undefined);
@@ -442,6 +463,7 @@ describe("syncVersions — pure union", () => {
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
     mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
     mockCreateVersion.mockResolvedValue(null);
     mockListRemoteVersions.mockResolvedValue([]);
     mockPushVersionBlob.mockResolvedValue(undefined);
@@ -696,5 +718,151 @@ describe("syncVersions — pure union", () => {
     );
     expect(updateCall).toBeDefined();
     expect(updateCall![1]).toEqual(expect.arrayContaining(["ver-local"]));
+  });
+});
+
+describe("syncMetrics — engine integration", () => {
+  const mockDb = {
+    select: vi.fn(),
+    execute: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSyncEngineForTests();
+    mockGetDatabase.mockResolvedValue(mockDb);
+    mockCreateBackupAdapter.mockResolvedValue({
+      saveBackup: vi.fn(),
+      listBackups: vi.fn().mockResolvedValue([]),
+      readBackup: vi.fn(),
+      deleteBackup: vi.fn(),
+    });
+    mockBackupServiceCreateBackup.mockResolvedValue("mock-backup.sql");
+    mockSerializeBook.mockResolvedValue('{"book":{}}');
+    mockComputeChecksum.mockResolvedValue("local-checksum");
+    mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
+    mockCreateVersion.mockResolvedValue(null);
+    mockListRemoteVersions.mockResolvedValue([]);
+    mockPushVersionBlob.mockResolvedValue(undefined);
+    mockPullVersionBlob.mockResolvedValue(null);
+    mockSerializeMetricsBatch.mockResolvedValue('{"events":[],"tombstones":[]}');
+    mockPushMetricsBlob.mockResolvedValue(undefined);
+    mockPullMetricsBlob.mockResolvedValue(null);
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      if (sql.includes("GROUP BY b.id")) return [{ id: "book-1", updated_at: 1000 }];
+      if (sql.includes("book_versions")) return [];
+      return [];
+    });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
+  });
+
+  it("skips metrics sync when syncMetrics is disabled", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
+    mockListRemoteBooks.mockResolvedValue([]);
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockSerializeMetricsBatch).not.toHaveBeenCalled();
+    expect(mockPushMetricsBlob).not.toHaveBeenCalled();
+    expect(mockPullMetricsBlob).not.toHaveBeenCalled();
+  });
+
+  it("pushes metrics and skips pull when checksums match", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "local-checksum",
+    });
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockSerializeMetricsBatch).toHaveBeenCalled();
+    expect(mockPullMetricsBlob).toHaveBeenCalled();
+    expect(mockPushMetricsBlob).not.toHaveBeenCalled();
+    expect(mockDecrypt).not.toHaveBeenCalled();
+    expect(mockApplyMetricsBatch).not.toHaveBeenCalled();
+  });
+
+  it("pulls and applies remote metrics when checksums differ", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    const remoteBlob = {
+      data: new Uint8Array([4, 5, 6]),
+      checksum: "remote-checksum",
+    };
+    mockPullMetricsBlob.mockResolvedValue(remoteBlob);
+    mockDecrypt.mockResolvedValue(
+      '{"events":[],"tombstones":[],"updatedAt":2000}',
+    );
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockPushMetricsBlob).toHaveBeenCalled();
+    expect(mockDecrypt).toHaveBeenCalledWith(remoteBlob.data, "pass");
+    expect(mockApplyMetricsBatch).toHaveBeenCalledWith({
+      events: [],
+      tombstones: [],
+      updatedAt: 2000,
+    });
+  });
+
+  it("pushes metrics when no remote blob exists", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockResolvedValue(null);
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockPushMetricsBlob).toHaveBeenCalled();
+    expect(mockDecrypt).not.toHaveBeenCalled();
+  });
+
+  it("throws when remote metrics payload is invalid JSON after decrypt", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockResolvedValue({
+      data: new Uint8Array([4, 5, 6]),
+      checksum: "remote-checksum",
+    });
+    mockDecrypt.mockResolvedValue("not valid json at all");
+
+    await expect(syncBook("book-1", "pass", vi.fn())).rejects.toThrow(
+      "Synced metrics payload is invalid or corrupted",
+    );
+  });
+
+  it("runs metrics sync in syncAllBooks path when enabled", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockResolvedValue(null);
+
+    await syncAllBooks("pass", vi.fn());
+
+    expect(mockSerializeMetricsBatch).toHaveBeenCalled();
+    expect(mockPushMetricsBlob).toHaveBeenCalled();
+  });
+
+  it("runs metrics sync even on cancelled syncAllBooks (partial outcome)", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [{ id: "book-2", updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Book Two" }];
+      return [];
+    });
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-2", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+    mockPullMetricsBlob.mockResolvedValue(null);
+
+    const result = await syncAllBooks("pass", vi.fn().mockResolvedValue("cancel"));
+
+    expect(result.outcome).toBe("cancelled");
+    expect(mockSerializeMetricsBatch).toHaveBeenCalled();
+    expect(mockPushMetricsBlob).toHaveBeenCalled();
   });
 });

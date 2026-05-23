@@ -38,6 +38,19 @@ export interface SyncItemMeta {
   updatedAt: number; // Unix seconds
 }
 
+import type { MetricEvent } from "../metrics/types";
+
+export interface MetricsSyncBlob {
+  events: MetricEvent[];
+  tombstones: Array<{
+    id: string;
+    deleted_at: string;
+    device_id: string;
+    reason: string;
+  }>;
+  updatedAt: number;
+}
+
 export interface BookSnapshot {
   book: {
     id: string;
