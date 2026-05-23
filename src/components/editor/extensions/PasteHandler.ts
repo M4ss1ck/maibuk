@@ -169,13 +169,17 @@ function readImageAsDataUrl(
         top: dropEvent.clientY,
       });
       if (coordinates) {
-        const tr = view.state.tr.insert(coordinates.pos, node);
+        const tr = view.state.tr
+          .insert(coordinates.pos, node)
+          .setMeta("metrics:source", "paste");
         view.dispatch(tr.scrollIntoView());
         return;
       }
     }
 
-    const tr = view.state.tr.replaceSelectionWith(node);
+    const tr = view.state.tr
+      .replaceSelectionWith(node)
+      .setMeta("metrics:source", "paste");
     view.dispatch(tr.scrollIntoView());
   };
   reader.readAsDataURL(file);
@@ -225,7 +229,7 @@ async function convertBlobImagesInHtml(
   }
 
   if (tr.docChanged) {
-    view.dispatch(tr.scrollIntoView());
+    view.dispatch(tr.setMeta("metrics:source", "paste").scrollIntoView());
   }
 }
 

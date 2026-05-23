@@ -1,3 +1,9 @@
+import type { MetricsCategory, MetricsSettings } from "../metrics/types";
+import { DEFAULT_METRICS_SETTINGS } from "../metrics/settings";
+
+export { DEFAULT_METRICS_SETTINGS };
+export type { MetricsCategory, MetricsSettings };
+
 export type FontSize = 14 | 16 | 18 | 20;
 export type FontFamily = "serif" | "sans" | "mono";
 export type ExportFormat = "epub" | "pdf";
@@ -97,6 +103,9 @@ export interface Settings {
 
   // Paste cleanup settings
   pasteCleanup: PasteCleanupSettings;
+
+  // Writing metrics settings
+  metrics: MetricsSettings;
 }
 
 export const PASTE_STRUCTURAL_OPTION_KEYS: PasteStructuralOptionKey[] = [

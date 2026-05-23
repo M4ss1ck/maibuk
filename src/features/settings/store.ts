@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import i18n, { detectSystemLocale } from "../../i18n";
 import {
+  DEFAULT_METRICS_SETTINGS,
   DEFAULT_PRIMARY_COLOR,
   DEFAULT_BACKUP_LIST_PAGE,
   DEFAULT_BACKUP_LIST_PAGE_SIZE,
@@ -22,7 +23,9 @@ import {
   type PasteCleanupOptions,
   type PasteStructuralOptionKey,
   type PasteCleanupRule,
+  type MetricsCategory,
 } from "./types";
+import { normalizeMetrics } from "../metrics/settings";
 
 const STORAGE_KEY = "maibuk-settings";
 const isWebBuild = import.meta.env.VITE_BUILD_TARGET === "web";
@@ -68,6 +71,9 @@ interface SettingsStore extends Settings {
   ) => void;
   removePasteCleanupRule: (id: string) => void;
   movePasteCleanupRule: (id: string, direction: "up" | "down") => void;
+  setMetricsCategoryEnabled: (category: MetricsCategory, enabled: boolean) => void;
+  setMetricsSyncEnabled: (enabled: boolean) => void;
+  setMetricsStreakDailyWordThreshold: (threshold: number) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
 }
@@ -99,6 +105,10 @@ const defaultSettings: Settings = {
     preset: "keepAll",
     options: { ...PASTE_CLEANUP_PRESETS.keepAll },
     rules: [],
+  },
+  metrics: {
+    ...DEFAULT_METRICS_SETTINGS,
+    enabled: { ...DEFAULT_METRICS_SETTINGS.enabled },
   },
 };
 
@@ -165,6 +175,8 @@ export function normalizePasteCleanup(value: unknown): PasteCleanupSettings {
     rules,
   };
 }
+
+export { normalizeMetrics };
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
@@ -308,6 +320,25 @@ export const useSettingsStore = create<SettingsStore>()(
           next.splice(target, 0, moved);
           return { pasteCleanup: { ...state.pasteCleanup, rules: next } };
         }),
+      setMetricsCategoryEnabled: (category, enabled) =>
+        set((state) => ({
+          metrics: {
+            ...state.metrics,
+            enabled: { ...state.metrics.enabled, [category]: enabled },
+          },
+        })),
+      setMetricsSyncEnabled: (syncMetrics) =>
+        set((state) => ({ metrics: { ...state.metrics, syncMetrics } })),
+      setMetricsStreakDailyWordThreshold: (streakDailyWordThreshold) =>
+        set((state) => ({
+          metrics: {
+            ...state.metrics,
+            streakDailyWordThreshold: Math.max(
+              1,
+              Math.floor(streakDailyWordThreshold),
+            ),
+          },
+        })),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;
@@ -344,6 +375,7 @@ export const useSettingsStore = create<SettingsStore>()(
           ...currentState,
           ...persisted,
           pasteCleanup: normalizePasteCleanup(persisted.pasteCleanup),
+          metrics: normalizeMetrics(persisted.metrics),
         };
       },
       onRehydrateStorage: () => {

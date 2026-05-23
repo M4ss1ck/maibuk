@@ -41,6 +41,7 @@ import { Modal } from "../components/ui/Modal";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { toast } from "../components/ui/Toast";
+import { metricsService } from "../lib/metrics/MetricsService";
 
 const VersionPanel = lazy(() =>
   import("../components/versions/VersionPanel").then((module) => ({
@@ -228,6 +229,7 @@ export function BookEditor() {
   // Chapter management handlers
   const handleSelectChapter = useCallback(
     (chapter: Chapter) => {
+      void metricsService.flushNow();
       setCurrentChapter(chapter);
       // Save as last edited chapter for this book
       if (bookId) {
@@ -245,6 +247,7 @@ export function BookEditor() {
           title,
           chapterType: type,
         });
+        void metricsService.flushNow();
         setCurrentChapter(newChapter);
         // Save as last edited chapter
         updateBook(bookId, { lastChapterId: newChapter.id });
@@ -259,6 +262,7 @@ export function BookEditor() {
       // Select another chapter if we deleted the current one
       if (currentChapter?.id === id) {
         const remaining = chapters.filter((c) => c.id !== id);
+        void metricsService.flushNow();
         setCurrentChapter(remaining.length > 0 ? remaining[0] : null);
       }
     },
@@ -373,6 +377,7 @@ export function BookEditor() {
       if (!bookId) return;
       // Fire-and-forget: the unmount cleanup cannot await reliably.
       void (async () => {
+        await metricsService.flushNow();
         await flushEditorContentRef.current();
         await useVersionStore
           .getState()
@@ -773,9 +778,12 @@ export function BookEditor() {
             onUpdate={handleContentUpdate}
             onWordCountChange={handleWordCountChange}
             onStatsChange={handleStatsChange}
+            onBlur={() => void metricsService.flushNow()}
             focusMode={focusMode}
             footnoteStartIndex={footnoteStartIndex}
             showInlineFootnotes={showInlineFootnotes}
+            bookId={bookId ?? null}
+            chapterId={currentChapter.id}
             placeholder={`Start writing "${currentChapter.title}"...`}
           />
         ) : (

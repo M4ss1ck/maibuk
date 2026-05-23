@@ -1,4 +1,5 @@
 import { createDatabase, IS_TAURI, type DatabaseAdapter } from "../platform";
+import { ensureMetricsSchema } from "../../features/metrics/events-repo";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;
@@ -126,6 +127,8 @@ async function initializeSchema(): Promise<void> {
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_book_versions_book ON book_versions(book_id, created_at DESC)
   `);
+
+  await ensureMetricsSchema(db);
 }
 
 export async function closeDatabase(): Promise<void> {
@@ -150,6 +153,9 @@ export async function resetDatabase(): Promise<void> {
   await database.execute("DELETE FROM books");
   await database.execute("DELETE FROM cover_templates");
   await database.execute("DELETE FROM settings");
+  await database.execute("DELETE FROM metrics_cache").catch(() => {});
+  await database.execute("DELETE FROM metrics_event_tombstones").catch(() => {});
+  await database.execute("DELETE FROM metrics_events").catch(() => {});
 }
 
 /**

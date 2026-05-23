@@ -32,8 +32,11 @@ import { PasteHandler } from "./extensions/PasteHandler";
 import { CopyHandler } from "./extensions/CopyHandler";
 import { SpellCheck } from "./extensions/SpellCheck";
 import { Footnote } from "./extensions/Footnote";
+import { MetricsObserver } from "./extensions/MetricsObserver";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
+import { setContentSilently } from "../../features/metrics/programmatic";
+import { isMetricsDevDisabled } from "../../features/metrics/settings";
 
 export interface EditorStats {
   words: number;
@@ -46,11 +49,14 @@ interface EditorProps {
   onUpdate: (content: string) => void;
   onWordCountChange?: (count: number) => void;
   onStatsChange?: (stats: EditorStats) => void;
+  onBlur?: () => void;
   placeholder?: string;
   editable?: boolean;
   focusMode?: boolean;
   footnoteStartIndex?: number;
   showInlineFootnotes?: boolean;
+  bookId?: string | null;
+  chapterId?: string | null;
 }
 
 export function Editor({
@@ -58,17 +64,23 @@ export function Editor({
   onUpdate,
   onWordCountChange,
   onStatsChange,
+  onBlur,
   placeholder = "Start writing your chapter...",
   editable = true,
   focusMode = false,
   footnoteStartIndex = 1,
   showInlineFootnotes = true,
+  bookId = null,
+  chapterId = null,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore(
     (state) => state.spellCheckEnabled,
   );
   const language = useSettingsStore((state) => state.language);
+  const metricsWritingEnabled = useSettingsStore(
+    (state) => state.metrics.enabled.writing,
+  );
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const editor = useEditor({
     extensions: [
@@ -129,6 +141,11 @@ export function Editor({
         enabled: spellCheckEnabled,
         language,
       }),
+      MetricsObserver.configure({
+        enabled: metricsWritingEnabled && !isMetricsDevDisabled(),
+        workId: bookId,
+        chapterId,
+      }),
     ],
     content: content || "",
     editable,
@@ -151,7 +168,7 @@ export function Editor({
   // Update content when it changes externally (e.g., switching chapters)
   useEffect(() => {
     if (editor && content !== null && editor.getHTML() !== content) {
-      editor.commands.setContent(content);
+      setContentSilently(editor, content);
     }
   }, [editor, content]);
 
@@ -242,6 +259,7 @@ export function Editor({
         className="flex-1 overflow-auto min-h-0"
         onClick={handleFocus}
         onKeyDown={handleFocus}
+        onBlur={onBlur}
       >
         <div className="max-w-editor-max mx-auto p-8">
           <EditorContent editor={editor} />

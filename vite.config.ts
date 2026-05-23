@@ -78,6 +78,12 @@ export default defineConfig(() => ({
         "src/features/versions/compare.ts",
         "src/components/versions/HistoryMenuButton.tsx",
         "src/lib/platform/detect.ts",
+        // Phase 8: Writing metrics infrastructure
+        "src/features/metrics/word-count.ts",
+        "src/features/metrics/classifier.ts",
+        "src/features/metrics/events-repo.ts",
+        "src/features/metrics/settings.ts",
+        "src/lib/metrics/MetricsService.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

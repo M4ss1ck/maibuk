@@ -101,6 +101,7 @@ src/
 │   ├── chapters/        # store.ts, types.ts
 │   ├── covers/          # types.ts
 │   ├── export/          # generators, sanitizers, styles, types
+│   ├── metrics/         # writing metrics types, classifier, repo, settings, session tracking
 │   ├── settings/        # store.ts, types.ts, AppSettingsProvider.tsx
 │   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts
 │   ├── theme/           # store.ts
@@ -248,6 +249,9 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `createBackup()` (platform factory)                                | `src/lib/platform/index.ts`                |
 | `computeChecksum()`                                                | `src/lib/checksum.ts`                      |
 | `parseTriggerFromFilename()`                                       | `src/features/backup/utils.ts`             |
+| `countWords()` / `classifyTransaction()`                           | `src/features/metrics/word-count.ts` / `classifier.ts` |
+| `ensureMetricsSchema()` / `insertEvents()`                         | `src/features/metrics/events-repo.ts`      |
+| `metricsService`                                                   | `src/lib/metrics/MetricsService.ts`        |
 
 ---
 
