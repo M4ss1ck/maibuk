@@ -1,10 +1,24 @@
 import { getDatabase } from "../db";
 import type { DatabaseAdapter } from "../platform/types";
 import { getOrCreateDeviceId } from "../../features/metrics/device-id";
-import { insertEvents } from "../../features/metrics/events-repo";
+import {
+  getCacheEntry,
+  getSourceHighWatermark,
+  insertEvents,
+  listEventsForAggregate,
+  upsertCache,
+} from "../../features/metrics/events-repo";
 import { isMetricsDevDisabled } from "../../features/metrics/settings";
 import { useMetricsStore } from "../../features/metrics/store";
 import type { MetricEvent } from "../../features/metrics/types";
+import {
+  METRICS_AGGREGATE_PAGE_SIZE,
+  METRICS_AGGREGATE_VERSION,
+  type AggregateKey,
+  type AggregateParams,
+  type AggregatePayload,
+} from "../../features/metrics/aggregates/types";
+import { mergeAggregatePayloads } from "../../features/metrics/aggregates/compute";
 import type { WorkerRequest, WorkerResponse } from "./types";
 
 type PendingRequest = {
@@ -81,6 +95,48 @@ export class MetricsService {
     }
   }
 
+  async getAggregate(
+    key: AggregateKey,
+    params: AggregateParams = {},
+  ): Promise<AggregatePayload> {
+    if (this.isDisabled()) {
+      return mergeAggregatePayloads(key, [], params);
+    }
+
+    await this.init();
+    const db = await this.options.getDatabase();
+    const sourceHighWatermark = await getSourceHighWatermark(db, key);
+    const cached = await getCacheEntry(db, key);
+    if (
+      cached &&
+      cached.aggregateVersion === METRICS_AGGREGATE_VERSION &&
+      cached.sourceHighWatermark >= sourceHighWatermark
+    ) {
+      return cached.payload as AggregatePayload;
+    }
+
+    const payloads: AggregatePayload[] = [];
+    for (let offset = 0; ; offset += METRICS_AGGREGATE_PAGE_SIZE) {
+      const rows = await listEventsForAggregate(db, key, {
+        limit: METRICS_AGGREGATE_PAGE_SIZE,
+        offset,
+      });
+      if (rows.length === 0) break;
+      payloads.push(await this.computeAggregateChunk(key, rows, params));
+      if (rows.length < METRICS_AGGREGATE_PAGE_SIZE) break;
+    }
+
+    const payload = mergeAggregatePayloads(key, payloads, params);
+    await upsertCache(db, {
+      cacheKey: key,
+      aggregateVersion: METRICS_AGGREGATE_VERSION,
+      sourceHighWatermark,
+      computedAt: new Date().toISOString(),
+      payload,
+    });
+    return payload;
+  }
+
   shutdown(): void {
     if (this.worker) {
       this.send({ type: "shutdown" });
@@ -122,6 +178,22 @@ export class MetricsService {
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
     });
+  }
+
+  private async computeAggregateChunk(
+    key: AggregateKey,
+    rows: MetricEvent[],
+    params: AggregateParams,
+  ): Promise<AggregatePayload> {
+    if (!this.worker) await this.init();
+    await this.readyPromise;
+
+    const id = ++this.requestId;
+    const responsePromise = this.waitForResponse(id);
+    this.send({ type: "computeAggregate", id, key, rows, params });
+    const response = await responsePromise;
+    if (response.type === "computed") return response.payload;
+    throw new Error("Metrics worker did not compute aggregate");
   }
 
   private send(message: WorkerRequest): void {

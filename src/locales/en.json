@@ -33,6 +33,7 @@
     "chaptersCount": "Chapters:",
     "projects": "Projects",
     "settings": "Settings",
+    "metrics": "Metrics",
     "copied": "Copied!",
     "paste": "Paste",
     "copy": "Copy"
@@ -43,6 +44,26 @@
     "designCover": "Design Cover",
     "focusMode": "Focus Mode (F11)",
     "downloadApp": "Download App"
+  },
+  "metrics": {
+    "title": "Metrics",
+    "subtitle": "Local writing patterns from your recent sessions",
+    "totalWords": "Total words",
+    "currentStreak": "Current streak",
+    "longestStreak": "Longest streak",
+    "daysThisWeek": "Days this week",
+    "daysThisMonth": "Days this month",
+    "heatmap": "Writing heatmap",
+    "wpm": "Words per minute",
+    "timeOfDay": "Time of day",
+    "perWork": "Per work",
+    "timePerWork": "Time per work",
+    "deepestSession": "Deepest session",
+    "editRatio": "Edit ratio",
+    "netWords": "Net words written",
+    "loadingEvents": "Loading writing patterns",
+    "noActivity": "No activity yet",
+    "wordsCount": "{{formattedCount}} words"
   },
   "books": {
     "title": "My Books",

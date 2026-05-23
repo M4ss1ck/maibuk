@@ -1,4 +1,8 @@
 import type { DatabaseAdapter } from "../../lib/platform/types";
+import type {
+  AggregateKey,
+  SnapshotMetrics,
+} from "./aggregates/types";
 import type { MetricEvent, MetricsCacheEntry } from "./types";
 
 interface MetricEventRow {
@@ -11,6 +15,20 @@ interface MetricEventRow {
   work_id: string | null;
   payload: string;
   schema_version: number;
+}
+
+interface CacheRow {
+  cache_key: string;
+  aggregate_version: number;
+  source_high_watermark: string;
+  computed_at: string;
+  payload: string;
+}
+
+interface SnapshotWorkRow {
+  id: string;
+  title: string;
+  word_count: number | null;
 }
 
 export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
@@ -115,6 +133,76 @@ export async function listEvents(db: DatabaseAdapter): Promise<MetricEvent[]> {
   return rows.map(toMetricEvent);
 }
 
+export async function getSnapshotMetrics(
+  db: DatabaseAdapter,
+): Promise<SnapshotMetrics> {
+  const rows = await db.select<SnapshotWorkRow[]>(
+    `SELECT id, title, word_count
+     FROM books
+     ORDER BY updated_at DESC, title ASC`,
+  );
+
+  return {
+    totalWords: rows.reduce((sum, row) => sum + Number(row.word_count ?? 0), 0),
+    perWork: rows.map((row) => ({
+      workId: row.id,
+      title: row.title,
+      wordCount: Number(row.word_count ?? 0),
+    })),
+  };
+}
+
+export async function getCacheEntry(
+  db: DatabaseAdapter,
+  cacheKey: string,
+): Promise<MetricsCacheEntry | null> {
+  const rows = await db.select<CacheRow[]>(
+    `SELECT cache_key, aggregate_version, source_high_watermark, computed_at, payload
+     FROM metrics_cache
+     WHERE cache_key = ?
+     LIMIT 1`,
+    [cacheKey],
+  );
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  return {
+    cacheKey: row.cache_key,
+    aggregateVersion: row.aggregate_version,
+    sourceHighWatermark: row.source_high_watermark,
+    computedAt: row.computed_at,
+    payload: JSON.parse(row.payload),
+  };
+}
+
+export async function getSourceHighWatermark(
+  db: DatabaseAdapter,
+  key: AggregateKey,
+): Promise<string> {
+  const { where, params } = buildAggregateWhere(key);
+  const rows = await db.select<{ watermark: string | null }[]>(
+    `SELECT MAX(timestamp) AS watermark FROM metrics_events ${where}`,
+    params,
+  );
+  return rows[0]?.watermark ?? "";
+}
+
+export async function listEventsForAggregate(
+  db: DatabaseAdapter,
+  key: AggregateKey,
+  options: { limit: number; offset: number },
+): Promise<MetricEvent[]> {
+  const { where, params } = buildAggregateWhere(key);
+  const rows = await db.select<MetricEventRow[]>(
+    `SELECT id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version
+     FROM metrics_events
+     ${where}
+     ORDER BY timestamp ASC, id ASC
+     LIMIT ? OFFSET ?`,
+    [...params, options.limit, options.offset],
+  );
+  return rows.map(toMetricEvent);
+}
+
 export async function purgeEventsByPrefix(
   db: DatabaseAdapter,
   eventTypePrefix: string,
@@ -178,5 +266,29 @@ function toMetricEvent(row: MetricEventRow): MetricEvent {
     workId: row.work_id,
     payload: JSON.parse(row.payload),
     schemaVersion: row.schema_version,
+  };
+}
+
+function buildAggregateWhere(key: AggregateKey): {
+  where: string;
+  params: unknown[];
+} {
+  if (key.startsWith("heatmap:")) {
+    const year = key.split(":")[1];
+    return {
+      where:
+        "WHERE local_date >= ? AND local_date < ? AND event_type LIKE 'writing.%'",
+      params: [`${year}-01-01`, `${Number(year) + 1}-01-01`],
+    };
+  }
+
+  if (key === "dashboard:last30d") {
+    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    return { where: "WHERE timestamp >= ?", params: [since] };
+  }
+
+  return {
+    where: "WHERE event_type = 'writing.typed'",
+    params: [],
   };
 }

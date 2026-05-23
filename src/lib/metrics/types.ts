@@ -1,4 +1,9 @@
 import type { MetricEvent } from "../../features/metrics/types";
+import type {
+  AggregateKey,
+  AggregateParams,
+  AggregatePayload,
+} from "../../features/metrics/aggregates/types";
 
 export type WorkerRequest =
   | { type: "init"; id: number; deviceId: string }
@@ -7,9 +12,9 @@ export type WorkerRequest =
   | {
       type: "computeAggregate";
       id: number;
-      key: string;
+      key: AggregateKey;
       rows: MetricEvent[];
-      params: Record<string, unknown>;
+      params: AggregateParams;
     }
   | { type: "shutdown" };
 
@@ -19,8 +24,8 @@ export type WorkerResponse =
   | {
       type: "computed";
       id: number;
-      key: string;
-      payload: unknown;
+      key: AggregateKey;
+      payload: AggregatePayload;
       sourceHighWatermark: string;
     }
   | { type: "needFlush" }

@@ -1,5 +1,6 @@
 import type { WorkerRequest, WorkerResponse } from "./types";
 import type { MetricEvent } from "../../features/metrics/types";
+import { computeAggregate } from "../../features/metrics/aggregates/compute";
 
 let buffer: MetricEvent[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -47,8 +48,8 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
         type: "computed",
         id: msg.id,
         key: msg.key,
-        payload: {},
-        sourceHighWatermark: "",
+        payload: computeAggregate(msg.key, msg.rows, msg.params),
+        sourceHighWatermark: getHighWatermark(msg.rows),
       });
       break;
     case "shutdown":
@@ -56,3 +57,10 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
       break;
   }
 };
+
+function getHighWatermark(rows: MetricEvent[]): string {
+  return rows.reduce(
+    (max, row) => (row.timestamp > max ? row.timestamp : max),
+    "",
+  );
+}

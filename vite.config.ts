@@ -83,6 +83,7 @@ export default defineConfig(() => ({
         "src/features/metrics/classifier.ts",
         "src/features/metrics/events-repo.ts",
         "src/features/metrics/settings.ts",
+        "src/features/metrics/aggregates/compute.ts",
         "src/lib/metrics/MetricsService.ts",
       ],
       exclude: ["src/**/*.d.ts"],
