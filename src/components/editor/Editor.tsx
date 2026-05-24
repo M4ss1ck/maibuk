@@ -17,7 +17,7 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { ImageFigure } from "./extensions/ImageFigure";
 import { Link } from "@tiptap/extension-link";
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
@@ -32,8 +32,10 @@ import { PasteHandler } from "./extensions/PasteHandler";
 import { CopyHandler } from "./extensions/CopyHandler";
 import { SpellCheck } from "./extensions/SpellCheck";
 import { Footnote } from "./extensions/Footnote";
+import { MetricsObserver } from "./extensions/MetricsObserver";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
+import { setContentSilently } from "../../features/metrics/programmatic";
 
 export interface EditorStats {
   words: number;
@@ -46,11 +48,14 @@ interface EditorProps {
   onUpdate: (content: string) => void;
   onWordCountChange?: (count: number) => void;
   onStatsChange?: (stats: EditorStats) => void;
+  onBlur?: () => void;
   placeholder?: string;
   editable?: boolean;
   focusMode?: boolean;
   footnoteStartIndex?: number;
   showInlineFootnotes?: boolean;
+  bookId?: string | null;
+  chapterId?: string | null;
 }
 
 export function Editor({
@@ -58,11 +63,14 @@ export function Editor({
   onUpdate,
   onWordCountChange,
   onStatsChange,
+  onBlur,
   placeholder = "Start writing your chapter...",
   editable = true,
   focusMode = false,
   footnoteStartIndex = 1,
   showInlineFootnotes = true,
+  bookId = null,
+  chapterId = null,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore(
@@ -70,6 +78,7 @@ export function Editor({
   );
   const language = useSettingsStore((state) => state.language);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
+  const appliedContentRef = useRef(content);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -129,6 +138,10 @@ export function Editor({
         enabled: spellCheckEnabled,
         language,
       }),
+      MetricsObserver.configure({
+        workId: bookId,
+        chapterId,
+      }),
     ],
     content: content || "",
     editable,
@@ -139,6 +152,7 @@ export function Editor({
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
+      appliedContentRef.current = html;
       onUpdate(html);
 
       if (onWordCountChange) {
@@ -150,9 +164,11 @@ export function Editor({
 
   // Update content when it changes externally (e.g., switching chapters)
   useEffect(() => {
-    if (editor && content !== null && editor.getHTML() !== content) {
-      editor.commands.setContent(content);
-    }
+    if (!editor || content === null) return;
+    if (appliedContentRef.current === content) return;
+
+    setContentSilently(editor, content);
+    appliedContentRef.current = content;
   }, [editor, content]);
 
   useEffect(() => {
@@ -242,6 +258,7 @@ export function Editor({
         className="flex-1 overflow-auto min-h-0"
         onClick={handleFocus}
         onKeyDown={handleFocus}
+        onBlur={onBlur}
       >
         <div className="max-w-editor-max mx-auto p-8">
           <EditorContent editor={editor} />

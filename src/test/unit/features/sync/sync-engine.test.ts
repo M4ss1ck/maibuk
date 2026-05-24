@@ -17,6 +17,10 @@ const mockRefreshAuth = vi.hoisted(() => vi.fn());
 const mockSyncStoreGetState = vi.hoisted(() => vi.fn());
 const mockSyncStoreSetState = vi.hoisted(() => vi.fn());
 const mockCreateVersion = vi.hoisted(() => vi.fn());
+const mockUseSettingsStoreGetState = vi.hoisted(() => vi.fn());
+const mockSyncMetricsRows = vi.hoisted(() => vi.fn());
+const mockApplyLegacyBlobAndMarkPushed = vi.hoisted(() => vi.fn());
+const mockPullMetricsBlob = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
@@ -41,6 +45,7 @@ vi.mock("../../../../features/sync/client", () => ({
   pushVersionBlob: mockPushVersionBlob,
   pullVersionBlob: mockPullVersionBlob,
   refreshAuth: mockRefreshAuth,
+  pullMetricsBlob: mockPullMetricsBlob,
 }));
 
 // Pre-mock backup module — Task 10 will add backup imports to sync-engine.ts.
@@ -54,6 +59,13 @@ vi.mock("../../../../features/sync/store", () => ({
   useSyncStore: {
     getState: mockSyncStoreGetState,
     setState: mockSyncStoreSetState,
+  },
+}));
+
+vi.mock("../../../../features/settings/store", () => ({
+  useSettingsStore: {
+    getState: mockUseSettingsStoreGetState,
+    setState: vi.fn(),
   },
 }));
 
@@ -71,6 +83,11 @@ vi.mock("../../../../features/backup/backup-service", () => ({
     deleteByTrigger = mockBackupServiceDeleteByTrigger;
     pruneBackups = vi.fn();
   },
+}));
+
+vi.mock("../../../../features/metrics/metrics-sync", () => ({
+  syncMetricsRows: mockSyncMetricsRows,
+  applyLegacyBlobAndMarkPushed: mockApplyLegacyBlobAndMarkPushed,
 }));
 
 const { syncBook, syncAllBooks, resetSyncEngineForTests } = await import(
@@ -99,6 +116,7 @@ describe("syncBook — timestamp fix", () => {
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
     mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
     mockCreateVersion.mockResolvedValue(null);
     mockListRemoteVersions.mockResolvedValue([]);
     mockPushVersionBlob.mockResolvedValue(undefined);
@@ -344,7 +362,8 @@ describe("ensureAuth — pre-sync auth guard", () => {
     mockSerializeBook.mockResolvedValue('{"book":{}}');
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
-    mockListRemoteBooks.mockResolvedValue([]);
+    mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
     mockCreateVersion.mockResolvedValue(null);
     mockListRemoteVersions.mockResolvedValue([]);
     mockPushVersionBlob.mockResolvedValue(undefined);
@@ -442,6 +461,7 @@ describe("syncVersions — pure union", () => {
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
     mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
     mockCreateVersion.mockResolvedValue(null);
     mockListRemoteVersions.mockResolvedValue([]);
     mockPushVersionBlob.mockResolvedValue(undefined);
@@ -696,5 +716,166 @@ describe("syncVersions — pure union", () => {
     );
     expect(updateCall).toBeDefined();
     expect(updateCall![1]).toEqual(expect.arrayContaining(["ver-local"]));
+  });
+});
+
+describe("syncMetrics — engine integration", () => {
+  const mockDb = {
+    select: vi.fn(),
+    execute: vi.fn(),
+  };
+
+  const BLOB_MIGRATED_KEY = "maibuk.metrics.blobMigrated";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSyncEngineForTests();
+    localStorage.removeItem(BLOB_MIGRATED_KEY);
+    mockGetDatabase.mockResolvedValue(mockDb);
+    mockCreateBackupAdapter.mockResolvedValue({
+      saveBackup: vi.fn(),
+      listBackups: vi.fn().mockResolvedValue([]),
+      readBackup: vi.fn(),
+      deleteBackup: vi.fn(),
+    });
+    mockBackupServiceCreateBackup.mockResolvedValue("mock-backup.sql");
+    mockSerializeBook.mockResolvedValue('{"book":{}}');
+    mockComputeChecksum.mockResolvedValue("local-checksum");
+    mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
+    mockCreateVersion.mockResolvedValue(null);
+    mockListRemoteVersions.mockResolvedValue([]);
+    mockPushVersionBlob.mockResolvedValue(undefined);
+    mockPullVersionBlob.mockResolvedValue(null);
+    mockSyncMetricsRows.mockResolvedValue(undefined);
+    mockApplyLegacyBlobAndMarkPushed.mockResolvedValue(undefined);
+    mockPullMetricsBlob.mockResolvedValue(null);
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      if (sql.includes("GROUP BY b.id")) return [{ id: "book-1", updated_at: 1000 }];
+      if (sql.includes("book_versions")) return [];
+      return [];
+    });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
+  });
+
+  it("skips metrics sync when syncMetrics is disabled", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
+    mockListRemoteBooks.mockResolvedValue([]);
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockSyncMetricsRows).not.toHaveBeenCalled();
+    expect(mockApplyLegacyBlobAndMarkPushed).not.toHaveBeenCalled();
+    expect(mockPullMetricsBlob).not.toHaveBeenCalled();
+  });
+
+  it("delegates to syncMetricsRows when sync is enabled and no legacy blob exists", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockResolvedValue(null);
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockPullMetricsBlob).toHaveBeenCalled();
+    expect(mockApplyLegacyBlobAndMarkPushed).not.toHaveBeenCalled();
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(localStorage.getItem(BLOB_MIGRATED_KEY)).toBe("true");
+  });
+
+  it("migrates a legacy blob exactly once, then runs row sync", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    const remoteBlob = {
+      data: new Uint8Array([4, 5, 6]),
+      checksum: "remote-checksum",
+    };
+    mockPullMetricsBlob.mockResolvedValue(remoteBlob);
+    mockDecrypt.mockResolvedValue(
+      '{"events":[],"tombstones":[],"updatedAt":2000}',
+    );
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockDecrypt).toHaveBeenCalledWith(remoteBlob.data, "pass");
+    expect(mockApplyLegacyBlobAndMarkPushed).toHaveBeenCalledWith({
+      events: [],
+      tombstones: [],
+      updatedAt: 2000,
+    });
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(localStorage.getItem(BLOB_MIGRATED_KEY)).toBe("true");
+
+    // Second sync — already migrated, skip the blob check entirely.
+    mockPullMetricsBlob.mockClear();
+    mockApplyLegacyBlobAndMarkPushed.mockClear();
+    mockSyncMetricsRows.mockClear();
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockPullMetricsBlob).not.toHaveBeenCalled();
+    expect(mockApplyLegacyBlobAndMarkPushed).not.toHaveBeenCalled();
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+  });
+
+  it("marks migration complete and continues if the legacy collection is missing", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockRejectedValue(
+      Object.assign(new Error("collection not found"), { status: 404 }),
+    );
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockApplyLegacyBlobAndMarkPushed).not.toHaveBeenCalled();
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(localStorage.getItem(BLOB_MIGRATED_KEY)).toBe("true");
+  });
+
+  it("throws when the legacy blob decrypts to invalid JSON", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockResolvedValue({
+      data: new Uint8Array([4, 5, 6]),
+      checksum: "remote-checksum",
+    });
+    mockDecrypt.mockResolvedValue("not valid json at all");
+
+    await expect(syncBook("book-1", "pass", vi.fn())).rejects.toThrow(
+      "Synced metrics payload is invalid or corrupted",
+    );
+    // Migration must not be marked complete on a corrupt payload — we'll
+    // retry next sync.
+    expect(localStorage.getItem(BLOB_MIGRATED_KEY)).toBeNull();
+  });
+
+  it("runs metrics sync in syncAllBooks path when enabled", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockResolvedValue(null);
+
+    await syncAllBooks("pass", vi.fn());
+
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+  });
+
+  it("runs metrics sync even on cancelled syncAllBooks (partial outcome)", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [{ id: "book-2", updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Book Two" }];
+      return [];
+    });
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-2", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+    mockPullMetricsBlob.mockResolvedValue(null);
+
+    const result = await syncAllBooks("pass", vi.fn().mockResolvedValue("cancel"));
+
+    expect(result.outcome).toBe("cancelled");
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
   });
 });

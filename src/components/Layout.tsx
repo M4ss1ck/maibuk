@@ -4,7 +4,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { APP_VERSION } from "../constants";
 import { useTranslation } from "react-i18next";
 import { ProjectsIcon, SettingsIcon, CloseIcon } from "./icons";
-import { Menu } from "lucide-react";
+import { BarChart3, Menu } from "lucide-react";
 import logo from "../../src-tauri/icons/icon.png";
 import { KeyboardShortcut } from "./ui";
 
@@ -85,10 +85,9 @@ export function Layout() {
             to="/"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                isActive
-                  ? "bg-primary text-white"
-                  : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isActive
+                ? "bg-primary text-white"
+                : "hover:bg-muted text-foreground"
               }`
             }
           >
@@ -101,13 +100,30 @@ export function Layout() {
           </NavLink>
 
           <NavLink
+            to="/metrics"
+            onClick={closeMobileMenu}
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
+                ? "bg-primary text-white"
+                : "hover:bg-muted text-foreground"
+              }`
+            }
+          >
+            <BarChart3 className="w-5 h-5" />
+            <span className="flex-1">{t("common.metrics")}</span>
+            <KeyboardShortcut
+              keys={["g", "m"]}
+              className="ml-auto hidden lg:inline-flex"
+            />
+          </NavLink>
+
+          <NavLink
             to="/settings"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${
-                isActive
-                  ? "bg-primary text-white"
-                  : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
+                ? "bg-primary text-white"
+                : "hover:bg-muted text-foreground"
               }`
             }
           >

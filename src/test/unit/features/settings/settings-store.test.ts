@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { PASTE_CLEANUP_PRESETS } from "../../../../features/settings/types";
+import {
+  DEFAULT_METRICS_SETTINGS,
+  PASTE_CLEANUP_PRESETS,
+} from "../../../../features/settings/types";
 
 // Mock i18n before importing the store
 const { mockChangeLanguage } = vi.hoisted(() => ({
@@ -14,7 +17,7 @@ vi.mock("../../../../i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
-const { useSettingsStore, normalizePasteCleanup } = await import(
+const { useSettingsStore, normalizePasteCleanup, normalizeMetrics } = await import(
   "../../../../features/settings/store"
 );
 
@@ -50,6 +53,7 @@ describe("useSettingsStore", () => {
         options: { ...PASTE_CLEANUP_PRESETS.keepAll },
         rules: [],
       },
+      metrics: DEFAULT_METRICS_SETTINGS,
       lastPath: null,
     });
   });
@@ -73,7 +77,36 @@ describe("useSettingsStore", () => {
       expect(state.pasteCleanup.preset).toBe("keepAll");
       expect(state.pasteCleanup.rules).toEqual([]);
       expect(state.pasteCleanup.options.strippedProperties).toEqual([]);
+      expect(state.metrics).toEqual(DEFAULT_METRICS_SETTINGS);
       expect(state.lastPath).toBeNull();
+    });
+  });
+
+  describe("metrics settings", () => {
+    it("updates a collection category without mutating the other categories", () => {
+      useSettingsStore.getState().setMetricsCategoryEnabled("writing", false);
+
+      expect(useSettingsStore.getState().metrics.enabled).toEqual({
+        writing: false,
+        time: true,
+        engagement: true,
+      });
+    });
+
+    it("normalizes malformed persisted metrics settings", () => {
+      const normalized = normalizeMetrics({
+        enabled: { writing: false },
+        syncMetrics: true,
+        streakDailyWordThreshold: 0,
+        idleThresholdSec: 0,
+      });
+
+      expect(normalized).toEqual({
+        enabled: { writing: false, time: true, engagement: true },
+        syncMetrics: true,
+        streakDailyWordThreshold: 1,
+        idleThresholdSec: 1,
+      });
     });
   });
 

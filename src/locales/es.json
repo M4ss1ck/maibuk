@@ -33,6 +33,7 @@
     "chaptersCount": "Capítulos:",
     "projects": "Proyectos",
     "settings": "Configuración",
+    "metrics": "Métricas",
     "copied": "¡Copiado!",
     "paste": "Pegar",
     "copy": "Copiar"
@@ -43,6 +44,28 @@
     "designCover": "Diseñar Portada",
     "focusMode": "Modo Enfocado (F11)",
     "downloadApp": "Descargar App"
+  },
+  "metrics": {
+    "title": "Métricas",
+    "subtitle": "Patrones locales de tus sesiones recientes",
+    "totalWords": "Palabras totales",
+    "currentStreak": "Racha actual",
+    "longestStreak": "Racha más larga",
+    "daysThisWeek": "Días esta semana",
+    "daysThisMonth": "Días este mes",
+    "heatmap": "Mapa de escritura",
+    "wpm": "Palabras por minuto",
+    "timeOfDay": "Hora del día",
+    "perWork": "Por obra",
+    "timePerWork": "Tiempo por obra",
+    "deepestSession": "Sesión más profunda",
+    "editRatio": "Ratio de edición",
+    "netWords": "Palabras netas escritas",
+    "loadingEvents": "Cargando patrones de escritura",
+    "noActivity": "Aún no hay actividad",
+    "disabledEmpty": "La recopilación de métricas está desactivada. Activa una categoría en Configuración → Métricas para volver a medir.",
+    "engagementDisabled": "El seguimiento de interacción está desactivado — actívalo en Configuración → Métricas.",
+    "wordsCount": "{{formattedCount}} palabras"
   },
   "books": {
     "title": "Mis Libros",
@@ -327,6 +350,32 @@
     "resetDatabaseFailed": "No se pudo reiniciar la base de datos. Intenta reiniciar la aplicación.",
     "resetDatabaseConfirm": "¿Estás seguro de que quieres reiniciar la base de datos? Esto eliminará permanentemente todos tus libros, capítulos y configuraciones. Esta acción no se puede deshacer.",
     "confirmReset": "Sí, reiniciar todo",
+    "metrics": {
+      "title": "Métricas",
+      "description": "Elige qué patrones locales de escritura registra Maibuk en este dispositivo.",
+      "writing": {
+        "label": "Volumen de escritura",
+        "description": "Eventos de palabras escritas, pegadas y eliminadas."
+      },
+      "time": {
+        "label": "Seguimiento de tiempo",
+        "description": "Eventos de inicio, cierre y tiempo activo de sesión."
+      },
+      "engagement": {
+        "label": "Interacción",
+        "description": "Vistas de ratio de edición y sesión más profunda."
+      },
+      "sync": {
+        "label": "Sincronizar métricas",
+        "description": "Comparte métricas entre dispositivos con sesión iniciada."
+      },
+      "syncRequiresAuth": "Inicia sesión para habilitar la sincronización de métricas",
+      "measuringSince": "Midiendo desde {{date}}",
+      "notMeasuredYet": "Aún no se mide",
+      "disableTitle": "¿Eliminar {{label}}?",
+      "disableDescription": "{{deletedData}} se eliminarán de este dispositivo. Esta acción no se puede deshacer.",
+      "confirmDisable": "Eliminar {{label}}"
+    },
     "pasteCleanup": {
       "title": "Limpieza al pegar",
       "description": "Controla cómo se elimina el formato del texto que pegas.",
@@ -484,6 +533,7 @@
     "showHelp": "Mostrar ayuda de atajos",
     "gotoProjects": "Ir a Proyectos",
     "gotoSettings": "Ir a Configuración",
+    "gotoMetrics": "Ir a Métricas",
     "toggleTheme": "Cambiar tema",
     "toggleShortcutHints": "Alternar atajos visuales",
     "syncNow": "Sincronizar ahora",

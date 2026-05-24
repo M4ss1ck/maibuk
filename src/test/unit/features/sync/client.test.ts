@@ -79,6 +79,7 @@ const {
   pullBookBlob,
   listRemoteBooks,
   parsePocketBaseDate,
+  pushMetricsEventRow,
 } = await import("../../../../features/sync/client");
 
 describe("parsePocketBaseDate()", () => {
@@ -328,6 +329,57 @@ describe("pushBookBlob()", () => {
     await expect(pushBookBlob("book-1", new Blob(["data"]), "checksum")).rejects.toThrow(
       "Not authenticated"
     );
+  });
+});
+
+describe("pushMetricsEventRow()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+  });
+
+  const row = {
+    client_id: "event-1",
+    device_id: "device-1",
+    timestamp: "2026-05-23T12:00:00.000Z",
+    local_date: "2026-05-23",
+    tz_offset_min: 0,
+    event_type: "writing.typed",
+    work_id: "book-1",
+    schema_version: 1,
+    encrypted_payload: "ciphertext",
+  };
+
+  it("treats PocketBase client_id unique errors as already pushed", async () => {
+    mockSyncCreate.mockRejectedValue({
+      status: 400,
+      data: {
+        data: {
+          client_id: {
+            code: "validation_not_unique",
+          },
+        },
+      },
+    });
+
+    await expect(pushMetricsEventRow(row)).resolves.toBeUndefined();
+  });
+
+  it("throws non-unique validation errors instead of marking them pushed", async () => {
+    const error = {
+      status: 400,
+      data: {
+        data: {
+          encrypted_payload: {
+            code: "validation_required",
+          },
+        },
+      },
+    };
+    mockSyncCreate.mockRejectedValue(error);
+
+    await expect(pushMetricsEventRow(row)).rejects.toBe(error);
   });
 });
 

@@ -9,6 +9,7 @@ vi.mock("react-i18next", () => ({
       const map: Record<string, string> = {
         "app.title": "Maibuk",
         "common.projects": "Projects",
+        "common.metrics": "Metrics",
         "common.settings": "Settings",
         "settings.light": "Light",
         "settings.dark": "Dark",
@@ -55,6 +56,12 @@ describe("Layout", () => {
   it("renders Settings navigation link", () => {
     renderLayout();
     const links = screen.getAllByText("Settings");
+    expect(links.length).toBeGreaterThan(0);
+  });
+
+  it("renders Metrics navigation link", () => {
+    renderLayout();
+    const links = screen.getAllByText("Metrics");
     expect(links.length).toBeGreaterThan(0);
   });
 
