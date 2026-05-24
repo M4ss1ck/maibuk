@@ -42,6 +42,17 @@ function classify(transaction: Transaction) {
   });
 }
 
+function netWords(events: ReturnType<typeof classifyTransaction>): number {
+  return events.reduce((sum, event) => {
+    const words = (event.payload as WritingMetricPayload).words;
+    if (event.eventType === "writing.deleted") return sum - words;
+    if (event.eventType === "writing.typed" || event.eventType === "writing.pasted") {
+      return sum + words;
+    }
+    return sum;
+  }, 0);
+}
+
 describe("classifyTransaction()", () => {
   it("skips selection-only and programmatic transactions", () => {
     const tr = stateFromText("hello").tr.setMeta("metrics:programmatic", true);
@@ -79,6 +90,19 @@ describe("classifyTransaction()", () => {
       "writing.typed",
     ]);
     expect(events.map((event) => (event.payload as WritingMetricPayload).words)).toEqual([1, 2]);
+  });
+
+  it("counts word deltas instead of letters during character-by-character typing", () => {
+    let state = stateFromText("");
+    const events: ReturnType<typeof classifyTransaction> = [];
+
+    for (const char of "new bright idea") {
+      const tr = state.tr.insertText(char, state.doc.textContent.length + 1);
+      events.push(...classify(tr));
+      state = state.apply(tr);
+    }
+
+    expect(netWords(events)).toBe(3);
   });
 
   it("classifies paste before history metadata and undo of paste as deletion", () => {
