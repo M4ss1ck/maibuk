@@ -199,8 +199,10 @@ describe("BookEditor loading state", () => {
     render(<BookEditor />);
 
     const logo = screen.getByAltText("Maibuk");
+    const loadingSurface = logo.parentElement?.parentElement;
     expect(logo).toBeInTheDocument();
     expect(logo.className).toContain("loading-entrance");
+    expect(loadingSurface).toHaveClass("h-dvh");
     expect(screen.getByText("editor.loading")).toBeInTheDocument();
   });
 

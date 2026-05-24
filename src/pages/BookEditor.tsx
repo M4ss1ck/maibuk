@@ -455,7 +455,7 @@ export function BookEditor() {
 
   if (isBookPreparing) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-dvh bg-background">
         <div className="flex flex-col items-center gap-3">
           <img
             src={logo}
