@@ -8,7 +8,10 @@ import {
   upsertCache,
 } from "../../../../features/metrics/events-repo";
 import type { MetricEvent } from "../../../../features/metrics/types";
-import { computeAggregate } from "../../../../features/metrics/aggregates/compute";
+import {
+  computeAggregate,
+  computeStreakFromDayTotals,
+} from "../../../../features/metrics/aggregates/compute";
 import { createMetricsService } from "../../../../lib/metrics/MetricsService";
 import type { WorkerRequest, WorkerResponse } from "../../../../lib/metrics/types";
 
@@ -35,6 +38,13 @@ class MockWorker {
         key: message.key,
         payload: computeAggregate(message.key, message.rows, message.params),
         sourceHighWatermark: message.rows[message.rows.length - 1]?.timestamp ?? "",
+      });
+    }
+    if (message.type === "computeStreakFromDays") {
+      this.emit({
+        type: "streakComputed",
+        id: message.id,
+        payload: computeStreakFromDayTotals(message.dayTotals, message.params),
       });
     }
   }
@@ -169,6 +179,7 @@ describe("MetricsService", () => {
       cacheKey: "heatmap:2026",
       aggregateVersion: 1,
       sourceHighWatermark: "2026-12-31T23:59:59.000Z",
+      windowStart: "2026-01-01T00:00:00.000Z",
       computedAt: "2026-05-23T12:00:00.000Z",
       payload: { days: [{ date: "2026-05-23", words: 99, events: 1 }] },
     });
@@ -199,5 +210,87 @@ describe("MetricsService", () => {
     service.shutdown();
 
     expect(worker.terminated).toBe(true);
+  });
+
+  it("computes streak through the day-aggregated worker message", async () => {
+    // Three consecutive days, all above the default threshold.
+    await insertEvents(testDb, [
+      {
+        ...buildEvent(),
+        id: "e-1",
+        localDate: "2026-05-21",
+        timestamp: "2026-05-21T12:00:00.000Z",
+        payload: { words: 80, chars: 400, chapterId: "c-1" },
+      },
+      {
+        ...buildEvent(),
+        id: "e-2",
+        localDate: "2026-05-22",
+        timestamp: "2026-05-22T12:00:00.000Z",
+        payload: { words: 80, chars: 400, chapterId: "c-1" },
+      },
+      {
+        ...buildEvent(),
+        id: "e-3",
+        localDate: "2026-05-23",
+        timestamp: "2026-05-23T12:00:00.000Z",
+        payload: { words: 80, chars: 400, chapterId: "c-1" },
+      },
+    ]);
+
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    const payload = (await service.getAggregate("streak:current", {
+      today: "2026-05-23",
+      dailyWordThreshold: 50,
+    })) as { currentStreak: number; longestStreak: number };
+
+    expect(payload.currentStreak).toBe(3);
+    expect(payload.longestStreak).toBe(3);
+    expect(
+      worker.posted.some((message) => message.type === "computeStreakFromDays"),
+    ).toBe(true);
+    // No raw-event computeAggregate path used for streak any more.
+    expect(
+      worker.posted.some(
+        (message) =>
+          message.type === "computeAggregate" && message.key === "streak:current",
+      ),
+    ).toBe(false);
+  });
+
+  it("invalidates a cached heatmap when the year's window_start no longer matches", async () => {
+    // Cache stamped with a stale windowStart (e.g. left over from a previous
+    // computation of a different key collision, or schema drift). New compute
+    // should re-run rather than returning the stale payload.
+    await insertEvents(testDb, [buildEvent()]);
+    await upsertCache(testDb, {
+      cacheKey: "heatmap:2026",
+      aggregateVersion: 1,
+      sourceHighWatermark: "2026-12-31T23:59:59.000Z",
+      windowStart: "1970-01-01T00:00:00.000Z",
+      computedAt: "2026-05-23T12:00:00.000Z",
+      payload: { days: [{ date: "2026-05-23", words: 99, events: 1 }] },
+    });
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    const payload = await service.getAggregate("heatmap:2026");
+
+    expect(payload).toEqual({
+      days: [{ date: "2026-05-23", words: 2, events: 1 }],
+    });
+    expect(
+      worker.posted.some((message) => message.type === "computeAggregate"),
+    ).toBe(true);
   });
 });

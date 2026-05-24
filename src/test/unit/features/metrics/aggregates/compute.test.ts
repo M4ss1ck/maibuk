@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeAggregate,
+  computeStreakFromDayTotals,
   mergeAggregatePayloads,
 } from "../../../../../features/metrics/aggregates/compute";
 import type { DashboardAggregate } from "../../../../../features/metrics/aggregates/types";
@@ -163,5 +164,43 @@ describe("computeAggregate()", () => {
       timeOfDay: [],
       timeByWork: [],
     });
+  });
+
+  it("computes streak from day-aggregated totals (no per-event input needed)", () => {
+    const payload = computeStreakFromDayTotals(
+      [
+        { date: "2026-05-19", words: 80 },
+        { date: "2026-05-20", words: 90 },
+        { date: "2026-05-21", words: 100 },
+        { date: "2026-05-22", words: 110 },
+        { date: "2026-05-23", words: 120 },
+      ],
+      { today: "2026-05-23", dailyWordThreshold: 50 },
+    );
+
+    expect(payload).toMatchObject({
+      currentStreak: 5,
+      longestStreak: 5,
+      daysThisWeek: 5,
+      daysThisMonth: 5,
+    });
+  });
+
+  it("computes a contiguous streak that would straddle a paginated event window", () => {
+    // 12 consecutive qualifying days — under the old per-chunk reduce, this
+    // would split across pages and merge with `Math.max`, understating the
+    // real streak. With the day-totals path, it is one shot.
+    const dayTotals = Array.from({ length: 12 }, (_, i) => ({
+      date: `2026-05-${String(10 + i).padStart(2, "0")}`,
+      words: 100,
+    }));
+
+    const payload = computeStreakFromDayTotals(dayTotals, {
+      today: "2026-05-21",
+      dailyWordThreshold: 50,
+    });
+
+    expect(payload.longestStreak).toBe(12);
+    expect(payload.currentStreak).toBe(12);
   });
 });

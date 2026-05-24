@@ -3,13 +3,18 @@ import type { DatabaseAdapter } from "../platform/types";
 import { getOrCreateDeviceId } from "../../features/metrics/device-id";
 import {
   getCacheEntry,
+  getDailyWritingHighWatermark,
   getSourceHighWatermark,
+  getWindowLowerBound,
   insertEvents,
+  listDailyWritingTotals,
   listEventsForAggregate,
   upsertCache,
 } from "../../features/metrics/events-repo";
 import { isMetricsDevDisabled } from "../../features/metrics/settings";
 import { useMetricsStore } from "../../features/metrics/store";
+import { SessionTracker } from "../../features/metrics/session-tracker";
+import { useSettingsStore } from "../../features/settings/store";
 import type { MetricEvent } from "../../features/metrics/types";
 import {
   METRICS_AGGREGATE_PAGE_SIZE,
@@ -38,6 +43,10 @@ export class MetricsService {
   private pendingRequests = new Map<number, PendingRequest>();
   private readyPromise: Promise<void> | null = null;
   private beforeUnloadHandler: (() => void) | null = null;
+  private visibilityHandler: (() => void) | null = null;
+  private sessionTracker: SessionTracker | null = null;
+  private sessionWorkId: string | null = null;
+  private lastActiveAt: number | null = null;
 
   constructor(private options: Required<MetricsServiceOptions>) {}
 
@@ -72,12 +81,61 @@ export class MetricsService {
 
   recordEvents(events: MetricEvent[]): void {
     if (events.length === 0 || this.isDisabled()) return;
+    const filtered = this.filterDisabledCategories(events);
+    if (filtered.length === 0) return;
 
     if (!this.worker) {
       void this.init();
     }
 
-    this.send({ type: "recordEvents", events });
+    this.send({ type: "recordEvents", events: filtered });
+  }
+
+  markActive(workId: string | null, now: Date = new Date()): void {
+    if (this.isDisabled()) return;
+    if (!useSettingsStore.getState().metrics.enabled.time) return;
+
+    const nowMs = now.getTime();
+    const idleThresholdSec = useSettingsStore.getState().metrics.idleThresholdSec;
+
+    if (!this.sessionTracker) {
+      this.sessionTracker = this.createSessionTracker(workId);
+    }
+
+    const workChanged = this.sessionWorkId !== workId;
+    const idledOut =
+      this.lastActiveAt !== null &&
+      nowMs - this.lastActiveAt > idleThresholdSec * 1000;
+
+    if (workChanged || idledOut) {
+      this.endSessionInternal(new Date(this.lastActiveAt ?? nowMs));
+      this.sessionTracker = this.createSessionTracker(workId);
+    }
+
+    this.sessionTracker.markActive(now);
+    this.sessionWorkId = workId;
+    this.lastActiveAt = nowMs;
+  }
+
+  endSession(now: Date = new Date()): void {
+    this.endSessionInternal(now);
+  }
+
+  private endSessionInternal(now: Date): void {
+    if (!this.sessionTracker) return;
+    this.sessionTracker.end(now);
+    this.sessionTracker = null;
+    this.sessionWorkId = null;
+    this.lastActiveAt = null;
+  }
+
+  private createSessionTracker(workId: string | null): SessionTracker {
+    return new SessionTracker({
+      workId,
+      deviceId: this.options.getDeviceId(),
+      idleThresholdSec: useSettingsStore.getState().metrics.idleThresholdSec,
+      recordEvents: (events) => this.recordEvents(events),
+    });
   }
 
   async flushNow(): Promise<void> {
@@ -95,6 +153,15 @@ export class MetricsService {
     }
   }
 
+  private filterDisabledCategories(events: MetricEvent[]): MetricEvent[] {
+    const { enabled } = useSettingsStore.getState().metrics;
+    return events.filter((event) => {
+      if (event.eventType.startsWith("writing.")) return enabled.writing;
+      if (event.eventType.startsWith("session.")) return enabled.time;
+      return true;
+    });
+  }
+
   async getAggregate(
     key: AggregateKey,
     params: AggregateParams = {},
@@ -105,12 +172,19 @@ export class MetricsService {
 
     await this.init();
     const db = await this.options.getDatabase();
+
+    if (key === "streak:current") {
+      return this.computeStreakAggregate(db, params);
+    }
+
     const sourceHighWatermark = await getSourceHighWatermark(db, key);
+    const windowStart = getWindowLowerBound(key);
     const cached = await getCacheEntry(db, key);
     if (
       cached &&
       cached.aggregateVersion === METRICS_AGGREGATE_VERSION &&
-      cached.sourceHighWatermark >= sourceHighWatermark
+      cached.sourceHighWatermark >= sourceHighWatermark &&
+      cached.windowStart === windowStart
     ) {
       return cached.payload as AggregatePayload;
     }
@@ -131,13 +205,60 @@ export class MetricsService {
       cacheKey: key,
       aggregateVersion: METRICS_AGGREGATE_VERSION,
       sourceHighWatermark,
+      windowStart,
       computedAt: new Date().toISOString(),
       payload,
     });
     return payload;
   }
 
+  private async computeStreakAggregate(
+    db: DatabaseAdapter,
+    params: AggregateParams,
+  ): Promise<AggregatePayload> {
+    const sourceHighWatermark = await getDailyWritingHighWatermark(db);
+    const today = params.today ?? formatLocalDateUTC(new Date());
+    // Encode today into windowStart so the cache invalidates at the local-day
+    // boundary — `currentStreak` and `daysThisWeek/Month` change with the date
+    // even when no new events arrive.
+    const windowStart = today;
+
+    const cached = await getCacheEntry(db, "streak:current");
+    if (
+      cached &&
+      cached.aggregateVersion === METRICS_AGGREGATE_VERSION &&
+      cached.sourceHighWatermark >= sourceHighWatermark &&
+      cached.windowStart === windowStart
+    ) {
+      return cached.payload as AggregatePayload;
+    }
+
+    const dayTotals = await listDailyWritingTotals(db);
+
+    if (!this.worker) await this.init();
+    await this.readyPromise;
+
+    const id = ++this.requestId;
+    const responsePromise = this.waitForResponse(id);
+    this.send({ type: "computeStreakFromDays", id, dayTotals, params });
+    const response = await responsePromise;
+    if (response.type !== "streakComputed") {
+      throw new Error("Metrics worker did not return a streak payload");
+    }
+
+    await upsertCache(db, {
+      cacheKey: "streak:current",
+      aggregateVersion: METRICS_AGGREGATE_VERSION,
+      sourceHighWatermark,
+      windowStart,
+      computedAt: new Date().toISOString(),
+      payload: response.payload,
+    });
+    return response.payload;
+  }
+
   shutdown(): void {
+    this.endSessionInternal(new Date());
     if (this.worker) {
       this.send({ type: "shutdown" });
       this.worker.terminate();
@@ -149,6 +270,10 @@ export class MetricsService {
     if (this.beforeUnloadHandler) {
       window.removeEventListener("beforeunload", this.beforeUnloadHandler);
       this.beforeUnloadHandler = null;
+    }
+    if (this.visibilityHandler) {
+      document.removeEventListener("visibilitychange", this.visibilityHandler);
+      this.visibilityHandler = null;
     }
   }
 
@@ -205,12 +330,31 @@ export class MetricsService {
   }
 
   private installBeforeUnloadFlush(): void {
-    if (this.beforeUnloadHandler || typeof window === "undefined") return;
-    this.beforeUnloadHandler = () => {
-      void this.flushNow();
-    };
-    window.addEventListener("beforeunload", this.beforeUnloadHandler);
+    if (typeof window === "undefined") return;
+    if (!this.beforeUnloadHandler) {
+      this.beforeUnloadHandler = () => {
+        this.endSessionInternal(new Date());
+        void this.flushNow();
+      };
+      window.addEventListener("beforeunload", this.beforeUnloadHandler);
+    }
+    if (!this.visibilityHandler && typeof document !== "undefined") {
+      this.visibilityHandler = () => {
+        if (document.visibilityState === "hidden") {
+          this.endSessionInternal(new Date());
+          void this.flushNow();
+        }
+      };
+      document.addEventListener("visibilitychange", this.visibilityHandler);
+    }
   }
+}
+
+function formatLocalDateUTC(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function createMetricsService(

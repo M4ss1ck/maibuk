@@ -229,6 +229,7 @@ export function BookEditor() {
   // Chapter management handlers
   const handleSelectChapter = useCallback(
     (chapter: Chapter) => {
+      metricsService.endSession();
       void metricsService.flushNow();
       setCurrentChapter(chapter);
       // Save as last edited chapter for this book
@@ -247,6 +248,7 @@ export function BookEditor() {
           title,
           chapterType: type,
         });
+        metricsService.endSession();
         void metricsService.flushNow();
         setCurrentChapter(newChapter);
         // Save as last edited chapter
@@ -262,6 +264,7 @@ export function BookEditor() {
       // Select another chapter if we deleted the current one
       if (currentChapter?.id === id) {
         const remaining = chapters.filter((c) => c.id !== id);
+        metricsService.endSession();
         void metricsService.flushNow();
         setCurrentChapter(remaining.length > 0 ? remaining[0] : null);
       }
@@ -375,6 +378,7 @@ export function BookEditor() {
   useEffect(() => {
     return () => {
       if (!bookId) return;
+      metricsService.endSession();
       // Fire-and-forget: the unmount cleanup cannot await reliably.
       void (async () => {
         await metricsService.flushNow();
@@ -778,7 +782,10 @@ export function BookEditor() {
             onUpdate={handleContentUpdate}
             onWordCountChange={handleWordCountChange}
             onStatsChange={handleStatsChange}
-            onBlur={() => void metricsService.flushNow()}
+            onBlur={() => {
+              metricsService.endSession();
+              void metricsService.flushNow();
+            }}
             focusMode={focusMode}
             footnoteStartIndex={footnoteStartIndex}
             showInlineFootnotes={showInlineFootnotes}

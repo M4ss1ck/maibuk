@@ -1,5 +1,5 @@
 import { getDatabase } from "../../lib/db";
-import { insertIfNotTombstoned } from "./events-repo";
+import { insertIfNotTombstoned, invalidateAllAggregateCaches } from "./events-repo";
 import type { MetricEvent, EventType } from "./types";
 
 interface MetricsEventRow {
@@ -90,5 +90,9 @@ export async function applyMetricsBatch(
 
   for (const event of snapshot.events) {
     await insertIfNotTombstoned(db, event);
+  }
+
+  if (snapshot.events.length > 0 || snapshot.tombstones.length > 0) {
+    await invalidateAllAggregateCaches(db);
   }
 }

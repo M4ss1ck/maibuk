@@ -51,6 +51,7 @@ export interface MetricsCacheEntry {
   cacheKey: string;
   aggregateVersion: number;
   sourceHighWatermark: string;
+  windowStart: string;
   computedAt: string;
   payload: unknown;
 }

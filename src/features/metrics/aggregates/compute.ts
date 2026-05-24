@@ -1,4 +1,5 @@
 import type { MetricEvent, WritingMetricPayload } from "../types";
+import type { DayWordTotal } from "../events-repo";
 import type {
   AggregateKey,
   AggregateParams,
@@ -19,9 +20,20 @@ export function computeAggregate(
     return computeHeatmap(rows);
   }
   if (key === "streak:current") {
+    // Legacy path retained for callers that still pass raw events (tests, etc.)
     return computeStreak(rows, params);
   }
   return computeDashboard(rows);
+}
+
+export function computeStreakFromDayTotals(
+  dayTotals: DayWordTotal[],
+  params: AggregateParams = {},
+): StreakAggregate {
+  const threshold = params.dailyWordThreshold ?? 50;
+  const today = params.today ?? formatLocalDate(new Date());
+  const byDate = new Map(dayTotals.map((row) => [row.date, row.words]));
+  return computeStreakFromMap(byDate, threshold, today);
 }
 
 export function mergeAggregatePayloads(
@@ -52,21 +64,10 @@ export function mergeAggregatePayloads(
   }
 
   if (key === "streak:current") {
-    const rows = (payloads as StreakAggregate[]).flatMap((payload) =>
-      Object.entries({
-        currentStreak: payload.currentStreak,
-        longestStreak: payload.longestStreak,
-        daysThisWeek: payload.daysThisWeek,
-        daysThisMonth: payload.daysThisMonth,
-      }),
-    );
-    return rows.reduce<StreakAggregate>(
-      (acc, [field, value]) => ({
-        ...acc,
-        [field]: Math.max(acc[field as keyof StreakAggregate], value),
-      }),
-      { currentStreak: 0, longestStreak: 0, daysThisWeek: 0, daysThisMonth: 0 },
-    );
+    // Streak is computed in one shot from day-aggregated SQL, never paginated.
+    // If pagination is ever applied here it would produce wrong results because
+    // streak math is not linear across chunk boundaries.
+    return payloads[0];
   }
 
   return finalizeDashboard(
@@ -127,6 +128,14 @@ function computeStreak(
     byDate.set(row.localDate, (byDate.get(row.localDate) ?? 0) + getWords(row));
   }
 
+  return computeStreakFromMap(byDate, threshold, today);
+}
+
+function computeStreakFromMap(
+  byDate: Map<string, number>,
+  threshold: number,
+  today: string,
+): StreakAggregate {
   const qualifying = new Set(
     Array.from(byDate.entries())
       .filter(([, words]) => words >= threshold)
@@ -144,7 +153,11 @@ function computeStreak(
   }
 
   let currentStreak = 0;
-  for (let cursor = addDays(today, -1); qualifying.has(cursor); cursor = addDays(cursor, -1)) {
+  for (
+    let cursor = addDays(today, -1);
+    qualifying.has(cursor);
+    cursor = addDays(cursor, -1)
+  ) {
     currentStreak += 1;
   }
   if (qualifying.has(today)) currentStreak += 1;

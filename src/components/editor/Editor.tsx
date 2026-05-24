@@ -36,7 +36,6 @@ import { MetricsObserver } from "./extensions/MetricsObserver";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 import { setContentSilently } from "../../features/metrics/programmatic";
-import { isMetricsDevDisabled } from "../../features/metrics/settings";
 
 export interface EditorStats {
   words: number;
@@ -78,9 +77,6 @@ export function Editor({
     (state) => state.spellCheckEnabled,
   );
   const language = useSettingsStore((state) => state.language);
-  const metricsWritingEnabled = useSettingsStore(
-    (state) => state.metrics.enabled.writing,
-  );
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const editor = useEditor({
     extensions: [
@@ -142,7 +138,6 @@ export function Editor({
         language,
       }),
       MetricsObserver.configure({
-        enabled: metricsWritingEnabled && !isMetricsDevDisabled(),
         workId: bookId,
         chapterId,
       }),

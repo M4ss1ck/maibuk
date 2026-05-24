@@ -1,6 +1,9 @@
 import type { WorkerRequest, WorkerResponse } from "./types";
 import type { MetricEvent } from "../../features/metrics/types";
-import { computeAggregate } from "../../features/metrics/aggregates/compute";
+import {
+  computeAggregate,
+  computeStreakFromDayTotals,
+} from "../../features/metrics/aggregates/compute";
 
 let buffer: MetricEvent[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -50,6 +53,13 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
         key: msg.key,
         payload: computeAggregate(msg.key, msg.rows, msg.params),
         sourceHighWatermark: getHighWatermark(msg.rows),
+      });
+      break;
+    case "computeStreakFromDays":
+      respond({
+        type: "streakComputed",
+        id: msg.id,
+        payload: computeStreakFromDayTotals(msg.dayTotals, msg.params),
       });
       break;
     case "shutdown":

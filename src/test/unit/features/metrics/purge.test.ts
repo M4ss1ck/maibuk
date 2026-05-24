@@ -61,6 +61,7 @@ describe("purgeMetricCategory()", () => {
       cacheKey: "heatmap:2026",
       aggregateVersion: 1,
       sourceHighWatermark: "2026-05-23T12:00:00.000Z",
+      windowStart: "2026-01-01T00:00:00.000Z",
       computedAt: "2026-05-23T12:01:00.000Z",
       payload: { days: [] },
     });
@@ -68,6 +69,7 @@ describe("purgeMetricCategory()", () => {
       cacheKey: "streak:current",
       aggregateVersion: 1,
       sourceHighWatermark: "2026-05-23T12:00:00.000Z",
+      windowStart: "2026-05-23",
       computedAt: "2026-05-23T12:01:00.000Z",
       payload: { currentStreak: 1 },
     });
@@ -75,6 +77,7 @@ describe("purgeMetricCategory()", () => {
       cacheKey: "dashboard:last30d",
       aggregateVersion: 1,
       sourceHighWatermark: "2026-05-23T12:00:00.000Z",
+      windowStart: "2026-04-23T00:00:00.000Z",
       computedAt: "2026-05-23T12:01:00.000Z",
       payload: { netWords: 3 },
     });
@@ -82,6 +85,7 @@ describe("purgeMetricCategory()", () => {
       cacheKey: "unrelated:cache",
       aggregateVersion: 1,
       sourceHighWatermark: "2026-05-23T12:00:00.000Z",
+      windowStart: "",
       computedAt: "2026-05-23T12:01:00.000Z",
       payload: {},
     });

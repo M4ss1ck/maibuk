@@ -21,6 +21,7 @@ interface CacheRow {
   cache_key: string;
   aggregate_version: number;
   source_high_watermark: string;
+  window_start: string | null;
   computed_at: string;
   payload: string;
 }
@@ -81,10 +82,29 @@ export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
       cache_key TEXT PRIMARY KEY,
       aggregate_version INTEGER NOT NULL,
       source_high_watermark TEXT NOT NULL,
+      window_start TEXT,
       computed_at TEXT NOT NULL,
       payload TEXT NOT NULL
     )
   `);
+
+  // Additive migration for installs that predate the window_start column.
+  await db
+    .execute("ALTER TABLE metrics_cache ADD COLUMN window_start TEXT")
+    .catch(() => {});
+}
+
+export function getWindowLowerBound(key: AggregateKey): string {
+  if (key === "dashboard:last30d") {
+    const since = new Date(Date.now() - 30 * 86_400_000);
+    since.setUTCHours(0, 0, 0, 0);
+    return since.toISOString();
+  }
+  if (key.startsWith("heatmap:")) {
+    const year = key.split(":")[1];
+    return `${year}-01-01T00:00:00.000Z`;
+  }
+  return "";
 }
 
 export async function insertEvents(
@@ -157,7 +177,7 @@ export async function getCacheEntry(
   cacheKey: string,
 ): Promise<MetricsCacheEntry | null> {
   const rows = await db.select<CacheRow[]>(
-    `SELECT cache_key, aggregate_version, source_high_watermark, computed_at, payload
+    `SELECT cache_key, aggregate_version, source_high_watermark, window_start, computed_at, payload
      FROM metrics_cache
      WHERE cache_key = ?
      LIMIT 1`,
@@ -169,6 +189,7 @@ export async function getCacheEntry(
     cacheKey: row.cache_key,
     aggregateVersion: row.aggregate_version,
     sourceHighWatermark: row.source_high_watermark,
+    windowStart: row.window_start ?? "",
     computedAt: row.computed_at,
     payload: JSON.parse(row.payload),
   };
@@ -215,6 +236,36 @@ export async function listEventsForAggregate(
   return rows.map(toMetricEvent);
 }
 
+export interface DayWordTotal {
+  date: string;
+  words: number;
+}
+
+export async function listDailyWritingTotals(
+  db: DatabaseAdapter,
+): Promise<DayWordTotal[]> {
+  const rows = await db.select<{ local_date: string; total: number | null }[]>(
+    `SELECT local_date,
+            SUM(CAST(COALESCE(json_extract(payload, '$.words'), 0) AS INTEGER)) AS total
+       FROM metrics_events
+      WHERE event_type = 'writing.typed'
+      GROUP BY local_date`,
+  );
+  return rows.map((row) => ({
+    date: row.local_date,
+    words: Number(row.total ?? 0),
+  }));
+}
+
+export async function getDailyWritingHighWatermark(
+  db: DatabaseAdapter,
+): Promise<string> {
+  const rows = await db.select<{ watermark: string | null }[]>(
+    "SELECT MAX(timestamp) AS watermark FROM metrics_events WHERE event_type = 'writing.typed'",
+  );
+  return rows[0]?.watermark ?? "";
+}
+
 export async function purgeEventsByPrefix(
   db: DatabaseAdapter,
   eventTypePrefix: string,
@@ -246,12 +297,13 @@ export async function upsertCache(
 ): Promise<void> {
   await db.execute(
     `INSERT OR REPLACE INTO metrics_cache
-      (cache_key, aggregate_version, source_high_watermark, computed_at, payload)
-     VALUES (?, ?, ?, ?, ?)`,
+      (cache_key, aggregate_version, source_high_watermark, window_start, computed_at, payload)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     [
       entry.cacheKey,
       entry.aggregateVersion,
       entry.sourceHighWatermark,
+      entry.windowStart,
       entry.computedAt,
       JSON.stringify(entry.payload),
     ],
@@ -265,6 +317,12 @@ export async function invalidateCache(
   for (const prefix of prefixes) {
     await db.execute("DELETE FROM metrics_cache WHERE cache_key LIKE ?", [`${prefix}%`]);
   }
+}
+
+export async function invalidateAllAggregateCaches(
+  db: DatabaseAdapter,
+): Promise<void> {
+  await db.execute("DELETE FROM metrics_cache");
 }
 
 function toMetricEvent(row: MetricEventRow): MetricEvent {
@@ -295,8 +353,10 @@ function buildAggregateWhere(key: AggregateKey): {
   }
 
   if (key === "dashboard:last30d") {
-    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    return { where: "WHERE timestamp >= ?", params: [since] };
+    return {
+      where: "WHERE timestamp >= ?",
+      params: [getWindowLowerBound(key)],
+    };
   }
 
   return {

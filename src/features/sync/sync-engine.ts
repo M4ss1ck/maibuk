@@ -259,25 +259,41 @@ async function syncVersions(bookId: string, passphrase: string): Promise<void> {
 async function syncMetrics(passphrase: string): Promise<void> {
   if (!useSettingsStore.getState().metrics.syncMetrics) return;
 
+  // 1. PULL first so we can detect whether anything has changed.
+  const remote = await pullMetricsBlob();
+
+  // No remote yet → push our local state and we're done.
+  if (!remote) {
+    const localJson = await serializeMetricsBatch();
+    const localChecksum = await computeChecksum(localJson);
+    const encrypted = await encrypt(localJson, passphrase);
+    await pushMetricsBlob(new Blob([toBlobPart(encrypted)]), localChecksum);
+    return;
+  }
+
+  // Fast-path: our pre-merge state already matches remote → in sync, nothing
+  // to do. Avoids the decrypt/merge/push round-trip on a no-op sync.
   const localJson = await serializeMetricsBatch();
   const localChecksum = await computeChecksum(localJson);
+  if (remote.checksum === localChecksum) return;
 
-  const remote = await pullMetricsBlob();
-  if (remote && remote.checksum === localChecksum) return;
-
-  const encrypted = await encrypt(localJson, passphrase);
-  await pushMetricsBlob(new Blob([toBlobPart(encrypted)]), localChecksum);
-
-  if (remote && remote.checksum !== localChecksum) {
-    const decrypted = await decrypt(remote.data, passphrase);
-    let snapshot: MetricsSyncBlob;
-    try {
-      snapshot = JSON.parse(decrypted) as MetricsSyncBlob;
-    } catch {
-      throw new Error("Synced metrics payload is invalid or corrupted");
-    }
-    await applyMetricsBatch(snapshot);
+  // 2. MERGE: decrypt remote and apply on top of local so the local set
+  //    becomes the merged union before we serialize for push.
+  const decrypted = await decrypt(remote.data, passphrase);
+  let snapshot: MetricsSyncBlob;
+  try {
+    snapshot = JSON.parse(decrypted) as MetricsSyncBlob;
+  } catch {
+    throw new Error("Synced metrics payload is invalid or corrupted");
   }
+  await applyMetricsBatch(snapshot);
+
+  // 3. PUSH the merged state so the other devices converge on the next pull.
+  const mergedJson = await serializeMetricsBatch();
+  const mergedChecksum = await computeChecksum(mergedJson);
+  if (mergedChecksum === remote.checksum) return; // Already identical after merge.
+  const encrypted = await encrypt(mergedJson, passphrase);
+  await pushMetricsBlob(new Blob([toBlobPart(encrypted)]), mergedChecksum);
 }
 
 export async function syncBook(

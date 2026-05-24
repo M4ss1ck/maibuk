@@ -75,6 +75,7 @@ describe("metrics events repository", () => {
       cacheKey: "writing:summary",
       aggregateVersion: 1,
       sourceHighWatermark: "2026-05-23T12:00:00.000Z",
+      windowStart: "",
       computedAt: "2026-05-23T12:01:00.000Z",
       payload: { words: 3 },
     });

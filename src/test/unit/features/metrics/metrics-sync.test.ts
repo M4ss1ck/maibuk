@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "../../../../lib/platform/types";
 import { createTestDatabase } from "../../../support/db-test-context";
-import { ensureMetricsSchema, insertEvents } from "../../../../features/metrics/events-repo";
+import {
+  ensureMetricsSchema,
+  insertEvents,
+  upsertCache,
+} from "../../../../features/metrics/events-repo";
 import {
   serializeMetricsBatch,
   applyMetricsBatch,
@@ -195,6 +199,46 @@ describe("metrics sync", () => {
 
       expect(events).toEqual([]);
       expect(tombstones).toHaveLength(1);
+    });
+
+    it("invalidates all aggregate caches after applying a non-empty batch", async () => {
+      await upsertCache(testDb, {
+        cacheKey: "heatmap:2026",
+        aggregateVersion: 1,
+        sourceHighWatermark: "2026-05-23T12:00:00.000Z",
+        windowStart: "2026-01-01T00:00:00.000Z",
+        computedAt: "2026-05-23T12:01:00.000Z",
+        payload: { days: [] },
+      });
+
+      await applyMetricsBatch({
+        events: [buildEvent({ id: "remote-1", deviceId: "device-b" })],
+        tombstones: [],
+        updatedAt: 1000,
+      });
+
+      const cacheRows = await testDb.select<{ cache_key: string }[]>(
+        "SELECT cache_key FROM metrics_cache",
+      );
+      expect(cacheRows).toEqual([]);
+    });
+
+    it("does not invalidate caches when the batch is empty", async () => {
+      await upsertCache(testDb, {
+        cacheKey: "heatmap:2026",
+        aggregateVersion: 1,
+        sourceHighWatermark: "2026-05-23T12:00:00.000Z",
+        windowStart: "2026-01-01T00:00:00.000Z",
+        computedAt: "2026-05-23T12:01:00.000Z",
+        payload: { days: [] },
+      });
+
+      await applyMetricsBatch({ events: [], tombstones: [], updatedAt: 1000 });
+
+      const cacheRows = await testDb.select<{ cache_key: string }[]>(
+        "SELECT cache_key FROM metrics_cache",
+      );
+      expect(cacheRows).toEqual([{ cache_key: "heatmap:2026" }]);
     });
 
     it("inserts non-duplicate tombstones (INSERT OR IGNORE)", async () => {
