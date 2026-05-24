@@ -9,6 +9,7 @@ const {
   mockGetList,
   mockUpdate,
   mockSyncCreate,
+  mockGetOne,
 } = vi.hoisted(() => ({
   mockAuthRefresh: vi.fn(),
   mockAuthWithPassword: vi.fn(),
@@ -18,6 +19,7 @@ const {
   mockGetList: vi.fn(),
   mockUpdate: vi.fn(),
   mockSyncCreate: vi.fn(),
+  mockGetOne: vi.fn(),
 }));
 
 let mockAuthStoreToken = "refreshed-token";
@@ -52,6 +54,13 @@ vi.mock("pocketbase", () => {
             create: mockCreate,
           };
         }
+        if (name === "version_items") {
+          return {
+            getOne: mockGetOne,
+            getFullList: mockGetFullList,
+            create: mockSyncCreate,
+          };
+        }
         return {
           getFullList: mockGetFullList,
           getList: mockGetList,
@@ -80,6 +89,14 @@ const {
   listRemoteBooks,
   parsePocketBaseDate,
   pushMetricsEventRow,
+  pushMetricsTombstoneRow,
+  pullMetricsEventRowsSince,
+  pullMetricsTombstoneRowsSince,
+  pushMetricsBlob,
+  pullMetricsBlob,
+  listRemoteVersions,
+  pushVersionBlob,
+  pullVersionBlob,
 } = await import("../../../../features/sync/client");
 
 describe("parsePocketBaseDate()", () => {
@@ -393,6 +410,296 @@ describe("pullBookBlob()", () => {
     mockGetList.mockResolvedValue({ items: [] });
 
     const result = await pullBookBlob("book-1");
+
+    expect(result).toBeNull();
+  });
+});
+
+describe("pushMetricsTombstoneRow()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+  });
+
+  const row = {
+    client_id: "tomb-1",
+    device_id: "device-1",
+    deleted_at: "2026-05-23T12:00:00.000Z",
+    reason: "user_purge",
+  };
+
+  it("pushes a tombstone row", async () => {
+    mockSyncCreate.mockResolvedValue({});
+
+    await pushMetricsTombstoneRow(row);
+
+    expect(mockSyncCreate).toHaveBeenCalled();
+  });
+
+  it("treats client_id unique errors as already pushed", async () => {
+    mockSyncCreate.mockRejectedValue({
+      status: 400,
+      data: { data: { client_id: { code: "validation_not_unique" } } },
+    });
+
+    await expect(pushMetricsTombstoneRow(row)).resolves.toBeUndefined();
+  });
+
+  it("throws when not authenticated", async () => {
+    mockAuthStoreRecord = null;
+
+    await expect(pushMetricsTombstoneRow(row)).rejects.toThrow("Not authenticated");
+  });
+});
+
+describe("pullMetricsEventRowsSince()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns mapped event rows", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        client_id: "e-1",
+        device_id: "d-1",
+        timestamp: "2026-05-23T12:00:00.000Z",
+        local_date: "2026-05-23",
+        tz_offset_min: 0,
+        event_type: "writing.typed",
+        work_id: "book-1",
+        schema_version: 1,
+        encrypted_payload: "cipher",
+        updated: "2026-05-23T12:00:00.000Z",
+      },
+    ]);
+
+    const result = await pullMetricsEventRowsSince("2026-05-22T00:00:00.000Z");
+
+    expect(result).toHaveLength(1);
+    expect(result[0].client_id).toBe("e-1");
+  });
+
+  it("omits filter when since is empty", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    await pullMetricsEventRowsSince("");
+
+    const call = mockGetFullList.mock.calls[0][0];
+    expect(call.filter).toBeUndefined();
+  });
+});
+
+describe("pullMetricsTombstoneRowsSince()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns mapped tombstone rows", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        client_id: "t-1",
+        device_id: "d-1",
+        deleted_at: "2026-05-23T12:00:00.000Z",
+        reason: "user_purge",
+        updated: "2026-05-23T12:00:00.000Z",
+      },
+    ]);
+
+    const result = await pullMetricsTombstoneRowsSince("2026-05-22T00:00:00.000Z");
+
+    expect(result).toHaveLength(1);
+    expect(result[0].client_id).toBe("t-1");
+  });
+});
+
+describe("pushMetricsBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+  });
+
+  it("creates a new metrics blob when none exists", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({});
+
+    await pushMetricsBlob(new Blob(["data"]), "checksum-abc");
+
+    expect(mockSyncCreate).toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("updates existing metrics blob", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "existing-1" }] });
+    mockUpdate.mockResolvedValue({});
+
+    await pushMetricsBlob(new Blob(["data"]), "checksum-abc");
+
+    expect(mockUpdate).toHaveBeenCalledWith("existing-1", expect.any(FormData));
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+  });
+
+  it("throws when not authenticated", async () => {
+    mockAuthStoreRecord = null;
+
+    await expect(pushMetricsBlob(new Blob(["data"]), "checksum")).rejects.toThrow(
+      "Not authenticated"
+    );
+  });
+});
+
+describe("pullMetricsBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+  });
+
+  it("returns null when not authenticated", async () => {
+    mockAuthStoreRecord = null;
+
+    const result = await pullMetricsBlob();
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when no blob exists", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+
+    const result = await pullMetricsBlob();
+
+    expect(result).toBeNull();
+  });
+});
+
+describe("listRemoteVersions()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns mapped version metadata", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "rec-1",
+        version_id: "ver-1",
+        book_id: "book-1",
+        checksum: "abc123",
+        version_name: "Draft 1",
+        version_trigger: "auto",
+        version_created_at: 1_000_000,
+        word_count: 500,
+      },
+    ]);
+
+    const result = await listRemoteVersions("book-1");
+
+    expect(result).toEqual([
+      {
+        remoteId: "rec-1",
+        versionId: "ver-1",
+        bookId: "book-1",
+        checksum: "abc123",
+        name: "Draft 1",
+        triggerType: "auto",
+        createdAt: 1_000_000,
+        wordCount: 500,
+      },
+    ]);
+  });
+
+  it("returns all versions when no bookId is provided", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    await listRemoteVersions();
+
+    const call = mockGetFullList.mock.calls[0][0];
+    expect(call.filter).toBe("");
+  });
+});
+
+describe("pushVersionBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+  });
+
+  it("creates a version item with all metadata", async () => {
+    mockSyncCreate.mockResolvedValue({});
+
+    await pushVersionBlob(
+      {
+        versionId: "ver-1",
+        bookId: "book-1",
+        checksum: "abc123",
+        name: "Draft 1",
+        triggerType: "manual",
+        createdAt: 1_000_000,
+        wordCount: 500,
+      },
+      new Blob(["data"])
+    );
+
+    expect(mockSyncCreate).toHaveBeenCalled();
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.has("encrypted_data")).toBe(true);
+    expect(formData.has("version_id")).toBe(true);
+  });
+
+  it("omits version_name when name is null", async () => {
+    mockSyncCreate.mockResolvedValue({});
+
+    await pushVersionBlob(
+      {
+        versionId: "ver-1",
+        bookId: "book-1",
+        checksum: "abc123",
+        name: null,
+        triggerType: "manual",
+        createdAt: 1_000_000,
+        wordCount: 500,
+      },
+      new Blob(["data"])
+    );
+
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.has("version_name")).toBe(false);
+  });
+
+  it("throws when not authenticated", async () => {
+    mockAuthStoreRecord = null;
+
+    await expect(
+      pushVersionBlob(
+        {
+          versionId: "ver-1",
+          bookId: "book-1",
+          checksum: "abc123",
+          name: null,
+          triggerType: "manual",
+          createdAt: 1_000_000,
+          wordCount: 500,
+        },
+        new Blob(["data"])
+      )
+    ).rejects.toThrow("Not authenticated");
+  });
+});
+
+describe("pullVersionBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns null when record is not found", async () => {
+    mockGetOne.mockRejectedValue(new Error("Not found"));
+
+    const result = await pullVersionBlob("rec-1");
 
     expect(result).toBeNull();
   });

@@ -1,0 +1,142 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+const mockDb = {
+  execute: vi.fn(),
+  select: vi.fn(),
+  close: vi.fn(),
+  exportData: vi.fn(),
+  importData: vi.fn(),
+};
+
+const mockEnsureMetricsSchema = vi.fn();
+
+const { mockCreateDatabase } = vi.hoisted(() => ({
+  mockCreateDatabase: vi.fn(),
+}));
+
+vi.mock("../../../../lib/platform", () => ({
+  createDatabase: mockCreateDatabase,
+  IS_TAURI: false,
+}));
+
+vi.mock("../../../../features/metrics/events-repo", () => ({
+  ensureMetricsSchema: mockEnsureMetricsSchema,
+}));
+
+describe("src/lib/db/index.ts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    mockCreateDatabase.mockResolvedValue(mockDb);
+    mockDb.execute.mockResolvedValue({ rowsAffected: 0 });
+    mockDb.select.mockResolvedValue([]);
+    mockDb.exportData.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockDb.importData.mockResolvedValue(undefined);
+  });
+
+  describe("getDatabase()", () => {
+    it("creates and returns a database on first call", async () => {
+      const { getDatabase } = await import("../../../../lib/db");
+      const db = await getDatabase();
+
+      expect(mockCreateDatabase).toHaveBeenCalledWith("maibuk.db");
+      expect(db).toBe(mockDb);
+    });
+
+    it("returns cached database on subsequent calls without recreating", async () => {
+      const { getDatabase } = await import("../../../../lib/db");
+      await getDatabase();
+      mockCreateDatabase.mockClear();
+
+      const db = await getDatabase();
+
+      expect(mockCreateDatabase).not.toHaveBeenCalled();
+      expect(db).toBe(mockDb);
+    });
+  });
+
+  describe("waitForDatabaseReady()", () => {
+    it("resolves when database is ready", async () => {
+      const { waitForDatabaseReady } = await import("../../../../lib/db");
+
+      await expect(waitForDatabaseReady()).resolves.toBeUndefined();
+      expect(mockCreateDatabase).toHaveBeenCalled();
+    });
+  });
+
+  describe("closeDatabase()", () => {
+    it("closes the database and resets the singleton", async () => {
+      const { getDatabase, closeDatabase } = await import("../../../../lib/db");
+      await getDatabase();
+
+      await closeDatabase();
+
+      expect(mockDb.close).toHaveBeenCalled();
+      // After close, a new getDatabase should create a new instance
+      mockCreateDatabase.mockClear();
+      await getDatabase();
+      expect(mockCreateDatabase).toHaveBeenCalled();
+    });
+
+    it("does not throw when database is not initialized", async () => {
+      const { closeDatabase } = await import("../../../../lib/db");
+
+      await expect(closeDatabase()).resolves.toBeUndefined();
+      expect(mockDb.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("exportDatabase()", () => {
+    it("returns exported data from the database", async () => {
+      const { exportDatabase } = await import("../../../../lib/db");
+      mockDb.exportData.mockResolvedValue(new Uint8Array([1, 2, 3]));
+
+      const data = await exportDatabase();
+
+      expect(data).toEqual(new Uint8Array([1, 2, 3]));
+      expect(mockDb.exportData).toHaveBeenCalled();
+    });
+  });
+
+  describe("resetDatabase()", () => {
+    it("deletes all data from tables in the correct order", async () => {
+      const { resetDatabase } = await import("../../../../lib/db");
+
+      await resetDatabase();
+
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM chapters");
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM book_versions");
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM books");
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM cover_templates");
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM settings");
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_cache");
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_event_tombstones");
+      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_events");
+    });
+
+    it("does not throw when metrics tables do not exist", async () => {
+      const { resetDatabase } = await import("../../../../lib/db");
+      mockDb.execute.mockImplementation((sql: string) => {
+        if (sql.includes("metrics_")) {
+          return Promise.reject(new Error("no such table"));
+        }
+        return Promise.resolve({ rowsAffected: 0 });
+      });
+
+      await expect(resetDatabase()).resolves.toBeUndefined();
+    });
+  });
+
+  describe("importDatabase()", () => {
+    it("imports sql content after converting INSERT to INSERT OR REPLACE", async () => {
+      const { importDatabase } = await import("../../../../lib/db");
+      const sql = `INSERT INTO books (id) VALUES ('1');\nINSERT OR IGNORE INTO chapters (id) VALUES ('2');`;
+
+      await importDatabase(sql);
+
+      expect(mockDb.importData).toHaveBeenCalledWith(
+        `INSERT OR REPLACE INTO books (id) VALUES ('1');\nINSERT OR REPLACE INTO chapters (id) VALUES ('2');`
+      );
+    });
+  });
+});
