@@ -23,6 +23,7 @@
     "fs:allow-read-dir",
     "dialog:default",
     "dialog:allow-save",
-    "os:default"
+    "os:default",
+    "core:window:allow-destroy"
   ]
 }
