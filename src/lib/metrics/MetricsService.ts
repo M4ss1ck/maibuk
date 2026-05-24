@@ -1,4 +1,5 @@
 import { getDatabase } from "../db";
+import { IS_TAURI } from "../platform";
 import type { DatabaseAdapter } from "../platform/types";
 import { getOrCreateDeviceId } from "../../features/metrics/device-id";
 import {
@@ -6,7 +7,7 @@ import {
   getDailyWritingHighWatermark,
   getSourceHighWatermark,
   getWindowLowerBound,
-  insertEvents,
+  insertEventsRespectingTombstones,
   listDailyWritingTotals,
   listEventsForAggregate,
   upsertCache,
@@ -44,6 +45,7 @@ export class MetricsService {
   private readyPromise: Promise<void> | null = null;
   private beforeUnloadHandler: (() => void) | null = null;
   private visibilityHandler: (() => void) | null = null;
+  private tauriCloseUnlisten: (() => void) | null = null;
   private sessionTracker: SessionTracker | null = null;
   private sessionWorkId: string | null = null;
   private lastActiveAt: number | null = null;
@@ -148,7 +150,9 @@ export class MetricsService {
     const response = await responsePromise;
     if (response.type === "flushReady" && response.events.length > 0) {
       const db = await this.options.getDatabase();
-      await insertEvents(db, response.events);
+      // Route through tombstone-aware insert so the tombstone-wins invariant
+      // is enforced direction-agnostically, not only on sync pulls.
+      await insertEventsRespectingTombstones(db, response.events);
       useMetricsStore.getState().setLastFlushedAt(new Date().toISOString());
     }
   }
@@ -275,6 +279,10 @@ export class MetricsService {
       document.removeEventListener("visibilitychange", this.visibilityHandler);
       this.visibilityHandler = null;
     }
+    if (this.tauriCloseUnlisten) {
+      this.tauriCloseUnlisten();
+      this.tauriCloseUnlisten = null;
+    }
   }
 
   private async handleMessage(message: WorkerResponse): Promise<void> {
@@ -346,6 +354,35 @@ export class MetricsService {
         }
       };
       document.addEventListener("visibilitychange", this.visibilityHandler);
+    }
+    void this.installTauriCloseHandler();
+  }
+
+  // Tauri's `beforeunload` doesn't fire reliably when the OS triggers a
+  // window close. `onCloseRequested` lets us defer the close until pending
+  // events are flushed, capped at 200 ms so a broken DB write can't hang the
+  // app shutdown.
+  private async installTauriCloseHandler(): Promise<void> {
+    if (!IS_TAURI || this.tauriCloseUnlisten) return;
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      const unlisten = await win.onCloseRequested(async (event) => {
+        event.preventDefault();
+        try {
+          this.endSessionInternal(new Date());
+          await Promise.race([
+            this.flushNow(),
+            new Promise<void>((resolve) => setTimeout(resolve, 200)),
+          ]);
+        } finally {
+          await win.destroy();
+        }
+      });
+      this.tauriCloseUnlisten = unlisten;
+    } catch {
+      // Not running inside a Tauri webview, or the window API failed —
+      // either way, fall back to the beforeunload path.
     }
   }
 }

@@ -1,3 +1,9 @@
+// `writing` and `time` are *data-collection* categories — toggling them off
+// stops the corresponding events from being written and purges existing rows.
+// `engagement` is a *view-only* preference — it controls whether the WPM /
+// dashboard section is rendered on /metrics. There are no `engagement.*`
+// event types; engagement metrics are derived from `session.*` (gated by
+// `time`).
 export type MetricsCategory = "writing" | "time" | "engagement";
 
 export type EventType =

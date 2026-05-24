@@ -149,6 +149,7 @@ export function MetricsSection() {
             checked={metrics.syncMetrics}
             onChange={setMetricsSyncEnabled}
             label={t("settings.metrics.sync.label")}
+            disabled={authStatus !== "logged-in"}
           />
         </div>
       </div>

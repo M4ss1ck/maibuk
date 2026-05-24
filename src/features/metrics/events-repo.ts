@@ -43,9 +43,14 @@ export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
       event_type TEXT NOT NULL,
       work_id TEXT,
       payload TEXT NOT NULL,
-      schema_version INTEGER NOT NULL
+      schema_version INTEGER NOT NULL,
+      pushed_at TEXT
     )
   `);
+  // Additive migration for installs that predate the pushed_at column.
+  await db
+    .execute("ALTER TABLE metrics_events ADD COLUMN pushed_at TEXT")
+    .catch(() => {});
 
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_metrics_events_local_date
@@ -69,9 +74,13 @@ export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
       id TEXT PRIMARY KEY,
       deleted_at TEXT NOT NULL,
       device_id TEXT NOT NULL,
-      reason TEXT NOT NULL
+      reason TEXT NOT NULL,
+      pushed_at TEXT
     )
   `);
+  await db
+    .execute("ALTER TABLE metrics_event_tombstones ADD COLUMN pushed_at TEXT")
+    .catch(() => {});
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_metrics_tombstones_deleted_at
       ON metrics_event_tombstones(deleted_at)
@@ -112,23 +121,30 @@ export async function insertEvents(
   events: MetricEvent[],
 ): Promise<void> {
   for (const event of events) {
-    await db.execute(
-      `INSERT OR IGNORE INTO metrics_events
-        (id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        event.id,
-        event.timestamp,
-        event.localDate,
-        event.tzOffsetMin,
-        event.deviceId,
-        event.eventType,
-        event.workId,
-        JSON.stringify(event.payload),
-        event.schemaVersion,
-      ],
-    );
+    await insertEventRow(db, event);
   }
+}
+
+async function insertEventRow(
+  db: DatabaseAdapter,
+  event: MetricEvent,
+): Promise<void> {
+  await db.execute(
+    `INSERT OR IGNORE INTO metrics_events
+      (id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      event.id,
+      event.timestamp,
+      event.localDate,
+      event.tzOffsetMin,
+      event.deviceId,
+      event.eventType,
+      event.workId,
+      JSON.stringify(event.payload),
+      event.schemaVersion,
+    ],
+  );
 }
 
 export async function insertIfNotTombstoned(
@@ -140,8 +156,17 @@ export async function insertIfNotTombstoned(
     [event.id],
   );
   if (tombstones.length > 0) return false;
-  await insertEvents(db, [event]);
+  await insertEventRow(db, event);
   return true;
+}
+
+export async function insertEventsRespectingTombstones(
+  db: DatabaseAdapter,
+  events: MetricEvent[],
+): Promise<void> {
+  for (const event of events) {
+    await insertIfNotTombstoned(db, event);
+  }
 }
 
 export async function listEvents(db: DatabaseAdapter): Promise<MetricEvent[]> {
@@ -323,6 +348,116 @@ export async function invalidateAllAggregateCaches(
   db: DatabaseAdapter,
 ): Promise<void> {
   await db.execute("DELETE FROM metrics_cache");
+}
+
+export interface TombstoneRow {
+  id: string;
+  deletedAt: string;
+  deviceId: string;
+  reason: string;
+}
+
+export async function listUnpushedEvents(
+  db: DatabaseAdapter,
+  limit: number,
+): Promise<MetricEvent[]> {
+  const rows = await db.select<MetricEventRow[]>(
+    `SELECT id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version
+     FROM metrics_events
+     WHERE pushed_at IS NULL
+     ORDER BY timestamp ASC, id ASC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map(toMetricEvent);
+}
+
+export async function markEventPushed(
+  db: DatabaseAdapter,
+  id: string,
+  pushedAt: string,
+): Promise<void> {
+  await db.execute(
+    "UPDATE metrics_events SET pushed_at = ? WHERE id = ?",
+    [pushedAt, id],
+  );
+}
+
+export async function listUnpushedTombstones(
+  db: DatabaseAdapter,
+  limit: number,
+): Promise<TombstoneRow[]> {
+  const rows = await db.select<
+    { id: string; deleted_at: string; device_id: string; reason: string }[]
+  >(
+    `SELECT id, deleted_at, device_id, reason
+     FROM metrics_event_tombstones
+     WHERE pushed_at IS NULL
+     ORDER BY deleted_at ASC, id ASC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    deletedAt: row.deleted_at,
+    deviceId: row.device_id,
+    reason: row.reason,
+  }));
+}
+
+export async function markTombstonePushed(
+  db: DatabaseAdapter,
+  id: string,
+  pushedAt: string,
+): Promise<void> {
+  await db.execute(
+    "UPDATE metrics_event_tombstones SET pushed_at = ? WHERE id = ?",
+    [pushedAt, id],
+  );
+}
+
+export async function applyRemoteEvent(
+  db: DatabaseAdapter,
+  event: MetricEvent,
+  pushedAt: string,
+): Promise<boolean> {
+  const tombstones = await db.select<{ id: string }[]>(
+    "SELECT id FROM metrics_event_tombstones WHERE id = ? LIMIT 1",
+    [event.id],
+  );
+  if (tombstones.length > 0) return false;
+  await db.execute(
+    `INSERT OR IGNORE INTO metrics_events
+      (id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version, pushed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      event.id,
+      event.timestamp,
+      event.localDate,
+      event.tzOffsetMin,
+      event.deviceId,
+      event.eventType,
+      event.workId,
+      JSON.stringify(event.payload),
+      event.schemaVersion,
+      pushedAt,
+    ],
+  );
+  return true;
+}
+
+export async function applyRemoteTombstone(
+  db: DatabaseAdapter,
+  tombstone: TombstoneRow,
+  pushedAt: string,
+): Promise<void> {
+  await db.execute(
+    `INSERT OR IGNORE INTO metrics_event_tombstones
+      (id, deleted_at, device_id, reason, pushed_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [tombstone.id, tombstone.deletedAt, tombstone.deviceId, tombstone.reason, pushedAt],
+  );
+  await db.execute("DELETE FROM metrics_events WHERE id = ?", [tombstone.id]);
 }
 
 function toMetricEvent(row: MetricEventRow): MetricEvent {

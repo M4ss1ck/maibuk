@@ -18,9 +18,8 @@ const mockSyncStoreGetState = vi.hoisted(() => vi.fn());
 const mockSyncStoreSetState = vi.hoisted(() => vi.fn());
 const mockCreateVersion = vi.hoisted(() => vi.fn());
 const mockUseSettingsStoreGetState = vi.hoisted(() => vi.fn());
-const mockSerializeMetricsBatch = vi.hoisted(() => vi.fn());
-const mockApplyMetricsBatch = vi.hoisted(() => vi.fn());
-const mockPushMetricsBlob = vi.hoisted(() => vi.fn());
+const mockSyncMetricsRows = vi.hoisted(() => vi.fn());
+const mockApplyLegacyBlobAndMarkPushed = vi.hoisted(() => vi.fn());
 const mockPullMetricsBlob = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../lib/db", () => ({
@@ -46,7 +45,6 @@ vi.mock("../../../../features/sync/client", () => ({
   pushVersionBlob: mockPushVersionBlob,
   pullVersionBlob: mockPullVersionBlob,
   refreshAuth: mockRefreshAuth,
-  pushMetricsBlob: mockPushMetricsBlob,
   pullMetricsBlob: mockPullMetricsBlob,
 }));
 
@@ -88,8 +86,8 @@ vi.mock("../../../../features/backup/backup-service", () => ({
 }));
 
 vi.mock("../../../../features/metrics/metrics-sync", () => ({
-  serializeMetricsBatch: mockSerializeMetricsBatch,
-  applyMetricsBatch: mockApplyMetricsBatch,
+  syncMetricsRows: mockSyncMetricsRows,
+  applyLegacyBlobAndMarkPushed: mockApplyLegacyBlobAndMarkPushed,
 }));
 
 const { syncBook, syncAllBooks, resetSyncEngineForTests } = await import(
@@ -727,9 +725,12 @@ describe("syncMetrics — engine integration", () => {
     execute: vi.fn(),
   };
 
+  const BLOB_MIGRATED_KEY = "maibuk.metrics.blobMigrated";
+
   beforeEach(() => {
     vi.clearAllMocks();
     resetSyncEngineForTests();
+    localStorage.removeItem(BLOB_MIGRATED_KEY);
     mockGetDatabase.mockResolvedValue(mockDb);
     mockCreateBackupAdapter.mockResolvedValue({
       saveBackup: vi.fn(),
@@ -747,8 +748,8 @@ describe("syncMetrics — engine integration", () => {
     mockListRemoteVersions.mockResolvedValue([]);
     mockPushVersionBlob.mockResolvedValue(undefined);
     mockPullVersionBlob.mockResolvedValue(null);
-    mockSerializeMetricsBatch.mockResolvedValue('{"events":[],"tombstones":[]}');
-    mockPushMetricsBlob.mockResolvedValue(undefined);
+    mockSyncMetricsRows.mockResolvedValue(undefined);
+    mockApplyLegacyBlobAndMarkPushed.mockResolvedValue(undefined);
     mockPullMetricsBlob.mockResolvedValue(null);
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
@@ -766,29 +767,25 @@ describe("syncMetrics — engine integration", () => {
 
     await syncBook("book-1", "pass", vi.fn());
 
-    expect(mockSerializeMetricsBatch).not.toHaveBeenCalled();
-    expect(mockPushMetricsBlob).not.toHaveBeenCalled();
+    expect(mockSyncMetricsRows).not.toHaveBeenCalled();
+    expect(mockApplyLegacyBlobAndMarkPushed).not.toHaveBeenCalled();
     expect(mockPullMetricsBlob).not.toHaveBeenCalled();
   });
 
-  it("pushes metrics and skips pull when checksums match", async () => {
+  it("delegates to syncMetricsRows when sync is enabled and no legacy blob exists", async () => {
     mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
     mockListRemoteBooks.mockResolvedValue([]);
-    mockPullMetricsBlob.mockResolvedValue({
-      data: new Uint8Array([1, 2, 3]),
-      checksum: "local-checksum",
-    });
+    mockPullMetricsBlob.mockResolvedValue(null);
 
     await syncBook("book-1", "pass", vi.fn());
 
-    expect(mockSerializeMetricsBatch).toHaveBeenCalled();
     expect(mockPullMetricsBlob).toHaveBeenCalled();
-    expect(mockPushMetricsBlob).not.toHaveBeenCalled();
-    expect(mockDecrypt).not.toHaveBeenCalled();
-    expect(mockApplyMetricsBatch).not.toHaveBeenCalled();
+    expect(mockApplyLegacyBlobAndMarkPushed).not.toHaveBeenCalled();
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(localStorage.getItem(BLOB_MIGRATED_KEY)).toBe("true");
   });
 
-  it("pulls and applies remote metrics when checksums differ", async () => {
+  it("migrates a legacy blob exactly once, then runs row sync", async () => {
     mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
     mockListRemoteBooks.mockResolvedValue([]);
     const remoteBlob = {
@@ -802,27 +799,42 @@ describe("syncMetrics — engine integration", () => {
 
     await syncBook("book-1", "pass", vi.fn());
 
-    expect(mockPushMetricsBlob).toHaveBeenCalled();
     expect(mockDecrypt).toHaveBeenCalledWith(remoteBlob.data, "pass");
-    expect(mockApplyMetricsBatch).toHaveBeenCalledWith({
+    expect(mockApplyLegacyBlobAndMarkPushed).toHaveBeenCalledWith({
       events: [],
       tombstones: [],
       updatedAt: 2000,
     });
-  });
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(localStorage.getItem(BLOB_MIGRATED_KEY)).toBe("true");
 
-  it("pushes metrics when no remote blob exists", async () => {
-    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
-    mockListRemoteBooks.mockResolvedValue([]);
-    mockPullMetricsBlob.mockResolvedValue(null);
+    // Second sync — already migrated, skip the blob check entirely.
+    mockPullMetricsBlob.mockClear();
+    mockApplyLegacyBlobAndMarkPushed.mockClear();
+    mockSyncMetricsRows.mockClear();
 
     await syncBook("book-1", "pass", vi.fn());
 
-    expect(mockPushMetricsBlob).toHaveBeenCalled();
-    expect(mockDecrypt).not.toHaveBeenCalled();
+    expect(mockPullMetricsBlob).not.toHaveBeenCalled();
+    expect(mockApplyLegacyBlobAndMarkPushed).not.toHaveBeenCalled();
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
   });
 
-  it("throws when remote metrics payload is invalid JSON after decrypt", async () => {
+  it("marks migration complete and continues if the legacy collection is missing", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockPullMetricsBlob.mockRejectedValue(
+      Object.assign(new Error("collection not found"), { status: 404 }),
+    );
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockApplyLegacyBlobAndMarkPushed).not.toHaveBeenCalled();
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(localStorage.getItem(BLOB_MIGRATED_KEY)).toBe("true");
+  });
+
+  it("throws when the legacy blob decrypts to invalid JSON", async () => {
     mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
     mockListRemoteBooks.mockResolvedValue([]);
     mockPullMetricsBlob.mockResolvedValue({
@@ -834,6 +846,9 @@ describe("syncMetrics — engine integration", () => {
     await expect(syncBook("book-1", "pass", vi.fn())).rejects.toThrow(
       "Synced metrics payload is invalid or corrupted",
     );
+    // Migration must not be marked complete on a corrupt payload — we'll
+    // retry next sync.
+    expect(localStorage.getItem(BLOB_MIGRATED_KEY)).toBeNull();
   });
 
   it("runs metrics sync in syncAllBooks path when enabled", async () => {
@@ -843,8 +858,7 @@ describe("syncMetrics — engine integration", () => {
 
     await syncAllBooks("pass", vi.fn());
 
-    expect(mockSerializeMetricsBatch).toHaveBeenCalled();
-    expect(mockPushMetricsBlob).toHaveBeenCalled();
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
   });
 
   it("runs metrics sync even on cancelled syncAllBooks (partial outcome)", async () => {
@@ -862,7 +876,6 @@ describe("syncMetrics — engine integration", () => {
     const result = await syncAllBooks("pass", vi.fn().mockResolvedValue("cancel"));
 
     expect(result.outcome).toBe("cancelled");
-    expect(mockSerializeMetricsBatch).toHaveBeenCalled();
-    expect(mockPushMetricsBlob).toHaveBeenCalled();
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
   });
 });

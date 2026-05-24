@@ -9,7 +9,6 @@ import {
   listRemoteVersions,
   pushVersionBlob,
   pullVersionBlob,
-  pushMetricsBlob,
   pullMetricsBlob,
 } from "./client";
 import type { BookSnapshot, SyncItemMeta, SingleSyncResult, BatchSyncResult, MetricsSyncBlob } from "./types";
@@ -19,7 +18,12 @@ import { BackupService } from "../backup/backup-service";
 import { useSettingsStore } from "../settings/store";
 import { useSyncStore } from "./store";
 import { useVersionStore } from "../versions/store";
-import { serializeMetricsBatch, applyMetricsBatch } from "../metrics/metrics-sync";
+import {
+  applyLegacyBlobAndMarkPushed,
+  syncMetricsRows,
+} from "../metrics/metrics-sync";
+
+const BLOB_MIGRATED_KEY = "maibuk.metrics.blobMigrated";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR =
@@ -259,26 +263,41 @@ async function syncVersions(bookId: string, passphrase: string): Promise<void> {
 async function syncMetrics(passphrase: string): Promise<void> {
   if (!useSettingsStore.getState().metrics.syncMetrics) return;
 
-  // 1. PULL first so we can detect whether anything has changed.
-  const remote = await pullMetricsBlob();
+  // One-time migration: if a legacy `metrics_sync` blob exists on the server
+  // and we haven't migrated yet, decrypt + apply it locally and mark the
+  // local rows as already-pushed. After this, all sync goes through the row
+  // collections.
+  await migrateLegacyMetricsBlobIfNeeded(passphrase);
 
-  // No remote yet → push our local state and we're done.
-  if (!remote) {
-    const localJson = await serializeMetricsBatch();
-    const localChecksum = await computeChecksum(localJson);
-    const encrypted = await encrypt(localJson, passphrase);
-    await pushMetricsBlob(new Blob([toBlobPart(encrypted)]), localChecksum);
+  await syncMetricsRows(passphrase);
+}
+
+async function migrateLegacyMetricsBlobIfNeeded(
+  passphrase: string,
+): Promise<void> {
+  if (typeof localStorage !== "undefined") {
+    if (localStorage.getItem(BLOB_MIGRATED_KEY) === "true") return;
+  }
+
+  let remote: { data: Uint8Array; checksum: string } | null = null;
+  try {
+    remote = await pullMetricsBlob();
+  } catch {
+    // Old collection may not exist on the server. That's expected on fresh
+    // deployments — just mark migration done so we don't keep probing.
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(BLOB_MIGRATED_KEY, "true");
+    }
     return;
   }
 
-  // Fast-path: our pre-merge state already matches remote → in sync, nothing
-  // to do. Avoids the decrypt/merge/push round-trip on a no-op sync.
-  const localJson = await serializeMetricsBatch();
-  const localChecksum = await computeChecksum(localJson);
-  if (remote.checksum === localChecksum) return;
+  if (!remote) {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(BLOB_MIGRATED_KEY, "true");
+    }
+    return;
+  }
 
-  // 2. MERGE: decrypt remote and apply on top of local so the local set
-  //    becomes the merged union before we serialize for push.
   const decrypted = await decrypt(remote.data, passphrase);
   let snapshot: MetricsSyncBlob;
   try {
@@ -286,14 +305,11 @@ async function syncMetrics(passphrase: string): Promise<void> {
   } catch {
     throw new Error("Synced metrics payload is invalid or corrupted");
   }
-  await applyMetricsBatch(snapshot);
+  await applyLegacyBlobAndMarkPushed(snapshot);
 
-  // 3. PUSH the merged state so the other devices converge on the next pull.
-  const mergedJson = await serializeMetricsBatch();
-  const mergedChecksum = await computeChecksum(mergedJson);
-  if (mergedChecksum === remote.checksum) return; // Already identical after merge.
-  const encrypted = await encrypt(mergedJson, passphrase);
-  await pushMetricsBlob(new Blob([toBlobPart(encrypted)]), mergedChecksum);
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(BLOB_MIGRATED_KEY, "true");
+  }
 }
 
 export async function syncBook(

@@ -98,13 +98,17 @@ export function mergeAggregatePayloads(
 }
 
 function computeHeatmap(rows: MetricEvent[]): HeatmapAggregate {
+  // Heatmap shows writing-day *intensity*, not net delta. Deletions don't
+  // subtract from a day's intensity — a heavy-edit day that types 5,000 words
+  // and deletes 3,000 is still a productive day for the heatmap. Only typed +
+  // pasted words contribute.
   const byDate = new Map<string, { words: number; events: number }>();
   for (const row of rows) {
-    if (!isWritingVolumeEvent(row.eventType)) continue;
+    if (row.eventType !== "writing.typed" && row.eventType !== "writing.pasted") continue;
     const words = getWords(row);
     if (words <= 0) continue;
     const current = byDate.get(row.localDate) ?? { words: 0, events: 0 };
-    current.words += row.eventType === "writing.deleted" ? -words : words;
+    current.words += words;
     current.events += 1;
     byDate.set(row.localDate, current);
   }
@@ -257,14 +261,6 @@ function finalizeDashboard(acc: ReturnType<typeof emptyDashboardAccumulator>): D
     timeOfDay,
     timeByWork,
   };
-}
-
-function isWritingVolumeEvent(eventType: MetricEvent["eventType"]): boolean {
-  return (
-    eventType === "writing.typed" ||
-    eventType === "writing.deleted" ||
-    eventType === "writing.pasted"
-  );
 }
 
 function getWords(event: MetricEvent): number {

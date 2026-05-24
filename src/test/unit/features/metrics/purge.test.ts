@@ -106,6 +106,9 @@ describe("purgeMetricCategory()", () => {
       { id: "deleted-1", device_id: "device-under-test" },
       { id: "typed-1", device_id: "device-under-test" },
     ]);
-    expect(cacheRows).toEqual([{ cache_key: "unrelated:cache" }]);
+    // Purge invalidates every aggregate cache — including unrelated ones — so
+    // future aggregate keys can't silently go stale by being omitted from a
+    // hand-maintained prefix list.
+    expect(cacheRows).toEqual([]);
   });
 });

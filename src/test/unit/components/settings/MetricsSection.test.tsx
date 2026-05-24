@@ -158,12 +158,14 @@ describe("MetricsSection", () => {
     expect(mockShutdown).toHaveBeenCalledTimes(1);
   });
 
-  it("renders measuring-since state and a functional sync toggle with auth hint when signed out", async () => {
+  it("renders measuring-since and disables the sync toggle with auth hint when signed out", async () => {
     render(<MetricsSection />);
 
     expect(await screen.findByText("Measuring since May 23, 2026")).toBeInTheDocument();
     const syncSwitch = screen.getByRole("switch", { name: "Sync metrics" });
-    expect(syncSwitch).not.toBeDisabled();
+    // Sync requires an authenticated PocketBase session; flipping the toggle
+    // while signed out would only confuse the user.
+    expect(syncSwitch).toBeDisabled();
     expect(screen.getByText("Sign in to sync to enable metrics sharing")).toBeInTheDocument();
   });
 });

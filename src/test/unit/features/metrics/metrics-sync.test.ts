@@ -9,11 +9,39 @@ import {
 import {
   serializeMetricsBatch,
   applyMetricsBatch,
+  syncMetricsRows,
+  applyLegacyBlobAndMarkPushed,
 } from "../../../../features/metrics/metrics-sync";
 import type { MetricEvent } from "../../../../features/metrics/types";
 
-const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
+const {
+  mockGetDatabase,
+  mockPullEvents,
+  mockPullTombstones,
+  mockPushEvent,
+  mockPushTombstone,
+  mockEncrypt,
+  mockDecrypt,
+} = vi.hoisted(() => ({
+  mockGetDatabase: vi.fn(),
+  mockPullEvents: vi.fn(),
+  mockPullTombstones: vi.fn(),
+  mockPushEvent: vi.fn(),
+  mockPushTombstone: vi.fn(),
+  mockEncrypt: vi.fn(),
+  mockDecrypt: vi.fn(),
+}));
 vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
+vi.mock("../../../../features/sync/client", () => ({
+  pullMetricsEventRowsSince: mockPullEvents,
+  pullMetricsTombstoneRowsSince: mockPullTombstones,
+  pushMetricsEventRow: mockPushEvent,
+  pushMetricsTombstoneRow: mockPushTombstone,
+}));
+vi.mock("../../../../features/sync/crypto", () => ({
+  encrypt: mockEncrypt,
+  decrypt: mockDecrypt,
+}));
 
 let testDb: DatabaseAdapter;
 
@@ -263,4 +291,211 @@ describe("metrics sync", () => {
       expect(rows).toEqual([{ id: "existing-tomb" }, { id: "new-tomb" }]);
     });
   });
+
+  describe("syncMetricsRows()", () => {
+    const EVENT_WATERMARK_KEY = "maibuk.metrics.lastEventPullAt";
+    const TOMBSTONE_WATERMARK_KEY = "maibuk.metrics.lastTombstonePullAt";
+
+    beforeEach(() => {
+      localStorage.removeItem(EVENT_WATERMARK_KEY);
+      localStorage.removeItem(TOMBSTONE_WATERMARK_KEY);
+      mockPullEvents.mockResolvedValue([]);
+      mockPullTombstones.mockResolvedValue([]);
+      mockPushEvent.mockResolvedValue(undefined);
+      mockPushTombstone.mockResolvedValue(undefined);
+      // Fake crypto: encrypt produces JSON bytes, decrypt returns JSON string.
+      mockEncrypt.mockImplementation(async (plaintext: string) =>
+        new TextEncoder().encode(plaintext),
+      );
+      mockDecrypt.mockImplementation(async (data: Uint8Array) =>
+        new TextDecoder().decode(data),
+      );
+    });
+
+    it("pushes locally-only events and marks them pushed", async () => {
+      await insertEvents(testDb, [
+        buildEvent({ id: "local-1" }),
+        buildEvent({ id: "local-2" }),
+      ]);
+
+      await syncMetricsRows("pass");
+
+      expect(mockPushEvent).toHaveBeenCalledTimes(2);
+      expect(mockPushEvent.mock.calls[0][0]).toMatchObject({ id: "local-1" });
+      // Verify they're no longer in the unpushed queue.
+      const stillUnpushed = await testDb.select<{ id: string }[]>(
+        "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
+      );
+      expect(stillUnpushed).toEqual([]);
+    });
+
+    it("pulls remote events, decrypts them, and stores them as pushed", async () => {
+      const encrypted = await mockEncrypt(
+        JSON.stringify({ words: 7, chars: 35, chapterId: "c-1" }),
+        "pass",
+      );
+      mockPullEvents.mockResolvedValue([
+        {
+          id: "remote-1",
+          device_id: "device-b",
+          timestamp: "2026-05-23T13:00:00.000Z",
+          local_date: "2026-05-23",
+          tz_offset_min: 0,
+          event_type: "writing.typed",
+          work_id: "book-2",
+          schema_version: 1,
+          encrypted_payload: uint8ToBase64(encrypted as Uint8Array),
+          updated: "2026-05-23T13:00:00.123Z",
+        },
+      ]);
+
+      await syncMetricsRows("pass");
+
+      const rows = await testDb.select<{ id: string; pushed_at: string | null }[]>(
+        "SELECT id, pushed_at FROM metrics_events",
+      );
+      expect(rows).toEqual([{ id: "remote-1", pushed_at: "2026-05-23T13:00:00.123Z" }]);
+      expect(localStorage.getItem(EVENT_WATERMARK_KEY)).toBe(
+        "2026-05-23T13:00:00.123Z",
+      );
+    });
+
+    it("applies a remote tombstone before pulled events so the event is dropped", async () => {
+      const encrypted = await mockEncrypt(
+        JSON.stringify({ words: 1, chars: 5, chapterId: null }),
+        "pass",
+      );
+      mockPullTombstones.mockResolvedValue([
+        {
+          id: "doomed-1",
+          device_id: "device-b",
+          deleted_at: "2026-05-23T12:30:00.000Z",
+          reason: "category-opt-out",
+          updated: "2026-05-23T12:30:00.500Z",
+        },
+      ]);
+      mockPullEvents.mockResolvedValue([
+        {
+          id: "doomed-1",
+          device_id: "device-b",
+          timestamp: "2026-05-23T12:00:00.000Z",
+          local_date: "2026-05-23",
+          tz_offset_min: 0,
+          event_type: "writing.typed",
+          work_id: null,
+          schema_version: 1,
+          encrypted_payload: uint8ToBase64(encrypted as Uint8Array),
+          updated: "2026-05-23T12:30:00.600Z",
+        },
+      ]);
+
+      await syncMetricsRows("pass");
+
+      const events = await testDb.select<{ id: string }[]>(
+        "SELECT id FROM metrics_events",
+      );
+      const tombstones = await testDb.select<{ id: string }[]>(
+        "SELECT id FROM metrics_event_tombstones",
+      );
+      expect(events).toEqual([]);
+      expect(tombstones).toEqual([{ id: "doomed-1" }]);
+    });
+
+    it("invalidates aggregate caches after applying remote rows", async () => {
+      await upsertCache(testDb, {
+        cacheKey: "heatmap:2026",
+        aggregateVersion: 1,
+        sourceHighWatermark: "2026-05-23T12:00:00.000Z",
+        windowStart: "2026-01-01T00:00:00.000Z",
+        computedAt: "2026-05-23T12:01:00.000Z",
+        payload: { days: [] },
+      });
+      mockPullTombstones.mockResolvedValue([
+        {
+          id: "t-1",
+          device_id: "device-b",
+          deleted_at: "2026-05-23T12:30:00.000Z",
+          reason: "category-opt-out",
+          updated: "2026-05-23T12:30:00.000Z",
+        },
+      ]);
+
+      await syncMetricsRows("pass");
+
+      const cacheRows = await testDb.select<{ cache_key: string }[]>(
+        "SELECT cache_key FROM metrics_cache",
+      );
+      expect(cacheRows).toEqual([]);
+    });
+
+    it("skips rows whose ciphertext cannot be decrypted", async () => {
+      mockDecrypt.mockRejectedValueOnce(new Error("bad key"));
+      mockPullEvents.mockResolvedValue([
+        {
+          id: "garbled",
+          device_id: "device-b",
+          timestamp: "2026-05-23T13:00:00.000Z",
+          local_date: "2026-05-23",
+          tz_offset_min: 0,
+          event_type: "writing.typed",
+          work_id: null,
+          schema_version: 1,
+          encrypted_payload: "AAAA",
+          updated: "2026-05-23T13:00:00.123Z",
+        },
+      ]);
+
+      await syncMetricsRows("wrong-passphrase");
+
+      const rows = await testDb.select<{ id: string }[]>(
+        "SELECT id FROM metrics_events",
+      );
+      expect(rows).toEqual([]);
+      // Watermark still advances so we don't keep retrying the same row each
+      // sync — the next push from the right device will resurface it.
+      expect(localStorage.getItem(EVENT_WATERMARK_KEY)).toBe(
+        "2026-05-23T13:00:00.123Z",
+      );
+    });
+  });
+
+  describe("applyLegacyBlobAndMarkPushed()", () => {
+    it("imports legacy blob rows and marks all locals as pushed", async () => {
+      await insertEvents(testDb, [buildEvent({ id: "local-1" })]);
+
+      await applyLegacyBlobAndMarkPushed({
+        events: [buildEvent({ id: "blob-1", deviceId: "device-b" })],
+        tombstones: [
+          {
+            id: "blob-tomb-1",
+            deleted_at: "2026-05-23T13:00:00.000Z",
+            device_id: "device-b",
+            reason: "category-opt-out",
+          },
+        ],
+        updatedAt: 1000,
+      });
+
+      // Locals + blob rows present, none of them remain in the unpushed queue.
+      const unpushedEvents = await testDb.select<{ id: string }[]>(
+        "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
+      );
+      const unpushedTombstones = await testDb.select<{ id: string }[]>(
+        "SELECT id FROM metrics_event_tombstones WHERE pushed_at IS NULL",
+      );
+      expect(unpushedEvents).toEqual([]);
+      expect(unpushedTombstones).toEqual([]);
+
+      const eventIds = await testDb.select<{ id: string }[]>(
+        "SELECT id FROM metrics_events ORDER BY id",
+      );
+      expect(eventIds.map((row) => row.id)).toEqual(["blob-1", "local-1"]);
+    });
+  });
 });
+
+function uint8ToBase64(data: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < data.byteLength; i++) binary += String.fromCharCode(data[i]);
+  return btoa(binary);
+}
