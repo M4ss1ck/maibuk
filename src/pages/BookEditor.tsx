@@ -42,6 +42,7 @@ import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { toast } from "../components/ui/Toast";
 import { metricsService } from "../lib/metrics/MetricsService";
+import logo from "../../src-tauri/icons/icon.png";
 
 const VersionPanel = lazy(() =>
   import("../components/versions/VersionPanel").then((module) => ({
@@ -55,11 +56,19 @@ export function BookEditor() {
   const navigate = useNavigate();
 
   // Stores
-  const { currentBook, loadBook, updateWordCount, updateBook, deleteBook } =
-    useBookStore();
+  const {
+    currentBook,
+    isLoading: isBookLoading,
+    loadBook,
+    updateWordCount,
+    updateBook,
+    deleteBook,
+  } = useBookStore();
   const {
     chapters,
+    currentBookId,
     currentChapter,
+    isLoading: areChaptersLoading,
     loadChapters,
     createChapter,
     updateChapter,
@@ -437,11 +446,22 @@ export function BookEditor() {
     },
   ]);
 
-  if (!currentBook) {
+  const isBookPreparing =
+    isBookLoading || !currentBook || currentBook.id !== bookId;
+  const isChapterPreparing =
+    areChaptersLoading ||
+    currentBookId !== bookId ||
+    (chapters.length > 0 && !currentChapter);
+
+  if (isBookPreparing) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+        <div className="flex flex-col items-center gap-3">
+          <img
+            src={logo}
+            alt="Maibuk"
+            className="w-16 h-16 loading-entrance"
+          />
           <p className="text-muted-foreground">{t("editor.loading")}</p>
         </div>
       </div>
@@ -793,6 +813,17 @@ export function BookEditor() {
             chapterId={currentChapter.id}
             placeholder={`Start writing "${currentChapter.title}"...`}
           />
+        ) : isChapterPreparing ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <img
+                src={logo}
+                alt="Maibuk"
+                className="w-16 h-16 loading-entrance"
+              />
+              <span className="text-sm">{t("editor.loadingEditor")}</span>
+            </div>
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center text-muted-foreground">

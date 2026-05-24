@@ -17,7 +17,7 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { ImageFigure } from "./extensions/ImageFigure";
 import { Link } from "@tiptap/extension-link";
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
@@ -78,6 +78,7 @@ export function Editor({
   );
   const language = useSettingsStore((state) => state.language);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
+  const appliedContentRef = useRef(content);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -151,6 +152,7 @@ export function Editor({
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
+      appliedContentRef.current = html;
       onUpdate(html);
 
       if (onWordCountChange) {
@@ -162,9 +164,11 @@ export function Editor({
 
   // Update content when it changes externally (e.g., switching chapters)
   useEffect(() => {
-    if (editor && content !== null && editor.getHTML() !== content) {
-      setContentSilently(editor, content);
-    }
+    if (!editor || content === null) return;
+    if (appliedContentRef.current === content) return;
+
+    setContentSilently(editor, content);
+    appliedContentRef.current = content;
   }, [editor, content]);
 
   useEffect(() => {

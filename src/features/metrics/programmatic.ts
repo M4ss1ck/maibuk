@@ -9,7 +9,7 @@ export function setContentSilently(editor: Editor, content: string): boolean {
     if (dispatch) {
       tr.replaceWith(0, tr.doc.content.size, document)
         .setMeta("metrics:programmatic", true)
-        .setMeta("preventUpdate", false);
+        .setMeta("preventUpdate", true);
       dispatch(tr);
     }
 
