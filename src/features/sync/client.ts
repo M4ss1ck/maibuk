@@ -145,10 +145,11 @@ export function parsePocketBaseDate(dateStr: string): number {
 // Schema requirements live in
 // docs/plans/2026-05-23-metrics-sync-pocketbase-schema.md. The two collections
 // (`metrics_events_rows`, `metrics_tombstones_rows`) are append-only and
-// owner-scoped via API rules.
+// owner-scoped via API rules. PB's system `id` is auto-generated; the
+// client-minted UUID lives in `client_id` with a unique-per-user index.
 
 export interface MetricsEventRowPayload {
-  id: string;
+  client_id: string;
   device_id: string;
   timestamp: string;
   local_date: string;
@@ -160,7 +161,7 @@ export interface MetricsEventRowPayload {
 }
 
 export interface MetricsTombstoneRowPayload {
-  id: string;
+  client_id: string;
   device_id: string;
   deleted_at: string;
   reason: string;
@@ -185,7 +186,7 @@ export async function pushMetricsEventRow(
   } catch (error) {
     // PB returns 400 with a unique-constraint violation when the row already
     // exists (a sibling device pushed it first). Treat as already-pushed.
-    if (isUniqueConstraintError(error)) return;
+    if (isClientIdUniqueConstraintError(error)) return;
     throw error;
   }
 }
@@ -199,7 +200,7 @@ export async function pushMetricsTombstoneRow(
   try {
     await client.collection("metrics_tombstones_rows").create({ ...row, user: userId });
   } catch (error) {
-    if (isUniqueConstraintError(error)) return;
+    if (isClientIdUniqueConstraintError(error)) return;
     throw error;
   }
 }
@@ -216,10 +217,10 @@ export async function pullMetricsEventRowsSince(
         : undefined,
       sort: "updated",
       fields:
-        "id,device_id,timestamp,local_date,tz_offset_min,event_type,work_id,schema_version,encrypted_payload,updated",
+        "client_id,device_id,timestamp,local_date,tz_offset_min,event_type,work_id,schema_version,encrypted_payload,updated",
     });
   return records.map((record) => ({
-    id: record.id as string,
+    client_id: record.client_id as string,
     device_id: record.device_id as string,
     timestamp: record.timestamp as string,
     local_date: record.local_date as string,
@@ -243,10 +244,10 @@ export async function pullMetricsTombstoneRowsSince(
         ? `updated > "${sinceIsoTimestamp}"`
         : undefined,
       sort: "updated",
-      fields: "id,device_id,deleted_at,reason,updated",
+      fields: "client_id,device_id,deleted_at,reason,updated",
     });
   return records.map((record) => ({
-    id: record.id as string,
+    client_id: record.client_id as string,
     device_id: record.device_id as string,
     deleted_at: record.deleted_at as string,
     reason: record.reason as string,
@@ -254,10 +255,18 @@ export async function pullMetricsTombstoneRowsSince(
   }));
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
+function isClientIdUniqueConstraintError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const status = (error as { status?: number }).status;
-  return status === 400 || status === 409;
+  if (status !== 400 && status !== 409) return false;
+
+  const clientIdError = (error as {
+    data?: { data?: Record<string, { code?: string; message?: string }> };
+  }).data?.data?.client_id;
+
+  const code = clientIdError?.code?.toLowerCase() ?? "";
+  const message = clientIdError?.message?.toLowerCase() ?? "";
+  return code.includes("unique") || message.includes("unique");
 }
 
 export async function pushMetricsBlob(

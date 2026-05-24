@@ -159,7 +159,7 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
   const remoteTombstones = await pullMetricsTombstoneRowsSince(tombstoneSince);
   for (const remote of remoteTombstones) {
     const tombstone: TombstoneRow = {
-      id: remote.id,
+      id: remote.client_id,
       deletedAt: remote.deleted_at,
       deviceId: remote.device_id,
       reason: remote.reason,
@@ -177,16 +177,18 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
   // 2. PULL events. Decrypt each payload before applying.
   const eventSince = readWatermark(EVENT_WATERMARK_KEY);
   const remoteEvents = await pullMetricsEventRowsSince(eventSince);
+  const processedEventUpdates: string[] = [];
   for (const remote of remoteEvents) {
     const event = await decodeRemoteEvent(remote, passphrase);
-    if (!event) continue;
-    await applyRemoteEvent(db, event, remote.updated);
+    if (!event) break;
+    const inserted = await applyRemoteEvent(db, event, remote.updated);
+    if (inserted) touchedAggregateCache = true;
+    processedEventUpdates.push(remote.updated);
   }
-  if (remoteEvents.length > 0) {
-    touchedAggregateCache = true;
+  if (processedEventUpdates.length > 0) {
     writeWatermark(
       EVENT_WATERMARK_KEY,
-      maxIso(remoteEvents.map((row) => row.updated)),
+      maxIso(processedEventUpdates),
     );
   }
 
@@ -196,7 +198,7 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
     if (batch.length === 0) break;
     for (const tombstone of batch) {
       await pushMetricsTombstoneRow({
-        id: tombstone.id,
+        client_id: tombstone.id,
         device_id: tombstone.deviceId,
         deleted_at: tombstone.deletedAt,
         reason: tombstone.reason,
@@ -212,7 +214,7 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
     for (const event of batch) {
       const encryptedPayload = await encryptPayload(event.payload, passphrase);
       await pushMetricsEventRow({
-        id: event.id,
+        client_id: event.id,
         device_id: event.deviceId,
         timestamp: event.timestamp,
         local_date: event.localDate,
@@ -249,7 +251,7 @@ async function decodeRemoteEvent(
     return null;
   }
   return {
-    id: remote.id,
+    id: remote.client_id,
     timestamp: remote.timestamp,
     localDate: remote.local_date,
     tzOffsetMin: remote.tz_offset_min,
@@ -307,21 +309,12 @@ export async function applyLegacyBlobAndMarkPushed(
       },
       pushedAt,
     );
+    await markTombstonePushed(db, tombstone.id, pushedAt);
   }
   for (const event of snapshot.events) {
     await applyRemoteEvent(db, event, pushedAt);
+    await markEventPushed(db, event.id, pushedAt);
   }
-  // Mark any pre-existing local rows as pushed too — the blob effectively
-  // already contained them on the server side, so the row collections are
-  // their new home of record after migration.
-  await db.execute(
-    "UPDATE metrics_events SET pushed_at = ? WHERE pushed_at IS NULL",
-    [pushedAt],
-  );
-  await db.execute(
-    "UPDATE metrics_event_tombstones SET pushed_at = ? WHERE pushed_at IS NULL",
-    [pushedAt],
-  );
   if (snapshot.events.length > 0 || snapshot.tombstones.length > 0) {
     await invalidateAllAggregateCaches(db);
   }

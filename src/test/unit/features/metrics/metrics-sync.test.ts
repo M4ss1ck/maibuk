@@ -321,7 +321,9 @@ describe("metrics sync", () => {
       await syncMetricsRows("pass");
 
       expect(mockPushEvent).toHaveBeenCalledTimes(2);
-      expect(mockPushEvent.mock.calls[0][0]).toMatchObject({ id: "local-1" });
+      // Push payload uses `client_id`, not `id` — PB auto-generates its own
+      // system id and dedups via the (user, client_id) unique index.
+      expect(mockPushEvent.mock.calls[0][0]).toMatchObject({ client_id: "local-1" });
       // Verify they're no longer in the unpushed queue.
       const stillUnpushed = await testDb.select<{ id: string }[]>(
         "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
@@ -336,7 +338,7 @@ describe("metrics sync", () => {
       );
       mockPullEvents.mockResolvedValue([
         {
-          id: "remote-1",
+          client_id: "remote-1",
           device_id: "device-b",
           timestamp: "2026-05-23T13:00:00.000Z",
           local_date: "2026-05-23",
@@ -367,7 +369,7 @@ describe("metrics sync", () => {
       );
       mockPullTombstones.mockResolvedValue([
         {
-          id: "doomed-1",
+          client_id: "doomed-1",
           device_id: "device-b",
           deleted_at: "2026-05-23T12:30:00.000Z",
           reason: "category-opt-out",
@@ -376,7 +378,7 @@ describe("metrics sync", () => {
       ]);
       mockPullEvents.mockResolvedValue([
         {
-          id: "doomed-1",
+          client_id: "doomed-1",
           device_id: "device-b",
           timestamp: "2026-05-23T12:00:00.000Z",
           local_date: "2026-05-23",
@@ -412,7 +414,7 @@ describe("metrics sync", () => {
       });
       mockPullTombstones.mockResolvedValue([
         {
-          id: "t-1",
+          client_id: "t-1",
           device_id: "device-b",
           deleted_at: "2026-05-23T12:30:00.000Z",
           reason: "category-opt-out",
@@ -432,7 +434,7 @@ describe("metrics sync", () => {
       mockDecrypt.mockRejectedValueOnce(new Error("bad key"));
       mockPullEvents.mockResolvedValue([
         {
-          id: "garbled",
+          client_id: "garbled",
           device_id: "device-b",
           timestamp: "2026-05-23T13:00:00.000Z",
           local_date: "2026-05-23",
@@ -451,16 +453,12 @@ describe("metrics sync", () => {
         "SELECT id FROM metrics_events",
       );
       expect(rows).toEqual([]);
-      // Watermark still advances so we don't keep retrying the same row each
-      // sync — the next push from the right device will resurface it.
-      expect(localStorage.getItem(EVENT_WATERMARK_KEY)).toBe(
-        "2026-05-23T13:00:00.123Z",
-      );
+      expect(localStorage.getItem(EVENT_WATERMARK_KEY)).toBeNull();
     });
   });
 
   describe("applyLegacyBlobAndMarkPushed()", () => {
-    it("imports legacy blob rows and marks all locals as pushed", async () => {
+    it("imports legacy blob rows but leaves local-only rows unpushed", async () => {
       await insertEvents(testDb, [buildEvent({ id: "local-1" })]);
 
       await applyLegacyBlobAndMarkPushed({
@@ -476,14 +474,13 @@ describe("metrics sync", () => {
         updatedAt: 1000,
       });
 
-      // Locals + blob rows present, none of them remain in the unpushed queue.
       const unpushedEvents = await testDb.select<{ id: string }[]>(
         "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
       );
       const unpushedTombstones = await testDb.select<{ id: string }[]>(
         "SELECT id FROM metrics_event_tombstones WHERE pushed_at IS NULL",
       );
-      expect(unpushedEvents).toEqual([]);
+      expect(unpushedEvents).toEqual([{ id: "local-1" }]);
       expect(unpushedTombstones).toEqual([]);
 
       const eventIds = await testDb.select<{ id: string }[]>(
