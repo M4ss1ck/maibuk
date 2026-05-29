@@ -40,7 +40,7 @@ export function Layout() {
           <Menu className="w-6 h-6" />
         </button>
         <div className="flex-1 flex items-center justify-center gap-2">
-          <img src={logo} alt="App Logo" className="w-8" />
+          <img src={logo} alt="Maibuk" className="w-8" />
           <h1 className="text-lg font-semibold">{t("app.title")}</h1>
         </div>
         <div className="w-10" /> {/* Spacer for symmetry */}
@@ -67,7 +67,7 @@ export function Layout() {
         `}
       >
         <div className="px-4 border-b border-border flex flex-row items-end gap-2 justify-start">
-          <img src={logo} alt="App Logo" className="w-14" />
+          <img src={logo} alt="Maibuk" className="w-14" />
           <h1 className="text-3xl mb-1 font-semibold">{t("app.title")}</h1>
           {/* Close button for mobile */}
           <button

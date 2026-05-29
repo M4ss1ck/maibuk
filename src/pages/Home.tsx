@@ -5,13 +5,14 @@ import { BookCard } from "../components/project/BookCard";
 import { NewBookDialog } from "../components/project/NewBookDialog";
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
-import { AddIcon, BookStackIcon } from "../components/icons";
+import { AddIcon } from "../components/icons";
 import { Download } from "lucide-react";
 import { IS_WEB } from "../lib/platform";
 import { DOWNLOAD_PAGE } from "../constants";
 import { KeyboardShortcut } from "../components/ui";
 import { isModKey, isTypingTarget } from "../lib/keyboard";
 import { useShortcuts } from "../lib/shortcuts";
+import logo from "../../src-tauri/icons/icon.png";
 
 export function Home() {
   const { t } = useTranslation();
@@ -119,8 +120,12 @@ export function Home() {
       {books.length === 0 ? (
         /* Empty state */
         <div className="empty-state-enter flex flex-col items-center justify-center py-20 sm:py-28 text-center">
-          <div className="w-20 h-20 mb-8 text-muted-foreground/60">
-            <BookStackIcon className="w-full h-full" />
+          <div className="w-20 h-20 mb-8">
+            <img
+              src={logo}
+              alt="Maibuk"
+              className="w-full h-full object-contain opacity-70"
+            />
           </div>
           <h3 className="text-2xl sm:text-3xl font-semibold mb-3 tracking-tight">
             {t("books.noBooks")}
