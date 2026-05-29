@@ -407,10 +407,12 @@ export function BookEditor() {
       keys: "escape",
       onTrigger: () => setFocusMode(false),
       enabled: focusMode,
+      allowInInput: true,
     },
     {
       keys: ["f11", "ctrl+shift+f", "meta+shift+f"],
       onTrigger: () => toggleFocusMode(),
+      allowInInput: true,
     },
     {
       keys: ["ctrl+s", "meta+s"],
