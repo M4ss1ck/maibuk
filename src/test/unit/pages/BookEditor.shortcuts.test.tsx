@@ -162,6 +162,28 @@ describe("BookEditor shortcuts", () => {
     );
   });
 
+  it("allows focus-mode exit shortcuts while typing in the editor", () => {
+    render(<BookEditor />);
+
+    const shortcuts = mockUseShortcuts.mock.calls[0][0] as Array<{
+      keys?: string | string[];
+      allowInInput?: boolean;
+    }>;
+
+    expect(shortcuts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          keys: "escape",
+          allowInInput: true,
+        }),
+        expect.objectContaining({
+          keys: ["f11", "ctrl+shift+f", "meta+shift+f"],
+          allowInInput: true,
+        }),
+      ])
+    );
+  });
+
   it("does not mount the version panel until history is opened", () => {
     render(<BookEditor />);
 
