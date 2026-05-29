@@ -7,6 +7,7 @@ import { useThemeStore } from "../features/theme";
 import { useSettingsStore } from "../features/settings/store";
 import { useSyncStore } from "../features/sync/store";
 import { getPassphrase } from "../features/sync/crypto";
+import { IS_TAURI } from "../lib/platform";
 
 export function GlobalShortcuts() {
   const { t } = useTranslation();
@@ -17,6 +18,8 @@ export function GlobalShortcuts() {
   const setTheme = useThemeStore((state) => state.setTheme);
   const hideKeyboardHints = useSettingsStore((state) => state.hideKeyboardHints);
   const setHideKeyboardHints = useSettingsStore((state) => state.setHideKeyboardHints);
+  const alwaysOnTop = useSettingsStore((state) => state.alwaysOnTop);
+  const setAlwaysOnTop = useSettingsStore((state) => state.setAlwaysOnTop);
 
   const cycleTheme = () => {
     if (theme === "light") {
@@ -46,6 +49,13 @@ export function GlobalShortcuts() {
       { id: "global.syncNow", label: t("shortcuts.syncNow"), keys: ["Ctrl+Shift+Y"] },
       { id: "global.showHelp", label: t("shortcuts.showHelp"), keys: ["?"] },
     ];
+    if (IS_TAURI) {
+      list.push({
+        id: "global.toggleAlwaysOnTop",
+        label: t("shortcuts.toggleAlwaysOnTop"),
+        keys: ["Ctrl+Shift+P"],
+      });
+    }
 
     if (location.pathname === "/") {
       list.push(
@@ -112,6 +122,14 @@ export function GlobalShortcuts() {
       sequence: ["g", "h"],
       onTrigger: () => {
         setHideKeyboardHints(!hideKeyboardHints);
+      },
+    },
+    {
+      keys: ["ctrl+shift+p", "meta+shift+p"],
+      allowInInput: true,
+      enabled: IS_TAURI,
+      onTrigger: () => {
+        setAlwaysOnTop(!alwaysOnTop);
       },
     },
     {

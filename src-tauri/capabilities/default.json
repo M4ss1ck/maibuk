@@ -24,6 +24,7 @@
     "dialog:default",
     "dialog:allow-save",
     "os:default",
-    "core:window:allow-destroy"
+    "core:window:allow-destroy",
+    "core:window:allow-set-always-on-top"
   ]
 }

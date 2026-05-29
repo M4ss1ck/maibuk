@@ -32,6 +32,7 @@ vi.mock("../../../lib/shortcuts", () => ({
 }));
 
 vi.mock("../../../lib/platform", () => ({
+  IS_TAURI: true,
   isMac: mockIsMac,
 }));
 
@@ -80,6 +81,8 @@ vi.mock("../../../features/settings/store", () => ({
       showNotesChapter: false,
       setShowNotesChapter: vi.fn(),
       hideKeyboardHints: false,
+      alwaysOnTop: false,
+      setAlwaysOnTop: vi.fn(),
     }),
 }));
 

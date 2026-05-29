@@ -42,6 +42,7 @@ export function Settings() {
     appFont,
     primaryColor,
     autoSave,
+    alwaysOnTop,
     language,
     defaultExportFormat,
     spellCheckEnabled,
@@ -54,6 +55,7 @@ export function Settings() {
     setAppFont,
     setPrimaryColor,
     setAutoSave,
+    setAlwaysOnTop,
     setLanguage,
     setDefaultExportFormat,
     setSpellCheckEnabled,
@@ -302,6 +304,21 @@ export function Settings() {
                 checked={autoSave}
                 onChange={setAutoSave}
                 label={t("settings.toggleAutoSave")}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.alwaysOnTop")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.alwaysOnTopDescription")}
+                </p>
+              </div>
+              <Switch
+                checked={alwaysOnTop}
+                onChange={setAlwaysOnTop}
+                label={t("settings.toggleAlwaysOnTop")}
+                disabled={!IS_TAURI}
               />
             </div>
 

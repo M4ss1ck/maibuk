@@ -34,6 +34,7 @@ describe("StartupRedirect", () => {
       appFont: "sans",
       primaryColor: "#3B82F6",
       autoSave: true,
+      alwaysOnTop: false,
       language: "en",
       spellCheckEnabled: true,
       customDictionary: [],

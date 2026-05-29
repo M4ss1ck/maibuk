@@ -77,6 +77,19 @@ export async function openExternal(url: string): Promise<void> {
   }
 }
 
+// Toggle main window "always on top" on supported desktop builds.
+export async function setWindowAlwaysOnTop(enabled: boolean): Promise<void> {
+  if (
+    !IS_TAURI ||
+    typeof window === "undefined" ||
+    !("__TAURI_INTERNALS__" in window)
+  ) {
+    return;
+  }
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().setAlwaysOnTop(enabled);
+}
+
 // OS factory
 export async function getOS(): Promise<OSAdapter> {
   if (IS_WEB) {

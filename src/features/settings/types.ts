@@ -74,6 +74,7 @@ export interface Settings {
 
   // General settings
   autoSave: boolean;
+  alwaysOnTop: boolean;
   language: Language;
   spellCheckEnabled: boolean;
   customDictionary: string[];

@@ -30,11 +30,12 @@ import {
   MoreVertical,
   PanelLeftClose,
   PanelLeftOpen,
+  Pin,
 } from "lucide-react";
 import { SyncStatusButton } from "../components/sync/SyncStatusButton";
 import { HistoryMenuButton } from "../components/versions/HistoryMenuButton";
 import { useShortcuts } from "../lib/shortcuts";
-import { isMac } from "../lib/platform";
+import { IS_TAURI, isMac } from "../lib/platform";
 import { useAutoCheckpoint } from "../features/versions/useAutoCheckpoint";
 import { useVersionStore } from "../features/versions/store";
 import { Modal } from "../components/ui/Modal";
@@ -99,6 +100,8 @@ export function BookEditor() {
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
   const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
   const hideKeyboardHints = useSettingsStore((s) => s.hideKeyboardHints);
+  const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
+  const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
   const saveVersionShortcut = isMac() ? "⌘⌥S" : "Ctrl+Alt+S";
   const panelShortcut = "g v";
 
@@ -688,6 +691,21 @@ export function BookEditor() {
               {/** Theme toggle */}
               <ThemeToggle variant="dropdown" />
 
+              {IS_TAURI && (
+                <button
+                  type="button"
+                  onClick={() => setAlwaysOnTop(!alwaysOnTop)}
+                  className={`p-2 rounded transition-colors ${
+                    alwaysOnTop
+                      ? "bg-muted text-primary"
+                      : "hover:bg-muted text-foreground"
+                  }`}
+                  title={t("settings.alwaysOnTop")}
+                >
+                  <Pin className="w-5 h-5" />
+                </button>
+              )}
+
               {/* Focus mode toggle */}
               <button
                 type="button"
@@ -773,6 +791,19 @@ export function BookEditor() {
                       <History className="w-4 h-4" />
                       {t("versions.showHistory")}
                     </button>
+                    {IS_TAURI && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAlwaysOnTop(!alwaysOnTop);
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                      >
+                        <Pin className="w-4 h-4" />
+                        {t("settings.alwaysOnTop")}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
