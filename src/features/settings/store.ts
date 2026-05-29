@@ -38,6 +38,7 @@ interface SettingsStore extends Settings {
   setAppFont: (font: FontFamily) => void;
   setPrimaryColor: (color: string) => void;
   setAutoSave: (enabled: boolean) => void;
+  setAlwaysOnTop: (enabled: boolean) => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
   setBackupRetention: (retention: number) => void;
   setBackupDirectory: (directory: string | null) => void;
@@ -83,6 +84,7 @@ const defaultSettings: Settings = {
   appFont: "sans",
   primaryColor: DEFAULT_PRIMARY_COLOR,
   autoSave: true,
+  alwaysOnTop: false,
   language: (i18n.language as Language) || "en",
   spellCheckEnabled: true,
   customDictionary: [],
@@ -187,6 +189,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setAppFont: (appFont) => set({ appFont }),
       setPrimaryColor: (primaryColor) => set({ primaryColor: normalizeHexColor(primaryColor) }),
       setAutoSave: (autoSave) => set({ autoSave }),
+      setAlwaysOnTop: (alwaysOnTop) => set({ alwaysOnTop }),
       setDefaultExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
       setBackupRetention: (backupRetention) =>
         set({ backupRetention: Math.max(1, Math.floor(backupRetention)) }),

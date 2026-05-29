@@ -33,6 +33,7 @@ describe("useSettingsStore", () => {
       appFont: "sans",
       primaryColor: "#3B82F6",
       autoSave: true,
+      alwaysOnTop: false,
       language: "en",
       spellCheckEnabled: true,
       customDictionary: [],
@@ -64,6 +65,7 @@ describe("useSettingsStore", () => {
       expect(state.appFontSize).toBe(16);
       expect(state.appFont).toBe("sans");
       expect(state.autoSave).toBe(true);
+      expect(state.alwaysOnTop).toBe(false);
       expect(state.language).toBe("en");
       expect(state.spellCheckEnabled).toBe(true);
       expect(state.customDictionary).toEqual([]);
@@ -195,6 +197,13 @@ describe("useSettingsStore", () => {
     it("toggles auto-save off", () => {
       useSettingsStore.getState().setAutoSave(false);
       expect(useSettingsStore.getState().autoSave).toBe(false);
+    });
+  });
+
+  describe("setAlwaysOnTop()", () => {
+    it("toggles always-on-top", () => {
+      useSettingsStore.getState().setAlwaysOnTop(true);
+      expect(useSettingsStore.getState().alwaysOnTop).toBe(true);
     });
   });
 

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useSettingsStore } from "./store";
 import i18n from "../../i18n";
 import type { FontFamily } from "./types";
+import { setWindowAlwaysOnTop } from "../../lib/platform";
 
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
   serif: "var(--font-serif)",
@@ -36,7 +37,14 @@ function darken(hex: string, amount: number) {
 }
 
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
-  const { appFontSize, appFont, primaryColor, language, hideKeyboardHints } = useSettingsStore();
+  const {
+    appFontSize,
+    appFont,
+    primaryColor,
+    language,
+    hideKeyboardHints,
+    alwaysOnTop,
+  } = useSettingsStore();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -61,6 +69,12 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     const root = document.documentElement;
     root.dataset.hideKeyboardHints = hideKeyboardHints ? "true" : "false";
   }, [hideKeyboardHints]);
+
+  useEffect(() => {
+    void setWindowAlwaysOnTop(alwaysOnTop).catch((error) => {
+      console.error("Failed to set always-on-top:", error);
+    });
+  }, [alwaysOnTop]);
 
   return <>{children}</>;
 }
