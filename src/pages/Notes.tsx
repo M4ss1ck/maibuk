@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useNoteStore } from "../features/notes";
 import type { Note, UpdateNoteInput } from "../features/notes";
 import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
+import { useSettingsStore } from "../features/settings/store";
 
 export function Notes() {
   const notes = useNoteStore((s) => s.notes);
@@ -12,6 +13,9 @@ export function Notes() {
   const deleteNote = useNoteStore((s) => s.deleteNote);
   const reorderNotes = useNoteStore((s) => s.reorderNotes);
   const setCurrentNote = useNoteStore((s) => s.setCurrentNote);
+  const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
+  const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
+  const isResizing = useRef(false);
 
   useEffect(() => {
     loadNotes();
@@ -32,10 +36,44 @@ export function Notes() {
     void updateNote({ id: note.id, pinned: !note.pinned });
   };
 
+  // Sidebar drag-resize handler
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizing.current = true;
+      const startX = e.clientX;
+      const startWidth = notesSidebarWidth;
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        if (!isResizing.current) return;
+        const newWidth = Math.max(
+          200,
+          Math.min(480, startWidth + moveEvent.clientX - startX),
+        );
+        setNotesSidebarWidth(newWidth);
+      };
+
+      const onMouseUp = () => {
+        isResizing.current = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [notesSidebarWidth, setNotesSidebarWidth],
+  );
+
   return (
     <div className="flex h-full">
       <div
-        className={`w-full md:w-80 shrink-0 ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
+        className={`h-full relative shrink-0 ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
+        style={{ width: `${notesSidebarWidth}px` }}
       >
         <NotesList
           notes={notes}
@@ -44,6 +82,10 @@ export function Notes() {
           onCreateNote={handleCreateNote}
           onReorderNotes={reorderNotes}
           onPinNote={handlePinNote}
+        />
+        <div
+          onMouseDown={handleResizeStart}
+          className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
         />
       </div>
       <div

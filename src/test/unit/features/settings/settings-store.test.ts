@@ -47,6 +47,7 @@ describe("useSettingsStore", () => {
       backupListPage: 1,
       backupListPageSize: 10,
       sidebarWidth: 256,
+      notesSidebarWidth: 256,
       toolbarExpanded: false,
       chapterListView: "normal",
       pasteCleanup: {
@@ -313,6 +314,23 @@ describe("useSettingsStore", () => {
     it("clamps to maximum of 480", () => {
       useSettingsStore.getState().setSidebarWidth(600);
       expect(useSettingsStore.getState().sidebarWidth).toBe(480);
+    });
+  });
+
+  describe("setNotesSidebarWidth()", () => {
+    it("updates notes sidebar width within bounds", () => {
+      useSettingsStore.getState().setNotesSidebarWidth(300);
+      expect(useSettingsStore.getState().notesSidebarWidth).toBe(300);
+    });
+
+    it("clamps to minimum of 200", () => {
+      useSettingsStore.getState().setNotesSidebarWidth(100);
+      expect(useSettingsStore.getState().notesSidebarWidth).toBe(200);
+    });
+
+    it("clamps to maximum of 480", () => {
+      useSettingsStore.getState().setNotesSidebarWidth(600);
+      expect(useSettingsStore.getState().notesSidebarWidth).toBe(480);
     });
   });
 

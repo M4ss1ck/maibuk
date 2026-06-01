@@ -53,6 +53,7 @@ interface SettingsStore extends Settings {
   setShowNotesChapter: (enabled: boolean) => void;
   setHideKeyboardHints: (enabled: boolean) => void;
   setSidebarWidth: (width: number) => void;
+  setNotesSidebarWidth: (width: number) => void;
   setToolbarExpanded: (expanded: boolean) => void;
   setChapterListView: (view: ChapterListView) => void;
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
@@ -98,6 +99,7 @@ const defaultSettings: Settings = {
   backupListPage: DEFAULT_BACKUP_LIST_PAGE,
   backupListPageSize: DEFAULT_BACKUP_LIST_PAGE_SIZE,
   sidebarWidth: 256,
+  notesSidebarWidth: 256,
   toolbarExpanded: false,
   chapterListView: "normal",
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
@@ -219,6 +221,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
       setSidebarWidth: (sidebarWidth) =>
         set({ sidebarWidth: Math.max(200, Math.min(480, sidebarWidth)) }),
+      setNotesSidebarWidth: (notesSidebarWidth) =>
+        set({ notesSidebarWidth: Math.max(200, Math.min(480, notesSidebarWidth)) }),
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
