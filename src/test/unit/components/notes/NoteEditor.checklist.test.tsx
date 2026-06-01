@@ -75,8 +75,12 @@ describe("NoteEditor checklist extensions", () => {
         nested?: boolean;
         HTMLAttributes?: { draggable?: string };
       };
+      config?: {
+        addNodeView?: () => unknown;
+      };
     };
     expect(taskItemExtension.options?.nested).toBe(true);
     expect(taskItemExtension.options?.HTMLAttributes?.draggable).toBe("true");
+    expect(typeof taskItemExtension.config?.addNodeView).toBe("function");
   });
 });

@@ -231,16 +231,15 @@ option {
   gap: 0.375rem;
   align-items: center;
   margin: 0.125em 0;
-  cursor: grab;
 }
 
 .editor-content ul[data-type="taskList"] li[data-checked] > label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.25rem;
   margin-top: 0;
   flex: 0 0 auto;
-  cursor: pointer;
 }
 
 .editor-content ul[data-type="taskList"] li[data-checked] > label input[type="checkbox"] {
@@ -255,6 +254,7 @@ option {
   display: grid;
   place-items: center;
   cursor: pointer;
+  order: 2;
 }
 
 .editor-content ul[data-type="taskList"] li[data-checked] > label input[type="checkbox"]::after {
@@ -277,7 +277,59 @@ option {
 }
 
 .editor-content ul[data-type="taskList"] li[data-checked] > label span {
-  display: none;
+  order: 1;
+  width: 0.85rem;
+  height: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted-foreground);
+  opacity: 0;
+  cursor: grab;
+  user-select: none;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+  line-height: 1;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label span .task-item-drag-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label span::before {
+  content: "";
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 -4px 0 currentColor,
+    0 4px 0 currentColor,
+    4px -4px 0 currentColor,
+    4px 0 0 currentColor,
+    4px 4px 0 currentColor;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked]:hover > label span {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked]:focus-within > label span {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label span:active {
+  cursor: grabbing;
+}
+
+@media (hover: none) {
+  .editor-content ul[data-type="taskList"] li[data-checked] > label span {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .editor-content ul[data-type="taskList"] li[data-checked] > div {

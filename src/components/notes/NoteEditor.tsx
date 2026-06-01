@@ -10,6 +10,66 @@ import { BackIcon, CheckIcon, SpinnerIcon, DeleteIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
 
+const NotesTaskItem = TaskItem.extend({
+  addNodeView() {
+    const parent = this.parent?.();
+    if (!parent) return null;
+
+    return (...args) => {
+      const nodeView = parent(...args);
+      if (!nodeView || !(nodeView.dom instanceof HTMLElement)) {
+        return nodeView;
+      }
+
+      const listItem = nodeView.dom as HTMLLIElement;
+      const dragHandle = listItem.querySelector("label > span");
+
+      if (!(dragHandle instanceof HTMLSpanElement)) {
+        return nodeView;
+      }
+
+      dragHandle.classList.add("task-item-drag-handle");
+      dragHandle.setAttribute("aria-hidden", "true");
+      dragHandle.textContent = "";
+
+      let dragFromHandle = false;
+
+      const handlePointerDown = () => {
+        dragFromHandle = true;
+      };
+
+      const handleDragStart = (event: DragEvent) => {
+        if (!dragFromHandle) {
+          event.preventDefault();
+        }
+        dragFromHandle = false;
+      };
+
+      const resetDragState = () => {
+        dragFromHandle = false;
+      };
+
+      dragHandle.addEventListener("mousedown", handlePointerDown);
+      dragHandle.addEventListener("touchstart", handlePointerDown);
+      listItem.addEventListener("dragstart", handleDragStart);
+      listItem.addEventListener("dragend", resetDragState);
+      listItem.addEventListener("mouseup", resetDragState);
+
+      const originalDestroy = nodeView.destroy?.bind(nodeView);
+      nodeView.destroy = () => {
+        dragHandle.removeEventListener("mousedown", handlePointerDown);
+        dragHandle.removeEventListener("touchstart", handlePointerDown);
+        listItem.removeEventListener("dragstart", handleDragStart);
+        listItem.removeEventListener("dragend", resetDragState);
+        listItem.removeEventListener("mouseup", resetDragState);
+        originalDestroy?.();
+      };
+
+      return nodeView;
+    };
+  },
+});
+
 interface NoteEditorProps {
   note: Note;
   onSave: (input: UpdateNoteInput) => Promise<void>;
@@ -82,7 +142,7 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
     () =>
       [
         TaskList,
-        TaskItem.configure({
+        NotesTaskItem.configure({
           nested: true,
           HTMLAttributes: { draggable: "true" },
         }),
