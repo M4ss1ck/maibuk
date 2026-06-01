@@ -68,19 +68,25 @@ describe("NoteEditor checklist extensions", () => {
     };
 
     expect(Array.isArray(props?.extraExtensions)).toBe(true);
-    expect(props.extraExtensions).toHaveLength(2);
+    expect(props.extraExtensions).toHaveLength(3);
 
     const taskItemExtension = props.extraExtensions?.[1] as {
       options?: {
         nested?: boolean;
-        HTMLAttributes?: { draggable?: string };
       };
       config?: {
+        draggable?: boolean;
         addNodeView?: () => unknown;
       };
     };
+    const taskDndBehavior = props.extraExtensions?.[2] as {
+      config?: {
+        addProseMirrorPlugins?: () => unknown;
+      };
+    };
     expect(taskItemExtension.options?.nested).toBe(true);
-    expect(taskItemExtension.options?.HTMLAttributes?.draggable).toBe("true");
+    expect(taskItemExtension.config?.draggable).toBe(true);
     expect(typeof taskItemExtension.config?.addNodeView).toBe("function");
+    expect(typeof taskDndBehavior.config?.addProseMirrorPlugins).toBe("function");
   });
 });

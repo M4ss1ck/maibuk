@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pin } from "lucide-react";
+import { Extension } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { NodeSelection, Plugin } from "@tiptap/pm/state";
+import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "../../features/notes";
 import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
@@ -10,7 +13,10 @@ import { BackIcon, CheckIcon, SpinnerIcon, DeleteIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
 
+let activeTaskHandleDragSourcePos: number | null = null;
+
 const NotesTaskItem = TaskItem.extend({
+  draggable: true,
   addNodeView() {
     const parent = this.parent?.();
     if (!parent) return null;
@@ -20,6 +26,29 @@ const NotesTaskItem = TaskItem.extend({
       if (!nodeView || !(nodeView.dom instanceof HTMLElement)) {
         return nodeView;
       }
+
+      const nodeViewProps = args[0] as {
+        getPos?: (() => number | undefined) | boolean;
+        editor?: {
+          view?: {
+            state: {
+              doc: Parameters<typeof NodeSelection.create>[0];
+            };
+            dragging: null | {
+              slice: ReturnType<NodeSelection["content"]>;
+              move: boolean;
+            };
+          };
+          chain: () => {
+            focus: (
+              position?: number | null,
+              options?: { scrollIntoView?: boolean },
+            ) => {
+              setNodeSelection: (pos: number) => { run: () => boolean };
+            };
+          };
+        };
+      };
 
       const listItem = nodeView.dom as HTMLLIElement;
       const dragHandle = listItem.querySelector("label > span");
@@ -35,18 +64,41 @@ const NotesTaskItem = TaskItem.extend({
       let dragFromHandle = false;
 
       const handlePointerDown = () => {
+        if (typeof nodeViewProps.getPos === "function" && nodeViewProps.editor) {
+          const pos = nodeViewProps.getPos();
+          if (typeof pos === "number") {
+            activeTaskHandleDragSourcePos = pos;
+            nodeViewProps.editor
+              .chain()
+              .focus(undefined, { scrollIntoView: false })
+              .setNodeSelection(pos)
+              .run();
+          }
+        }
         dragFromHandle = true;
       };
 
       const handleDragStart = (event: DragEvent) => {
         if (!dragFromHandle) {
           event.preventDefault();
+          activeTaskHandleDragSourcePos = null;
+          return;
+        }
+
+        if (typeof nodeViewProps.getPos === "function") {
+          const pos = nodeViewProps.getPos();
+          activeTaskHandleDragSourcePos = typeof pos === "number" ? pos : null;
+        }
+
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
         }
         dragFromHandle = false;
       };
 
       const resetDragState = () => {
         dragFromHandle = false;
+        activeTaskHandleDragSourcePos = null;
       };
 
       dragHandle.addEventListener("mousedown", handlePointerDown);
@@ -67,6 +119,64 @@ const NotesTaskItem = TaskItem.extend({
 
       return nodeView;
     };
+  },
+});
+
+const NotesTaskDndBehavior = Extension.create({
+  name: "notesTaskDndBehavior",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          // Keep task-item DnD as move-only to avoid intermittent internal copy behavior.
+          dragCopies: () => false,
+          handleDrop(view, event, slice) {
+            const sourcePos = activeTaskHandleDragSourcePos;
+            activeTaskHandleDragSourcePos = null;
+
+            if (sourcePos === null) {
+              return false;
+            }
+
+            const sourceNode = view.state.doc.nodeAt(sourcePos);
+            if (!sourceNode || sourceNode.type.name !== "taskItem") {
+              return false;
+            }
+
+            const eventPos = view.posAtCoords({
+              left: event.clientX,
+              top: event.clientY,
+            });
+            if (!eventPos) {
+              return false;
+            }
+
+            event.preventDefault();
+
+            let tr = view.state.tr.setSelection(
+              NodeSelection.create(view.state.doc, sourcePos),
+            );
+            tr = tr.deleteSelection();
+
+            const mappedDropPos = tr.mapping.map(eventPos.pos);
+            const insertionPos = dropPoint(tr.doc, mappedDropPos, slice) ?? mappedDropPos;
+            const isNode =
+              slice.openStart === 0 &&
+              slice.openEnd === 0 &&
+              slice.content.childCount === 1;
+
+            if (isNode && slice.content.firstChild) {
+              tr = tr.replaceRangeWith(insertionPos, insertionPos, slice.content.firstChild);
+            } else {
+              tr = tr.replaceRange(insertionPos, insertionPos, slice);
+            }
+
+            view.dispatch(tr.setMeta("uiEvent", "drop").scrollIntoView());
+            return true;
+          },
+        },
+      }),
+    ];
   },
 });
 
@@ -144,8 +254,8 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
         TaskList,
         NotesTaskItem.configure({
           nested: true,
-          HTMLAttributes: { draggable: "true" },
         }),
+        NotesTaskDndBehavior,
       ],
     [],
   );
