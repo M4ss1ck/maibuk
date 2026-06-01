@@ -34,6 +34,7 @@
     "projects": "Projects",
     "settings": "Settings",
     "metrics": "Metrics",
+    "notes": "Notes",
     "copied": "Copied!",
     "paste": "Paste",
     "copy": "Copy"
@@ -106,6 +107,23 @@
     "compactView": "Compact view",
     "switchToNormalView": "Switch to normal view",
     "switchToCompactView": "Switch to compact view"
+  },
+  "notes": {
+    "title": "Notes",
+    "newNote": "New note",
+    "search": "Search notes...",
+    "untitled": "Untitled note",
+    "titlePlaceholder": "Note title",
+    "bodyPlaceholder": "Start writing...",
+    "noteCount_one": "{{count}} note",
+    "noteCount_other": "{{count}} notes",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "delete": "Delete note",
+    "deleteConfirm": "Delete this note?",
+    "empty": "No notes yet. Capture your first thought.",
+    "emptyEditorTitle": "A clean page",
+    "emptyEditorBody": "Select a note from the list, or capture a new thought."
   },
   "editor": {
     "loading": "Loading book...",
@@ -537,6 +555,7 @@
     "gotoProjects": "Go to Projects",
     "gotoSettings": "Go to Settings",
     "gotoMetrics": "Go to Metrics",
+    "gotoNotes": "Go to Notes",
     "toggleTheme": "Cycle theme",
     "toggleShortcutHints": "Toggle shortcut hints",
     "toggleAlwaysOnTop": "Toggle always on top",

@@ -34,6 +34,7 @@
     "projects": "Proyectos",
     "settings": "Configuración",
     "metrics": "Métricas",
+    "notes": "Notas",
     "copied": "¡Copiado!",
     "paste": "Pegar",
     "copy": "Copiar"
@@ -106,6 +107,23 @@
     "compactView": "Vista compacta",
     "switchToNormalView": "Cambiar a vista normal",
     "switchToCompactView": "Cambiar a vista compacta"
+  },
+  "notes": {
+    "title": "Notas",
+    "newNote": "Nueva nota",
+    "search": "Buscar notas...",
+    "untitled": "Nota sin título",
+    "titlePlaceholder": "Título de la nota",
+    "bodyPlaceholder": "Comienza a escribir...",
+    "noteCount_one": "{{count}} nota",
+    "noteCount_other": "{{count}} notas",
+    "saving": "Guardando…",
+    "saved": "Guardado",
+    "delete": "Eliminar nota",
+    "deleteConfirm": "¿Eliminar esta nota?",
+    "empty": "Aún no hay notas. Captura tu primera idea.",
+    "emptyEditorTitle": "Una página en blanco",
+    "emptyEditorBody": "Selecciona una nota de la lista o captura una nueva idea."
   },
   "editor": {
     "loading": "Cargando libro...",
@@ -537,6 +555,7 @@
     "gotoProjects": "Ir a Proyectos",
     "gotoSettings": "Ir a Configuración",
     "gotoMetrics": "Ir a Métricas",
+    "gotoNotes": "Ir a Notas",
     "toggleTheme": "Cambiar tema",
     "toggleShortcutHints": "Alternar atajos visuales",
     "toggleAlwaysOnTop": "Alternar siempre visible",

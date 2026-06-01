@@ -186,6 +186,20 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     )
   `);
 
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS notes (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT,
+      tags TEXT,
+      pinned INTEGER DEFAULT 0,
+      "order" INTEGER NOT NULL,
+      word_count INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)`);
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_chapters_order ON chapters(book_id, "order")`
