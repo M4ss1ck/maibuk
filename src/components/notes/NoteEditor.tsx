@@ -380,7 +380,6 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
               className="w-full bg-transparent text-3xl font-serif font-semibold outline-none placeholder:text-muted-foreground"
             />
             <div className="relative mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">{t("notes.tags")}:</span>
               {note.tags.map((tag) => {
                 const color = tagColor(tag);
                 return (
@@ -405,7 +404,7 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
                 onClick={() => setIsTagEditorOpen((prev) => !prev)}
                 className="rounded border border-border px-2 py-1 text-xs text-foreground hover:bg-muted"
               >
-                + {t("notes.addTag")}
+                + {t("common.add")}
               </button>
               {isTagEditorOpen && (
                 <TagEditor

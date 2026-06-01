@@ -34,6 +34,7 @@ vi.mock("react-i18next", () => ({
       const map: Record<string, string> = {
         "common.back": "Back",
         "common.words": "words",
+        "common.add": "Add",
         "notes.saving": "Saving",
         "notes.saved": "Saved",
         "notes.delete": "Delete note",
@@ -106,7 +107,7 @@ describe("NoteEditor tags", () => {
       />, 
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Add tag/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Add/ }));
     fireEvent.click(screen.getByRole("button", { name: "research" }));
 
     await waitFor(() => {
