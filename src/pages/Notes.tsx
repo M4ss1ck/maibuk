@@ -28,6 +28,10 @@ export function Notes() {
 
   const handleDelete = (id: string) => deleteNote(id);
 
+  const handlePinNote = (note: Note) => {
+    void updateNote({ id: note.id, pinned: !note.pinned });
+  };
+
   return (
     <div className="flex h-full">
       <div
@@ -39,6 +43,7 @@ export function Notes() {
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateNote}
           onReorderNotes={reorderNotes}
+          onPinNote={handlePinNote}
         />
       </div>
       <div

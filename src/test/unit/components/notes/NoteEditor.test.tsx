@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, act } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "../../../../components/notes/NoteEditor";
 import type { Note, UpdateNoteInput } from "../../../../features/notes";
@@ -77,7 +77,8 @@ function buildNote(overrides: Partial<Note>): Note {
 }
 
 describe("NoteEditor", () => {
-  it("saves full payload immediately when pin is toggled", async () => {
+  it("debounces and saves full payload after title and content changes", async () => {
+    vi.useFakeTimers();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
     render(
@@ -94,16 +95,19 @@ describe("NoteEditor", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Apply editor update" }));
-    fireEvent.click(screen.getByRole("button", { name: "Pin" }));
 
-    await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith({
-        id: "note-1",
-        title: "Edited title",
-        content: "<p>Updated body</p>",
-        wordCount: 42,
-        pinned: true,
-      });
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await vi.runAllTimersAsync();
     });
+
+    expect(onSave).toHaveBeenCalledWith({
+      id: "note-1",
+      title: "Edited title",
+      content: "<p>Updated body</p>",
+      wordCount: 42,
+    });
+
+    vi.useRealTimers();
   });
 });

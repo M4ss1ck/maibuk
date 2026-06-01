@@ -11,6 +11,7 @@ interface NotesListProps {
   onSelectNote: (note: Note) => void;
   onCreateNote: () => void;
   onReorderNotes: (ids: string[]) => Promise<void>;
+  onPinNote?: (note: Note) => void;
 }
 
 function matchesQuery(note: Note, query: string): boolean {
@@ -24,6 +25,7 @@ export function NotesList({
   onSelectNote,
   onCreateNote,
   onReorderNotes,
+  onPinNote,
 }: NotesListProps) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
@@ -105,6 +107,7 @@ export function NotesList({
                 note={note}
                 isSelected={currentNoteId === note.id}
                 onSelect={onSelectNote}
+                onPinToggle={onPinNote}
                 draggable={isSearchActive ? undefined : true}
                 onDragStart={(e) => handleDragStart(e, note.id)}
                 onDragOver={handleDragOver}

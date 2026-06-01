@@ -229,10 +229,6 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
     await saveNow();
   }, 1000);
 
-  const handlePinToggle = useCallback(() => {
-    void saveNow({ pinned: !note.pinned });
-  }, [note.pinned, saveNow]);
-
   const handleTitleChange = useCallback(
     (value: string) => {
       setTitle(value);
@@ -336,20 +332,6 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
             <Pin className="w-4 h-4" />
           </button>
         )}
-
-        <button
-          type="button"
-          onClick={handlePinToggle}
-          title={note.pinned ? t("notes.unpin") : t("notes.pin")}
-          aria-label={note.pinned ? t("notes.unpin") : t("notes.pin")}
-          className={`p-1 rounded transition-colors ${
-            note.pinned
-              ? "bg-primary/10 text-primary hover:bg-primary/20"
-              : "hover:bg-muted text-muted-foreground"
-          }`}
-        >
-          <Pin className={`w-4 h-4 ${note.pinned ? "fill-current" : ""}`} />
-        </button>
 
         {confirmingDelete ? (
           <span className="flex items-center gap-1">
