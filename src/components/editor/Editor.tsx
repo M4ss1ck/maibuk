@@ -1,5 +1,6 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import type { Extensions } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
 import Underline from "@tiptap/extension-underline";
@@ -56,6 +57,7 @@ interface EditorProps {
   showInlineFootnotes?: boolean;
   bookId?: string | null;
   chapterId?: string | null;
+  extraExtensions?: Extensions;
 }
 
 export function Editor({
@@ -71,6 +73,7 @@ export function Editor({
   showInlineFootnotes = true,
   bookId = null,
   chapterId = null,
+  extraExtensions,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore(
@@ -142,6 +145,7 @@ export function Editor({
         workId: bookId,
         chapterId,
       }),
+      ...(extraExtensions ?? []),
     ],
     content: content || "",
     editable,

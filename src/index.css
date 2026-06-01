@@ -220,6 +220,84 @@ option {
   margin: 0.25em 0;
 }
 
+.editor-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.75em 0;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  margin: 0.125em 0;
+  cursor: grab;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  background: var(--color-card);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label input[type="checkbox"]::after {
+  content: "";
+  width: 0.28rem;
+  height: 0.5rem;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(45deg) scale(0);
+  transition: transform 120ms ease-out;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label input[type="checkbox"]:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label input[type="checkbox"]:checked::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > label span {
+  display: none;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > div > p {
+  margin: 0;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked] > div > p + p {
+  margin-top: 0.35rem;
+}
+
+.editor-content ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--color-muted-foreground);
+  text-decoration: line-through;
+}
+
 .editor-content blockquote {
   border-left: 3px solid var(--color-border);
   margin: 1em 0;

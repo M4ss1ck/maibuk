@@ -1,10 +1,14 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pin } from "lucide-react";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
 import type { Note, UpdateNoteInput } from "../../features/notes";
+import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon, DeleteIcon } from "../icons";
+import { TagEditor } from "./TagEditor";
+import { tagColor } from "./tagColor";
 
 interface NoteEditorProps {
   note: Note;
@@ -19,6 +23,8 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
   const [wordCount, setWordCount] = useState(note.wordCount);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
+  const notes = useNoteStore((s) => s.notes);
 
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
@@ -71,6 +77,39 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
   const handleWordCountChange = useCallback((count: number) => {
     setWordCount(count);
   }, []);
+
+  const notesExtensions = useMemo(
+    () =>
+      [
+        TaskList,
+        TaskItem.configure({
+          nested: true,
+          HTMLAttributes: { draggable: "true" },
+        }),
+      ],
+    [],
+  );
+
+  const allTags = useMemo(() => {
+    const uniqueTags = new Set<string>();
+    for (const existingNote of notes) {
+      for (const tag of existingNote.tags) {
+        const normalized = tag.trim();
+        if (normalized) uniqueTags.add(normalized);
+      }
+    }
+    return [...uniqueTags].sort((a, b) => a.localeCompare(b));
+  }, [notes]);
+
+  const handleTagsChange = useCallback(
+    (tags: string[]) => {
+      const cleanTags = tags
+        .map((tag) => tag.trim())
+        .filter((tag, idx, arr) => tag.length > 0 && arr.indexOf(tag) === idx);
+      void saveNow({ tags: cleanTags });
+    },
+    [saveNow],
+  );
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-card">
@@ -159,6 +198,43 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
           placeholder={t("notes.titlePlaceholder")}
           className="w-full bg-transparent text-3xl font-serif font-semibold outline-none placeholder:text-muted-foreground"
         />
+        <div className="relative mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">{t("notes.tags")}:</span>
+          {note.tags.map((tag) => {
+            const color = tagColor(tag);
+            return (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+                style={{ borderColor: color, backgroundColor: `${color}22`, color }}
+              >
+                <span>{tag}</span>
+                <button
+                  type="button"
+                  onClick={() => handleTagsChange(note.tags.filter((t) => t !== tag))}
+                  className="leading-none opacity-80 hover:opacity-100"
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setIsTagEditorOpen((prev) => !prev)}
+            className="rounded border border-border px-2 py-1 text-xs text-foreground hover:bg-muted"
+          >
+            + {t("notes.addTag")}
+          </button>
+          {isTagEditorOpen && (
+            <TagEditor
+              tags={note.tags}
+              allTags={allTags}
+              onChange={handleTagsChange}
+              onClose={() => setIsTagEditorOpen(false)}
+            />
+          )}
+        </div>
       </div>
 
       {/* Body */}
@@ -167,6 +243,7 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
         onUpdate={handleContentUpdate}
         onWordCountChange={handleWordCountChange}
         placeholder={t("notes.bodyPlaceholder")}
+        extraExtensions={notesExtensions}
       />
     </div>
   );
