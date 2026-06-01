@@ -30,8 +30,26 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
+vi.mock("../../../../features/settings/store", () => ({
+  useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ alwaysOnTop: false, setAlwaysOnTop: vi.fn() }),
+}));
+
+vi.mock("../../../../components/ThemeToggle", () => ({
+  ThemeToggle: () => <button type="button">Theme</button>,
+}));
+
+vi.mock("../../../../lib/platform", () => ({
+  IS_TAURI: false,
+}));
+
 vi.mock("../../../../components/editor", () => ({
-  Editor: (props: unknown) => mockEditor(props),
+  Editor: (props: { headerContent?: React.ReactNode }) => (
+    <div>
+      {props.headerContent}
+      {mockEditor(props)}
+    </div>
+  ),
 }));
 
 vi.mock("../../../../features/notes/store", () => ({

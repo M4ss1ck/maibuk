@@ -184,6 +184,7 @@
     "bulletList": "Bullet List",
     "numberedList": "Numbered List",
     "quote": "Quote",
+    "taskList": "Task List",
     "increaseIndent": "Increase Indent (Tab)",
     "decreaseIndent": "Decrease Indent (Shift+Tab)",
     "increaseFirstLineIndent": "Increase First Line Indent",

@@ -24,15 +24,31 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
+vi.mock("../../../../features/settings/store", () => ({
+  useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ alwaysOnTop: false, setAlwaysOnTop: vi.fn() }),
+}));
+
+vi.mock("../../../../components/ThemeToggle", () => ({
+  ThemeToggle: () => <button type="button">Theme</button>,
+}));
+
+vi.mock("../../../../lib/platform", () => ({
+  IS_TAURI: false,
+}));
+
 vi.mock("../../../../components/editor", () => ({
   Editor: ({
     onUpdate,
     onWordCountChange,
+    headerContent,
   }: {
     onUpdate: (content: string) => void;
     onWordCountChange: (count: number) => void;
+    headerContent?: React.ReactNode;
   }) => (
     <div>
+      {headerContent}
       <button
         type="button"
         onClick={() => {

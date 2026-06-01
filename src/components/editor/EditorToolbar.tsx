@@ -37,6 +37,7 @@ import {
   Heading3,
   List,
   ListOrdered,
+  ListChecks,
   Quote,
   IndentIncrease,
   IndentDecrease,
@@ -191,6 +192,7 @@ export function EditorToolbar({
         isH3: e.isActive("heading", { level: 3 }),
         isBulletList: e.isActive("bulletList"),
         isOrderedList: e.isActive("orderedList"),
+        isTaskList: e.isActive("taskList"),
         isBlockquote: e.isActive("blockquote"),
         isAlignLeft: e.isActive({ textAlign: "left" }),
         isAlignCenter: e.isActive({ textAlign: "center" }),
@@ -503,21 +505,33 @@ export function EditorToolbar({
             <List className="w-4 h-4" />
           </ToolbarButton>
 
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            isActive={editorState.isOrderedList}
-            title={t("editor.numberedList")}
-          >
-            <ListOrdered className="w-4 h-4" />
-          </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          isActive={editorState.isOrderedList}
+          title={t("editor.numberedList")}
+        >
+          <ListOrdered className="w-4 h-4" />
+        </ToolbarButton>
 
+        {editor.schema.nodes.taskList !== undefined && (
           <ToolbarButton
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            isActive={editorState.isBlockquote}
-            title={t("editor.quote")}
+            onClick={() =>
+              (editor.commands as any).toggleTaskList()
+            }
+            isActive={editorState.isTaskList}
+            title={t("editor.taskList")}
           >
-            <Quote className="w-4 h-4" />
+            <ListChecks className="w-4 h-4" />
           </ToolbarButton>
+        )}
+
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          isActive={editorState.isBlockquote}
+          title={t("editor.quote")}
+        >
+          <Quote className="w-4 h-4" />
+        </ToolbarButton>
 
           <Divider />
 

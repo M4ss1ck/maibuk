@@ -12,6 +12,9 @@ import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon, DeleteIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
+import { ThemeToggle } from "../ThemeToggle";
+import { useSettingsStore } from "../../features/settings/store";
+import { IS_TAURI } from "../../lib/platform";
 
 let activeTaskHandleDragSourcePos: number | null = null;
 
@@ -195,6 +198,8 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
   const notes = useNoteStore((s) => s.notes);
+  const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
+  const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
 
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
@@ -282,7 +287,7 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
   );
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-card">
+    <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Header */}
       <div className="px-4 py-2 border-b border-border flex items-center gap-2 shrink-0">
         <button
@@ -314,6 +319,23 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
         <span className="text-xs text-muted-foreground">
           {wordCount.toLocaleString()} {t("common.words")}
         </span>
+
+        <ThemeToggle variant="dropdown" />
+
+        {IS_TAURI && (
+          <button
+            type="button"
+            onClick={() => setAlwaysOnTop(!alwaysOnTop)}
+            className={`p-1 rounded transition-colors ${
+              alwaysOnTop
+                ? "bg-muted text-primary"
+                : "hover:bg-muted text-foreground"
+            }`}
+            title={t("settings.alwaysOnTop")}
+          >
+            <Pin className="w-4 h-4" />
+          </button>
+        )}
 
         <button
           type="button"
@@ -359,54 +381,6 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
         )}
       </div>
 
-      {/* Title */}
-      <div className="px-8 pt-6 max-w-editor-max mx-auto w-full">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          placeholder={t("notes.titlePlaceholder")}
-          className="w-full bg-transparent text-3xl font-serif font-semibold outline-none placeholder:text-muted-foreground"
-        />
-        <div className="relative mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">{t("notes.tags")}:</span>
-          {note.tags.map((tag) => {
-            const color = tagColor(tag);
-            return (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
-                style={{ borderColor: color, backgroundColor: `${color}22`, color }}
-              >
-                <span>{tag}</span>
-                <button
-                  type="button"
-                  onClick={() => handleTagsChange(note.tags.filter((t) => t !== tag))}
-                  className="leading-none opacity-80 hover:opacity-100"
-                >
-                  ×
-                </button>
-              </span>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => setIsTagEditorOpen((prev) => !prev)}
-            className="rounded border border-border px-2 py-1 text-xs text-foreground hover:bg-muted"
-          >
-            + {t("notes.addTag")}
-          </button>
-          {isTagEditorOpen && (
-            <TagEditor
-              tags={note.tags}
-              allTags={allTags}
-              onChange={handleTagsChange}
-              onClose={() => setIsTagEditorOpen(false)}
-            />
-          )}
-        </div>
-      </div>
-
       {/* Body */}
       <Editor
         content={note.content}
@@ -414,6 +388,54 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
         onWordCountChange={handleWordCountChange}
         placeholder={t("notes.bodyPlaceholder")}
         extraExtensions={notesExtensions}
+        headerContent={
+          <div className="px-8 pt-6 max-w-editor-max mx-auto w-full">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              placeholder={t("notes.titlePlaceholder")}
+              className="w-full bg-transparent text-3xl font-serif font-semibold outline-none placeholder:text-muted-foreground"
+            />
+            <div className="relative mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">{t("notes.tags")}:</span>
+              {note.tags.map((tag) => {
+                const color = tagColor(tag);
+                return (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+                    style={{ borderColor: color, backgroundColor: `${color}22`, color }}
+                  >
+                    <span>{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleTagsChange(note.tags.filter((t) => t !== tag))}
+                      className="leading-none opacity-80 hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setIsTagEditorOpen((prev) => !prev)}
+                className="rounded border border-border px-2 py-1 text-xs text-foreground hover:bg-muted"
+              >
+                + {t("notes.addTag")}
+              </button>
+              {isTagEditorOpen && (
+                <TagEditor
+                  tags={note.tags}
+                  allTags={allTags}
+                  onChange={handleTagsChange}
+                  onClose={() => setIsTagEditorOpen(false)}
+                />
+              )}
+            </div>
+          </div>
+        }
       />
     </div>
   );

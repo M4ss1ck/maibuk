@@ -58,6 +58,7 @@ interface EditorProps {
   bookId?: string | null;
   chapterId?: string | null;
   extraExtensions?: Extensions;
+  headerContent?: React.ReactNode;
 }
 
 export function Editor({
@@ -74,6 +75,7 @@ export function Editor({
   bookId = null,
   chapterId = null,
   extraExtensions,
+  headerContent,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore(
@@ -257,6 +259,8 @@ export function Editor({
           onContextMenuOpenChange={setIsContextMenuOpen}
         />
       )}
+
+      {headerContent}
 
       <div
         className="flex-1 overflow-auto min-h-0"

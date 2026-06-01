@@ -184,6 +184,7 @@
     "bulletList": "Lista con Viñetas",
     "numberedList": "Lista Numerada",
     "quote": "Cita",
+    "taskList": "Lista de Tareas",
     "increaseIndent": "Aumentar Margen (Tab)",
     "decreaseIndent": "Reducir Margen (Shift+Tab)",
     "increaseFirstLineIndent": "Aumentar Sangría",
