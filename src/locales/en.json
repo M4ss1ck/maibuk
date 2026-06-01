@@ -119,6 +119,8 @@
     "noteCount_other": "{{count}} notes",
     "saving": "Saving…",
     "saved": "Saved",
+    "pin": "Pin",
+    "unpin": "Unpin",
     "delete": "Delete note",
     "deleteConfirm": "Delete this note?",
     "empty": "No notes yet. Capture your first thought.",

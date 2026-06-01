@@ -119,6 +119,8 @@
     "noteCount_other": "{{count}} notas",
     "saving": "Guardando…",
     "saved": "Guardado",
+    "pin": "Fijar",
+    "unpin": "Quitar fijado",
     "delete": "Eliminar nota",
     "deleteConfirm": "¿Eliminar esta nota?",
     "empty": "Aún no hay notas. Captura tu primera idea.",

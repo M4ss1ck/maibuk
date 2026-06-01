@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Pin } from "lucide-react";
 import type { Note, UpdateNoteInput } from "../../features/notes";
 import { Editor } from "../editor";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
@@ -22,22 +23,34 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
 
+  const saveNow = useCallback(
+    async (extra: Partial<UpdateNoteInput> = {}) => {
+      setSaveStatus("saving");
+      try {
+        await onSave({
+          id: note.id,
+          title,
+          content: contentRef.current,
+          wordCount,
+          ...extra,
+        });
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch (error) {
+        console.error("Failed to save note:", error);
+        setSaveStatus("idle");
+      }
+    },
+    [note.id, onSave, title, wordCount],
+  );
+
   const debouncedSave = useDebouncedCallback(async () => {
-    setSaveStatus("saving");
-    try {
-      await onSave({
-        id: note.id,
-        title,
-        content: contentRef.current,
-        wordCount,
-      });
-      setSaveStatus("saved");
-      setTimeout(() => setSaveStatus("idle"), 2000);
-    } catch (error) {
-      console.error("Failed to save note:", error);
-      setSaveStatus("idle");
-    }
+    await saveNow();
   }, 1000);
+
+  const handlePinToggle = useCallback(() => {
+    void saveNow({ pinned: !note.pinned });
+  }, [note.pinned, saveNow]);
 
   const handleTitleChange = useCallback(
     (value: string) => {
@@ -92,6 +105,20 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
         <span className="text-xs text-muted-foreground">
           {wordCount.toLocaleString()} {t("common.words")}
         </span>
+
+        <button
+          type="button"
+          onClick={handlePinToggle}
+          title={note.pinned ? t("notes.unpin") : t("notes.pin")}
+          aria-label={note.pinned ? t("notes.unpin") : t("notes.pin")}
+          className={`p-1 rounded transition-colors ${
+            note.pinned
+              ? "bg-primary/10 text-primary hover:bg-primary/20"
+              : "hover:bg-muted text-muted-foreground"
+          }`}
+        >
+          <Pin className={`w-4 h-4 ${note.pinned ? "fill-current" : ""}`} />
+        </button>
 
         {confirmingDelete ? (
           <span className="flex items-center gap-1">

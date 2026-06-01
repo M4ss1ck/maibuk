@@ -10,6 +10,7 @@ export function Notes() {
   const createNote = useNoteStore((s) => s.createNote);
   const updateNote = useNoteStore((s) => s.updateNote);
   const deleteNote = useNoteStore((s) => s.deleteNote);
+  const reorderNotes = useNoteStore((s) => s.reorderNotes);
   const setCurrentNote = useNoteStore((s) => s.setCurrentNote);
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export function Notes() {
           currentNoteId={currentNote?.id ?? null}
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateNote}
+          onReorderNotes={reorderNotes}
         />
       </div>
       <div

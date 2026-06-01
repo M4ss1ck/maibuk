@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { Note } from "../../features/notes";
 import { AddIcon } from "../icons/AddIcon";
@@ -9,6 +10,7 @@ interface NotesListProps {
   currentNoteId: string | null;
   onSelectNote: (note: Note) => void;
   onCreateNote: () => void;
+  onReorderNotes: (ids: string[]) => Promise<void>;
 }
 
 function matchesQuery(note: Note, query: string): boolean {
@@ -21,12 +23,47 @@ export function NotesList({
   currentNoteId,
   onSelectNote,
   onCreateNote,
+  onReorderNotes,
 }: NotesListProps) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const query = search.trim().toLowerCase();
   const filtered = query ? notes.filter((n) => matchesQuery(n, query)) : notes;
+  const isSearchActive = query.length > 0;
+
+  const handleDragStart = (e: DragEvent<HTMLLIElement>, id: string) => {
+    if (isSearchActive) return;
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLLIElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: DragEvent<HTMLLIElement>, targetId: string) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId || isSearchActive) return;
+
+    const draggedIndex = notes.findIndex((n) => n.id === draggedId);
+    const targetIndex = notes.findIndex((n) => n.id === targetId);
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const newOrder = [...notes];
+    const [removed] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, removed);
+
+    void onReorderNotes(newOrder.map((n) => n.id));
+    setDraggedId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+  };
 
   return (
     <aside className="w-full border-r border-border flex flex-col bg-background h-full shrink-0">
@@ -68,6 +105,12 @@ export function NotesList({
                 note={note}
                 isSelected={currentNoteId === note.id}
                 onSelect={onSelectNote}
+                draggable={isSearchActive ? undefined : true}
+                onDragStart={(e) => handleDragStart(e, note.id)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, note.id)}
+                onDragEnd={handleDragEnd}
+                isDragging={draggedId === note.id}
               />
             ))}
           </ul>
