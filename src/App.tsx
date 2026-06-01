@@ -6,6 +6,7 @@ import { BookEditor } from "./pages/BookEditor";
 import { CoverDesigner } from "./pages/CoverDesigner";
 import { Settings } from "./pages/Settings";
 import { Metrics } from "./pages/Metrics";
+import { Notes } from "./pages/Notes";
 import { Embed } from "./pages/Embed";
 import { StartupRedirect } from "./components/StartupRedirect";
 import { PathTracker } from "./components/PathTracker";
@@ -41,6 +42,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
+          <Route path="notes" element={<Notes />} />
           <Route path="metrics" element={<Metrics />} />
           <Route path="settings" element={<Settings />} />
         </Route>

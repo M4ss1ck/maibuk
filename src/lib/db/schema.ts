@@ -71,6 +71,19 @@ export const bookVersions = sqliteTable("book_versions", {
   syncedAt: integer("synced_at"),
 });
 
+// Notes table (separate Notes workspace, not tied to a book)
+export const notes = sqliteTable("notes", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  content: text("content"), // Tiptap JSON string
+  tags: text("tags"), // JSON array of tag names
+  pinned: integer("pinned", { mode: "boolean" }).default(false),
+  order: integer("order").notNull(),
+  wordCount: integer("word_count").default(0),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 // Cover templates table
 export const coverTemplates = sqliteTable("cover_templates", {
   id: text("id").primaryKey(),
@@ -94,6 +107,8 @@ export type Book = typeof books.$inferSelect;
 export type NewBook = typeof books.$inferInsert;
 export type Chapter = typeof chapters.$inferSelect;
 export type NewChapter = typeof chapters.$inferInsert;
+export type NoteRow = typeof notes.$inferSelect;
+export type NewNoteRow = typeof notes.$inferInsert;
 export type CoverTemplate = typeof coverTemplates.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
 export type BookVersionRow = typeof bookVersions.$inferSelect;

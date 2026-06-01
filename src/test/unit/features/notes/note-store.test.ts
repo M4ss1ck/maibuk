@@ -1,0 +1,118 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { DatabaseAdapter } from "../../../../lib/platform/types";
+import { createTestDatabase } from "../../../support/db-test-context";
+
+// --- Mock getDatabase ---
+let testDb: DatabaseAdapter;
+
+const { mockGetDatabase } = vi.hoisted(() => ({
+  mockGetDatabase: vi.fn(),
+}));
+
+vi.mock("../../../../lib/db", () => ({
+  getDatabase: mockGetDatabase,
+}));
+
+const { useNoteStore } = await import("../../../../features/notes/store");
+
+describe("useNoteStore", () => {
+  beforeEach(async () => {
+    testDb = await createTestDatabase();
+    mockGetDatabase.mockResolvedValue(testDb);
+
+    useNoteStore.setState({
+      notes: [],
+      currentNote: null,
+      isLoading: false,
+      error: null,
+    });
+  });
+
+  describe("initial state", () => {
+    it("starts empty", () => {
+      const state = useNoteStore.getState();
+      expect(state.notes).toEqual([]);
+      expect(state.currentNote).toBeNull();
+      expect(state.isLoading).toBe(false);
+    });
+  });
+
+  describe("createNote()", () => {
+    it("creates a note with auto-assigned order", async () => {
+      const first = await useNoteStore.getState().createNote({ title: "First" });
+      const second = await useNoteStore.getState().createNote({ title: "Second" });
+
+      expect(first.order).toBe(0);
+      expect(second.order).toBe(1);
+      expect(useNoteStore.getState().notes).toHaveLength(2);
+    });
+
+    it("persists tags and pinned through the round-trip", async () => {
+      const created = await useNoteStore
+        .getState()
+        .createNote({ title: "Tagged", tags: ["a", "b"], pinned: true });
+
+      await useNoteStore.getState().loadNote(created.id);
+      const loaded = useNoteStore.getState().currentNote;
+
+      expect(loaded?.tags).toEqual(["a", "b"]);
+      expect(loaded?.pinned).toBe(true);
+    });
+  });
+
+  describe("loadNotes()", () => {
+    it("loads notes with pinned first, then by order", async () => {
+      await useNoteStore.getState().createNote({ title: "A" });
+      const b = await useNoteStore.getState().createNote({ title: "B" });
+      await useNoteStore.getState().createNote({ title: "C" });
+      await useNoteStore.getState().updateNote({ id: b.id, pinned: true });
+
+      await useNoteStore.getState().loadNotes();
+      const titles = useNoteStore.getState().notes.map((n) => n.title);
+
+      expect(titles).toEqual(["B", "A", "C"]);
+    });
+  });
+
+  describe("updateNote()", () => {
+    it("updates fields and currentNote when it matches", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Draft" });
+      useNoteStore.getState().setCurrentNote(note);
+
+      await useNoteStore
+        .getState()
+        .updateNote({ id: note.id, title: "Final", content: "<p>hi</p>", wordCount: 1 });
+
+      const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+      expect(updated?.title).toBe("Final");
+      expect(updated?.content).toBe("<p>hi</p>");
+      expect(updated?.wordCount).toBe(1);
+      expect(useNoteStore.getState().currentNote?.title).toBe("Final");
+    });
+  });
+
+  describe("deleteNote()", () => {
+    it("removes the note and clears currentNote when it matches", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Temp" });
+      useNoteStore.getState().setCurrentNote(note);
+
+      await useNoteStore.getState().deleteNote(note.id);
+
+      expect(useNoteStore.getState().notes).toHaveLength(0);
+      expect(useNoteStore.getState().currentNote).toBeNull();
+    });
+  });
+
+  describe("reorderNotes()", () => {
+    it("applies the new order", async () => {
+      const a = await useNoteStore.getState().createNote({ title: "A" });
+      const b = await useNoteStore.getState().createNote({ title: "B" });
+      const c = await useNoteStore.getState().createNote({ title: "C" });
+
+      await useNoteStore.getState().reorderNotes([c.id, a.id, b.id]);
+      await useNoteStore.getState().loadNotes();
+
+      expect(useNoteStore.getState().notes.map((n) => n.title)).toEqual(["C", "A", "B"]);
+    });
+  });
+});

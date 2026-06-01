@@ -38,6 +38,7 @@ export default defineConfig(() => ({
         // Phase 2: Stores + hooks
         "src/features/books/store.ts",
         "src/features/chapters/store.ts",
+        "src/features/notes/store.ts",
         "src/features/settings/store.ts",
         "src/features/theme/store.ts",
         "src/features/sync/store.ts",

@@ -96,6 +96,7 @@ export interface Settings {
 
   // Editor layout settings
   sidebarWidth: number;
+  notesSidebarWidth: number;
   toolbarExpanded: boolean;
   chapterListView: ChapterListView;
   htmlEditorLightTheme: HtmlEditorTheme;

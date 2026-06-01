@@ -4,7 +4,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { APP_VERSION } from "../constants";
 import { useTranslation } from "react-i18next";
 import { ProjectsIcon, SettingsIcon, CloseIcon } from "./icons";
-import { BarChart3, Menu } from "lucide-react";
+import { BarChart3, Menu, NotebookPen } from "lucide-react";
 import logo from "../../src-tauri/icons/icon.png";
 import { KeyboardShortcut } from "./ui";
 
@@ -95,6 +95,24 @@ export function Layout() {
             <span className="flex-1">{t("common.projects")}</span>
             <KeyboardShortcut
               keys={["g", "p"]}
+              className="ml-auto hidden lg:inline-flex"
+            />
+          </NavLink>
+
+          <NavLink
+            to="/notes"
+            onClick={closeMobileMenu}
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
+                ? "bg-primary text-white"
+                : "hover:bg-muted text-foreground"
+              }`
+            }
+          >
+            <NotebookPen className="w-5 h-5" />
+            <span className="flex-1">{t("common.notes")}</span>
+            <KeyboardShortcut
+              keys={["g", "n"]}
               className="ml-auto hidden lg:inline-flex"
             />
           </NavLink>
