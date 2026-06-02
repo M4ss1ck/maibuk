@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { BookSnapshot } from "../../features/sync/types";
 import { diffSnapshots, type ChapterDiff, type ChapterDiffStatus } from "../../features/versions";
+import { sanitizeChapterHtml } from "../../features/versions/sanitize";
 
 interface VersionCompareProps {
   current: BookSnapshot;
@@ -139,8 +140,9 @@ export function VersionCompare({ current, target }: VersionCompareProps) {
                   <ChapterBanner selectedChapter={selectedChapter} />
                   <div
                     className="editor-content"
+                    // biome-ignore lint/security/noDangerouslySetInnerHtml: diff HTML is sanitized via sanitizeChapterHtml
                     dangerouslySetInnerHTML={{
-                      __html: selectedChapter.html ?? "",
+                      __html: sanitizeChapterHtml(selectedChapter.html ?? ""),
                     }}
                   />
                 </>

@@ -307,11 +307,10 @@ export function VersionPanel({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <div
+          <ul
             className={`flex flex-col gap-1 transition-opacity ${
               isLoading ? "opacity-60" : ""
             }`}
-            role="list"
             aria-busy={isLoading}
           >
             {visibleVersions.map((version, index) => {
@@ -321,10 +320,9 @@ export function VersionPanel({
               const isRenaming = renamingId === version.id;
 
               return (
-                <div
+                <li
                   key={version.id}
                   id={`version-row-${index}`}
-                  role="listitem"
                   className={`flex items-center gap-2 px-2 py-2 rounded-lg transition-colors ${
                     isFocused
                       ? "bg-muted ring-1 ring-primary/30"
@@ -464,10 +462,10 @@ export function VersionPanel({
                     </div>
                   </>
                 )}
-              </div>
+              </li>
             );
           })}
-          </div>
+          </ul>
           {totalPages > 1 && (
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
               <Button

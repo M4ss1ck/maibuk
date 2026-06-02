@@ -25,6 +25,7 @@ export function Heatmap({ aggregate, isLoading }: HeatmapProps) {
       <div className="overflow-x-auto">
         <div
           className="grid grid-flow-col grid-rows-7 gap-1 min-w-[760px]"
+          role="img"
           aria-label={t("metrics.heatmap")}
         >
           {days.map((day) => (

@@ -49,6 +49,7 @@ export function VersionPreview({ snapshot }: VersionPreviewProps) {
         <div className="flex-1 min-h-0 overflow-auto border border-border rounded-lg p-3 bg-background">
           <div
             className="editor-content"
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: chapter HTML is sanitized via sanitizeChapterHtml
             dangerouslySetInnerHTML={{
               __html: sanitizeChapterHtml(selectedChapter.content ?? ""),
             }}

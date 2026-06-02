@@ -567,9 +567,9 @@ describe("useVersionStore", () => {
         counts.map((r) => [r.trigger_type as string, Number(r.c)])
       );
       expect(byTrigger["auto-idle"]).toBe(VERSION_AUTO_PRUNE_KEEP);
-      expect(byTrigger["close"]).toBe(VERSION_AUTO_PRUNE_KEEP);
+      expect(byTrigger.close).toBe(VERSION_AUTO_PRUNE_KEEP);
       expect(byTrigger["pre-sync"]).toBe(VERSION_AUTO_PRUNE_KEEP);
-      expect(byTrigger["manual"]).toBe(1);
+      expect(byTrigger.manual).toBe(1);
     });
 
     it("does not re-prune on subsequent page navigation for the same book", async () => {
