@@ -37,8 +37,6 @@ vi.mock("react-i18next", () => ({
         "common.add": "Add",
         "notes.saving": "Saving",
         "notes.saved": "Saved",
-        "notes.delete": "Delete note",
-        "notes.deleteConfirm": "Delete this note?",
         "notes.titlePlaceholder": "Note title",
         "notes.bodyPlaceholder": "Start writing...",
         "notes.pin": "Pin",
@@ -102,7 +100,6 @@ describe("NoteEditor tags", () => {
       <NoteEditor
         note={buildNote({ tags: ["draft"] })}
         onSave={onSave}
-        onDelete={vi.fn()}
         onBack={vi.fn()}
       />, 
     );

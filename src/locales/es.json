@@ -127,6 +127,7 @@
     "createTag": "Crear \"{{name}}\"",
     "delete": "Eliminar nota",
     "deleteConfirm": "¿Eliminar esta nota?",
+    "duplicate": "Duplicar nota",
     "empty": "Aún no hay notas. Captura tu primera idea.",
     "emptyEditorTitle": "Una página en blanco",
     "emptyEditorBody": "Selecciona una nota de la lista o captura una nueva idea."

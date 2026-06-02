@@ -9,7 +9,7 @@ import type { Note, UpdateNoteInput } from "../../features/notes";
 import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
-import { BackIcon, CheckIcon, SpinnerIcon, DeleteIcon } from "../icons";
+import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
 import { ThemeToggle } from "../ThemeToggle";
@@ -186,16 +186,14 @@ const NotesTaskDndBehavior = Extension.create({
 interface NoteEditorProps {
   note: Note;
   onSave: (input: UpdateNoteInput) => Promise<void>;
-  onDelete: (id: string) => void;
   onBack: () => void;
 }
 
-export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) {
+export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
   const { t } = useTranslation();
   const [title, setTitle] = useState(note.title);
   const [wordCount, setWordCount] = useState(note.wordCount);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
   const notes = useNoteStore((s) => s.notes);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
@@ -333,34 +331,6 @@ export function NoteEditor({ note, onSave, onDelete, onBack }: NoteEditorProps) 
           </button>
         )}
 
-        {confirmingDelete ? (
-          <span className="flex items-center gap-1">
-            <span className="text-xs">{t("notes.deleteConfirm")}</span>
-            <button
-              type="button"
-              onClick={() => onDelete(note.id)}
-              className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
-            >
-              {t("common.yes")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(false)}
-              className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
-            >
-              {t("common.no")}
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmingDelete(true)}
-            className="p-1 hover:bg-destructive/10 rounded transition-colors"
-            title={t("notes.delete")}
-          >
-            <DeleteIcon className="w-4 h-4 text-destructive" />
-          </button>
-        )}
       </div>
 
       {/* Body */}

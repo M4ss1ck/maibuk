@@ -15,8 +15,6 @@ vi.mock("react-i18next", () => ({
         "common.words": "words",
         "notes.saving": "Saving",
         "notes.saved": "Saved",
-        "notes.delete": "Delete note",
-        "notes.deleteConfirm": "Delete this note?",
         "notes.titlePlaceholder": "Note title",
         "notes.bodyPlaceholder": "Start writing...",
         "notes.pin": "Pin",
@@ -76,7 +74,6 @@ describe("NoteEditor checklist extensions", () => {
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn().mockResolvedValue(undefined)}
-        onDelete={vi.fn()}
         onBack={vi.fn()}
       />,
     );
