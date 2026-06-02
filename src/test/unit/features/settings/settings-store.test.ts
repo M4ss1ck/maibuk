@@ -57,6 +57,7 @@ describe("useSettingsStore", () => {
       },
       metrics: DEFAULT_METRICS_SETTINGS,
       lastPath: null,
+      lastNoteId: null,
     });
   });
 
@@ -82,6 +83,7 @@ describe("useSettingsStore", () => {
       expect(state.pasteCleanup.options.strippedProperties).toEqual([]);
       expect(state.metrics).toEqual(DEFAULT_METRICS_SETTINGS);
       expect(state.lastPath).toBeNull();
+      expect(state.lastNoteId).toBeNull();
     });
   });
 
@@ -506,6 +508,19 @@ describe("useSettingsStore", () => {
       useSettingsStore.getState().setLastPath("/book/123");
       useSettingsStore.getState().setLastPath(null);
       expect(useSettingsStore.getState().lastPath).toBeNull();
+    });
+  });
+
+  describe("setLastNoteId()", () => {
+    it("sets the last opened note id", () => {
+      useSettingsStore.getState().setLastNoteId("note-abc");
+      expect(useSettingsStore.getState().lastNoteId).toBe("note-abc");
+    });
+
+    it("clears the last note id with null", () => {
+      useSettingsStore.getState().setLastNoteId("note-abc");
+      useSettingsStore.getState().setLastNoteId(null);
+      expect(useSettingsStore.getState().lastNoteId).toBeNull();
     });
   });
 });
