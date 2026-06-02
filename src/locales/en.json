@@ -120,17 +120,20 @@
     "noteCount_other": "{{count}} notes",
     "saving": "Saving…",
     "saved": "Saved",
+    "secondsAgo": "seconds ago",
+    "minutesAgo": "minutes ago",
     "pin": "Pin",
     "unpin": "Unpin",
     "addTag": "Add tag",
     "tags": "Tags",
-    "createTag": "Create \"{{name}}\"",
     "delete": "Delete note",
     "deleteConfirm": "Delete this note?",
     "duplicate": "Duplicate note",
     "empty": "No notes yet. Capture your first thought.",
     "emptyEditorTitle": "A clean page",
-    "emptyEditorBody": "Select a note from the list, or capture a new thought."
+    "emptyEditorBody": "Select a note from the list, or capture a new thought.",
+    "collapseHeading": "Collapse heading",
+    "expandHeading": "Expand heading"
   },
   "editor": {
     "loading": "Loading book...",

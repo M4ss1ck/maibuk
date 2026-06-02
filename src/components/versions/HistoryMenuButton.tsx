@@ -122,11 +122,11 @@ export function HistoryMenuButton({
       </button>
 
       {menuOpen && (
-        <ul
+        <div
           role="menu"
           className="absolute right-0 top-full z-50 mt-1 min-w-56 rounded-lg border border-border bg-background p-1 shadow-lg"
         >
-          <li>
+          <div role="none">
             <button
               ref={saveItemRef}
               type="button"
@@ -140,8 +140,8 @@ export function HistoryMenuButton({
                 {saveVersionShortcut}
               </kbd>
             </button>
-          </li>
-          <li>
+          </div>
+          <div role="none">
             <button
               ref={historyItemRef}
               type="button"
@@ -155,8 +155,8 @@ export function HistoryMenuButton({
                 {panelShortcut}
               </kbd>
             </button>
-          </li>
-        </ul>
+          </div>
+        </div>
       )}
     </div>
   );

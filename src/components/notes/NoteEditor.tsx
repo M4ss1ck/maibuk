@@ -8,10 +8,12 @@ import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "../../features/notes";
 import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
+import { CollapsibleHeading } from "../editor/extensions";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
+import { timeAgo } from "./timeAgo";
 import { ThemeToggle } from "../ThemeToggle";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
@@ -45,7 +47,7 @@ const NotesTaskItem = TaskItem.extend({
           chain: () => {
             focus: (
               position?: number | null,
-              options?: { scrollIntoView?: boolean },
+              options?: { scrollIntoView?: boolean }
             ) => {
               setNodeSelection: (pos: number) => { run: () => boolean };
             };
@@ -156,17 +158,13 @@ const NotesTaskDndBehavior = Extension.create({
 
             event.preventDefault();
 
-            let tr = view.state.tr.setSelection(
-              NodeSelection.create(view.state.doc, sourcePos),
-            );
+            let tr = view.state.tr.setSelection(NodeSelection.create(view.state.doc, sourcePos));
             tr = tr.deleteSelection();
 
             const mappedDropPos = tr.mapping.map(eventPos.pos);
             const insertionPos = dropPoint(tr.doc, mappedDropPos, slice) ?? mappedDropPos;
             const isNode =
-              slice.openStart === 0 &&
-              slice.openEnd === 0 &&
-              slice.content.childCount === 1;
+              slice.openStart === 0 && slice.openEnd === 0 && slice.content.childCount === 1;
 
             if (isNode && slice.content.firstChild) {
               tr = tr.replaceRangeWith(insertionPos, insertionPos, slice.content.firstChild);
@@ -190,11 +188,10 @@ interface NoteEditorProps {
 }
 
 export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [title, setTitle] = useState(note.title);
   const [wordCount, setWordCount] = useState(note.wordCount);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
-  const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
   const notes = useNoteStore((s) => s.notes);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
@@ -220,7 +217,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         setSaveStatus("idle");
       }
     },
-    [note.id, onSave, title, wordCount],
+    [note.id, onSave, title, wordCount]
   );
 
   const debouncedSave = useDebouncedCallback(async () => {
@@ -232,7 +229,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
       setTitle(value);
       debouncedSave();
     },
-    [debouncedSave],
+    [debouncedSave]
   );
 
   const handleContentUpdate = useCallback(
@@ -240,7 +237,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
       contentRef.current = content;
       debouncedSave();
     },
-    [debouncedSave],
+    [debouncedSave]
   );
 
   const handleWordCountChange = useCallback((count: number) => {
@@ -248,15 +245,18 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
   }, []);
 
   const notesExtensions = useMemo(
-    () =>
-      [
-        TaskList,
-        NotesTaskItem.configure({
-          nested: true,
-        }),
-        NotesTaskDndBehavior,
-      ],
-    [],
+    () => [
+      TaskList,
+      NotesTaskItem.configure({
+        nested: true,
+      }),
+      NotesTaskDndBehavior,
+      CollapsibleHeading.configure({
+        collapseLabel: t("notes.collapseHeading"),
+        expandLabel: t("notes.expandHeading"),
+      }),
+    ],
+    [t]
   );
 
   const allTags = useMemo(() => {
@@ -277,7 +277,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         .filter((tag, idx, arr) => tag.length > 0 && arr.indexOf(tag) === idx);
       void saveNow({ tags: cleanTags });
     },
-    [saveNow],
+    [saveNow]
   );
 
   return (
@@ -321,16 +321,13 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
             type="button"
             onClick={() => setAlwaysOnTop(!alwaysOnTop)}
             className={`p-1 rounded transition-colors ${
-              alwaysOnTop
-                ? "bg-muted text-primary"
-                : "hover:bg-muted text-foreground"
+              alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
             }`}
             title={t("settings.alwaysOnTop")}
           >
             <Pin className="w-4 h-4" />
           </button>
         )}
-
       </div>
 
       {/* Body */}
@@ -350,6 +347,9 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
               className="w-full bg-transparent text-3xl font-serif font-semibold outline-none placeholder:text-muted-foreground"
             />
             <div className="relative mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {timeAgo(note.updatedAt, i18n.language, t)}
+              </span>
               {note.tags.map((tag) => {
                 const color = tagColor(tag);
                 return (
@@ -369,21 +369,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
                   </span>
                 );
               })}
-              <button
-                type="button"
-                onClick={() => setIsTagEditorOpen((prev) => !prev)}
-                className="rounded border border-border px-2 py-1 text-xs text-foreground hover:bg-muted"
-              >
-                + {t("common.add")}
-              </button>
-              {isTagEditorOpen && (
-                <TagEditor
-                  tags={note.tags}
-                  allTags={allTags}
-                  onChange={handleTagsChange}
-                  onClose={() => setIsTagEditorOpen(false)}
-                />
-              )}
+              <TagEditor tags={note.tags} allTags={allTags} onChange={handleTagsChange} />
             </div>
           </div>
         }

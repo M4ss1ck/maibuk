@@ -81,6 +81,35 @@ describe("Combobox", () => {
 
       expect(onChange).toHaveBeenCalledWith("MyFont");
     });
+
+    it("accepts custom value via the numpad Enter key", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(<Combobox value="" onChange={onChange} options={options} />);
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.type(input, "MyFont");
+      await user.keyboard("[NumpadEnter]");
+
+      expect(onChange).toHaveBeenCalledWith("MyFont");
+    });
+  });
+
+  describe("keyboard navigation", () => {
+    it("selects the highlighted option with the arrow keys and Enter", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(<Combobox value="" onChange={onChange} options={options} />);
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+
+      expect(onChange).toHaveBeenCalledWith("Georgia");
+    });
   });
 
   describe("divider", () => {

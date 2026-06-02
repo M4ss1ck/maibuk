@@ -15,6 +15,7 @@ interface ComboboxProps {
   placeholder?: string;
   className?: string;
   inputClasses?: string;
+  autoFocus?: boolean;
 }
 
 export function Combobox({
@@ -24,6 +25,7 @@ export function Combobox({
   placeholder = "",
   className = "",
   inputClasses = "w-17.5",
+  autoFocus = false,
 }: ComboboxProps) {
   const [query, setQuery] = useState("");
 
@@ -43,7 +45,7 @@ export function Combobox({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && query) {
+    if ((e.key === "Enter" || e.code === "NumpadEnter") && query) {
       e.preventDefault();
       onChange(query);
       setQuery("");
@@ -60,6 +62,7 @@ export function Combobox({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
+            autoFocus={autoFocus}
           />
           <ComboboxButton className="absolute inset-y-0 right-0 flex items-center pr-1.5">
             <ChevronIcon className="h-4 w-4 text-muted-foreground" />
