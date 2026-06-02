@@ -78,6 +78,8 @@ interface SettingsStore extends Settings {
   setMetricsStreakDailyWordThreshold: (threshold: number) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
+  lastNoteId: string | null;
+  setLastNoteId: (id: string | null) => void;
 }
 
 const defaultSettings: Settings = {
@@ -187,6 +189,7 @@ export const useSettingsStore = create<SettingsStore>()(
     (set) => ({
       ...defaultSettings,
       lastPath: null,
+      lastNoteId: null,
       setAppFontSize: (appFontSize) => set({ appFontSize }),
       setAppFont: (appFont) => set({ appFont }),
       setPrimaryColor: (primaryColor) => set({ primaryColor: normalizeHexColor(primaryColor) }),
@@ -369,6 +372,7 @@ export const useSettingsStore = create<SettingsStore>()(
         }));
       },
       setLastPath: (lastPath) => set({ lastPath }),
+      setLastNoteId: (lastNoteId) => set({ lastNoteId }),
     }),
     {
       name: STORAGE_KEY,

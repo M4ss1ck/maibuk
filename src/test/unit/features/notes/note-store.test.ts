@@ -74,6 +74,13 @@ describe("useNoteStore", () => {
     });
   });
 
+  describe("loadNote()", () => {
+    it("sets currentNote to null when the note does not exist", async () => {
+      await useNoteStore.getState().loadNote("missing-id");
+      expect(useNoteStore.getState().currentNote).toBeNull();
+    });
+  });
+
   describe("updateNote()", () => {
     it("updates fields and currentNote when it matches", async () => {
       const note = await useNoteStore.getState().createNote({ title: "Draft" });

@@ -8,6 +8,7 @@ export function Notes() {
   const notes = useNoteStore((s) => s.notes);
   const currentNote = useNoteStore((s) => s.currentNote);
   const loadNotes = useNoteStore((s) => s.loadNotes);
+  const loadNote = useNoteStore((s) => s.loadNote);
   const createNote = useNoteStore((s) => s.createNote);
   const updateNote = useNoteStore((s) => s.updateNote);
   const deleteNote = useNoteStore((s) => s.deleteNote);
@@ -15,22 +16,42 @@ export function Notes() {
   const setCurrentNote = useNoteStore((s) => s.setCurrentNote);
   const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
   const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
+  const lastNoteId = useSettingsStore((s) => s.lastNoteId);
+  const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
   const isResizing = useRef(false);
 
   useEffect(() => {
-    loadNotes();
-  }, [loadNotes]);
+    async function init() {
+      await loadNotes();
+      if (!useNoteStore.getState().currentNote && lastNoteId) {
+        await loadNote(lastNoteId);
+        if (!useNoteStore.getState().currentNote) {
+          setLastNoteId(null);
+        }
+      }
+    }
+    init();
+  }, [loadNotes, loadNote, lastNoteId, setLastNoteId]);
 
   const handleCreateNote = async () => {
     const note = await createNote({ title: "" });
     setCurrentNote(note);
+    setLastNoteId(note.id);
   };
 
-  const handleSelectNote = (note: Note) => setCurrentNote(note);
+  const handleSelectNote = (note: Note) => {
+    setCurrentNote(note);
+    setLastNoteId(note.id);
+  };
 
   const handleSave = (input: UpdateNoteInput) => updateNote(input);
 
-  const handleDelete = (id: string) => deleteNote(id);
+  const handleDelete = async (id: string) => {
+    await deleteNote(id);
+    if (lastNoteId === id) {
+      setLastNoteId(null);
+    }
+  };
 
   const handlePinNote = (note: Note) => {
     void updateNote({ id: note.id, pinned: !note.pinned });
@@ -97,7 +118,10 @@ export function Notes() {
             note={currentNote}
             onSave={handleSave}
             onDelete={handleDelete}
-            onBack={() => setCurrentNote(null)}
+            onBack={() => {
+              setCurrentNote(null);
+              setLastNoteId(null);
+            }}
           />
         ) : (
           <EmptyNotes onCreateNote={handleCreateNote} />
