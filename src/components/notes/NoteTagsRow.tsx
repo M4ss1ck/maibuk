@@ -45,7 +45,7 @@ export function NoteTagsRow({ tags, dateLabel }: NoteTagsRowProps) {
 
       const availableForTags = container.clientWidth - dateWidth - GAP;
 
-      const fit = (budget: number) => {
+      const fitFn = (budget: number) => {
         let used = 0;
         let count = 0;
         for (const width of tagWidths) {
@@ -57,10 +57,10 @@ export function NoteTagsRow({ tags, dateLabel }: NoteTagsRowProps) {
         return count;
       };
 
-      let count = fit(availableForTags);
+      let count = fitFn(availableForTags);
       if (count < tags.length) {
         // Some tags overflow: reserve room for the "+N" counter.
-        count = Math.max(1, fit(availableForTags - counterWidth - GAP));
+        count = Math.max(1, fitFn(availableForTags - counterWidth - GAP));
       }
       setVisibleCount(count);
     };
