@@ -1,6 +1,6 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import type { Extensions } from "@tiptap/core";
+import type { Editor as TiptapEditor, Extensions } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
 import Underline from "@tiptap/extension-underline";
@@ -59,6 +59,7 @@ interface EditorProps {
   chapterId?: string | null;
   extraExtensions?: Extensions;
   headerContent?: React.ReactNode;
+  onEditorReady?: (editor: TiptapEditor | null) => void;
 }
 
 export function Editor({
@@ -76,6 +77,7 @@ export function Editor({
   chapterId = null,
   extraExtensions,
   headerContent,
+  onEditorReady,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore(
@@ -167,6 +169,12 @@ export function Editor({
       }
     },
   });
+
+  // Expose the editor instance to parents (e.g. the table-of-contents panel)
+  useEffect(() => {
+    onEditorReady?.(editor ?? null);
+    return () => onEditorReady?.(null);
+  }, [editor, onEditorReady]);
 
   // Update content when it changes externally (e.g., switching chapters)
   useEffect(() => {

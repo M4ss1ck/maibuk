@@ -270,6 +270,12 @@
     "themeDracula": "Dracula",
     "themeOneLight": "One Light"
   },
+  "toc": {
+    "sceneBreak": "Scene break",
+    "untitledHeading": "Untitled heading",
+    "showOutline": "Show outline",
+    "hideOutline": "Hide outline"
+  },
   "dictionary": {
     "title": "Dictionary",
     "noDefinition": "No definition found",

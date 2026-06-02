@@ -7,6 +7,7 @@ export { ImageInsertDialog } from "./ImageInsertDialog";
 export { FootnoteDialog } from "./FootnoteDialog";
 export { FootnoteList } from "./FootnoteList";
 export { NotesPanel } from "./NotesPanel";
+export { ChapterOutline } from "./ChapterOutline";
 export { LinkDialog } from "./LinkDialog";
 export { HtmlViewPanel } from "./HtmlViewPanel";
 export { ColorPicker } from "./ColorPicker";

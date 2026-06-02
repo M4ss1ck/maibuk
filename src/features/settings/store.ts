@@ -57,6 +57,7 @@ interface SettingsStore extends Settings {
   setNotesSidebarWidth: (width: number) => void;
   setToolbarExpanded: (expanded: boolean) => void;
   setChapterListView: (view: ChapterListView) => void;
+  setShowChapterOutline: (enabled: boolean) => void;
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
   setHtmlPanelHeight: (height: number) => void;
@@ -106,6 +107,7 @@ const defaultSettings: Settings = {
   notesSidebarWidth: 256,
   toolbarExpanded: false,
   chapterListView: "normal",
+  showChapterOutline: true,
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
   htmlPanelHeight: 200,
@@ -232,6 +234,7 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ notesSidebarWidth: Math.max(200, Math.min(480, notesSidebarWidth)) }),
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
       setChapterListView: (chapterListView) => set({ chapterListView }),
+      setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
       setHtmlEditorDarkTheme: (htmlEditorDarkTheme) => set({ htmlEditorDarkTheme }),
       setHtmlPanelHeight: (htmlPanelHeight) =>
