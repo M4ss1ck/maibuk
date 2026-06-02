@@ -279,9 +279,7 @@
   "dictionary": {
     "title": "Dictionary",
     "noDefinition": "No definition found",
-    "viewOnWiktionary": "View on Wiktionary",
-    "phonetic": "Pronunciation",
-    "translations": "Translations"
+    "viewOnWiktionary": "View on Wiktionary"
   },
   "export": {
     "title": "Export Book",
