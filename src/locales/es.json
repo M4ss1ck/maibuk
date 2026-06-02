@@ -131,7 +131,9 @@
     "duplicate": "Duplicar nota",
     "empty": "Aún no hay notas. Captura tu primera idea.",
     "emptyEditorTitle": "Una página en blanco",
-    "emptyEditorBody": "Selecciona una nota de la lista o captura una nueva idea."
+    "emptyEditorBody": "Selecciona una nota de la lista o captura una nueva idea.",
+    "collapseHeading": "Contraer encabezado",
+    "expandHeading": "Expandir encabezado"
   },
   "editor": {
     "loading": "Cargando libro...",

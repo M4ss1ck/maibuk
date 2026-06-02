@@ -8,6 +8,7 @@ import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "../../features/notes";
 import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
+import { CollapsibleHeading } from "../editor/extensions";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
@@ -46,7 +47,7 @@ const NotesTaskItem = TaskItem.extend({
           chain: () => {
             focus: (
               position?: number | null,
-              options?: { scrollIntoView?: boolean },
+              options?: { scrollIntoView?: boolean }
             ) => {
               setNodeSelection: (pos: number) => { run: () => boolean };
             };
@@ -157,17 +158,13 @@ const NotesTaskDndBehavior = Extension.create({
 
             event.preventDefault();
 
-            let tr = view.state.tr.setSelection(
-              NodeSelection.create(view.state.doc, sourcePos),
-            );
+            let tr = view.state.tr.setSelection(NodeSelection.create(view.state.doc, sourcePos));
             tr = tr.deleteSelection();
 
             const mappedDropPos = tr.mapping.map(eventPos.pos);
             const insertionPos = dropPoint(tr.doc, mappedDropPos, slice) ?? mappedDropPos;
             const isNode =
-              slice.openStart === 0 &&
-              slice.openEnd === 0 &&
-              slice.content.childCount === 1;
+              slice.openStart === 0 && slice.openEnd === 0 && slice.content.childCount === 1;
 
             if (isNode && slice.content.firstChild) {
               tr = tr.replaceRangeWith(insertionPos, insertionPos, slice.content.firstChild);
@@ -220,7 +217,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         setSaveStatus("idle");
       }
     },
-    [note.id, onSave, title, wordCount],
+    [note.id, onSave, title, wordCount]
   );
 
   const debouncedSave = useDebouncedCallback(async () => {
@@ -232,7 +229,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
       setTitle(value);
       debouncedSave();
     },
-    [debouncedSave],
+    [debouncedSave]
   );
 
   const handleContentUpdate = useCallback(
@@ -240,7 +237,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
       contentRef.current = content;
       debouncedSave();
     },
-    [debouncedSave],
+    [debouncedSave]
   );
 
   const handleWordCountChange = useCallback((count: number) => {
@@ -248,15 +245,18 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
   }, []);
 
   const notesExtensions = useMemo(
-    () =>
-      [
-        TaskList,
-        NotesTaskItem.configure({
-          nested: true,
-        }),
-        NotesTaskDndBehavior,
-      ],
-    [],
+    () => [
+      TaskList,
+      NotesTaskItem.configure({
+        nested: true,
+      }),
+      NotesTaskDndBehavior,
+      CollapsibleHeading.configure({
+        collapseLabel: t("notes.collapseHeading"),
+        expandLabel: t("notes.expandHeading"),
+      }),
+    ],
+    [t]
   );
 
   const allTags = useMemo(() => {
@@ -277,7 +277,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         .filter((tag, idx, arr) => tag.length > 0 && arr.indexOf(tag) === idx);
       void saveNow({ tags: cleanTags });
     },
-    [saveNow],
+    [saveNow]
   );
 
   return (
@@ -321,16 +321,13 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
             type="button"
             onClick={() => setAlwaysOnTop(!alwaysOnTop)}
             className={`p-1 rounded transition-colors ${
-              alwaysOnTop
-                ? "bg-muted text-primary"
-                : "hover:bg-muted text-foreground"
+              alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
             }`}
             title={t("settings.alwaysOnTop")}
           >
             <Pin className="w-4 h-4" />
           </button>
         )}
-
       </div>
 
       {/* Body */}
