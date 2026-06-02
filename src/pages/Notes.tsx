@@ -103,6 +103,7 @@ export function Notes() {
           onCreateNote={handleCreateNote}
           onReorderNotes={reorderNotes}
           onPinNote={handlePinNote}
+          onDeleteNote={handleDelete}
         />
         <div
           onMouseDown={handleResizeStart}
@@ -117,7 +118,6 @@ export function Notes() {
             key={currentNote.id}
             note={currentNote}
             onSave={handleSave}
-            onDelete={handleDelete}
             onBack={() => {
               setCurrentNote(null);
               setLastNoteId(null);
