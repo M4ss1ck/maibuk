@@ -3,7 +3,7 @@ import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { GripVertical, Pin, Trash2, Copy } from "lucide-react";
 import type { Note } from "../../features/notes";
-import { tagColor } from "./tagColor";
+import { NoteTagsRow } from "./NoteTagsRow";
 
 interface NoteListItemProps {
   note: Note;
@@ -154,21 +154,7 @@ export function NoteListItem({
             {preview}
           </span>
         )}
-        <div className="mt-1 flex flex-wrap items-center gap-1">
-          {note.tags.slice(0, 3).map((tag) => {
-            const color = tagColor(tag);
-            return (
-              <span
-                key={tag}
-                className="rounded-full border px-1.5 py-0.5 text-[10px]"
-                style={{ borderColor: color, backgroundColor: `${color}22`, color }}
-              >
-                {tag}
-              </span>
-            );
-          })}
-          <span className="text-xs text-muted-foreground">{formatDate(note.updatedAt)}</span>
-        </div>
+        <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
       </button>
     </li>
   );
