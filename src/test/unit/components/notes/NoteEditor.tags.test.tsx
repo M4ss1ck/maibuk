@@ -31,7 +31,7 @@ const mockNotes: Note[] = [
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, params?: { name?: string }) => {
+    t: (key: string) => {
       const map: Record<string, string> = {
         "common.back": "Back",
         "common.words": "words",
@@ -46,15 +46,11 @@ vi.mock("react-i18next", () => ({
         "notes.tags": "Tags",
       };
 
-      if (key === "notes.createTag") {
-        return `Create "${params?.name ?? ""}"`;
-      }
-
       return map[key] ?? key;
     },
     i18n: { language: "en" },
   }),
-  initReactI18next: { type: "3rdParty", init: () => {} },
+  initReactI18next: { type: "3rdParty", init: () => { } },
 }));
 
 vi.mock("../../../../features/settings/store", () => ({

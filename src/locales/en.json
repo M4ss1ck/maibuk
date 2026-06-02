@@ -126,7 +126,6 @@
     "unpin": "Unpin",
     "addTag": "Add tag",
     "tags": "Tags",
-    "createTag": "Create \"{{name}}\"",
     "delete": "Delete note",
     "deleteConfirm": "Delete this note?",
     "duplicate": "Duplicate note",

@@ -126,7 +126,6 @@
     "unpin": "Quitar fijado",
     "addTag": "Agregar etiqueta",
     "tags": "Etiquetas",
-    "createTag": "Crear \"{{name}}\"",
     "delete": "Eliminar nota",
     "deleteConfirm": "¿Eliminar esta nota?",
     "duplicate": "Duplicar nota",
