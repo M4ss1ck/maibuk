@@ -57,6 +57,17 @@ export function Notes() {
     void updateNote({ id: note.id, pinned: !note.pinned });
   };
 
+  const handleDuplicateNote = async (note: Note) => {
+    const duplicated = await createNote({
+      title: `${note.title} (copy)`,
+      content: note.content,
+      tags: [...note.tags],
+      wordCount: note.wordCount,
+    });
+    setCurrentNote(duplicated);
+    setLastNoteId(duplicated.id);
+  };
+
   // Sidebar drag-resize handler
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -104,6 +115,7 @@ export function Notes() {
           onReorderNotes={reorderNotes}
           onPinNote={handlePinNote}
           onDeleteNote={handleDelete}
+          onDuplicateNote={handleDuplicateNote}
         />
         <div
           onMouseDown={handleResizeStart}
