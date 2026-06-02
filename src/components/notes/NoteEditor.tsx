@@ -352,7 +352,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
             />
             <div className="relative mt-3 flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted-foreground">
-                {timeAgo(note.updatedAt, i18n.language)}
+                {timeAgo(note.updatedAt, i18n.language, t)}
               </span>
               {note.tags.map((tag) => {
                 const color = tagColor(tag);

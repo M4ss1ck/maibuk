@@ -120,6 +120,8 @@
     "noteCount_other": "{{count}} notas",
     "saving": "Guardando…",
     "saved": "Guardado",
+    "secondsAgo": "hace unos segundos",
+    "minutesAgo": "hace unos minutos",
     "pin": "Fijar",
     "unpin": "Quitar fijado",
     "addTag": "Agregar etiqueta",

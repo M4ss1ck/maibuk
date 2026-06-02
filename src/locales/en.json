@@ -120,6 +120,8 @@
     "noteCount_other": "{{count}} notes",
     "saving": "Saving…",
     "saved": "Saved",
+    "secondsAgo": "seconds ago",
+    "minutesAgo": "minutes ago",
     "pin": "Pin",
     "unpin": "Unpin",
     "addTag": "Add tag",
