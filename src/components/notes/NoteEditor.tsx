@@ -12,6 +12,7 @@ import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
+import { timeAgo } from "./timeAgo";
 import { ThemeToggle } from "../ThemeToggle";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
@@ -190,7 +191,7 @@ interface NoteEditorProps {
 }
 
 export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [title, setTitle] = useState(note.title);
   const [wordCount, setWordCount] = useState(note.wordCount);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
@@ -350,6 +351,9 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
               className="w-full bg-transparent text-3xl font-serif font-semibold outline-none placeholder:text-muted-foreground"
             />
             <div className="relative mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {timeAgo(note.updatedAt, i18n.language)}
+              </span>
               {note.tags.map((tag) => {
                 const color = tagColor(tag);
                 return (
