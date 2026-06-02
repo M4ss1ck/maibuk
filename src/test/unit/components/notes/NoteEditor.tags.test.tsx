@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "../../../../components/notes/NoteEditor";
 import type { Note, UpdateNoteInput } from "../../../../features/notes";
@@ -51,6 +52,7 @@ vi.mock("react-i18next", () => ({
 
       return map[key] ?? key;
     },
+    i18n: { language: "en" },
   }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
@@ -69,9 +71,7 @@ vi.mock("../../../../lib/platform", () => ({
 }));
 
 vi.mock("../../../../components/editor", () => ({
-  Editor: ({ headerContent }: { headerContent?: React.ReactNode }) => (
-    <div>{headerContent}</div>
-  ),
+  Editor: ({ headerContent }: { headerContent?: React.ReactNode }) => <div>{headerContent}</div>,
 }));
 
 vi.mock("../../../../features/notes/store", () => ({
@@ -94,18 +94,14 @@ function buildNote(overrides: Partial<Note>): Note {
 
 describe("NoteEditor tags", () => {
   it("adds tags through the tag editor and saves with full payload", async () => {
+    const user = userEvent.setup();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(
-      <NoteEditor
-        note={buildNote({ tags: ["draft"] })}
-        onSave={onSave}
-        onBack={vi.fn()}
-      />, 
-    );
+    render(<NoteEditor note={buildNote({ tags: ["draft"] })} onSave={onSave} onBack={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Add/ }));
-    fireEvent.click(screen.getByRole("button", { name: "research" }));
+    await user.click(screen.getByRole("button", { name: "+ Add" }));
+    await user.type(screen.getByRole("combobox"), "rese");
+    await user.click(await screen.findByText("research"));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith({

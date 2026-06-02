@@ -195,7 +195,6 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [wordCount, setWordCount] = useState(note.wordCount);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
-  const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
   const notes = useNoteStore((s) => s.notes);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
@@ -373,21 +372,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
                   </span>
                 );
               })}
-              <button
-                type="button"
-                onClick={() => setIsTagEditorOpen((prev) => !prev)}
-                className="rounded border border-border px-2 py-1 text-xs text-foreground hover:bg-muted"
-              >
-                + {t("common.add")}
-              </button>
-              {isTagEditorOpen && (
-                <TagEditor
-                  tags={note.tags}
-                  allTags={allTags}
-                  onChange={handleTagsChange}
-                  onClose={() => setIsTagEditorOpen(false)}
-                />
-              )}
+              <TagEditor tags={note.tags} allTags={allTags} onChange={handleTagsChange} />
             </div>
           </div>
         }

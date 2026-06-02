@@ -1,12 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { TagEditor } from "../../../../components/notes/TagEditor";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, params?: { name?: string }) => {
-      if (key === "notes.tags") return "Tags";
-      if (key === "notes.createTag") return `Create "${params?.name ?? ""}"`;
+    t: (key: string) => {
+      if (key === "notes.addTag") return "Add tag";
+      if (key === "common.add") return "Add";
       return key;
     },
   }),
@@ -14,50 +15,65 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("TagEditor", () => {
-  it("toggles existing tags and allows creating a new tag", () => {
+  it("reveals the combobox when the add button is clicked", async () => {
+    const user = userEvent.setup();
+
+    render(<TagEditor tags={[]} allTags={["draft"]} onChange={vi.fn()} />);
+
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "+ Add" }));
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+  });
+
+  it("adds an existing tag from the options", async () => {
+    const user = userEvent.setup();
     const onChange = vi.fn();
 
     render(
-      <div>
-        <TagEditor
-          tags={["draft"]}
-          allTags={["draft", "ideas", "research"]}
-          onChange={onChange}
-        />
-        <button type="button">Outside</button>
-      </div>,
+      <TagEditor tags={["draft"]} allTags={["draft", "ideas", "research"]} onChange={onChange} />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "ideas" }));
+    await user.click(screen.getByRole("button", { name: "+ Add" }));
+    await user.type(screen.getByRole("combobox"), "ide");
+    await user.click(await screen.findByText("ideas"));
+
     expect(onChange).toHaveBeenCalledWith(["draft", "ideas"]);
-
-    fireEvent.click(screen.getByRole("button", { name: "draft" }));
-    expect(onChange).toHaveBeenCalledWith([]);
-
-    fireEvent.change(screen.getByPlaceholderText("Tags"), {
-      target: { value: "plot" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: 'Create "plot"' }));
-    expect(onChange).toHaveBeenCalledWith(["draft", "plot"]);
   });
 
-  it("closes when clicking outside", () => {
-    const onClose = vi.fn();
+  it("excludes already-selected tags from the options", async () => {
+    const user = userEvent.setup();
 
-    render(
-      <div>
-        <TagEditor
-          tags={[]}
-          allTags={["draft"]}
-          onChange={vi.fn()}
-          onClose={onClose}
-        />
-        <button type="button">Outside</button>
-      </div>,
-    );
+    render(<TagEditor tags={["draft"]} allTags={["draft", "ideas"]} onChange={vi.fn()} />);
 
-    fireEvent.mouseDown(screen.getByRole("button", { name: "Outside" }));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "+ Add" }));
+    await user.click(screen.getByRole("button", { name: "Chevron Down" }));
+    await screen.findByText("ideas");
+    expect(screen.queryByText("draft")).not.toBeInTheDocument();
+  });
+
+  it("creates a new tag via the Enter key and collapses back to the add button", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(<TagEditor tags={["draft"]} allTags={["draft"]} onChange={onChange} />);
+
+    await user.click(screen.getByRole("button", { name: "+ Add" }));
+    await user.type(screen.getByRole("combobox"), "plot{Enter}");
+
+    expect(onChange).toHaveBeenCalledWith(["draft", "plot"]);
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+ Add" })).toBeInTheDocument();
+  });
+
+  it("ignores adding a tag that is already selected", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(<TagEditor tags={["draft"]} allTags={["draft"]} onChange={onChange} />);
+
+    await user.click(screen.getByRole("button", { name: "+ Add" }));
+    await user.type(screen.getByRole("combobox"), "draft{Enter}");
+
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
