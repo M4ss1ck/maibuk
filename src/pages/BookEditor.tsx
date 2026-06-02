@@ -4,6 +4,7 @@ import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
 import { Editor, ChapterList } from "../components/editor";
+import type { Editor as TiptapEditor } from "@tiptap/core";
 import { NotesPanel } from "../components/editor/NotesPanel";
 import type { EditorStats } from "../components/editor/Editor";
 import { useDebouncedCallback } from "../hooks/useAutoSave";
@@ -89,6 +90,7 @@ export function BookEditor() {
   );
   const [showMobileChapters, setShowMobileChapters] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [tocEditor, setTocEditor] = useState<TiptapEditor | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showVersionPanel, setShowVersionPanel] = useState(false);
   const [showSaveVersionDialog, setShowSaveVersionDialog] = useState(false);
@@ -236,6 +238,11 @@ export function BookEditor() {
   // Handle editor stats changes (selection-aware)
   const handleStatsChange = useCallback((stats: EditorStats) => {
     setEditorStats(stats);
+  }, []);
+
+  // Receive the editor instance for the table-of-contents panel
+  const handleEditorReady = useCallback((editor: TiptapEditor | null) => {
+    setTocEditor(editor);
   }, []);
 
   // Chapter management handlers
@@ -508,6 +515,7 @@ export function BookEditor() {
             <ChapterList
               chapters={chapters}
               currentChapterId={currentChapter?.id ?? null}
+              editor={tocEditor}
               onSelectChapter={(chapter) => {
                 handleSelectChapter(chapter);
                 setShowMobileChapters(false);
@@ -530,6 +538,7 @@ export function BookEditor() {
             <ChapterList
               chapters={chapters}
               currentChapterId={currentChapter?.id ?? null}
+              editor={tocEditor}
               onSelectChapter={handleSelectChapter}
               onCreateChapter={handleCreateChapter}
               onUpdateChapter={handleUpdateChapter}
@@ -835,6 +844,7 @@ export function BookEditor() {
             onUpdate={handleContentUpdate}
             onWordCountChange={handleWordCountChange}
             onStatsChange={handleStatsChange}
+            onEditorReady={handleEditorReady}
             onBlur={() => {
               metricsService.endSession();
               void metricsService.flushNow();

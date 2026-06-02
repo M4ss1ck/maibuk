@@ -100,6 +100,7 @@ export interface Settings {
   notesSidebarWidth: number;
   toolbarExpanded: boolean;
   chapterListView: ChapterListView;
+  showChapterOutline: boolean;
   htmlEditorLightTheme: HtmlEditorTheme;
   htmlEditorDarkTheme: HtmlEditorTheme;
   htmlPanelHeight: number;
