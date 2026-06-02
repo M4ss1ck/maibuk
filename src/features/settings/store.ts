@@ -52,6 +52,7 @@ interface SettingsStore extends Settings {
   setShowInlineFootnotes: (enabled: boolean) => void;
   setShowNotesChapter: (enabled: boolean) => void;
   setHideKeyboardHints: (enabled: boolean) => void;
+  setMainSidebarWidth: (width: number) => void;
   setSidebarWidth: (width: number) => void;
   setNotesSidebarWidth: (width: number) => void;
   setToolbarExpanded: (expanded: boolean) => void;
@@ -100,6 +101,7 @@ const defaultSettings: Settings = {
   backupDirectory: null,
   backupListPage: DEFAULT_BACKUP_LIST_PAGE,
   backupListPageSize: DEFAULT_BACKUP_LIST_PAGE_SIZE,
+  mainSidebarWidth: 280,
   sidebarWidth: 256,
   notesSidebarWidth: 256,
   toolbarExpanded: false,
@@ -222,6 +224,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setShowInlineFootnotes: (showInlineFootnotes) => set({ showInlineFootnotes }),
       setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
+      setMainSidebarWidth: (mainSidebarWidth) =>
+        set({ mainSidebarWidth: Math.max(200, Math.min(480, mainSidebarWidth)) }),
       setSidebarWidth: (sidebarWidth) =>
         set({ sidebarWidth: Math.max(200, Math.min(480, sidebarWidth)) }),
       setNotesSidebarWidth: (notesSidebarWidth) =>
