@@ -18,6 +18,7 @@ vi.mock("react-i18next", () => ({
       };
       return map[key] ?? key;
     },
+    i18n: { language: "en" },
   }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
