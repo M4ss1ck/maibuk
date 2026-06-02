@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Modal } from "../ui/Modal";
 import type { Language } from "../../features/settings/types";
-import { lookupWord, type DictionaryEntry } from "../../lib/dictionary";
+import { lookupWord } from "../../lib/dictionary";
+import { openExternal } from "../../lib/platform";
+import { Modal } from "../ui/Modal";
 
 interface DictionaryDialogProps {
   isOpen: boolean;
@@ -13,7 +14,7 @@ interface DictionaryDialogProps {
 
 export function DictionaryDialog({ isOpen, word, language, onClose }: DictionaryDialogProps) {
   const { t } = useTranslation();
-  const [entry, setEntry] = useState<DictionaryEntry | null>(null);
+  const [html, setHtml] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -25,12 +26,12 @@ export function DictionaryDialog({ isOpen, word, language, onClose }: Dictionary
     let cancelled = false;
     setIsLoading(true);
     setHasError(false);
-    setEntry(null);
+    setHtml(null);
 
     lookupWord(normalizedWord, language)
       .then((result) => {
         if (cancelled) return;
-        setEntry(result);
+        setHtml(result);
         setIsLoading(false);
       })
       .catch(() => {
@@ -48,72 +49,45 @@ export function DictionaryDialog({ isOpen, word, language, onClose }: Dictionary
     ? `https://${language}.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}`
     : "";
 
+  // Open content links in the system browser instead of navigating in-app.
+  const handleContentClick = (event: MouseEvent<HTMLDivElement>) => {
+    const anchor = (event.target as HTMLElement).closest("a");
+    const href = anchor?.getAttribute("href");
+    if (!href || href.startsWith("#")) return;
+    event.preventDefault();
+    openExternal(href);
+  };
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={normalizedWord ?? t("dictionary.title")}
+      size="wide"
       footer={
         wiktionaryUrl ? (
-          <a
-            href={wiktionaryUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => openExternal(wiktionaryUrl)}
             className="text-sm text-primary hover:underline"
           >
             {t("dictionary.viewOnWiktionary")}
-          </a>
+          </button>
         ) : null
       }
     >
       {isLoading ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      ) : hasError || !entry || entry.meanings.length === 0 ? (
+      ) : hasError || !html ? (
         <p className="text-sm text-muted-foreground">{t("dictionary.noDefinition")}</p>
       ) : (
-        <div className="space-y-4">
-          {entry.phonetic && (
-            <div className="text-sm text-muted-foreground">
-              {t("dictionary.phonetic")}: {entry.phonetic}
-            </div>
-          )}
-
-          {entry.meanings.map((meaning, index) => (
-            <div key={`${meaning.partOfSpeech}-${index}`} className="space-y-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">
-                {meaning.partOfSpeech}
-              </p>
-              <ol className="list-decimal pl-5 space-y-2 text-sm">
-                {meaning.definitions.map((definition, defIndex) => (
-                  <li key={`${definition.definition}-${defIndex}`}>
-                    <p>{definition.definition}</p>
-                    {definition.example && (
-                      <p className="text-xs text-muted-foreground mt-1">“{definition.example}”</p>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ))}
-
-          {entry.translations && entry.translations.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">
-                {t("dictionary.translations")}
-              </p>
-              <ul className="space-y-2 text-sm">
-                {entry.translations.slice(0, 8).map((translation) => (
-                  <li key={translation.language} className="flex flex-wrap gap-x-2">
-                    <span className="font-medium text-foreground">{translation.language}:</span>
-                    <span className="text-muted-foreground">
-                      {translation.words.slice(0, 6).join(", ")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+        // biome-ignore lint/a11y/useKeyWithClickEvents: delegated handler only intercepts anchor clicks, which are natively keyboard-accessible
+        <div
+          className="wiktionary-content"
+          onClick={handleContentClick}
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is sanitized via DOMPurify in lookupWord
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
       )}
     </Modal>
   );

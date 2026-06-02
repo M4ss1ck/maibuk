@@ -868,6 +868,127 @@ option {
   line-height: 1.4;
 }
 
+/* Wiktionary dictionary dialog content (raw article body, app-controlled styles) */
+.wiktionary-content {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-foreground);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.wiktionary-content h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.wiktionary-content h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 1.5em 0 0.5em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.wiktionary-content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1.25em 0 0.5em;
+}
+
+.wiktionary-content h4,
+.wiktionary-content h5,
+.wiktionary-content h6 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+}
+
+.wiktionary-content p {
+  margin: 0.75em 0;
+}
+
+.wiktionary-content ul,
+.wiktionary-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.wiktionary-content ul {
+  list-style-type: disc;
+}
+
+.wiktionary-content ol {
+  list-style-type: decimal;
+}
+
+.wiktionary-content li {
+  margin: 0.3em 0;
+}
+
+.wiktionary-content dl {
+  margin: 0.5em 0;
+}
+
+.wiktionary-content dd {
+  margin-left: 1.5em;
+  color: var(--color-muted-foreground);
+}
+
+.wiktionary-content a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.wiktionary-content a:hover {
+  text-decoration: underline;
+}
+
+.wiktionary-content a.new {
+  color: var(--color-destructive);
+}
+
+.wiktionary-content table {
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  max-width: 100%;
+}
+
+.wiktionary-content th,
+.wiktionary-content td {
+  border: 1px solid var(--color-table-border);
+  padding: 0.3em 0.5em;
+  text-align: left;
+}
+
+.wiktionary-content th {
+  background: var(--color-table-header);
+  font-weight: 600;
+}
+
+.wiktionary-content blockquote {
+  margin: 0.75em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--color-border);
+  color: var(--color-muted-foreground);
+}
+
+.wiktionary-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.wiktionary-content sup,
+.wiktionary-content sub {
+  font-size: 0.7em;
+}
+
+.wiktionary-content hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 1em 0;
+}
+
 /* ─── Animation keyframes ─── */
 
 @keyframes fade-in {
