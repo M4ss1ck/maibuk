@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, NavLink } from "react-router-dom";
 import { ThemeToggle } from "./ThemeToggle";
 import { APP_VERSION } from "../constants";
@@ -7,12 +7,49 @@ import { ProjectsIcon, SettingsIcon, CloseIcon } from "./icons";
 import { BarChart3, Menu, NotebookPen } from "lucide-react";
 import logo from "../../src-tauri/icons/icon.png";
 import { KeyboardShortcut } from "./ui";
+import { useSettingsStore } from "../features/settings/store";
 
 export function Layout() {
   const { t } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const mainSidebarWidth = useSettingsStore((s) => s.mainSidebarWidth);
+  const setMainSidebarWidth = useSettingsStore((s) => s.setMainSidebarWidth);
+  const isResizing = useRef(false);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
+  // Sidebar drag-resize handler
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizing.current = true;
+      const startX = e.clientX;
+      const startWidth = mainSidebarWidth;
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        if (!isResizing.current) return;
+        const newWidth = Math.max(
+          200,
+          Math.min(480, startWidth + moveEvent.clientX - startX),
+        );
+        setMainSidebarWidth(newWidth);
+      };
+
+      const onMouseUp = () => {
+        isResizing.current = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [mainSidebarWidth, setMainSidebarWidth],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -58,9 +95,10 @@ export function Layout() {
 
       {/* Sidebar - hidden on mobile, shown as drawer when menu is open */}
       <aside
+        style={{ width: `${mainSidebarWidth}px` }}
         className={`
-          fixed md:relative z-50 md:z-auto
-          w-sidebar h-full
+          fixed md:relative z-50 md:z-auto shrink-0
+          h-full
           border-r border-border flex flex-col bg-background
           transform transition-transform duration-300 ease-in-out
           ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
@@ -91,8 +129,8 @@ export function Layout() {
               }`
             }
           >
-            <ProjectsIcon className="w-5 h-5" />
-            <span className="flex-1">{t("common.projects")}</span>
+            <ProjectsIcon className="w-5 h-5 shrink-0" />
+            <span className="flex-1 truncate">{t("common.projects")}</span>
             <KeyboardShortcut
               keys={["g", "p"]}
               className="ml-auto hidden lg:inline-flex"
@@ -109,8 +147,8 @@ export function Layout() {
               }`
             }
           >
-            <NotebookPen className="w-5 h-5" />
-            <span className="flex-1">{t("common.notes")}</span>
+            <NotebookPen className="w-5 h-5 shrink-0" />
+            <span className="flex-1 truncate">{t("common.notes")}</span>
             <KeyboardShortcut
               keys={["g", "n"]}
               className="ml-auto hidden lg:inline-flex"
@@ -127,8 +165,8 @@ export function Layout() {
               }`
             }
           >
-            <BarChart3 className="w-5 h-5" />
-            <span className="flex-1">{t("common.metrics")}</span>
+            <BarChart3 className="w-5 h-5 shrink-0" />
+            <span className="flex-1 truncate">{t("common.metrics")}</span>
             <KeyboardShortcut
               keys={["g", "m"]}
               className="ml-auto hidden lg:inline-flex"
@@ -145,8 +183,8 @@ export function Layout() {
               }`
             }
           >
-            <SettingsIcon className="w-5 h-5" />
-            <span className="flex-1">{t("common.settings")}</span>
+            <SettingsIcon className="w-5 h-5 shrink-0" />
+            <span className="flex-1 truncate">{t("common.settings")}</span>
             <KeyboardShortcut
               keys={["g", "s"]}
               className="ml-auto hidden lg:inline-flex"
@@ -158,6 +196,12 @@ export function Layout() {
           <ThemeToggle />
           <p className="text-sm text-muted-foreground">{APP_VERSION}</p>
         </div>
+
+        {/* Drag handle to resize the sidebar (desktop only) */}
+        <div
+          onMouseDown={handleResizeStart}
+          className="hidden md:block absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+        />
       </aside>
 
       {/* Main content */}

@@ -95,6 +95,7 @@ export interface Settings {
   backupListPageSize: BackupListPageSize;
 
   // Editor layout settings
+  mainSidebarWidth: number;
   sidebarWidth: number;
   notesSidebarWidth: number;
   toolbarExpanded: boolean;
