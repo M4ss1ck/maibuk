@@ -17,6 +17,8 @@ vi.mock("react-i18next", () => ({
         "notes.saved": "Saved",
         "notes.titlePlaceholder": "Note title",
         "notes.bodyPlaceholder": "Start writing...",
+        "notes.collapseHeading": "Collapse heading",
+        "notes.expandHeading": "Expand heading",
         "notes.pin": "Pin",
         "notes.unpin": "Unpin",
         "notes.addTag": "Add tag",
@@ -69,8 +71,8 @@ function buildNote(overrides: Partial<Note>): Note {
   };
 }
 
-describe("NoteEditor checklist extensions", () => {
-  it("passes task-list extensions to the shared Editor", () => {
+describe("NoteEditor extensions", () => {
+  it("passes task-list and collapsible-heading extensions to the shared Editor", () => {
     render(
       <NoteEditor
         note={buildNote({})}
@@ -84,7 +86,7 @@ describe("NoteEditor checklist extensions", () => {
     };
 
     expect(Array.isArray(props?.extraExtensions)).toBe(true);
-    expect(props.extraExtensions).toHaveLength(3);
+    expect(props.extraExtensions).toHaveLength(4);
 
     const taskItemExtension = props.extraExtensions?.[1] as {
       options?: {
@@ -100,9 +102,23 @@ describe("NoteEditor checklist extensions", () => {
         addProseMirrorPlugins?: () => unknown;
       };
     };
+    const collapsibleHeading = props.extraExtensions?.[3] as {
+      options?: {
+        collapseLabel?: string;
+        expandLabel?: string;
+      };
+      config?: {
+        addProseMirrorPlugins?: () => unknown;
+      };
+    };
     expect(taskItemExtension.options?.nested).toBe(true);
     expect(taskItemExtension.config?.draggable).toBe(true);
     expect(typeof taskItemExtension.config?.addNodeView).toBe("function");
     expect(typeof taskDndBehavior.config?.addProseMirrorPlugins).toBe("function");
+    expect(collapsibleHeading.options).toMatchObject({
+      collapseLabel: "Collapse heading",
+      expandLabel: "Expand heading",
+    });
+    expect(typeof collapsibleHeading.config?.addProseMirrorPlugins).toBe("function");
   });
 });
