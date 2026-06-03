@@ -3,11 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { IS_WEB, getDialog, getFileSystem } from "../lib/platform";
 import { CanvasStage, LayersPanel, PropertiesPanel, Toolbar } from "../components/cover-editor";
+import type { ExportChoice } from "../components/cover-editor/Toolbar";
 import { useBookStore } from "../features/books/store";
 import { useCoverStore } from "../features/covers/store";
 import { createDefaultScene, createTextLayer } from "../features/covers/scene/defaults";
 import { loadScene } from "../features/covers/scene/migrate";
-import { dataUrlToBytes, exportScene, type ExportFormat } from "../features/covers/export";
+import { dataUrlToBytes, exportScene, exportScenePdf } from "../features/covers/export";
 import { Button } from "../components/ui/Button";
 import { BackIcon } from "../components/icons";
 import { useShortcuts } from "../lib/shortcuts";
@@ -62,12 +63,22 @@ export function CoverDesigner() {
   }, [currentBook]);
 
   const exportAndSave = useCallback(
-    async (format: ExportFormat) => {
+    async (format: ExportChoice) => {
       const scene = useCoverStore.getState().scene;
-      const dataUrl = await exportScene(scene, { format, targetDpi: scene.doc.dpi });
-      const bytes = dataUrlToBytes(dataUrl);
-      const filename = `${currentBook?.title || "cover"}.${format === "jpeg" ? "jpg" : "png"}`;
-      const mimeType = format === "png" ? "image/png" : "image/jpeg";
+      let bytes: Uint8Array;
+      let ext: string;
+      let mimeType: string;
+      if (format === "pdf") {
+        bytes = await exportScenePdf(scene);
+        ext = "pdf";
+        mimeType = "application/pdf";
+      } else {
+        const dataUrl = await exportScene(scene, { format, targetDpi: scene.doc.dpi });
+        bytes = dataUrlToBytes(dataUrl);
+        ext = format === "jpeg" ? "jpg" : "png";
+        mimeType = format === "png" ? "image/png" : "image/jpeg";
+      }
+      const filename = `${currentBook?.title || "cover"}.${ext}`;
 
       if (IS_WEB) {
         const fs = await getFileSystem();
@@ -77,7 +88,7 @@ export function CoverDesigner() {
       const dialog = await getDialog();
       const filePath = await dialog.save({
         defaultPath: filename,
-        filters: [{ name: format.toUpperCase(), extensions: [format === "jpeg" ? "jpg" : "png"] }],
+        filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
       });
       if (filePath) {
         const fs = await getFileSystem();

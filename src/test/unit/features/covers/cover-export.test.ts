@@ -21,3 +21,12 @@ describe("dataUrlToBytes", () => {
     expect(Array.from(bytes)).toEqual([72, 105]);
   });
 });
+
+describe("pxToPoints", () => {
+  it("converts pixels to PDF points at the given dpi", async () => {
+    const { pxToPoints } = await import("../../../../features/covers/export");
+    // 300px at 300dpi = 1 inch = 72 points
+    expect(pxToPoints(300, 300)).toBe(72);
+    expect(pxToPoints(1800, 300)).toBe(432);
+  });
+});

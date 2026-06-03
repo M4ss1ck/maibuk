@@ -10,6 +10,11 @@ export function exportMultiplier(designDpi: number, targetDpi: number): number {
   return designDpi > 0 && targetDpi > 0 ? targetDpi / designDpi : 1;
 }
 
+/** Convert a pixel measurement at `dpi` into PDF points (1pt = 1/72 inch). */
+export function pxToPoints(px: number, dpi: number): number {
+  return dpi > 0 ? (px / dpi) * 72 : px;
+}
+
 /** Decode a base64 data URL into raw bytes. */
 export function dataUrlToBytes(dataUrl: string): Uint8Array {
   const base64 = dataUrl.split(",")[1] ?? "";
@@ -52,4 +57,23 @@ export async function exportScene(
   } finally {
     canvas.dispose();
   }
+}
+
+/**
+ * Export a scene as a single-page, print-ready PDF: a full-bleed page sized to
+ * the trim (in points) with the high-DPI render embedded edge to edge.
+ */
+export async function exportScenePdf(scene: CoverScene): Promise<Uint8Array> {
+  const { PDFDocument } = await import("pdf-lib");
+  const pngDataUrl = await exportScene(scene, { format: "png", targetDpi: scene.doc.dpi });
+  const pngBytes = dataUrlToBytes(pngDataUrl);
+
+  const pdf = await PDFDocument.create();
+  const widthPt = pxToPoints(scene.doc.width, scene.doc.dpi);
+  const heightPt = pxToPoints(scene.doc.height, scene.doc.dpi);
+  const page = pdf.addPage([widthPt, heightPt]);
+  const png = await pdf.embedPng(pngBytes);
+  page.drawImage(png, { x: 0, y: 0, width: widthPt, height: heightPt });
+
+  return pdf.save();
 }

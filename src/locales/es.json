@@ -499,6 +499,7 @@
     "export": "Exportar",
     "pngExport": "Exportar como PNG",
     "jpgExport": "Exportar como JPG",
+    "pdfExport": "Exportar como PDF (impresión)",
     "bringForward": "Traer al Frente",
     "sendBackward": "Enviar Atrás",
     "tips": {

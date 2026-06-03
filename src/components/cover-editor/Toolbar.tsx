@@ -28,7 +28,8 @@ import {
   getPreset,
 } from "../../features/covers/scene/defaults";
 import { TEMPLATES, buildTemplateScene } from "../../features/covers/scene/templates";
-import type { ExportFormat } from "../../features/covers/export";
+
+export type ExportChoice = "png" | "jpeg" | "pdf";
 import { Button } from "../ui/Button";
 import {
   ChevronDownIcon,
@@ -40,7 +41,7 @@ import {
 } from "../icons";
 
 interface ToolbarProps {
-  onExport: (format: ExportFormat) => void;
+  onExport: (format: ExportChoice) => void;
   bookTitle: string;
   bookAuthor: string;
 }
@@ -319,6 +320,9 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
             </button>
             <button type="button" onClick={() => { onExport("jpeg"); setShowExport(false); }} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.jpgExport")}
+            </button>
+            <button type="button" onClick={() => { onExport("pdf"); setShowExport(false); }} className="w-full px-4 py-2 text-left hover:bg-muted">
+              {t("cover.pdfExport")}
             </button>
           </div>
         )}
