@@ -1,0 +1,52 @@
+import { Canvas } from "fabric";
+import { applyBackground, buildObject } from "../../components/cover-editor/render/toFabric";
+import type { CoverScene } from "./scene/schema";
+
+export type ExportFormat = "png" | "jpeg";
+
+/** Multiplier to scale a design-DPI render up/down to a target DPI. */
+export function exportMultiplier(designDpi: number, targetDpi: number): number {
+  return designDpi > 0 && targetDpi > 0 ? targetDpi / designDpi : 1;
+}
+
+/** Decode a base64 data URL into raw bytes. */
+export function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/** Render a scene onto a fresh offscreen Fabric canvas at full document size. */
+async function renderSceneToCanvas(scene: CoverScene): Promise<Canvas> {
+  const el = document.createElement("canvas");
+  const canvas = new Canvas(el, { width: scene.doc.width, height: scene.doc.height });
+  await applyBackground(canvas, scene.background);
+  for (const layer of scene.layers) {
+    if (layer.hidden) continue;
+    const obj = await buildObject(layer);
+    if (obj) canvas.add(obj);
+  }
+  canvas.requestRenderAll();
+  return canvas;
+}
+
+/** Render and export a scene to a PNG/JPEG data URL at the target DPI. */
+export async function exportScene(
+  scene: CoverScene,
+  opts: { format: ExportFormat; quality?: number; targetDpi?: number }
+): Promise<string> {
+  const canvas = await renderSceneToCanvas(scene);
+  try {
+    return canvas.toDataURL({
+      format: opts.format,
+      quality: opts.quality ?? 0.92,
+      multiplier: exportMultiplier(scene.doc.dpi, opts.targetDpi ?? scene.doc.dpi),
+    });
+  } finally {
+    canvas.dispose();
+  }
+}
