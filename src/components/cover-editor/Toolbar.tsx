@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlignCenterHorizontal,
@@ -39,6 +39,8 @@ import {
 } from "../icons";
 
 export type ExportChoice = "png" | "jpeg" | "pdf";
+
+type MenuKey = "presets" | "templates" | "text" | "shape" | "export";
 
 interface ToolbarProps {
   onExport: (format: ExportChoice) => void;
@@ -90,12 +92,29 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
     { edge: "bottom", Icon: AlignEndHorizontal, label: t("cover.align.bottom") },
   ];
 
-  const [showPresets, setShowPresets] = useState(false);
-  const [showTextMenu, setShowTextMenu] = useState(false);
-  const [showShapeMenu, setShowShapeMenu] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [showExport, setShowExport] = useState(false);
+  const [openMenu, setOpenMenu] = useState<MenuKey | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const toggleMenu = (key: MenuKey) => setOpenMenu((cur) => (cur === key ? null : key));
+  const closeMenu = () => setOpenMenu(null);
+
+  // Dismiss any open dropdown on outside click or Escape.
+  useEffect(() => {
+    if (openMenu === null) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closeMenu();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeMenu();
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openMenu]);
 
   const applyTemplate = (templateId: string) => {
     replaceScene(
@@ -105,12 +124,12 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         presetId: scene.doc.presetId ?? "6x9",
       })
     );
-    setShowTemplates(false);
+    closeMenu();
   };
 
   const addShape = (shape: "rect" | "ellipse" | "line") => {
     addLayer(createShapeLayer({ shape, docWidth: scene.doc.width, docHeight: scene.doc.height }));
-    setShowShapeMenu(false);
+    closeMenu();
   };
 
   const currentPreset = PRESETS.find((p) => p.id === scene.doc.presetId) ?? PRESETS[0];
@@ -131,7 +150,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         docHeight: scene.doc.height,
       })
     );
-    setShowTextMenu(false);
+    closeMenu();
   };
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,19 +181,19 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
       safeMargin: Math.round(p.width * 0.05),
       presetId: p.id,
     });
-    setShowPresets(false);
+    closeMenu();
   };
 
   return (
-    <div className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2">
+    <div ref={rootRef} className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2">
       {/* Preset selector */}
       <div className="relative">
-        <Button variant="ghost" size="sm" onClick={() => setShowPresets((v) => !v)} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+        <Button variant="ghost" size="sm" onClick={() => toggleMenu("presets")} className="gap-1 sm:gap-2 text-xs sm:text-sm">
           <DimensionIcon className="w-4 h-4" />
           <span className="hidden sm:inline">{currentPreset.name}</span>
           <ChevronDownIcon className="w-3 h-3" />
         </Button>
-        {showPresets && (
+        {openMenu === "presets" && (
           <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
             {PRESETS.map((p) => (
               <button
@@ -193,11 +212,11 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
       {/* Templates */}
       <div className="relative">
-        <Button variant="ghost" size="sm" onClick={() => setShowTemplates((v) => !v)} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+        <Button variant="ghost" size="sm" onClick={() => toggleMenu("templates")} className="gap-1 sm:gap-2 text-xs sm:text-sm">
           <LayoutTemplate className="w-4 h-4" />
           <span className="hidden sm:inline">{t("cover.templates")}</span>
         </Button>
-        {showTemplates && (
+        {openMenu === "templates" && (
           <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
             {TEMPLATES.map((tpl) => (
               <button key={tpl.id} type="button" onClick={() => applyTemplate(tpl.id)} className="w-full px-4 py-2 text-left hover:bg-muted">
@@ -212,11 +231,11 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
       {/* Add text */}
       <div className="relative">
-        <Button variant="ghost" size="sm" onClick={() => setShowTextMenu((v) => !v)} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+        <Button variant="ghost" size="sm" onClick={() => toggleMenu("text")} className="gap-1 sm:gap-2 text-xs sm:text-sm">
           <TextIcon className="w-4 h-4" />
           <span className="hidden sm:inline">{t("cover.addText")}</span>
         </Button>
-        {showTextMenu && (
+        {openMenu === "text" && (
           <div className="absolute top-full left-0 mt-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
             <button type="button" onClick={() => addText("title")} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.toolbar.title")}
@@ -240,11 +259,11 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
       {/* Add shape */}
       <div className="relative">
-        <Button variant="ghost" size="sm" onClick={() => setShowShapeMenu((v) => !v)} className="gap-1 sm:gap-2 text-xs sm:text-sm" title={t("cover.addShape")}>
+        <Button variant="ghost" size="sm" onClick={() => toggleMenu("shape")} className="gap-1 sm:gap-2 text-xs sm:text-sm" title={t("cover.addShape")}>
           <Shapes className="w-4 h-4" />
           <span className="hidden sm:inline">{t("cover.addShape")}</span>
         </Button>
-        {showShapeMenu && (
+        {openMenu === "shape" && (
           <div className="absolute top-full left-0 mt-1 w-44 bg-card border border-border rounded-lg shadow-lg z-50">
             <button type="button" onClick={() => addShape("rect")} className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2">
               <Square className="w-4 h-4" /> {t("cover.shape.rect")}
@@ -309,19 +328,19 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
       {/* Export */}
       <div className="relative">
-        <Button variant="primary" size="sm" onClick={() => setShowExport((v) => !v)} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+        <Button variant="primary" size="sm" onClick={() => toggleMenu("export")} className="gap-1 sm:gap-2 text-xs sm:text-sm">
           <ExportIcon className="w-4 h-4" />
           <span className="hidden sm:inline">{t("cover.export")}</span>
         </Button>
-        {showExport && (
+        {openMenu === "export" && (
           <div className="absolute top-full right-0 mt-1 w-40 bg-card border border-border rounded-lg shadow-lg z-50">
-            <button type="button" onClick={() => { onExport("png"); setShowExport(false); }} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button type="button" onClick={() => { onExport("png"); closeMenu(); }} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.pngExport")}
             </button>
-            <button type="button" onClick={() => { onExport("jpeg"); setShowExport(false); }} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button type="button" onClick={() => { onExport("jpeg"); closeMenu(); }} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.jpgExport")}
             </button>
-            <button type="button" onClick={() => { onExport("pdf"); setShowExport(false); }} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button type="button" onClick={() => { onExport("pdf"); closeMenu(); }} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.pdfExport")}
             </button>
           </div>
