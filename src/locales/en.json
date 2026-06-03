@@ -499,6 +499,7 @@
     "export": "Export",
     "pngExport": "Export as PNG",
     "jpgExport": "Export as JPG",
+    "pdfExport": "Export as PDF (print)",
     "bringForward": "Bring Forward",
     "sendBackward": "Send Backward",
     "tips": {
@@ -511,7 +512,72 @@
       "subtitle": "Subtitle",
       "author": "Author Name"
     },
-    "backgroundColor": "Color"
+    "backgroundColor": "Color",
+    "addShape": "Add Shape",
+    "templates": "Templates",
+    "toggleOverlays": "Toggle margin guides",
+    "toggleSnapping": "Toggle snapping",
+    "align": {
+      "left": "Align left",
+      "hcenter": "Center horizontally",
+      "right": "Align right",
+      "top": "Align top",
+      "vcenter": "Center vertically",
+      "bottom": "Align bottom"
+    },
+    "shape": {
+      "rect": "Rectangle",
+      "ellipse": "Ellipse",
+      "line": "Line"
+    },
+    "filters": {
+      "title": "Filters",
+      "brightness": "Brightness",
+      "contrast": "Contrast",
+      "saturation": "Saturation",
+      "blur": "Blur"
+    },
+    "backgroundImage": "Background Image",
+    "removeBackgroundImage": "Remove Background Image",
+    "undo": "Undo",
+    "redo": "Redo",
+    "duplicate": "Duplicate",
+    "layers": {
+      "title": "Layers",
+      "empty": "No layers yet",
+      "reorderUp": "Bring forward",
+      "reorderDown": "Send backward",
+      "toggleVisible": "Toggle visibility",
+      "toggleLock": "Toggle lock"
+    },
+    "props": {
+      "title": "Properties",
+      "size": "Size",
+      "lineHeight": "Line height",
+      "letterSpacing": "Spacing",
+      "fill": "Fill",
+      "stroke": "Stroke",
+      "shadow": "Shadow",
+      "width": "Width",
+      "height": "Height",
+      "rotation": "Rotation",
+      "opacity": "Opacity",
+      "radius": "Corner radius",
+      "curve": "Curve text"
+    },
+    "paint": {
+      "solid": "Solid",
+      "linear": "Linear",
+      "radial": "Radial",
+      "angle": "Angle",
+      "addStop": "Add stop",
+      "removeStop": "Remove stop"
+    },
+    "fit": {
+      "cover": "Cover",
+      "contain": "Contain",
+      "stretch": "Stretch"
+    }
   },
   "sync": {
     "title": "Sync",

@@ -499,6 +499,7 @@
     "export": "Exportar",
     "pngExport": "Exportar como PNG",
     "jpgExport": "Exportar como JPG",
+    "pdfExport": "Exportar como PDF (impresión)",
     "bringForward": "Traer al Frente",
     "sendBackward": "Enviar Atrás",
     "tips": {
@@ -511,7 +512,72 @@
       "subtitle": "Subtítulo",
       "author": "Nombre del Autor"
     },
-    "backgroundColor": "Color"
+    "backgroundColor": "Color",
+    "addShape": "Añadir Forma",
+    "templates": "Plantillas",
+    "toggleOverlays": "Alternar guías de margen",
+    "toggleSnapping": "Alternar ajuste",
+    "align": {
+      "left": "Alinear a la izquierda",
+      "hcenter": "Centrar horizontalmente",
+      "right": "Alinear a la derecha",
+      "top": "Alinear arriba",
+      "vcenter": "Centrar verticalmente",
+      "bottom": "Alinear abajo"
+    },
+    "shape": {
+      "rect": "Rectángulo",
+      "ellipse": "Elipse",
+      "line": "Línea"
+    },
+    "filters": {
+      "title": "Filtros",
+      "brightness": "Brillo",
+      "contrast": "Contraste",
+      "saturation": "Saturación",
+      "blur": "Desenfoque"
+    },
+    "backgroundImage": "Imagen de Fondo",
+    "removeBackgroundImage": "Quitar Imagen de Fondo",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
+    "duplicate": "Duplicar",
+    "layers": {
+      "title": "Capas",
+      "empty": "Aún no hay capas",
+      "reorderUp": "Traer al frente",
+      "reorderDown": "Enviar atrás",
+      "toggleVisible": "Alternar visibilidad",
+      "toggleLock": "Alternar bloqueo"
+    },
+    "props": {
+      "title": "Propiedades",
+      "size": "Tamaño",
+      "lineHeight": "Interlineado",
+      "letterSpacing": "Espaciado",
+      "fill": "Relleno",
+      "stroke": "Contorno",
+      "shadow": "Sombra",
+      "width": "Ancho",
+      "height": "Alto",
+      "rotation": "Rotación",
+      "opacity": "Opacidad",
+      "radius": "Radio de esquina",
+      "curve": "Curvar texto"
+    },
+    "paint": {
+      "solid": "Sólido",
+      "linear": "Lineal",
+      "radial": "Radial",
+      "angle": "Ángulo",
+      "addStop": "Añadir parada",
+      "removeStop": "Quitar parada"
+    },
+    "fit": {
+      "cover": "Cubrir",
+      "contain": "Contener",
+      "stretch": "Estirar"
+    }
   },
   "sync": {
     "title": "Sincronización",
