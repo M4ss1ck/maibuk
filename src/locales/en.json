@@ -513,6 +513,7 @@
     },
     "backgroundColor": "Color",
     "addShape": "Add Shape",
+    "templates": "Templates",
     "toggleOverlays": "Toggle margin guides",
     "toggleSnapping": "Toggle snapping",
     "align": {

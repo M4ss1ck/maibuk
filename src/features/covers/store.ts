@@ -45,6 +45,7 @@ interface CoverStore {
   toggleLocked: (id: string) => void;
   setBackground: (bg: Background) => void;
   setDoc: (doc: CoverDoc) => void;
+  replaceScene: (scene: CoverScene) => void;
   undo: () => void;
   redo: () => void;
   markSaved: () => void;
@@ -171,6 +172,12 @@ export const useCoverStore = create<CoverStore>((set, get) => {
     setDoc: (doc) => {
       const { scene } = get();
       commit({ ...scene, doc });
+    },
+
+    // Apply a whole new scene (e.g. a template) as an undoable, dirtying change.
+    replaceScene: (next) => {
+      commit(next);
+      set({ selectedId: null });
     },
 
     undo: () => {

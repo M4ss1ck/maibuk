@@ -163,7 +163,7 @@ export function CoverDesigner() {
       </div>
 
       {/* Toolbar */}
-      <Toolbar onExport={exportAndSave} />
+      <Toolbar onExport={exportAndSave} bookTitle={currentBook.title} bookAuthor={currentBook.authorName} />
 
       {/* Main area: layers | canvas | properties */}
       <div className="flex-1 flex min-h-0">

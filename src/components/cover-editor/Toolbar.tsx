@@ -9,6 +9,7 @@ import {
   AlignStartVertical,
   Circle,
   Copy,
+  LayoutTemplate,
   Magnet,
   Minus,
   Redo2,
@@ -26,6 +27,7 @@ import {
   createTextLayer,
   getPreset,
 } from "../../features/covers/scene/defaults";
+import { TEMPLATES, buildTemplateScene } from "../../features/covers/scene/templates";
 import type { ExportFormat } from "../../features/covers/export";
 import { Button } from "../ui/Button";
 import {
@@ -39,6 +41,8 @@ import {
 
 interface ToolbarProps {
   onExport: (format: ExportFormat) => void;
+  bookTitle: string;
+  bookAuthor: string;
 }
 
 function loadImageSize(src: string): Promise<{ width: number; height: number }> {
@@ -59,10 +63,11 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-export function Toolbar({ onExport }: ToolbarProps) {
+export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
   const { t } = useTranslation();
   const scene = useCoverStore((s) => s.scene);
   const selectedId = useCoverStore((s) => s.selectedId);
+  const replaceScene = useCoverStore((s) => s.replaceScene);
   const addLayer = useCoverStore((s) => s.addLayer);
   const removeLayer = useCoverStore((s) => s.removeLayer);
   const duplicateSelected = useCoverStore((s) => s.duplicateSelected);
@@ -87,8 +92,20 @@ export function Toolbar({ onExport }: ToolbarProps) {
   const [showPresets, setShowPresets] = useState(false);
   const [showTextMenu, setShowTextMenu] = useState(false);
   const [showShapeMenu, setShowShapeMenu] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const applyTemplate = (templateId: string) => {
+    replaceScene(
+      buildTemplateScene(templateId, {
+        title: bookTitle,
+        author: bookAuthor,
+        presetId: scene.doc.presetId ?? "6x9",
+      })
+    );
+    setShowTemplates(false);
+  };
 
   const addShape = (shape: "rect" | "ellipse" | "line") => {
     addLayer(createShapeLayer({ shape, docWidth: scene.doc.width, docHeight: scene.doc.height }));
@@ -167,6 +184,23 @@ export function Toolbar({ onExport }: ToolbarProps) {
               >
                 <span className="font-medium">{p.name}</span>
                 <span className="text-xs text-muted-foreground">{p.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Templates */}
+      <div className="relative">
+        <Button variant="ghost" size="sm" onClick={() => setShowTemplates((v) => !v)} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+          <LayoutTemplate className="w-4 h-4" />
+          <span className="hidden sm:inline">{t("cover.templates")}</span>
+        </Button>
+        {showTemplates && (
+          <div className="absolute top-full left-0 mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50">
+            {TEMPLATES.map((tpl) => (
+              <button key={tpl.id} type="button" onClick={() => applyTemplate(tpl.id)} className="w-full px-4 py-2 text-left hover:bg-muted">
+                {tpl.name}
               </button>
             ))}
           </div>

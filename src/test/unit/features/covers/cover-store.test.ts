@@ -151,6 +151,20 @@ describe("useCoverStore", () => {
     expect(useCoverStore.getState().dirty).toBe(false);
   });
 
+  it("replaceScene applies a new scene that is dirty and undoable", () => {
+    const st = useCoverStore.getState();
+    st.addLayer(freshTitle());
+    st.markSaved();
+    const next = createDefaultScene("kindle");
+    next.layers.push(freshTitle(), freshTitle());
+    st.replaceScene(next);
+    expect(useCoverStore.getState().scene.doc.presetId).toBe("kindle");
+    expect(useCoverStore.getState().scene.layers).toHaveLength(2);
+    expect(useCoverStore.getState().dirty).toBe(true);
+    st.undo();
+    expect(useCoverStore.getState().scene.layers).toHaveLength(1);
+  });
+
   it("markSaved clears dirty without changing the scene", () => {
     const st = useCoverStore.getState();
     st.addLayer(freshTitle());

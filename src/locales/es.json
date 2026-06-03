@@ -513,6 +513,7 @@
     },
     "backgroundColor": "Color",
     "addShape": "Añadir Forma",
+    "templates": "Plantillas",
     "toggleOverlays": "Alternar guías de margen",
     "toggleSnapping": "Alternar ajuste",
     "align": {
