@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { Canvas, type FabricObject, IText } from "fabric";
 import { useCoverStore } from "../../features/covers/store";
 import { applyBackground, buildObject } from "./render/toFabric";
-import { readGeometry } from "./render/fromFabric";
 import { buildGuideLine, buildOverlays } from "./render/overlays";
 import { snapAxis } from "../../features/covers/scene/snap";
 import { collectFonts, ensureFontsLoaded } from "../../features/covers/scene/fonts";
@@ -40,10 +39,39 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
 
     const { updateLayer, select } = useCoverStore.getState();
 
+    const clearGuides = () => {
+      for (const g of guidesRef.current) canvas.remove(g);
+      guidesRef.current = [];
+      canvas.requestRenderAll();
+    };
+
     canvas.on("object:modified", (e) => {
+      clearGuides();
       if (applyingRef.current || !e.target) return;
-      const read = readGeometry(e.target);
-      if (read) updateLayer(read.id, read.patch);
+      const obj = e.target;
+      const id = layerIdOf(obj);
+      if (!id) return;
+      const layer = useCoverStore.getState().scene.layers.find((l) => l.id === id);
+      if (!layer) return;
+      const sx = obj.scaleX ?? 1;
+      const sy = obj.scaleY ?? 1;
+      const patch: Record<string, unknown> = {
+        x: obj.left ?? 0,
+        y: obj.top ?? 0,
+        rotation: obj.angle ?? 0,
+        opacity: obj.opacity ?? 1,
+      };
+      if (layer.type === "text") {
+        // Map scaling onto font size (vertical) and box width (horizontal) so
+        // the text actually resizes instead of just stretching its box.
+        patch.font = { ...layer.font, size: Math.max(1, Math.round(layer.font.size * sy)) };
+        patch.width = Math.round((obj.width ?? layer.width) * sx);
+        if (obj instanceof IText) patch.text = obj.text ?? "";
+      } else {
+        patch.width = obj.getScaledWidth();
+        patch.height = obj.getScaledHeight();
+      }
+      updateLayer(id, patch as Parameters<typeof updateLayer>[1]);
     });
 
     canvas.on("selection:created", (e) => {
@@ -55,6 +83,7 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
       select(layerIdOf(e.selected?.[0]) ?? null);
     });
     canvas.on("selection:cleared", () => {
+      clearGuides();
       if (applyingRef.current) return;
       select(null);
     });
@@ -74,11 +103,6 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
       const id = layerIdOf(target);
       if (id) updateLayer(id, { text: target.text ?? "" });
     });
-
-    const clearGuides = () => {
-      for (const g of guidesRef.current) canvas.remove(g);
-      guidesRef.current = [];
-    };
 
     canvas.on("object:moving", (e) => {
       const obj = e.target;
@@ -143,6 +167,7 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
     (async () => {
       applyingRef.current = true;
       canvas.remove(...canvas.getObjects());
+      guidesRef.current = [];
       await applyBackground(canvas, scene.background);
       for (const layer of scene.layers) {
         if (cancelled) break;

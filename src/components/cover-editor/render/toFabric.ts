@@ -10,6 +10,7 @@ import {
   Path,
   Rect,
   Shadow,
+  Textbox,
   type TFiller,
 } from "fabric";
 import type { ImageLayer } from "../../../features/covers/scene/schema";
@@ -36,9 +37,38 @@ function paintToFill(paint: Paint): string | TFiller {
   });
 }
 
-/** Apply the scene background to a Fabric canvas. Phase 1: solid + image. */
+/**
+ * Build a pixel-space gradient sized to `w`×`h` for use as a canvas background.
+ * (Percentage units need an owning object's box, which a canvas background lacks,
+ * so it would otherwise collapse to a single color.)
+ */
+function gradientToCanvasFill(bg: Background, w: number, h: number): string | TFiller {
+  if (bg.type === "linear-gradient") {
+    const colorStops = sortStops(bg.stops).map((s) => ({ offset: s.offset, color: s.color }));
+    const c = linearGradientCoords(bg.angle, w, h);
+    return new Gradient({ type: "linear", gradientUnits: "pixels", coords: c, colorStops });
+  }
+  if (bg.type === "radial-gradient") {
+    const colorStops = sortStops(bg.stops).map((s) => ({ offset: s.offset, color: s.color }));
+    return new Gradient({
+      type: "radial",
+      gradientUnits: "pixels",
+      coords: { x1: bg.cx * w, y1: bg.cy * h, r1: 0, x2: bg.cx * w, y2: bg.cy * h, r2: bg.r * Math.max(w, h) },
+      colorStops,
+    });
+  }
+  return "#1a1a2e";
+}
+
+/** Apply the scene background to a Fabric canvas. Supports solid, image, gradients. */
 export async function applyBackground(canvas: Canvas, bg: Background): Promise<void> {
   canvas.backgroundImage = undefined;
+  // Backgrounds are drawn in doc space (backgroundVpt), so size to doc, not the
+  // zoomed element.
+  const zoom = canvas.getZoom() || 1;
+  const docW = canvas.getWidth() / zoom;
+  const docH = canvas.getHeight() / zoom;
+
   if (bg.type === "solid") {
     canvas.backgroundColor = bg.color;
     return;
@@ -48,10 +78,8 @@ export async function applyBackground(canvas: Canvas, bg: Background): Promise<v
     const img = await FabricImage.fromURL(bg.src, { crossOrigin: "anonymous" });
     const w = img.width ?? 1;
     const h = img.height ?? 1;
-    const cw = canvas.getWidth();
-    const ch = canvas.getHeight();
-    let scaleX = cw / w;
-    let scaleY = ch / h;
+    let scaleX = docW / w;
+    let scaleY = docH / h;
     if (bg.fit === "cover") {
       const s = Math.max(scaleX, scaleY);
       scaleX = s;
@@ -65,9 +93,9 @@ export async function applyBackground(canvas: Canvas, bg: Background): Promise<v
     canvas.backgroundImage = img;
     return;
   }
-  // Gradient backgrounds: build a Paint of the same shape and fill the canvas.
+  // Gradient backgrounds: fill with a pixel-space gradient sized to the doc.
   if (bg.type === "linear-gradient" || bg.type === "radial-gradient") {
-    canvas.backgroundColor = paintToFill(bg as Paint) as TFiller;
+    canvas.backgroundColor = gradientToCanvasFill(bg, docW, docH);
     return;
   }
   canvas.backgroundColor = "#1a1a2e";
@@ -115,7 +143,8 @@ function applyCommon(obj: FabricObject, layer: Layer): void {
 /** Build a Fabric object for a scene layer. Returns null for unsupported layers. */
 export async function buildObject(layer: Layer): Promise<FabricObject | null> {
   if (layer.type === "text") {
-    const obj = new IText(layer.text, {
+    const curved = !!(layer.curve && layer.curve.spread > 0);
+    const opts = {
       fontFamily: layer.font.family,
       fontSize: layer.font.size,
       fontWeight: layer.font.weight,
@@ -125,7 +154,10 @@ export async function buildObject(layer: Layer): Promise<FabricObject | null> {
       textAlign: layer.align,
       fill: paintToFill(layer.fill),
       width: layer.width,
-    });
+    };
+    // Textbox honors `width` (so alignment/centering work); curved text needs a
+    // path, which only the plain IText supports.
+    const obj = curved ? new IText(layer.text, opts) : new Textbox(layer.text, opts);
     if (layer.stroke && layer.stroke.width > 0) {
       obj.set({ stroke: layer.stroke.color, strokeWidth: layer.stroke.width });
     }

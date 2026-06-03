@@ -28,7 +28,7 @@ function NumberField({
         step={step}
         min={min}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-20 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
+        className="no-spinner w-20 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
       />
     </label>
   );
@@ -117,7 +117,7 @@ function TextProperties({ layer }: { layer: TextLayer }) {
               min={0}
               value={layer.stroke.width}
               onChange={(e) => updateLayer(layer.id, { stroke: { color: layer.stroke?.color ?? "#000000", width: Number(e.target.value) } })}
-              className="w-16 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
+              className="no-spinner w-16 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
             />
           </div>
         )}
@@ -207,7 +207,7 @@ function ShapeProperties({ layer }: { layer: ShapeLayer }) {
               min={0}
               value={layer.stroke.width}
               onChange={(e) => updateLayer(layer.id, { stroke: { color: layer.stroke?.color ?? "#000000", width: Number(e.target.value) } })}
-              className="w-16 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
+              className="no-spinner w-16 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
             />
           </div>
         )}

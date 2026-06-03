@@ -28,8 +28,6 @@ import {
   getPreset,
 } from "../../features/covers/scene/defaults";
 import { TEMPLATES, buildTemplateScene } from "../../features/covers/scene/templates";
-
-export type ExportChoice = "png" | "jpeg" | "pdf";
 import { Button } from "../ui/Button";
 import {
   ChevronDownIcon,
@@ -39,6 +37,8 @@ import {
   TextIcon,
   TrashIcon,
 } from "../icons";
+
+export type ExportChoice = "png" | "jpeg" | "pdf";
 
 interface ToolbarProps {
   onExport: (format: ExportChoice) => void;
@@ -175,7 +175,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
           <ChevronDownIcon className="w-3 h-3" />
         </Button>
         {showPresets && (
-          <div className="absolute top-full left-0 mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50">
+          <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
             {PRESETS.map((p) => (
               <button
                 type="button"
@@ -198,7 +198,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
           <span className="hidden sm:inline">{t("cover.templates")}</span>
         </Button>
         {showTemplates && (
-          <div className="absolute top-full left-0 mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50">
+          <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
             {TEMPLATES.map((tpl) => (
               <button key={tpl.id} type="button" onClick={() => applyTemplate(tpl.id)} className="w-full px-4 py-2 text-left hover:bg-muted">
                 {tpl.name}
@@ -217,7 +217,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
           <span className="hidden sm:inline">{t("cover.addText")}</span>
         </Button>
         {showTextMenu && (
-          <div className="absolute top-full left-0 mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50">
+          <div className="absolute top-full left-0 mt-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
             <button type="button" onClick={() => addText("title")} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.toolbar.title")}
             </button>
@@ -245,7 +245,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
           <span className="hidden sm:inline">{t("cover.addShape")}</span>
         </Button>
         {showShapeMenu && (
-          <div className="absolute top-full left-0 mt-1 w-44 bg-popover border border-border rounded-lg shadow-lg z-50">
+          <div className="absolute top-full left-0 mt-1 w-44 bg-card border border-border rounded-lg shadow-lg z-50">
             <button type="button" onClick={() => addShape("rect")} className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2">
               <Square className="w-4 h-4" /> {t("cover.shape.rect")}
             </button>
@@ -314,7 +314,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
           <span className="hidden sm:inline">{t("cover.export")}</span>
         </Button>
         {showExport && (
-          <div className="absolute top-full right-0 mt-1 w-40 bg-popover border border-border rounded-lg shadow-lg z-50">
+          <div className="absolute top-full right-0 mt-1 w-40 bg-card border border-border rounded-lg shadow-lg z-50">
             <button type="button" onClick={() => { onExport("png"); setShowExport(false); }} className="w-full px-4 py-2 text-left hover:bg-muted">
               {t("cover.pngExport")}
             </button>

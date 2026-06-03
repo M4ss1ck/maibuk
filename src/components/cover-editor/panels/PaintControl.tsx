@@ -96,7 +96,7 @@ export function PaintControl({ paint, onChange }: { paint: Paint; onChange: (p: 
                 max={1}
                 value={paint[k]}
                 onChange={(e) => onChange({ ...paint, [k]: Number(e.target.value) })}
-                className="w-full px-1 py-0.5 border border-border rounded bg-background text-foreground text-right"
+                className="no-spinner w-full px-1 py-0.5 border border-border rounded bg-background text-foreground text-right"
               />
             </label>
           ))}
@@ -120,7 +120,7 @@ export function PaintControl({ paint, onChange }: { paint: Paint; onChange: (p: 
                 max={1}
                 value={stop.offset}
                 onChange={(e) => updateStop(i, { offset: Number(e.target.value) })}
-                className="w-16 px-1 py-0.5 border border-border rounded bg-background text-foreground text-right text-xs"
+                className="no-spinner w-16 px-1 py-0.5 border border-border rounded bg-background text-foreground text-right text-xs"
               />
               <button
                 type="button"

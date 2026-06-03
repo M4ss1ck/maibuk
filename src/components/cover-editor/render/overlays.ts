@@ -24,8 +24,9 @@ export function buildOverlays(doc: CoverDoc): FabricObject[] {
           height: doc.height - m * 2,
           fill: "transparent",
           stroke: SAFE_COLOR,
-          strokeWidth: 2,
-          strokeDashArray: [12, 12],
+          strokeWidth: 1.5,
+          strokeUniform: true,
+          strokeDashArray: [10, 8],
         })
       )
     );
@@ -38,7 +39,7 @@ export function buildGuideLine(orientation: "v" | "h", pos: number, doc: CoverDo
   const coords: [number, number, number, number] =
     orientation === "v" ? [pos, 0, pos, doc.height] : [0, pos, doc.width, pos];
   return markHelper(
-    new Line(coords, { stroke: GUIDE_COLOR, strokeWidth: 1, selectable: false, evented: false })
+    new Line(coords, { stroke: GUIDE_COLOR, strokeWidth: 1, strokeUniform: true, selectable: false, evented: false })
   );
 }
 
