@@ -1,171 +1,101 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { IS_WEB, getDialog, getFileSystem } from "../lib/platform";
-import { CoverCanvas, CoverToolbar, type CoverCanvasRef } from "../components/cover-editor";
-import { useBookStore } from "../features/books/store";
-import {
-  COVER_DIMENSIONS,
-  DEFAULT_TEXT_STYLES,
-  type CoverDimension,
-  type TextStyle,
-} from "../features/covers/types";
-import { Button } from "../components/ui/Button";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { IS_WEB, getDialog, getFileSystem } from "../lib/platform";
+import { CanvasStage, LayersPanel, PropertiesPanel, Toolbar } from "../components/cover-editor";
+import { useBookStore } from "../features/books/store";
+import { useCoverStore } from "../features/covers/store";
+import { createDefaultScene, createTextLayer } from "../features/covers/scene/defaults";
+import { loadScene } from "../features/covers/scene/migrate";
+import { dataUrlToBytes, exportScene, type ExportFormat } from "../features/covers/export";
+import { Button } from "../components/ui/Button";
 import { BackIcon } from "../components/icons";
 import { useShortcuts } from "../lib/shortcuts";
+
+const DEFAULT_PRESET = "6x9";
 
 export function CoverDesigner() {
   const { t } = useTranslation();
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
-  const canvasRef = useRef<CoverCanvasRef>(null);
 
   const { currentBook, loadBook, updateBook } = useBookStore();
-
-  const [dimension, setDimension] = useState<CoverDimension>(COVER_DIMENSIONS[0]);
-  const [hasSelection, setHasSelection] = useState(false);
+  const dirty = useCoverStore((s) => s.dirty);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [isCanvasReady, setIsCanvasReady] = useState(false);
   const coverLoadedRef = useRef(false);
 
-  // Load book data
   useEffect(() => {
-    if (bookId) {
-      loadBook(bookId);
-    }
+    if (bookId) loadBook(bookId);
   }, [bookId, loadBook]);
 
-  // Handle canvas ready - load cover data
-  const handleCanvasReady = useCallback(() => {
-    setIsCanvasReady(true);
-  }, []);
-
-  // Load existing cover data OR initialize with book title and author
+  // Load (and migrate) the cover scene once the book is available.
   useEffect(() => {
-    if (!canvasRef.current || !currentBook || !isCanvasReady || coverLoadedRef.current) return;
-
-    // Mark as loaded to prevent re-loading
+    if (!currentBook || coverLoadedRef.current) return;
     coverLoadedRef.current = true;
+    const store = useCoverStore.getState();
+    const fallbackDoc = createDefaultScene(DEFAULT_PRESET).doc;
+    const scene = loadScene(currentBook.coverData, fallbackDoc);
 
-    if (currentBook.coverData) {
-      // Load existing cover
-      canvasRef.current.loadJSON(currentBook.coverData);
-      setHasChanges(false);
+    if (!currentBook.coverData && scene.layers.length === 0) {
+      // Seed a fresh cover from the book metadata.
+      store.setScene(scene);
+      store.addLayer(
+        createTextLayer({
+          role: "title",
+          text: currentBook.title,
+          docWidth: scene.doc.width,
+          docHeight: scene.doc.height,
+        })
+      );
+      store.addLayer(
+        createTextLayer({
+          role: "author",
+          text: currentBook.authorName,
+          docWidth: scene.doc.width,
+          docHeight: scene.doc.height,
+        })
+      );
+      store.markSaved();
     } else {
-      // Initialize new cover with book title and author
-      const { title, authorName } = currentBook;
-
-      // Add title
-      canvasRef.current.addText(title, DEFAULT_TEXT_STYLES.title, "title");
-
-      // Add author name below title
-      const authorStyle = {
-        ...DEFAULT_TEXT_STYLES.author,
-      };
-      canvasRef.current.addText(authorName, authorStyle, "author");
-
-      // Don't mark as having changes for initial setup
-      setTimeout(() => setHasChanges(false), 100);
+      store.setScene(scene);
     }
-  }, [currentBook, isCanvasReady]);
+  }, [currentBook]);
 
-  const handleSelectionChange = useCallback((selected: boolean) => {
-    setHasSelection(selected);
-  }, []);
-
-  const handleModified = useCallback(() => {
-    setHasChanges(true);
-  }, []);
-
-  const handleAddText = useCallback((text: string, style: TextStyle, type: string) => {
-    canvasRef.current?.addText(text, style, type);
-  }, []);
-
-  const handleAddImage = useCallback(async (file: File) => {
-    const url = URL.createObjectURL(file);
-    await canvasRef.current?.addImage(url);
-  }, []);
-
-  const handleBackgroundColor = useCallback((color: string) => {
-    canvasRef.current?.setBackgroundColor(color);
-  }, []);
-
-  const handleBackgroundImage = useCallback(async (file: File) => {
-    const url = URL.createObjectURL(file);
-    await canvasRef.current?.setBackgroundImage(url);
-  }, []);
-
-  const handleDelete = useCallback(() => {
-    canvasRef.current?.deleteSelected();
-  }, []);
-
-  const handleBringForward = useCallback(() => {
-    canvasRef.current?.bringForward();
-  }, []);
-
-  const handleSendBackward = useCallback(() => {
-    canvasRef.current?.sendBackward();
-  }, []);
-
-  const handleExport = useCallback(
-    async (format: "png" | "jpeg") => {
-      if (!canvasRef.current) return;
-
-      const dataUrl =
-        format === "png" ? canvasRef.current.exportToPNG() : canvasRef.current.exportToJPEG(0.9);
-
-      // Convert data URL to binary
-      const base64 = dataUrl.split(",")[1];
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-
-      const filename = `${currentBook?.title || "cover"}.${format}`;
+  const exportAndSave = useCallback(
+    async (format: ExportFormat) => {
+      const scene = useCoverStore.getState().scene;
+      const dataUrl = await exportScene(scene, { format, targetDpi: scene.doc.dpi });
+      const bytes = dataUrlToBytes(dataUrl);
+      const filename = `${currentBook?.title || "cover"}.${format === "jpeg" ? "jpg" : "png"}`;
       const mimeType = format === "png" ? "image/png" : "image/jpeg";
 
       if (IS_WEB) {
-        // On web, directly download the file
         const fs = await getFileSystem();
         fs.downloadFile(filename, bytes, mimeType);
-      } else {
-        // On Tauri, show save dialog
-        const dialog = await getDialog();
-        const filePath = await dialog.save({
-          defaultPath: filename,
-          filters: [
-            {
-              name: format.toUpperCase(),
-              extensions: [format],
-            },
-          ],
-        });
-
-        if (filePath) {
-          const fs = await getFileSystem();
-          await fs.writeFile(filePath, bytes);
-        }
+        return;
+      }
+      const dialog = await getDialog();
+      const filePath = await dialog.save({
+        defaultPath: filename,
+        filters: [{ name: format.toUpperCase(), extensions: [format === "jpeg" ? "jpg" : "png"] }],
+      });
+      if (filePath) {
+        const fs = await getFileSystem();
+        await fs.writeFile(filePath, bytes);
       }
     },
     [currentBook?.title]
   );
 
   const handleSave = useCallback(async () => {
-    if (!bookId || !canvasRef.current) return;
-
+    if (!bookId) return;
     setIsSaving(true);
     try {
-      const coverData = canvasRef.current.getJSON();
-      const coverImagePath = canvasRef.current.exportToPNG();
-
-      await updateBook(bookId, {
-        coverData,
-        coverImagePath,
-      });
-
-      setHasChanges(false);
+      const scene = useCoverStore.getState().scene;
+      const coverData = JSON.stringify(scene);
+      const coverImagePath = await exportScene(scene, { format: "png", targetDpi: scene.doc.dpi });
+      await updateBook(bookId, { coverData, coverImagePath });
+      useCoverStore.getState().markSaved();
     } catch (error) {
       console.error("Failed to save cover:", error);
     } finally {
@@ -174,24 +104,35 @@ export function CoverDesigner() {
   }, [bookId, updateBook]);
 
   const handleBack = useCallback(() => {
-    if (hasChanges) {
-      // TODO: Show confirmation dialog
-    }
     navigate(`/book/${bookId}`);
-  }, [navigate, bookId, hasChanges]);
+  }, [navigate, bookId]);
 
   useShortcuts([
-    {
-      keys: ["delete", "backspace"],
-      onTrigger: () => handleDelete(),
-    },
-    {
-      keys: ["ctrl+s", "meta+s"],
-      onTrigger: () => {
-        handleSave();
-      },
-      allowInInput: true,
-    },
+    { keys: ["delete", "backspace"], onTrigger: () => {
+      const { selectedId, removeLayer } = useCoverStore.getState();
+      if (selectedId) removeLayer(selectedId);
+    } },
+    { keys: ["ctrl+s", "meta+s"], onTrigger: () => handleSave(), allowInInput: true },
+    { keys: ["ctrl+z", "meta+z"], onTrigger: () => useCoverStore.getState().undo() },
+    { keys: ["ctrl+shift+z", "meta+shift+z", "ctrl+y"], onTrigger: () => useCoverStore.getState().redo() },
+    { keys: ["ctrl+d", "meta+d"], onTrigger: () => useCoverStore.getState().duplicateSelected(), preventDefault: true },
+    { keys: ["arrowup"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, -1) },
+    { keys: ["arrowdown"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, 1) },
+    { keys: ["arrowleft"], onTrigger: () => useCoverStore.getState().nudgeSelected(-1, 0) },
+    { keys: ["arrowright"], onTrigger: () => useCoverStore.getState().nudgeSelected(1, 0) },
+    { keys: ["shift+arrowup"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, -10) },
+    { keys: ["shift+arrowdown"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, 10) },
+    { keys: ["shift+arrowleft"], onTrigger: () => useCoverStore.getState().nudgeSelected(-10, 0) },
+    { keys: ["shift+arrowright"], onTrigger: () => useCoverStore.getState().nudgeSelected(10, 0) },
+    { keys: ["["], onTrigger: () => {
+      const { selectedId, sendBackward } = useCoverStore.getState();
+      if (selectedId) sendBackward(selectedId);
+    } },
+    { keys: ["]"], onTrigger: () => {
+      const { selectedId, bringForward } = useCoverStore.getState();
+      if (selectedId) bringForward(selectedId);
+    } },
+    { keys: ["escape"], onTrigger: () => useCoverStore.getState().select(null) },
   ]);
 
   if (!currentBook) {
@@ -212,57 +153,27 @@ export function CoverDesigner() {
         <Button variant="ghost" size="sm" onClick={handleBack}>
           <BackIcon className="w-5 h-5" />
         </Button>
-
         <div className="flex-1 min-w-0">
           <h1 className="font-medium text-sm sm:text-base truncate">{t("cover.title")}</h1>
           <p className="text-xs text-muted-foreground truncate">{currentBook.title}</p>
         </div>
-
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleSave}
-          disabled={!hasChanges || isSaving}
-          className="text-xs sm:text-sm"
-        >
-          {isSaving ? t("common.loading") : hasChanges ? t("cover.saveCover") : t("cover.saved")}
+        <Button variant="secondary" size="sm" onClick={handleSave} disabled={!dirty || isSaving} className="text-xs sm:text-sm">
+          {isSaving ? t("common.loading") : dirty ? t("cover.saveCover") : t("cover.saved")}
         </Button>
       </div>
 
       {/* Toolbar */}
-      <CoverToolbar
-        dimension={dimension}
-        onDimensionChange={setDimension}
-        onAddText={handleAddText}
-        onAddImage={handleAddImage}
-        onBackgroundColor={handleBackgroundColor}
-        onBackgroundImage={handleBackgroundImage}
-        onDelete={handleDelete}
-        onBringForward={handleBringForward}
-        onSendBackward={handleSendBackward}
-        onExport={handleExport}
-        hasSelection={hasSelection}
-        bookTitle={currentBook.title}
-        bookAuthor={currentBook.authorName}
-      />
+      <Toolbar onExport={exportAndSave} />
 
-      {/* Canvas area */}
-      <CoverCanvas
-        ref={canvasRef}
-        dimension={dimension}
-        onSelectionChange={handleSelectionChange}
-        onModified={handleModified}
-        onCanvasReady={handleCanvasReady}
-        className="flex-1"
-      />
-
-      {/* Tips - hidden on mobile */}
-      <div className="hidden sm:flex h-10 border-t border-border items-center justify-center text-sm text-muted-foreground gap-4">
-        <span>{t("cover.tips.doubleClick")}</span>
-        <span>|</span>
-        <span>{t("cover.tips.delete")}</span>
-        <span>|</span>
-        <span>{t("cover.tips.save")}</span>
+      {/* Main area: layers | canvas | properties */}
+      <div className="flex-1 flex min-h-0">
+        <div className="w-56 border-r border-border hidden md:block">
+          <LayersPanel />
+        </div>
+        <CanvasStage className="flex-1" />
+        <div className="w-64 border-l border-border overflow-y-auto hidden lg:block">
+          <PropertiesPanel />
+        </div>
       </div>
     </div>
   );

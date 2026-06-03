@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Background, CoverScene, Layer } from "./scene/schema";
+import type { Background, CoverDoc, CoverScene, Layer } from "./scene/schema";
 
 const HISTORY_LIMIT = 100;
 
@@ -36,6 +36,7 @@ interface CoverStore {
   toggleHidden: (id: string) => void;
   toggleLocked: (id: string) => void;
   setBackground: (bg: Background) => void;
+  setDoc: (doc: CoverDoc) => void;
   undo: () => void;
   redo: () => void;
   markSaved: () => void;
@@ -136,6 +137,11 @@ export const useCoverStore = create<CoverStore>((set, get) => {
     setBackground: (bg) => {
       const { scene } = get();
       commit({ ...scene, background: bg });
+    },
+
+    setDoc: (doc) => {
+      const { scene } = get();
+      commit({ ...scene, doc });
     },
 
     undo: () => {

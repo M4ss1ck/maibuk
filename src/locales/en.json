@@ -511,7 +511,32 @@
       "subtitle": "Subtitle",
       "author": "Author Name"
     },
-    "backgroundColor": "Color"
+    "backgroundColor": "Color",
+    "backgroundImage": "Background Image",
+    "removeBackgroundImage": "Remove Background Image",
+    "undo": "Undo",
+    "redo": "Redo",
+    "duplicate": "Duplicate",
+    "layers": {
+      "title": "Layers",
+      "empty": "No layers yet",
+      "reorderUp": "Bring forward",
+      "reorderDown": "Send backward",
+      "toggleVisible": "Toggle visibility",
+      "toggleLock": "Toggle lock"
+    },
+    "props": {
+      "title": "Properties",
+      "size": "Size",
+      "lineHeight": "Line height",
+      "letterSpacing": "Spacing",
+      "fill": "Fill",
+      "shadow": "Shadow",
+      "width": "Width",
+      "height": "Height",
+      "rotation": "Rotation",
+      "opacity": "Opacity"
+    }
   },
   "sync": {
     "title": "Sync",

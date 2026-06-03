@@ -511,7 +511,32 @@
       "subtitle": "Subtítulo",
       "author": "Nombre del Autor"
     },
-    "backgroundColor": "Color"
+    "backgroundColor": "Color",
+    "backgroundImage": "Imagen de Fondo",
+    "removeBackgroundImage": "Quitar Imagen de Fondo",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
+    "duplicate": "Duplicar",
+    "layers": {
+      "title": "Capas",
+      "empty": "Aún no hay capas",
+      "reorderUp": "Traer al frente",
+      "reorderDown": "Enviar atrás",
+      "toggleVisible": "Alternar visibilidad",
+      "toggleLock": "Alternar bloqueo"
+    },
+    "props": {
+      "title": "Propiedades",
+      "size": "Tamaño",
+      "lineHeight": "Interlineado",
+      "letterSpacing": "Espaciado",
+      "fill": "Relleno",
+      "shadow": "Sombra",
+      "width": "Ancho",
+      "height": "Alto",
+      "rotation": "Rotación",
+      "opacity": "Opacidad"
+    }
   },
   "sync": {
     "title": "Sincronización",
