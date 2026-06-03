@@ -531,11 +531,25 @@
       "lineHeight": "Line height",
       "letterSpacing": "Spacing",
       "fill": "Fill",
+      "stroke": "Stroke",
       "shadow": "Shadow",
       "width": "Width",
       "height": "Height",
       "rotation": "Rotation",
       "opacity": "Opacity"
+    },
+    "paint": {
+      "solid": "Solid",
+      "linear": "Linear",
+      "radial": "Radial",
+      "angle": "Angle",
+      "addStop": "Add stop",
+      "removeStop": "Remove stop"
+    },
+    "fit": {
+      "cover": "Cover",
+      "contain": "Contain",
+      "stretch": "Stretch"
     }
   },
   "sync": {

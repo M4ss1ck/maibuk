@@ -2,6 +2,8 @@ import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useCoverStore } from "../../../features/covers/store";
 import { PRESET_COLORS } from "../../../features/covers/scene/defaults";
+import type { Background, Paint } from "../../../features/covers/scene/schema";
+import { PaintControl } from "./PaintControl";
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -12,13 +14,17 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+const FITS = [
+  { id: "cover", key: "cover.fit.cover" },
+  { id: "contain", key: "cover.fit.contain" },
+  { id: "stretch", key: "cover.fit.stretch" },
+] as const;
+
 export function BackgroundPanel() {
   const { t } = useTranslation();
   const background = useCoverStore((s) => s.scene.background);
   const setBackground = useCoverStore((s) => s.setBackground);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const currentColor = background.type === "solid" ? background.color : "#1a1a2e";
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -29,38 +35,68 @@ export function BackgroundPanel() {
     e.target.value = "";
   };
 
+  const asPaint: Paint =
+    background.type === "image"
+      ? { type: "solid", color: "#1a1a2e" }
+      : (background as Paint);
+
   return (
     <div className="p-3 space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {t("cover.background")}
       </p>
 
-      <div className="grid grid-cols-8 gap-1">
-        {PRESET_COLORS.map((color) => (
-          <button
-            key={color}
-            type="button"
-            onClick={() => setBackground({ type: "solid", color })}
-            className={`w-6 h-6 rounded border transition-transform hover:scale-110 ${
-              background.type === "solid" && background.color === color
-                ? "border-primary"
-                : "border-border"
-            }`}
-            style={{ backgroundColor: color }}
-            title={color}
-          />
-        ))}
-      </div>
+      {background.type !== "image" && (
+        <>
+          <div className="grid grid-cols-8 gap-1">
+            {PRESET_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => setBackground({ type: "solid", color })}
+                className={`w-6 h-6 rounded border transition-transform hover:scale-110 ${
+                  background.type === "solid" && background.color === color
+                    ? "border-primary"
+                    : "border-border"
+                }`}
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+          </div>
+          <PaintControl paint={asPaint} onChange={(p) => setBackground(p as Background)} />
+        </>
+      )}
 
-      <label className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">{t("cover.custom")}</span>
-        <input
-          type="color"
-          value={currentColor}
-          onChange={(e) => setBackground({ type: "solid", color: e.target.value })}
-          className="w-8 h-8 cursor-pointer rounded border border-border"
-        />
-      </label>
+      {background.type === "image" && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">{t("cover.backgroundImage")}</p>
+          <div className="flex gap-1">
+            {FITS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={`flex-1 px-2 py-1 rounded text-xs ${background.fit === f.id ? "bg-primary text-white" : "bg-muted"}`}
+                onClick={() => setBackground({ ...background, fit: f.id })}
+              >
+                {t(f.key)}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">{t("cover.props.opacity")}</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={background.opacity}
+              onChange={(e) => setBackground({ ...background, opacity: Number(e.target.value) })}
+              className="flex-1"
+            />
+          </label>
+        </div>
+      )}
 
       <button
         type="button"

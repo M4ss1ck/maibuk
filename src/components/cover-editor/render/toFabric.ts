@@ -3,15 +3,34 @@ import {
   Ellipse,
   FabricImage,
   type FabricObject,
+  Gradient,
   IText,
   Line,
   Rect,
   Shadow,
+  type TFiller,
 } from "fabric";
 import type { Background, Layer, Paint } from "../../../features/covers/scene/schema";
+import { linearGradientCoords, sortStops } from "../../../features/covers/scene/paint";
 
-function solidColor(paint: Paint, fallback = "#000000"): string {
-  return paint.type === "solid" ? paint.color : fallback;
+/**
+ * Convert a scene Paint into a Fabric fill: a color string for solid paints, or
+ * a percentage-space Gradient for gradients (zoom-independent, relative to the
+ * filled object's bounding box).
+ */
+function paintToFill(paint: Paint): string | TFiller {
+  if (paint.type === "solid") return paint.color;
+  const colorStops = sortStops(paint.stops).map((s) => ({ offset: s.offset, color: s.color }));
+  if (paint.type === "linear-gradient") {
+    const c = linearGradientCoords(paint.angle, 1, 1);
+    return new Gradient({ type: "linear", gradientUnits: "percentage", coords: c, colorStops });
+  }
+  return new Gradient({
+    type: "radial",
+    gradientUnits: "percentage",
+    coords: { x1: paint.cx, y1: paint.cy, r1: 0, x2: paint.cx, y2: paint.cy, r2: paint.r },
+    colorStops,
+  });
 }
 
 /** Apply the scene background to a Fabric canvas. Phase 1: solid + image. */
@@ -43,7 +62,11 @@ export async function applyBackground(canvas: Canvas, bg: Background): Promise<v
     canvas.backgroundImage = img;
     return;
   }
-  // gradients (Phase 2): fall back to a neutral fill for now.
+  // Gradient backgrounds: build a Paint of the same shape and fill the canvas.
+  if (bg.type === "linear-gradient" || bg.type === "radial-gradient") {
+    canvas.backgroundColor = paintToFill(bg as Paint) as TFiller;
+    return;
+  }
   canvas.backgroundColor = "#1a1a2e";
 }
 
@@ -75,7 +98,7 @@ export async function buildObject(layer: Layer): Promise<FabricObject | null> {
       lineHeight: layer.font.lineHeight,
       charSpacing: layer.font.size > 0 ? (layer.font.letterSpacing / layer.font.size) * 1000 : 0,
       textAlign: layer.align,
-      fill: solidColor(layer.fill, "#ffffff"),
+      fill: paintToFill(layer.fill),
       width: layer.width,
     });
     if (layer.stroke && layer.stroke.width > 0) {
@@ -107,7 +130,7 @@ export async function buildObject(layer: Layer): Promise<FabricObject | null> {
   }
 
   if (layer.type === "shape") {
-    const fill = solidColor(layer.fill, "#888888");
+    const fill = paintToFill(layer.fill);
     const stroke = layer.stroke;
     let obj: FabricObject;
     if (layer.shape === "rect") {
@@ -115,7 +138,8 @@ export async function buildObject(layer: Layer): Promise<FabricObject | null> {
     } else if (layer.shape === "ellipse") {
       obj = new Ellipse({ rx: layer.width / 2, ry: layer.height / 2, fill });
     } else {
-      obj = new Line([0, 0, layer.width, 0], { stroke: stroke?.color ?? fill, strokeWidth: stroke?.width ?? 2 });
+      const lineColor = stroke?.color ?? (layer.fill.type === "solid" ? layer.fill.color : "#888888");
+      obj = new Line([0, 0, layer.width, 0], { stroke: lineColor, strokeWidth: stroke?.width ?? 2 });
     }
     if (stroke && stroke.width > 0 && layer.shape !== "line") {
       obj.set({ stroke: stroke.color, strokeWidth: stroke.width });

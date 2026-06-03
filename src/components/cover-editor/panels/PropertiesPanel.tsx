@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { useCoverStore } from "../../../features/covers/store";
 import { FONT_FAMILIES } from "../../../features/covers/scene/defaults";
-import type { Paint, TextLayer } from "../../../features/covers/scene/schema";
+import type { TextLayer } from "../../../features/covers/scene/schema";
 import { Select } from "../../ui/Select";
 import { BackgroundPanel } from "./BackgroundPanel";
+import { PaintControl } from "./PaintControl";
 
 function NumberField({
   label,
@@ -31,10 +32,6 @@ function NumberField({
       />
     </label>
   );
-}
-
-function solidColor(paint: Paint): string {
-  return paint.type === "solid" ? paint.color : "#ffffff";
 }
 
 function TextProperties({ layer }: { layer: TextLayer }) {
@@ -89,15 +86,42 @@ function TextProperties({ layer }: { layer: TextLayer }) {
         ))}
       </div>
 
-      <label className="flex items-center justify-between gap-2 text-sm">
-        <span className="text-muted-foreground">{t("cover.props.fill")}</span>
-        <input
-          type="color"
-          value={solidColor(layer.fill)}
-          onChange={(e) => updateLayer(layer.id, { fill: { type: "solid", color: e.target.value } })}
-          className="w-8 h-8 cursor-pointer rounded border border-border"
-        />
-      </label>
+      <div className="space-y-1">
+        <span className="text-sm text-muted-foreground">{t("cover.props.fill")}</span>
+        <PaintControl paint={layer.fill} onChange={(fill) => updateLayer(layer.id, { fill })} />
+      </div>
+
+      <div className="space-y-1 pt-2 border-t border-border">
+        <label className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">{t("cover.props.stroke")}</span>
+          <input
+            type="checkbox"
+            checked={!!layer.stroke}
+            onChange={(e) =>
+              updateLayer(layer.id, {
+                stroke: e.target.checked ? { color: "#000000", width: 2 } : undefined,
+              })
+            }
+          />
+        </label>
+        {layer.stroke && (
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={layer.stroke.color}
+              onChange={(e) => updateLayer(layer.id, { stroke: { color: e.target.value, width: layer.stroke?.width ?? 2 } })}
+              className="w-8 h-8 cursor-pointer rounded border border-border"
+            />
+            <input
+              type="number"
+              min={0}
+              value={layer.stroke.width}
+              onChange={(e) => updateLayer(layer.id, { stroke: { color: layer.stroke?.color ?? "#000000", width: Number(e.target.value) } })}
+              className="w-16 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
+            />
+          </div>
+        )}
+      </div>
 
       <label className="flex items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">{t("cover.props.shadow")}</span>

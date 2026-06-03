@@ -531,11 +531,25 @@
       "lineHeight": "Interlineado",
       "letterSpacing": "Espaciado",
       "fill": "Relleno",
+      "stroke": "Contorno",
       "shadow": "Sombra",
       "width": "Ancho",
       "height": "Alto",
       "rotation": "Rotación",
       "opacity": "Opacidad"
+    },
+    "paint": {
+      "solid": "Sólido",
+      "linear": "Lineal",
+      "radial": "Radial",
+      "angle": "Ángulo",
+      "addStop": "Añadir parada",
+      "removeStop": "Quitar parada"
+    },
+    "fit": {
+      "cover": "Cubrir",
+      "contain": "Contener",
+      "stretch": "Estirar"
     }
   },
   "sync": {
