@@ -512,6 +512,19 @@
       "author": "Nombre del Autor"
     },
     "backgroundColor": "Color",
+    "addShape": "Añadir Forma",
+    "shape": {
+      "rect": "Rectángulo",
+      "ellipse": "Elipse",
+      "line": "Línea"
+    },
+    "filters": {
+      "title": "Filtros",
+      "brightness": "Brillo",
+      "contrast": "Contraste",
+      "saturation": "Saturación",
+      "blur": "Desenfoque"
+    },
     "backgroundImage": "Imagen de Fondo",
     "removeBackgroundImage": "Quitar Imagen de Fondo",
     "undo": "Deshacer",
@@ -536,7 +549,8 @@
       "width": "Ancho",
       "height": "Alto",
       "rotation": "Rotación",
-      "opacity": "Opacidad"
+      "opacity": "Opacidad",
+      "radius": "Radio de esquina"
     },
     "paint": {
       "solid": "Sólido",

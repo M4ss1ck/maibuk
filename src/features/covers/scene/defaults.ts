@@ -2,8 +2,11 @@ import {
   COVER_SCHEMA_VERSION,
   type CoverScene,
   type ImageLayer,
+  type ShapeLayer,
   type TextLayer,
 } from "./schema";
+
+export const DEFAULT_FILTERS = { brightness: 0, contrast: 0, saturation: 0, blur: 0 };
 
 export interface CoverPreset {
   id: string;
@@ -126,6 +129,33 @@ export function createTextLayer(args: {
     },
     align: "center",
     fill: { type: "solid", color: "#ffffff" },
+  };
+}
+
+export function createShapeLayer(args: {
+  shape: ShapeLayer["shape"];
+  docWidth: number;
+  docHeight: number;
+}): ShapeLayer {
+  const { shape, docWidth, docHeight } = args;
+  const width = Math.round(docWidth * 0.4);
+  const height = shape === "line" ? 0 : Math.round(docHeight * 0.15);
+  return {
+    id: genId(),
+    name: shape,
+    type: "shape",
+    shape,
+    x: Math.round(docWidth / 2 - width / 2),
+    y: Math.round(docHeight / 2 - height / 2),
+    width,
+    height: shape === "line" ? 4 : height,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    hidden: false,
+    fill: { type: "solid", color: "#e94560" },
+    ...(shape === "line" ? { stroke: { color: "#e94560", width: 4 } } : {}),
+    ...(shape === "rect" ? { radius: 0 } : {}),
   };
 }
 

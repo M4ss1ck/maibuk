@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useCoverStore } from "../../../features/covers/store";
-import { FONT_FAMILIES } from "../../../features/covers/scene/defaults";
-import type { TextLayer } from "../../../features/covers/scene/schema";
+import { DEFAULT_FILTERS, FONT_FAMILIES } from "../../../features/covers/scene/defaults";
+import type { ImageLayer, ShapeLayer, TextLayer } from "../../../features/covers/scene/schema";
 import { Select } from "../../ui/Select";
 import { BackgroundPanel } from "./BackgroundPanel";
 import { PaintControl } from "./PaintControl";
@@ -141,6 +141,88 @@ function TextProperties({ layer }: { layer: TextLayer }) {
   );
 }
 
+function ShapeProperties({ layer }: { layer: ShapeLayer }) {
+  const { t } = useTranslation();
+  const updateLayer = useCoverStore((s) => s.updateLayer);
+  return (
+    <div className="space-y-3">
+      {layer.shape !== "line" && (
+        <div className="space-y-1">
+          <span className="text-sm text-muted-foreground">{t("cover.props.fill")}</span>
+          <PaintControl paint={layer.fill} onChange={(fill) => updateLayer(layer.id, { fill })} />
+        </div>
+      )}
+      {layer.shape === "rect" && (
+        <NumberField label={t("cover.props.radius")} value={layer.radius ?? 0} min={0} onChange={(radius) => updateLayer(layer.id, { radius })} />
+      )}
+      <div className="space-y-1 pt-2 border-t border-border">
+        <label className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">{t("cover.props.stroke")}</span>
+          <input
+            type="checkbox"
+            checked={!!layer.stroke}
+            onChange={(e) =>
+              updateLayer(layer.id, { stroke: e.target.checked ? { color: "#000000", width: 2 } : undefined })
+            }
+          />
+        </label>
+        {layer.stroke && (
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={layer.stroke.color}
+              onChange={(e) => updateLayer(layer.id, { stroke: { color: e.target.value, width: layer.stroke?.width ?? 2 } })}
+              className="w-8 h-8 cursor-pointer rounded border border-border"
+            />
+            <input
+              type="number"
+              min={0}
+              value={layer.stroke.width}
+              onChange={(e) => updateLayer(layer.id, { stroke: { color: layer.stroke?.color ?? "#000000", width: Number(e.target.value) } })}
+              className="w-16 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ImageProperties({ layer }: { layer: ImageLayer }) {
+  const { t } = useTranslation();
+  const updateLayer = useCoverStore((s) => s.updateLayer);
+  const f = layer.filters ?? DEFAULT_FILTERS;
+  const setFilter = (patch: Partial<typeof DEFAULT_FILTERS>) =>
+    updateLayer(layer.id, { filters: { ...f, ...patch } });
+
+  const sliders: Array<{ key: keyof typeof DEFAULT_FILTERS; label: string; min: number; max: number }> = [
+    { key: "brightness", label: t("cover.filters.brightness"), min: -1, max: 1 },
+    { key: "contrast", label: t("cover.filters.contrast"), min: -1, max: 1 },
+    { key: "saturation", label: t("cover.filters.saturation"), min: -1, max: 1 },
+    { key: "blur", label: t("cover.filters.blur"), min: 0, max: 1 },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-muted-foreground">{t("cover.filters.title")}</p>
+      {sliders.map((s) => (
+        <label key={s.key} className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground w-20 truncate">{s.label}</span>
+          <input
+            type="range"
+            min={s.min}
+            max={s.max}
+            step={0.05}
+            value={f[s.key]}
+            onChange={(e) => setFilter({ [s.key]: Number(e.target.value) })}
+            className="flex-1"
+          />
+        </label>
+      ))}
+    </div>
+  );
+}
+
 export function PropertiesPanel() {
   const { t } = useTranslation();
   const selectedId = useCoverStore((s) => s.selectedId);
@@ -158,6 +240,8 @@ export function PropertiesPanel() {
       </p>
 
       {layer.type === "text" && <TextProperties layer={layer} />}
+      {layer.type === "shape" && <ShapeProperties layer={layer} />}
+      {layer.type === "image" && <ImageProperties layer={layer} />}
 
       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
         <NumberField label="X" value={layer.x} onChange={(x) => updateLayer(layer.id, { x })} />

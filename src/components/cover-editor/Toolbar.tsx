@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Redo2, Undo2 } from "lucide-react";
+import { Circle, Copy, Minus, Redo2, Shapes, Square, Undo2 } from "lucide-react";
 import { useCoverStore } from "../../features/covers/store";
 import {
   PRESETS,
   createImageLayer,
+  createShapeLayer,
   createTextLayer,
   getPreset,
 } from "../../features/covers/scene/defaults";
@@ -54,8 +55,14 @@ export function Toolbar({ onExport }: ToolbarProps) {
 
   const [showPresets, setShowPresets] = useState(false);
   const [showTextMenu, setShowTextMenu] = useState(false);
+  const [showShapeMenu, setShowShapeMenu] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const addShape = (shape: "rect" | "ellipse" | "line") => {
+    addLayer(createShapeLayer({ shape, docWidth: scene.doc.width, docHeight: scene.doc.height }));
+    setShowShapeMenu(false);
+  };
 
   const currentPreset = PRESETS.find((p) => p.id === scene.doc.presetId) ?? PRESETS[0];
 
@@ -164,6 +171,27 @@ export function Toolbar({ onExport }: ToolbarProps) {
         <span className="hidden sm:inline">{t("cover.addImage")}</span>
       </Button>
       <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+
+      {/* Add shape */}
+      <div className="relative">
+        <Button variant="ghost" size="sm" onClick={() => setShowShapeMenu((v) => !v)} className="gap-1 sm:gap-2 text-xs sm:text-sm" title={t("cover.addShape")}>
+          <Shapes className="w-4 h-4" />
+          <span className="hidden sm:inline">{t("cover.addShape")}</span>
+        </Button>
+        {showShapeMenu && (
+          <div className="absolute top-full left-0 mt-1 w-44 bg-popover border border-border rounded-lg shadow-lg z-50">
+            <button type="button" onClick={() => addShape("rect")} className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2">
+              <Square className="w-4 h-4" /> {t("cover.shape.rect")}
+            </button>
+            <button type="button" onClick={() => addShape("ellipse")} className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2">
+              <Circle className="w-4 h-4" /> {t("cover.shape.ellipse")}
+            </button>
+            <button type="button" onClick={() => addShape("line")} className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2">
+              <Minus className="w-4 h-4" /> {t("cover.shape.line")}
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 

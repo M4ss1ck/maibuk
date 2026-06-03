@@ -3,8 +3,10 @@ import {
   PRESETS,
   FONT_FAMILIES,
   PRESET_COLORS,
+  DEFAULT_FILTERS,
   createDefaultScene,
   createTextLayer,
+  createShapeLayer,
 } from "../../../../features/covers/scene/defaults";
 
 describe("PRESETS", () => {
@@ -39,6 +41,23 @@ describe("createTextLayer", () => {
     expect(l.id).toMatch(/.+/);
     expect(l.text).toBe("Hi");
     expect(l.align).toBe("center");
+  });
+});
+
+describe("createShapeLayer", () => {
+  it("creates a centered rect with a solid fill", () => {
+    const l = createShapeLayer({ shape: "rect", docWidth: 1800, docHeight: 2700 });
+    expect(l.type).toBe("shape");
+    expect(l.shape).toBe("rect");
+    expect(l.fill.type).toBe("solid");
+    expect(l.id).toMatch(/.+/);
+    expect(l.width).toBeGreaterThan(0);
+  });
+});
+
+describe("DEFAULT_FILTERS", () => {
+  it("is a neutral (no-op) filter set", () => {
+    expect(DEFAULT_FILTERS).toEqual({ brightness: 0, contrast: 0, saturation: 0, blur: 0 });
   });
 });
 

@@ -3,6 +3,7 @@ import {
   Ellipse,
   FabricImage,
   type FabricObject,
+  filters,
   Gradient,
   IText,
   Line,
@@ -10,6 +11,7 @@ import {
   Shadow,
   type TFiller,
 } from "fabric";
+import type { ImageLayer } from "../../../features/covers/scene/schema";
 import type { Background, Layer, Paint } from "../../../features/covers/scene/schema";
 import { linearGradientCoords, sortStops } from "../../../features/covers/scene/paint";
 
@@ -70,6 +72,28 @@ export async function applyBackground(canvas: Canvas, bg: Background): Promise<v
   canvas.backgroundColor = "#1a1a2e";
 }
 
+function applyImageCrop(img: FabricImage, layer: ImageLayer): void {
+  if (!layer.crop) return;
+  img.set({
+    cropX: layer.crop.x,
+    cropY: layer.crop.y,
+    width: layer.crop.width,
+    height: layer.crop.height,
+  });
+}
+
+function applyImageFilters(img: FabricImage, layer: ImageLayer): void {
+  const f = layer.filters;
+  if (!f) return;
+  const list = [];
+  if (f.brightness) list.push(new filters.Brightness({ brightness: f.brightness }));
+  if (f.contrast) list.push(new filters.Contrast({ contrast: f.contrast }));
+  if (f.saturation) list.push(new filters.Saturation({ saturation: f.saturation }));
+  if (f.blur) list.push(new filters.Blur({ blur: f.blur }));
+  img.filters = list;
+  img.applyFilters();
+}
+
 function applyCommon(obj: FabricObject, layer: Layer): void {
   obj.set({
     left: layer.x,
@@ -122,9 +146,9 @@ export async function buildObject(layer: Layer): Promise<FabricObject | null> {
   if (layer.type === "image") {
     if (!layer.src) return null;
     const img = await FabricImage.fromURL(layer.src, { crossOrigin: "anonymous" });
-    const natural = img.width ?? layer.width;
+    applyImageCrop(img, layer);
+    applyImageFilters(img, layer);
     img.scaleToWidth(layer.width);
-    void natural;
     applyCommon(img, layer);
     return img;
   }
