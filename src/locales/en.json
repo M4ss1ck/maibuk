@@ -513,6 +513,16 @@
     },
     "backgroundColor": "Color",
     "addShape": "Add Shape",
+    "toggleOverlays": "Toggle margin guides",
+    "toggleSnapping": "Toggle snapping",
+    "align": {
+      "left": "Align left",
+      "hcenter": "Center horizontally",
+      "right": "Align right",
+      "top": "Align top",
+      "vcenter": "Center vertically",
+      "bottom": "Align bottom"
+    },
     "shape": {
       "rect": "Rectangle",
       "ellipse": "Ellipse",

@@ -16,12 +16,20 @@ function moveItem<T>(arr: T[], from: number, to: number): T[] {
   return next;
 }
 
+export type AlignEdge = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
+
 interface CoverStore {
   scene: CoverScene;
   selectedId: string | null;
   dirty: boolean;
   past: CoverScene[];
   future: CoverScene[];
+  // Transient editor preferences (not part of the scene/history).
+  overlays: boolean;
+  snapping: boolean;
+  setOverlays: (on: boolean) => void;
+  setSnapping: (on: boolean) => void;
+  alignSelected: (edge: AlignEdge) => void;
 
   setScene: (scene: CoverScene) => void;
   select: (id: string | null) => void;
@@ -69,6 +77,27 @@ export const useCoverStore = create<CoverStore>((set, get) => {
     dirty: false,
     past: [],
     future: [],
+    overlays: true,
+    snapping: true,
+
+    setOverlays: (on) => set({ overlays: on }),
+    setSnapping: (on) => set({ snapping: on }),
+
+    alignSelected: (edge) => {
+      const { selectedId, scene } = get();
+      if (!selectedId) return;
+      const layer = scene.layers.find((l) => l.id === selectedId);
+      if (!layer || layer.locked) return;
+      const { width: dw, height: dh } = scene.doc;
+      const patch: Partial<Layer> = {};
+      if (edge === "left") patch.x = 0;
+      else if (edge === "hcenter") patch.x = Math.round((dw - layer.width) / 2);
+      else if (edge === "right") patch.x = dw - layer.width;
+      else if (edge === "top") patch.y = 0;
+      else if (edge === "vcenter") patch.y = Math.round((dh - layer.height) / 2);
+      else if (edge === "bottom") patch.y = dh - layer.height;
+      patchLayers((layers) => layers.map((l) => (l.id === selectedId ? ({ ...l, ...patch } as Layer) : l)));
+    },
 
     setScene: (scene) => set({ scene, selectedId: null, dirty: false, past: [], future: [] }),
 

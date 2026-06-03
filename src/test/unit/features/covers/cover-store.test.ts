@@ -128,6 +128,29 @@ describe("useCoverStore", () => {
     expect(useCoverStore.getState().scene.doc.width).toBe(1800);
   });
 
+  it("alignSelected snaps a layer to canvas edges and center", () => {
+    const layer = { ...freshTitle(), x: 5, y: 5, width: 600, height: 100 };
+    const st = useCoverStore.getState();
+    st.addLayer(layer);
+    st.alignSelected("left");
+    expect(useCoverStore.getState().scene.layers[0].x).toBe(0);
+    st.alignSelected("hcenter");
+    expect(useCoverStore.getState().scene.layers[0].x).toBe(Math.round((1800 - 600) / 2));
+    st.alignSelected("bottom");
+    expect(useCoverStore.getState().scene.layers[0].y).toBe(2700 - 100);
+  });
+
+  it("toggles overlays and snapping without dirtying the scene", () => {
+    const st = useCoverStore.getState();
+    st.addLayer(freshTitle());
+    st.markSaved();
+    st.setOverlays(false);
+    st.setSnapping(false);
+    expect(useCoverStore.getState().overlays).toBe(false);
+    expect(useCoverStore.getState().snapping).toBe(false);
+    expect(useCoverStore.getState().dirty).toBe(false);
+  });
+
   it("markSaved clears dirty without changing the scene", () => {
     const st = useCoverStore.getState();
     st.addLayer(freshTitle());

@@ -513,6 +513,16 @@
     },
     "backgroundColor": "Color",
     "addShape": "Añadir Forma",
+    "toggleOverlays": "Alternar guías de margen",
+    "toggleSnapping": "Alternar ajuste",
+    "align": {
+      "left": "Alinear a la izquierda",
+      "hcenter": "Centrar horizontalmente",
+      "right": "Alinear a la derecha",
+      "top": "Alinear arriba",
+      "vcenter": "Centrar verticalmente",
+      "bottom": "Alinear abajo"
+    },
     "shape": {
       "rect": "Rectángulo",
       "ellipse": "Elipse",

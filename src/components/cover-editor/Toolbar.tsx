@@ -1,6 +1,23 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Circle, Copy, Minus, Redo2, Shapes, Square, Undo2 } from "lucide-react";
+import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  Circle,
+  Copy,
+  Magnet,
+  Minus,
+  Redo2,
+  Ruler,
+  Shapes,
+  Square,
+  Undo2,
+} from "lucide-react";
+import type { AlignEdge } from "../../features/covers/store";
 import { useCoverStore } from "../../features/covers/store";
 import {
   PRESETS,
@@ -52,6 +69,20 @@ export function Toolbar({ onExport }: ToolbarProps) {
   const setDoc = useCoverStore((s) => s.setDoc);
   const undo = useCoverStore((s) => s.undo);
   const redo = useCoverStore((s) => s.redo);
+  const alignSelected = useCoverStore((s) => s.alignSelected);
+  const overlays = useCoverStore((s) => s.overlays);
+  const snapping = useCoverStore((s) => s.snapping);
+  const setOverlays = useCoverStore((s) => s.setOverlays);
+  const setSnapping = useCoverStore((s) => s.setSnapping);
+
+  const alignButtons: Array<{ edge: AlignEdge; Icon: typeof AlignStartVertical; label: string }> = [
+    { edge: "left", Icon: AlignStartVertical, label: t("cover.align.left") },
+    { edge: "hcenter", Icon: AlignCenterVertical, label: t("cover.align.hcenter") },
+    { edge: "right", Icon: AlignEndVertical, label: t("cover.align.right") },
+    { edge: "top", Icon: AlignStartHorizontal, label: t("cover.align.top") },
+    { edge: "vcenter", Icon: AlignCenterHorizontal, label: t("cover.align.vcenter") },
+    { edge: "bottom", Icon: AlignEndHorizontal, label: t("cover.align.bottom") },
+  ];
 
   const [showPresets, setShowPresets] = useState(false);
   const [showTextMenu, setShowTextMenu] = useState(false);
@@ -218,6 +249,25 @@ export function Toolbar({ onExport }: ToolbarProps) {
         className="text-destructive hover:text-destructive"
       >
         <TrashIcon className="w-4 h-4" />
+      </Button>
+
+      <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
+
+      {/* Align selected to canvas */}
+      {alignButtons.map(({ edge, Icon, label }) => (
+        <Button key={edge} variant="ghost" size="sm" onClick={() => alignSelected(edge)} disabled={!selectedId} title={label} className="hidden md:inline-flex">
+          <Icon className="w-4 h-4" />
+        </Button>
+      ))}
+
+      <div className="w-px h-6 bg-border mx-1 sm:mx-2 hidden md:block" />
+
+      {/* Layout aid toggles */}
+      <Button variant={overlays ? "secondary" : "ghost"} size="sm" onClick={() => setOverlays(!overlays)} title={t("cover.toggleOverlays")}>
+        <Ruler className="w-4 h-4" />
+      </Button>
+      <Button variant={snapping ? "secondary" : "ghost"} size="sm" onClick={() => setSnapping(!snapping)} title={t("cover.toggleSnapping")}>
+        <Magnet className="w-4 h-4" />
       </Button>
 
       <div className="flex-1 min-w-2" />

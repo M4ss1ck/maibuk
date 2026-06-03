@@ -3,6 +3,8 @@ import { Canvas, type FabricObject, IText } from "fabric";
 import { useCoverStore } from "../../features/covers/store";
 import { applyBackground, buildObject } from "./render/toFabric";
 import { readGeometry } from "./render/fromFabric";
+import { buildGuideLine, buildOverlays } from "./render/overlays";
+import { snapAxis } from "../../features/covers/scene/snap";
 
 interface CanvasStageProps {
   className?: string;
@@ -22,6 +24,9 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
 
   const scene = useCoverStore((s) => s.scene);
   const selectedId = useCoverStore((s) => s.selectedId);
+  const overlays = useCoverStore((s) => s.overlays);
+  // Transient snap-guide lines shown during a drag.
+  const guidesRef = useRef<FabricObject[]>([]);
 
   // Create the Fabric canvas once.
   useEffect(() => {
@@ -69,6 +74,42 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
       if (id) updateLayer(id, { text: target.text ?? "" });
     });
 
+    const clearGuides = () => {
+      for (const g of guidesRef.current) canvas.remove(g);
+      guidesRef.current = [];
+    };
+
+    canvas.on("object:moving", (e) => {
+      const obj = e.target;
+      if (!obj || applyingRef.current) return;
+      clearGuides();
+      const { snapping, scene: s } = useCoverStore.getState();
+      if (!snapping) return;
+      const doc = s.doc;
+      const w = obj.getScaledWidth();
+      const h = obj.getScaledHeight();
+      const left = obj.left ?? 0;
+      const top = obj.top ?? 0;
+      const m = doc.safeMargin;
+      const threshold = 8 / canvas.getZoom();
+      const sx = snapAxis([left, left + w / 2, left + w], [0, doc.width / 2, doc.width, m, doc.width - m], threshold);
+      const sy = snapAxis([top, top + h / 2, top + h], [0, doc.height / 2, doc.height, m, doc.height - m], threshold);
+      if (sx) {
+        obj.set({ left: left + sx.delta });
+        const g = buildGuideLine("v", sx.line, doc);
+        guidesRef.current.push(g);
+        canvas.add(g);
+      }
+      if (sy) {
+        obj.set({ top: (obj.top ?? 0) + sy.delta });
+        const g = buildGuideLine("h", sy.line, doc);
+        guidesRef.current.push(g);
+        canvas.add(g);
+      }
+    });
+
+    canvas.on("mouse:up", clearGuides);
+
     return () => {
       canvas.dispose();
       fabricRef.current = null;
@@ -109,6 +150,9 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
         if (obj && !cancelled) canvas.add(obj);
       }
       if (!cancelled) {
+        if (overlays) {
+          for (const o of buildOverlays(scene.doc)) canvas.add(o);
+        }
         // Restore active selection.
         if (selectedId) {
           const match = canvas.getObjects().find((o) => layerIdOf(o) === selectedId);
@@ -122,7 +166,7 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
     return () => {
       cancelled = true;
     };
-  }, [scene]);
+  }, [scene, overlays]);
 
   // Sync active object when selection changes in the store.
   useEffect(() => {
