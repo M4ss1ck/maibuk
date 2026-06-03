@@ -560,7 +560,8 @@
       "height": "Height",
       "rotation": "Rotation",
       "opacity": "Opacity",
-      "radius": "Corner radius"
+      "radius": "Corner radius",
+      "curve": "Curve text"
     },
     "paint": {
       "solid": "Solid",

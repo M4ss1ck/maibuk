@@ -1,5 +1,6 @@
 import { Canvas } from "fabric";
 import { applyBackground, buildObject } from "../../components/cover-editor/render/toFabric";
+import { collectFonts, ensureFontsLoaded } from "./scene/fonts";
 import type { CoverScene } from "./scene/schema";
 
 export type ExportFormat = "png" | "jpeg";
@@ -22,6 +23,8 @@ export function dataUrlToBytes(dataUrl: string): Uint8Array {
 
 /** Render a scene onto a fresh offscreen Fabric canvas at full document size. */
 async function renderSceneToCanvas(scene: CoverScene): Promise<Canvas> {
+  // Ensure fonts are ready so headless export matches the editor.
+  await ensureFontsLoaded(collectFonts(scene));
   const el = document.createElement("canvas");
   const canvas = new Canvas(el, { width: scene.doc.width, height: scene.doc.height });
   await applyBackground(canvas, scene.background);

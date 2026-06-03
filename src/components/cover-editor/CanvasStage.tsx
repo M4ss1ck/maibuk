@@ -5,6 +5,7 @@ import { applyBackground, buildObject } from "./render/toFabric";
 import { readGeometry } from "./render/fromFabric";
 import { buildGuideLine, buildOverlays } from "./render/overlays";
 import { snapAxis } from "../../features/covers/scene/snap";
+import { collectFonts, ensureFontsLoaded } from "../../features/covers/scene/fonts";
 
 interface CanvasStageProps {
   className?: string;
@@ -159,6 +160,10 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
           if (match) canvas.setActiveObject(match);
         }
         canvas.requestRenderAll();
+        // Reflow text once bundled/system fonts are ready.
+        ensureFontsLoaded(collectFonts(scene)).then(() => {
+          if (!cancelled) canvas.requestRenderAll();
+        });
       }
       applyingRef.current = false;
     })();

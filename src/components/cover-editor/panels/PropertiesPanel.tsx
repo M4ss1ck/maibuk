@@ -137,6 +137,34 @@ function TextProperties({ layer }: { layer: TextLayer }) {
           }
         />
       </label>
+
+      <div className="space-y-1 pt-2 border-t border-border">
+        <label className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">{t("cover.props.curve")}</span>
+          <input
+            type="checkbox"
+            checked={!!layer.curve}
+            onChange={(e) =>
+              updateLayer(layer.id, {
+                curve: e.target.checked ? { type: "arc", spread: 60 } : undefined,
+              })
+            }
+          />
+        </label>
+        {layer.curve && (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="range"
+              min={0}
+              max={180}
+              value={layer.curve.spread}
+              onChange={(e) => updateLayer(layer.id, { curve: { type: "arc", spread: Number(e.target.value) } })}
+              className="flex-1"
+            />
+            <span className="w-10 text-right text-xs">{Math.round(layer.curve.spread)}°</span>
+          </label>
+        )}
+      </div>
     </div>
   );
 }

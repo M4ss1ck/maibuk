@@ -560,7 +560,8 @@
       "height": "Alto",
       "rotation": "Rotación",
       "opacity": "Opacidad",
-      "radius": "Radio de esquina"
+      "radius": "Radio de esquina",
+      "curve": "Curvar texto"
     },
     "paint": {
       "solid": "Sólido",

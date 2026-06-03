@@ -7,6 +7,7 @@ import {
   Gradient,
   IText,
   Line,
+  Path,
   Rect,
   Shadow,
   type TFiller,
@@ -138,6 +139,14 @@ export async function buildObject(layer: Layer): Promise<FabricObject | null> {
           offsetY: layer.shadow.offsetY,
         })
       );
+    }
+    if (layer.curve && layer.curve.spread > 0) {
+      // Render the text along a symmetric circular arc whose arc length ~ width.
+      const t = (layer.curve.spread * Math.PI) / 180;
+      const r = layer.width / t;
+      const chord = 2 * r * Math.sin(t / 2);
+      const path = new Path(`M 0 0 A ${r} ${r} 0 0 1 ${chord} 0`, { fill: "", stroke: "" });
+      obj.set({ path, pathAlign: "center" });
     }
     applyCommon(obj, layer);
     return obj;
