@@ -271,6 +271,22 @@ describe("useChapterStore", () => {
   });
 
   describe("deleteChapter()", () => {
+    it("bumps the parent book updated_at so chapter deletion syncs", async () => {
+      await testDb.execute("UPDATE books SET updated_at = ? WHERE id = ?", [1000, "book-1"]);
+      const created = await useChapterStore.getState().createChapter({
+        bookId: "book-1",
+        title: "To Delete",
+      });
+
+      await useChapterStore.getState().deleteChapter(created.id);
+
+      const rows = await testDb.select<{ updated_at: number }[]>(
+        "SELECT updated_at FROM books WHERE id = ?",
+        ["book-1"]
+      );
+      expect(rows[0].updated_at).toBeGreaterThan(1000);
+    });
+
     it("removes chapter from state and database", async () => {
       const created = await useChapterStore.getState().createChapter({
         bookId: "book-1",

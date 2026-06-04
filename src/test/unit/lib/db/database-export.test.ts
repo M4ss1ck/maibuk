@@ -40,4 +40,31 @@ describe("DatabaseAdapter export/import round-trip", () => {
     expect(versions[0].word_count).toBe(1000);
     expect(versions[0].checksum).toBe("abc123");
   });
+
+  it("round-trips sync tombstones", async () => {
+    const db = await createTestDatabase();
+
+    await db.execute(`
+      INSERT INTO sync_tombstones
+        (id, entity_type, entity_id, title, deleted_at, confirmed_at, pushed_at)
+      VALUES ('book:book-1', 'book', 'book-1', 'Deleted Draft', 1000, NULL, NULL)
+    `);
+
+    const exported = await db.exportData();
+    const sqlDump = new TextDecoder().decode(exported);
+
+    expect(sqlDump).toContain('INSERT OR REPLACE INTO "sync_tombstones"');
+    expect(sqlDump).toContain("Deleted Draft");
+
+    const freshDb = await createTestDatabase();
+    await freshDb.importData(sqlDump);
+
+    const tombstones = await freshDb.select<Record<string, unknown>[]>(
+      "SELECT * FROM sync_tombstones WHERE id = ?",
+      ["book:book-1"]
+    );
+    expect(tombstones).toHaveLength(1);
+    expect(tombstones[0].entity_type).toBe("book");
+    expect(tombstones[0].entity_id).toBe("book-1");
+  });
 });

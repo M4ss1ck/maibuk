@@ -1,12 +1,13 @@
 import { useCallback, useState, useRef } from "react";
 import { getPassphrase } from "./crypto";
 import { useSyncStore } from "./store";
-import type { SyncConflict, ConflictResolver } from "./types";
+import type { SyncConflict, ConflictResolver, SyncOptions } from "./types";
 
 export function useSyncFlow() {
   const { syncAll } = useSyncStore();
   const [showPassphraseDialog, setShowPassphraseDialog] = useState(false);
   const [pendingSyncAfterPassphrase, setPendingSyncAfterPassphrase] = useState(false);
+  const [pendingSyncOptions, setPendingSyncOptions] = useState<Partial<SyncOptions> | undefined>();
   const [activeConflict, setActiveConflict] = useState<SyncConflict | null>(null);
   const conflictResolverRef = useRef<((choice: "push" | "pull" | "cancel") => void) | null>(null);
 
@@ -32,21 +33,23 @@ export function useSyncFlow() {
   const closePassphraseDialog = useCallback(() => {
     setShowPassphraseDialog(false);
     setPendingSyncAfterPassphrase(false);
+    setPendingSyncOptions(undefined);
   }, []);
 
-  const requestPassphraseForSync = useCallback(() => {
+  const requestPassphraseForSync = useCallback((options?: Partial<SyncOptions>) => {
     setPendingSyncAfterPassphrase(true);
+    setPendingSyncOptions(options);
     setShowPassphraseDialog(true);
   }, []);
 
-  const syncAllWithSessionPassphrase = useCallback(async () => {
+  const syncAllWithSessionPassphrase = useCallback(async (options?: Partial<SyncOptions>) => {
     const passphrase = getPassphrase();
     if (!passphrase) {
-      requestPassphraseForSync();
+      requestPassphraseForSync(options);
       return false;
     }
 
-    await syncAll(passphrase, onConflict);
+    await syncAll(passphrase, onConflict, options);
     return true;
   }, [requestPassphraseForSync, syncAll, onConflict]);
 
@@ -62,14 +65,15 @@ export function useSyncFlow() {
     }
 
     try {
-      await syncAll(passphrase, onConflict);
+      await syncAll(passphrase, onConflict, pendingSyncOptions);
       return true;
     } catch {
       return false;
     } finally {
       setPendingSyncAfterPassphrase(false);
+      setPendingSyncOptions(undefined);
     }
-  }, [pendingSyncAfterPassphrase, syncAll, onConflict]);
+  }, [pendingSyncAfterPassphrase, pendingSyncOptions, syncAll, onConflict]);
 
   return {
     showPassphraseDialog,

@@ -220,7 +220,17 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
 
   deleteChapter: async (id: string) => {
     const db = await getDatabase();
+    const rows = await db.select<{ book_id: string }[]>(
+      "SELECT book_id FROM chapters WHERE id = ?",
+      [id]
+    );
     await db.execute("DELETE FROM chapters WHERE id = ?", [id]);
+    if (rows.length > 0) {
+      await db.execute("UPDATE books SET updated_at = ? WHERE id = ?", [
+        Math.floor(Date.now() / 1000),
+        rows[0].book_id,
+      ]);
+    }
 
     set((state) => ({
       chapters: state.chapters.filter((chapter) => chapter.id !== id),

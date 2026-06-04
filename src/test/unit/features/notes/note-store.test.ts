@@ -99,6 +99,26 @@ describe("useNoteStore", () => {
   });
 
   describe("deleteNote()", () => {
+    it("records a pending sync tombstone before deleting the note", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Idea" });
+
+      await useNoteStore.getState().deleteNote(note.id);
+
+      const tombstones = await testDb.select<Record<string, unknown>[]>(
+        "SELECT entity_type, entity_id, title, confirmed_at, pushed_at FROM sync_tombstones WHERE entity_id = ?",
+        [note.id],
+      );
+      expect(tombstones).toEqual([
+        {
+          entity_type: "note",
+          entity_id: note.id,
+          title: "Idea",
+          confirmed_at: null,
+          pushed_at: null,
+        },
+      ]);
+    });
+
     it("removes the note and clears currentNote when it matches", async () => {
       const note = await useNoteStore.getState().createNote({ title: "Temp" });
       useNoteStore.getState().setCurrentNote(note);

@@ -1,6 +1,15 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AuthStatus, SyncStatus, SyncItemMeta, ConflictResolver, SyncOutcome } from "./types";
+import type {
+  AuthStatus,
+  SyncStatus,
+  SyncItemMeta,
+  ConflictResolver,
+  SyncOutcome,
+  SyncOptions,
+  SyncLogEntry,
+  SyncDeletionReviewItem,
+} from "./types";
 import {
   initClient,
   normalizeServerUrl,
@@ -13,8 +22,10 @@ import {
 } from "./client";
 import { clearPassphrase, setPassphrase as cryptoSetPassphrase } from "./crypto";
 import { syncAllBooks, syncBook } from "./sync-engine";
+import { confirmTombstones } from "./tombstones";
 
 const STORAGE_KEY = "maibuk-sync";
+const MAX_SYNC_LOG_ENTRIES = 100;
 
 interface SyncStore {
   authStatus: AuthStatus;
@@ -25,6 +36,8 @@ interface SyncStore {
   syncError: string | null;
   apiUrl: string;
   bookSyncMeta: Record<string, SyncItemMeta>;
+  syncLog: SyncLogEntry[];
+  pendingDeletions: SyncDeletionReviewItem[];
   authVerified: boolean;
   passphrase: string | null;
 
@@ -35,13 +48,20 @@ interface SyncStore {
   loginWithOAuth: (provider: string) => Promise<void>;
   logout: () => void;
   verifyAuth: () => Promise<void>;
-  syncAll: (passphrase: string, onConflict: ConflictResolver) => Promise<void>;
+  syncAll: (
+    passphrase: string,
+    onConflict: ConflictResolver,
+    options?: Partial<SyncOptions>
+  ) => Promise<void>;
   syncSingleBook: (
     bookId: string,
     passphrase: string,
-    onConflict: ConflictResolver
+    onConflict: ConflictResolver,
+    options?: Partial<SyncOptions>
   ) => Promise<void>;
   updateBookMeta: (bookId: string, meta: SyncItemMeta) => void;
+  confirmPendingDeletions: (ids: string[]) => Promise<void>;
+  clearSyncLog: () => void;
 }
 
 function applySyncOutcome(outcome: SyncOutcome, set: (partial: Partial<SyncStore>) => void): void {
@@ -68,6 +88,8 @@ export const useSyncStore = create<SyncStore>()(
       syncError: null,
       apiUrl: "",
       bookSyncMeta: {},
+      syncLog: [],
+      pendingDeletions: [],
       authVerified: false,
       passphrase: null,
 
@@ -124,6 +146,8 @@ export const useSyncStore = create<SyncStore>()(
           syncStatus: "idle",
           syncError: null,
           bookSyncMeta: {},
+          syncLog: [],
+          pendingDeletions: [],
         });
       },
 
@@ -166,10 +190,21 @@ export const useSyncStore = create<SyncStore>()(
         }
       },
 
-      syncAll: async (passphrase, onConflict) => {
-        set({ syncStatus: "syncing", syncError: null });
+      syncAll: async (passphrase, onConflict, options) => {
+        set({ syncStatus: "syncing", syncError: null, pendingDeletions: [] });
         try {
-          const result = await syncAllBooks(passphrase, onConflict);
+          const result = await syncAllBooks(passphrase, onConflict, {
+            scope: "all",
+            direction: "bidirectional",
+            ...options,
+            onLog: (entry) => {
+              set((state) => ({
+                syncLog: [entry, ...state.syncLog].slice(0, MAX_SYNC_LOG_ENTRIES),
+              }));
+              options?.onLog?.(entry);
+            },
+          });
+          set({ pendingDeletions: result.pendingDeletions ?? [] });
           applySyncOutcome(result.outcome, set);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Sync failed";
@@ -178,10 +213,21 @@ export const useSyncStore = create<SyncStore>()(
         }
       },
 
-      syncSingleBook: async (bookId, passphrase, onConflict) => {
-        set({ syncStatus: "syncing", syncError: null });
+      syncSingleBook: async (bookId, passphrase, onConflict, options) => {
+        set({ syncStatus: "syncing", syncError: null, pendingDeletions: [] });
         try {
-          const result = await syncBook(bookId, passphrase, onConflict);
+          const result = await syncBook(bookId, passphrase, onConflict, {
+            scope: "books",
+            direction: "bidirectional",
+            ...options,
+            onLog: (entry) => {
+              set((state) => ({
+                syncLog: [entry, ...state.syncLog].slice(0, MAX_SYNC_LOG_ENTRIES),
+              }));
+              options?.onLog?.(entry);
+            },
+          });
+          set({ pendingDeletions: result.pendingDeletions ?? [] });
           applySyncOutcome(result.outcome, set);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Sync failed";
@@ -194,6 +240,17 @@ export const useSyncStore = create<SyncStore>()(
         set((state) => ({
           bookSyncMeta: { ...state.bookSyncMeta, [bookId]: meta },
         }));
+      },
+
+      confirmPendingDeletions: async (ids) => {
+        await confirmTombstones(ids);
+        set((state) => ({
+          pendingDeletions: state.pendingDeletions.filter((item) => !ids.includes(item.id)),
+        }));
+      },
+
+      clearSyncLog: () => {
+        set({ syncLog: [] });
       },
     }),
     {

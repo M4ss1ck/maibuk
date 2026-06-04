@@ -14,6 +14,7 @@ import { AuthDialog } from "./AuthDialog";
 import { SyncPanel } from "./SyncPanel";
 import { PassphraseDialog } from "./PassphraseDialog";
 import { ConflictDialog } from "./ConflictDialog";
+import type { SyncOptions } from "../../features/sync/types";
 
 export function SyncStatusButton() {
   const { authStatus, syncStatus, lastSyncedAt } = useSyncStore();
@@ -104,8 +105,8 @@ export function SyncStatusButton() {
       {showSyncPanel && (
         <SyncPanel
           onClose={() => setShowSyncPanel(false)}
-          onSync={async () => {
-            const didSync = await syncAllWithSessionPassphrase();
+          onSync={async (options?: Partial<SyncOptions>) => {
+            const didSync = await syncAllWithSessionPassphrase(options);
             if (!didSync) {
               setShowSyncPanel(false);
             }

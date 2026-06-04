@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
+import { recordTombstone } from "../sync/tombstones";
 import type { CreateNoteInput, Note, UpdateNoteInput } from "./types";
 
 function generateId(): string {
@@ -161,6 +162,16 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
   deleteNote: async (id: string) => {
     const db = await getDatabase();
+    const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [
+      id,
+    ]);
+    if (rows.length > 0) {
+      await recordTombstone({
+        entityType: "note",
+        entityId: id,
+        title: rows[0].title,
+      });
+    }
     await db.execute("DELETE FROM notes WHERE id = ?", [id]);
     set((state) => ({
       notes: state.notes.filter((n) => n.id !== id),

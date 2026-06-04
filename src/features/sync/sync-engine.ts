@@ -13,6 +13,8 @@ import {
   pushNoteBlob,
   pullNoteBlob,
   listRemoteNotes,
+  deleteRemoteBook,
+  deleteRemoteNote,
 } from "./client";
 import type {
   BookSnapshot,
@@ -22,6 +24,12 @@ import type {
   SingleSyncResult,
   BatchSyncResult,
   MetricsSyncBlob,
+  SyncOptions,
+  SyncScope,
+  SyncDirection,
+  SyncEntityType,
+  SyncDeletionReviewItem,
+  SyncLogEntry,
 } from "./types";
 import type { SyncAction, ConflictResolver } from "./types";
 import { createBackup } from "../../lib/platform";
@@ -33,12 +41,22 @@ import {
   applyLegacyBlobAndMarkPushed,
   syncMetricsRows,
 } from "../metrics/metrics-sync";
+import {
+  hasTombstone,
+  listPendingTombstones,
+  markTombstonePushed,
+} from "./tombstones";
 
 const BLOB_MIGRATED_KEY = "maibuk.metrics.blobMigrated";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR =
   "Could not create a safety backup. Sync aborted. Free up disk space and try again.";
+const DEFAULT_SYNC_OPTIONS: SyncOptions = {
+  scope: "all",
+  direction: "bidirectional",
+  confirmedDeletionIds: [],
+};
 
 async function decryptSnapshot(data: Uint8Array, passphrase: string): Promise<BookSnapshot> {
   const decrypted = await decrypt(data, passphrase);
@@ -68,6 +86,54 @@ function toBlobPart(data: Uint8Array): ArrayBuffer {
   const buffer = new ArrayBuffer(data.byteLength);
   new Uint8Array(buffer).set(data);
   return buffer;
+}
+
+function resolveSyncOptions(options?: Partial<SyncOptions>): SyncOptions {
+  return {
+    ...DEFAULT_SYNC_OPTIONS,
+    ...options,
+    confirmedDeletionIds: options?.confirmedDeletionIds ?? [],
+  };
+}
+
+function includesScope(scope: SyncScope, entity: SyncEntityType | "metrics"): boolean {
+  return scope === "all" || scope === entity || (entity === "book" && scope === "books") ||
+    (entity === "note" && scope === "notes");
+}
+
+function canPull(direction: SyncDirection): boolean {
+  return direction !== "push";
+}
+
+function canPush(direction: SyncDirection): boolean {
+  return direction !== "pull";
+}
+
+function toDeletionReviewItem(tombstone: {
+  id: string;
+  entityType: SyncEntityType;
+  entityId: string;
+  title: string;
+  deletedAt: number;
+}): SyncDeletionReviewItem {
+  return {
+    id: tombstone.id,
+    entityType: tombstone.entityType,
+    entityId: tombstone.entityId,
+    title: tombstone.title,
+    deletedAt: tombstone.deletedAt,
+  };
+}
+
+function emitLog(
+  options: SyncOptions,
+  entry: Omit<SyncLogEntry, "id" | "timestamp">
+): void {
+  options.onLog?.({
+    id: crypto.randomUUID(),
+    timestamp: Math.floor(Date.now() / 1000),
+    ...entry,
+  });
 }
 
 interface EffectiveTimestamp {
@@ -130,6 +196,55 @@ async function createPreSyncBackupOrThrow(): Promise<void> {
   }
 }
 
+async function processPendingDeletions(
+  entityTypes: SyncEntityType[],
+  options: SyncOptions
+): Promise<{
+  actions: SyncAction[];
+  pendingDeletions: SyncDeletionReviewItem[];
+}> {
+  if (!canPush(options.direction) || entityTypes.length === 0) {
+    return { actions: [], pendingDeletions: [] };
+  }
+
+  const tombstones = await listPendingTombstones(entityTypes);
+  const confirmedIds = new Set(options.confirmedDeletionIds ?? []);
+  const pendingDeletions: SyncDeletionReviewItem[] = [];
+  const actions: SyncAction[] = [];
+
+  for (const tombstone of tombstones) {
+    const isConfirmed = tombstone.confirmedAt != null || confirmedIds.has(tombstone.id);
+    if (!isConfirmed) {
+      emitLog(options, {
+        level: "warning",
+        event: "delete-pending",
+        message: `Deletion needs confirmation: ${tombstone.title}`,
+        entityType: tombstone.entityType,
+        entityId: tombstone.entityId,
+      });
+      pendingDeletions.push(toDeletionReviewItem(tombstone));
+      continue;
+    }
+
+    if (tombstone.entityType === "book") {
+      await deleteRemoteBook(tombstone.entityId);
+    } else {
+      await deleteRemoteNote(tombstone.entityId);
+    }
+    await markTombstonePushed(tombstone.entityType, tombstone.entityId);
+    emitLog(options, {
+      level: "success",
+      event: "delete-pushed",
+      message: `Deleted remote ${tombstone.entityType}: ${tombstone.title}`,
+      entityType: tombstone.entityType,
+      entityId: tombstone.entityId,
+    });
+    actions.push("pushed");
+  }
+
+  return { actions, pendingDeletions };
+}
+
 async function ensureAuth(): Promise<void> {
   if (useSyncStore.getState().authVerified) return;
 
@@ -160,6 +275,7 @@ async function syncBookInBatch(
   bookId: string,
   passphrase: string,
   onConflict: ConflictResolver,
+  options: SyncOptions,
   remoteBooks?: SyncItemMeta[],
   precomputedLocalUpdatedAt?: number
 ): Promise<SyncAction> {
@@ -175,13 +291,67 @@ async function syncBookInBatch(
   const remote = remotes.find((r) => r.bookId === bookId);
 
   if (!remote) {
+    if (!canPush(options.direction)) {
+      emitLog(options, {
+        level: "info",
+        event: "skip",
+        message: `Skipped local-only book ${bookId} in pull-only sync`,
+        entityType: "book",
+        entityId: bookId,
+      });
+      return "skipped";
+    }
     const encrypted = await encrypt(json, passphrase);
     await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    emitLog(options, {
+      level: "success",
+      event: "push",
+      message: `Pushed book ${bookId}`,
+      entityType: "book",
+      entityId: bookId,
+    });
     return "pushed";
   }
 
   if (remote.checksum === localChecksum) {
+    emitLog(options, {
+      level: "info",
+      event: "skip",
+      message: `Skipped unchanged book ${bookId}`,
+      entityType: "book",
+      entityId: bookId,
+    });
     return "skipped";
+  }
+
+  if (options.direction === "pull") {
+    await useVersionStore.getState().createVersion({ bookId, triggerType: "pre-sync" });
+    const pulled = await pullBookBlob(bookId);
+    if (!pulled) return "skipped";
+
+    const snapshot = await decryptSnapshot(pulled.data, passphrase);
+    await applyBookSnapshot(snapshot);
+    emitLog(options, {
+      level: "success",
+      event: "pull",
+      message: `Pulled book ${bookId}`,
+      entityType: "book",
+      entityId: bookId,
+    });
+    return "pulled";
+  }
+
+  if (options.direction === "push") {
+    const encrypted = await encrypt(json, passphrase);
+    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    emitLog(options, {
+      level: "success",
+      event: "push",
+      message: `Pushed book ${bookId}`,
+      entityType: "book",
+      entityId: bookId,
+    });
+    return "pushed";
   }
 
   // Checksums differ — compare timestamps
@@ -189,12 +359,29 @@ async function syncBookInBatch(
     // Local is strictly newer — push
     const encrypted = await encrypt(json, passphrase);
     await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    emitLog(options, {
+      level: "success",
+      event: "push",
+      message: `Pushed book ${bookId}`,
+      entityType: "book",
+      entityId: bookId,
+    });
     return "pushed";
   }
 
   // Remote is newer or equal timestamps — ask user
   const bookTitle = await getBookTitle(bookId);
+  emitLog(options, {
+    level: "warning",
+    event: "conflict",
+    message: `Book conflict: ${bookTitle}`,
+    entityType: "book",
+    entityId: bookId,
+  });
   const choice = await onConflict({
+    entityType: "book",
+    entityId: bookId,
+    entityTitle: bookTitle,
     bookId,
     bookTitle,
     localUpdatedAt,
@@ -208,6 +395,13 @@ async function syncBookInBatch(
   if (choice === "push") {
     const encrypted = await encrypt(json, passphrase);
     await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    emitLog(options, {
+      level: "success",
+      event: "push",
+      message: `Pushed book ${bookId}`,
+      entityType: "book",
+      entityId: bookId,
+    });
     return "pushed";
   }
 
@@ -219,6 +413,13 @@ async function syncBookInBatch(
 
   const snapshot = await decryptSnapshot(pulled.data, passphrase);
   await applyBookSnapshot(snapshot);
+  emitLog(options, {
+    level: "success",
+    event: "pull",
+    message: `Pulled book ${bookId}`,
+    entityType: "book",
+    entityId: bookId,
+  });
   return "pulled";
 }
 
@@ -226,6 +427,7 @@ async function syncNoteInBatch(
   noteId: string,
   passphrase: string,
   onConflict: ConflictResolver,
+  options: SyncOptions,
   remoteNotes: NoteSyncItemMeta[],
   localUpdatedAt: number
 ): Promise<SyncAction> {
@@ -237,26 +439,96 @@ async function syncNoteInBatch(
   const remote = remoteNotes.find((r) => r.noteId === noteId);
 
   if (!remote) {
+    if (!canPush(options.direction)) {
+      emitLog(options, {
+        level: "info",
+        event: "skip",
+        message: `Skipped local-only note ${noteId} in pull-only sync`,
+        entityType: "note",
+        entityId: noteId,
+      });
+      return "skipped";
+    }
     const encrypted = await encrypt(json, passphrase);
     await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    emitLog(options, {
+      level: "success",
+      event: "push",
+      message: `Pushed note ${noteId}`,
+      entityType: "note",
+      entityId: noteId,
+    });
     return "pushed";
   }
 
   if (remote.checksum === localChecksum) {
+    emitLog(options, {
+      level: "info",
+      event: "skip",
+      message: `Skipped unchanged note ${noteId}`,
+      entityType: "note",
+      entityId: noteId,
+    });
     return "skipped";
+  }
+
+  if (options.direction === "pull") {
+    const pulled = await pullNoteBlob(noteId);
+    if (!pulled) return "skipped";
+
+    const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
+    await applyNoteSnapshot(snapshot);
+    emitLog(options, {
+      level: "success",
+      event: "pull",
+      message: `Pulled note ${noteId}`,
+      entityType: "note",
+      entityId: noteId,
+    });
+    return "pulled";
+  }
+
+  if (options.direction === "push") {
+    const encrypted = await encrypt(json, passphrase);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    emitLog(options, {
+      level: "success",
+      event: "push",
+      message: `Pushed note ${noteId}`,
+      entityType: "note",
+      entityId: noteId,
+    });
+    return "pushed";
   }
 
   // Checksums differ — compare timestamps
   if (localUpdatedAt > remote.updatedAt) {
     const encrypted = await encrypt(json, passphrase);
     await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    emitLog(options, {
+      level: "success",
+      event: "push",
+      message: `Pushed note ${noteId}`,
+      entityType: "note",
+      entityId: noteId,
+    });
     return "pushed";
   }
 
   // Remote is newer or equal timestamps — ask user. Notes are not versioned, so
   // there is no pre-pull snapshot to take (the pre-sync backup is the safety net).
   const noteTitle = await getNoteTitle(noteId);
+  emitLog(options, {
+    level: "warning",
+    event: "conflict",
+    message: `Note conflict: ${noteTitle}`,
+    entityType: "note",
+    entityId: noteId,
+  });
   const choice = await onConflict({
+    entityType: "note",
+    entityId: noteId,
+    entityTitle: noteTitle,
     bookId: noteId,
     bookTitle: noteTitle,
     localUpdatedAt,
@@ -270,6 +542,13 @@ async function syncNoteInBatch(
   if (choice === "push") {
     const encrypted = await encrypt(json, passphrase);
     await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    emitLog(options, {
+      level: "success",
+      event: "push",
+      message: `Pushed note ${noteId}`,
+      entityType: "note",
+      entityId: noteId,
+    });
     return "pushed";
   }
 
@@ -279,10 +558,21 @@ async function syncNoteInBatch(
 
   const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
   await applyNoteSnapshot(snapshot);
+  emitLog(options, {
+    level: "success",
+    event: "pull",
+    message: `Pulled note ${noteId}`,
+    entityType: "note",
+    entityId: noteId,
+  });
   return "pulled";
 }
 
-async function syncVersions(bookId: string, passphrase: string): Promise<void> {
+async function syncVersions(
+  bookId: string,
+  passphrase: string,
+  options: SyncOptions = DEFAULT_SYNC_OPTIONS
+): Promise<void> {
   const db = await getDatabase();
 
   const localRows = await db.select<
@@ -301,31 +591,33 @@ async function syncVersions(bookId: string, passphrase: string): Promise<void> {
   // rejection) must not abort the whole version sync — log it and move on, the
   // same way the pull loop below isolates each version. synced_at is only
   // stamped after a successful push, so a skipped version retries next sync.
-  for (const local of localRows) {
-    if (remoteIds.has(local.id)) continue;
+  if (canPush(options.direction)) {
+    for (const local of localRows) {
+      if (remoteIds.has(local.id)) continue;
 
-    try {
-      const encrypted = await encrypt(local.snapshot, passphrase);
-      await pushVersionBlob(
-        {
-          versionId: local.id,
-          bookId,
-          checksum: local.checksum,
-          name: local.name,
-          triggerType: local.trigger_type,
-          createdAt: local.created_at,
-          wordCount: local.word_count,
-        },
-        new Blob([toBlobPart(new Uint8Array(encrypted))])
-      );
+      try {
+        const encrypted = await encrypt(local.snapshot, passphrase);
+        await pushVersionBlob(
+          {
+            versionId: local.id,
+            bookId,
+            checksum: local.checksum,
+            name: local.name,
+            triggerType: local.trigger_type,
+            createdAt: local.created_at,
+            wordCount: local.word_count,
+          },
+          new Blob([toBlobPart(new Uint8Array(encrypted))])
+        );
 
-      const now = Math.floor(Date.now() / 1000);
-      await db.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [
-        now,
-        local.id,
-      ]);
-    } catch (error) {
-      console.warn(`Version sync: skipping push of version ${local.id}`, error);
+        const now = Math.floor(Date.now() / 1000);
+        await db.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [
+          now,
+          local.id,
+        ]);
+      } catch (error) {
+        console.warn(`Version sync: skipping push of version ${local.id}`, error);
+      }
     }
   }
 
@@ -336,36 +628,38 @@ async function syncVersions(bookId: string, passphrase: string): Promise<void> {
   // would never match it.) Each version is isolated so one bad blob cannot
   // abort the whole initial sync, but a wrong passphrase — which fails every
   // version — is surfaced rather than silently swallowed.
-  for (const remote of remotes) {
-    if (localIds.has(remote.versionId)) continue;
+  if (canPull(options.direction)) {
+    for (const remote of remotes) {
+      if (localIds.has(remote.versionId)) continue;
 
-    try {
-      const blob = await pullVersionBlob(remote.remoteId);
-      if (!blob) continue;
+      try {
+        const blob = await pullVersionBlob(remote.remoteId);
+        if (!blob) continue;
 
-      const decrypted = await decrypt(blob.data, passphrase);
+        const decrypted = await decrypt(blob.data, passphrase);
 
-      await db.execute(
-        `INSERT OR IGNORE INTO book_versions
-         (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          remote.versionId,
-          bookId,
-          remote.name,
-          decrypted,
-          remote.wordCount,
-          remote.checksum,
-          remote.triggerType,
-          remote.createdAt,
-          Math.floor(Date.now() / 1000),
-        ]
-      );
-    } catch (error) {
-      if (isSyncCryptoError(error) && error.code === "INVALID_PASSPHRASE") {
-        throw error;
+        await db.execute(
+          `INSERT OR IGNORE INTO book_versions
+           (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            remote.versionId,
+            bookId,
+            remote.name,
+            decrypted,
+            remote.wordCount,
+            remote.checksum,
+            remote.triggerType,
+            remote.createdAt,
+            Math.floor(Date.now() / 1000),
+          ]
+        );
+      } catch (error) {
+        if (isSyncCryptoError(error) && error.code === "INVALID_PASSPHRASE") {
+          throw error;
+        }
+        console.warn(`Version sync: skipping version ${remote.versionId}`, error);
       }
-      console.warn(`Version sync: skipping version ${remote.versionId}`, error);
     }
   }
 }
@@ -383,7 +677,8 @@ interface NoteTimestampRow {
  */
 async function syncAllNotes(
   passphrase: string,
-  onConflict: ConflictResolver
+  onConflict: ConflictResolver,
+  options: SyncOptions
 ): Promise<{ actions: SyncAction[]; cancelled: boolean }> {
   assertOnline();
 
@@ -401,6 +696,7 @@ async function syncAllNotes(
       note.id,
       passphrase,
       onConflict,
+      options,
       remoteNotes,
       note.updated_at
     );
@@ -411,15 +707,35 @@ async function syncAllNotes(
   }
 
   // Pull remote-only notes (no local data — auto-pull, no conflict dialog)
-  for (const remote of remoteNotes) {
-    if (localNoteIds.has(remote.noteId)) continue;
+  if (canPull(options.direction)) {
+    for (const remote of remoteNotes) {
+      if (localNoteIds.has(remote.noteId)) continue;
+      if (await hasTombstone("note", remote.noteId)) {
+        emitLog(options, {
+          level: "warning",
+          event: "skip",
+          message: `Skipped tombstoned remote note ${remote.noteId}`,
+          entityType: "note",
+          entityId: remote.noteId,
+        });
+        actions.push("skipped");
+        continue;
+      }
 
-    const pulled = await pullNoteBlob(remote.noteId);
-    if (!pulled) continue;
+      const pulled = await pullNoteBlob(remote.noteId);
+      if (!pulled) continue;
 
-    const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
-    await applyNoteSnapshot(snapshot);
-    actions.push("pulled");
+      const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
+      await applyNoteSnapshot(snapshot);
+      emitLog(options, {
+        level: "success",
+        event: "pull",
+        message: `Pulled remote-only note ${remote.noteId}`,
+        entityType: "note",
+        entityId: remote.noteId,
+      });
+      actions.push("pulled");
+    }
   }
 
   return { actions, cancelled: false };
@@ -480,17 +796,33 @@ async function migrateLegacyMetricsBlobIfNeeded(
 export async function syncBook(
   bookId: string,
   passphrase: string,
-  onConflict: ConflictResolver
+  onConflict: ConflictResolver,
+  optionsInput?: Partial<SyncOptions>
 ): Promise<SingleSyncResult> {
   assertNotSyncing();
   isSyncing = true;
+  const options = resolveSyncOptions({ scope: "books", ...optionsInput });
   try {
     await ensureAuth();
     await createPreSyncBackupOrThrow();
+    emitLog(options, {
+      level: "success",
+      event: "backup",
+      message: "Created pre-sync safety backup",
+    });
 
-    const action = await syncBookInBatch(bookId, passphrase, onConflict);
+    const deletionResult = await processPendingDeletions(["book"], options);
+    if (deletionResult.pendingDeletions.length > 0) {
+      return {
+        outcome: "partial",
+        action: "skipped",
+        pendingDeletions: deletionResult.pendingDeletions,
+      };
+    }
+
+    const action = await syncBookInBatch(bookId, passphrase, onConflict, options);
     if (action !== "cancelled") {
-      await syncVersions(bookId, passphrase);
+      await syncVersions(bookId, passphrase, options);
     }
     await syncMetrics(passphrase);
     return {
@@ -509,41 +841,111 @@ interface BookTimestampRow {
 
 export async function syncAllBooks(
   passphrase: string,
-  onConflict: ConflictResolver
+  onConflict: ConflictResolver,
+  optionsInput?: Partial<SyncOptions>
 ): Promise<BatchSyncResult> {
   assertNotSyncing();
   isSyncing = true;
+  const options = resolveSyncOptions(optionsInput);
   try {
     await ensureAuth();
     assertOnline();
     const actions: SyncAction[] = [];
 
     await createPreSyncBackupOrThrow();
+    emitLog(options, {
+      level: "success",
+      event: "backup",
+      message: "Created pre-sync safety backup",
+    });
+
+    const deletionScopes: SyncEntityType[] = [];
+    if (includesScope(options.scope, "book")) deletionScopes.push("book");
+    if (includesScope(options.scope, "note")) deletionScopes.push("note");
+    const deletionResult = await processPendingDeletions(deletionScopes, options);
+    actions.push(...deletionResult.actions);
+    if (deletionResult.pendingDeletions.length > 0) {
+      return {
+        outcome: actions.length > 0 ? "partial" : "partial",
+        actions,
+        pendingDeletions: deletionResult.pendingDeletions,
+      };
+    }
 
     const db = await getDatabase();
-    const localBooks = await db.select<BookTimestampRow[]>(
-      `SELECT b.id, MAX(b.updated_at, COALESCE(MAX(c.updated_at), 0)) AS updated_at
-       FROM books b
-       LEFT JOIN chapters c ON c.book_id = b.id
-       GROUP BY b.id`
-    );
-    const localBookIds = new Set(localBooks.map((b) => b.id));
-
-    const remoteBooks = await listRemoteBooks();
-
-    for (const book of localBooks) {
-      const action = await syncBookInBatch(
-        book.id,
-        passphrase,
-        onConflict,
-        remoteBooks,
-        book.updated_at
+    if (includesScope(options.scope, "book")) {
+      const localBooks = await db.select<BookTimestampRow[]>(
+        `SELECT b.id, MAX(b.updated_at, COALESCE(MAX(c.updated_at), 0)) AS updated_at
+         FROM books b
+         LEFT JOIN chapters c ON c.book_id = b.id
+         GROUP BY b.id`
       );
-      if (action !== "cancelled") {
-        await syncVersions(book.id, passphrase);
+      const localBookIds = new Set(localBooks.map((b) => b.id));
+
+      const remoteBooks = await listRemoteBooks();
+
+      for (const book of localBooks) {
+        const action = await syncBookInBatch(
+          book.id,
+          passphrase,
+          onConflict,
+          options,
+          remoteBooks,
+          book.updated_at
+        );
+        if (action !== "cancelled") {
+          await syncVersions(book.id, passphrase, options);
+        }
+        actions.push(action);
+        if (action === "cancelled") {
+          await syncMetrics(passphrase);
+          return {
+            outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
+            actions,
+          };
+        }
       }
-      actions.push(action);
-      if (action === "cancelled") {
+
+      // Pull remote-only books (no local data — auto-pull, no conflict dialog)
+      if (canPull(options.direction)) {
+        for (const remote of remoteBooks) {
+          if (localBookIds.has(remote.bookId)) continue;
+          if (await hasTombstone("book", remote.bookId)) {
+            emitLog(options, {
+              level: "warning",
+              event: "skip",
+              message: `Skipped tombstoned remote book ${remote.bookId}`,
+              entityType: "book",
+              entityId: remote.bookId,
+            });
+            actions.push("skipped");
+            continue;
+          }
+
+          const pulled = await pullBookBlob(remote.bookId);
+          if (!pulled) continue;
+
+          const snapshot = await decryptSnapshot(pulled.data, passphrase);
+          await applyBookSnapshot(snapshot);
+          emitLog(options, {
+            level: "success",
+            event: "pull",
+            message: `Pulled remote-only book ${remote.bookId}`,
+            entityType: "book",
+            entityId: remote.bookId,
+          });
+          actions.push("pulled");
+          await syncVersions(remote.bookId, passphrase, options);
+        }
+      }
+    }
+
+    // Notes sync alongside books in the same pass, sharing the auth check and
+    // pre-sync backup. A cancelled note conflict aborts the rest of note sync.
+    if (includesScope(options.scope, "note")) {
+      const noteResult = await syncAllNotes(passphrase, onConflict, options);
+      actions.push(...noteResult.actions);
+      if (noteResult.cancelled) {
         await syncMetrics(passphrase);
         return {
           outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
@@ -552,32 +954,9 @@ export async function syncAllBooks(
       }
     }
 
-    // Pull remote-only books (no local data — auto-pull, no conflict dialog)
-    for (const remote of remoteBooks) {
-      if (localBookIds.has(remote.bookId)) continue;
-
-      const pulled = await pullBookBlob(remote.bookId);
-      if (!pulled) continue;
-
-      const snapshot = await decryptSnapshot(pulled.data, passphrase);
-      await applyBookSnapshot(snapshot);
-      actions.push("pulled");
-      await syncVersions(remote.bookId, passphrase);
-    }
-
-    // Notes sync alongside books in the same pass, sharing the auth check and
-    // pre-sync backup. A cancelled note conflict aborts the rest of note sync.
-    const noteResult = await syncAllNotes(passphrase, onConflict);
-    actions.push(...noteResult.actions);
-    if (noteResult.cancelled) {
+    if (includesScope(options.scope, "metrics")) {
       await syncMetrics(passphrase);
-      return {
-        outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
-        actions,
-      };
     }
-
-    await syncMetrics(passphrase);
 
     return { outcome: "success", actions };
   } finally {

@@ -311,16 +311,20 @@ describe("BackupService", () => {
       expect(mockDb.execute).toHaveBeenNthCalledWith(2, "DELETE FROM book_versions");
       expect(mockDb.execute).toHaveBeenNthCalledWith(3, "DELETE FROM books");
       expect(mockDb.execute).toHaveBeenNthCalledWith(4, "DELETE FROM notes");
-      expect(mockDb.execute).toHaveBeenNthCalledWith(5, 'INSERT INTO "books" VALUES ("book-1")');
+      expect(mockDb.execute).toHaveBeenNthCalledWith(5, "DELETE FROM sync_tombstones");
       expect(mockDb.execute).toHaveBeenNthCalledWith(
         6,
-        'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")'
+        'INSERT INTO "books" VALUES ("book-1")'
       );
       expect(mockDb.execute).toHaveBeenNthCalledWith(
         7,
+        'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")'
+      );
+      expect(mockDb.execute).toHaveBeenNthCalledWith(
+        8,
         'INSERT INTO "chapters" VALUES ("chapter-1")'
       );
-      expect(mockDb.execute).toHaveBeenCalledTimes(7);
+      expect(mockDb.execute).toHaveBeenCalledTimes(8);
       expect(mockLoadBooks).toHaveBeenCalled();
       expect(mockLoadChapters).toHaveBeenCalledWith("book-1");
     });
@@ -410,6 +414,7 @@ describe("BackupService", () => {
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM book_versions
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM books
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM notes
+        .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM sync_tombstones
         .mockRejectedValueOnce(new Error("UNIQUE constraint failed")); // INSERT fails
 
       await expect(
@@ -418,7 +423,7 @@ describe("BackupService", () => {
         "RESTORE_FAILED: Restore failed on statement 1/1: UNIQUE constraint failed"
       );
 
-      expect(mockDb.execute).toHaveBeenCalledTimes(5);
+      expect(mockDb.execute).toHaveBeenCalledTimes(6);
       expect(mockLoadBooks).not.toHaveBeenCalled();
     });
 

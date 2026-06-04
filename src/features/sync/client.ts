@@ -148,6 +148,17 @@ export async function pullBookBlob(
   };
 }
 
+export async function deleteRemoteBook(bookId: string): Promise<void> {
+  const client = getClient();
+  const existing = await client
+    .collection("sync_items")
+    .getList(1, 1, { filter: `book_id = "${bookId}"` });
+
+  if (existing.items.length === 0) return;
+
+  await client.collection("sync_items").delete(existing.items[0].id);
+}
+
 export async function pushNoteBlob(
   noteId: string,
   encryptedData: Blob,
@@ -195,6 +206,17 @@ export async function pullNoteBlob(
     data: new Uint8Array(arrayBuffer),
     checksum: record.checksum as string,
   };
+}
+
+export async function deleteRemoteNote(noteId: string): Promise<void> {
+  const client = getClient();
+  const existing = await client
+    .collection("note_items")
+    .getList(1, 1, { filter: `note_id = "${noteId}"` });
+
+  if (existing.items.length === 0) return;
+
+  await client.collection("note_items").delete(existing.items[0].id);
 }
 
 export async function listRemoteNotes(): Promise<NoteSyncItemMeta[]> {

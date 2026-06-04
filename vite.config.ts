@@ -69,6 +69,7 @@ export default defineConfig(() => ({
         "src/lib/platform/web/backup.ts",
         "src/features/sync/sync-engine.ts",
         "src/features/sync/client.ts",
+        "src/features/sync/tombstones.ts",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
         "src/components/editor/paste-cleanup.ts",

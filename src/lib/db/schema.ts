@@ -84,6 +84,18 @@ export const notes = sqliteTable("notes", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// Local deletion markers used by sync to prevent remote resurrection and to
+// require explicit confirmation before destructive remote deletes.
+export const syncTombstones = sqliteTable("sync_tombstones", {
+  id: text("id").primaryKey(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  title: text("title").notNull(),
+  deletedAt: integer("deleted_at").notNull(),
+  confirmedAt: integer("confirmed_at"),
+  pushedAt: integer("pushed_at"),
+});
+
 // Cover templates table
 export const coverTemplates = sqliteTable("cover_templates", {
   id: text("id").primaryKey(),
@@ -109,6 +121,8 @@ export type Chapter = typeof chapters.$inferSelect;
 export type NewChapter = typeof chapters.$inferInsert;
 export type NoteRow = typeof notes.$inferSelect;
 export type NewNoteRow = typeof notes.$inferInsert;
+export type SyncTombstoneRow = typeof syncTombstones.$inferSelect;
+export type NewSyncTombstoneRow = typeof syncTombstones.$inferInsert;
 export type CoverTemplate = typeof coverTemplates.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
 export type BookVersionRow = typeof bookVersions.$inferSelect;

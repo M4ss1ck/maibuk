@@ -60,10 +60,13 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
   }
 
   async exportData(): Promise<Uint8Array> {
-    const [books, chapters, bookVersions, coverTemplates, settings] = await Promise.all([
+    const [books, chapters, bookVersions, notes, syncTombstones, coverTemplates, settings] =
+      await Promise.all([
       this.select<Record<string, unknown>[]>("SELECT * FROM books"),
       this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
       this.select<Record<string, unknown>[]>("SELECT * FROM book_versions"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM sync_tombstones"),
       this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
       this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
     ]);
@@ -81,6 +84,12 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
       "",
       "-- Book Versions",
       generateInsertStatements("book_versions", bookVersions),
+      "",
+      "-- Notes",
+      generateInsertStatements("notes", notes),
+      "",
+      "-- Sync Tombstones",
+      generateInsertStatements("sync_tombstones", syncTombstones),
       "",
       "-- Cover Templates",
       generateInsertStatements("cover_templates", coverTemplates),
@@ -200,12 +209,29 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     )
   `);
 
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS sync_tombstones (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      deleted_at INTEGER NOT NULL,
+      confirmed_at INTEGER,
+      pushed_at INTEGER,
+      UNIQUE(entity_type, entity_id)
+    )
+  `);
+
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)`);
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_chapters_order ON chapters(book_id, "order")`
   );
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_book_versions_book ON book_versions(book_id, created_at DESC)`
+  );
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_sync_tombstones_pending
+      ON sync_tombstones(entity_type, pushed_at, confirmed_at)`
   );
 
   return adapter;

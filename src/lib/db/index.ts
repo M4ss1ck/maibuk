@@ -108,6 +108,19 @@ async function initializeSchema(): Promise<void> {
     )
   `);
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS sync_tombstones (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      deleted_at INTEGER NOT NULL,
+      confirmed_at INTEGER,
+      pushed_at INTEGER,
+      UNIQUE(entity_type, entity_id)
+    )
+  `);
+
   // Create cover_templates table
   await db.execute(`
     CREATE TABLE IF NOT EXISTS cover_templates (
@@ -143,6 +156,11 @@ async function initializeSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_book_versions_book ON book_versions(book_id, created_at DESC)
   `);
 
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_sync_tombstones_pending
+      ON sync_tombstones(entity_type, pushed_at, confirmed_at)
+  `);
+
   await ensureMetricsSchema(db);
 }
 
@@ -168,6 +186,7 @@ export async function resetDatabase(): Promise<void> {
   await database.execute("DELETE FROM books");
   await database.execute("DELETE FROM cover_templates");
   await database.execute("DELETE FROM notes").catch(() => {});
+  await database.execute("DELETE FROM sync_tombstones").catch(() => {});
   await database.execute("DELETE FROM settings");
   await database.execute("DELETE FROM metrics_cache").catch(() => {});
   await database.execute("DELETE FROM metrics_event_tombstones").catch(() => {});

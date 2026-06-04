@@ -30,7 +30,7 @@ const MIN_PROTECTED = 2;
  * unquoted semicolons, and this regex requires a concrete VALUES clause.
  */
 const RESTORE_TABLE_PATTERN =
-  /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters|book_versions|notes)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
+  /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters|book_versions|notes|sync_tombstones)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
 
 function isRestoreStatement(statement: string): boolean {
   return RESTORE_TABLE_PATTERN.test(statement.trim());
@@ -54,6 +54,7 @@ async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Pr
   await db.execute("DELETE FROM book_versions");
   await db.execute("DELETE FROM books");
   await db.execute("DELETE FROM notes");
+  await db.execute("DELETE FROM sync_tombstones");
 
   for (let i = 0; i < statements.length; i++) {
     try {
