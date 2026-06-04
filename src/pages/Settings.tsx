@@ -33,7 +33,7 @@ import { useSyncFlow } from "../features/sync/useSyncFlow";
 import { AuthDialog } from "../components/sync/AuthDialog";
 import { PassphraseDialog } from "../components/sync/PassphraseDialog";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
-import { RefreshCw } from "lucide-react";
+import { SyncControls } from "../components/sync/SyncControls";
 import { BackupSection } from "../components/settings/BackupSection";
 import { MetricsSection } from "../components/settings/MetricsSection";
 import { PasteCleanupSection } from "../components/settings/PasteCleanupSection";
@@ -71,7 +71,7 @@ export function Settings() {
     setHideKeyboardHints,
   } = useSettings();
 
-  const { apiUrl, setApiUrl, authStatus, userEmail, syncStatus, logout } =
+  const { apiUrl, setApiUrl, authStatus, userEmail, logout } =
     useSyncStore();
   const {
     showPassphraseDialog,
@@ -353,8 +353,8 @@ export function Settings() {
         </section>
 
         {/* Sync Settings */}
-        <section className="mb-6 sm:mb-8">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+          <h3 className="text-lg text-primary font-medium mb-4">
             {t("sync.title")}
           </h3>
           <div className="divide-y divide-border">
@@ -365,7 +365,7 @@ export function Settings() {
                   {t("sync.serverUrlDescription")}
                 </p>
               </div>
-              <div className="w-full sm:w-56">
+              <div className="w-full sm:w-80">
                 <Input
                   type="text"
                   value={syncServerUrl}
@@ -392,28 +392,9 @@ export function Settings() {
                 </p>
               </div>
               {authStatus === "logged-in" ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                      // Errors surface via syncError in the store; swallow the
-                      // rejection so it isn't an uncaught promise.
-                      void syncAllWithSessionPassphrase().catch(() => {});
-                    }}
-                    disabled={syncStatus === "syncing"}
-                  >
-                    <RefreshCw
-                      className={`w-4 h-4 ${syncStatus === "syncing" ? "animate-spin" : ""}`}
-                    />
-                    {syncStatus === "syncing"
-                      ? t("sync.syncing")
-                      : t("sync.syncNow")}
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={logout}>
-                    {t("sync.logout")}
-                  </Button>
-                </div>
+                <Button variant="destructive" size="sm" onClick={logout}>
+                  {t("sync.logout")}
+                </Button>
               ) : (
                 <Button
                   variant="primary"
@@ -425,7 +406,20 @@ export function Settings() {
               )}
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            {authStatus === "logged-in" && (
+              <div className="py-3">
+                <SyncControls
+                  layout="settings"
+                  onSync={async (options) => {
+                    // Errors surface via syncError in the store; swallow the
+                    // rejection so it isn't an uncaught promise.
+                    await syncAllWithSessionPassphrase(options).catch(() => {});
+                  }}
+                />
+              </div>
+            )}
+
+            <p className="py-3 text-xs text-muted-foreground">
               {t("sync.encryptionInfo")}
             </p>
           </div>

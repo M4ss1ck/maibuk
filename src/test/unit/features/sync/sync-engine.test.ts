@@ -13,6 +13,13 @@ const mockListRemoteVersions = vi.hoisted(() => vi.fn());
 const mockPushVersionBlob = vi.hoisted(() => vi.fn());
 const mockPullVersionBlob = vi.hoisted(() => vi.fn());
 const mockApplyBookSnapshot = vi.hoisted(() => vi.fn());
+const mockSerializeNote = vi.hoisted(() => vi.fn());
+const mockApplyNoteSnapshot = vi.hoisted(() => vi.fn());
+const mockPushNoteBlob = vi.hoisted(() => vi.fn());
+const mockPullNoteBlob = vi.hoisted(() => vi.fn());
+const mockListRemoteNotes = vi.hoisted(() => vi.fn());
+const mockDeleteRemoteBook = vi.hoisted(() => vi.fn());
+const mockDeleteRemoteNote = vi.hoisted(() => vi.fn());
 const mockRefreshAuth = vi.hoisted(() => vi.fn());
 const mockSyncStoreGetState = vi.hoisted(() => vi.fn());
 const mockSyncStoreSetState = vi.hoisted(() => vi.fn());
@@ -21,6 +28,10 @@ const mockUseSettingsStoreGetState = vi.hoisted(() => vi.fn());
 const mockSyncMetricsRows = vi.hoisted(() => vi.fn());
 const mockApplyLegacyBlobAndMarkPushed = vi.hoisted(() => vi.fn());
 const mockPullMetricsBlob = vi.hoisted(() => vi.fn());
+const mockListPendingTombstones = vi.hoisted(() => vi.fn());
+const mockHasTombstone = vi.hoisted(() => vi.fn());
+const mockGetTombstone = vi.hoisted(() => vi.fn());
+const mockMarkTombstonePushed = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
@@ -29,6 +40,8 @@ vi.mock("../../../../lib/db", () => ({
 vi.mock("../../../../features/sync/serializer", () => ({
   serializeBook: mockSerializeBook,
   applyBookSnapshot: mockApplyBookSnapshot,
+  serializeNote: mockSerializeNote,
+  applyNoteSnapshot: mockApplyNoteSnapshot,
 }));
 
 class FakeSyncCryptoError extends Error {
@@ -55,6 +68,11 @@ vi.mock("../../../../features/sync/client", () => ({
   pullVersionBlob: mockPullVersionBlob,
   refreshAuth: mockRefreshAuth,
   pullMetricsBlob: mockPullMetricsBlob,
+  pushNoteBlob: mockPushNoteBlob,
+  pullNoteBlob: mockPullNoteBlob,
+  listRemoteNotes: mockListRemoteNotes,
+  deleteRemoteBook: mockDeleteRemoteBook,
+  deleteRemoteNote: mockDeleteRemoteNote,
 }));
 
 // Pre-mock backup module — Task 10 will add backup imports to sync-engine.ts.
@@ -99,9 +117,39 @@ vi.mock("../../../../features/metrics/metrics-sync", () => ({
   applyLegacyBlobAndMarkPushed: mockApplyLegacyBlobAndMarkPushed,
 }));
 
+vi.mock("../../../../features/sync/tombstones", () => ({
+  listPendingTombstones: mockListPendingTombstones,
+  hasTombstone: mockHasTombstone,
+  getTombstone: mockGetTombstone,
+  markTombstonePushed: mockMarkTombstonePushed,
+}));
+
 const { syncBook, syncAllBooks, resetSyncEngineForTests } = await import(
   "../../../../features/sync/sync-engine"
 );
+
+// Note sync runs inside syncAllBooks. These defaults survive vi.clearAllMocks()
+// (which clears call history, not implementations), so the existing book-focused
+// tests — which have no local notes — see an empty remote note set and no-op.
+mockListRemoteNotes.mockResolvedValue([]);
+mockSerializeNote.mockResolvedValue('{"note":{}}');
+mockPushNoteBlob.mockResolvedValue(undefined);
+mockPullNoteBlob.mockResolvedValue(null);
+mockListPendingTombstones.mockResolvedValue([]);
+mockHasTombstone.mockResolvedValue(false);
+mockGetTombstone.mockResolvedValue(null);
+mockDeleteRemoteBook.mockResolvedValue(undefined);
+mockDeleteRemoteNote.mockResolvedValue(undefined);
+mockMarkTombstonePushed.mockResolvedValue(undefined);
+
+beforeEach(() => {
+  mockListPendingTombstones.mockResolvedValue([]);
+  mockHasTombstone.mockResolvedValue(false);
+  mockGetTombstone.mockResolvedValue(null);
+  mockDeleteRemoteBook.mockResolvedValue(undefined);
+  mockDeleteRemoteNote.mockResolvedValue(undefined);
+  mockMarkTombstonePushed.mockResolvedValue(undefined);
+});
 
 describe("syncBook — timestamp fix", () => {
   const mockDb = {
@@ -374,6 +422,202 @@ describe("syncAllBooks — truthful outcomes", () => {
     expect(result.outcome).toBe("success");
     expect(result.actions).toEqual(["pulled"]);
     expect(mockPullBookBlob).toHaveBeenCalledWith("book-remote");
+  });
+});
+
+describe("syncAllBooks — scoped direction and deletion safety", () => {
+  const mockDb = {
+    select: vi.fn(),
+    execute: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSyncEngineForTests();
+    mockGetDatabase.mockResolvedValue(mockDb);
+    mockCreateBackupAdapter.mockResolvedValue({
+      saveBackup: vi.fn(),
+      listBackups: vi.fn().mockResolvedValue([]),
+      readBackup: vi.fn(),
+      deleteBackup: vi.fn(),
+    });
+    mockBackupServiceCreateBackup.mockResolvedValue("mock-backup.sql");
+    mockSerializeBook.mockResolvedValue('{"book":{}}');
+    mockSerializeNote.mockResolvedValue('{"note":{}}');
+    mockComputeChecksum.mockResolvedValue("local-checksum");
+    mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockDecrypt.mockResolvedValue('{"book":{"id":"remote-book"},"chapters":[]}');
+    mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
+    mockCreateVersion.mockResolvedValue(null);
+    mockListRemoteVersions.mockResolvedValue([]);
+    mockPushVersionBlob.mockResolvedValue(undefined);
+    mockPullVersionBlob.mockResolvedValue(null);
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockListRemoteNotes.mockResolvedValue([]);
+    mockPushBookBlob.mockResolvedValue(undefined);
+    mockPullBookBlob.mockResolvedValue(null);
+    mockPushNoteBlob.mockResolvedValue(undefined);
+    mockPullNoteBlob.mockResolvedValue(null);
+    mockListPendingTombstones.mockResolvedValue([]);
+    mockHasTombstone.mockResolvedValue(false);
+    mockDeleteRemoteBook.mockResolvedValue(undefined);
+    mockDeleteRemoteNote.mockResolvedValue(undefined);
+    mockMarkTombstonePushed.mockResolvedValue(undefined);
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [{ id: "book-1", updated_at: 5000 }];
+      if (sql.includes("FROM notes")) return [{ id: "note-1", updated_at: 5000 }];
+      if (sql.includes("book_versions")) return [];
+      return [];
+    });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
+  });
+
+  it("pull-only never pushes local-only books", async () => {
+    await syncAllBooks("pass", vi.fn(), {
+      scope: "books",
+      direction: "pull",
+    });
+
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(mockPushVersionBlob).not.toHaveBeenCalled();
+  });
+
+  it("emits operation log entries from the engine", async () => {
+    const onLog = vi.fn();
+
+    await syncAllBooks("pass", vi.fn(), {
+      scope: "books",
+      direction: "bidirectional",
+      onLog,
+    });
+
+    expect(onLog).toHaveBeenCalledWith(expect.objectContaining({ event: "backup" }));
+    expect(onLog).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "push", entityType: "book", entityId: "book-1" })
+    );
+  });
+
+  it("notes scope does not list or sync books", async () => {
+    await syncAllBooks("pass", vi.fn(), {
+      scope: "notes",
+      direction: "bidirectional",
+    });
+
+    expect(mockListRemoteBooks).not.toHaveBeenCalled();
+    expect(mockSerializeBook).not.toHaveBeenCalled();
+    expect(mockListRemoteNotes).toHaveBeenCalled();
+    expect(mockPushNoteBlob).toHaveBeenCalled();
+  });
+
+  it("skips remote-only books that have a local tombstone", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [];
+      if (sql.includes("book_versions")) return [];
+      return [];
+    });
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "deleted-book", checksum: "remote", updatedAt: 5000 },
+    ]);
+    mockGetTombstone.mockImplementation(async (entityType: string, entityId: string) => {
+      return entityType === "book" && entityId === "deleted-book"
+        ? {
+            id: "book:deleted-book",
+            entityType: "book",
+            entityId: "deleted-book",
+            title: "Deleted Draft",
+            deletedAt: 1000,
+            confirmedAt: null,
+            pushedAt: null,
+          }
+        : null;
+    });
+
+    const result = await syncAllBooks("pass", vi.fn(), {
+      scope: "books",
+      direction: "bidirectional",
+    });
+
+    expect(result.actions).toEqual(["skipped"]);
+    expect(mockPullBookBlob).not.toHaveBeenCalled();
+    expect(mockApplyBookSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("returns pending deletions and does not delete remote rows until confirmed", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [];
+      if (sql.includes("book_versions")) return [];
+      return [];
+    });
+    mockListPendingTombstones.mockResolvedValue([
+      {
+        id: "book:book-1",
+        entityType: "book",
+        entityId: "book-1",
+        title: "Deleted Draft",
+        deletedAt: 1000,
+        confirmedAt: null,
+        pushedAt: null,
+      },
+    ]);
+
+    const result = await syncAllBooks("pass", vi.fn(), {
+      scope: "books",
+      direction: "bidirectional",
+    });
+
+    expect(result.outcome).toBe("partial");
+    expect(result.pendingDeletions).toEqual([
+      {
+        id: "book:book-1",
+        entityType: "book",
+        entityId: "book-1",
+        title: "Deleted Draft",
+        deletedAt: 1000,
+      },
+    ]);
+    expect(mockDeleteRemoteBook).not.toHaveBeenCalled();
+  });
+
+  it("pushes confirmed book and note tombstones as remote deletes", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [];
+      if (sql.includes("FROM notes")) return [];
+      if (sql.includes("book_versions")) return [];
+      return [];
+    });
+    mockListPendingTombstones.mockResolvedValue([
+      {
+        id: "book:book-1",
+        entityType: "book",
+        entityId: "book-1",
+        title: "Deleted Draft",
+        deletedAt: 1000,
+        confirmedAt: 1100,
+        pushedAt: null,
+      },
+      {
+        id: "note:note-1",
+        entityType: "note",
+        entityId: "note-1",
+        title: "Deleted Note",
+        deletedAt: 1001,
+        confirmedAt: 1100,
+        pushedAt: null,
+      },
+    ]);
+
+    const result = await syncAllBooks("pass", vi.fn(), {
+      scope: "all",
+      direction: "push",
+      confirmedDeletionIds: ["book:book-1", "note:note-1"],
+    });
+
+    expect(result.pendingDeletions).toBeUndefined();
+    expect(mockDeleteRemoteBook).toHaveBeenCalledWith("book-1");
+    expect(mockDeleteRemoteNote).toHaveBeenCalledWith("note-1");
+    expect(mockMarkTombstonePushed).toHaveBeenCalledWith("book", "book-1");
+    expect(mockMarkTombstonePushed).toHaveBeenCalledWith("note", "note-1");
   });
 });
 
@@ -995,5 +1239,134 @@ describe("syncMetrics — engine integration", () => {
 
     expect(result.outcome).toBe("cancelled");
     expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+  });
+});
+
+describe("syncAllNotes — note sync parity with books", () => {
+  const mockDb = {
+    select: vi.fn(),
+    execute: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSyncEngineForTests();
+    mockGetDatabase.mockResolvedValue(mockDb);
+    mockCreateBackupAdapter.mockResolvedValue({
+      saveBackup: vi.fn(),
+      listBackups: vi.fn().mockResolvedValue([]),
+      readBackup: vi.fn(),
+      deleteBackup: vi.fn(),
+    });
+    mockBackupServiceCreateBackup.mockResolvedValue("mock-backup.sql");
+    mockComputeChecksum.mockResolvedValue("local-checksum");
+    mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
+    // No books in any of these tests — focus on notes.
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockListRemoteNotes.mockResolvedValue([]);
+    mockSerializeNote.mockResolvedValue('{"note":{"id":"note-1"}}');
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return []; // no local books
+      if (sql.includes("FROM notes") && sql.includes("updated_at")) {
+        return [{ id: "note-1", updated_at: 5000 }];
+      }
+      if (sql.includes("SELECT title FROM notes")) return [{ title: "My Note" }];
+      return [];
+    });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
+  });
+
+  it("pushes a local-only note", async () => {
+    mockListRemoteNotes.mockResolvedValue([]);
+
+    const result = await syncAllBooks("pass", vi.fn());
+
+    expect(mockPushNoteBlob).toHaveBeenCalledWith("note-1", expect.anything(), "local-checksum");
+    expect(result.actions).toContain("pushed");
+  });
+
+  it("skips a note whose checksum matches the remote", async () => {
+    mockListRemoteNotes.mockResolvedValue([
+      { remoteId: "r1", noteId: "note-1", checksum: "local-checksum", updatedAt: 5000 },
+    ]);
+
+    const result = await syncAllBooks("pass", vi.fn());
+
+    expect(mockPushNoteBlob).not.toHaveBeenCalled();
+    expect(result.actions).toContain("skipped");
+  });
+
+  it("pushes when local note is newer than a diverged remote", async () => {
+    mockListRemoteNotes.mockResolvedValue([
+      { remoteId: "r1", noteId: "note-1", checksum: "remote-checksum", updatedAt: 3000 },
+    ]);
+
+    await syncAllBooks("pass", vi.fn());
+
+    expect(mockPushNoteBlob).toHaveBeenCalled();
+  });
+
+  it("asks for conflict resolution and applies remote on pull", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [];
+      if (sql.includes("FROM notes") && sql.includes("updated_at")) {
+        return [{ id: "note-1", updated_at: 1000 }];
+      }
+      if (sql.includes("SELECT title FROM notes")) return [{ title: "My Note" }];
+      return [];
+    });
+    mockListRemoteNotes.mockResolvedValue([
+      { remoteId: "r1", noteId: "note-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+    const onConflict = vi.fn().mockResolvedValue("pull");
+    mockPullNoteBlob.mockResolvedValue({ data: new Uint8Array([1, 2, 3]), checksum: "remote-checksum" });
+    mockDecrypt.mockResolvedValue('{"note":{"id":"note-1"}}');
+
+    const result = await syncAllBooks("pass", onConflict);
+
+    expect(onConflict).toHaveBeenCalledWith(
+      expect.objectContaining({ bookId: "note-1", bookTitle: "My Note" })
+    );
+    expect(mockApplyNoteSnapshot).toHaveBeenCalled();
+    expect(result.actions).toContain("pulled");
+  });
+
+  it("pulls remote-only notes that have no local copy", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [];
+      if (sql.includes("FROM notes") && sql.includes("updated_at")) return []; // no local notes
+      return [];
+    });
+    mockListRemoteNotes.mockResolvedValue([
+      { remoteId: "r1", noteId: "note-remote", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+    mockPullNoteBlob.mockResolvedValue({ data: new Uint8Array([1, 2, 3]), checksum: "remote-checksum" });
+    mockDecrypt.mockResolvedValue('{"note":{"id":"note-remote"}}');
+
+    const result = await syncAllBooks("pass", vi.fn());
+
+    expect(mockApplyNoteSnapshot).toHaveBeenCalled();
+    expect(result.actions).toContain("pulled");
+  });
+
+  it("aborts the rest of note sync when a conflict is cancelled", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [];
+      if (sql.includes("FROM notes") && sql.includes("updated_at")) {
+        return [{ id: "note-1", updated_at: 1000 }];
+      }
+      if (sql.includes("SELECT title FROM notes")) return [{ title: "My Note" }];
+      return [];
+    });
+    mockListRemoteNotes.mockResolvedValue([
+      { remoteId: "r1", noteId: "note-1", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+
+    const result = await syncAllBooks("pass", vi.fn().mockResolvedValue("cancel"));
+
+    expect(result.outcome).toBe("cancelled");
+    expect(result.actions).toContain("cancelled");
   });
 });

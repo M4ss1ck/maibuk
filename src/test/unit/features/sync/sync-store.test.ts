@@ -13,6 +13,7 @@ const {
   mockClearPassphrase,
   mockSyncAllBooks,
   mockSyncBook,
+  mockConfirmTombstones,
 } = vi.hoisted(() => ({
   mockInitClient: vi.fn(),
   mockRestoreAuth: vi.fn(),
@@ -25,6 +26,7 @@ const {
   mockClearPassphrase: vi.fn(),
   mockSyncAllBooks: vi.fn(),
   mockSyncBook: vi.fn(),
+  mockConfirmTombstones: vi.fn(),
 }));
 
 vi.mock("../../../../features/sync/client", () => ({
@@ -48,6 +50,10 @@ vi.mock("../../../../features/sync/sync-engine", () => ({
   syncBook: mockSyncBook,
 }));
 
+vi.mock("../../../../features/sync/tombstones", () => ({
+  confirmTombstones: mockConfirmTombstones,
+}));
+
 const { useSyncStore } = await import("../../../../features/sync/store");
 
 function resetSyncStore() {
@@ -62,6 +68,8 @@ function resetSyncStore() {
     syncError: null,
     apiUrl: "",
     bookSyncMeta: {},
+    syncLog: [],
+    pendingDeletions: [],
   });
 }
 
@@ -83,6 +91,8 @@ describe("useSyncStore", () => {
       expect(state.syncError).toBeNull();
       expect(state.apiUrl).toBe("");
       expect(state.bookSyncMeta).toEqual({});
+      expect(state.syncLog).toEqual([]);
+      expect(state.pendingDeletions).toEqual([]);
       expect(state.authVerified).toBe(false);
       expect(state.passphrase).toBeNull();
     });
@@ -227,7 +237,15 @@ describe("useSyncStore", () => {
 
       await useSyncStore.getState().syncAll("my-passphrase", mockOnConflict);
 
-      expect(mockSyncAllBooks).toHaveBeenCalledWith("my-passphrase", mockOnConflict);
+      expect(mockSyncAllBooks).toHaveBeenCalledWith(
+        "my-passphrase",
+        mockOnConflict,
+        expect.objectContaining({
+          scope: "all",
+          direction: "bidirectional",
+          onLog: expect.any(Function),
+        })
+      );
       expect(useSyncStore.getState().syncStatus).toBe("success");
       expect(useSyncStore.getState().lastSyncedAt).toBeDefined();
       expect(useSyncStore.getState().lastSyncedAt).toBeGreaterThan(0);
@@ -276,6 +294,118 @@ describe("useSyncStore", () => {
       expect(useSyncStore.getState().lastSyncedAt).toBeGreaterThan(0);
       expect(useSyncStore.getState().syncError).toBeNull();
     });
+
+    it("passes scope and direction options through to the engine", async () => {
+      mockSyncAllBooks.mockResolvedValue({ outcome: "success", actions: ["skipped"] });
+
+      await useSyncStore.getState().syncAll("passphrase", vi.fn(), {
+        scope: "notes",
+        direction: "pull",
+      });
+
+      expect(mockSyncAllBooks).toHaveBeenCalledWith(
+        "passphrase",
+        expect.any(Function),
+        expect.objectContaining({
+          scope: "notes",
+          direction: "pull",
+          onLog: expect.any(Function),
+        })
+      );
+    });
+
+    it("stores pending deletion review items returned by the engine", async () => {
+      mockSyncAllBooks.mockResolvedValue({
+        outcome: "partial",
+        actions: [],
+        pendingDeletions: [
+          {
+            id: "book:book-1",
+            entityType: "book",
+            entityId: "book-1",
+            title: "Deleted Draft",
+            deletedAt: 1000,
+          },
+        ],
+      });
+
+      await useSyncStore.getState().syncAll("passphrase", vi.fn());
+
+      expect(useSyncStore.getState().syncStatus).toBe("partial");
+      expect(useSyncStore.getState().pendingDeletions).toEqual([
+        {
+          id: "book:book-1",
+          entityType: "book",
+          entityId: "book-1",
+          title: "Deleted Draft",
+          deletedAt: 1000,
+        },
+      ]);
+    });
+
+    it("records log entries emitted by the engine", async () => {
+      mockSyncAllBooks.mockImplementation(async (_passphrase, _onConflict, options) => {
+        options.onLog({
+          id: "log-1",
+          timestamp: 1000,
+          level: "info",
+          event: "backup",
+          message: "Created safety backup",
+        });
+        return { outcome: "success", actions: ["skipped"] };
+      });
+
+      await useSyncStore.getState().syncAll("passphrase", vi.fn());
+
+      expect(useSyncStore.getState().syncLog).toEqual([
+        {
+          id: "log-1",
+          timestamp: 1000,
+          level: "info",
+          event: "backup",
+          message: "Created safety backup",
+        },
+      ]);
+    });
+  });
+
+  describe("deletion review and log actions", () => {
+    it("confirms pending deletion ids and clears them from review", async () => {
+      useSyncStore.setState({
+        pendingDeletions: [
+          {
+            id: "book:book-1",
+            entityType: "book",
+            entityId: "book-1",
+            title: "Deleted Draft",
+            deletedAt: 1000,
+          },
+        ],
+      });
+
+      await useSyncStore.getState().confirmPendingDeletions(["book:book-1"]);
+
+      expect(mockConfirmTombstones).toHaveBeenCalledWith(["book:book-1"]);
+      expect(useSyncStore.getState().pendingDeletions).toEqual([]);
+    });
+
+    it("clears the sync log", () => {
+      useSyncStore.setState({
+        syncLog: [
+          {
+            id: "log-1",
+            timestamp: 1000,
+            level: "info",
+            event: "backup",
+            message: "Created safety backup",
+          },
+        ],
+      });
+
+      useSyncStore.getState().clearSyncLog();
+
+      expect(useSyncStore.getState().syncLog).toEqual([]);
+    });
   });
 
   describe("syncSingleBook()", () => {
@@ -285,7 +415,16 @@ describe("useSyncStore", () => {
 
       await useSyncStore.getState().syncSingleBook("book-1", "passphrase", mockOnConflict);
 
-      expect(mockSyncBook).toHaveBeenCalledWith("book-1", "passphrase", mockOnConflict);
+      expect(mockSyncBook).toHaveBeenCalledWith(
+        "book-1",
+        "passphrase",
+        mockOnConflict,
+        expect.objectContaining({
+          scope: "books",
+          direction: "bidirectional",
+          onLog: expect.any(Function),
+        })
+      );
       expect(useSyncStore.getState().syncStatus).toBe("success");
     });
 
@@ -391,7 +530,15 @@ describe("useSyncStore", () => {
 
       await useSyncStore.getState().verifyAuth();
 
-      expect(mockSyncAllBooks).toHaveBeenCalledWith("my-secret", expect.any(Function));
+      expect(mockSyncAllBooks).toHaveBeenCalledWith(
+        "my-secret",
+        expect.any(Function),
+        expect.objectContaining({
+          scope: "all",
+          direction: "bidirectional",
+          onLog: expect.any(Function),
+        })
+      );
       expect(useSyncStore.getState().syncStatus).toBe("success");
     });
 

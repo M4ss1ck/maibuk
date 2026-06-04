@@ -239,6 +239,29 @@ describe("useBookStore", () => {
   });
 
   describe("deleteBook()", () => {
+    it("records a pending sync tombstone before deleting the book", async () => {
+      const created = await useBookStore.getState().createBook({
+        title: "Doomed Draft",
+        authorName: "Author",
+      });
+
+      await useBookStore.getState().deleteBook(created.id);
+
+      const tombstones = await testDb.select<Record<string, unknown>[]>(
+        "SELECT entity_type, entity_id, title, confirmed_at, pushed_at FROM sync_tombstones WHERE entity_id = ?",
+        [created.id]
+      );
+      expect(tombstones).toEqual([
+        {
+          entity_type: "book",
+          entity_id: created.id,
+          title: "Doomed Draft",
+          confirmed_at: null,
+          pushed_at: null,
+        },
+      ]);
+    });
+
     it("removes book from state and database", async () => {
       const created = await useBookStore.getState().createBook({
         title: "To Delete",

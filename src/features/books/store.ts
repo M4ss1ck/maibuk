@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
+import { recordTombstone } from "../sync/tombstones";
 import type { Book, CreateBookInput, UpdateBookInput } from "./types";
 
 function generateId(): string {
@@ -192,6 +193,16 @@ export const useBookStore = create<BookStore>((set) => ({
 
   deleteBook: async (id: string) => {
     const db = await getDatabase();
+    const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [
+      id,
+    ]);
+    if (rows.length > 0) {
+      await recordTombstone({
+        entityType: "book",
+        entityId: id,
+        title: rows[0].title,
+      });
+    }
     await db.execute("DELETE FROM books WHERE id = ?", [id]);
 
     set((state) => ({

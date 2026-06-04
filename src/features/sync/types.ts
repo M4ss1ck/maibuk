@@ -11,18 +11,75 @@ export type SyncStatus =
 
 export type SyncAction = "pushed" | "pulled" | "skipped" | "cancelled";
 export type SyncOutcome = "success" | "cancelled" | "partial";
+export type SyncScope = "all" | "books" | "notes" | "metrics";
+export type SyncDirection = "bidirectional" | "pull" | "push";
+export type SyncEntityType = "book" | "note";
+
+export interface SyncOptions {
+  scope: SyncScope;
+  direction: SyncDirection;
+  confirmedDeletionIds?: string[];
+  onLog?: (entry: SyncLogEntry) => void;
+}
+
+export type SyncLogLevel = "info" | "success" | "warning" | "error";
+export type SyncLogEvent =
+  | "auth"
+  | "backup"
+  | "scope"
+  | "compare"
+  | "push"
+  | "pull"
+  | "skip"
+  | "conflict"
+  | "delete-pending"
+  | "delete-pushed"
+  | "error";
+
+export interface SyncLogEntry {
+  id: string;
+  timestamp: number;
+  level: SyncLogLevel;
+  event: SyncLogEvent;
+  message: string;
+  entityType?: SyncEntityType | "metrics" | "versions";
+  entityId?: string;
+}
+
+export interface SyncDeletionReviewItem {
+  id: string;
+  entityType: SyncEntityType;
+  entityId: string;
+  title: string;
+  deletedAt: number;
+}
+
+export interface SyncTombstone {
+  id: string;
+  entityType: SyncEntityType;
+  entityId: string;
+  title: string;
+  deletedAt: number;
+  confirmedAt: number | null;
+  pushedAt: number | null;
+}
 
 export interface SingleSyncResult {
   outcome: SyncOutcome;
   action: SyncAction;
+  pendingDeletions?: SyncDeletionReviewItem[];
 }
 
 export interface BatchSyncResult {
   outcome: SyncOutcome;
   actions: SyncAction[];
+  pendingDeletions?: SyncDeletionReviewItem[];
 }
 
 export interface SyncConflict {
+  entityType?: SyncEntityType;
+  entityId?: string;
+  entityTitle?: string;
   bookId: string;
   bookTitle: string;
   localUpdatedAt: number;
@@ -34,6 +91,13 @@ export type ConflictResolver = (conflict: SyncConflict) => Promise<"push" | "pul
 export interface SyncItemMeta {
   remoteId: string;
   bookId: string;
+  checksum: string;
+  updatedAt: number; // Unix seconds
+}
+
+export interface NoteSyncItemMeta {
+  remoteId: string;
+  noteId: string;
   checksum: string;
   updatedAt: number; // Unix seconds
 }
@@ -85,4 +149,18 @@ export interface BookSnapshot {
     createdAt: number;
     updatedAt: number;
   }>;
+}
+
+export interface NoteSnapshot {
+  note: {
+    id: string;
+    title: string;
+    content: string | null;
+    tags: string | null; // JSON array string, stored verbatim
+    pinned: boolean;
+    order: number;
+    wordCount: number;
+    createdAt: number; // Unix seconds
+    updatedAt: number;
+  };
 }

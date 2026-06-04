@@ -131,7 +131,7 @@ export function BackupSection() {
         setErrorMessage(t("backup.createFailed"));
       }
     } finally {
-      await refresh().catch(() => {});
+      await refresh().catch(() => { });
     }
   }, [service, backupRetention, refresh, t]);
 
@@ -153,7 +153,7 @@ export function BackupSection() {
         console.error("Failed to delete backup:", error);
         setErrorMessage(t("backup.deleteFailed"));
       } finally {
-        await refresh().catch(() => {});
+        await refresh().catch(() => { });
       }
     },
     [service, refresh, t]
@@ -185,7 +185,7 @@ export function BackupSection() {
         }
       } finally {
         setConfirmRestore(null);
-        await refresh().catch(() => {});
+        await refresh().catch(() => { });
       }
     },
     [refresh, service, t]
@@ -232,7 +232,7 @@ export function BackupSection() {
             onChange={(e) => setBackupDirectory(e.target.value || null)}
             placeholder={t("backup.directoryPlaceholder")}
           />
-          <Button variant="secondary" onClick={() => void handleChooseDirectory()}>
+          <Button variant="secondary" className="shrink-0 h-11" onClick={() => void handleChooseDirectory()}>
             {t("backup.chooseDirectory")}
           </Button>
         </div>

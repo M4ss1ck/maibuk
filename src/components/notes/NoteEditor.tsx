@@ -15,6 +15,7 @@ import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
 import { timeAgo } from "./timeAgo";
 import { ThemeToggle } from "../ThemeToggle";
+import { SyncStatusButton } from "../sync/SyncStatusButton";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
 
@@ -315,6 +316,8 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         </span>
 
         <ThemeToggle variant="dropdown" />
+
+        <SyncStatusButton />
 
         {IS_TAURI && (
           <button

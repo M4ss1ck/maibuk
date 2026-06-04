@@ -1,7 +1,8 @@
 import { getDatabase } from "../../lib/db";
 import { useBookStore } from "../books/store";
 import { useChapterStore } from "../chapters/store";
-import type { BookSnapshot } from "./types";
+import { useNoteStore } from "../notes/store";
+import type { BookSnapshot, NoteSnapshot } from "./types";
 
 interface BookRow {
   id: string;
@@ -170,4 +171,68 @@ export async function applyBookSnapshot(snapshot: BookSnapshot): Promise<void> {
   if (currentBookId === book.id) {
     await useChapterStore.getState().loadChapters(book.id);
   }
+}
+
+interface NoteRow {
+  id: string;
+  title: string;
+  content: string | null;
+  tags: string | null;
+  pinned: number;
+  order: number;
+  word_count: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export async function serializeNote(noteId: string): Promise<string> {
+  const db = await getDatabase();
+
+  const notes = await db.select<NoteRow[]>("SELECT * FROM notes WHERE id = ?", [noteId]);
+
+  if (notes.length === 0) {
+    throw new Error(`Note not found: ${noteId}`);
+  }
+
+  const row = notes[0];
+  const snapshot: NoteSnapshot = {
+    note: {
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      tags: row.tags,
+      pinned: Boolean(row.pinned),
+      order: row.order,
+      wordCount: row.word_count,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    },
+  };
+
+  return JSON.stringify(snapshot);
+}
+
+export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
+  const db = await getDatabase();
+  const { note } = snapshot;
+
+  await db.execute(
+    `INSERT OR REPLACE INTO notes (
+      id, title, content, tags, pinned, "order", word_count, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      note.id,
+      note.title,
+      note.content,
+      note.tags,
+      note.pinned ? 1 : 0,
+      note.order,
+      note.wordCount,
+      note.createdAt,
+      note.updatedAt,
+    ]
+  );
+
+  // Reload store so UI reflects the new data
+  await useNoteStore.getState().loadNotes();
 }

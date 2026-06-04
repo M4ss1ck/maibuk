@@ -8,6 +8,7 @@ const {
   mockGetFullList,
   mockGetList,
   mockUpdate,
+  mockDelete,
   mockSyncCreate,
   mockGetOne,
 } = vi.hoisted(() => ({
@@ -18,6 +19,7 @@ const {
   mockGetFullList: vi.fn(),
   mockGetList: vi.fn(),
   mockUpdate: vi.fn(),
+  mockDelete: vi.fn(),
   mockSyncCreate: vi.fn(),
   mockGetOne: vi.fn(),
 }));
@@ -65,6 +67,7 @@ vi.mock("pocketbase", () => {
           getFullList: mockGetFullList,
           getList: mockGetList,
           update: mockUpdate,
+          delete: mockDelete,
           create: mockSyncCreate,
         };
       });
@@ -87,6 +90,8 @@ const {
   getAuthModel,
   pushBookBlob,
   pullBookBlob,
+  deleteRemoteBook,
+  deleteRemoteNote,
   listRemoteBooks,
   parsePocketBaseDate,
   pushMetricsEventRow,
@@ -335,6 +340,54 @@ describe("listRemoteBooks()", () => {
     const result = await listRemoteBooks();
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("deleteRemoteBook()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("deletes the matching remote book row", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "remote-1" }] });
+
+    await deleteRemoteBook("book-1");
+
+    expect(mockGetList).toHaveBeenCalledWith(1, 1, { filter: 'book_id = "book-1"' });
+    expect(mockDelete).toHaveBeenCalledWith("remote-1");
+  });
+
+  it("does nothing when no remote book row exists", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+
+    await deleteRemoteBook("missing-book");
+
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteRemoteNote()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("deletes the matching remote note row", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "remote-note-1" }] });
+
+    await deleteRemoteNote("note-1");
+
+    expect(mockGetList).toHaveBeenCalledWith(1, 1, { filter: 'note_id = "note-1"' });
+    expect(mockDelete).toHaveBeenCalledWith("remote-note-1");
+  });
+
+  it("does nothing when no remote note row exists", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+
+    await deleteRemoteNote("missing-note");
+
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 });
 
