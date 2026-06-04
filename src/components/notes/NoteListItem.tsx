@@ -60,10 +60,13 @@ export function NoteListItem({
       onDragEnd={onDragEnd}
       className={`group rounded transition-colors ${isDragging ? "opacity-50" : ""}`}
     >
-      <button
-        type="button"
+      {/* biome-ignore lint/a11y/useSemanticElements: Cannot use <button> because it contains nested action <button> elements */}
+      <div
+        role="button"
+        tabIndex={0}
         draggable={false}
         onClick={() => onSelect(note)}
+        onKeyDown={() => onSelect(note)}
         className={`w-full text-left rounded py-3 pl-2 pr-3 transition-colors ${isSelected ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
           }`}
       >
@@ -155,7 +158,7 @@ export function NoteListItem({
           </span>
         )}
         <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
-      </button>
+      </div>
     </li>
   );
 }

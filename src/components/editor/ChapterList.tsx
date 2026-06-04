@@ -235,8 +235,8 @@ export function ChapterList({
                     aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
                     aria-pressed={showChapterOutline}
                     className={`shrink-0 p-1 rounded transition-colors ${showChapterOutline
-                        ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-muted-foreground hover:bg-muted"
+                      ? "text-primary bg-primary/10 hover:bg-primary/20"
+                      : "text-muted-foreground hover:bg-muted"
                       }`}
                   >
                     <ListTree className="w-3.5 h-3.5" />
@@ -299,10 +299,13 @@ export function ChapterList({
                       </div>
                     ) : (
                       <>
-                        <button
-                          type="button"
+                        {/* biome-ignore lint/a11y/useSemanticElements: Cannot use <button> because it contains nested action <button> elements */}
+                        <div
+                          role="button"
+                          tabIndex={0}
                           draggable={false}
                           onClick={() => onSelectChapter(chapter)}
+                          onKeyDown={() => onSelectChapter(chapter)}
                           className={`w-full text-left ${isCompactView ? "px-2 py-1.5" : "p-3"}`}
                         >
                           {/* Title line: icon, title, inline edit/delete actions */}
@@ -363,7 +366,7 @@ export function ChapterList({
                               )}
                             </div>
                           )}
-                        </button>
+                        </div>
 
                         {/* Delete confirmation */}
                         {deleteConfirmId === chapter.id && (
