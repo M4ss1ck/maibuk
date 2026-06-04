@@ -70,9 +70,9 @@ export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
         <SyncControls onSync={onSync} />
 
         <Button
-          variant="ghost"
+          variant="destructive"
           size="sm"
-          className="w-full text-muted-foreground"
+          className="w-full"
           onClick={handleLogout}
         >
           <LogOut className="w-4 h-4" />
