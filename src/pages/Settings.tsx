@@ -28,6 +28,7 @@ import {
 } from "../lib/platform";
 import { BackupService } from "../features/backup/backup-service";
 import { useSyncStore } from "../features/sync/store";
+import { normalizeServerUrl } from "../features/sync/client";
 import { useSyncFlow } from "../features/sync/useSyncFlow";
 import { AuthDialog } from "../components/sync/AuthDialog";
 import { PassphraseDialog } from "../components/sync/PassphraseDialog";
@@ -366,15 +367,17 @@ export function Settings() {
               </div>
               <div className="w-full sm:w-56">
                 <Input
-                  type="url"
+                  type="text"
                   value={syncServerUrl}
                   onChange={(e) => setSyncServerUrl(e.target.value)}
                   onBlur={() => {
-                    if (syncServerUrl !== apiUrl) {
-                      setApiUrl(syncServerUrl);
+                    const normalized = normalizeServerUrl(syncServerUrl);
+                    setSyncServerUrl(normalized);
+                    if (normalized !== apiUrl) {
+                      setApiUrl(normalized);
                     }
                   }}
-                  placeholder="https://sync.example.com"
+                  placeholder="sync.example.com"
                 />
               </div>
             </div>

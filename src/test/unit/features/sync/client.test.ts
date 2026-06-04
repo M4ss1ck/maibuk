@@ -98,7 +98,31 @@ const {
   listRemoteVersions,
   pushVersionBlob,
   pullVersionBlob,
+  normalizeServerUrl,
 } = await import("../../../../features/sync/client");
+
+describe("normalizeServerUrl()", () => {
+  it("prepends https:// when no protocol is present", () => {
+    expect(normalizeServerUrl("sync.example.com")).toBe("https://sync.example.com");
+  });
+
+  it("leaves an explicit https:// URL untouched", () => {
+    expect(normalizeServerUrl("https://sync.example.com")).toBe("https://sync.example.com");
+  });
+
+  it("leaves an explicit http:// URL untouched", () => {
+    expect(normalizeServerUrl("http://localhost:8090")).toBe("http://localhost:8090");
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(normalizeServerUrl("  sync.example.com  ")).toBe("https://sync.example.com");
+  });
+
+  it("returns empty string for blank input", () => {
+    expect(normalizeServerUrl("")).toBe("");
+    expect(normalizeServerUrl("   ")).toBe("");
+  });
+});
 
 describe("parsePocketBaseDate()", () => {
   it("parses standard ISO 8601 dates", () => {

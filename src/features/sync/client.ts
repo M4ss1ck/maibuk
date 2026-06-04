@@ -3,6 +3,18 @@ import type { SyncItemMeta } from "./types";
 
 let pb: PocketBase | null = null;
 
+/**
+ * Lets users type a bare host ("sync.example.com") without the scheme.
+ * Defaults to https when no protocol is present; leaves an explicit
+ * http:// or https:// untouched. Empty input stays empty.
+ */
+export function normalizeServerUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 export function initClient(url: string): void {
   pb = new PocketBase(url);
   // The SDK auto-cancels a pending request when another hits the same path.

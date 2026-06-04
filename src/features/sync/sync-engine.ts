@@ -209,29 +209,36 @@ async function syncVersions(bookId: string, passphrase: string): Promise<void> {
   const remoteIds = new Set(remotes.map((r) => r.versionId));
   const localIds = new Set(localRows.map((r) => r.id));
 
-  // Push local-only versions
+  // Push local-only versions. A single failed push (e.g. a transient server
+  // rejection) must not abort the whole version sync — log it and move on, the
+  // same way the pull loop below isolates each version. synced_at is only
+  // stamped after a successful push, so a skipped version retries next sync.
   for (const local of localRows) {
     if (remoteIds.has(local.id)) continue;
 
-    const encrypted = await encrypt(local.snapshot, passphrase);
-    await pushVersionBlob(
-      {
-        versionId: local.id,
-        bookId,
-        checksum: local.checksum,
-        name: local.name,
-        triggerType: local.trigger_type,
-        createdAt: local.created_at,
-        wordCount: local.word_count,
-      },
-      new Blob([toBlobPart(new Uint8Array(encrypted))])
-    );
+    try {
+      const encrypted = await encrypt(local.snapshot, passphrase);
+      await pushVersionBlob(
+        {
+          versionId: local.id,
+          bookId,
+          checksum: local.checksum,
+          name: local.name,
+          triggerType: local.trigger_type,
+          createdAt: local.created_at,
+          wordCount: local.word_count,
+        },
+        new Blob([toBlobPart(new Uint8Array(encrypted))])
+      );
 
-    const now = Math.floor(Date.now() / 1000);
-    await db.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [
-      now,
-      local.id,
-    ]);
+      const now = Math.floor(Date.now() / 1000);
+      await db.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [
+        now,
+        local.id,
+      ]);
+    } catch (error) {
+      console.warn(`Version sync: skipping push of version ${local.id}`, error);
+    }
   }
 
   // Pull remote-only versions. AES-GCM authenticates each blob on decrypt, so a

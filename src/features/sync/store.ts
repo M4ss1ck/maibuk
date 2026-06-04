@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type { AuthStatus, SyncStatus, SyncItemMeta, ConflictResolver, SyncOutcome } from "./types";
 import {
   initClient,
+  normalizeServerUrl,
   restoreAuth,
   refreshAuth as pbRefreshAuth,
   login as pbLogin,
@@ -70,7 +71,8 @@ export const useSyncStore = create<SyncStore>()(
       authVerified: false,
       passphrase: null,
 
-      setApiUrl: (apiUrl) => {
+      setApiUrl: (url) => {
+        const apiUrl = normalizeServerUrl(url);
         initClient(apiUrl);
         set({ apiUrl });
       },
