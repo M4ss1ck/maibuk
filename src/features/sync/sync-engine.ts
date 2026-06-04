@@ -42,7 +42,7 @@ import {
   syncMetricsRows,
 } from "../metrics/metrics-sync";
 import {
-  hasTombstone,
+  getTombstone,
   listPendingTombstones,
   markTombstonePushed,
 } from "./tombstones";
@@ -282,6 +282,7 @@ async function syncBookInBatch(
   assertOnline();
 
   const json = await serializeBook(bookId);
+  const bookTitle = await getBookTitle(bookId);
   const localChecksum = await computeChecksum(json);
   // Reuse the timestamp from syncAllBooks' GROUP BY query when available,
   // avoiding a redundant per-book MAX query.
@@ -295,7 +296,7 @@ async function syncBookInBatch(
       emitLog(options, {
         level: "info",
         event: "skip",
-        message: `Skipped local-only book ${bookId} in pull-only sync`,
+        message: `Skipped local-only book ${bookTitle} in pull-only sync`,
         entityType: "book",
         entityId: bookId,
       });
@@ -306,7 +307,7 @@ async function syncBookInBatch(
     emitLog(options, {
       level: "success",
       event: "push",
-      message: `Pushed book ${bookId}`,
+      message: `Pushed book ${bookTitle}`,
       entityType: "book",
       entityId: bookId,
     });
@@ -317,7 +318,7 @@ async function syncBookInBatch(
     emitLog(options, {
       level: "info",
       event: "skip",
-      message: `Skipped unchanged book ${bookId}`,
+      message: `Skipped unchanged book ${bookTitle}`,
       entityType: "book",
       entityId: bookId,
     });
@@ -334,7 +335,7 @@ async function syncBookInBatch(
     emitLog(options, {
       level: "success",
       event: "pull",
-      message: `Pulled book ${bookId}`,
+      message: `Pulled book ${bookTitle}`,
       entityType: "book",
       entityId: bookId,
     });
@@ -347,7 +348,7 @@ async function syncBookInBatch(
     emitLog(options, {
       level: "success",
       event: "push",
-      message: `Pushed book ${bookId}`,
+      message: `Pushed book ${bookTitle}`,
       entityType: "book",
       entityId: bookId,
     });
@@ -362,7 +363,7 @@ async function syncBookInBatch(
     emitLog(options, {
       level: "success",
       event: "push",
-      message: `Pushed book ${bookId}`,
+      message: `Pushed book ${bookTitle}`,
       entityType: "book",
       entityId: bookId,
     });
@@ -370,7 +371,6 @@ async function syncBookInBatch(
   }
 
   // Remote is newer or equal timestamps — ask user
-  const bookTitle = await getBookTitle(bookId);
   emitLog(options, {
     level: "warning",
     event: "conflict",
@@ -398,7 +398,7 @@ async function syncBookInBatch(
     emitLog(options, {
       level: "success",
       event: "push",
-      message: `Pushed book ${bookId}`,
+      message: `Pushed book ${bookTitle}`,
       entityType: "book",
       entityId: bookId,
     });
@@ -434,6 +434,7 @@ async function syncNoteInBatch(
   assertOnline();
 
   const json = await serializeNote(noteId);
+  const noteTitle = await getNoteTitle(noteId);
   const localChecksum = await computeChecksum(json);
 
   const remote = remoteNotes.find((r) => r.noteId === noteId);
@@ -443,7 +444,7 @@ async function syncNoteInBatch(
       emitLog(options, {
         level: "info",
         event: "skip",
-        message: `Skipped local-only note ${noteId} in pull-only sync`,
+        message: `Skipped local-only note ${noteTitle} in pull-only sync`,
         entityType: "note",
         entityId: noteId,
       });
@@ -454,7 +455,7 @@ async function syncNoteInBatch(
     emitLog(options, {
       level: "success",
       event: "push",
-      message: `Pushed note ${noteId}`,
+      message: `Pushed note ${noteTitle}`,
       entityType: "note",
       entityId: noteId,
     });
@@ -465,7 +466,7 @@ async function syncNoteInBatch(
     emitLog(options, {
       level: "info",
       event: "skip",
-      message: `Skipped unchanged note ${noteId}`,
+      message: `Skipped unchanged note ${noteTitle}`,
       entityType: "note",
       entityId: noteId,
     });
@@ -481,7 +482,7 @@ async function syncNoteInBatch(
     emitLog(options, {
       level: "success",
       event: "pull",
-      message: `Pulled note ${noteId}`,
+      message: `Pulled note ${noteTitle}`,
       entityType: "note",
       entityId: noteId,
     });
@@ -494,7 +495,7 @@ async function syncNoteInBatch(
     emitLog(options, {
       level: "success",
       event: "push",
-      message: `Pushed note ${noteId}`,
+      message: `Pushed note ${noteTitle}`,
       entityType: "note",
       entityId: noteId,
     });
@@ -508,7 +509,7 @@ async function syncNoteInBatch(
     emitLog(options, {
       level: "success",
       event: "push",
-      message: `Pushed note ${noteId}`,
+      message: `Pushed note ${noteTitle}`,
       entityType: "note",
       entityId: noteId,
     });
@@ -517,7 +518,6 @@ async function syncNoteInBatch(
 
   // Remote is newer or equal timestamps — ask user. Notes are not versioned, so
   // there is no pre-pull snapshot to take (the pre-sync backup is the safety net).
-  const noteTitle = await getNoteTitle(noteId);
   emitLog(options, {
     level: "warning",
     event: "conflict",
@@ -545,7 +545,7 @@ async function syncNoteInBatch(
     emitLog(options, {
       level: "success",
       event: "push",
-      message: `Pushed note ${noteId}`,
+      message: `Pushed note ${noteTitle}`,
       entityType: "note",
       entityId: noteId,
     });
@@ -710,11 +710,12 @@ async function syncAllNotes(
   if (canPull(options.direction)) {
     for (const remote of remoteNotes) {
       if (localNoteIds.has(remote.noteId)) continue;
-      if (await hasTombstone("note", remote.noteId)) {
+      const noteTombstone = await getTombstone("note", remote.noteId);
+      if (noteTombstone) {
         emitLog(options, {
           level: "warning",
           event: "skip",
-          message: `Skipped tombstoned remote note ${remote.noteId}`,
+          message: `Skipped tombstoned remote note ${noteTombstone.title}`,
           entityType: "note",
           entityId: remote.noteId,
         });
@@ -730,7 +731,7 @@ async function syncAllNotes(
       emitLog(options, {
         level: "success",
         event: "pull",
-        message: `Pulled remote-only note ${remote.noteId}`,
+        message: `Pulled remote-only note ${snapshot.note.title}`,
         entityType: "note",
         entityId: remote.noteId,
       });
@@ -910,11 +911,12 @@ export async function syncAllBooks(
       if (canPull(options.direction)) {
         for (const remote of remoteBooks) {
           if (localBookIds.has(remote.bookId)) continue;
-          if (await hasTombstone("book", remote.bookId)) {
+          const bookTombstone = await getTombstone("book", remote.bookId);
+          if (bookTombstone) {
             emitLog(options, {
               level: "warning",
               event: "skip",
-              message: `Skipped tombstoned remote book ${remote.bookId}`,
+              message: `Skipped tombstoned remote book ${bookTombstone.title}`,
               entityType: "book",
               entityId: remote.bookId,
             });
@@ -930,7 +932,7 @@ export async function syncAllBooks(
           emitLog(options, {
             level: "success",
             event: "pull",
-            message: `Pulled remote-only book ${remote.bookId}`,
+            message: `Pulled remote-only book ${snapshot.book.title}`,
             entityType: "book",
             entityId: remote.bookId,
           });

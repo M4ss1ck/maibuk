@@ -30,6 +30,7 @@ const mockApplyLegacyBlobAndMarkPushed = vi.hoisted(() => vi.fn());
 const mockPullMetricsBlob = vi.hoisted(() => vi.fn());
 const mockListPendingTombstones = vi.hoisted(() => vi.fn());
 const mockHasTombstone = vi.hoisted(() => vi.fn());
+const mockGetTombstone = vi.hoisted(() => vi.fn());
 const mockMarkTombstonePushed = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../lib/db", () => ({
@@ -119,6 +120,7 @@ vi.mock("../../../../features/metrics/metrics-sync", () => ({
 vi.mock("../../../../features/sync/tombstones", () => ({
   listPendingTombstones: mockListPendingTombstones,
   hasTombstone: mockHasTombstone,
+  getTombstone: mockGetTombstone,
   markTombstonePushed: mockMarkTombstonePushed,
 }));
 
@@ -135,6 +137,7 @@ mockPushNoteBlob.mockResolvedValue(undefined);
 mockPullNoteBlob.mockResolvedValue(null);
 mockListPendingTombstones.mockResolvedValue([]);
 mockHasTombstone.mockResolvedValue(false);
+mockGetTombstone.mockResolvedValue(null);
 mockDeleteRemoteBook.mockResolvedValue(undefined);
 mockDeleteRemoteNote.mockResolvedValue(undefined);
 mockMarkTombstonePushed.mockResolvedValue(undefined);
@@ -142,6 +145,7 @@ mockMarkTombstonePushed.mockResolvedValue(undefined);
 beforeEach(() => {
   mockListPendingTombstones.mockResolvedValue([]);
   mockHasTombstone.mockResolvedValue(false);
+  mockGetTombstone.mockResolvedValue(null);
   mockDeleteRemoteBook.mockResolvedValue(undefined);
   mockDeleteRemoteNote.mockResolvedValue(undefined);
   mockMarkTombstonePushed.mockResolvedValue(undefined);
@@ -515,8 +519,18 @@ describe("syncAllBooks — scoped direction and deletion safety", () => {
     mockListRemoteBooks.mockResolvedValue([
       { bookId: "deleted-book", checksum: "remote", updatedAt: 5000 },
     ]);
-    mockHasTombstone.mockImplementation(async (entityType: string, entityId: string) => {
-      return entityType === "book" && entityId === "deleted-book";
+    mockGetTombstone.mockImplementation(async (entityType: string, entityId: string) => {
+      return entityType === "book" && entityId === "deleted-book"
+        ? {
+            id: "book:deleted-book",
+            entityType: "book",
+            entityId: "deleted-book",
+            title: "Deleted Draft",
+            deletedAt: 1000,
+            confirmedAt: null,
+            pushedAt: null,
+          }
+        : null;
     });
 
     const result = await syncAllBooks("pass", vi.fn(), {

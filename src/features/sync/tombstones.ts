@@ -119,3 +119,17 @@ export async function hasTombstone(
   );
   return rows.length > 0;
 }
+
+export async function getTombstone(
+  entityType: SyncEntityType,
+  entityId: string
+): Promise<SyncTombstone | null> {
+  const db = await getDatabase();
+  const rows = await db.select<TombstoneRow[]>(
+    `SELECT id, entity_type, entity_id, title, deleted_at, confirmed_at, pushed_at
+     FROM sync_tombstones
+     WHERE entity_type = ? AND entity_id = ? LIMIT 1`,
+    [entityType, entityId]
+  );
+  return rows[0] ? toModel(rows[0]) : null;
+}
