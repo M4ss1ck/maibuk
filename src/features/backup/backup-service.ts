@@ -9,6 +9,7 @@ import { getDatabase } from "../../lib/db";
 import { parseSqlStatements } from "../../lib/db/sql-parser";
 import { useBookStore } from "../books/store";
 import { useChapterStore } from "../chapters/store";
+import { useNoteStore } from "../notes/store";
 import { generateSqlDump } from "./generate-sql-dump";
 
 function buildFilename(trigger: BackupEntry["trigger"]): string {
@@ -23,12 +24,13 @@ function buildFilename(trigger: BackupEntry["trigger"]): string {
 const PROTECTED_TRIGGERS = new Set<BackupEntry["trigger"]>(["pre-sync", "pre-restore"]);
 const MIN_PROTECTED = 2;
 /**
- * Filter to only allow restore INSERT statements targeting books and chapters.
+ * Filter to only allow restore INSERT statements targeting books, chapters,
+ * book versions and notes.
  * Multi-statement injection is blocked by `parseSqlStatements()` splitting on
  * unquoted semicolons, and this regex requires a concrete VALUES clause.
  */
 const RESTORE_TABLE_PATTERN =
-  /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters|book_versions)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
+  /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters|book_versions|notes)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
 
 function isRestoreStatement(statement: string): boolean {
   return RESTORE_TABLE_PATTERN.test(statement.trim());
@@ -51,6 +53,7 @@ async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Pr
   await db.execute("DELETE FROM chapters");
   await db.execute("DELETE FROM book_versions");
   await db.execute("DELETE FROM books");
+  await db.execute("DELETE FROM notes");
 
   for (let i = 0; i < statements.length; i++) {
     try {
@@ -136,6 +139,7 @@ export class BackupService {
     }
 
     await useBookStore.getState().loadBooks();
+    await useNoteStore.getState().loadNotes();
     const previousBookId = useChapterStore.getState().currentBookId;
     const restoredBooks = useBookStore.getState().books;
     const currentBookStillExists = previousBookId

@@ -1,6 +1,6 @@
 import { getDatabase } from "../../lib/db";
 import { encrypt, decrypt, computeChecksum, isSyncCryptoError } from "./crypto";
-import { serializeBook, applyBookSnapshot } from "./serializer";
+import { serializeBook, applyBookSnapshot, serializeNote, applyNoteSnapshot } from "./serializer";
 import {
   pushBookBlob,
   pullBookBlob,
@@ -10,8 +10,19 @@ import {
   pushVersionBlob,
   pullVersionBlob,
   pullMetricsBlob,
+  pushNoteBlob,
+  pullNoteBlob,
+  listRemoteNotes,
 } from "./client";
-import type { BookSnapshot, SyncItemMeta, SingleSyncResult, BatchSyncResult, MetricsSyncBlob } from "./types";
+import type {
+  BookSnapshot,
+  NoteSnapshot,
+  SyncItemMeta,
+  NoteSyncItemMeta,
+  SingleSyncResult,
+  BatchSyncResult,
+  MetricsSyncBlob,
+} from "./types";
 import type { SyncAction, ConflictResolver } from "./types";
 import { createBackup } from "../../lib/platform";
 import { BackupService } from "../backup/backup-service";
@@ -33,6 +44,15 @@ async function decryptSnapshot(data: Uint8Array, passphrase: string): Promise<Bo
   const decrypted = await decrypt(data, passphrase);
   try {
     return JSON.parse(decrypted) as BookSnapshot;
+  } catch {
+    throw new Error("Synced payload is invalid or corrupted");
+  }
+}
+
+async function decryptNoteSnapshot(data: Uint8Array, passphrase: string): Promise<NoteSnapshot> {
+  const decrypted = await decrypt(data, passphrase);
+  try {
+    return JSON.parse(decrypted) as NoteSnapshot;
   } catch {
     throw new Error("Synced payload is invalid or corrupted");
   }
@@ -73,6 +93,14 @@ async function getBookTitle(bookId: string): Promise<string> {
     bookId,
   ]);
   return rows[0]?.title ?? bookId;
+}
+
+async function getNoteTitle(noteId: string): Promise<string> {
+  const db = await getDatabase();
+  const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [
+    noteId,
+  ]);
+  return rows[0]?.title ?? noteId;
 }
 
 function assertNotSyncing(): void {
@@ -194,6 +222,66 @@ async function syncBookInBatch(
   return "pulled";
 }
 
+async function syncNoteInBatch(
+  noteId: string,
+  passphrase: string,
+  onConflict: ConflictResolver,
+  remoteNotes: NoteSyncItemMeta[],
+  localUpdatedAt: number
+): Promise<SyncAction> {
+  assertOnline();
+
+  const json = await serializeNote(noteId);
+  const localChecksum = await computeChecksum(json);
+
+  const remote = remoteNotes.find((r) => r.noteId === noteId);
+
+  if (!remote) {
+    const encrypted = await encrypt(json, passphrase);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    return "pushed";
+  }
+
+  if (remote.checksum === localChecksum) {
+    return "skipped";
+  }
+
+  // Checksums differ — compare timestamps
+  if (localUpdatedAt > remote.updatedAt) {
+    const encrypted = await encrypt(json, passphrase);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    return "pushed";
+  }
+
+  // Remote is newer or equal timestamps — ask user. Notes are not versioned, so
+  // there is no pre-pull snapshot to take (the pre-sync backup is the safety net).
+  const noteTitle = await getNoteTitle(noteId);
+  const choice = await onConflict({
+    bookId: noteId,
+    bookTitle: noteTitle,
+    localUpdatedAt,
+    remoteUpdatedAt: remote.updatedAt,
+  });
+
+  if (choice === "cancel") {
+    return "cancelled";
+  }
+
+  if (choice === "push") {
+    const encrypted = await encrypt(json, passphrase);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    return "pushed";
+  }
+
+  // choice === "pull"
+  const pulled = await pullNoteBlob(noteId);
+  if (!pulled) return "skipped";
+
+  const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
+  await applyNoteSnapshot(snapshot);
+  return "pulled";
+}
+
 async function syncVersions(bookId: string, passphrase: string): Promise<void> {
   const db = await getDatabase();
 
@@ -280,6 +368,61 @@ async function syncVersions(bookId: string, passphrase: string): Promise<void> {
       console.warn(`Version sync: skipping version ${remote.versionId}`, error);
     }
   }
+}
+
+interface NoteTimestampRow {
+  id: string;
+  updated_at: number;
+}
+
+/**
+ * Syncs all notes the same way books are synced: one encrypted blob per note,
+ * checksum + timestamp conflict resolution, auto-pull of remote-only notes.
+ * Notes are not versioned, so there is no per-note version history to reconcile.
+ * Returns the per-note actions and whether the user cancelled at a conflict.
+ */
+async function syncAllNotes(
+  passphrase: string,
+  onConflict: ConflictResolver
+): Promise<{ actions: SyncAction[]; cancelled: boolean }> {
+  assertOnline();
+
+  const db = await getDatabase();
+  const localNotes = await db.select<NoteTimestampRow[]>(
+    "SELECT id, updated_at FROM notes"
+  );
+  const localNoteIds = new Set(localNotes.map((n) => n.id));
+
+  const remoteNotes = await listRemoteNotes();
+  const actions: SyncAction[] = [];
+
+  for (const note of localNotes) {
+    const action = await syncNoteInBatch(
+      note.id,
+      passphrase,
+      onConflict,
+      remoteNotes,
+      note.updated_at
+    );
+    actions.push(action);
+    if (action === "cancelled") {
+      return { actions, cancelled: true };
+    }
+  }
+
+  // Pull remote-only notes (no local data — auto-pull, no conflict dialog)
+  for (const remote of remoteNotes) {
+    if (localNoteIds.has(remote.noteId)) continue;
+
+    const pulled = await pullNoteBlob(remote.noteId);
+    if (!pulled) continue;
+
+    const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
+    await applyNoteSnapshot(snapshot);
+    actions.push("pulled");
+  }
+
+  return { actions, cancelled: false };
 }
 
 async function syncMetrics(passphrase: string): Promise<void> {
@@ -420,6 +563,18 @@ export async function syncAllBooks(
       await applyBookSnapshot(snapshot);
       actions.push("pulled");
       await syncVersions(remote.bookId, passphrase);
+    }
+
+    // Notes sync alongside books in the same pass, sharing the auth check and
+    // pre-sync backup. A cancelled note conflict aborts the rest of note sync.
+    const noteResult = await syncAllNotes(passphrase, onConflict);
+    actions.push(...noteResult.actions);
+    if (noteResult.cancelled) {
+      await syncMetrics(passphrase);
+      return {
+        outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
+        actions,
+      };
     }
 
     await syncMetrics(passphrase);

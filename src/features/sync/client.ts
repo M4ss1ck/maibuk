@@ -1,5 +1,5 @@
 import PocketBase from "pocketbase";
-import type { SyncItemMeta } from "./types";
+import type { SyncItemMeta, NoteSyncItemMeta } from "./types";
 
 let pb: PocketBase | null = null;
 
@@ -146,6 +146,70 @@ export async function pullBookBlob(
     data: new Uint8Array(arrayBuffer),
     checksum: record.checksum as string,
   };
+}
+
+export async function pushNoteBlob(
+  noteId: string,
+  encryptedData: Blob,
+  checksum: string
+): Promise<void> {
+  const client = getClient();
+  const userId = client.authStore.record?.id;
+  if (!userId) throw new Error("Not authenticated");
+
+  // Check if a record already exists for this note
+  const existing = await client
+    .collection("note_items")
+    .getList(1, 1, { filter: `note_id = "${noteId}"` });
+
+  const formData = new FormData();
+  formData.append("encrypted_data", encryptedData, `${noteId}.bin`);
+  formData.append("checksum", checksum);
+  formData.append("user", userId);
+  formData.append("note_id", noteId);
+
+  if (existing.items.length > 0) {
+    await client.collection("note_items").update(existing.items[0].id, formData);
+  } else {
+    await client.collection("note_items").create(formData);
+  }
+}
+
+export async function pullNoteBlob(
+  noteId: string
+): Promise<{ data: Uint8Array; checksum: string } | null> {
+  const client = getClient();
+
+  const records = await client
+    .collection("note_items")
+    .getList(1, 1, { filter: `note_id = "${noteId}"` });
+
+  if (records.items.length === 0) return null;
+
+  const record = records.items[0];
+  const fileUrl = client.files.getURL(record, record.encrypted_data);
+  const response = await fetch(fileUrl);
+  const arrayBuffer = await response.arrayBuffer();
+
+  return {
+    data: new Uint8Array(arrayBuffer),
+    checksum: record.checksum as string,
+  };
+}
+
+export async function listRemoteNotes(): Promise<NoteSyncItemMeta[]> {
+  const client = getClient();
+
+  const records = await client
+    .collection("note_items")
+    .getFullList({ fields: "id,note_id,checksum,updated" });
+
+  return records.map((record) => ({
+    remoteId: record.id,
+    noteId: record.note_id as string,
+    checksum: record.checksum as string,
+    updatedAt: parsePocketBaseDate(record.updated as string),
+  }));
 }
 
 /** Normalizes PocketBase datetime strings to Unix seconds. Returns 0 for unparseable input. */

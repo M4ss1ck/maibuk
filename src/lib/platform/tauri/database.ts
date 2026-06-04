@@ -43,10 +43,11 @@ class TauriDatabaseAdapter implements DatabaseAdapter {
 
   async exportData(): Promise<Uint8Array> {
     // Generate SQL dump since we can't read the file directly without permissions
-    const [books, chapters, bookVersions, coverTemplates, settings] = await Promise.all([
+    const [books, chapters, bookVersions, notes, coverTemplates, settings] = await Promise.all([
       this.select<Record<string, unknown>[]>("SELECT * FROM books"),
       this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
       this.select<Record<string, unknown>[]>("SELECT * FROM book_versions"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
       this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
       this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
     ]);
@@ -64,6 +65,9 @@ class TauriDatabaseAdapter implements DatabaseAdapter {
       "",
       "-- Book Versions",
       generateInsertStatements("book_versions", bookVersions),
+      "",
+      "-- Notes",
+      generateInsertStatements("notes", notes),
       "",
       "-- Cover Templates",
       generateInsertStatements("cover_templates", coverTemplates),

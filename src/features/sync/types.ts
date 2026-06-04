@@ -38,6 +38,13 @@ export interface SyncItemMeta {
   updatedAt: number; // Unix seconds
 }
 
+export interface NoteSyncItemMeta {
+  remoteId: string;
+  noteId: string;
+  checksum: string;
+  updatedAt: number; // Unix seconds
+}
+
 import type { MetricEvent } from "../metrics/types";
 
 export interface MetricsSyncBlob {
@@ -85,4 +92,18 @@ export interface BookSnapshot {
     createdAt: number;
     updatedAt: number;
   }>;
+}
+
+export interface NoteSnapshot {
+  note: {
+    id: string;
+    title: string;
+    content: string | null;
+    tags: string | null; // JSON array string, stored verbatim
+    pinned: boolean;
+    order: number;
+    wordCount: number;
+    createdAt: number; // Unix seconds
+    updatedAt: number;
+  };
 }
