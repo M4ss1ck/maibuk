@@ -4,16 +4,6 @@ import { parseSqlStatements } from "../../db/sql-parser";
 
 const DB_STORAGE_KEY = "maibuk-database";
 
-/** Convert Uint8Array to base64 without stack overflow on large arrays. */
-function uint8ArrayToBase64(data: Uint8Array): string {
-  const CHUNK = 8192;
-  let binary = "";
-  for (let i = 0; i < data.length; i += CHUNK) {
-    binary += String.fromCharCode(...data.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
-
 function escapeSQL(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "number") return String(value);
@@ -38,6 +28,10 @@ function generateInsertStatements(tableName: string, rows: Record<string, unknow
 }
 
 class WebDatabaseAdapter implements DatabaseAdapter {
+  // Serializes IndexedDB writes so overlapping persists don't race on the same
+  // transaction. Each persist enqueues a write of its own snapshot.
+  private writeChain: Promise<void> = Promise.resolve();
+
   constructor(private db: SqlJsDatabase) {}
 
   async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
@@ -62,6 +56,7 @@ class WebDatabaseAdapter implements DatabaseAdapter {
 
   async close(): Promise<void> {
     this.persist();
+    await this.writeChain;
     this.db.close();
   }
 
@@ -114,21 +109,24 @@ class WebDatabaseAdapter implements DatabaseAdapter {
   }
 
   private persist(): void {
-    try {
-      const data = this.db.export();
-      // For larger databases, use IndexedDB instead of localStorage
-      if (data.length < 5 * 1024 * 1024) {
-        // Less than 5MB - use localStorage for synchronous persistence
-        const base64 = uint8ArrayToBase64(data);
-        localStorage.setItem(DB_STORAGE_KEY, base64);
-      } else {
-        // Use IndexedDB for larger databases and clear stale localStorage
-        localStorage.removeItem(DB_STORAGE_KEY);
-        void this.persistToIndexedDB(data);
-      }
-    } catch (error) {
-      console.error("Failed to persist database:", error);
-    }
+    // Always persist to IndexedDB. localStorage is avoided entirely: books can
+    // be metadata-heavy and base64-in-localStorage blows the ~5MB quota,
+    // surfacing as "Failed to persist database". IndexedDB stores the binary
+    // directly with a far larger quota.
+    const data = this.db.export();
+    this.writeChain = this.writeChain
+      .catch(() => {})
+      .then(() => this.persistToIndexedDB(data))
+      .catch((error) => {
+        console.error("Failed to persist database:", error);
+      });
+  }
+
+  /** One-time migration of a database previously persisted in localStorage. */
+  async migrateLegacyStorage(): Promise<void> {
+    this.persist();
+    await this.writeChain;
+    localStorage.removeItem(DB_STORAGE_KEY);
   }
 
   private async persistToIndexedDB(data: Uint8Array): Promise<void> {
@@ -186,32 +184,31 @@ export async function createWebDatabase(_path: string): Promise<DatabaseAdapter>
     locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
   });
 
-  let db: SqlJsDatabase;
-
-  // Try to restore from localStorage first
-  const saved = localStorage.getItem(DB_STORAGE_KEY);
-  if (saved) {
-    try {
-      const binary = Uint8Array.from(atob(saved), (c) => c.charCodeAt(0));
-      db = new SQL.Database(binary);
-      return new WebDatabaseAdapter(db);
-    } catch (error) {
-      console.warn("Failed to restore from localStorage, trying IndexedDB:", error);
-    }
-  }
-
-  // Try IndexedDB
+  // IndexedDB is the primary (and only) persistence target.
   const indexedDBData = await loadFromIndexedDB();
   if (indexedDBData) {
     try {
-      db = new SQL.Database(indexedDBData);
-      return new WebDatabaseAdapter(db);
+      return new WebDatabaseAdapter(new SQL.Database(indexedDBData));
     } catch (error) {
       console.warn("Failed to restore from IndexedDB:", error);
     }
   }
 
+  // Legacy: a database persisted by an older build still lives in localStorage.
+  // Load it, migrate it into IndexedDB, then drop the localStorage copy so we
+  // never hit the storage quota again.
+  const legacy = localStorage.getItem(DB_STORAGE_KEY);
+  if (legacy) {
+    try {
+      const binary = Uint8Array.from(atob(legacy), (c) => c.charCodeAt(0));
+      const adapter = new WebDatabaseAdapter(new SQL.Database(binary));
+      await adapter.migrateLegacyStorage();
+      return adapter;
+    } catch (error) {
+      console.warn("Failed to migrate localStorage database:", error);
+    }
+  }
+
   // Create new database
-  db = new SQL.Database();
-  return new WebDatabaseAdapter(db);
+  return new WebDatabaseAdapter(new SQL.Database());
 }

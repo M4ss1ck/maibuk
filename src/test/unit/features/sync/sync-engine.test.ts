@@ -31,10 +31,19 @@ vi.mock("../../../../features/sync/serializer", () => ({
   applyBookSnapshot: mockApplyBookSnapshot,
 }));
 
+class FakeSyncCryptoError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 vi.mock("../../../../features/sync/crypto", () => ({
   computeChecksum: mockComputeChecksum,
   encrypt: mockEncrypt,
   decrypt: mockDecrypt,
+  isSyncCryptoError: (error: unknown) => error instanceof FakeSyncCryptoError,
 }));
 
 vi.mock("../../../../features/sync/client", () => ({
@@ -340,6 +349,32 @@ describe("syncAllBooks — truthful outcomes", () => {
       "Could not create a safety backup. Sync aborted. Free up disk space and try again."
     );
   });
+
+  it("proceeds with the sync when the local database is empty (BACKUP_EMPTY)", async () => {
+    // Fresh device: no local books, first sync is a pull. The pre-sync backup
+    // throws BACKUP_EMPTY because there is nothing to dump — sync must continue
+    // rather than abort.
+    mockBackupServiceCreateBackup.mockRejectedValue(new Error("BACKUP_EMPTY"));
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [];
+      if (sql.includes("book_versions")) return [];
+      return [];
+    });
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-remote", checksum: "remote-checksum", updatedAt: 5000 },
+    ]);
+    mockPullBookBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
+    mockDecrypt.mockResolvedValue('{"book":{"id":"book-remote"},"chapters":[]}');
+
+    const result = await syncAllBooks("pass", vi.fn());
+
+    expect(result.outcome).toBe("success");
+    expect(result.actions).toEqual(["pulled"]);
+    expect(mockPullBookBlob).toHaveBeenCalledWith("book-remote");
+  });
 });
 
 describe("ensureAuth — pre-sync auth guard", () => {
@@ -620,7 +655,11 @@ describe("syncVersions — pure union", () => {
     );
   });
 
-  it("skips pulled version when decrypted checksum does not match remote checksum", async () => {
+  it("inserts a successfully decrypted version without re-verifying its checksum", async () => {
+    // Regression: version checksums are a content hash of the snapshot, not a
+    // hash of the raw serialized blob, so the old pull-side re-hash check could
+    // never match and skipped every pulled version. AES-GCM decrypt is the
+    // integrity gate now — a version that decrypts is inserted as-is.
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("book_versions")) return [];
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
@@ -639,25 +678,104 @@ describe("syncVersions — pure union", () => {
         wordCount: 600,
       },
     ]);
-    mockPullVersionBlob.mockResolvedValue({
-      data: new Uint8Array([1, 2, 3]),
-    });
+    mockPullVersionBlob.mockResolvedValue({ data: new Uint8Array([1, 2, 3]) });
     mockDecrypt.mockResolvedValue('{"book":{}}');
-    mockComputeChecksum
-      .mockResolvedValueOnce("local-checksum")
-      .mockResolvedValueOnce("tampered-checksum"); // mismatch
+    // A naive hash of the decrypted blob differs from the stored checksum —
+    // the engine must NOT reject the version over that.
+    mockComputeChecksum.mockResolvedValue("does-not-match-chk-remote");
 
     mockListRemoteBooks.mockResolvedValue([
       { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
     ]);
+    const onConflict = vi.fn().mockResolvedValue("pull");
+    mockPullBookBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
 
-    const onConflict = vi.fn().mockResolvedValue("cancel");
     await syncBook("book-1", "pass", onConflict);
 
     const insertCall = mockDb.execute.mock.calls.find((call) =>
       (call[0] as string).includes("INSERT OR IGNORE INTO book_versions")
     );
+    expect(insertCall).toBeDefined();
+    expect(insertCall![1]).toEqual(
+      expect.arrayContaining(["ver-remote", "chk-remote"])
+    );
+  });
+
+  it("skips a version that fails to decrypt and continues syncing", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("book_versions")) return [];
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+    mockListRemoteVersions.mockResolvedValue([
+      {
+        remoteId: "rem-bad",
+        versionId: "ver-bad",
+        bookId: "book-1",
+        checksum: "chk-bad",
+        name: null,
+        triggerType: "auto-idle",
+        createdAt: 2000,
+        wordCount: 600,
+      },
+    ]);
+    mockPullVersionBlob.mockResolvedValue({ data: new Uint8Array([9]) });
+    mockDecrypt.mockRejectedValue(new Error("corrupt blob"));
+
+    // Local book is newer than remote → it pushes (no book decrypt), so the
+    // only decrypt exercised is the failing version blob.
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 500 },
+    ]);
+    const onConflict = vi.fn();
+
+    // A single bad version must not abort the whole sync.
+    const result = await syncBook("book-1", "pass", onConflict);
+    expect(result.outcome).toBe("success");
+
+    const insertCall = mockDb.execute.mock.calls.find((call) =>
+      (call[0] as string).includes("INSERT OR IGNORE INTO book_versions")
+    );
     expect(insertCall).toBeUndefined();
+  });
+
+  it("re-throws when a version fails to decrypt due to an invalid passphrase", async () => {
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("book_versions")) return [];
+      if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
+      return [];
+    });
+    mockListRemoteVersions.mockResolvedValue([
+      {
+        remoteId: "rem-1",
+        versionId: "ver-remote",
+        bookId: "book-1",
+        checksum: "chk-remote",
+        name: null,
+        triggerType: "auto-idle",
+        createdAt: 2000,
+        wordCount: 600,
+      },
+    ]);
+    mockPullVersionBlob.mockResolvedValue({ data: new Uint8Array([1, 2, 3]) });
+    mockDecrypt.mockRejectedValue(
+      new FakeSyncCryptoError("INVALID_PASSPHRASE", "bad passphrase")
+    );
+
+    // Local book is newer → it pushes, so the failing decrypt is the version's.
+    mockListRemoteBooks.mockResolvedValue([
+      { bookId: "book-1", checksum: "remote-checksum", updatedAt: 500 },
+    ]);
+    const onConflict = vi.fn();
+
+    await expect(syncBook("book-1", "pass", onConflict)).rejects.toThrow(
+      "bad passphrase"
+    );
   });
 
   it("creates pre-sync version before applyBookSnapshot on a conflict-resolved pull", async () => {

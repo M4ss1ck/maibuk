@@ -593,6 +593,7 @@
     "switchToRegister": "Don't have an account? Sign up",
     "switchToLogin": "Already have an account? Log in",
     "syncAll": "Sync All Books",
+    "syncNow": "Sync now",
     "syncing": "Syncing...",
     "lastSynced": "Last synced: {{time}}",
     "neverSynced": "Never synced",

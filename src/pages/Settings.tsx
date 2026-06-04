@@ -28,7 +28,12 @@ import {
 } from "../lib/platform";
 import { BackupService } from "../features/backup/backup-service";
 import { useSyncStore } from "../features/sync/store";
+import { normalizeServerUrl } from "../features/sync/client";
+import { useSyncFlow } from "../features/sync/useSyncFlow";
 import { AuthDialog } from "../components/sync/AuthDialog";
+import { PassphraseDialog } from "../components/sync/PassphraseDialog";
+import { ConflictDialog } from "../components/sync/ConflictDialog";
+import { RefreshCw } from "lucide-react";
 import { BackupSection } from "../components/settings/BackupSection";
 import { MetricsSection } from "../components/settings/MetricsSection";
 import { PasteCleanupSection } from "../components/settings/PasteCleanupSection";
@@ -66,7 +71,16 @@ export function Settings() {
     setHideKeyboardHints,
   } = useSettings();
 
-  const { apiUrl, setApiUrl, authStatus, userEmail, logout } = useSyncStore();
+  const { apiUrl, setApiUrl, authStatus, userEmail, syncStatus, logout } =
+    useSyncStore();
+  const {
+    showPassphraseDialog,
+    closePassphraseDialog,
+    syncAllWithSessionPassphrase,
+    completePassphraseFlow,
+    activeConflict,
+    resolveConflict,
+  } = useSyncFlow();
   const [syncServerUrl, setSyncServerUrl] = useState(apiUrl);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -353,15 +367,17 @@ export function Settings() {
               </div>
               <div className="w-full sm:w-56">
                 <Input
-                  type="url"
+                  type="text"
                   value={syncServerUrl}
                   onChange={(e) => setSyncServerUrl(e.target.value)}
                   onBlur={() => {
-                    if (syncServerUrl !== apiUrl) {
-                      setApiUrl(syncServerUrl);
+                    const normalized = normalizeServerUrl(syncServerUrl);
+                    setSyncServerUrl(normalized);
+                    if (normalized !== apiUrl) {
+                      setApiUrl(normalized);
                     }
                   }}
-                  placeholder="https://sync.example.com"
+                  placeholder="sync.example.com"
                 />
               </div>
             </div>
@@ -376,9 +392,28 @@ export function Settings() {
                 </p>
               </div>
               {authStatus === "logged-in" ? (
-                <Button variant="destructive" size="sm" onClick={logout}>
-                  {t("sync.logout")}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      // Errors surface via syncError in the store; swallow the
+                      // rejection so it isn't an uncaught promise.
+                      void syncAllWithSessionPassphrase().catch(() => {});
+                    }}
+                    disabled={syncStatus === "syncing"}
+                  >
+                    <RefreshCw
+                      className={`w-4 h-4 ${syncStatus === "syncing" ? "animate-spin" : ""}`}
+                    />
+                    {syncStatus === "syncing"
+                      ? t("sync.syncing")
+                      : t("sync.syncNow")}
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={logout}>
+                    {t("sync.logout")}
+                  </Button>
+                </div>
               ) : (
                 <Button
                   variant="primary"
@@ -410,6 +445,18 @@ export function Settings() {
           isOpen={showAuthDialog}
           onClose={() => setShowAuthDialog(false)}
         />
+
+        <PassphraseDialog
+          isOpen={showPassphraseDialog}
+          onClose={closePassphraseDialog}
+          onSuccess={() => {
+            void completePassphraseFlow();
+          }}
+        />
+
+        {activeConflict && (
+          <ConflictDialog conflict={activeConflict} onResolve={resolveConflict} />
+        )}
 
         {/* Editor Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">

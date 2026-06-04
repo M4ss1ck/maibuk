@@ -29,6 +29,7 @@ const {
 
 vi.mock("../../../../features/sync/client", () => ({
   initClient: mockInitClient,
+  normalizeServerUrl: (url: string) => url,
   restoreAuth: mockRestoreAuth,
   refreshAuth: mockRefreshAuth,
   login: mockPbLogin,
