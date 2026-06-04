@@ -69,6 +69,7 @@ vi.mock("pocketbase", () => {
         };
       });
       files = { getURL: vi.fn() };
+      autoCancellation = vi.fn();
     },
   };
 });

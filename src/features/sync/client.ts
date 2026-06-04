@@ -5,6 +5,12 @@ let pb: PocketBase | null = null;
 
 export function initClient(url: string): void {
   pb = new PocketBase(url);
+  // The SDK auto-cancels a pending request when another hits the same path.
+  // Sync fires many same-collection requests (list/push/pull per book and
+  // version), and rehydrate's background auth-refresh can overlap a manual
+  // sync — auto-cancellation surfaces those as spurious connection failures.
+  // We manage request lifecycle ourselves, so disable it.
+  pb.autoCancellation(false);
 }
 
 function getClient(): PocketBase {

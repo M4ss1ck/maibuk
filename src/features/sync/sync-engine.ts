@@ -1,5 +1,5 @@
 import { getDatabase } from "../../lib/db";
-import { encrypt, decrypt, computeChecksum } from "./crypto";
+import { encrypt, decrypt, computeChecksum, isSyncCryptoError } from "./crypto";
 import { serializeBook, applyBookSnapshot } from "./serializer";
 import {
   pushBookBlob,
@@ -87,7 +87,17 @@ async function createPreSyncBackupOrThrow(): Promise<void> {
     const backupService = new BackupService(adapter);
     await backupService.deleteByTrigger("pre-sync");
     await backupService.createBackup("pre-sync");
-  } catch {
+  } catch (error) {
+    // An empty database has nothing to lose, so there is nothing to back up.
+    // This is the normal case on a fresh device whose first sync is a pull —
+    // refusing to proceed here is what previously forced users to create a
+    // book before they could sync. Proceed without a backup.
+    if (error instanceof Error && error.message === "BACKUP_EMPTY") {
+      return;
+    }
+    // Surface the real failure for diagnosis instead of masking every cause as
+    // "out of disk space".
+    console.error("Pre-sync backup failed:", error);
     throw new Error(PRE_SYNC_BACKUP_ERROR);
   }
 }
@@ -224,39 +234,44 @@ async function syncVersions(bookId: string, passphrase: string): Promise<void> {
     ]);
   }
 
-  // Pull remote-only versions
+  // Pull remote-only versions. AES-GCM authenticates each blob on decrypt, so a
+  // corrupt or tampered payload throws below — there is no separate integrity
+  // check to do here. (The stored checksum is a content hash of the snapshot,
+  // not a hash of the raw serialized blob, so re-hashing the decrypted payload
+  // would never match it.) Each version is isolated so one bad blob cannot
+  // abort the whole initial sync, but a wrong passphrase — which fails every
+  // version — is surfaced rather than silently swallowed.
   for (const remote of remotes) {
     if (localIds.has(remote.versionId)) continue;
 
-    const blob = await pullVersionBlob(remote.remoteId);
-    if (!blob) continue;
+    try {
+      const blob = await pullVersionBlob(remote.remoteId);
+      if (!blob) continue;
 
-    const decrypted = await decrypt(blob.data, passphrase);
+      const decrypted = await decrypt(blob.data, passphrase);
 
-    const decryptedChecksum = await computeChecksum(decrypted);
-    if (decryptedChecksum !== remote.checksum) {
-      console.warn(
-        `Version sync: checksum mismatch for ${remote.versionId}, skipping`
+      await db.execute(
+        `INSERT OR IGNORE INTO book_versions
+         (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          remote.versionId,
+          bookId,
+          remote.name,
+          decrypted,
+          remote.wordCount,
+          remote.checksum,
+          remote.triggerType,
+          remote.createdAt,
+          Math.floor(Date.now() / 1000),
+        ]
       );
-      continue;
+    } catch (error) {
+      if (isSyncCryptoError(error) && error.code === "INVALID_PASSPHRASE") {
+        throw error;
+      }
+      console.warn(`Version sync: skipping version ${remote.versionId}`, error);
     }
-
-    await db.execute(
-      `INSERT OR IGNORE INTO book_versions
-       (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        remote.versionId,
-        bookId,
-        remote.name,
-        decrypted,
-        remote.wordCount,
-        remote.checksum,
-        remote.triggerType,
-        remote.createdAt,
-        Math.floor(Date.now() / 1000),
-      ]
-    );
   }
 }
 
