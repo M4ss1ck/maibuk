@@ -180,6 +180,22 @@ async function initializeSchema(): Promise<void> {
     )
   `);
 
+  // Link index: edges extracted from note/chapter content (powers backlinks).
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS links (
+      id TEXT PRIMARY KEY,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      source_book_id TEXT,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      target_heading_id TEXT,
+      label TEXT,
+      resolved INTEGER DEFAULT 1,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
   await db.execute(`
     CREATE TABLE IF NOT EXISTS sync_tombstones (
       id TEXT PRIMARY KEY,
@@ -257,6 +273,14 @@ async function initializeSchema(): Promise<void> {
       ON sync_tombstones(entity_type, pushed_at, confirmed_at)
   `);
 
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)
+  `);
+
   await ensureMetricsSchema(db);
 }
 
@@ -287,6 +311,7 @@ export async function resetDatabase(): Promise<void> {
   await database.execute("DELETE FROM books");
   await database.execute("DELETE FROM cover_templates");
   await database.execute("DELETE FROM notes").catch(() => {});
+  await database.execute("DELETE FROM links").catch(() => {});
   await database.execute("DELETE FROM sync_tombstones").catch(() => {});
   await database.execute("DELETE FROM settings");
   await database.execute("DELETE FROM metrics_cache").catch(() => {});

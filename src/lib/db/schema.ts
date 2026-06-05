@@ -163,6 +163,20 @@ export const notes = sqliteTable("notes", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// Link index: edges extracted from note/chapter content (powers backlinks).
+export const links = sqliteTable("links", {
+  id: text("id").primaryKey(),
+  sourceType: text("source_type").notNull(), // 'note' | 'chapter'
+  sourceId: text("source_id").notNull(),
+  sourceBookId: text("source_book_id"),
+  targetType: text("target_type").notNull(), // 'note' | 'book' | 'chapter' | 'heading'
+  targetId: text("target_id").notNull(),
+  targetHeadingId: text("target_heading_id"),
+  label: text("label"),
+  resolved: integer("resolved", { mode: "boolean" }).default(true),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 // Local deletion markers used by sync to prevent remote resurrection and to
 // require explicit confirmation before destructive remote deletes.
 export const syncTombstones = sqliteTable("sync_tombstones", {
@@ -216,3 +230,5 @@ export type EpubStructureRow = typeof epubStructures.$inferSelect;
 export type NewEpubStructureRow = typeof epubStructures.$inferInsert;
 export type ChapterEpubMetaRow = typeof chapterEpubMeta.$inferSelect;
 export type NewChapterEpubMetaRow = typeof chapterEpubMeta.$inferInsert;
+export type LinkRow = typeof links.$inferSelect;
+export type NewLinkRow = typeof links.$inferInsert;
