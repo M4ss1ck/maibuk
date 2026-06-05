@@ -92,7 +92,29 @@
     "language": "Idioma",
     "targetWordCount": "Meta de palabras",
     "targetWordCountPlaceholder": "ej: 80000",
+    "importEpub": "Importar EPUB",
+    "importShort": "Importar",
     "loading": "Cargando..."
+  },
+  "import": {
+    "title": "Importar EPUB",
+    "action": "Importar EPUB",
+    "importing": "Importando...",
+    "scanning": "Analizando...",
+    "chapters": "Capítulos",
+    "assets": "Recursos",
+    "styles": "Estilos",
+    "metadata": "Metadatos",
+    "cleanReport": "Este EPUB se puede importar sin advertencias de compatibilidad.",
+    "compatibilityReport": "Reporte de compatibilidad",
+    "reportUnsupported": "Reportar función no soportada",
+    "acknowledgeWarnings": "Aceptar advertencias de compatibilidad",
+    "severity": {
+      "blocking": "Bloqueante",
+      "lossy": "Con pérdida",
+      "converted": "Convertido",
+      "info": "Información"
+    }
   },
   "chapters": {
     "title": "Capítulos",
