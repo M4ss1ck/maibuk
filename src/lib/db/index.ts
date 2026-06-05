@@ -93,6 +93,78 @@ async function initializeSchema(): Promise<void> {
     )
   `);
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS project_assets (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      href TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      role TEXT,
+      data_base64 TEXT,
+      text_content TEXT,
+      size_bytes INTEGER,
+      checksum TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS book_metadata (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      namespace TEXT,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      attributes_json TEXT,
+      "order" INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS book_styles (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      css TEXT NOT NULL,
+      source_href TEXT,
+      is_default INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS epub_structures (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      epub_version TEXT,
+      package_path TEXT NOT NULL,
+      manifest_json TEXT NOT NULL,
+      spine_json TEXT NOT NULL,
+      nav_json TEXT,
+      compatibility_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS chapter_epub_meta (
+      chapter_id TEXT PRIMARY KEY REFERENCES chapters(id) ON DELETE CASCADE,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      href TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      nav_title TEXT,
+      spine_index INTEGER NOT NULL,
+      linear INTEGER DEFAULT 1,
+      capabilities_json TEXT
+    )
+  `);
+
   // Create notes table (standalone Notes workspace, not tied to a book)
   await db.execute(`
     CREATE TABLE IF NOT EXISTS notes (
@@ -157,6 +229,30 @@ async function initializeSchema(): Promise<void> {
   `);
 
   await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_project_assets_book_id ON project_assets(book_id)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_project_assets_book_href ON project_assets(book_id, href)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_book_metadata_book_id ON book_metadata(book_id)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_book_styles_book_id ON book_styles(book_id)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_epub_structures_book_id ON epub_structures(book_id)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_chapter_epub_meta_book_id ON chapter_epub_meta(book_id)
+  `);
+
+  await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_sync_tombstones_pending
       ON sync_tombstones(entity_type, pushed_at, confirmed_at)
   `);
@@ -181,6 +277,11 @@ export async function resetDatabase(): Promise<void> {
   const database = await getDatabase();
 
   // Delete all data from tables (order matters due to foreign keys)
+  await database.execute("DELETE FROM chapter_epub_meta").catch(() => {});
+  await database.execute("DELETE FROM epub_structures").catch(() => {});
+  await database.execute("DELETE FROM book_styles").catch(() => {});
+  await database.execute("DELETE FROM book_metadata").catch(() => {});
+  await database.execute("DELETE FROM project_assets").catch(() => {});
   await database.execute("DELETE FROM chapters");
   await database.execute("DELETE FROM book_versions");
   await database.execute("DELETE FROM books");

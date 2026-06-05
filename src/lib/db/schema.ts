@@ -71,6 +71,85 @@ export const bookVersions = sqliteTable("book_versions", {
   syncedAt: integer("synced_at"),
 });
 
+// Project assets imported from EPUBs or created inside Maibuk.
+export const projectAssets = sqliteTable("project_assets", {
+  id: text("id").primaryKey(),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  href: text("href").notNull(),
+  mediaType: text("media_type").notNull(),
+  role: text("role"),
+  dataBase64: text("data_base64"),
+  textContent: text("text_content"),
+  sizeBytes: integer("size_bytes"),
+  checksum: text("checksum"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+// Rich book metadata that does not fit the core books columns.
+export const bookMetadata = sqliteTable("book_metadata", {
+  id: text("id").primaryKey(),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
+  namespace: text("namespace"),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  attributesJson: text("attributes_json"),
+  order: integer("order").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+// Imported/custom book-level CSS profiles.
+export const bookStyles = sqliteTable("book_styles", {
+  id: text("id").primaryKey(),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  css: text("css").notNull(),
+  sourceHref: text("source_href"),
+  isDefault: integer("is_default", { mode: "boolean" }).default(false),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+// EPUB package/spine/nav model retained for project-aware import/export.
+export const epubStructures = sqliteTable("epub_structures", {
+  id: text("id").primaryKey(),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
+  epubVersion: text("epub_version"),
+  packagePath: text("package_path").notNull(),
+  manifestJson: text("manifest_json").notNull(),
+  spineJson: text("spine_json").notNull(),
+  navJson: text("nav_json"),
+  compatibilityJson: text("compatibility_json").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+// Mapping from Maibuk chapters back to EPUB spine items.
+export const chapterEpubMeta = sqliteTable("chapter_epub_meta", {
+  chapterId: text("chapter_id")
+    .primaryKey()
+    .references(() => chapters.id, { onDelete: "cascade" }),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
+  href: text("href").notNull(),
+  mediaType: text("media_type").notNull(),
+  navTitle: text("nav_title"),
+  spineIndex: integer("spine_index").notNull(),
+  linear: integer("linear", { mode: "boolean" }).default(true),
+  capabilitiesJson: text("capabilities_json"),
+});
+
 // Notes table (separate Notes workspace, not tied to a book)
 export const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),
@@ -127,3 +206,13 @@ export type CoverTemplate = typeof coverTemplates.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
 export type BookVersionRow = typeof bookVersions.$inferSelect;
 export type NewBookVersionRow = typeof bookVersions.$inferInsert;
+export type ProjectAssetRow = typeof projectAssets.$inferSelect;
+export type NewProjectAssetRow = typeof projectAssets.$inferInsert;
+export type BookMetadataRow = typeof bookMetadata.$inferSelect;
+export type NewBookMetadataRow = typeof bookMetadata.$inferInsert;
+export type BookStyleRow = typeof bookStyles.$inferSelect;
+export type NewBookStyleRow = typeof bookStyles.$inferInsert;
+export type EpubStructureRow = typeof epubStructures.$inferSelect;
+export type NewEpubStructureRow = typeof epubStructures.$inferInsert;
+export type ChapterEpubMetaRow = typeof chapterEpubMeta.$inferSelect;
+export type NewChapterEpubMetaRow = typeof chapterEpubMeta.$inferInsert;
