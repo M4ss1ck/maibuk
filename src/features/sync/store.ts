@@ -21,7 +21,7 @@ import {
   logout as pbLogout,
 } from "./client";
 import { clearPassphrase, setPassphrase as cryptoSetPassphrase } from "./crypto";
-import { syncAllBooks, syncBook } from "./sync-engine";
+import { syncAllBooks, syncBook, syncSingleNote as engineSyncSingleNote } from "./sync-engine";
 import { confirmTombstones } from "./tombstones";
 
 const STORAGE_KEY = "maibuk-sync";
@@ -55,6 +55,12 @@ interface SyncStore {
   ) => Promise<void>;
   syncSingleBook: (
     bookId: string,
+    passphrase: string,
+    onConflict: ConflictResolver,
+    options?: Partial<SyncOptions>
+  ) => Promise<void>;
+  syncSingleNote: (
+    noteId: string,
     passphrase: string,
     onConflict: ConflictResolver,
     options?: Partial<SyncOptions>
@@ -218,6 +224,29 @@ export const useSyncStore = create<SyncStore>()(
         try {
           const result = await syncBook(bookId, passphrase, onConflict, {
             scope: "books",
+            direction: "bidirectional",
+            ...options,
+            onLog: (entry) => {
+              set((state) => ({
+                syncLog: [entry, ...state.syncLog].slice(0, MAX_SYNC_LOG_ENTRIES),
+              }));
+              options?.onLog?.(entry);
+            },
+          });
+          set({ pendingDeletions: result.pendingDeletions ?? [] });
+          applySyncOutcome(result.outcome, set);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Sync failed";
+          set({ syncStatus: "error", syncError: message });
+          throw error;
+        }
+      },
+
+      syncSingleNote: async (noteId, passphrase, onConflict, options) => {
+        set({ syncStatus: "syncing", syncError: null, pendingDeletions: [] });
+        try {
+          const result = await engineSyncSingleNote(noteId, passphrase, onConflict, {
+            scope: "notes",
             direction: "bidirectional",
             ...options,
             onLog: (entry) => {

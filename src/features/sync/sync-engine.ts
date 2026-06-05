@@ -344,7 +344,7 @@ async function syncBookInBatch(
 
   if (options.direction === "push") {
     const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -359,7 +359,7 @@ async function syncBookInBatch(
   if (localUpdatedAt > remote.updatedAt) {
     // Local is strictly newer — push
     const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -394,7 +394,7 @@ async function syncBookInBatch(
 
   if (choice === "push") {
     const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -491,7 +491,7 @@ async function syncNoteInBatch(
 
   if (options.direction === "push") {
     const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -505,7 +505,7 @@ async function syncNoteInBatch(
   // Checksums differ — compare timestamps
   if (localUpdatedAt > remote.updatedAt) {
     const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -541,7 +541,7 @@ async function syncNoteInBatch(
 
   if (choice === "push") {
     const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -825,6 +825,53 @@ export async function syncBook(
     if (action !== "cancelled") {
       await syncVersions(bookId, passphrase, options);
     }
+    await syncMetrics(passphrase);
+    return {
+      outcome: action === "cancelled" ? "cancelled" : "success",
+      action,
+    };
+  } finally {
+    isSyncing = false;
+  }
+}
+
+async function getNoteUpdatedAt(noteId: string): Promise<number> {
+  const db = await getDatabase();
+  const rows = await db.select<EffectiveTimestamp[]>(
+    "SELECT updated_at FROM notes WHERE id = ?",
+    [noteId]
+  );
+  return rows[0]?.updated_at ?? 0;
+}
+
+export async function syncSingleNote(
+  noteId: string,
+  passphrase: string,
+  onConflict: ConflictResolver,
+  optionsInput?: Partial<SyncOptions>
+): Promise<SingleSyncResult> {
+  assertNotSyncing();
+  isSyncing = true;
+  const options = resolveSyncOptions({ scope: "notes", ...optionsInput });
+  try {
+    await ensureAuth();
+    await createPreSyncBackupOrThrow();
+    emitLog(options, {
+      level: "success",
+      event: "backup",
+      message: "Created pre-sync safety backup",
+    });
+
+    const remoteNotes = await listRemoteNotes();
+    const localUpdatedAt = await getNoteUpdatedAt(noteId);
+    const action = await syncNoteInBatch(
+      noteId,
+      passphrase,
+      onConflict,
+      options,
+      remoteNotes,
+      localUpdatedAt
+    );
     await syncMetrics(passphrase);
     return {
       outcome: action === "cancelled" ? "cancelled" : "success",

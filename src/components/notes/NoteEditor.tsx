@@ -314,10 +314,10 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         <span className="text-xs text-muted-foreground">
           {wordCount.toLocaleString()} {t("common.words")}
         </span>
+        
+        <SyncStatusButton />
 
         <ThemeToggle variant="dropdown" />
-
-        <SyncStatusButton />
 
         {IS_TAURI && (
           <button

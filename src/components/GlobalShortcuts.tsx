@@ -6,6 +6,7 @@ import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
 import { useThemeStore } from "../features/theme";
 import { useSettingsStore } from "../features/settings/store";
 import { useSyncStore } from "../features/sync/store";
+import { useNoteStore } from "../features/notes";
 import { getPassphrase } from "../features/sync/crypto";
 import { IS_TAURI } from "../lib/platform";
 
@@ -145,15 +146,28 @@ export function GlobalShortcuts() {
       keys: ["ctrl+shift+y", "meta+shift+y"],
       allowInInput: true,
       onTrigger: () => {
-        const { authStatus, syncStatus } = useSyncStore.getState();
-        if (authStatus !== "logged-in" || syncStatus === "syncing") return;
+        const store = useSyncStore.getState();
+        if (store.authStatus !== "logged-in" || store.syncStatus === "syncing") return;
         const passphrase = getPassphrase();
         if (!passphrase) return;
         const skipConflicts = async () => "cancel" as const;
-        useSyncStore
-          .getState()
-          .syncAll(passphrase, skipConflicts)
-          .catch(() => { });
+
+        // While editing, push only the current content instead of a full sync.
+        const bookMatch = location.pathname.match(/^\/book\/([^/]+)$/);
+        if (bookMatch) {
+          store.syncSingleBook(bookMatch[1], passphrase, skipConflicts).catch(() => { });
+          return;
+        }
+
+        if (location.pathname === "/notes") {
+          const { currentNote } = useNoteStore.getState();
+          if (currentNote) {
+            store.syncSingleNote(currentNote.id, passphrase, skipConflicts).catch(() => { });
+            return;
+          }
+        }
+
+        store.syncAll(passphrase, skipConflicts).catch(() => { });
       },
     },
     {

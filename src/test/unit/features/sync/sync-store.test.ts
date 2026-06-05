@@ -13,6 +13,7 @@ const {
   mockClearPassphrase,
   mockSyncAllBooks,
   mockSyncBook,
+  mockSyncSingleNote,
   mockConfirmTombstones,
 } = vi.hoisted(() => ({
   mockInitClient: vi.fn(),
@@ -26,6 +27,7 @@ const {
   mockClearPassphrase: vi.fn(),
   mockSyncAllBooks: vi.fn(),
   mockSyncBook: vi.fn(),
+  mockSyncSingleNote: vi.fn(),
   mockConfirmTombstones: vi.fn(),
 }));
 
@@ -48,6 +50,7 @@ vi.mock("../../../../features/sync/crypto", () => ({
 vi.mock("../../../../features/sync/sync-engine", () => ({
   syncAllBooks: mockSyncAllBooks,
   syncBook: mockSyncBook,
+  syncSingleNote: mockSyncSingleNote,
 }));
 
 vi.mock("../../../../features/sync/tombstones", () => ({
@@ -454,6 +457,49 @@ describe("useSyncStore", () => {
       mockSyncBook.mockResolvedValue({ outcome: "cancelled", action: "cancelled" });
 
       await useSyncStore.getState().syncSingleBook("book-1", "passphrase", vi.fn());
+
+      expect(useSyncStore.getState().syncStatus).toBe("cancelled");
+      expect(useSyncStore.getState().lastSyncedAt).toBe(555);
+      expect(useSyncStore.getState().syncError).toBeNull();
+    });
+  });
+
+  describe("syncSingleNote()", () => {
+    it("calls syncSingleNote engine fn and sets success status", async () => {
+      mockSyncSingleNote.mockResolvedValue({ outcome: "success", action: "pushed" });
+      const mockOnConflict = vi.fn();
+
+      await useSyncStore.getState().syncSingleNote("note-1", "passphrase", mockOnConflict);
+
+      expect(mockSyncSingleNote).toHaveBeenCalledWith(
+        "note-1",
+        "passphrase",
+        mockOnConflict,
+        expect.objectContaining({
+          scope: "notes",
+          direction: "bidirectional",
+          onLog: expect.any(Function),
+        })
+      );
+      expect(useSyncStore.getState().syncStatus).toBe("success");
+    });
+
+    it("sets error status on failure", async () => {
+      mockSyncSingleNote.mockRejectedValue(new Error("Sync failed"));
+
+      await expect(
+        useSyncStore.getState().syncSingleNote("note-1", "passphrase", vi.fn())
+      ).rejects.toThrow("Sync failed");
+
+      expect(useSyncStore.getState().syncStatus).toBe("error");
+      expect(useSyncStore.getState().syncError).toBe("Sync failed");
+    });
+
+    it("sets cancelled status when the user cancels a single-note conflict", async () => {
+      useSyncStore.setState({ lastSyncedAt: 555 });
+      mockSyncSingleNote.mockResolvedValue({ outcome: "cancelled", action: "cancelled" });
+
+      await useSyncStore.getState().syncSingleNote("note-1", "passphrase", vi.fn());
 
       expect(useSyncStore.getState().syncStatus).toBe("cancelled");
       expect(useSyncStore.getState().lastSyncedAt).toBe(555);
