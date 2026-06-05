@@ -78,6 +78,7 @@
     "drizzle-orm": "^0.45.1",
     "epub-gen-memory": "^1.1.2",
     "fabric": "^7.1.0",
+    "fflate": "^0.8.3",
     "i18next": "^25.7.4",
     "lucide-react": "^0.562.0",
     "node-htmldiff": "^0.9.4",
