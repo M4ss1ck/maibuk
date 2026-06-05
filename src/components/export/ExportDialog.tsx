@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { Button, Switch, Select } from "../ui";
 import {
@@ -13,7 +13,9 @@ import {
   type PdfPageSize,
   type PdfMarginPreset,
   type ExportProgress,
+  type ProjectEpubExportOptions,
 } from "../../features/export";
+import { getEpubStructure, listBookStyles } from "../../features/import/epub-project-repo";
 import type { Book } from "../../features/books/types";
 import type { Chapter } from "../../features/chapters/types";
 import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
@@ -40,11 +42,43 @@ export function ExportDialog({
   );
   const [pdfOptions, setPdfOptions] =
     useState<PdfExportOptions>(DEFAULT_PDF_OPTIONS);
+  const [projectEpubOptions, setProjectEpubOptions] = useState<ProjectEpubExportOptions>({
+    includeImportedStyles: true,
+    useMaibukStyles: true,
+    generateMaibukToc: true,
+  });
+  const [hasProjectEpubData, setHasProjectEpubData] = useState(false);
 
   const [progress, setProgress] = useState<ExportProgress>({
     status: "idle",
     message: "",
   });
+
+  useEffect(() => {
+    if (!isOpen || format !== "epub") return;
+    let cancelled = false;
+
+    async function loadProjectEpubData() {
+      try {
+        const [structure, styles] = await Promise.all([
+          getEpubStructure(book.id),
+          listBookStyles(book.id),
+        ]);
+        if (!cancelled) {
+          setHasProjectEpubData(Boolean(structure || styles.length > 0));
+        }
+      } catch {
+        if (!cancelled) {
+          setHasProjectEpubData(false);
+        }
+      }
+    }
+
+    loadProjectEpubData();
+    return () => {
+      cancelled = true;
+    };
+  }, [book.id, format, isOpen]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -279,6 +313,68 @@ export function ExportDialog({
                     }
                   />
                 </div>
+
+                {hasProjectEpubData && (
+                  <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+                    <h3 className="text-sm font-medium text-foreground">
+                      {t("export.projectEpubOptions")}
+                    </h3>
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="project-use-maibuk-styles"
+                        className="text-sm text-foreground"
+                      >
+                        {t("export.useMaibukStyles")}
+                      </label>
+                      <Switch
+                        id="project-use-maibuk-styles"
+                        checked={projectEpubOptions.useMaibukStyles}
+                        onChange={(checked) =>
+                          setProjectEpubOptions((prev) => ({
+                            ...prev,
+                            useMaibukStyles: checked,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="project-include-imported-styles"
+                        className="text-sm text-foreground"
+                      >
+                        {t("export.includeImportedStyles")}
+                      </label>
+                      <Switch
+                        id="project-include-imported-styles"
+                        checked={projectEpubOptions.includeImportedStyles}
+                        onChange={(checked) =>
+                          setProjectEpubOptions((prev) => ({
+                            ...prev,
+                            includeImportedStyles: checked,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="project-generate-maibuk-toc"
+                        className="text-sm text-foreground"
+                      >
+                        {t("export.generateMaibukToc")}
+                      </label>
+                      <Switch
+                        id="project-generate-maibuk-toc"
+                        checked={projectEpubOptions.generateMaibukToc}
+                        onChange={(checked) =>
+                          setProjectEpubOptions((prev) => ({
+                            ...prev,
+                            generateMaibukToc: checked,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               // PDF Options

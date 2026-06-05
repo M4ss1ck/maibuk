@@ -100,6 +100,8 @@ export default defineConfig(() => ({
         "src/features/import/epub-normalizer.ts",
         "src/features/import/epub-import-service.ts",
         "src/features/import/xhtml-to-editor.ts",
+        // Phase 10: Project-aware export
+        "src/features/export/project-epub-generator.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

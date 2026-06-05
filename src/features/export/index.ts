@@ -1,4 +1,6 @@
 export { generateEpub, getEpubFilename } from "./epub-generator";
+export { buildProjectEpubPackage } from "./project-epub-generator";
+export type { ProjectEpubExportOptions, ProjectEpubPackage } from "./project-epub-generator";
 export { processChapterHtml, sanitizeHtmlForEpub } from "./html-sanitizer";
 export { EPUB_STYLES } from "./epub-styles";
 export type {
