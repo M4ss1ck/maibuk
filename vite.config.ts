@@ -91,6 +91,8 @@ export default defineConfig(() => ({
         "src/components/settings/MetricsSection.tsx",
         "src/pages/Metrics.tsx",
         "src/lib/metrics/MetricsService.ts",
+        // Phase 9: EPUB import
+        "src/features/import/types.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {
