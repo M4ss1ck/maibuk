@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEncryptedEpubFixture,
+  buildEpubWithNavFixture,
+  buildEpubWithNcxFixture,
   buildEpubWithoutContainerFixture,
   buildEpubWithoutOpfFixture,
   buildMinimalEpubFixture,
@@ -65,6 +67,28 @@ describe("readEpub()", () => {
         index: 0,
         linear: true,
       }),
+    ]);
+  });
+
+  it("parses EPUB3 nav.xhtml toc entries with resolved hrefs and labels", () => {
+    const parsed = readEpub(buildEpubWithNavFixture());
+
+    expect(parsed.nav).toEqual([
+      { href: "EPUB/chapter-1.xhtml", label: "The Beginning", children: [] },
+      {
+        href: "EPUB/text/chapter-2.xhtml",
+        label: "Rising Action",
+        children: [{ href: "EPUB/text/chapter-2.xhtml", label: "A Scene", children: [] }],
+      },
+    ]);
+  });
+
+  it("parses EPUB2 NCX navMap entries with resolved hrefs and labels", () => {
+    const parsed = readEpub(buildEpubWithNcxFixture());
+
+    expect(parsed.nav).toEqual([
+      { href: "EPUB/chapter-1.xhtml", label: "The Beginning", children: [] },
+      { href: "EPUB/chapter-2.xhtml", label: "Rising Action", children: [] },
     ]);
   });
 

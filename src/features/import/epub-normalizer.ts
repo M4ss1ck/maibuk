@@ -2,7 +2,7 @@ import { strFromU8 } from "fflate";
 import type { CreateBookInput } from "../books/types";
 import type { BookMetadataInput, BookStyleInput, ChapterEpubMetaInput, EpubStructureInput } from "./epub-project-repo";
 import type { ProjectAssetInput } from "./project-assets-repo";
-import type { ParsedEpub, ParsedEpubNavItem, ParsedEpubResource, ParsedEpubSpineItem } from "./types";
+import type { ParsedEpub, ParsedEpubNavItem, ParsedEpubResource } from "./types";
 import { normalizeXhtmlToEditorHtml } from "./xhtml-to-editor";
 
 export interface NormalizedBookInput extends CreateBookInput {
@@ -120,6 +120,7 @@ function buildChapters(
       resourcesByAbsoluteHref.get(spineItem.href) ??
       parsed.resources.find((candidate) => candidate.href === spineItem.href);
     if (!resource) return [];
+    if (resource.properties.includes("nav")) return [];
 
     const html = resource.text ?? strFromU8(resource.data);
     const normalized = normalizeXhtmlToEditorHtml({
@@ -128,7 +129,7 @@ function buildChapters(
       assetHrefMap,
     });
 
-    const navTitle = findNavTitle(parsed, spineItem);
+    const navTitle = findNavTitle(parsed, resource.absoluteHref);
     return [
       {
         title: navTitle ?? documentTitle(html) ?? `Chapter ${chapterIndex + 1}`,
@@ -160,16 +161,13 @@ function isAssetResource(resource: ParsedEpubResource): boolean {
   return ASSET_MEDIA_TYPES.has(resource.mediaType);
 }
 
-function findNavTitle(parsed: ParsedEpub, spineItem: ParsedEpubSpineItem): string | null {
+function findNavTitle(parsed: ParsedEpub, chapterHref: string): string | null {
   const navItems = flattenNav(parsed.nav);
+  const targetBasename = basename(chapterHref);
   const match = navItems.find(
-    (item) =>
-      item.href === spineItem.href ||
-      item.href === basename(spineItem.href) ||
-      spineItem.href.endsWith(item.href) ||
-      item.href.endsWith(spineItem.href)
+    (item) => item.href === chapterHref || basename(item.href) === targetBasename
   );
-  return match?.label ?? null;
+  return match?.label?.trim() || null;
 }
 
 function flattenNav(items: ParsedEpubNavItem[]): {

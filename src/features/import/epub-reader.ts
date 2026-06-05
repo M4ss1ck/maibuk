@@ -215,19 +215,74 @@ function parseSpine(
 }
 
 function parseNav(resources: ParsedEpubResource[]): ParsedEpubNavItem[] {
-  const navResource = resources.find(
-    (resource) =>
-      resource.properties.includes("nav") || resource.mediaType === "application/x-dtbncx+xml"
-  );
-  if (!navResource) return [];
+  const epub3Nav = resources.find((resource) => resource.properties.includes("nav"));
+  if (epub3Nav?.text) {
+    const items = parseEpub3Nav(epub3Nav);
+    if (items.length > 0) return items;
+  }
 
-  return [
-    {
-      href: navResource.href,
-      label: navResource.mediaType === "application/x-dtbncx+xml" ? "NCX" : "Navigation",
-      children: [],
-    },
-  ];
+  const ncx = resources.find((resource) => resource.mediaType === "application/x-dtbncx+xml");
+  if (ncx?.text) {
+    return parseNcxNav(ncx);
+  }
+
+  return [];
+}
+
+function parseEpub3Nav(navResource: ParsedEpubResource): ParsedEpubNavItem[] {
+  const document = new DOMParser().parseFromString(navResource.text ?? "", "text/html");
+  const navs = Array.from(document.querySelectorAll("nav"));
+  const toc =
+    navs.find((nav) => (nav.getAttribute("epub:type") ?? "").split(/\s+/).includes("toc")) ??
+    navs[0];
+  const list = toc ? childByLocalName(toc, "ol") : undefined;
+  return list ? parseNavList(list, dirname(navResource.absoluteHref)) : [];
+}
+
+function parseNavList(list: Element, baseDir: string): ParsedEpubNavItem[] {
+  return childrenByLocalName(list, "li").flatMap((item) => {
+    const anchor = childByLocalName(item, "a") ?? childByLocalName(item, "span");
+    const label = anchor?.textContent?.trim() ?? "";
+    const href = anchor?.getAttribute("href") ?? "";
+    const childList = childByLocalName(item, "ol");
+    const children = childList ? parseNavList(childList, baseDir) : [];
+    if (!label && children.length === 0) return [];
+    return [{ href: resolveNavHref(baseDir, href), label, children }];
+  });
+}
+
+function parseNcxNav(ncxResource: ParsedEpubResource): ParsedEpubNavItem[] {
+  const document = new DOMParser().parseFromString(ncxResource.text ?? "", "application/xml");
+  if (document.querySelector("parsererror")) return [];
+  const navMap = document.querySelector("navMap");
+  return navMap ? parseNavPoints(navMap, dirname(ncxResource.absoluteHref)) : [];
+}
+
+function parseNavPoints(parent: Element, baseDir: string): ParsedEpubNavItem[] {
+  return childrenByLocalName(parent, "navPoint").map((navPoint) => {
+    const navLabel = childByLocalName(navPoint, "navLabel");
+    const label =
+      (navLabel ? childByLocalName(navLabel, "text") : undefined)?.textContent?.trim() ?? "";
+    const src = childByLocalName(navPoint, "content")?.getAttribute("src") ?? "";
+    return {
+      href: resolveNavHref(baseDir, src),
+      label,
+      children: parseNavPoints(navPoint, baseDir),
+    };
+  });
+}
+
+function childByLocalName(parent: Element, localName: string): Element | undefined {
+  return Array.from(parent.children).find((child) => child.localName === localName);
+}
+
+function childrenByLocalName(parent: Element, localName: string): Element[] {
+  return Array.from(parent.children).filter((child) => child.localName === localName);
+}
+
+function resolveNavHref(baseDir: string, href: string): string {
+  const withoutFragment = href.split("#")[0];
+  return withoutFragment ? resolveHref(baseDir, withoutFragment) : "";
 }
 
 function attributesToRecord(element: Element): Record<string, string> {

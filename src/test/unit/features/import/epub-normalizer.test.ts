@@ -169,6 +169,109 @@ describe("normalizeEpubProject()", () => {
     ]);
   });
 
+  it("prefers nav labels over a document title that repeats the book title", () => {
+    const bookTitleDoc = (n: number) =>
+      `<html><head><title>Imported Novel</title></head><body><p>${n}</p></body></html>`;
+    const parsed = buildParsedEpub({
+      resources: [
+        {
+          id: "chapter-1",
+          href: "chapter-1.xhtml",
+          absoluteHref: "EPUB/chapter-1.xhtml",
+          mediaType: "application/xhtml+xml",
+          properties: [],
+          data: strToU8(bookTitleDoc(1)),
+          text: bookTitleDoc(1),
+        },
+        {
+          id: "chapter-2",
+          href: "text/chapter-2.xhtml",
+          absoluteHref: "EPUB/text/chapter-2.xhtml",
+          mediaType: "application/xhtml+xml",
+          properties: [],
+          data: strToU8(bookTitleDoc(2)),
+          text: bookTitleDoc(2),
+        },
+      ],
+      spine: [
+        {
+          idref: "chapter-1",
+          href: "chapter-1.xhtml",
+          mediaType: "application/xhtml+xml",
+          linear: true,
+          index: 0,
+          properties: [],
+        },
+        {
+          idref: "chapter-2",
+          href: "text/chapter-2.xhtml",
+          mediaType: "application/xhtml+xml",
+          linear: true,
+          index: 1,
+          properties: [],
+        },
+      ],
+      nav: [
+        { href: "EPUB/chapter-1.xhtml", label: "The Beginning", children: [] },
+        { href: "EPUB/text/chapter-2.xhtml", label: "Rising Action", children: [] },
+      ],
+    });
+
+    expect(normalizeEpubProject(parsed).chapters.map((chapter) => chapter.title)).toEqual([
+      "The Beginning",
+      "Rising Action",
+    ]);
+  });
+
+  it("excludes the navigation document from chapters when it appears in the spine", () => {
+    const navDoc = "<html><head><title>Contents</title></head><body><nav></nav></body></html>";
+    const parsed = buildParsedEpub({
+      resources: [
+        {
+          id: "nav",
+          href: "nav.xhtml",
+          absoluteHref: "EPUB/nav.xhtml",
+          mediaType: "application/xhtml+xml",
+          properties: ["nav"],
+          data: strToU8(navDoc),
+          text: navDoc,
+        },
+        {
+          id: "chapter-1",
+          href: "chapter-1.xhtml",
+          absoluteHref: "EPUB/chapter-1.xhtml",
+          mediaType: "application/xhtml+xml",
+          properties: [],
+          data: strToU8("<html><body><p>One</p></body></html>"),
+          text: "<html><body><p>One</p></body></html>",
+        },
+      ],
+      spine: [
+        {
+          idref: "nav",
+          href: "nav.xhtml",
+          mediaType: "application/xhtml+xml",
+          linear: true,
+          index: 0,
+          properties: [],
+        },
+        {
+          idref: "chapter-1",
+          href: "chapter-1.xhtml",
+          mediaType: "application/xhtml+xml",
+          linear: true,
+          index: 1,
+          properties: [],
+        },
+      ],
+      nav: [],
+    });
+
+    expect(normalizeEpubProject(parsed).chapters.map((chapter) => chapter.href)).toEqual([
+      "EPUB/chapter-1.xhtml",
+    ]);
+  });
+
   it("uses document title before generated chapter title fallback", () => {
     const parsed = buildParsedEpub({ nav: [] });
 

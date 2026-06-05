@@ -132,14 +132,14 @@ export function EpubImportDialog({
         )}
 
         {needsAcknowledgement && !hasBlockingIssues && (
-          <label className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-sm">
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-sm">
             <Switch
               checked={acknowledged}
               onChange={setAcknowledged}
               label={t("import.acknowledgeWarnings")}
             />
             <span>{t("import.acknowledgeWarnings")}</span>
-          </label>
+          </div>
         )}
 
         {error && (
