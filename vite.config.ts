@@ -93,6 +93,7 @@ export default defineConfig(() => ({
         "src/lib/metrics/MetricsService.ts",
         // Phase 9: EPUB import
         "src/features/import/types.ts",
+        "src/features/import/epub-reader.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {
