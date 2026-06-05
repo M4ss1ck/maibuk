@@ -331,6 +331,35 @@ describe("metrics sync", () => {
       expect(stillUnpushed).toEqual([]);
     });
 
+    it("pushes a backlog of events with bounded concurrency, not one-at-a-time", async () => {
+      const events = Array.from({ length: 25 }, (_, i) => buildEvent({ id: `local-${i}` }));
+      await insertEvents(testDb, events);
+      // This suite doesn't clear mock call history between tests; reset so the
+      // count below reflects only this test's pushes.
+      mockPushEvent.mockReset();
+
+      let inFlight = 0;
+      let maxInFlight = 0;
+      mockPushEvent.mockImplementation(async () => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight--;
+      });
+
+      await syncMetricsRows("pass");
+
+      expect(mockPushEvent).toHaveBeenCalledTimes(25);
+      // Serial one-at-a-time would keep maxInFlight at 1; bounded parallel lifts it.
+      expect(maxInFlight).toBeGreaterThan(1);
+      expect(maxInFlight).toBeLessThanOrEqual(10);
+
+      const stillUnpushed = await testDb.select<{ id: string }[]>(
+        "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
+      );
+      expect(stillUnpushed).toEqual([]);
+    });
+
     it("pulls remote events, decrypts them, and stores them as pushed", async () => {
       const encrypted = await mockEncrypt(
         JSON.stringify({ words: 7, chars: 35, chapterId: "c-1" }),

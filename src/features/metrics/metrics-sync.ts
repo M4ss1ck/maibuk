@@ -123,8 +123,29 @@ export async function applyMetricsBatch(
 // server schema.
 
 const PUSH_BATCH_SIZE = 200;
+// Upload events/tombstones a few at a time instead of one network round-trip
+// each. A backlog of N rows would otherwise drain as N serial requests, which
+// is what made the first sync hang for a long time.
+const PUSH_CONCURRENCY = 10;
 const EVENT_WATERMARK_KEY = "maibuk.metrics.lastEventPullAt";
 const TOMBSTONE_WATERMARK_KEY = "maibuk.metrics.lastTombstonePullAt";
+
+// Push each chunk's network requests in parallel (the slow part), then mark the
+// rows pushed serially — concurrent local DB writes can race and lose an update,
+// which would leave a row unpushed and re-uploaded on the next pass.
+async function pushInChunks<T>(
+  items: T[],
+  push: (item: T) => Promise<void>,
+  mark: (item: T) => Promise<void>,
+): Promise<void> {
+  for (let i = 0; i < items.length; i += PUSH_CONCURRENCY) {
+    const chunk = items.slice(i, i + PUSH_CONCURRENCY);
+    await Promise.all(chunk.map(push));
+    for (const item of chunk) {
+      await mark(item);
+    }
+  }
+}
 
 function readWatermark(key: string): string {
   try {
@@ -196,36 +217,41 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
   while (true) {
     const batch = await listUnpushedTombstones(db, PUSH_BATCH_SIZE);
     if (batch.length === 0) break;
-    for (const tombstone of batch) {
-      await pushMetricsTombstoneRow({
-        client_id: tombstone.id,
-        device_id: tombstone.deviceId,
-        deleted_at: tombstone.deletedAt,
-        reason: tombstone.reason,
-      });
-      await markTombstonePushed(db, tombstone.id, new Date().toISOString());
-    }
+    await pushInChunks(
+      batch,
+      (tombstone) =>
+        pushMetricsTombstoneRow({
+          client_id: tombstone.id,
+          device_id: tombstone.deviceId,
+          deleted_at: tombstone.deletedAt,
+          reason: tombstone.reason,
+        }),
+      (tombstone) => markTombstonePushed(db, tombstone.id, new Date().toISOString()),
+    );
   }
 
   // 4. PUSH local-only events.
   while (true) {
     const batch = await listUnpushedEvents(db, PUSH_BATCH_SIZE);
     if (batch.length === 0) break;
-    for (const event of batch) {
-      const encryptedPayload = await encryptPayload(event.payload, passphrase);
-      await pushMetricsEventRow({
-        client_id: event.id,
-        device_id: event.deviceId,
-        timestamp: event.timestamp,
-        local_date: event.localDate,
-        tz_offset_min: event.tzOffsetMin,
-        event_type: event.eventType,
-        work_id: event.workId,
-        schema_version: event.schemaVersion,
-        encrypted_payload: encryptedPayload,
-      });
-      await markEventPushed(db, event.id, new Date().toISOString());
-    }
+    await pushInChunks(
+      batch,
+      async (event) => {
+        const encryptedPayload = await encryptPayload(event.payload, passphrase);
+        await pushMetricsEventRow({
+          client_id: event.id,
+          device_id: event.deviceId,
+          timestamp: event.timestamp,
+          local_date: event.localDate,
+          tz_offset_min: event.tzOffsetMin,
+          event_type: event.eventType,
+          work_id: event.workId,
+          schema_version: event.schemaVersion,
+          encrypted_payload: encryptedPayload,
+        });
+      },
+      (event) => markEventPushed(db, event.id, new Date().toISOString()),
+    );
   }
 
   if (touchedAggregateCache) {
