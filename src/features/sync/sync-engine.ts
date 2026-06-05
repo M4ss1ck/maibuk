@@ -344,7 +344,7 @@ async function syncBookInBatch(
 
   if (options.direction === "push") {
     const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -359,7 +359,7 @@ async function syncBookInBatch(
   if (localUpdatedAt > remote.updatedAt) {
     // Local is strictly newer — push
     const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -394,7 +394,7 @@ async function syncBookInBatch(
 
   if (choice === "push") {
     const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -491,7 +491,7 @@ async function syncNoteInBatch(
 
   if (options.direction === "push") {
     const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -505,7 +505,7 @@ async function syncNoteInBatch(
   // Checksums differ — compare timestamps
   if (localUpdatedAt > remote.updatedAt) {
     const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -541,7 +541,7 @@ async function syncNoteInBatch(
 
   if (choice === "push") {
     const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",

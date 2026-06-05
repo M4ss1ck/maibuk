@@ -102,16 +102,12 @@ export function getAuthModel(): unknown {
 export async function pushBookBlob(
   bookId: string,
   encryptedData: Blob,
-  checksum: string
+  checksum: string,
+  remoteId?: string
 ): Promise<void> {
   const client = getClient();
   const userId = client.authStore.record?.id;
   if (!userId) throw new Error("Not authenticated");
-
-  // Check if a record already exists for this book
-  const existing = await client
-    .collection("sync_items")
-    .getList(1, 1, { filter: `book_id = "${bookId}"` });
 
   const formData = new FormData();
   formData.append("encrypted_data", encryptedData, `${bookId}.bin`);
@@ -119,8 +115,10 @@ export async function pushBookBlob(
   formData.append("user", userId);
   formData.append("book_id", bookId);
 
-  if (existing.items.length > 0) {
-    await client.collection("sync_items").update(existing.items[0].id, formData);
+  // The caller already knows the remote record id (from listRemoteBooks), so
+  // update it directly instead of re-querying. No id means a new record.
+  if (remoteId) {
+    await client.collection("sync_items").update(remoteId, formData);
   } else {
     await client.collection("sync_items").create(formData);
   }
@@ -162,16 +160,12 @@ export async function deleteRemoteBook(bookId: string): Promise<void> {
 export async function pushNoteBlob(
   noteId: string,
   encryptedData: Blob,
-  checksum: string
+  checksum: string,
+  remoteId?: string
 ): Promise<void> {
   const client = getClient();
   const userId = client.authStore.record?.id;
   if (!userId) throw new Error("Not authenticated");
-
-  // Check if a record already exists for this note
-  const existing = await client
-    .collection("note_items")
-    .getList(1, 1, { filter: `note_id = "${noteId}"` });
 
   const formData = new FormData();
   formData.append("encrypted_data", encryptedData, `${noteId}.bin`);
@@ -179,8 +173,10 @@ export async function pushNoteBlob(
   formData.append("user", userId);
   formData.append("note_id", noteId);
 
-  if (existing.items.length > 0) {
-    await client.collection("note_items").update(existing.items[0].id, formData);
+  // The caller already knows the remote record id (from listRemoteNotes), so
+  // update it directly instead of re-querying. No id means a new record.
+  if (remoteId) {
+    await client.collection("note_items").update(remoteId, formData);
   } else {
     await client.collection("note_items").create(formData);
   }

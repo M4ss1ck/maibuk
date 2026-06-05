@@ -89,6 +89,7 @@ const {
   getAuthToken,
   getAuthModel,
   pushBookBlob,
+  pushNoteBlob,
   pullBookBlob,
   deleteRemoteBook,
   deleteRemoteNote,
@@ -398,30 +399,66 @@ describe("pushBookBlob()", () => {
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
   });
 
-  it("creates a new record when none exists", async () => {
-    mockGetList.mockResolvedValue({ items: [] });
+  it("creates a new record when no remoteId is given, without an extra lookup", async () => {
     mockSyncCreate.mockResolvedValue({});
 
     await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc");
 
-    expect(mockSyncCreate).toHaveBeenCalled();
+    expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
     expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockGetList).not.toHaveBeenCalled();
   });
 
-  it("updates existing record when one exists", async () => {
-    mockGetList.mockResolvedValue({ items: [{ id: "existing-1" }] });
+  it("updates the existing record directly when a remoteId is given", async () => {
     mockUpdate.mockResolvedValue({});
 
-    await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc");
+    await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc", "existing-1");
 
     expect(mockUpdate).toHaveBeenCalledWith("existing-1", expect.any(FormData));
     expect(mockSyncCreate).not.toHaveBeenCalled();
+    expect(mockGetList).not.toHaveBeenCalled();
   });
 
   it("throws when not authenticated", async () => {
     mockAuthStoreRecord = null;
 
     await expect(pushBookBlob("book-1", new Blob(["data"]), "checksum")).rejects.toThrow(
+      "Not authenticated"
+    );
+  });
+});
+
+describe("pushNoteBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+  });
+
+  it("creates a new record when no remoteId is given, without an extra lookup", async () => {
+    mockSyncCreate.mockResolvedValue({});
+
+    await pushNoteBlob("note-1", new Blob(["data"]), "checksum-abc");
+
+    expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockGetList).not.toHaveBeenCalled();
+  });
+
+  it("updates the existing record directly when a remoteId is given", async () => {
+    mockUpdate.mockResolvedValue({});
+
+    await pushNoteBlob("note-1", new Blob(["data"]), "checksum-abc", "existing-note-1");
+
+    expect(mockUpdate).toHaveBeenCalledWith("existing-note-1", expect.any(FormData));
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+    expect(mockGetList).not.toHaveBeenCalled();
+  });
+
+  it("throws when not authenticated", async () => {
+    mockAuthStoreRecord = null;
+
+    await expect(pushNoteBlob("note-1", new Blob(["data"]), "checksum")).rejects.toThrow(
       "Not authenticated"
     );
   });
