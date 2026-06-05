@@ -1,3 +1,5 @@
+export * from "./epub-import-service";
+export * from "./epub-normalizer";
 export * from "./epub-project-repo";
 export * from "./epub-reader";
 export * from "./epub-scanner";

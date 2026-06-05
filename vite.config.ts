@@ -97,6 +97,8 @@ export default defineConfig(() => ({
         "src/features/import/epub-scanner.ts",
         "src/features/import/project-assets-repo.ts",
         "src/features/import/epub-project-repo.ts",
+        "src/features/import/epub-normalizer.ts",
+        "src/features/import/epub-import-service.ts",
         "src/features/import/xhtml-to-editor.ts",
       ],
       exclude: ["src/**/*.d.ts"],
