@@ -95,6 +95,7 @@ export default defineConfig(() => ({
         "src/features/import/types.ts",
         "src/features/import/epub-reader.ts",
         "src/features/import/epub-scanner.ts",
+        "src/features/import/xhtml-to-editor.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {
