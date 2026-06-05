@@ -2,7 +2,7 @@ import { strFromU8 } from "fflate";
 import type { CreateBookInput } from "../books/types";
 import type { BookMetadataInput, BookStyleInput, ChapterEpubMetaInput, EpubStructureInput } from "./epub-project-repo";
 import type { ProjectAssetInput } from "./project-assets-repo";
-import type { ParsedEpub, ParsedEpubResource, ParsedEpubSpineItem } from "./types";
+import type { ParsedEpub, ParsedEpubNavItem, ParsedEpubResource, ParsedEpubSpineItem } from "./types";
 import { normalizeXhtmlToEditorHtml } from "./xhtml-to-editor";
 
 export interface NormalizedBookInput extends CreateBookInput {
@@ -172,11 +172,14 @@ function findNavTitle(parsed: ParsedEpub, spineItem: ParsedEpubSpineItem): strin
   return match?.label ?? null;
 }
 
-function flattenNav(items: { href: string; label: string; children: typeof items }[]): {
+function flattenNav(items: ParsedEpubNavItem[]): {
   href: string;
   label: string;
 }[] {
-  return items.flatMap((item) => [{ href: item.href, label: item.label }, ...flattenNav(item.children)]);
+  return items.flatMap((item) => [
+    { href: item.href, label: item.label },
+    ...flattenNav(item.children),
+  ]);
 }
 
 function documentTitle(html: string): string | null {
@@ -186,7 +189,8 @@ function documentTitle(html: string): string | null {
 }
 
 function basename(path: string): string {
-  return path.split("/").filter(Boolean).at(-1) ?? path;
+  const segments = path.split("/").filter(Boolean);
+  return segments.length > 0 ? segments[segments.length - 1] : path;
 }
 
 function assetId(resource: ParsedEpubResource): string {
