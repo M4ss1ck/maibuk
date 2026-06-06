@@ -339,7 +339,7 @@ export function LinkDialog({
     }
 
     setExpandedTargetKeys((current) => new Set(current).add(key));
-    if (Object.prototype.hasOwnProperty.call(childTargetsByKey, key)) {
+    if (key in childTargetsByKey) {
       return;
     }
 
