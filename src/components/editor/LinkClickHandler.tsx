@@ -7,12 +7,15 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { toast } from "../ui";
 import { openExternal } from "../../lib/platform";
-import { isInternalLink } from "../../features/links/link-uri";
+import { isInternalLink, parseLinkUri } from "../../features/links/link-uri";
 import { navigateToLinkTarget } from "../../features/links/navigate";
 import { useChapterStore } from "../../features/chapters/store";
 
 interface LinkClickDialogProps {
   editor: Editor;
+  resolveBookIdForChapter?: (
+    chapterId: string,
+  ) => string | undefined | Promise<string | undefined>;
 }
 
 interface LinkInfo {
@@ -20,7 +23,10 @@ interface LinkInfo {
   position: { x: number; y: number };
 }
 
-export function LinkClickHandler({ editor }: LinkClickDialogProps) {
+export function LinkClickHandler({
+  editor,
+  resolveBookIdForChapter,
+}: LinkClickDialogProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const chapters = useChapterStore((s) => s.chapters);
@@ -28,6 +34,27 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   useEffect(() => {
+    const navigateInternalLink = async (href: string) => {
+      const parsed = parseLinkUri(href);
+      if (parsed?.targetType !== "chapter" && parsed?.targetType !== "heading") {
+        navigateToLinkTarget(href, navigate);
+        return;
+      }
+
+      const storeBookId = chapters.find((c) => c.id === parsed.targetId)?.bookId;
+      if (storeBookId || !resolveBookIdForChapter) {
+        navigateToLinkTarget(href, navigate, {
+          bookIdForChapter: () => storeBookId,
+        });
+        return;
+      }
+
+      const resolvedBookId = await resolveBookIdForChapter(parsed.targetId);
+      navigateToLinkTarget(href, navigate, {
+        bookIdForChapter: () => resolvedBookId,
+      });
+    };
+
     const handleClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const link = target.closest("a.editor-link");
@@ -38,10 +65,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
 
         const href = link.getAttribute("href");
         if (href && isInternalLink(href)) {
-          navigateToLinkTarget(href, navigate, {
-            bookIdForChapter: (chapterId) =>
-              chapters.find((c) => c.id === chapterId)?.bookId,
-          });
+          void navigateInternalLink(href);
           return;
         }
         if (href) {
@@ -61,7 +85,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
     return () => {
       editorElement.removeEventListener("click", handleClick);
     };
-  }, [editor, navigate, chapters]);
+  }, [editor, navigate, chapters, resolveBookIdForChapter]);
 
   const handleOpenLink = () => {
     if (linkInfo?.url) {

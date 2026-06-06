@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -39,7 +40,17 @@ export type InternalTarget =
       chapterId: string;
       title: string;
       headingId: string;
+    }
+  | {
+      type: "noteHeading";
+      noteId: string;
+      title: string;
+      headingId: string;
     };
+
+export type InternalTargetChildrenLoader = (
+  target: InternalTarget,
+) => Promise<InternalTarget[]>;
 
 interface LinkDialogProps {
   editor: Editor;
@@ -47,6 +58,7 @@ interface LinkDialogProps {
   onClose: () => void;
   bookId?: string | null;
   internalTargets?: InternalTarget[];
+  loadInternalTargetChildren?: InternalTargetChildrenLoader;
 }
 
 function getSelectedMarks(editor: Editor): LinkTextMark[] {
@@ -101,6 +113,12 @@ function getTargetHref(target: InternalTarget): string {
         targetId: target.chapterId,
         headingId: target.headingId,
       });
+    case "noteHeading":
+      return formatLinkUri({
+        targetType: "noteHeading",
+        targetId: target.noteId,
+        headingId: target.headingId,
+      });
   }
 }
 
@@ -114,6 +132,8 @@ function getTargetKey(target: InternalTarget): string {
       return `chapter-${target.chapterId}`;
     case "heading":
       return `heading-${target.chapterId}-${target.headingId}`;
+    case "noteHeading":
+      return `note-heading-${target.noteId}-${target.headingId}`;
   }
 }
 
@@ -132,17 +152,42 @@ function getTargetTypeLabelKey(target: InternalTarget): TargetTypeLabelKey {
     case "chapter":
       return "editor.linkTargetChapter";
     case "heading":
+    case "noteHeading":
       return "editor.linkTargetHeading";
   }
 }
 
-export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = [] }: LinkDialogProps) {
+function canTargetHaveChildren(
+  target: InternalTarget,
+  loadInternalTargetChildren?: InternalTargetChildrenLoader,
+): boolean {
+  if (!loadInternalTargetChildren) return false;
+  return target.type === "note" || target.type === "book" || target.type === "chapter";
+}
+
+export function LinkDialog({
+  editor,
+  isOpen,
+  onClose,
+  bookId,
+  internalTargets = [],
+  loadInternalTargetChildren,
+}: LinkDialogProps) {
   const { t } = useTranslation();
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"url" | "internal">("url");
   const [query, setQuery] = useState("");
+  const [expandedTargetKeys, setExpandedTargetKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [childTargetsByKey, setChildTargetsByKey] = useState<
+    Record<string, InternalTarget[]>
+  >({});
+  const [loadingTargetKeys, setLoadingTargetKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   // Get current link and selection when dialog opens
   useEffect(() => {
@@ -156,6 +201,9 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
       setError("");
       setMode(isInternalLink(currentLink) ? "internal" : "url");
       setQuery("");
+      setExpandedTargetKeys(new Set());
+      setChildTargetsByKey({});
+      setLoadingTargetKeys(new Set());
     }
   }, [isOpen, editor]);
 
@@ -212,6 +260,9 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
     setError("");
     setMode("url");
     setQuery("");
+    setExpandedTargetKeys(new Set());
+    setChildTargetsByKey({});
+    setLoadingTargetKeys(new Set());
     onClose();
   };
 
@@ -274,9 +325,109 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
     handleClose();
   };
 
-  const filteredTargets = internalTargets.filter((tgt) =>
-    tgt.title.toLowerCase().includes(query.toLowerCase()),
-  );
+  const toggleTarget = async (target: InternalTarget) => {
+    if (!loadInternalTargetChildren) return;
+
+    const key = getTargetKey(target);
+    if (expandedTargetKeys.has(key)) {
+      setExpandedTargetKeys((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+      return;
+    }
+
+    setExpandedTargetKeys((current) => new Set(current).add(key));
+    if (Object.prototype.hasOwnProperty.call(childTargetsByKey, key)) {
+      return;
+    }
+
+    setLoadingTargetKeys((current) => new Set(current).add(key));
+    try {
+      const children = await loadInternalTargetChildren(target);
+      setChildTargetsByKey((current) => ({ ...current, [key]: children }));
+    } catch {
+      setChildTargetsByKey((current) => ({ ...current, [key]: [] }));
+    } finally {
+      setLoadingTargetKeys((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const targetMatchesQuery = (target: InternalTarget) =>
+    normalizedQuery.length === 0 ||
+    target.title.toLowerCase().includes(normalizedQuery);
+
+  const renderTarget = (target: InternalTarget, depth = 0): ReactNode => {
+    const key = getTargetKey(target);
+    const canExpand = canTargetHaveChildren(target, loadInternalTargetChildren);
+    const isExpanded = expandedTargetKeys.has(key);
+    const isLoading = loadingTargetKeys.has(key);
+    const children = childTargetsByKey[key] ?? [];
+    const renderedChildren = children
+      .map((child) => renderTarget(child, depth + 1))
+      .filter(Boolean);
+
+    if (!targetMatchesQuery(target) && renderedChildren.length === 0) {
+      return null;
+    }
+
+    return (
+      <li key={key}>
+        <div
+          className="flex items-stretch hover:bg-muted"
+          style={{ paddingLeft: `${depth * 16}px` }}
+        >
+          {canExpand ? (
+            <button
+              type="button"
+              aria-label={`${
+                isExpanded
+                  ? t("editor.collapseLinkTarget")
+                  : t("editor.expandLinkTarget")
+              } ${target.title}`}
+              aria-expanded={isExpanded}
+              onClick={() => void toggleTarget(target)}
+              className="shrink-0 px-2 text-muted-foreground hover:text-foreground"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </button>
+          ) : (
+            <span className="w-8 shrink-0" />
+          )}
+          <button
+            type="button"
+            onClick={() => handleInsertInternal(target)}
+            className={`min-w-0 flex-1 text-left px-3 py-2 flex items-center justify-between gap-3 ${
+              target.type === "heading" || target.type === "noteHeading"
+                ? "text-sm text-muted-foreground"
+                : "font-medium"
+            }`}
+          >
+            <span className="min-w-0 truncate">{target.title}</span>
+            <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t(getTargetTypeLabelKey(target))}
+            </span>
+          </button>
+        </div>
+        {isExpanded && renderedChildren.length > 0 && (
+          <ul>{renderedChildren}</ul>
+        )}
+      </li>
+    );
+  };
 
   const isEditing = !!editor.getAttributes("link").href;
   const canLinkInternally = !!bookId || internalTargets.length > 0;
@@ -375,24 +526,7 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
               autoFocus
             />
             <ul className="max-h-64 overflow-auto rounded-lg border border-border">
-              {filteredTargets.map((tgt) => (
-                <li key={getTargetKey(tgt)}>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertInternal(tgt)}
-                    className={`w-full text-left px-3 py-2 hover:bg-muted flex items-center justify-between gap-3 ${
-                      tgt.type === "heading"
-                        ? "pl-6 text-sm text-muted-foreground"
-                        : "font-medium"
-                    }`}
-                  >
-                    <span className="min-w-0 truncate">{tgt.title}</span>
-                    <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      {t(getTargetTypeLabelKey(tgt))}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {internalTargets.map((tgt) => renderTarget(tgt))}
             </ul>
           </div>
         )}

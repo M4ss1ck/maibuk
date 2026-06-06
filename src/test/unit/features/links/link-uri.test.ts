@@ -14,12 +14,16 @@ describe("link-uri", () => {
     expect(formatLinkUri({ targetType: "heading", targetId: "c1", headingId: "h-abc" })).toBe(
       "maibuk://heading/c1/h-abc",
     );
+    expect(formatLinkUri({ targetType: "noteHeading", targetId: "n1", headingId: "h-note" })).toBe(
+      "maibuk://note-heading/n1/h-note",
+    );
   });
 
   it("round-trips parse(format(x)) === x", () => {
     const links = [
       { targetType: "note" as const, targetId: "n1" },
       { targetType: "heading" as const, targetId: "c1", headingId: "h-xyz" },
+      { targetType: "noteHeading" as const, targetId: "n1", headingId: "h-note" },
     ];
     for (const l of links) {
       expect(parseLinkUri(formatLinkUri(l))).toEqual(l);

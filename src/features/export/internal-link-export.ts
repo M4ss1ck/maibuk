@@ -32,6 +32,7 @@ export function rewriteInternalLinksForExport(
         break;
       }
       case "note":
+      case "noteHeading":
         resolved = null; // notes are never exported
         break;
     }

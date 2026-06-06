@@ -20,6 +20,14 @@ export function navigateToLinkTarget(
     case "note":
       navigate("/notes", { state: { openNoteId: parsed.targetId } });
       return;
+    case "noteHeading":
+      navigate("/notes", {
+        state: {
+          openNoteId: parsed.targetId,
+          scrollToHeadingId: parsed.headingId,
+        },
+      });
+      return;
     case "book":
       navigate(`/book/${parsed.targetId}`, { state: {} });
       return;

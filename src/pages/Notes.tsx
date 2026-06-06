@@ -36,9 +36,23 @@ export function Notes() {
   }, [loadNotes, loadNote, lastNoteId, setLastNoteId]);
 
   useEffect(() => {
-    const state = location.state as { openNoteId?: string } | null;
+    const state = location.state as {
+      openNoteId?: string;
+      scrollToHeadingId?: string;
+    } | null;
     if (state?.openNoteId) {
-      void loadNote(state.openNoteId);
+      void loadNote(state.openNoteId).then(() => {
+        if (!state.scrollToHeadingId) return;
+        const headingId = state.scrollToHeadingId;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            document.getElementById(headingId)?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          });
+        });
+      });
     }
   }, [location.state, loadNote]);
 

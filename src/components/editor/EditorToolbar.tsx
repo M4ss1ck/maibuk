@@ -5,7 +5,11 @@ import { TableMenu } from "./TableMenu";
 import { FindReplace } from "./FindReplace";
 import { ImageInsertDialog } from "./ImageInsertDialog";
 import { FootnoteDialog } from "./FootnoteDialog";
-import { LinkDialog, type InternalTarget } from "./LinkDialog";
+import {
+  LinkDialog,
+  type InternalTarget,
+  type InternalTargetChildrenLoader,
+} from "./LinkDialog";
 import { HtmlViewPanel } from "./HtmlViewPanel";
 import { EditorContextMenu } from "./EditorContextMenu";
 import { findBlockOffsetInHtml } from "./HtmlInspectMenu";
@@ -65,6 +69,7 @@ interface EditorToolbarProps {
   onContextMenuOpenChange?: (open: boolean) => void;
   bookId?: string | null;
   internalTargets?: InternalTarget[];
+  loadInternalTargetChildren?: InternalTargetChildrenLoader;
 }
 
 const HEADING_SIZES: Record<1 | 2 | 3, string> = {
@@ -79,6 +84,7 @@ export function EditorToolbar({
   onContextMenuOpenChange,
   bookId,
   internalTargets,
+  loadInternalTargetChildren,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -728,6 +734,7 @@ export function EditorToolbar({
         onClose={() => setShowLinkDialog(false)}
         bookId={bookId}
         internalTargets={internalTargets}
+        loadInternalTargetChildren={loadInternalTargetChildren}
       />
       <DictionaryDialog
         isOpen={showDictionaryDialog}

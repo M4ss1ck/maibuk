@@ -4,8 +4,18 @@ import { NoteEditor } from "../../../../components/notes/NoteEditor";
 import type { Note } from "../../../../features/notes";
 import type { Book } from "../../../../features/books/types";
 
-const { mockEditor, mockNotes, mockBooks } = vi.hoisted(() => ({
+const { mockEditor, mockNotes, mockBooks, mockListAllChaptersForLinking } = vi.hoisted(() => ({
   mockEditor: vi.fn((_: unknown) => <div />),
+  mockListAllChaptersForLinking: vi.fn(() =>
+    Promise.resolve([
+      {
+        id: "chapter-1",
+        bookId: "book-1",
+        title: "Opening Chapter",
+        content: '<h2 id="h-opening">Opening Scene</h2><p>Body</p>',
+      },
+    ]),
+  ),
   mockNotes: [
     {
       id: "note-1",
@@ -21,7 +31,7 @@ const { mockEditor, mockNotes, mockBooks } = vi.hoisted(() => ({
     {
       id: "note-2",
       title: "Research Note",
-      content: "<p>Research body</p>",
+      content: '<h2 id="h-research">Research Question</h2><p>Research body</p>',
       tags: [],
       pinned: false,
       order: 1,
@@ -114,6 +124,27 @@ vi.mock("../../../../features/books/store", () => ({
   },
 }));
 
+vi.mock("../../../../features/chapters/store", () => ({
+  listAllChaptersForLinking: mockListAllChaptersForLinking,
+  listChaptersForBookLinking: vi.fn(() =>
+    Promise.resolve([
+      {
+        id: "chapter-1",
+        bookId: "book-1",
+        title: "Opening Chapter",
+      },
+    ]),
+  ),
+  getChapterForLinking: vi.fn(() =>
+    Promise.resolve({
+      id: "chapter-1",
+      bookId: "book-1",
+      title: "Opening Chapter",
+      content: '<h2 id="h-opening">Opening Scene</h2><p>Body</p>',
+    }),
+  ),
+}));
+
 function buildNote(overrides: Partial<Note>): Note {
   return {
     id: overrides.id ?? "note-1",
@@ -131,6 +162,7 @@ function buildNote(overrides: Partial<Note>): Note {
 describe("NoteEditor extensions", () => {
   beforeEach(() => {
     mockEditor.mockClear();
+    mockListAllChaptersForLinking.mockClear();
   });
 
   it("passes task-list and collapsible-heading extensions to the shared Editor", () => {
@@ -200,6 +232,87 @@ describe("NoteEditor extensions", () => {
       { type: "note", noteId: "note-1", title: "Current" },
       { type: "note", noteId: "note-2", title: "Research Note" },
       { type: "book", bookId: "book-1", title: "Novel Draft" },
+    ]);
+  });
+
+  it("does not eagerly load all chapter and heading targets", async () => {
+    render(
+      <NoteEditor
+        note={buildNote({ id: "note-1" })}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
+      />,
+    );
+
+    await Promise.resolve();
+
+    expect(mockListAllChaptersForLinking).not.toHaveBeenCalled();
+  });
+
+  it("passes a lazy loader for book, chapter, and note children", async () => {
+    render(
+      <NoteEditor
+        note={buildNote({ id: "note-1" })}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const props = mockEditor.mock.calls[0]?.[0] as {
+      loadInternalTargetChildren?: (target: {
+        type: string;
+        bookId?: string;
+        chapterId?: string;
+        noteId?: string;
+        title: string;
+      }) => Promise<unknown[]>;
+    };
+
+    expect(props.loadInternalTargetChildren).toBeTypeOf("function");
+
+    await expect(
+      props.loadInternalTargetChildren?.({
+        type: "book",
+        bookId: "book-1",
+        title: "Novel Draft",
+      }),
+    ).resolves.toEqual([
+      {
+        type: "chapter",
+        chapterId: "chapter-1",
+        title: "Opening Chapter",
+        headingId: null,
+      },
+    ]);
+
+    await expect(
+      props.loadInternalTargetChildren?.({
+        type: "chapter",
+        chapterId: "chapter-1",
+        title: "Opening Chapter",
+      }),
+    ).resolves.toEqual([
+      {
+        type: "heading",
+        chapterId: "chapter-1",
+        title: "Opening Scene",
+        headingId: "h-opening",
+      },
+    ]);
+
+    await expect(
+      props.loadInternalTargetChildren?.({
+        type: "note",
+        noteId: "note-2",
+        title: "Research Note",
+      }),
+    ).resolves.toEqual([
+      {
+        type: "noteHeading",
+        noteId: "note-2",
+        title: "Research Question",
+        headingId: "h-research",
+      },
     ]);
   });
 });

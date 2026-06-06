@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pin } from "lucide-react";
 import { Extension } from "@tiptap/core";
@@ -8,7 +8,7 @@ import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "../../features/notes";
 import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
-import type { InternalTarget } from "../editor/LinkDialog";
+import type { InternalTarget, InternalTargetChildrenLoader } from "../editor/LinkDialog";
 import { CollapsibleHeading } from "../editor/extensions";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
@@ -20,14 +20,17 @@ import { SyncStatusButton } from "../sync/SyncStatusButton";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
 import { useNavigate } from "react-router-dom";
-import { isInternalLink } from "../../features/links/link-uri";
+import { isInternalLink, parseLinkUri } from "../../features/links/link-uri";
 import { navigateToLinkTarget } from "../../features/links/navigate";
 import { Wikilink } from "../editor/extensions";
 import { createWikilinkRenderer } from "../editor/WikilinkSuggestion";
 import { buildWikilinkCandidates } from "../../features/links/wikilink-targets";
 import { useBookStore } from "../../features/books/store";
 import { assignHeadingIds } from "../../features/links/heading-ids";
-import { listAllChaptersForLinking } from "../../features/chapters/store";
+import {
+  getChapterForLinking,
+  listChaptersForBookLinking,
+} from "../../features/chapters/store";
 import { NoteBacklinks } from "./NoteBacklinks";
 
 let activeTaskHandleDragSourcePos: number | null = null;
@@ -209,31 +212,8 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
   const books = useBookStore((s) => s.books);
   const navigate = useNavigate();
-
-  const [chapterTargets, setChapterTargets] = useState<
-    {
-      id: string;
-      bookId: string;
-      title: string;
-      headings: { id: string; text: string }[];
-    }[]
-  >([]);
-
-  useEffect(() => {
-    void listAllChaptersForLinking().then((rows) =>
-      setChapterTargets(
-        rows.map((c) => ({
-          id: c.id,
-          bookId: c.bookId,
-          title: c.title,
-          headings: assignHeadingIds(c.content).headings.map((h) => ({
-            id: h.id,
-            text: h.text,
-          })),
-        })),
-      ),
-    );
-  }, []);
+  // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
+  const contentRef = useRef(note.content);
 
   const wikilinkExtension = useMemo(
     () =>
@@ -243,18 +223,8 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
             buildWikilinkCandidates(query, {
               notes: notes.map((n) => ({ id: n.id, title: n.title })),
               books: books.map((b) => ({ id: b.id, title: b.title })),
-              chapters: chapterTargets.map((c) => ({
-                id: c.id,
-                bookId: c.bookId,
-                title: c.title,
-              })),
-              headings: chapterTargets.flatMap((c) =>
-                c.headings.map((h) => ({
-                  chapterId: c.id,
-                  id: h.id,
-                  text: h.text,
-                })),
-              ),
+              chapters: [],
+              headings: [],
             }),
           onCreateNote: async (title: string) => {
             const created = await useNoteStore.getState().createNote({ title });
@@ -263,7 +233,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
           render: createWikilinkRenderer(),
         },
       }),
-    [notes, books, chapterTargets],
+    [notes, books],
   );
 
   const internalTargets = useMemo<InternalTarget[]>(
@@ -274,8 +244,52 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
     [notes, books],
   );
 
-  // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
-  const contentRef = useRef(note.content);
+  const loadInternalTargetChildren = useCallback<InternalTargetChildrenLoader>(
+    async (target) => {
+      if (target.type === "book") {
+        const chapters = await listChaptersForBookLinking(target.bookId);
+        return chapters.map((chapter) => ({
+          type: "chapter" as const,
+          chapterId: chapter.id,
+          title: chapter.title,
+          headingId: null,
+        }));
+      }
+
+      if (target.type === "chapter") {
+        const chapter = await getChapterForLinking(target.chapterId);
+        if (!chapter) return [];
+        return assignHeadingIds(chapter.content).headings.map((heading) => ({
+          type: "heading" as const,
+          chapterId: chapter.id,
+          title: heading.text,
+          headingId: heading.id,
+        }));
+      }
+
+      if (target.type === "note") {
+        const targetNote =
+          target.noteId === note.id
+            ? { ...note, content: contentRef.current }
+            : notes.find((existingNote) => existingNote.id === target.noteId);
+        if (!targetNote) return [];
+        return assignHeadingIds(targetNote.content).headings.map((heading) => ({
+          type: "noteHeading" as const,
+          noteId: target.noteId,
+          title: heading.text,
+          headingId: heading.id,
+        }));
+      }
+
+      return [];
+    },
+    [note, notes],
+  );
+
+  const resolveBookIdForChapter = useCallback(async (chapterId: string) => {
+    const chapter = await getChapterForLinking(chapterId);
+    return chapter?.bookId;
+  }, []);
 
   const saveNow = useCallback(
     async (extra: Partial<UpdateNoteInput> = {}) => {
@@ -332,10 +346,16 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         const href = target.getAttribute("href");
         if (href && isInternalLink(href)) {
           event.preventDefault();
-          navigateToLinkTarget(href, navigate, {
-            bookIdForChapter: (chapterId) =>
-              chapterTargets.find((c) => c.id === chapterId)?.bookId,
-          });
+          const parsed = parseLinkUri(href);
+          if (parsed?.targetType === "chapter" || parsed?.targetType === "heading") {
+            void getChapterForLinking(parsed.targetId).then((chapter) => {
+              navigateToLinkTarget(href, navigate, {
+                bookIdForChapter: () => chapter?.bookId,
+              });
+            });
+            return;
+          }
+          navigateToLinkTarget(href, navigate);
         } else {
           const broken = (event.target as HTMLElement).closest("a.wikilink-broken");
           if (broken instanceof HTMLAnchorElement) {
@@ -353,7 +373,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
       };
       dom.addEventListener("click", onClick);
     },
-    [navigate, chapterTargets],
+    [navigate],
   );
 
   const notesExtensions = useMemo(
@@ -458,6 +478,8 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         extraExtensions={allNotesExtensions}
         internalTargets={internalTargets}
         onEditorReady={handleEditorReady}
+        loadInternalTargetChildren={loadInternalTargetChildren}
+        resolveBookIdForChapter={resolveBookIdForChapter}
         headerContent={
           <div className="px-8 pt-6 max-w-editor-max mx-auto w-full">
             <input

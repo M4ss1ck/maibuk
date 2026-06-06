@@ -307,3 +307,39 @@ export async function listAllChaptersForLinking(): Promise<
     content: r.content,
   }));
 }
+
+export async function listChaptersForBookLinking(
+  bookId: string,
+): Promise<{ id: string; bookId: string; title: string }[]> {
+  const db = await getDatabase();
+  const rows = await db.select<
+    { id: string; book_id: string; title: string }[]
+  >(
+    'SELECT id, book_id, title FROM chapters WHERE book_id = ? ORDER BY "order" ASC',
+    [bookId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    title: r.title,
+  }));
+}
+
+export async function getChapterForLinking(
+  chapterId: string,
+): Promise<{ id: string; bookId: string; title: string; content: string | null } | null> {
+  const db = await getDatabase();
+  const rows = await db.select<
+    { id: string; book_id: string; title: string; content: string | null }[]
+  >("SELECT id, book_id, title, content FROM chapters WHERE id = ? LIMIT 1", [
+    chapterId,
+  ]);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    bookId: row.book_id,
+    title: row.title,
+    content: row.content,
+  };
+}

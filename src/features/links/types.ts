@@ -1,8 +1,13 @@
-export type LinkTargetType = "note" | "book" | "chapter" | "heading";
+export type LinkTargetType =
+  | "note"
+  | "book"
+  | "chapter"
+  | "heading"
+  | "noteHeading";
 
 export interface ParsedLink {
   targetType: LinkTargetType;
-  targetId: string; // noteId | bookId | chapterId (chapterId for heading)
+  targetId: string; // noteId | bookId | chapterId
   headingId?: string;
 }
 

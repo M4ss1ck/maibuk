@@ -21,6 +21,14 @@ describe("navigateToLinkTarget", () => {
     });
   });
 
+  it("routes a note-heading URI to notes with note+heading state", () => {
+    const navigate = vi.fn();
+    navigateToLinkTarget("maibuk://note-heading/n1/h-research", navigate);
+    expect(navigate).toHaveBeenCalledWith("/notes", {
+      state: { openNoteId: "n1", scrollToHeadingId: "h-research" },
+    });
+  });
+
   it("routes a chapter URI to the book editor", () => {
     const navigate = vi.fn();
     navigateToLinkTarget("maibuk://chapter/c1", navigate, {

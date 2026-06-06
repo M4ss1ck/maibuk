@@ -7,6 +7,7 @@ export interface ResolverData {
   books: { id: string; title: string }[];
   chapters: { id: string; bookId: string; title: string }[];
   headings: { id: string; chapterId: string; text: string }[];
+  noteHeadings?: { id: string; noteId: string; text: string }[];
 }
 
 export interface ResolvedTarget {
@@ -60,6 +61,19 @@ function resolveById(
         exists: true,
       };
     }
+    case "noteHeading": {
+      const h = data.noteHeadings?.find(
+        (x) => x.noteId === id && x.id === headingId,
+      );
+      if (!h) return null;
+      return {
+        type,
+        id,
+        headingId,
+        title: h.text,
+        exists: true,
+      };
+    }
   }
 }
 
@@ -93,6 +107,16 @@ export function resolveByTitle(
       headingId: h.id,
       title: h.text,
       bookId: bookIdForChapter(h.chapterId, data),
+      exists: true,
+    };
+  }
+  const noteHeading = data.noteHeadings?.find((x) => x.text === title);
+  if (noteHeading) {
+    return {
+      type: "noteHeading",
+      id: noteHeading.noteId,
+      headingId: noteHeading.id,
+      title: noteHeading.text,
       exists: true,
     };
   }

@@ -16,6 +16,8 @@ export function formatLinkUri(link: ParsedLink): string {
       return `${PREFIX}chapter/${link.targetId}`;
     case "heading":
       return `${PREFIX}heading/${link.targetId}/${link.headingId}`;
+    case "noteHeading":
+      return `${PREFIX}note-heading/${link.targetId}/${link.headingId}`;
   }
 }
 
@@ -30,6 +32,10 @@ export function parseLinkUri(href: string | null | undefined): ParsedLink | null
   if (kind === "heading") {
     if (parts.length !== 3) return null;
     return { targetType: "heading", targetId: parts[1], headingId: parts[2] };
+  }
+  if (parts[0] === "note-heading") {
+    if (parts.length !== 3) return null;
+    return { targetType: "noteHeading", targetId: parts[1], headingId: parts[2] };
   }
   return null;
 }

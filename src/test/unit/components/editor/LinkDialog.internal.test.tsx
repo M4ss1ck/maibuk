@@ -1,6 +1,6 @@
 // src/test/unit/components/editor/LinkDialog.internal.test.tsx
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { LinkDialog } from "../../../../components/editor/LinkDialog";
 
 vi.mock("react-i18next", () => ({
@@ -160,6 +160,93 @@ describe("LinkDialog internal target picker", () => {
 
     expect(screen.getByText("editor.linkTargetNote")).toBeInTheDocument();
     expect(screen.getByText("editor.linkTargetBook")).toBeInTheDocument();
+  });
+
+  it("lazy loads book children when the book target is expanded", async () => {
+    const loadInternalTargetChildren = vi.fn(async () => [
+      {
+        type: "chapter" as const,
+        chapterId: "chapter-1",
+        title: "Opening Chapter",
+        headingId: null,
+      },
+    ]);
+
+    render(
+      <LinkDialog
+        editor={editor}
+        isOpen
+        onClose={() => {}}
+        internalTargets={[
+          {
+            type: "book",
+            bookId: "book-1",
+            title: "Novel Draft",
+          },
+        ]}
+        loadInternalTargetChildren={loadInternalTargetChildren}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+
+    expect(screen.queryByText("Opening Chapter")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("editor.expandLinkTarget Novel Draft"));
+
+    await waitFor(() =>
+      expect(loadInternalTargetChildren).toHaveBeenCalledWith({
+        type: "book",
+        bookId: "book-1",
+        title: "Novel Draft",
+      }),
+    );
+    expect(await screen.findByText("Opening Chapter")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Opening Chapter"));
+
+    expect(setLink).toHaveBeenCalledWith({ href: "maibuk://chapter/chapter-1" });
+  });
+
+  it("lazy loads note heading children when the note target is expanded", async () => {
+    const loadInternalTargetChildren = vi.fn(async () => [
+      {
+        type: "noteHeading" as const,
+        noteId: "note-2",
+        title: "Research Question",
+        headingId: "h-research",
+      },
+    ]);
+
+    render(
+      <LinkDialog
+        editor={editor}
+        isOpen
+        onClose={() => {}}
+        internalTargets={[
+          {
+            type: "note",
+            noteId: "note-2",
+            title: "Research Note",
+          },
+        ]}
+        loadInternalTargetChildren={loadInternalTargetChildren}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+
+    expect(screen.queryByText("Research Question")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("editor.expandLinkTarget Research Note"));
+
+    expect(await screen.findByText("Research Question")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Research Question"));
+
+    expect(setLink).toHaveBeenCalledWith({
+      href: "maibuk://note-heading/note-2/h-research",
+    });
   });
 
   it("inserts target title as linked text when selecting an empty line", () => {

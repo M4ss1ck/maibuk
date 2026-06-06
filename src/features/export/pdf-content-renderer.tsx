@@ -429,7 +429,9 @@ function renderInlineChildren(node: Element, styles: PdfStyles): ReactNode[] {
           src = `#chapter-${parsed.targetId}`;
         } else if (
           parsed &&
-          (parsed.targetType === "note" || parsed.targetType === "book")
+          (parsed.targetType === "note" ||
+            parsed.targetType === "noteHeading" ||
+            parsed.targetType === "book")
         ) {
           result.push(
             createElement(

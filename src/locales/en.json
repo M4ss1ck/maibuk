@@ -193,6 +193,8 @@
     "linkTargetBook": "Book",
     "linkTargetChapter": "Chapter",
     "linkTargetHeading": "Heading",
+    "expandLinkTarget": "Expand",
+    "collapseLinkTarget": "Collapse",
     "findReplace": "Find & Replace",
     "insertImage": "Insert Image",
     "insertLink": "Insert Link",

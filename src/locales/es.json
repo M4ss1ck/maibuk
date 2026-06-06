@@ -193,6 +193,8 @@
     "linkTargetBook": "Libro",
     "linkTargetChapter": "Capítulo",
     "linkTargetHeading": "Encabezado",
+    "expandLinkTarget": "Expandir",
+    "collapseLinkTarget": "Contraer",
     "findReplace": "Buscar y Reemplazar",
     "insertImage": "Insertar Imagen",
     "insertLink": "Insertar Enlace",
