@@ -742,6 +742,20 @@ option {
   color: var(--color-primary-hover);
 }
 
+.wikilink {
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  cursor: pointer;
+}
+
+.wikilink-broken {
+  color: var(--color-muted-foreground);
+  border-bottom: 1px dashed currentColor;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
 /* Footnote reference (inline superscript number) */
 .footnote-ref {
   display: inline;

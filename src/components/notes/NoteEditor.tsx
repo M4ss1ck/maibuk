@@ -327,7 +327,18 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
               chapterTargets.find((c) => c.id === chapterId)?.bookId,
           });
         } else {
-          // Unresolved [[ ]] -> Task 17 handles "create note".
+          const broken = (event.target as HTMLElement).closest("a.wikilink-broken");
+          if (broken instanceof HTMLAnchorElement) {
+            event.preventDefault();
+            const label = broken.getAttribute("data-label") ?? broken.textContent ?? "";
+            if (!label) return;
+            void useNoteStore
+              .getState()
+              .createNote({ title: label })
+              .then((created) => {
+                navigate("/notes", { state: { openNoteId: created.id } });
+              });
+          }
         }
       };
       dom.addEventListener("click", onClick);
