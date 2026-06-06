@@ -12,6 +12,14 @@ describe("tagColor", () => {
       "#fbbf24",
       "#f87171",
       "#38bdf8",
+      "#a78bfa",
+      "#fb923c",
+      "#2dd4bf",
+      "#e879f9",
+      "#facc15",
+      "#34d399",
+      "#f472b6",
+      "#818cf8",
     ];
 
     expect(palette).toContain(tagColor("draft"));

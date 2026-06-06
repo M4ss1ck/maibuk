@@ -254,7 +254,7 @@ export function ChapterList({
                     onDragEnd={handleDragEnd}
                     className={`group relative rounded transition-colors cursor-pointer ${draggedId === chapter.id ? "opacity-50" : ""
                       } ${isActive ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
-                      }`}
+                      }${isActive && showChapterOutline ? " sticky top-0 backdrop-blur-sm" : ""}`}
                   >
                     {/* Edit form overlay */}
                     {editingId === chapter.id ? (
