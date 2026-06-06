@@ -11,6 +11,7 @@
 import { createElement, type ReactNode } from "react";
 import { Text, View, Image, Link } from "@react-pdf/renderer";
 import type { PdfStyles } from "./pdf-styles";
+import { parseLinkUri } from "../links/link-uri";
 
 // ---------------------------------------------------------------------------
 // CSS → react-pdf style helpers
@@ -216,7 +217,8 @@ function renderHeading(
   level: "heading1" | "heading2" | "heading3" | "heading4" | "heading5" | "heading6",
   key: string
 ): ReactNode {
-  return createElement(Text, { key, style: styles[level] }, ...renderInlineChildren(el, styles));
+  const headingId = el.getAttribute("id");
+  return createElement(Text, { key, id: headingId ?? undefined, style: styles[level] }, ...renderInlineChildren(el, styles));
 }
 
 function renderList(
@@ -418,11 +420,30 @@ function renderInlineChildren(node: Element, styles: PdfStyles): ReactNode[] {
         );
         break;
       case "a": {
-        const href = el.getAttribute("href") || "";
+        const rawHref = el.getAttribute("href") || "";
+        const parsed = parseLinkUri(rawHref);
+        let src = rawHref;
+        if (parsed?.targetType === "heading") {
+          src = `#${parsed.headingId}`;
+        } else if (parsed?.targetType === "chapter") {
+          src = `#chapter-${parsed.targetId}`;
+        } else if (
+          parsed &&
+          (parsed.targetType === "note" || parsed.targetType === "book")
+        ) {
+          result.push(
+            createElement(
+              Text,
+              { key: nextKey(), style: styles.link },
+              ...renderInlineChildren(el, styles)
+            )
+          );
+          break;
+        }
         result.push(
           createElement(
             Link,
-            { key: nextKey(), src: href, style: styles.link },
+            { key: nextKey(), src, style: styles.link },
             ...renderInlineChildren(el, styles)
           )
         );

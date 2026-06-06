@@ -108,7 +108,7 @@ function renderToc(chapters: Chapter[], styles: ReturnType<typeof createPdfStyle
       { key: `toc-${i}`, style: styles.tocEntry },
       createElement(
         Link,
-        { src: `#chapter-${chapters.indexOf(ch)}`, style: styles.tocLink },
+        { src: `#chapter-${ch.id}`, style: styles.tocLink },
         createElement(Text, null, ch.title)
       )
     )
@@ -156,7 +156,7 @@ function renderChapter(
     View,
     {
       key: `chapter-${index}`,
-      id: `chapter-${index}`,
+      id: `chapter-${chapter.id}`,
       break: addBreak,
     },
 
