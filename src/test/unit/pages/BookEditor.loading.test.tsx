@@ -71,6 +71,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("react-router-dom", () => ({
   useParams: () => ({ bookId: "book-1" }),
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ state: null, pathname: "/book/book-1" }),
 }));
 
 vi.mock("../../../lib/shortcuts", () => ({
