@@ -207,6 +207,76 @@ describe("LinkDialog internal target picker", () => {
     );
   });
 
+  it("preserves existing marks when editing internal link display text", () => {
+    const internalLinkEditor = {
+      ...editor,
+      state: {
+        selection: { from: 1, to: 5 },
+        doc: {
+          textBetween: () => "anchor",
+          nodesBetween: (
+            _from: number,
+            _to: number,
+            callback: (node: {
+              isText: boolean;
+              marks: {
+                type: { name: string };
+                attrs: Record<string, unknown>;
+              }[];
+            }) => void,
+          ) =>
+            callback({
+              isText: true,
+              marks: [
+                { type: { name: "bold" }, attrs: {} },
+                {
+                  type: { name: "textStyle" },
+                  attrs: { fontSize: "20px" },
+                },
+                {
+                  type: { name: "link" },
+                  attrs: { href: "maibuk://chapter/c1" },
+                },
+              ],
+            }),
+        },
+      },
+      getAttributes: () => ({ href: "maibuk://chapter/c1" }),
+    } as unknown as import("@tiptap/react").Editor;
+
+    render(
+      <LinkDialog
+        editor={internalLinkEditor}
+        isOpen
+        onClose={() => {}}
+        bookId="b1"
+        internalTargets={[
+          {
+            type: "chapter",
+            chapterId: "c1",
+            title: "Chapter One",
+            headingId: null,
+          },
+        ]}
+      />,
+    );
+
+    const textInput = screen.getByPlaceholderText("editor.linkText");
+    fireEvent.change(textInput, { target: { value: "Custom Label" } });
+
+    fireEvent.click(screen.getByText("common.update"));
+
+    expect(insertContent).toHaveBeenCalledWith({
+      type: "text",
+      text: "Custom Label",
+      marks: [
+        { type: "bold", attrs: {} },
+        { type: "textStyle", attrs: { fontSize: "20px" } },
+        { type: "link", attrs: { href: "maibuk://chapter/c1" } },
+      ],
+    });
+  });
+
   it("uses custom display text when provided in url mode with a selection", () => {
     render(
       <LinkDialog

@@ -6,6 +6,17 @@ import { Input } from "../ui/Input";
 import { useTranslation } from "react-i18next";
 import { formatLinkUri, isInternalLink } from "../../features/links/link-uri";
 
+type LinkTextMark = {
+  type: string;
+  attrs?: Record<string, unknown>;
+};
+
+type LinkedTextContent = {
+  type: "text";
+  text: string;
+  marks: LinkTextMark[];
+};
+
 export interface InternalTarget {
   type: "chapter" | "heading";
   chapterId: string;
@@ -19,6 +30,44 @@ interface LinkDialogProps {
   onClose: () => void;
   bookId?: string | null;
   internalTargets?: InternalTarget[];
+}
+
+function getSelectedMarks(editor: Editor): LinkTextMark[] {
+  const { from, to } = editor.state.selection;
+  const doc = editor.state.doc;
+  const marks = new Map<string, LinkTextMark>();
+
+  if (from === to || typeof doc.nodesBetween !== "function") {
+    return [];
+  }
+
+  doc.nodesBetween(from, to, (node) => {
+    if (!node.isText) return;
+    for (const mark of node.marks) {
+      const type = mark.type.name;
+      if (type === "link" || marks.has(type)) continue;
+      marks.set(type, { type, attrs: mark.attrs });
+    }
+  });
+
+  return Array.from(marks.values());
+}
+
+function createLinkedTextContent(
+  editor: Editor,
+  href: string,
+  displayText: string,
+): LinkedTextContent | string {
+  const marks = getSelectedMarks(editor);
+  if (marks.length === 0) {
+    return `<a href="${href}">${displayText}</a>`;
+  }
+
+  return {
+    type: "text",
+    text: displayText,
+    marks: [...marks, { type: "link", attrs: { href } }],
+  };
 }
 
 export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = [] }: LinkDialogProps) {
@@ -76,7 +125,7 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
       editor
         .chain()
         .focus()
-        .insertContent(`<a href="${finalUrl}">${displayText}</a>`)
+        .insertContent(createLinkedTextContent(editor, finalUrl, displayText))
         .run();
     } else {
       // Selection exists — just update the link
@@ -127,7 +176,7 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
       editor
         .chain()
         .focus()
-        .insertContent(`<a href="${href}">${displayText}</a>`)
+        .insertContent(createLinkedTextContent(editor, href, displayText))
         .run();
     } else {
       // Selection exists — just update the link
@@ -157,7 +206,7 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
       editor
         .chain()
         .focus()
-        .insertContent(`<a href="${href}">${displayText}</a>`)
+        .insertContent(createLinkedTextContent(editor, href, displayText))
         .run();
     } else {
       editor.chain().focus().setLink({ href }).run();
