@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { useNoteStore } from "../features/notes";
 import type { Note, UpdateNoteInput } from "../features/notes";
 import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
@@ -19,6 +20,7 @@ export function Notes() {
   const lastNoteId = useSettingsStore((s) => s.lastNoteId);
   const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
   const isResizing = useRef(false);
+  const location = useLocation();
 
   useEffect(() => {
     async function init() {
@@ -32,6 +34,13 @@ export function Notes() {
     }
     init();
   }, [loadNotes, loadNote, lastNoteId, setLastNoteId]);
+
+  useEffect(() => {
+    const state = location.state as { openNoteId?: string } | null;
+    if (state?.openNoteId) {
+      void loadNote(state.openNoteId);
+    }
+  }, [location.state, loadNote]);
 
   const handleCreateNote = async () => {
     const note = await createNote({ title: "" });
