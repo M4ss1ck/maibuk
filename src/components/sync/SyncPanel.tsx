@@ -5,14 +5,16 @@ import { Button } from "../ui/Button";
 import { useSyncStore } from "../../features/sync/store";
 import type { SyncOptions } from "../../features/sync/types";
 import { SyncControls } from "./SyncControls";
+import { timeAgo } from "../../components/notes/timeAgo";
 
 interface SyncPanelProps {
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onSync: (options?: Partial<SyncOptions>) => Promise<void>;
 }
 
-export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
-  const { t } = useTranslation();
+export function SyncPanel({ triggerRef, onClose, onSync }: SyncPanelProps) {
+  const { t, i18n } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
   const { userEmail, lastSyncedAt, syncError, logout } = useSyncStore();
 
@@ -23,6 +25,9 @@ export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
         return;
       }
       if (panelRef.current.contains(target)) {
+        return;
+      }
+      if (triggerRef.current && target instanceof Node && triggerRef.current.contains(target)) {
         return;
       }
       if (
@@ -44,11 +49,11 @@ export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
     onClose();
   };
 
-  const formatLastSynced = (): string => {
+  const formatLastSynced = (tooltip = false): string => {
     if (!lastSyncedAt) return t("sync.neverSynced");
-    const date = new Date(lastSyncedAt * 1000);
+    if (tooltip) return new Date(lastSyncedAt * 1000).toLocaleString();
     return t("sync.lastSynced", {
-      time: date.toLocaleString(),
+      time: timeAgo(lastSyncedAt, i18n.language, t),
     });
   };
 
@@ -59,7 +64,7 @@ export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
     >
       <div className="px-4 py-3 border-b border-border">
         <p className="text-sm font-medium truncate">{userEmail}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{formatLastSynced()}</p>
+        <p className="text-xs text-muted-foreground mt-0.5" title={formatLastSynced(true)}>{formatLastSynced()}</p>
       </div>
 
       {syncError && (

@@ -104,6 +104,7 @@ export function SyncStatusButton() {
 
       {showSyncPanel && (
         <SyncPanel
+          triggerRef={buttonRef}
           onClose={() => setShowSyncPanel(false)}
           onSync={async (options?: Partial<SyncOptions>) => {
             const didSync = await syncAllWithSessionPassphrase(options);
