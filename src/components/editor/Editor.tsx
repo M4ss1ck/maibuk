@@ -37,6 +37,9 @@ import { MetricsObserver } from "./extensions/MetricsObserver";
 import { HeadingId } from "./extensions/HeadingId";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
+import { useChapterStore } from "../../features/chapters/store";
+import { assignHeadingIds } from "../../features/links/heading-ids";
+import type { InternalTarget } from "./LinkDialog";
 import { setContentSilently } from "../../features/metrics/programmatic";
 
 export interface EditorStats {
@@ -86,6 +89,23 @@ export function Editor({
   );
   const language = useSettingsStore((state) => state.language);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
+  const chapters = useChapterStore((s) => s.chapters);
+  const internalTargets: InternalTarget[] = bookId
+    ? chapters.flatMap((c) => {
+        const targets: InternalTarget[] = [
+          { type: "chapter", chapterId: c.id, title: c.title, headingId: null },
+        ];
+        for (const h of assignHeadingIds(c.content).headings) {
+          targets.push({
+            type: "heading",
+            chapterId: c.id,
+            title: h.text,
+            headingId: h.id,
+          });
+        }
+        return targets;
+      })
+    : [];
   const appliedContentRef = useRef(content);
   const editor = useEditor({
     extensions: [
@@ -300,6 +320,8 @@ export function Editor({
         editor={editor}
         isOpen={showBubbleLinkDialog}
         onClose={() => setShowBubbleLinkDialog(false)}
+        bookId={bookId}
+        internalTargets={internalTargets}
       />
     </div>
   );
