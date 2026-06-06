@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
+import { assignHeadingIds } from "../links/heading-ids";
+import { reindexSource } from "../links/link-index";
 import type {
   Chapter,
   CreateChapterInput,
@@ -158,11 +160,13 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
       values.push(input.title);
     }
     if (input.content !== undefined) {
+      const normalized = assignHeadingIds(input.content);
+      input = { ...input, content: normalized.html };
       updates.push("content = ?");
-      values.push(input.content);
+      values.push(normalized.html);
 
       // Calculate word count from content
-      const text = input.content.replace(/<[^>]*>/g, " ");
+      const text = normalized.html.replace(/<[^>]*>/g, " ");
       const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length;
       updates.push("word_count = ?");
       values.push(wordCount);
@@ -216,6 +220,20 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
             }
           : state.currentChapter,
     }));
+
+    if (input.content !== undefined) {
+      const bookId =
+        get().chapters.find((c) => c.id === id)?.bookId ??
+        get().currentChapter?.bookId ??
+        get().currentBookId ??
+        undefined;
+      await reindexSource({
+        sourceType: "chapter",
+        sourceId: id,
+        sourceBookId: bookId,
+        contentHtml: input.content,
+      });
+    }
   },
 
   deleteChapter: async (id: string) => {
