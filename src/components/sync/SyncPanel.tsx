@@ -8,11 +8,12 @@ import { SyncControls } from "./SyncControls";
 import { timeAgo } from "../../components/notes/timeAgo";
 
 interface SyncPanelProps {
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onSync: (options?: Partial<SyncOptions>) => Promise<void>;
 }
 
-export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
+export function SyncPanel({ triggerRef, onClose, onSync }: SyncPanelProps) {
   const { t, i18n } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
   const { userEmail, lastSyncedAt, syncError, logout } = useSyncStore();
@@ -24,6 +25,9 @@ export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
         return;
       }
       if (panelRef.current.contains(target)) {
+        return;
+      }
+      if (triggerRef.current && target instanceof Node && triggerRef.current.contains(target)) {
         return;
       }
       if (
