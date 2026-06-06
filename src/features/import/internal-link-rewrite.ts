@@ -47,7 +47,11 @@ export function rewriteImportedInternalLinks(
 
       const resolved = resolveHref(chapter.href, original);
       const [path, frag] = resolved.split("#", 2);
-      const targetId = byPath.get(path);
+      let targetId = byPath.get(path);
+      if (!targetId) {
+        // The href may already be package-relative (e.g. from a previous export).
+        targetId = byPath.get(stripFragment(original));
+      }
       if (!targetId) continue; // unknown target -> leave as-is
 
       anchor.setAttribute(
