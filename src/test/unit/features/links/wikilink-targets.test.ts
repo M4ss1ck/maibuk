@@ -26,7 +26,7 @@ describe("buildWikilinkCandidates", () => {
 
   it("always appends a createNote entry using the raw query", () => {
     const result = buildWikilinkCandidates("Totally New", data);
-    expect(result.at(-1)).toEqual({ kind: "createNote", label: "Totally New" });
+    expect(result[result.length - 1]).toEqual({ kind: "createNote", label: "Totally New" });
   });
 
   it("returns no createNote entry for an empty query", () => {

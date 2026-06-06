@@ -232,7 +232,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
         sourceId: id,
         sourceBookId: bookId,
         contentHtml: input.content,
-      });
+      }).catch(() => {});
     }
   },
 
@@ -292,3 +292,18 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
     set({ currentChapter: chapter });
   },
 }));
+
+export async function listAllChaptersForLinking(): Promise<
+  { id: string; bookId: string; title: string; content: string | null }[]
+> {
+  const db = await getDatabase();
+  const rows = await db.select<
+    { id: string; book_id: string; title: string; content: string | null }[]
+  >("SELECT id, book_id, title, content FROM chapters");
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    title: r.title,
+    content: r.content,
+  }));
+}

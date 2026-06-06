@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pin } from "lucide-react";
 import { Extension } from "@tiptap/core";
@@ -18,6 +18,12 @@ import { ThemeToggle } from "../ThemeToggle";
 import { SyncStatusButton } from "../sync/SyncStatusButton";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
+import { Wikilink } from "../editor/extensions";
+import { createWikilinkRenderer } from "../editor/WikilinkSuggestion";
+import { buildWikilinkCandidates } from "../../features/links/wikilink-targets";
+import { useBookStore } from "../../features/books/store";
+import { assignHeadingIds } from "../../features/links/heading-ids";
+import { listAllChaptersForLinking } from "../../features/chapters/store";
 
 let activeTaskHandleDragSourcePos: number | null = null;
 
@@ -196,6 +202,63 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
   const notes = useNoteStore((s) => s.notes);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
+  const books = useBookStore((s) => s.books);
+
+  const [chapterTargets, setChapterTargets] = useState<
+    {
+      id: string;
+      bookId: string;
+      title: string;
+      headings: { id: string; text: string }[];
+    }[]
+  >([]);
+
+  useEffect(() => {
+    void listAllChaptersForLinking().then((rows) =>
+      setChapterTargets(
+        rows.map((c) => ({
+          id: c.id,
+          bookId: c.bookId,
+          title: c.title,
+          headings: assignHeadingIds(c.content).headings.map((h) => ({
+            id: h.id,
+            text: h.text,
+          })),
+        })),
+      ),
+    );
+  }, []);
+
+  const wikilinkExtension = useMemo(
+    () =>
+      Wikilink.configure({
+        suggestion: {
+          items: (query: string) =>
+            buildWikilinkCandidates(query, {
+              notes: notes.map((n) => ({ id: n.id, title: n.title })),
+              books: books.map((b) => ({ id: b.id, title: b.title })),
+              chapters: chapterTargets.map((c) => ({
+                id: c.id,
+                bookId: c.bookId,
+                title: c.title,
+              })),
+              headings: chapterTargets.flatMap((c) =>
+                c.headings.map((h) => ({
+                  chapterId: c.id,
+                  id: h.id,
+                  text: h.text,
+                })),
+              ),
+            }),
+          onCreateNote: async (title: string) => {
+            const created = await useNoteStore.getState().createNote({ title });
+            return { noteId: created.id };
+          },
+          render: createWikilinkRenderer(),
+        },
+      }),
+    [notes, books, chapterTargets],
+  );
 
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
@@ -258,6 +321,11 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
       }),
     ],
     [t]
+  );
+
+  const allNotesExtensions = useMemo(
+    () => [...notesExtensions, wikilinkExtension],
+    [notesExtensions, wikilinkExtension],
   );
 
   const allTags = useMemo(() => {
@@ -339,7 +407,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         onUpdate={handleContentUpdate}
         onWordCountChange={handleWordCountChange}
         placeholder={t("notes.bodyPlaceholder")}
-        extraExtensions={notesExtensions}
+        extraExtensions={allNotesExtensions}
         headerContent={
           <div className="px-8 pt-6 max-w-editor-max mx-auto w-full">
             <input
