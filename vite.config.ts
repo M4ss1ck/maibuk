@@ -91,6 +91,17 @@ export default defineConfig(() => ({
         "src/components/settings/MetricsSection.tsx",
         "src/pages/Metrics.tsx",
         "src/lib/metrics/MetricsService.ts",
+        // Phase 9: EPUB import
+        "src/features/import/types.ts",
+        "src/features/import/epub-reader.ts",
+        "src/features/import/epub-scanner.ts",
+        "src/features/import/project-assets-repo.ts",
+        "src/features/import/epub-project-repo.ts",
+        "src/features/import/epub-normalizer.ts",
+        "src/features/import/epub-import-service.ts",
+        "src/features/import/xhtml-to-editor.ts",
+        // Phase 10: Project-aware export
+        "src/features/export/project-epub-generator.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

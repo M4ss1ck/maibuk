@@ -1,10 +1,57 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "../../../../components/notes/NoteEditor";
 import type { Note } from "../../../../features/notes";
+import type { Book } from "../../../../features/books/types";
 
-const { mockEditor } = vi.hoisted(() => ({
+const { mockEditor, mockNotes, mockBooks, mockListAllChaptersForLinking } = vi.hoisted(() => ({
   mockEditor: vi.fn((_: unknown) => <div />),
+  mockListAllChaptersForLinking: vi.fn(() =>
+    Promise.resolve([
+      {
+        id: "chapter-1",
+        bookId: "book-1",
+        title: "Opening Chapter",
+        content: '<h2 id="h-opening">Opening Scene</h2><p>Body</p>',
+      },
+    ]),
+  ),
+  mockNotes: [
+    {
+      id: "note-1",
+      title: "Current",
+      content: "<p>Current body</p>",
+      tags: [],
+      pinned: false,
+      order: 0,
+      wordCount: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    {
+      id: "note-2",
+      title: "Research Note",
+      content: '<h2 id="h-research">Research Question</h2><p>Research body</p>',
+      tags: [],
+      pinned: false,
+      order: 1,
+      wordCount: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ] satisfies Note[],
+  mockBooks: [
+    {
+      id: "book-1",
+      title: "Novel Draft",
+      authorName: "Author",
+      language: "en",
+      wordCount: 100,
+      status: "draft",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ] satisfies Book[],
 }));
 
 vi.mock("react-i18next", () => ({
@@ -42,6 +89,19 @@ vi.mock("../../../../components/ThemeToggle", () => ({
 
 vi.mock("../../../../lib/platform", () => ({
   IS_TAURI: false,
+  createDatabase: vi.fn(() =>
+    Promise.resolve({
+      execute: vi.fn(() => Promise.resolve({ rowsAffected: 0 })),
+      select: vi.fn(() => Promise.resolve([])),
+      close: vi.fn(() => Promise.resolve()),
+      exportData: vi.fn(() => Promise.resolve(new Uint8Array())),
+      importData: vi.fn(() => Promise.resolve()),
+    }),
+  ),
+}));
+
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock("../../../../components/editor", () => ({
@@ -54,7 +114,35 @@ vi.mock("../../../../components/editor", () => ({
 }));
 
 vi.mock("../../../../features/notes/store", () => ({
-  useNoteStore: (selector: (state: { notes: Note[] }) => unknown) => selector({ notes: [] }),
+  useNoteStore: (selector: (state: { notes: Note[] }) => unknown) => selector({ notes: mockNotes }),
+}));
+
+vi.mock("../../../../features/books/store", () => ({
+  useBookStore: (selector?: (state: { books: Book[] }) => unknown) => {
+    const state = { books: mockBooks };
+    return selector ? selector(state) : state;
+  },
+}));
+
+vi.mock("../../../../features/chapters/store", () => ({
+  listAllChaptersForLinking: mockListAllChaptersForLinking,
+  listChaptersForBookLinking: vi.fn(() =>
+    Promise.resolve([
+      {
+        id: "chapter-1",
+        bookId: "book-1",
+        title: "Opening Chapter",
+      },
+    ]),
+  ),
+  getChapterForLinking: vi.fn(() =>
+    Promise.resolve({
+      id: "chapter-1",
+      bookId: "book-1",
+      title: "Opening Chapter",
+      content: '<h2 id="h-opening">Opening Scene</h2><p>Body</p>',
+    }),
+  ),
 }));
 
 function buildNote(overrides: Partial<Note>): Note {
@@ -72,6 +160,11 @@ function buildNote(overrides: Partial<Note>): Note {
 }
 
 describe("NoteEditor extensions", () => {
+  beforeEach(() => {
+    mockEditor.mockClear();
+    mockListAllChaptersForLinking.mockClear();
+  });
+
   it("passes task-list and collapsible-heading extensions to the shared Editor", () => {
     render(
       <NoteEditor
@@ -86,7 +179,7 @@ describe("NoteEditor extensions", () => {
     };
 
     expect(Array.isArray(props?.extraExtensions)).toBe(true);
-    expect(props.extraExtensions).toHaveLength(4);
+    expect(props.extraExtensions).toHaveLength(5);
 
     const taskItemExtension = props.extraExtensions?.[1] as {
       options?: {
@@ -120,5 +213,106 @@ describe("NoteEditor extensions", () => {
       expandLabel: "Expand heading",
     });
     expect(typeof collapsibleHeading.config?.addProseMirrorPlugins).toBe("function");
+  });
+
+  it("passes notes and books as internal link targets to the shared Editor", () => {
+    render(
+      <NoteEditor
+        note={buildNote({ id: "note-1" })}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const props = mockEditor.mock.calls[0]?.[0] as {
+      internalTargets?: unknown[];
+    };
+
+    expect(props.internalTargets).toEqual([
+      { type: "note", noteId: "note-1", title: "Current" },
+      { type: "note", noteId: "note-2", title: "Research Note" },
+      { type: "book", bookId: "book-1", title: "Novel Draft" },
+    ]);
+  });
+
+  it("does not eagerly load all chapter and heading targets", async () => {
+    render(
+      <NoteEditor
+        note={buildNote({ id: "note-1" })}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
+      />,
+    );
+
+    await Promise.resolve();
+
+    expect(mockListAllChaptersForLinking).not.toHaveBeenCalled();
+  });
+
+  it("passes a lazy loader for book, chapter, and note children", async () => {
+    render(
+      <NoteEditor
+        note={buildNote({ id: "note-1" })}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const props = mockEditor.mock.calls[0]?.[0] as {
+      loadInternalTargetChildren?: (target: {
+        type: string;
+        bookId?: string;
+        chapterId?: string;
+        noteId?: string;
+        title: string;
+      }) => Promise<unknown[]>;
+    };
+
+    expect(props.loadInternalTargetChildren).toBeTypeOf("function");
+
+    await expect(
+      props.loadInternalTargetChildren?.({
+        type: "book",
+        bookId: "book-1",
+        title: "Novel Draft",
+      }),
+    ).resolves.toEqual([
+      {
+        type: "chapter",
+        chapterId: "chapter-1",
+        title: "Opening Chapter",
+        headingId: null,
+      },
+    ]);
+
+    await expect(
+      props.loadInternalTargetChildren?.({
+        type: "chapter",
+        chapterId: "chapter-1",
+        title: "Opening Chapter",
+      }),
+    ).resolves.toEqual([
+      {
+        type: "heading",
+        chapterId: "chapter-1",
+        title: "Opening Scene",
+        headingId: "h-opening",
+      },
+    ]);
+
+    await expect(
+      props.loadInternalTargetChildren?.({
+        type: "note",
+        noteId: "note-2",
+        title: "Research Note",
+      }),
+    ).resolves.toEqual([
+      {
+        type: "noteHeading",
+        noteId: "note-2",
+        title: "Research Question",
+        headingId: "h-research",
+      },
+    ]);
   });
 });

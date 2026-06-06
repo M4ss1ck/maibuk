@@ -92,7 +92,29 @@
     "language": "Idioma",
     "targetWordCount": "Meta de palabras",
     "targetWordCountPlaceholder": "ej: 80000",
+    "importEpub": "Importar EPUB",
+    "importShort": "Importar",
     "loading": "Cargando..."
+  },
+  "import": {
+    "title": "Importar EPUB",
+    "action": "Importar EPUB",
+    "importing": "Importando...",
+    "scanning": "Analizando...",
+    "chapters": "Capítulos",
+    "assets": "Recursos",
+    "styles": "Estilos",
+    "metadata": "Metadatos",
+    "cleanReport": "Este EPUB se puede importar sin advertencias de compatibilidad.",
+    "compatibilityReport": "Reporte de compatibilidad",
+    "reportUnsupported": "Reportar función no soportada",
+    "acknowledgeWarnings": "Aceptar advertencias de compatibilidad",
+    "severity": {
+      "blocking": "Bloqueante",
+      "lossy": "Con pérdida",
+      "converted": "Convertido",
+      "info": "Información"
+    }
   },
   "chapters": {
     "title": "Capítulos",
@@ -133,7 +155,8 @@
     "emptyEditorTitle": "Una página en blanco",
     "emptyEditorBody": "Selecciona una nota de la lista o captura una nueva idea.",
     "collapseHeading": "Contraer encabezado",
-    "expandHeading": "Expandir encabezado"
+    "expandHeading": "Expandir encabezado",
+    "backlinks": "Enlazado desde"
   },
   "editor": {
     "loading": "Cargando libro...",
@@ -163,6 +186,15 @@
     "displayText": "Texto a Mostrar",
     "optional": "(opcional)",
     "leaveEmpty": "Dejar vacío para usar el texto seleccionado",
+    "linkExternalUrl": "URL",
+    "linkInThisBook": "En este libro",
+    "searchTargets": "Buscar notas, libros, capítulos y encabezados…",
+    "linkTargetNote": "Nota",
+    "linkTargetBook": "Libro",
+    "linkTargetChapter": "Capítulo",
+    "linkTargetHeading": "Encabezado",
+    "expandLinkTarget": "Expandir",
+    "collapseLinkTarget": "Contraer",
     "findReplace": "Buscar y Reemplazar",
     "insertImage": "Insertar Imagen",
     "insertLink": "Insertar Enlace",
@@ -293,6 +325,10 @@
     "includeTOC": "Incluir Tabla de Contenidos",
     "numberedTOC": "Numerar capítulos en la TOC",
     "prependChapterTitles": "Anteponer títulos de capítulos",
+    "projectEpubOptions": "Opciones de EPUB importado",
+    "useMaibukStyles": "Usar estilos predeterminados de Maibuk",
+    "includeImportedStyles": "Incluir CSS importado",
+    "generateMaibukToc": "Generar TOC de Maibuk",
     "numberChapters": "Numerar capítulos",
     "includePageNumbers": "Incluir números de página",
     "pageSize": "Tamaño de página",

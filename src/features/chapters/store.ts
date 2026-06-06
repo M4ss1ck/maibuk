@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
+import { assignHeadingIds } from "../links/heading-ids";
+import { reindexSource } from "../links/link-index";
 import type {
   Chapter,
   CreateChapterInput,
@@ -158,11 +160,13 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
       values.push(input.title);
     }
     if (input.content !== undefined) {
+      const normalized = assignHeadingIds(input.content);
+      input = { ...input, content: normalized.html };
       updates.push("content = ?");
-      values.push(input.content);
+      values.push(normalized.html);
 
       // Calculate word count from content
-      const text = input.content.replace(/<[^>]*>/g, " ");
+      const text = normalized.html.replace(/<[^>]*>/g, " ");
       const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length;
       updates.push("word_count = ?");
       values.push(wordCount);
@@ -216,6 +220,20 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
             }
           : state.currentChapter,
     }));
+
+    if (input.content !== undefined) {
+      const bookId =
+        get().chapters.find((c) => c.id === id)?.bookId ??
+        get().currentChapter?.bookId ??
+        get().currentBookId ??
+        undefined;
+      await reindexSource({
+        sourceType: "chapter",
+        sourceId: id,
+        sourceBookId: bookId,
+        contentHtml: input.content,
+      }).catch(() => {});
+    }
   },
 
   deleteChapter: async (id: string) => {
@@ -274,3 +292,54 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
     set({ currentChapter: chapter });
   },
 }));
+
+export async function listAllChaptersForLinking(): Promise<
+  { id: string; bookId: string; title: string; content: string | null }[]
+> {
+  const db = await getDatabase();
+  const rows = await db.select<
+    { id: string; book_id: string; title: string; content: string | null }[]
+  >("SELECT id, book_id, title, content FROM chapters");
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    title: r.title,
+    content: r.content,
+  }));
+}
+
+export async function listChaptersForBookLinking(
+  bookId: string,
+): Promise<{ id: string; bookId: string; title: string }[]> {
+  const db = await getDatabase();
+  const rows = await db.select<
+    { id: string; book_id: string; title: string }[]
+  >(
+    'SELECT id, book_id, title FROM chapters WHERE book_id = ? ORDER BY "order" ASC',
+    [bookId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    title: r.title,
+  }));
+}
+
+export async function getChapterForLinking(
+  chapterId: string,
+): Promise<{ id: string; bookId: string; title: string; content: string | null } | null> {
+  const db = await getDatabase();
+  const rows = await db.select<
+    { id: string; book_id: string; title: string; content: string | null }[]
+  >("SELECT id, book_id, title, content FROM chapters WHERE id = ? LIMIT 1", [
+    chapterId,
+  ]);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    bookId: row.book_id,
+    title: row.title,
+    content: row.content,
+  };
+}

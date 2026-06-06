@@ -8,6 +8,7 @@ import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "../../features/notes";
 import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
+import type { InternalTarget, InternalTargetChildrenLoader } from "../editor/LinkDialog";
 import { CollapsibleHeading } from "../editor/extensions";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
@@ -18,6 +19,19 @@ import { ThemeToggle } from "../ThemeToggle";
 import { SyncStatusButton } from "../sync/SyncStatusButton";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
+import { useNavigate } from "react-router-dom";
+import { isInternalLink, parseLinkUri } from "../../features/links/link-uri";
+import { navigateToLinkTarget } from "../../features/links/navigate";
+import { Wikilink } from "../editor/extensions";
+import { createWikilinkRenderer } from "../editor/WikilinkSuggestion";
+import { buildWikilinkCandidates } from "../../features/links/wikilink-targets";
+import { useBookStore } from "../../features/books/store";
+import { assignHeadingIds } from "../../features/links/heading-ids";
+import {
+  getChapterForLinking,
+  listChaptersForBookLinking,
+} from "../../features/chapters/store";
+import { NoteBacklinks } from "./NoteBacklinks";
 
 let activeTaskHandleDragSourcePos: number | null = null;
 
@@ -196,9 +210,86 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
   const notes = useNoteStore((s) => s.notes);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
-
+  const books = useBookStore((s) => s.books);
+  const navigate = useNavigate();
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
+
+  const wikilinkExtension = useMemo(
+    () =>
+      Wikilink.configure({
+        suggestion: {
+          items: ({ query }: { query: string }) =>
+            buildWikilinkCandidates(query, {
+              notes: notes.map((n) => ({ id: n.id, title: n.title })),
+              books: books.map((b) => ({ id: b.id, title: b.title })),
+              chapters: [],
+              headings: [],
+            }),
+          onCreateNote: async (title: string) => {
+            const created = await useNoteStore.getState().createNote({ title });
+            return { noteId: created.id };
+          },
+          render: createWikilinkRenderer(),
+        },
+      }),
+    [notes, books],
+  );
+
+  const internalTargets = useMemo<InternalTarget[]>(
+    () => [
+      ...notes.map((n) => ({ type: "note" as const, noteId: n.id, title: n.title })),
+      ...books.map((b) => ({ type: "book" as const, bookId: b.id, title: b.title })),
+    ],
+    [notes, books],
+  );
+
+  const loadInternalTargetChildren = useCallback<InternalTargetChildrenLoader>(
+    async (target) => {
+      if (target.type === "book") {
+        const chapters = await listChaptersForBookLinking(target.bookId);
+        return chapters.map((chapter) => ({
+          type: "chapter" as const,
+          chapterId: chapter.id,
+          title: chapter.title,
+          headingId: null,
+        }));
+      }
+
+      if (target.type === "chapter") {
+        const chapter = await getChapterForLinking(target.chapterId);
+        if (!chapter) return [];
+        return assignHeadingIds(chapter.content).headings.map((heading) => ({
+          type: "heading" as const,
+          chapterId: chapter.id,
+          title: heading.text,
+          headingId: heading.id,
+        }));
+      }
+
+      if (target.type === "note") {
+        const targetNote =
+          target.noteId === note.id
+            ? { ...note, content: contentRef.current }
+            : notes.find((existingNote) => existingNote.id === target.noteId);
+        if (!targetNote) return [];
+        return assignHeadingIds(targetNote.content).headings.map((heading) => ({
+          type: "noteHeading" as const,
+          noteId: target.noteId,
+          title: heading.text,
+          headingId: heading.id,
+        }));
+      }
+
+      return [];
+    },
+    [note, notes],
+  );
+
+  const resolveBookIdForChapter = useCallback(async (chapterId: string) => {
+    const chapter = await getChapterForLinking(chapterId);
+    return chapter?.bookId;
+  }, []);
 
   const saveNow = useCallback(
     async (extra: Partial<UpdateNoteInput> = {}) => {
@@ -245,6 +336,46 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
     setWordCount(count);
   }, []);
 
+  const handleEditorReady = useCallback(
+    (editor: import("@tiptap/core").Editor | null) => {
+      if (!editor) return;
+      const dom = editor.view.dom;
+      const onClick = (event: MouseEvent) => {
+        const target = (event.target as HTMLElement).closest("a.wikilink");
+        if (!(target instanceof HTMLAnchorElement)) return;
+        const href = target.getAttribute("href");
+        if (href && isInternalLink(href)) {
+          event.preventDefault();
+          const parsed = parseLinkUri(href);
+          if (parsed?.targetType === "chapter" || parsed?.targetType === "heading") {
+            void getChapterForLinking(parsed.targetId).then((chapter) => {
+              navigateToLinkTarget(href, navigate, {
+                bookIdForChapter: () => chapter?.bookId,
+              });
+            });
+            return;
+          }
+          navigateToLinkTarget(href, navigate);
+        } else {
+          const broken = (event.target as HTMLElement).closest("a.wikilink-broken");
+          if (broken instanceof HTMLAnchorElement) {
+            event.preventDefault();
+            const label = broken.getAttribute("data-label") ?? broken.textContent ?? "";
+            if (!label) return;
+            void useNoteStore
+              .getState()
+              .createNote({ title: label })
+              .then((created) => {
+                navigate("/notes", { state: { openNoteId: created.id } });
+              });
+          }
+        }
+      };
+      dom.addEventListener("click", onClick);
+    },
+    [navigate],
+  );
+
   const notesExtensions = useMemo(
     () => [
       TaskList,
@@ -258,6 +389,11 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
       }),
     ],
     [t]
+  );
+
+  const allNotesExtensions = useMemo(
+    () => [...notesExtensions, wikilinkExtension],
+    [notesExtensions, wikilinkExtension],
   );
 
   const allTags = useMemo(() => {
@@ -339,7 +475,11 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         onUpdate={handleContentUpdate}
         onWordCountChange={handleWordCountChange}
         placeholder={t("notes.bodyPlaceholder")}
-        extraExtensions={notesExtensions}
+        extraExtensions={allNotesExtensions}
+        internalTargets={internalTargets}
+        onEditorReady={handleEditorReady}
+        loadInternalTargetChildren={loadInternalTargetChildren}
+        resolveBookIdForChapter={resolveBookIdForChapter}
         headerContent={
           <div className="px-8 pt-6 max-w-editor-max mx-auto w-full">
             <input
@@ -376,6 +516,12 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
             </div>
           </div>
         }
+      />
+      <NoteBacklinks
+        noteId={note.id}
+        onOpen={(sourceId) => {
+          void useNoteStore.getState().loadNote(sourceId);
+        }}
       />
     </div>
   );

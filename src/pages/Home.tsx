@@ -3,22 +3,35 @@ import { useNavigate } from "react-router-dom";
 import { useBookStore } from "../features/books/store";
 import { BookCard } from "../components/project/BookCard";
 import { NewBookDialog } from "../components/project/NewBookDialog";
+import { EpubImportDialog } from "../components/import";
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
 import { AddIcon } from "../components/icons";
-import { Download } from "lucide-react";
-import { IS_WEB } from "../lib/platform";
+import { Download, FileUp } from "lucide-react";
+import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "../lib/platform";
 import { DOWNLOAD_PAGE } from "../constants";
 import { KeyboardShortcut } from "../components/ui";
 import { isModKey, isTypingTarget } from "../lib/keyboard";
 import { useShortcuts } from "../lib/shortcuts";
+import { scanEpubForImport } from "../features/import/epub-import-service";
+import type { CompatibilityReport, ImportPreview } from "../features/import";
 import logo from "../../src-tauri/icons/icon.png";
+
+interface EpubImportState {
+  bytes: Uint8Array;
+  fileName: string;
+  report: CompatibilityReport;
+  preview: ImportPreview;
+}
 
 export function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [isNewBookOpen, setIsNewBookOpen] = useState(false);
   const [focusedBookIndex, setFocusedBookIndex] = useState(0);
+  const [epubImport, setEpubImport] = useState<EpubImportState | null>(null);
+  const [isScanningEpub, setIsScanningEpub] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const { books, isLoading, loadBooks } = useBookStore();
 
@@ -85,6 +98,47 @@ export function Home() {
     navigate(`/book/${bookId}`);
   };
 
+  const handleImportEpub = async () => {
+    setImportError(null);
+    setIsScanningEpub(true);
+    try {
+      let file: { name: string; data: Uint8Array } | null = null;
+      if (IS_WEB) {
+        const dialog = await getWebDialog();
+        file = await dialog.openWithData({
+          filters: [{ name: "EPUB", extensions: ["epub"] }],
+        });
+      } else {
+        const dialog = await getDialog();
+        const path = await dialog.open({
+          filters: [{ name: "EPUB", extensions: ["epub"] }],
+        });
+        if (path) {
+          const fs = await getFileSystem();
+          file = { name: path.split("/").pop() ?? path, data: await fs.readFile(path) };
+        }
+      }
+
+      if (!file) return;
+
+      const scan = await scanEpubForImport(file.data);
+      setEpubImport({
+        bytes: file.data,
+        fileName: file.name,
+        report: scan.report,
+        preview: scan.preview,
+      });
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsScanningEpub(false);
+    }
+  };
+
+  const handleBookImported = (bookId: string) => {
+    navigate(`/book/${bookId}`);
+  };
+
   if (isLoading && books.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -108,6 +162,18 @@ export function Home() {
               <span className="hidden sm:inline">{t("nav.downloadApp")}</span>
             </Button>
           )}
+          <Button
+            variant="secondary"
+            onClick={handleImportEpub}
+            className="text-sm"
+            disabled={isScanningEpub}
+          >
+            <FileUp className="w-5 h-5" />
+            <span className="hidden sm:inline">
+              {isScanningEpub ? t("import.scanning") : t("books.importEpub")}
+            </span>
+            <span className="sm:hidden">{t("books.importShort")}</span>
+          </Button>
           <Button onClick={() => setIsNewBookOpen(true)} className="text-sm">
             <AddIcon className="w-5 h-5" />
             <span className="hidden sm:inline">{t("books.newBook")}</span>
@@ -154,11 +220,28 @@ export function Home() {
         </div>
       )}
 
+      {importError && (
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md rounded-lg border border-destructive/30 bg-background px-4 py-3 text-sm text-destructive shadow-lg">
+          {importError}
+        </div>
+      )}
+
       <NewBookDialog
         isOpen={isNewBookOpen}
         onClose={() => setIsNewBookOpen(false)}
         onSuccess={handleBookCreated}
       />
+      {epubImport && (
+        <EpubImportDialog
+          isOpen={true}
+          bytes={epubImport.bytes}
+          fileName={epubImport.fileName}
+          report={epubImport.report}
+          preview={epubImport.preview}
+          onClose={() => setEpubImport(null)}
+          onImported={handleBookImported}
+        />
+      )}
     </div>
   );
 }

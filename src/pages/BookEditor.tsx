@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
@@ -56,6 +56,7 @@ export function BookEditor() {
   const { t } = useTranslation();
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Stores
   const {
@@ -134,6 +135,34 @@ export function BookEditor() {
       setCurrentChapter(lastEditedChapter ?? chapters[chapters.length - 1]);
     }
   }, [chapters, currentChapter, currentBook, bookId, setCurrentChapter]);
+
+  // Deep-link: open target chapter and scroll to heading from navigation state
+  useEffect(() => {
+    const state = location.state as {
+      openChapterId?: string;
+      scrollToHeadingId?: string;
+    } | null;
+    if (!state?.openChapterId || chapters.length === 0) return;
+
+    const target = chapters.find((c) => c.id === state.openChapterId);
+    if (target) {
+      setCurrentChapter(target);
+      if (state.scrollToHeadingId) {
+        const headingId = state.scrollToHeadingId;
+        // Wait for the editor to render the chapter, then scroll to the anchor.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            document.getElementById(headingId)?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          });
+        });
+      }
+    }
+    // Clear the navigation state so re-renders don't re-trigger.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [chapters, location, navigate, setCurrentChapter]);
 
   // Update word count display and sync editor content ref when chapter changes
   useEffect(() => {

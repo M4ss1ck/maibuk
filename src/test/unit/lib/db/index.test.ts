@@ -53,6 +53,29 @@ describe("src/lib/db/index.ts", () => {
       expect(mockCreateDatabase).not.toHaveBeenCalled();
       expect(db).toBe(mockDb);
     });
+
+    it("creates EPUB project tables and indexes during initialization", async () => {
+      const { getDatabase } = await import("../../../../lib/db");
+
+      await getDatabase();
+
+      const executedSql = mockDb.execute.mock.calls.map(([sql]) => sql);
+      expect(executedSql).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining("CREATE TABLE IF NOT EXISTS project_assets"),
+          expect.stringContaining("CREATE TABLE IF NOT EXISTS book_metadata"),
+          expect.stringContaining("CREATE TABLE IF NOT EXISTS book_styles"),
+          expect.stringContaining("CREATE TABLE IF NOT EXISTS epub_structures"),
+          expect.stringContaining("CREATE TABLE IF NOT EXISTS chapter_epub_meta"),
+          expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_project_assets_book_id"),
+          expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_project_assets_book_href"),
+          expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_book_metadata_book_id"),
+          expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_book_styles_book_id"),
+          expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_epub_structures_book_id"),
+          expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_chapter_epub_meta_book_id"),
+        ])
+      );
+    });
   });
 
   describe("waitForDatabaseReady()", () => {

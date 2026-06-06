@@ -29,6 +29,12 @@ describe("useChapterStore", () => {
     testDb = await createTestDatabase();
     mockGetDatabase.mockResolvedValue(testDb);
     await seedBook(testDb);
+    await testDb.execute(`
+      CREATE TABLE IF NOT EXISTS links (
+        id TEXT PRIMARY KEY, source_type TEXT NOT NULL, source_id TEXT NOT NULL, source_book_id TEXT,
+        target_type TEXT NOT NULL, target_id TEXT NOT NULL, target_heading_id TEXT, label TEXT,
+        resolved INTEGER DEFAULT 1, updated_at INTEGER NOT NULL
+      )`);
 
     useChapterStore.setState({
       chapters: [],

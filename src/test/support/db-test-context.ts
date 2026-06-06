@@ -60,11 +60,28 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
   }
 
   async exportData(): Promise<Uint8Array> {
-    const [books, chapters, bookVersions, notes, syncTombstones, coverTemplates, settings] =
-      await Promise.all([
+    const [
+      books,
+      chapters,
+      bookVersions,
+      projectAssets,
+      bookMetadata,
+      bookStyles,
+      epubStructures,
+      chapterEpubMeta,
+      notes,
+      syncTombstones,
+      coverTemplates,
+      settings,
+    ] = await Promise.all([
       this.select<Record<string, unknown>[]>("SELECT * FROM books"),
       this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
       this.select<Record<string, unknown>[]>("SELECT * FROM book_versions"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM project_assets"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM book_metadata"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM book_styles"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM epub_structures"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM chapter_epub_meta"),
       this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
       this.select<Record<string, unknown>[]>("SELECT * FROM sync_tombstones"),
       this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
@@ -84,6 +101,21 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
       "",
       "-- Book Versions",
       generateInsertStatements("book_versions", bookVersions),
+      "",
+      "-- Project Assets",
+      generateInsertStatements("project_assets", projectAssets),
+      "",
+      "-- Book Metadata",
+      generateInsertStatements("book_metadata", bookMetadata),
+      "",
+      "-- Book Styles",
+      generateInsertStatements("book_styles", bookStyles),
+      "",
+      "-- EPUB Structures",
+      generateInsertStatements("epub_structures", epubStructures),
+      "",
+      "-- Chapter EPUB Metadata",
+      generateInsertStatements("chapter_epub_meta", chapterEpubMeta),
       "",
       "-- Notes",
       generateInsertStatements("notes", notes),
@@ -176,6 +208,78 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   `);
 
   await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS project_assets (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      href TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      role TEXT,
+      data_base64 TEXT,
+      text_content TEXT,
+      size_bytes INTEGER,
+      checksum TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS book_metadata (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      namespace TEXT,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      attributes_json TEXT,
+      "order" INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS book_styles (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      css TEXT NOT NULL,
+      source_href TEXT,
+      is_default INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS epub_structures (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      epub_version TEXT,
+      package_path TEXT NOT NULL,
+      manifest_json TEXT NOT NULL,
+      spine_json TEXT NOT NULL,
+      nav_json TEXT,
+      compatibility_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS chapter_epub_meta (
+      chapter_id TEXT PRIMARY KEY REFERENCES chapters(id) ON DELETE CASCADE,
+      book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      href TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      nav_title TEXT,
+      spine_index INTEGER NOT NULL,
+      linear INTEGER DEFAULT 1,
+      capabilities_json TEXT
+    )
+  `);
+
+  await adapter.execute(`
     CREATE TABLE IF NOT EXISTS cover_templates (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -222,6 +326,21 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     )
   `);
 
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS links (
+      id TEXT PRIMARY KEY,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      source_book_id TEXT,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      target_heading_id TEXT,
+      label TEXT,
+      resolved INTEGER DEFAULT 1,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)`);
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_chapters_order ON chapters(book_id, "order")`
@@ -230,9 +349,27 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     `CREATE INDEX IF NOT EXISTS idx_book_versions_book ON book_versions(book_id, created_at DESC)`
   );
   await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_project_assets_book_id ON project_assets(book_id)`
+  );
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_project_assets_book_href ON project_assets(book_id, href)`
+  );
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_book_metadata_book_id ON book_metadata(book_id)`
+  );
+  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_book_styles_book_id ON book_styles(book_id)`);
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_epub_structures_book_id ON epub_structures(book_id)`
+  );
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_chapter_epub_meta_book_id ON chapter_epub_meta(book_id)`
+  );
+  await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_sync_tombstones_pending
       ON sync_tombstones(entity_type, pushed_at, confirmed_at)`
   );
+  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id)`);
+  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)`);
 
   return adapter;
 }

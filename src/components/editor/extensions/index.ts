@@ -6,3 +6,5 @@ export { Indent } from "./Indent";
 export { SpellCheck } from "./SpellCheck";
 export { CollapsibleHeading } from "./CollapsibleHeading";
 export { CopyHandler } from "./CopyHandler";
+export { HeadingId } from "./HeadingId";
+export { Wikilink } from "./Wikilink";

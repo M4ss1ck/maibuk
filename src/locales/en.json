@@ -92,7 +92,29 @@
     "language": "Language",
     "targetWordCount": "Target Word Count",
     "targetWordCountPlaceholder": "e.g. 80000",
+    "importEpub": "Import EPUB",
+    "importShort": "Import",
     "loading": "Loading..."
+  },
+  "import": {
+    "title": "Import EPUB",
+    "action": "Import EPUB",
+    "importing": "Importing...",
+    "scanning": "Scanning...",
+    "chapters": "Chapters",
+    "assets": "Assets",
+    "styles": "Styles",
+    "metadata": "Metadata",
+    "cleanReport": "This EPUB can be imported without compatibility warnings.",
+    "compatibilityReport": "Compatibility report",
+    "reportUnsupported": "Report unsupported feature",
+    "acknowledgeWarnings": "Acknowledge compatibility warnings",
+    "severity": {
+      "blocking": "Blocking",
+      "lossy": "Lossy",
+      "converted": "Converted",
+      "info": "Info"
+    }
   },
   "chapters": {
     "title": "Chapters",
@@ -133,7 +155,8 @@
     "emptyEditorTitle": "A clean page",
     "emptyEditorBody": "Select a note from the list, or capture a new thought.",
     "collapseHeading": "Collapse heading",
-    "expandHeading": "Expand heading"
+    "expandHeading": "Expand heading",
+    "backlinks": "Linked from"
   },
   "editor": {
     "loading": "Loading book...",
@@ -163,6 +186,15 @@
     "displayText": "Display Text",
     "optional": "(optional)",
     "leaveEmpty": "Leave empty to use selected text",
+    "linkExternalUrl": "URL",
+    "linkInThisBook": "In this book",
+    "searchTargets": "Search notes, books, chapters, and headings…",
+    "linkTargetNote": "Note",
+    "linkTargetBook": "Book",
+    "linkTargetChapter": "Chapter",
+    "linkTargetHeading": "Heading",
+    "expandLinkTarget": "Expand",
+    "collapseLinkTarget": "Collapse",
     "findReplace": "Find & Replace",
     "insertImage": "Insert Image",
     "insertLink": "Insert Link",
@@ -293,6 +325,10 @@
     "includeTOC": "Include Table of Contents",
     "numberedTOC": "Number chapters in TOC",
     "prependChapterTitles": "Prepend chapter titles",
+    "projectEpubOptions": "Imported EPUB options",
+    "useMaibukStyles": "Use Maibuk default styling",
+    "includeImportedStyles": "Include imported CSS",
+    "generateMaibukToc": "Generate Maibuk TOC",
     "numberChapters": "Number chapters",
     "includePageNumbers": "Include page numbers",
     "pageSize": "Page size",

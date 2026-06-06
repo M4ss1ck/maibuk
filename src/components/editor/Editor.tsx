@@ -34,8 +34,12 @@ import { CopyHandler } from "./extensions/CopyHandler";
 import { SpellCheck } from "./extensions/SpellCheck";
 import { Footnote } from "./extensions/Footnote";
 import { MetricsObserver } from "./extensions/MetricsObserver";
+import { HeadingId } from "./extensions/HeadingId";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
+import { useChapterStore } from "../../features/chapters/store";
+import { assignHeadingIds } from "../../features/links/heading-ids";
+import type { InternalTarget, InternalTargetChildrenLoader } from "./LinkDialog";
 import { setContentSilently } from "../../features/metrics/programmatic";
 
 export interface EditorStats {
@@ -57,6 +61,11 @@ interface EditorProps {
   showInlineFootnotes?: boolean;
   bookId?: string | null;
   chapterId?: string | null;
+  internalTargets?: InternalTarget[];
+  loadInternalTargetChildren?: InternalTargetChildrenLoader;
+  resolveBookIdForChapter?: (
+    chapterId: string,
+  ) => string | undefined | Promise<string | undefined>;
   extraExtensions?: Extensions;
   headerContent?: React.ReactNode;
   onEditorReady?: (editor: TiptapEditor | null) => void;
@@ -75,6 +84,9 @@ export function Editor({
   showInlineFootnotes = true,
   bookId = null,
   chapterId = null,
+  internalTargets: providedInternalTargets = [],
+  loadInternalTargetChildren: providedLoadInternalTargetChildren,
+  resolveBookIdForChapter,
   extraExtensions,
   headerContent,
   onEditorReady,
@@ -85,6 +97,35 @@ export function Editor({
   );
   const language = useSettingsStore((state) => state.language);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
+  const chapters = useChapterStore((s) => s.chapters);
+  const bookInternalTargets: InternalTarget[] = bookId
+    ? chapters.map((c) => ({
+        type: "chapter" as const,
+        chapterId: c.id,
+        title: c.title,
+        headingId: null,
+      }))
+    : [];
+  const internalTargets = [...providedInternalTargets, ...bookInternalTargets];
+  const loadInternalTargetChildren = useCallback<InternalTargetChildrenLoader>(
+    async (target) => {
+      if (providedLoadInternalTargetChildren) {
+        return providedLoadInternalTargetChildren(target);
+      }
+
+      if (target.type !== "chapter") return [];
+      const chapter = chapters.find((candidate) => candidate.id === target.chapterId);
+      if (!chapter) return [];
+
+      return assignHeadingIds(chapter.content).headings.map((heading) => ({
+        type: "heading" as const,
+        chapterId: chapter.id,
+        title: heading.text,
+        headingId: heading.id,
+      }));
+    },
+    [chapters, providedLoadInternalTargetChildren],
+  );
   const appliedContentRef = useRef(content);
   const editor = useEditor({
     extensions: [
@@ -96,6 +137,7 @@ export function Editor({
         link: false,
         underline: false,
       }),
+      HeadingId,
       Placeholder.configure({
         placeholder,
         emptyEditorClass: "is-editor-empty",
@@ -130,6 +172,7 @@ export function Editor({
       }),
       Link.configure({
         openOnClick: false,
+        protocols: ["maibuk"],
         HTMLAttributes: {
           class: "editor-link",
         },
@@ -265,6 +308,9 @@ export function Editor({
         <EditorToolbar
           editor={editor}
           onContextMenuOpenChange={setIsContextMenuOpen}
+          bookId={bookId}
+          internalTargets={internalTargets}
+          loadInternalTargetChildren={loadInternalTargetChildren}
         />
       )}
 
@@ -284,7 +330,10 @@ export function Editor({
         </div>
       </div>
 
-      <LinkClickHandler editor={editor} />
+      <LinkClickHandler
+        editor={editor}
+        resolveBookIdForChapter={resolveBookIdForChapter}
+      />
       <ImageContextMenu editor={editor} />
 
       {/* Floating selection toolbar — hidden when the context menu is open */}
@@ -298,6 +347,9 @@ export function Editor({
         editor={editor}
         isOpen={showBubbleLinkDialog}
         onClose={() => setShowBubbleLinkDialog(false)}
+        bookId={bookId}
+        internalTargets={internalTargets}
+        loadInternalTargetChildren={loadInternalTargetChildren}
       />
     </div>
   );

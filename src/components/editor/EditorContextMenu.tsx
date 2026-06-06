@@ -12,6 +12,7 @@ interface EditorContextMenuProps {
   editor: Editor;
   onInspect: (blockIndex: number) => void;
   onLookup: (word: string) => void;
+  onEditLink?: () => void;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -40,6 +41,7 @@ export function EditorContextMenu({
   editor,
   onInspect,
   onLookup,
+  onEditLink,
   onOpenChange,
 }: EditorContextMenuProps) {
   const { t } = useTranslation();
@@ -58,6 +60,21 @@ export function EditorContextMenu({
     (event: MouseEvent) => {
       // Skip if another handler already claimed this event (e.g. ImageContextMenu)
       if (event.defaultPrevented) return;
+
+      const target = event.target as HTMLElement;
+      const link = target.closest("a.editor-link");
+      if (link && onEditLink) {
+        const pos = editor.view.posAtCoords({
+          left: event.clientX,
+          top: event.clientY,
+        });
+        if (!pos) return;
+
+        event.preventDefault();
+        editor.chain().setTextSelection(pos.pos).extendMarkRange("link").run();
+        onEditLink();
+        return;
+      }
 
       const pos = editor.view.posAtCoords({
         left: event.clientX,
@@ -144,7 +161,7 @@ export function EditorContextMenu({
         });
       }
     },
-    [editor, consumeProbe]
+    [editor, consumeProbe, onEditLink]
   );
 
   // Register contextmenu listener (bubble phase). The pointerdown listener for
