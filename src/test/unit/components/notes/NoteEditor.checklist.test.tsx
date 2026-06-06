@@ -42,6 +42,19 @@ vi.mock("../../../../components/ThemeToggle", () => ({
 
 vi.mock("../../../../lib/platform", () => ({
   IS_TAURI: false,
+  createDatabase: vi.fn(() =>
+    Promise.resolve({
+      execute: vi.fn(() => Promise.resolve({ rowsAffected: 0 })),
+      select: vi.fn(() => Promise.resolve([])),
+      close: vi.fn(() => Promise.resolve()),
+      exportData: vi.fn(() => Promise.resolve(new Uint8Array())),
+      importData: vi.fn(() => Promise.resolve()),
+    }),
+  ),
+}));
+
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock("../../../../components/editor", () => ({
@@ -86,7 +99,7 @@ describe("NoteEditor extensions", () => {
     };
 
     expect(Array.isArray(props?.extraExtensions)).toBe(true);
-    expect(props.extraExtensions).toHaveLength(4);
+    expect(props.extraExtensions).toHaveLength(5);
 
     const taskItemExtension = props.extraExtensions?.[1] as {
       options?: {

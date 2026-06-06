@@ -18,6 +18,9 @@ import { ThemeToggle } from "../ThemeToggle";
 import { SyncStatusButton } from "../sync/SyncStatusButton";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
+import { useNavigate } from "react-router-dom";
+import { isInternalLink } from "../../features/links/link-uri";
+import { navigateToLinkTarget } from "../../features/links/navigate";
 import { Wikilink } from "../editor/extensions";
 import { createWikilinkRenderer } from "../editor/WikilinkSuggestion";
 import { buildWikilinkCandidates } from "../../features/links/wikilink-targets";
@@ -203,6 +206,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
   const books = useBookStore((s) => s.books);
+  const navigate = useNavigate();
 
   const [chapterTargets, setChapterTargets] = useState<
     {
@@ -308,6 +312,29 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
     setWordCount(count);
   }, []);
 
+  const handleEditorReady = useCallback(
+    (editor: import("@tiptap/core").Editor | null) => {
+      if (!editor) return;
+      const dom = editor.view.dom;
+      const onClick = (event: MouseEvent) => {
+        const target = (event.target as HTMLElement).closest("a.wikilink");
+        if (!(target instanceof HTMLAnchorElement)) return;
+        const href = target.getAttribute("href");
+        if (href && isInternalLink(href)) {
+          event.preventDefault();
+          navigateToLinkTarget(href, navigate, {
+            bookIdForChapter: (chapterId) =>
+              chapterTargets.find((c) => c.id === chapterId)?.bookId,
+          });
+        } else {
+          // Unresolved [[ ]] -> Task 17 handles "create note".
+        }
+      };
+      dom.addEventListener("click", onClick);
+    },
+    [navigate, chapterTargets],
+  );
+
   const notesExtensions = useMemo(
     () => [
       TaskList,
@@ -408,6 +435,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         onWordCountChange={handleWordCountChange}
         placeholder={t("notes.bodyPlaceholder")}
         extraExtensions={allNotesExtensions}
+        onEditorReady={handleEditorReady}
         headerContent={
           <div className="px-8 pt-6 max-w-editor-max mx-auto w-full">
             <input

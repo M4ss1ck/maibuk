@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
 import { recordTombstone } from "../sync/tombstones";
+import { reindexSource } from "../links/link-index";
 import type { CreateNoteInput, Note, UpdateNoteInput } from "./types";
 
 function generateId(): string {
@@ -158,6 +159,14 @@ export const useNoteStore = create<NoteStore>((set) => ({
       notes: sortNotes(state.notes.map((n) => (n.id === updated.id ? updated : n))),
       currentNote: state.currentNote?.id === updated.id ? updated : state.currentNote,
     }));
+
+    if (input.content !== undefined) {
+      await reindexSource({
+        sourceType: "note",
+        sourceId: updated.id,
+        contentHtml: updated.content,
+      });
+    }
   },
 
   deleteNote: async (id: string) => {
@@ -173,6 +182,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
       });
     }
     await db.execute("DELETE FROM notes WHERE id = ?", [id]);
+    await db.execute("DELETE FROM links WHERE source_id = ?", [id]).catch(() => {});
     set((state) => ({
       notes: state.notes.filter((n) => n.id !== id),
       currentNote: state.currentNote?.id === id ? null : state.currentNote,

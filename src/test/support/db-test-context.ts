@@ -326,6 +326,21 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     )
   `);
 
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS links (
+      id TEXT PRIMARY KEY,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      source_book_id TEXT,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      target_heading_id TEXT,
+      label TEXT,
+      resolved INTEGER DEFAULT 1,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)`);
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_chapters_order ON chapters(book_id, "order")`
@@ -353,6 +368,8 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     `CREATE INDEX IF NOT EXISTS idx_sync_tombstones_pending
       ON sync_tombstones(entity_type, pushed_at, confirmed_at)`
   );
+  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id)`);
+  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)`);
 
   return adapter;
 }
