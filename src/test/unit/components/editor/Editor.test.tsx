@@ -25,8 +25,13 @@ vi.mock("../../../../features/metrics/programmatic", () => ({
   setContentSilently: mockSetContentSilently,
 }));
 
+const capturedToolbarProps: Record<string, unknown>[] = [];
+
 vi.mock("../../../../components/editor/EditorToolbar", () => ({
-  EditorToolbar: () => null,
+  EditorToolbar: (props: Record<string, unknown>) => {
+    capturedToolbarProps.push(props);
+    return null;
+  },
 }));
 
 vi.mock("../../../../components/editor/SelectionToolbar", () => ({
@@ -61,6 +66,7 @@ vi.mock("../../../../components/editor/extensions/SpellCheck", async () => {
 describe("Editor", () => {
   beforeEach(() => {
     mockSetContentSilently.mockClear();
+    capturedToolbarProps.length = 0;
   });
 
   it("does not re-apply initial content after the editor is created", async () => {
@@ -75,5 +81,24 @@ describe("Editor", () => {
     await waitFor(() => {
       expect(mockSetContentSilently).not.toHaveBeenCalled();
     });
+  });
+
+  it("passes bookId and internalTargets to EditorToolbar", async () => {
+    render(
+      <Editor
+        content={"<p>Chapter</p>\n"}
+        onUpdate={vi.fn()}
+        bookId="b1"
+        chapterId="c1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(capturedToolbarProps.length).toBeGreaterThan(0);
+    });
+
+    const lastProps = capturedToolbarProps[capturedToolbarProps.length - 1];
+    expect(lastProps.bookId).toBe("b1");
+    expect(lastProps.internalTargets).toBeDefined();
   });
 });

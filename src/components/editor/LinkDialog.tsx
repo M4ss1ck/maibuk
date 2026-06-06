@@ -4,7 +4,7 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { useTranslation } from "react-i18next";
-import { formatLinkUri } from "../../features/links/link-uri";
+import { formatLinkUri, isInternalLink } from "../../features/links/link-uri";
 
 export interface InternalTarget {
   type: "chapter" | "heading";
@@ -39,7 +39,7 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
       setText(selectedText);
       setUrl(currentLink);
       setError("");
-      setMode("url");
+      setMode(isInternalLink(currentLink) ? "internal" : "url");
       setQuery("");
     }
   }, [isOpen, editor]);
@@ -52,26 +52,34 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
 
     // Validate URL format
     let finalUrl = url.trim();
-    if (!/^https?:\/\//i.test(finalUrl) && !finalUrl.startsWith("mailto:")) {
+    if (
+      !isInternalLink(finalUrl) &&
+      !/^https?:\/\//i.test(finalUrl) &&
+      !finalUrl.startsWith("mailto:")
+    ) {
       finalUrl = `https://${finalUrl}`;
     }
 
-    if (text.trim()) {
-      // If we have custom text, insert it with the link
-      const { from, to } = editor.state.selection;
-      if (from === to) {
-        // No selection, insert text with link
-        editor
-          .chain()
-          .focus()
-          .insertContent(`<a href="${finalUrl}">${text.trim()}</a>`)
-          .run();
-      } else {
-        // Has selection, set link on selection
-        editor.chain().focus().setLink({ href: finalUrl }).run();
-      }
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to);
+    const displayText = text.trim();
+
+    if (from === to || !selectedText) {
+      // No selection or empty selection — insert text with link
+      editor
+        .chain()
+        .focus()
+        .insertContent(`<a href="${finalUrl}">${displayText || finalUrl}</a>`)
+        .run();
+    } else if (displayText && displayText !== selectedText) {
+      // Selection exists and display text was customized — replace with new text
+      editor
+        .chain()
+        .focus()
+        .insertContent(`<a href="${finalUrl}">${displayText}</a>`)
+        .run();
     } else {
-      // Just set link on current selection
+      // Selection exists — just update the link
       editor.chain().focus().setLink({ href: finalUrl }).run();
     }
 
@@ -101,7 +109,60 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
             headingId: target.headingId,
           })
         : formatLinkUri({ targetType: "chapter", targetId: target.chapterId });
-    editor.chain().focus().setLink({ href }).run();
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to);
+    const displayText = text.trim();
+
+    if (from === to || !selectedText) {
+      // No selection or empty selection — insert linked text
+      editor
+        .chain()
+        .focus()
+        .insertContent(
+          `<a href="${href}">${displayText || target.title}</a>`,
+        )
+        .run();
+    } else if (displayText && displayText !== selectedText) {
+      // Selection exists and display text was customized — replace with new text
+      editor
+        .chain()
+        .focus()
+        .insertContent(`<a href="${href}">${displayText}</a>`)
+        .run();
+    } else {
+      // Selection exists — just update the link
+      editor.chain().focus().setLink({ href }).run();
+    }
+    handleClose();
+  };
+
+  const handleUpdateInternal = () => {
+    const href = url.trim();
+    if (!isInternalLink(href)) {
+      setError(t("errors.URLRequired"));
+      return;
+    }
+
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to);
+    const displayText = text.trim();
+
+    if (from === to || !selectedText) {
+      editor
+        .chain()
+        .focus()
+        .insertContent(`<a href="${href}">${displayText || href}</a>`)
+        .run();
+    } else if (displayText && displayText !== selectedText) {
+      editor
+        .chain()
+        .focus()
+        .insertContent(`<a href="${href}">${displayText}</a>`)
+        .run();
+    } else {
+      editor.chain().focus().setLink({ href }).run();
+    }
+
     handleClose();
   };
 
@@ -135,6 +196,9 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
               {isEditing ? t("common.update") : t("common.insert")}
             </Button>
           )}
+          {mode === "internal" && isEditing && (
+            <Button onClick={handleUpdateInternal}>{t("common.update")}</Button>
+          )}
         </>
       }
     >
@@ -157,43 +221,41 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
         )}
 
         {mode === "url" && (
-          <>
-            <div>
-              <label htmlFor="link-url" className="block text-sm font-medium mb-1">
-                URL
-              </label>
-              <Input
-                id="link-url"
-                value={url}
-                onChange={(e) => {
-                  setUrl(e.target.value);
-                  setError("");
-                }}
-                placeholder="https://example.com"
-                autoFocus
-              />
-              {error && <p className="text-sm text-destructive mt-1">{error}</p>}
-            </div>
-
-            <div>
-              <label htmlFor="link-text" className="block text-sm font-medium mb-1">
-                {t("editor.displayText")}{" "}
-                <span className="text-muted-foreground">
-                  {t("editor.optional")}
-                </span>
-              </label>
-              <Input
-                id="link-text"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder={t("editor.linkText")}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                {t("editor.leaveEmpty")}
-              </p>
-            </div>
-          </>
+          <div>
+            <label htmlFor="link-url" className="block text-sm font-medium mb-1">
+              URL
+            </label>
+            <Input
+              id="link-url"
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                setError("");
+              }}
+              placeholder="https://example.com"
+              autoFocus
+            />
+            {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          </div>
         )}
+
+        <div>
+          <label htmlFor="link-text" className="block text-sm font-medium mb-1">
+            {t("editor.displayText")}{" "}
+            <span className="text-muted-foreground">
+              {t("editor.optional")}
+            </span>
+          </label>
+          <Input
+            id="link-text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={t("editor.linkText")}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            {t("editor.leaveEmpty")}
+          </p>
+        </div>
 
         {mode === "internal" && (
           <div className="space-y-2">

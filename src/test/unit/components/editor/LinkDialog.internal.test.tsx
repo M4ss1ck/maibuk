@@ -8,7 +8,8 @@ vi.mock("react-i18next", () => ({
 }));
 
 const setLink = vi.fn(() => ({ run: vi.fn() }));
-const focus = vi.fn(() => ({ setLink }));
+const insertContent = vi.fn(() => ({ run: vi.fn() }));
+const focus = vi.fn(() => ({ setLink, insertContent }));
 const chain = vi.fn(() => ({ focus }));
 
 const editor = {
@@ -53,6 +54,40 @@ describe("LinkDialog internal target picker", () => {
     expect(setLink).toHaveBeenCalledWith({ href: "maibuk://chapter/c1" });
   });
 
+  it("inserts target title as linked text when no selection is active", () => {
+    const noSelectionEditor = {
+      ...editor,
+      state: {
+        selection: { from: 5, to: 5 },
+        doc: { textBetween: () => "" },
+      },
+    } as unknown as import("@tiptap/react").Editor;
+
+    render(
+      <LinkDialog
+        editor={noSelectionEditor}
+        isOpen
+        onClose={() => {}}
+        bookId="b1"
+        internalTargets={[
+          {
+            type: "chapter",
+            chapterId: "c1",
+            title: "Chapter One",
+            headingId: null,
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("Chapter One"));
+
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="maibuk://chapter/c1">Chapter One</a>',
+    );
+  });
+
   it("inserts a maibuk heading link when a heading is chosen", () => {
     render(
       <LinkDialog
@@ -73,5 +108,124 @@ describe("LinkDialog internal target picker", () => {
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
     fireEvent.click(screen.getByText("A Section"));
     expect(setLink).toHaveBeenCalledWith({ href: "maibuk://heading/c1/h-1" });
+  });
+
+  it("inserts target title as linked text when selecting an empty line", () => {
+    const emptyLineEditor = {
+      ...editor,
+      state: {
+        selection: { from: 5, to: 6 },
+        doc: { textBetween: () => "" },
+      },
+    } as unknown as import("@tiptap/react").Editor;
+
+    render(
+      <LinkDialog
+        editor={emptyLineEditor}
+        isOpen
+        onClose={() => {}}
+        bookId="b1"
+        internalTargets={[
+          {
+            type: "chapter",
+            chapterId: "c1",
+            title: "Chapter One",
+            headingId: null,
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("Chapter One"));
+
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="maibuk://chapter/c1">Chapter One</a>',
+    );
+  });
+
+  it("uses custom display text when provided in internal mode", () => {
+    render(
+      <LinkDialog
+        editor={editor}
+        isOpen
+        onClose={() => {}}
+        bookId="b1"
+        internalTargets={[
+          {
+            type: "chapter",
+            chapterId: "c1",
+            title: "Chapter One",
+            headingId: null,
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+
+    const textInput = screen.getByPlaceholderText("editor.linkText");
+    fireEvent.change(textInput, { target: { value: "Custom Label" } });
+
+    fireEvent.click(screen.getByText("Chapter One"));
+
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="maibuk://chapter/c1">Custom Label</a>',
+    );
+  });
+
+  it("preserves an existing internal href when editing display text", () => {
+    const internalLinkEditor = {
+      ...editor,
+      getAttributes: () => ({ href: "maibuk://chapter/c1" }),
+    } as unknown as import("@tiptap/react").Editor;
+
+    render(
+      <LinkDialog
+        editor={internalLinkEditor}
+        isOpen
+        onClose={() => {}}
+        bookId="b1"
+        internalTargets={[
+          {
+            type: "chapter",
+            chapterId: "c1",
+            title: "Chapter One",
+            headingId: null,
+          },
+        ]}
+      />,
+    );
+
+    const textInput = screen.getByPlaceholderText("editor.linkText");
+    fireEvent.change(textInput, { target: { value: "Custom Label" } });
+
+    fireEvent.click(screen.getByText("common.update"));
+
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="maibuk://chapter/c1">Custom Label</a>',
+    );
+  });
+
+  it("uses custom display text when provided in url mode with a selection", () => {
+    render(
+      <LinkDialog
+        editor={editor}
+        isOpen
+        onClose={() => {}}
+      />,
+    );
+
+    const urlInput = screen.getByPlaceholderText("https://example.com");
+    fireEvent.change(urlInput, { target: { value: "https://example.com" } });
+
+    const textInput = screen.getByPlaceholderText("editor.linkText");
+    fireEvent.change(textInput, { target: { value: "Custom Label" } });
+
+    fireEvent.click(screen.getByText("common.insert"));
+
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="https://example.com">Custom Label</a>',
+    );
   });
 });

@@ -288,6 +288,8 @@ export function Editor({
         <EditorToolbar
           editor={editor}
           onContextMenuOpenChange={setIsContextMenuOpen}
+          bookId={bookId}
+          internalTargets={internalTargets}
         />
       )}
 
