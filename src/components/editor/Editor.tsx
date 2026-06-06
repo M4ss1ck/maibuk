@@ -34,6 +34,7 @@ import { CopyHandler } from "./extensions/CopyHandler";
 import { SpellCheck } from "./extensions/SpellCheck";
 import { Footnote } from "./extensions/Footnote";
 import { MetricsObserver } from "./extensions/MetricsObserver";
+import { HeadingId } from "./extensions/HeadingId";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 import { setContentSilently } from "../../features/metrics/programmatic";
@@ -96,6 +97,7 @@ export function Editor({
         link: false,
         underline: false,
       }),
+      HeadingId,
       Placeholder.configure({
         placeholder,
         emptyEditorClass: "is-editor-empty",
