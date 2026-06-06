@@ -10,6 +10,7 @@ import type { Chapter } from "../chapters/types";
 import type { EpubExportOptions } from "./types";
 import { processChapterHtml } from "./html-sanitizer";
 import { EPUB_STYLES } from "./epub-styles";
+import { rewriteInternalLinksForExport } from "./internal-link-export";
 
 /**
  * Generates an EPUB file from book data.
@@ -34,9 +35,19 @@ export async function generateEpub(
 
   onProgress?.("Processing chapter content...");
 
+  // Build href map for internal link rewrite.
+  const chapterHref = new Map<string, string>();
+  exportChapters.forEach((chapter, index) => {
+    chapterHref.set(chapter.id, `chapter-${index + 1}.xhtml`);
+  });
+  const firstChapterHref = chapterHref.get(exportChapters[0].id) ?? "chapter-1.xhtml";
+
   // Convert chapters to epub-gen-memory format
   const epubChapters: EpubChapter[] = exportChapters.map((chapter, index) => {
-    const content = chapter.content ? processChapterHtml(chapter.content) : "";
+    const rawContent = chapter.content
+      ? rewriteInternalLinksForExport(chapter.content, { chapterHref, firstChapterHref })
+      : "";
+    const content = processChapterHtml(rawContent);
 
     // Determine if chapter should be before TOC (frontmatter)
     const beforeToc = chapter.chapterType === "frontmatter";

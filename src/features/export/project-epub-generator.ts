@@ -4,6 +4,7 @@ import type { BookMetadata, BookStyle } from "../import/epub-project-repo";
 import type { ProjectAsset } from "../import/project-assets-repo";
 import { processChapterHtml } from "./html-sanitizer";
 import { EPUB_STYLES } from "./epub-styles";
+import { rewriteInternalLinksForExport } from "./internal-link-export";
 
 export interface ProjectEpubExportOptions {
   includeImportedStyles: boolean;
@@ -47,13 +48,23 @@ export function buildProjectEpubPackage(input: BuildProjectEpubPackageInput): Pr
   const assetPathById = new Map(
     input.assets.map((asset) => [asset.id, `assets/${sanitizeAssetFilename(asset.filename)}`])
   );
+  // Build href map for internal link rewrite.
+  const chapterHref = new Map<string, string>();
+  exportChapters.forEach((chapter, index) => {
+    chapterHref.set(chapter.id, `chapters/chapter-${index + 1}.xhtml`);
+  });
+  const firstChapterHref = chapterHref.get(exportChapters[0]?.id) ?? "chapters/chapter-1.xhtml";
+
   const chapters = exportChapters.map((chapter, index) => {
     const href = `chapters/chapter-${index + 1}.xhtml`;
+    const rawContent = chapter.content
+      ? rewriteInternalLinksForExport(chapter.content, { chapterHref, firstChapterHref })
+      : "<p></p>";
     return {
       title: chapter.title,
       href,
       content: rewriteAssetReferences(
-        processChapterHtml(chapter.content || "<p></p>"),
+        processChapterHtml(rawContent),
         assetPathById
       ),
     };
