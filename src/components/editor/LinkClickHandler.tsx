@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import type { Editor } from "@tiptap/react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { toast } from "../ui";
 import { openExternal } from "../../lib/platform";
+import { isInternalLink } from "../../features/links/link-uri";
+import { navigateToLinkTarget } from "../../features/links/navigate";
+import { useChapterStore } from "../../features/chapters/store";
 
 interface LinkClickDialogProps {
   editor: Editor;
@@ -18,6 +22,8 @@ interface LinkInfo {
 
 export function LinkClickHandler({ editor }: LinkClickDialogProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const chapters = useChapterStore((s) => s.chapters);
   const [linkInfo, setLinkInfo] = useState<LinkInfo | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
@@ -31,6 +37,13 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
         event.stopPropagation();
 
         const href = link.getAttribute("href");
+        if (href && isInternalLink(href)) {
+          navigateToLinkTarget(href, navigate, {
+            bookIdForChapter: (chapterId) =>
+              chapters.find((c) => c.id === chapterId)?.bookId,
+          });
+          return;
+        }
         if (href) {
           setLinkInfo({
             url: href,
@@ -48,7 +61,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
     return () => {
       editorElement.removeEventListener("click", handleClick);
     };
-  }, [editor]);
+  }, [editor, navigate, chapters]);
 
   const handleOpenLink = () => {
     if (linkInfo?.url) {
