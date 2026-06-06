@@ -155,7 +155,8 @@
     "emptyEditorTitle": "Una página en blanco",
     "emptyEditorBody": "Selecciona una nota de la lista o captura una nueva idea.",
     "collapseHeading": "Contraer encabezado",
-    "expandHeading": "Expandir encabezado"
+    "expandHeading": "Expandir encabezado",
+    "backlinks": "Enlazado desde"
   },
   "editor": {
     "loading": "Cargando libro...",

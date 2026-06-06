@@ -10,7 +10,7 @@ export interface WikilinkAttrs {
 }
 
 export interface WikilinkSuggestionConfig {
-  items: (query: string) => WikilinkCandidate[];
+  items: (props: { query: string; editor: Editor }) => WikilinkCandidate[];
   onCreateNote: (title: string) => Promise<{ noteId: string }>;
   render: SuggestionOptions["render"];
 }

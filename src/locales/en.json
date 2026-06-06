@@ -155,7 +155,8 @@
     "emptyEditorTitle": "A clean page",
     "emptyEditorBody": "Select a note from the list, or capture a new thought.",
     "collapseHeading": "Collapse heading",
-    "expandHeading": "Expand heading"
+    "expandHeading": "Expand heading",
+    "backlinks": "Linked from"
   },
   "editor": {
     "loading": "Loading book...",

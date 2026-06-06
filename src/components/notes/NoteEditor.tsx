@@ -27,6 +27,7 @@ import { buildWikilinkCandidates } from "../../features/links/wikilink-targets";
 import { useBookStore } from "../../features/books/store";
 import { assignHeadingIds } from "../../features/links/heading-ids";
 import { listAllChaptersForLinking } from "../../features/chapters/store";
+import { NoteBacklinks } from "./NoteBacklinks";
 
 let activeTaskHandleDragSourcePos: number | null = null;
 
@@ -237,7 +238,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
     () =>
       Wikilink.configure({
         suggestion: {
-          items: (query: string) =>
+          items: ({ query }: { query: string }) =>
             buildWikilinkCandidates(query, {
               notes: notes.map((n) => ({ id: n.id, title: n.title })),
               books: books.map((b) => ({ id: b.id, title: b.title })),
@@ -483,6 +484,12 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
             </div>
           </div>
         }
+      />
+      <NoteBacklinks
+        noteId={note.id}
+        onOpen={(sourceId) => {
+          void useNoteStore.getState().loadNote(sourceId);
+        }}
       />
     </div>
   );

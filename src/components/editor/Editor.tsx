@@ -152,6 +152,7 @@ export function Editor({
       }),
       Link.configure({
         openOnClick: false,
+        protocols: ["maibuk"],
         HTMLAttributes: {
           class: "editor-link",
         },
