@@ -17,12 +17,29 @@ type LinkedTextContent = {
   marks: LinkTextMark[];
 };
 
-export interface InternalTarget {
-  type: "chapter" | "heading";
-  chapterId: string;
-  title: string;
-  headingId: string | null;
-}
+export type InternalTarget =
+  | {
+      type: "note";
+      noteId: string;
+      title: string;
+    }
+  | {
+      type: "book";
+      bookId: string;
+      title: string;
+    }
+  | {
+      type: "chapter";
+      chapterId: string;
+      title: string;
+      headingId: null;
+    }
+  | {
+      type: "heading";
+      chapterId: string;
+      title: string;
+      headingId: string;
+    };
 
 interface LinkDialogProps {
   editor: Editor;
@@ -68,6 +85,55 @@ function createLinkedTextContent(
     text: displayText,
     marks: [...marks, { type: "link", attrs: { href } }],
   };
+}
+
+function getTargetHref(target: InternalTarget): string {
+  switch (target.type) {
+    case "note":
+      return formatLinkUri({ targetType: "note", targetId: target.noteId });
+    case "book":
+      return formatLinkUri({ targetType: "book", targetId: target.bookId });
+    case "chapter":
+      return formatLinkUri({ targetType: "chapter", targetId: target.chapterId });
+    case "heading":
+      return formatLinkUri({
+        targetType: "heading",
+        targetId: target.chapterId,
+        headingId: target.headingId,
+      });
+  }
+}
+
+function getTargetKey(target: InternalTarget): string {
+  switch (target.type) {
+    case "note":
+      return `note-${target.noteId}`;
+    case "book":
+      return `book-${target.bookId}`;
+    case "chapter":
+      return `chapter-${target.chapterId}`;
+    case "heading":
+      return `heading-${target.chapterId}-${target.headingId}`;
+  }
+}
+
+type TargetTypeLabelKey =
+  | "editor.linkTargetNote"
+  | "editor.linkTargetBook"
+  | "editor.linkTargetChapter"
+  | "editor.linkTargetHeading";
+
+function getTargetTypeLabelKey(target: InternalTarget): TargetTypeLabelKey {
+  switch (target.type) {
+    case "note":
+      return "editor.linkTargetNote";
+    case "book":
+      return "editor.linkTargetBook";
+    case "chapter":
+      return "editor.linkTargetChapter";
+    case "heading":
+      return "editor.linkTargetHeading";
+  }
 }
 
 export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = [] }: LinkDialogProps) {
@@ -150,14 +216,7 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
   };
 
   const handleInsertInternal = (target: InternalTarget) => {
-    const href =
-      target.type === "heading" && target.headingId
-        ? formatLinkUri({
-            targetType: "heading",
-            targetId: target.chapterId,
-            headingId: target.headingId,
-          })
-        : formatLinkUri({ targetType: "chapter", targetId: target.chapterId });
+    const href = getTargetHref(target);
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to);
     const displayText = text.trim();
@@ -220,6 +279,7 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
   );
 
   const isEditing = !!editor.getAttributes("link").href;
+  const canLinkInternally = !!bookId || internalTargets.length > 0;
 
   return (
     <Modal
@@ -252,7 +312,7 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
       }
     >
       <div className="space-y-4">
-        {bookId && (
+        {canLinkInternally && (
           <div className="flex gap-2">
             <Button
               variant={mode === "url" ? "primary" : "secondary"}
@@ -316,17 +376,20 @@ export function LinkDialog({ editor, isOpen, onClose, bookId, internalTargets = 
             />
             <ul className="max-h-64 overflow-auto rounded-lg border border-border">
               {filteredTargets.map((tgt) => (
-                <li key={`${tgt.chapterId}-${tgt.headingId ?? "chapter"}`}>
+                <li key={getTargetKey(tgt)}>
                   <button
                     type="button"
                     onClick={() => handleInsertInternal(tgt)}
-                    className={`w-full text-left px-3 py-2 hover:bg-muted ${
+                    className={`w-full text-left px-3 py-2 hover:bg-muted flex items-center justify-between gap-3 ${
                       tgt.type === "heading"
                         ? "pl-6 text-sm text-muted-foreground"
                         : "font-medium"
                     }`}
                   >
-                    {tgt.title}
+                    <span className="min-w-0 truncate">{tgt.title}</span>
+                    <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {t(getTargetTypeLabelKey(tgt))}
+                    </span>
                   </button>
                 </li>
               ))}

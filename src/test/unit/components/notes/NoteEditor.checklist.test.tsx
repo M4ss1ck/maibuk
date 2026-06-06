@@ -1,10 +1,47 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "../../../../components/notes/NoteEditor";
 import type { Note } from "../../../../features/notes";
+import type { Book } from "../../../../features/books/types";
 
-const { mockEditor } = vi.hoisted(() => ({
+const { mockEditor, mockNotes, mockBooks } = vi.hoisted(() => ({
   mockEditor: vi.fn((_: unknown) => <div />),
+  mockNotes: [
+    {
+      id: "note-1",
+      title: "Current",
+      content: "<p>Current body</p>",
+      tags: [],
+      pinned: false,
+      order: 0,
+      wordCount: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    {
+      id: "note-2",
+      title: "Research Note",
+      content: "<p>Research body</p>",
+      tags: [],
+      pinned: false,
+      order: 1,
+      wordCount: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ] satisfies Note[],
+  mockBooks: [
+    {
+      id: "book-1",
+      title: "Novel Draft",
+      authorName: "Author",
+      language: "en",
+      wordCount: 100,
+      status: "draft",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ] satisfies Book[],
 }));
 
 vi.mock("react-i18next", () => ({
@@ -67,7 +104,14 @@ vi.mock("../../../../components/editor", () => ({
 }));
 
 vi.mock("../../../../features/notes/store", () => ({
-  useNoteStore: (selector: (state: { notes: Note[] }) => unknown) => selector({ notes: [] }),
+  useNoteStore: (selector: (state: { notes: Note[] }) => unknown) => selector({ notes: mockNotes }),
+}));
+
+vi.mock("../../../../features/books/store", () => ({
+  useBookStore: (selector?: (state: { books: Book[] }) => unknown) => {
+    const state = { books: mockBooks };
+    return selector ? selector(state) : state;
+  },
 }));
 
 function buildNote(overrides: Partial<Note>): Note {
@@ -85,6 +129,10 @@ function buildNote(overrides: Partial<Note>): Note {
 }
 
 describe("NoteEditor extensions", () => {
+  beforeEach(() => {
+    mockEditor.mockClear();
+  });
+
   it("passes task-list and collapsible-heading extensions to the shared Editor", () => {
     render(
       <NoteEditor
@@ -133,5 +181,25 @@ describe("NoteEditor extensions", () => {
       expandLabel: "Expand heading",
     });
     expect(typeof collapsibleHeading.config?.addProseMirrorPlugins).toBe("function");
+  });
+
+  it("passes notes and books as internal link targets to the shared Editor", () => {
+    render(
+      <NoteEditor
+        note={buildNote({ id: "note-1" })}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const props = mockEditor.mock.calls[0]?.[0] as {
+      internalTargets?: unknown[];
+    };
+
+    expect(props.internalTargets).toEqual([
+      { type: "note", noteId: "note-1", title: "Current" },
+      { type: "note", noteId: "note-2", title: "Research Note" },
+      { type: "book", bookId: "book-1", title: "Novel Draft" },
+    ]);
   });
 });

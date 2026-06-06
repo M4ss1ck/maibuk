@@ -61,6 +61,7 @@ interface EditorProps {
   showInlineFootnotes?: boolean;
   bookId?: string | null;
   chapterId?: string | null;
+  internalTargets?: InternalTarget[];
   extraExtensions?: Extensions;
   headerContent?: React.ReactNode;
   onEditorReady?: (editor: TiptapEditor | null) => void;
@@ -79,6 +80,7 @@ export function Editor({
   showInlineFootnotes = true,
   bookId = null,
   chapterId = null,
+  internalTargets: providedInternalTargets = [],
   extraExtensions,
   headerContent,
   onEditorReady,
@@ -90,7 +92,7 @@ export function Editor({
   const language = useSettingsStore((state) => state.language);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const chapters = useChapterStore((s) => s.chapters);
-  const internalTargets: InternalTarget[] = bookId
+  const bookInternalTargets: InternalTarget[] = bookId
     ? chapters.flatMap((c) => {
         const targets: InternalTarget[] = [
           { type: "chapter", chapterId: c.id, title: c.title, headingId: null },
@@ -106,6 +108,7 @@ export function Editor({
         return targets;
       })
     : [];
+  const internalTargets = [...providedInternalTargets, ...bookInternalTargets];
   const appliedContentRef = useRef(content);
   const editor = useEditor({
     extensions: [

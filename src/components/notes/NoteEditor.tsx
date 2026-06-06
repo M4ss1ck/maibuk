@@ -8,6 +8,7 @@ import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "../../features/notes";
 import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
+import type { InternalTarget } from "../editor/LinkDialog";
 import { CollapsibleHeading } from "../editor/extensions";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
@@ -265,6 +266,14 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
     [notes, books, chapterTargets],
   );
 
+  const internalTargets = useMemo<InternalTarget[]>(
+    () => [
+      ...notes.map((n) => ({ type: "note" as const, noteId: n.id, title: n.title })),
+      ...books.map((b) => ({ type: "book" as const, bookId: b.id, title: b.title })),
+    ],
+    [notes, books],
+  );
+
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
 
@@ -447,6 +456,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         onWordCountChange={handleWordCountChange}
         placeholder={t("notes.bodyPlaceholder")}
         extraExtensions={allNotesExtensions}
+        internalTargets={internalTargets}
         onEditorReady={handleEditorReady}
         headerContent={
           <div className="px-8 pt-6 max-w-editor-max mx-auto w-full">

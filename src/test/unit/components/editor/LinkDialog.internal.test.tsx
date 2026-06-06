@@ -110,6 +110,58 @@ describe("LinkDialog internal target picker", () => {
     expect(setLink).toHaveBeenCalledWith({ href: "maibuk://heading/c1/h-1" });
   });
 
+  it("shows and inserts note targets without a book id", () => {
+    render(
+      <LinkDialog
+        editor={editor}
+        isOpen
+        onClose={() => {}}
+        internalTargets={[
+          {
+            type: "note",
+            noteId: "n2",
+            title: "Research Note",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.change(screen.getByPlaceholderText("editor.searchTargets"), {
+      target: { value: "research" },
+    });
+    fireEvent.click(screen.getByText("Research Note"));
+
+    expect(setLink).toHaveBeenCalledWith({ href: "maibuk://note/n2" });
+  });
+
+  it("labels note and book targets with their type", () => {
+    render(
+      <LinkDialog
+        editor={editor}
+        isOpen
+        onClose={() => {}}
+        internalTargets={[
+          {
+            type: "note",
+            noteId: "n2",
+            title: "Shared Title",
+          },
+          {
+            type: "book",
+            bookId: "b1",
+            title: "Shared Title",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+
+    expect(screen.getByText("editor.linkTargetNote")).toBeInTheDocument();
+    expect(screen.getByText("editor.linkTargetBook")).toBeInTheDocument();
+  });
+
   it("inserts target title as linked text when selecting an empty line", () => {
     const emptyLineEditor = {
       ...editor,
