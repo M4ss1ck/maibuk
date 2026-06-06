@@ -136,7 +136,7 @@ function unwrapUnsupportedElements(root: HTMLElement): void {
   }
 }
 
-function resolveHref(baseHref: string, href: string): string {
+export function resolveHref(baseHref: string, href: string): string {
   if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("#")) {
     return href;
   }

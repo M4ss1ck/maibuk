@@ -6,6 +6,7 @@ import { readEpub } from "./epub-reader";
 import { scanEpub, buildImportPreview } from "./epub-scanner";
 import { normalizeEpubProject } from "./epub-normalizer";
 import { insertProjectAssets } from "./project-assets-repo";
+import { rewriteImportedInternalLinks } from "./internal-link-rewrite";
 import type { CompatibilityReport, ImportPreview } from "./types";
 import { canImport, requiresAcknowledgement } from "./types";
 
@@ -66,6 +67,21 @@ export async function importEpubProject(input: {
         linear: chapterInput.linear,
         capabilities: chapterInput.capabilities,
       });
+    }
+
+    const importedChapters = chapterMappings.map((m, idx) => ({
+      chapterId: m.chapterId,
+      href: m.href,
+      content: normalized.chapters[idx].content,
+    }));
+    const rewritten = rewriteImportedInternalLinks(importedChapters);
+    for (const c of rewritten) {
+      const original = importedChapters.find((x) => x.chapterId === c.chapterId);
+      if (original && original.content !== c.content) {
+        await useChapterStore
+          .getState()
+          .updateChapter(c.chapterId, { content: c.content });
+      }
     }
 
     await insertProjectAssets(book.id, normalized.assets);
