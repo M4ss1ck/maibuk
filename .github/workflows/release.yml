@@ -154,7 +154,8 @@ jobs:
             nsis \
             llvm \
             clang \
-            lld
+            lld \
+            libappindicator3-dev
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
