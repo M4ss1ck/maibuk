@@ -22,6 +22,7 @@ import { exportDatabase, importDatabase, resetDatabase } from "../lib/db";
 import {
   getFileSystem,
   IS_TAURI,
+  isMac,
   getDialog,
   getWebDialog,
   createBackup,
@@ -48,6 +49,8 @@ export function Settings() {
     primaryColor,
     autoSave,
     alwaysOnTop,
+    launchOnStartup,
+    closeToTray,
     language,
     defaultExportFormat,
     spellCheckEnabled,
@@ -61,6 +64,8 @@ export function Settings() {
     setPrimaryColor,
     setAutoSave,
     setAlwaysOnTop,
+    setLaunchOnStartup,
+    setCloseToTray,
     setLanguage,
     setDefaultExportFormat,
     setSpellCheckEnabled,
@@ -300,6 +305,44 @@ export function Settings() {
             </div>
           </div>
         </section>
+
+        {/* Window Settings */}
+        {IS_TAURI && !isMac() && (
+          <section className="mb-6 sm:mb-8">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              {t("settings.window")}
+            </h3>
+            <div className="divide-y divide-border">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+                <div>
+                  <p className="font-medium">{t("settings.launchOnStartup")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("settings.launchOnStartupDescription")}
+                  </p>
+                </div>
+                <Switch
+                  checked={launchOnStartup}
+                  onChange={setLaunchOnStartup}
+                  label={t("settings.launchOnStartup")}
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+                <div>
+                  <p className="font-medium">{t("settings.closeToTray")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("settings.closeToTrayDescription")}
+                  </p>
+                </div>
+                <Switch
+                  checked={closeToTray}
+                  onChange={setCloseToTray}
+                  label={t("settings.closeToTray")}
+                />
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* General Settings */}
         <section className="mb-6 sm:mb-8">
