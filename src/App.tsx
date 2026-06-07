@@ -13,6 +13,7 @@ import { PathTracker } from "./components/PathTracker";
 import { ToastViewport } from "./components/ui";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
 import { runDailyBackupOnce } from "./features/backup/lifecycle";
+import { installWindowCloseHandler } from "./lib/window/closeHandler";
 
 function isEmbedPath(pathname: string): boolean {
   return pathname === "/embed";
@@ -25,6 +26,7 @@ function App() {
   useEffect(() => {
     if (embedMode) return;
     void runDailyBackupOnce();
+    void installWindowCloseHandler();
   }, [embedMode]);
 
   if (embedMode) {
