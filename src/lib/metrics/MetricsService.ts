@@ -381,6 +381,8 @@ export class MetricsService {
           ]);
         } finally {
           await win.destroy();
+          const { exit } = await import("@tauri-apps/plugin-process");
+          await exit(0);
         }
       });
       this.tauriCloseUnlisten = unlisten;
