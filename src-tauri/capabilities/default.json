@@ -25,6 +25,10 @@
     "dialog:allow-save",
     "os:default",
     "core:window:allow-destroy",
-    "core:window:allow-set-always-on-top"
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-hide",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }
