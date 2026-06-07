@@ -19,7 +19,7 @@ jobs:
       version: ${{ steps.get_version.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Sync version across files
         if: github.event.inputs.version != ''
@@ -55,13 +55,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "lts/*"
           cache: "pnpm"
@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Linux dependencies
         run: |
@@ -103,10 +103,10 @@ jobs:
           workspaces: "./src-tauri -> target"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "lts/*"
           cache: "pnpm"
@@ -127,7 +127,7 @@ jobs:
           args: --target x86_64-unknown-linux-gnu
 
       - name: Upload Linux artifacts for Arch build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-build-artifacts
           path: |
@@ -144,7 +144,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install cross-compilation dependencies
         run: |
@@ -168,10 +168,10 @@ jobs:
           workspaces: "./src-tauri -> target"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "lts/*"
           cache: "pnpm"
@@ -199,10 +199,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-build-artifacts
           path: ./artifacts
@@ -236,7 +236,7 @@ jobs:
           ./scripts/build-arch-package.sh
 
       - name: Upload Arch package to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: src-tauri/target/release/bundle/arch/*.pkg.tar.zst
           tag_name: v${{ needs.prepare.outputs.version }}
