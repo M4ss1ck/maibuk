@@ -17,6 +17,12 @@ vi.mock("../../../../i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
+const applyLaunchOnStartup = vi.fn().mockResolvedValue(undefined);
+vi.mock("../../../../lib/platform", () => ({
+  setLaunchOnStartup: applyLaunchOnStartup,
+  isLaunchOnStartupEnabled: vi.fn().mockResolvedValue(false),
+}));
+
 const { useSettingsStore, normalizePasteCleanup, normalizeMetrics } = await import(
   "../../../../features/settings/store"
 );
@@ -34,6 +40,8 @@ describe("useSettingsStore", () => {
       primaryColor: "#3B82F6",
       autoSave: true,
       alwaysOnTop: false,
+      launchOnStartup: false,
+      closeToTray: false,
       language: "en",
       spellCheckEnabled: true,
       customDictionary: [],
@@ -208,6 +216,24 @@ describe("useSettingsStore", () => {
       useSettingsStore.getState().setAlwaysOnTop(true);
       expect(useSettingsStore.getState().alwaysOnTop).toBe(true);
     });
+  });
+
+  it("defaults launchOnStartup and closeToTray to false", () => {
+    const s = useSettingsStore.getState();
+    expect(s.launchOnStartup).toBe(false);
+    expect(s.closeToTray).toBe(false);
+  });
+
+  it("setCloseToTray updates state", () => {
+    useSettingsStore.getState().setCloseToTray(true);
+    expect(useSettingsStore.getState().closeToTray).toBe(true);
+  });
+
+  it("setLaunchOnStartup updates state and calls the platform helper", () => {
+    applyLaunchOnStartup.mockClear();
+    useSettingsStore.getState().setLaunchOnStartup(true);
+    expect(useSettingsStore.getState().launchOnStartup).toBe(true);
+    expect(applyLaunchOnStartup).toHaveBeenCalledWith(true);
   });
 
   describe("setDefaultExportFormat()", () => {

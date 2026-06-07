@@ -26,6 +26,7 @@ import {
   type MetricsCategory,
 } from "./types";
 import { normalizeMetrics } from "../metrics/settings";
+import { setLaunchOnStartup as applyLaunchOnStartup } from "../../lib/platform";
 
 const STORAGE_KEY = "maibuk-settings";
 const isWebBuild = import.meta.env.VITE_BUILD_TARGET === "web";
@@ -39,6 +40,8 @@ interface SettingsStore extends Settings {
   setPrimaryColor: (color: string) => void;
   setAutoSave: (enabled: boolean) => void;
   setAlwaysOnTop: (enabled: boolean) => void;
+  setLaunchOnStartup: (enabled: boolean) => void;
+  setCloseToTray: (enabled: boolean) => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
   setBackupRetention: (retention: number) => void;
   setBackupDirectory: (directory: string | null) => void;
@@ -90,6 +93,8 @@ const defaultSettings: Settings = {
   primaryColor: DEFAULT_PRIMARY_COLOR,
   autoSave: true,
   alwaysOnTop: false,
+  launchOnStartup: false,
+  closeToTray: false,
   language: (i18n.language as Language) || "en",
   spellCheckEnabled: true,
   customDictionary: [],
@@ -199,6 +204,13 @@ export const useSettingsStore = create<SettingsStore>()(
       setPrimaryColor: (primaryColor) => set({ primaryColor: normalizeHexColor(primaryColor) }),
       setAutoSave: (autoSave) => set({ autoSave }),
       setAlwaysOnTop: (alwaysOnTop) => set({ alwaysOnTop }),
+      setLaunchOnStartup: (launchOnStartup) => {
+        set({ launchOnStartup });
+        void applyLaunchOnStartup(launchOnStartup).catch((error) => {
+          console.error("Failed to update launch-on-startup:", error);
+        });
+      },
+      setCloseToTray: (closeToTray) => set({ closeToTray }),
       setDefaultExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
       setBackupRetention: (backupRetention) =>
         set({ backupRetention: Math.max(1, Math.floor(backupRetention)) }),
