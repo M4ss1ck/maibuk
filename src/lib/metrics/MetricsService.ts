@@ -1,5 +1,4 @@
 import { getDatabase } from "../db";
-import { IS_TAURI } from "../platform";
 import type { DatabaseAdapter } from "../platform/types";
 import { getOrCreateDeviceId } from "../../features/metrics/device-id";
 import {
@@ -45,7 +44,6 @@ export class MetricsService {
   private readyPromise: Promise<void> | null = null;
   private beforeUnloadHandler: (() => void) | null = null;
   private visibilityHandler: (() => void) | null = null;
-  private tauriCloseUnlisten: (() => void) | null = null;
   private sessionTracker: SessionTracker | null = null;
   private sessionWorkId: string | null = null;
   private lastActiveAt: number | null = null;
@@ -279,10 +277,6 @@ export class MetricsService {
       document.removeEventListener("visibilitychange", this.visibilityHandler);
       this.visibilityHandler = null;
     }
-    if (this.tauriCloseUnlisten) {
-      this.tauriCloseUnlisten();
-      this.tauriCloseUnlisten = null;
-    }
   }
 
   private async handleMessage(message: WorkerResponse): Promise<void> {
@@ -354,35 +348,6 @@ export class MetricsService {
         }
       };
       document.addEventListener("visibilitychange", this.visibilityHandler);
-    }
-    void this.installTauriCloseHandler();
-  }
-
-  // Tauri's `beforeunload` doesn't fire reliably when the OS triggers a
-  // window close. `onCloseRequested` lets us defer the close until pending
-  // events are flushed, capped at 200 ms so a broken DB write can't hang the
-  // app shutdown.
-  private async installTauriCloseHandler(): Promise<void> {
-    if (!IS_TAURI || this.tauriCloseUnlisten) return;
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      const win = getCurrentWindow();
-      const unlisten = await win.onCloseRequested(async (event) => {
-        event.preventDefault();
-        try {
-          this.endSessionInternal(new Date());
-          await Promise.race([
-            this.flushNow(),
-            new Promise<void>((resolve) => setTimeout(resolve, 200)),
-          ]);
-        } finally {
-          await win.destroy();
-        }
-      });
-      this.tauriCloseUnlisten = unlisten;
-    } catch {
-      // Not running inside a Tauri webview, or the window API failed —
-      // either way, fall back to the beforeunload path.
     }
   }
 }

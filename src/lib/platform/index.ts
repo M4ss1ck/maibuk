@@ -90,6 +90,36 @@ export async function setWindowAlwaysOnTop(enabled: boolean): Promise<void> {
   await getCurrentWindow().setAlwaysOnTop(enabled);
 }
 
+// Launch the app at login (hidden in the tray). No-op on web.
+export async function setLaunchOnStartup(enabled: boolean): Promise<void> {
+  if (
+    !IS_TAURI ||
+    typeof window === "undefined" ||
+    !("__TAURI_INTERNALS__" in window)
+  ) {
+    return;
+  }
+  const { enable, disable } = await import("@tauri-apps/plugin-autostart");
+  if (enabled) {
+    await enable();
+  } else {
+    await disable();
+  }
+}
+
+// Whether the OS autostart entry is currently registered. False on web.
+export async function isLaunchOnStartupEnabled(): Promise<boolean> {
+  if (
+    !IS_TAURI ||
+    typeof window === "undefined" ||
+    !("__TAURI_INTERNALS__" in window)
+  ) {
+    return false;
+  }
+  const { isEnabled } = await import("@tauri-apps/plugin-autostart");
+  return isEnabled();
+}
+
 // OS factory
 export async function getOS(): Promise<OSAdapter> {
   if (IS_WEB) {

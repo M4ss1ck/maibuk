@@ -75,6 +75,8 @@ export interface Settings {
   // General settings
   autoSave: boolean;
   alwaysOnTop: boolean;
+  launchOnStartup: boolean;
+  closeToTray: boolean;
   language: Language;
   spellCheckEnabled: boolean;
   customDictionary: string[];

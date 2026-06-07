@@ -14,7 +14,6 @@ import {
 } from "../../../../features/metrics/aggregates/compute";
 import { createMetricsService } from "../../../../lib/metrics/MetricsService";
 import type { WorkerRequest, WorkerResponse } from "../../../../lib/metrics/types";
-
 class MockWorker {
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null;
   posted: WorkerRequest[] = [];
