@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useSettingsStore } from "./store";
 import i18n from "../../i18n";
 import type { FontFamily } from "./types";
-import { setWindowAlwaysOnTop } from "../../lib/platform";
+import { setWindowAlwaysOnTop, isLaunchOnStartupEnabled } from "../../lib/platform";
 
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
   serif: "var(--font-serif)",
@@ -75,6 +75,18 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
       console.error("Failed to set always-on-top:", error);
     });
   }, [alwaysOnTop]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void isLaunchOnStartupEnabled().then((enabled) => {
+      if (!cancelled && enabled !== useSettingsStore.getState().launchOnStartup) {
+        useSettingsStore.setState({ launchOnStartup: enabled });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return <>{children}</>;
 }
