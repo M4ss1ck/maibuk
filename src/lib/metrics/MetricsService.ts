@@ -369,6 +369,10 @@ export class MetricsService {
       const win = getCurrentWindow();
       const unlisten = await win.onCloseRequested(async (event) => {
         event.preventDefault();
+        if (useSettingsStore.getState().closeToTray) {
+          await win.hide();
+          return;
+        }
         try {
           this.endSessionInternal(new Date());
           await Promise.race([

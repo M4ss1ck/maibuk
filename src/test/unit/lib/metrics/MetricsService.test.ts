@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "../../../../lib/platform/types";
 import { createTestDatabase } from "../../../support/db-test-context";
 import {
@@ -14,6 +14,22 @@ import {
 } from "../../../../features/metrics/aggregates/compute";
 import { createMetricsService } from "../../../../lib/metrics/MetricsService";
 import type { WorkerRequest, WorkerResponse } from "../../../../lib/metrics/types";
+import { useSettingsStore } from "../../../../features/settings/store";
+
+const mockWindowHide = vi.fn().mockResolvedValue(undefined);
+const mockWindowDestroy = vi.fn().mockResolvedValue(undefined);
+let closeHandler: ((e: { preventDefault: () => void }) => Promise<void>) | null = null;
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    hide: mockWindowHide,
+    destroy: mockWindowDestroy,
+    onCloseRequested: vi.fn(async (cb: (e: { preventDefault: () => void }) => Promise<void>) => {
+      closeHandler = cb;
+      return () => {};
+    }),
+  }),
+}));
 
 class MockWorker {
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null;
@@ -292,5 +308,32 @@ describe("MetricsService", () => {
     expect(
       worker.posted.some((message) => message.type === "computeAggregate"),
     ).toBe(true);
+  });
+
+  it("hides instead of destroying when closeToTray is on", async () => {
+    mockWindowHide.mockClear();
+    mockWindowDestroy.mockClear();
+    closeHandler = null;
+
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    useSettingsStore.setState({ closeToTray: true });
+
+    await service.init();
+    // installTauriCloseHandler is fire-and-forget; wait for microtasks
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(closeHandler).not.toBeNull();
+    await closeHandler!({ preventDefault: vi.fn() });
+
+    expect(mockWindowHide).toHaveBeenCalledOnce();
+    expect(mockWindowDestroy).not.toHaveBeenCalled();
+
+    service.shutdown();
   });
 });
