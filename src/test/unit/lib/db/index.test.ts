@@ -54,6 +54,20 @@ describe("src/lib/db/index.ts", () => {
       expect(db).toBe(mockDb);
     });
 
+    it("ignores migration errors when added columns already exist", async () => {
+      // ALTER TABLE ... ADD COLUMN fails on databases that already have the
+      // column; initialization must swallow that and still resolve.
+      mockDb.execute.mockImplementation((sql: string) => {
+        if (/ALTER TABLE/i.test(sql)) {
+          return Promise.reject(new Error("duplicate column name"));
+        }
+        return Promise.resolve({ rowsAffected: 0 });
+      });
+      const { getDatabase } = await import("../../../../lib/db");
+
+      await expect(getDatabase()).resolves.toBe(mockDb);
+    });
+
     it("creates EPUB project tables and indexes during initialization", async () => {
       const { getDatabase } = await import("../../../../lib/db");
 
@@ -141,6 +155,32 @@ describe("src/lib/db/index.ts", () => {
       const { resetDatabase } = await import("../../../../lib/db");
       mockDb.execute.mockImplementation((sql: string) => {
         if (sql.includes("metrics_")) {
+          return Promise.reject(new Error("no such table"));
+        }
+        return Promise.resolve({ rowsAffected: 0 });
+      });
+
+      await expect(resetDatabase()).resolves.toBeUndefined();
+    });
+
+    it("does not throw when optional tables are missing", async () => {
+      const { resetDatabase } = await import("../../../../lib/db");
+      // Every DELETE guarded by .catch() is for a table that may not exist yet.
+      const optional = [
+        "chapter_epub_meta",
+        "epub_structures",
+        "book_styles",
+        "book_metadata",
+        "project_assets",
+        "notes",
+        "links",
+        "sync_tombstones",
+        "metrics_cache",
+        "metrics_event_tombstones",
+        "metrics_events",
+      ];
+      mockDb.execute.mockImplementation((sql: string) => {
+        if (optional.some((table) => sql === `DELETE FROM ${table}`)) {
           return Promise.reject(new Error("no such table"));
         }
         return Promise.resolve({ rowsAffected: 0 });
