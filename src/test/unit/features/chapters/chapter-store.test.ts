@@ -13,7 +13,26 @@ vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
 }));
 
-const { useChapterStore } = await import("../../../../features/chapters/store");
+const {
+  useChapterStore,
+  listAllChaptersForLinking,
+  listChaptersForBookLinking,
+  getChapterForLinking,
+} = await import("../../../../features/chapters/store");
+
+async function seedChapter(
+  db: DatabaseAdapter,
+  id: string,
+  bookId: string,
+  order: number,
+  content: string | null = "<p>Body</p>",
+) {
+  await db.execute(
+    `INSERT INTO chapters (id, book_id, title, content, "order", created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, bookId, `Chapter ${order}`, content, order, 1, 2],
+  );
+}
 
 // Helper: seed a book row so FK constraints pass
 async function seedBook(db: DatabaseAdapter, bookId = "book-1") {
@@ -392,6 +411,55 @@ describe("useChapterStore", () => {
       useChapterStore.getState().setCurrentChapter(null);
 
       expect(useChapterStore.getState().currentChapter).toBeNull();
+    });
+  });
+
+  describe("linking queries", () => {
+    it("listAllChaptersForLinking returns every chapter across books", async () => {
+      await seedBook(testDb, "book-2");
+      await seedChapter(testDb, "ch-a", "book-1", 0);
+      await seedChapter(testDb, "ch-b", "book-2", 0, null);
+
+      const rows = await listAllChaptersForLinking();
+
+      expect(rows).toEqual(
+        expect.arrayContaining([
+          { id: "ch-a", bookId: "book-1", title: "Chapter 0", content: "<p>Body</p>" },
+          { id: "ch-b", bookId: "book-2", title: "Chapter 0", content: null },
+        ]),
+      );
+      expect(rows).toHaveLength(2);
+    });
+
+    it("listChaptersForBookLinking returns only the book's chapters in order", async () => {
+      await seedBook(testDb, "book-2");
+      await seedChapter(testDb, "ch-2", "book-1", 2);
+      await seedChapter(testDb, "ch-1", "book-1", 1);
+      await seedChapter(testDb, "other", "book-2", 0);
+
+      const rows = await listChaptersForBookLinking("book-1");
+
+      expect(rows).toEqual([
+        { id: "ch-1", bookId: "book-1", title: "Chapter 1" },
+        { id: "ch-2", bookId: "book-1", title: "Chapter 2" },
+      ]);
+    });
+
+    it("getChapterForLinking returns the chapter when it exists", async () => {
+      await seedChapter(testDb, "ch-1", "book-1", 0);
+
+      const row = await getChapterForLinking("ch-1");
+
+      expect(row).toEqual({
+        id: "ch-1",
+        bookId: "book-1",
+        title: "Chapter 0",
+        content: "<p>Body</p>",
+      });
+    });
+
+    it("getChapterForLinking returns null when the chapter is missing", async () => {
+      expect(await getChapterForLinking("missing")).toBeNull();
     });
   });
 });

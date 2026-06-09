@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "../../../../lib/platform/types";
 import { createTestDatabase } from "../../../support/db-test-context";
-import type { NoteSnapshot } from "../../../../features/sync/types";
+import type { BookSnapshot, NoteSnapshot } from "../../../../features/sync/types";
+import { useChapterStore } from "../../../../features/chapters/store";
 
 let testDb: DatabaseAdapter;
 
@@ -13,9 +14,29 @@ vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
 }));
 
-const { applyNoteSnapshot, normalizeNoteSnapshotForSync } = await import(
-  "../../../../features/sync/serializer"
-);
+const { applyBookSnapshot, applyNoteSnapshot, normalizeNoteSnapshotForSync, serializeBook, serializeNote } =
+  await import("../../../../features/sync/serializer");
+
+async function insertBook(db: DatabaseAdapter, id: string): Promise<void> {
+  await db.execute(
+    `INSERT INTO books (
+      id, title, subtitle, author_name, description, genre, language,
+      cover_image_path, cover_data, word_count, target_word_count, status,
+      created_at, updated_at, last_opened_at, last_chapter_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, "Title", null, "Author", null, null, "en", null, null, 5, null, "draft", 1, 2, null, null],
+  );
+}
+
+async function insertChapter(db: DatabaseAdapter, id: string, bookId: string, order: number): Promise<void> {
+  await db.execute(
+    `INSERT INTO chapters (
+      id, book_id, title, content, synopsis, "order", parent_id,
+      chapter_type, word_count, status, is_included_in_export, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, bookId, `Chapter ${order}`, "<p>Body</p>", null, order, null, "chapter", 1, "draft", 1, 1, 2],
+  );
+}
 
 describe("note snapshot serializer", () => {
   beforeEach(async () => {
@@ -87,5 +108,219 @@ describe("note snapshot serializer", () => {
     });
 
     expect(normalizeNoteSnapshotForSync(first)).toBe(normalizeNoteSnapshotForSync(second));
+  });
+});
+
+describe("book snapshot serializer", () => {
+  beforeEach(async () => {
+    testDb = await createTestDatabase();
+    mockGetDatabase.mockResolvedValue(testDb);
+    useChapterStore.setState({ currentBookId: null });
+  });
+
+  it("serializes a book with its chapters ordered by `order`", async () => {
+    await insertBook(testDb, "book-1");
+    await insertChapter(testDb, "ch-2", "book-1", 2);
+    await insertChapter(testDb, "ch-1", "book-1", 1);
+
+    const snapshot = JSON.parse(await serializeBook("book-1")) as BookSnapshot;
+
+    expect(snapshot.book.id).toBe("book-1");
+    expect(snapshot.book.authorName).toBe("Author");
+    expect(snapshot.chapters.map((c) => c.id)).toEqual(["ch-1", "ch-2"]);
+    expect(snapshot.chapters[0].isIncludedInExport).toBe(true);
+  });
+
+  it("throws when the book does not exist", async () => {
+    await expect(serializeBook("missing")).rejects.toThrow("Book not found: missing");
+  });
+
+  it("applies a snapshot, replacing existing chapters", async () => {
+    await insertBook(testDb, "book-1");
+    await insertChapter(testDb, "stale", "book-1", 1);
+
+    const snapshot: BookSnapshot = {
+      book: {
+        id: "book-1",
+        title: "Updated",
+        subtitle: null,
+        authorName: "Author",
+        description: null,
+        genre: null,
+        language: "en",
+        coverImagePath: null,
+        coverData: null,
+        wordCount: 9,
+        targetWordCount: null,
+        status: "draft",
+        createdAt: 1,
+        updatedAt: 5,
+        lastOpenedAt: null,
+        lastChapterId: null,
+      },
+      chapters: [
+        {
+          id: "fresh",
+          bookId: "book-1",
+          title: "Fresh",
+          content: "<p>Fresh</p>",
+          synopsis: null,
+          order: 0,
+          parentId: null,
+          chapterType: "chapter",
+          wordCount: 1,
+          status: "draft",
+          isIncludedInExport: false,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    };
+
+    await applyBookSnapshot(snapshot);
+
+    const book = await testDb.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [
+      "book-1",
+    ]);
+    const chapters = await testDb.select<{ id: string; is_included_in_export: number }[]>(
+      "SELECT id, is_included_in_export FROM chapters WHERE book_id = ?",
+      ["book-1"],
+    );
+    expect(book[0].title).toBe("Updated");
+    expect(chapters).toEqual([{ id: "fresh", is_included_in_export: 0 }]);
+  });
+
+  it("reloads the current book's chapters when applying its snapshot", async () => {
+    await insertBook(testDb, "book-1");
+    useChapterStore.setState({ currentBookId: "book-1" });
+
+    const snapshot: BookSnapshot = {
+      book: {
+        id: "book-1",
+        title: "Reloaded",
+        subtitle: null,
+        authorName: "Author",
+        description: null,
+        genre: null,
+        language: "en",
+        coverImagePath: null,
+        coverData: null,
+        wordCount: 0,
+        targetWordCount: null,
+        status: "draft",
+        createdAt: 1,
+        updatedAt: 5,
+        lastOpenedAt: null,
+        lastChapterId: null,
+      },
+      chapters: [
+        {
+          id: "ch-1",
+          bookId: "book-1",
+          title: "One",
+          content: null,
+          synopsis: null,
+          order: 0,
+          parentId: null,
+          chapterType: "chapter",
+          wordCount: 0,
+          status: "draft",
+          isIncludedInExport: true,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    };
+
+    await applyBookSnapshot(snapshot);
+
+    expect(useChapterStore.getState().chapters.map((c) => c.id)).toEqual(["ch-1"]);
+  });
+
+  it("wraps errors with the failing chapter's position and title", async () => {
+    await insertBook(testDb, "book-1");
+
+    const snapshot: BookSnapshot = {
+      book: {
+        id: "book-1",
+        title: "Title",
+        subtitle: null,
+        authorName: "Author",
+        description: null,
+        genre: null,
+        language: "en",
+        coverImagePath: null,
+        coverData: null,
+        wordCount: 0,
+        targetWordCount: null,
+        status: "draft",
+        createdAt: 1,
+        updatedAt: 5,
+        lastOpenedAt: null,
+        lastChapterId: null,
+      },
+      chapters: [
+        {
+          // Duplicate primary key forces the second insert to fail.
+          id: "dup",
+          bookId: "book-1",
+          title: "First",
+          content: null,
+          synopsis: null,
+          order: 0,
+          parentId: null,
+          chapterType: "chapter",
+          wordCount: 0,
+          status: "draft",
+          isIncludedInExport: true,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        {
+          id: "dup",
+          bookId: "book-1",
+          title: "Second",
+          content: null,
+          synopsis: null,
+          order: 1,
+          parentId: null,
+          chapterType: "chapter",
+          wordCount: 0,
+          status: "draft",
+          isIncludedInExport: true,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    };
+
+    await expect(applyBookSnapshot(snapshot)).rejects.toThrow(
+      'Sync apply failed on chapter 2/2 ("Second")',
+    );
+  });
+});
+
+describe("serializeNote", () => {
+  beforeEach(async () => {
+    testDb = await createTestDatabase();
+    mockGetDatabase.mockResolvedValue(testDb);
+  });
+
+  it("serializes an existing note", async () => {
+    await testDb.execute(
+      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["note-1", "Title", "<p>Body</p>", "[]", 1, 0, 1, '["h"]', 10, 20],
+    );
+
+    const snapshot = JSON.parse(await serializeNote("note-1")) as NoteSnapshot;
+
+    expect(snapshot.note.id).toBe("note-1");
+    expect(snapshot.note.pinned).toBe(true);
+    expect(snapshot.note.collapsedHeadings).toBe('["h"]');
+  });
+
+  it("throws when the note does not exist", async () => {
+    await expect(serializeNote("missing")).rejects.toThrow("Note not found: missing");
   });
 });

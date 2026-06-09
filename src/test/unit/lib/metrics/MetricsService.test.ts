@@ -13,6 +13,7 @@ import {
   computeStreakFromDayTotals,
 } from "../../../../features/metrics/aggregates/compute";
 import { createMetricsService } from "../../../../lib/metrics/MetricsService";
+import { useSettingsStore } from "../../../../features/settings/store";
 import type { WorkerRequest, WorkerResponse } from "../../../../lib/metrics/types";
 class MockWorker {
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null;
@@ -72,6 +73,14 @@ function buildEvent(): MetricEvent {
     schemaVersion: 1,
   };
 }
+
+function recordedEventTypes(worker: MockWorker): string[] {
+  return worker.posted
+    .filter((m): m is Extract<WorkerRequest, { type: "recordEvents" }> => m.type === "recordEvents")
+    .flatMap((m) => m.events.map((e) => e.eventType));
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 describe("MetricsService", () => {
   beforeEach(async () => {
@@ -291,5 +300,132 @@ describe("MetricsService", () => {
     expect(
       worker.posted.some((message) => message.type === "computeAggregate"),
     ).toBe(true);
+  });
+
+  it("records session start/active/end events through session tracking", async () => {
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    await service.init();
+    service.markActive("book-1", new Date("2026-05-23T12:00:00.000Z"));
+    service.endSession(new Date("2026-05-23T12:05:00.000Z"));
+
+    const types = recordedEventTypes(worker);
+    expect(types).toContain("session.started");
+    expect(types).toContain("session.ended");
+    expect(types).toContain("session.active");
+
+    service.shutdown();
+  });
+
+  it("rotates the session when the active work changes", async () => {
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    await service.init();
+    service.markActive("book-1", new Date("2026-05-23T12:00:00.000Z"));
+    service.markActive("book-2", new Date("2026-05-23T12:00:10.000Z"));
+
+    const types = recordedEventTypes(worker);
+    expect(types.filter((t) => t === "session.started")).toHaveLength(2);
+    expect(types.filter((t) => t === "session.ended")).toHaveLength(1);
+
+    service.shutdown();
+  });
+
+  it("rotates the session after the idle threshold elapses", async () => {
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    await service.init();
+    // Default idle threshold is 30s; a 60s gap forces a fresh session.
+    service.markActive("book-1", new Date("2026-05-23T12:00:00.000Z"));
+    service.markActive("book-1", new Date("2026-05-23T12:01:00.000Z"));
+
+    const types = recordedEventTypes(worker);
+    expect(types.filter((t) => t === "session.started")).toHaveLength(2);
+    expect(types.filter((t) => t === "session.ended")).toHaveLength(1);
+
+    service.shutdown();
+  });
+
+  it("does not track time when the time category is disabled", async () => {
+    const previous = useSettingsStore.getState().metrics;
+    useSettingsStore.setState({
+      metrics: { ...previous, enabled: { ...previous.enabled, time: false } },
+    });
+
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    await service.init();
+    service.markActive("book-1");
+
+    expect(recordedEventTypes(worker)).toEqual([]);
+
+    useSettingsStore.setState({ metrics: previous });
+    service.shutdown();
+  });
+
+  it("flushes buffered events when the window fires beforeunload", async () => {
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    await service.init();
+    service.recordEvents([buildEvent()]);
+    window.dispatchEvent(new Event("beforeunload"));
+    await tick();
+
+    expect(await listEvents(testDb)).toHaveLength(1);
+
+    service.shutdown();
+  });
+
+  it("flushes buffered events when the document becomes hidden", async () => {
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+
+    await service.init();
+    service.recordEvents([buildEvent()]);
+
+    const descriptor = Object.getOwnPropertyDescriptor(document, "visibilityState");
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await tick();
+
+    if (descriptor) {
+      Object.defineProperty(document, "visibilityState", descriptor);
+    }
+
+    expect(await listEvents(testDb)).toHaveLength(1);
+
+    service.shutdown();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
@@ -24,6 +24,7 @@ vi.mock("react-i18next", () => ({
 import { Layout } from "../../components/Layout";
 import { APP_VERSION } from "../../constants";
 import { useThemeStore } from "../../features/theme/store";
+import { useSettingsStore } from "../../features/settings/store";
 
 describe("Layout", () => {
   beforeEach(() => {
@@ -79,5 +80,53 @@ describe("Layout", () => {
 
     // Backdrop + sidebar close button both render when the menu is open
     expect(screen.getAllByLabelText("Close menu")).toHaveLength(2);
+  });
+
+  it("closes the mobile menu when Escape is pressed", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(screen.getByLabelText("Open menu"));
+    expect(screen.getAllByLabelText("Close menu")).toHaveLength(2);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    // The backdrop overlay disappears; only the always-present sidebar
+    // close button remains.
+    expect(screen.getAllByLabelText("Close menu")).toHaveLength(1);
+  });
+
+  it("closes the mobile menu when the backdrop is clicked", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(screen.getByLabelText("Open menu"));
+    // First "Close menu" element is the backdrop overlay button.
+    await user.click(screen.getAllByLabelText("Close menu")[0]);
+
+    expect(screen.getAllByLabelText("Close menu")).toHaveLength(1);
+  });
+
+  it("resizes the sidebar via the drag handle", () => {
+    useSettingsStore.setState({ mainSidebarWidth: 280 });
+    const { container } = renderLayout();
+
+    const handle = container.querySelector(".cursor-col-resize");
+    expect(handle).not.toBeNull();
+
+    // Drag right by 50px: 280 -> 330, within the [200, 480] clamp.
+    fireEvent.mouseDown(handle as Element, { clientX: 100 });
+    fireEvent.mouseMove(document, { clientX: 150 });
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(330);
+
+    // Beyond the clamp ceiling stays at 480.
+    fireEvent.mouseMove(document, { clientX: 1000 });
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
+
+    fireEvent.mouseUp(document);
+
+    // After mouseup the drag is released: further movement is ignored.
+    fireEvent.mouseMove(document, { clientX: 100 });
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
   });
 });

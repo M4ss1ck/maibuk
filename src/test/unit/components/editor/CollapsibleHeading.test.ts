@@ -165,6 +165,75 @@ describe("CollapsibleHeading", () => {
     editor.destroy();
   });
 
+  it("assigns heading ids on create when the initial doc has none", async () => {
+    // JSON content skips parseHTML, so headings start without an id and must
+    // be backfilled by the onCreate hook. onCreate only fires once mounted,
+    // on the next macrotask, so the editor must be attached and awaited.
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const editor = new Editor({
+      element,
+      extensions: [
+        StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+        CollapsibleHeading,
+      ],
+      content: {
+        type: "doc",
+        content: [
+          { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Hi" }] },
+        ],
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const ids = getHeadingIds(editor);
+    expect(ids).toHaveLength(1);
+    expect(ids[0].length).toBeGreaterThan(0);
+    editor.destroy();
+    element.remove();
+  });
+
+  it("toggles collapse when the decoration toggle button is pressed", () => {
+    const editor = createEditor('<h2 data-heading-id="h1">Title</h2><p>Body</p>');
+
+    const button = editor.view.dom.querySelector(
+      ".heading-collapse-toggle",
+    ) as HTMLElement | null;
+    expect(button).not.toBeNull();
+
+    button?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    expect(getCollapsedSet(editor).has("h1")).toBe(true);
+    editor.destroy();
+  });
+
+  it("assigns an id to a heading inserted without one", () => {
+    const editor = createEditor("<p>Body</p>");
+    const { schema } = editor.state;
+    const heading = schema.nodes.heading.create({ level: 2 }, schema.text("New"));
+
+    editor.view.dispatch(editor.state.tr.insert(0, heading));
+
+    expect(getHeadingIds(editor)).toHaveLength(1);
+    editor.destroy();
+  });
+
+  it("stops hiding once a sibling heading at the same level is reached", () => {
+    const editor = createEditor(
+      '<h2 data-heading-id="a">A</h2><p>under a</p><h2 data-heading-id="b">B</h2><p>under b</p>',
+    );
+
+    editor.view.dispatch(
+      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { toggle: "a" }),
+    );
+
+    const headings = editor.view.dom.querySelectorAll("h2");
+    // Section under A is hidden, but sibling B at the same level is not.
+    expect(headings[1]).not.toHaveClass("heading-section-hidden");
+    editor.destroy();
+  });
+
   it("replaces collapsed state via replace meta", () => {
     const editor = createEditor("<h2>A</h2><p>Text</p><h3>B</h3>", ["pre-existing-id"]);
     expect(getCollapsedSet(editor).has("pre-existing-id")).toBe(true);
