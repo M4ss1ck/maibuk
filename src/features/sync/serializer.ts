@@ -181,6 +181,7 @@ interface NoteRow {
   pinned: number;
   order: number;
   word_count: number;
+  collapsed_headings: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -204,6 +205,7 @@ export async function serializeNote(noteId: string): Promise<string> {
       pinned: Boolean(row.pinned),
       order: row.order,
       wordCount: row.word_count,
+      collapsedHeadings: row.collapsed_headings,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     },
@@ -212,14 +214,31 @@ export async function serializeNote(noteId: string): Promise<string> {
   return JSON.stringify(snapshot);
 }
 
+export function normalizeNoteSnapshotForSync(json: string): string {
+  const snapshot = JSON.parse(json) as NoteSnapshot;
+  return JSON.stringify({
+    ...snapshot,
+    note: {
+      ...snapshot.note,
+      collapsedHeadings: null,
+    },
+  });
+}
+
 export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
   const db = await getDatabase();
   const { note } = snapshot;
+  const existing = await db.select<{ collapsed_headings: string | null }[]>(
+    "SELECT collapsed_headings FROM notes WHERE id = ?",
+    [note.id],
+  );
+  const collapsedHeadings =
+    existing.length > 0 ? existing[0].collapsed_headings ?? "[]" : note.collapsedHeadings ?? "[]";
 
   await db.execute(
     `INSERT OR REPLACE INTO notes (
-      id, title, content, tags, pinned, "order", word_count, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       note.id,
       note.title,
@@ -228,6 +247,7 @@ export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
       note.pinned ? 1 : 0,
       note.order,
       note.wordCount,
+      collapsedHeadings,
       note.createdAt,
       note.updatedAt,
     ]

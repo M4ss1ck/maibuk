@@ -1,6 +1,12 @@
 import { getDatabase } from "../../lib/db";
 import { encrypt, decrypt, computeChecksum, isSyncCryptoError } from "./crypto";
-import { serializeBook, applyBookSnapshot, serializeNote, applyNoteSnapshot } from "./serializer";
+import {
+  serializeBook,
+  applyBookSnapshot,
+  serializeNote,
+  applyNoteSnapshot,
+  normalizeNoteSnapshotForSync,
+} from "./serializer";
 import {
   pushBookBlob,
   pullBookBlob,
@@ -435,7 +441,7 @@ async function syncNoteInBatch(
 
   const json = await serializeNote(noteId);
   const noteTitle = await getNoteTitle(noteId);
-  const localChecksum = await computeChecksum(json);
+  const localChecksum = await computeChecksum(normalizeNoteSnapshotForSync(json));
 
   const remote = remoteNotes.find((r) => r.noteId === noteId);
 

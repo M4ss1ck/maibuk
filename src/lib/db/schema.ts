@@ -159,6 +159,7 @@ export const notes = sqliteTable("notes", {
   pinned: integer("pinned", { mode: "boolean" }).default(false),
   order: integer("order").notNull(),
   wordCount: integer("word_count").default(0),
+  collapsedHeadings: text("collapsed_headings").default("[]"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });

@@ -142,4 +142,51 @@ describe("useNoteStore", () => {
       expect(useNoteStore.getState().notes.map((n) => n.title)).toEqual(["C", "A", "B"]);
     });
   });
+
+  describe("saveCollapsedHeadings()", () => {
+    it("saves collapsed headings and updates local state", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-06-08T00:00:00Z"));
+        const note = await useNoteStore.getState().createNote({ title: "Test" });
+        expect(note.collapsedHeadings).toEqual([]);
+
+        vi.setSystemTime(new Date("2026-06-08T00:01:00Z"));
+        await useNoteStore.getState().saveCollapsedHeadings(note.id, ["h1", "h2"]);
+
+        const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+        expect(updated?.collapsedHeadings).toEqual(["h1", "h2"]);
+        expect(updated?.updatedAt).toBe(note.updatedAt);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("updates currentNote when it matches", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Current" });
+      useNoteStore.getState().setCurrentNote(note);
+
+      await useNoteStore.getState().saveCollapsedHeadings(note.id, ["abc"]);
+
+      expect(useNoteStore.getState().currentNote?.collapsedHeadings).toEqual(["abc"]);
+    });
+
+    it("persists collapsed headings through a round-trip", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Persist" });
+      await useNoteStore.getState().saveCollapsedHeadings(note.id, ["h1", "h2"]);
+
+      await useNoteStore.getState().loadNote(note.id);
+      const loaded = useNoteStore.getState().currentNote;
+      expect(loaded?.collapsedHeadings).toEqual(["h1", "h2"]);
+    });
+
+    it("clears collapsed headings with empty array", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Clear" });
+      await useNoteStore.getState().saveCollapsedHeadings(note.id, ["h1"]);
+      await useNoteStore.getState().saveCollapsedHeadings(note.id, []);
+
+      const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+      expect(updated?.collapsedHeadings).toEqual([]);
+    });
+  });
 });

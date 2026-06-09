@@ -180,6 +180,11 @@ async function initializeSchema(): Promise<void> {
     )
   `);
 
+  // Migration: Add collapsed_headings column for existing databases
+  await db
+    .execute(`ALTER TABLE notes ADD COLUMN collapsed_headings TEXT DEFAULT '[]'`)
+    .catch(() => {});
+
   // Link index: edges extracted from note/chapter content (powers backlinks).
   await db.execute(`
     CREATE TABLE IF NOT EXISTS links (

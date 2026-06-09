@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pin } from "lucide-react";
 import { Extension } from "@tiptap/core";
@@ -10,6 +10,7 @@ import { useNoteStore } from "../../features/notes/store";
 import { Editor } from "../editor";
 import type { InternalTarget, InternalTargetChildrenLoader } from "../editor/LinkDialog";
 import { CollapsibleHeading } from "../editor/extensions";
+import { collapsibleHeadingPluginKey } from "../editor/extensions/CollapsibleHeading";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
@@ -338,6 +339,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
 
   const handleEditorReady = useCallback(
     (editor: import("@tiptap/core").Editor | null) => {
+      editorRef.current = editor;
       if (!editor) return;
       const dom = editor.view.dom;
       const onClick = (event: MouseEvent) => {
@@ -372,9 +374,42 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         }
       };
       dom.addEventListener("click", onClick);
+
+      const onTransaction = ({ transaction }: { transaction: import("@tiptap/pm/state").Transaction }) => {
+        const meta = transaction.getMeta(collapsibleHeadingPluginKey);
+        if (meta && typeof meta.toggle === "string") {
+          const pluginState = collapsibleHeadingPluginKey.getState(editor.state);
+          if (pluginState) {
+            void useNoteStore.getState().saveCollapsedHeadings(note.id, [...pluginState.collapsed]);
+          }
+        }
+      };
+
+      editor.on("transaction", onTransaction);
     },
-    [navigate],
+    [navigate, note.id],
   );
+
+  const collapsedHeadingsKey = note.collapsedHeadings.join(",");
+
+  // Sync persisted collapsed state into the ProseMirror plugin when
+  // the editor becomes available or the stored collapsed headings change
+  // (e.g. when switching notes).  The plugin's `init()` only runs once
+  // when `useEditor` creates the editor; this effect updates it after
+  // the fact so we don't rely on editor recreation.
+  const editorRef = useRef<import("@tiptap/core").Editor | null>(null);
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const pluginState = collapsibleHeadingPluginKey.getState(editor.state);
+    if (!pluginState) return;
+    const desired = new Set(note.collapsedHeadings);
+    const current = pluginState.collapsed;
+    if (current.size === desired.size && [...desired].every((id) => current.has(id))) return;
+    editor.view.dispatch(
+      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { replace: note.collapsedHeadings }),
+    );
+  }, [collapsedHeadingsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const notesExtensions = useMemo(
     () => [
@@ -386,9 +421,10 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
       CollapsibleHeading.configure({
         collapseLabel: t("notes.collapseHeading"),
         expandLabel: t("notes.expandHeading"),
+        collapsedHeadings: note.collapsedHeadings,
       }),
     ],
-    [t]
+    [t, collapsedHeadingsKey],
   );
 
   const allNotesExtensions = useMemo(

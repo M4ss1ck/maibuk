@@ -308,6 +308,7 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
       pinned INTEGER DEFAULT 0,
       "order" INTEGER NOT NULL,
       word_count INTEGER DEFAULT 0,
+      collapsed_headings TEXT DEFAULT '[]',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )
