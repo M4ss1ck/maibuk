@@ -52,16 +52,22 @@ hr + p,
 }
 
 /* Scene breaks */
-hr.scene-break {
-  border: none;
+.scene-break {
   text-align: center;
   margin: 2em 0;
+  letter-spacing: 0.5em;
+  border: none;
 }
 
-hr.scene-break::before {
-  content: "* * *";
+figure.scene-break {
+  letter-spacing: normal;
+}
+
+figure.scene-break img {
+  max-width: 40%;
+  height: auto;
+  margin: 0 auto;
   display: block;
-  letter-spacing: 0.5em;
 }
 
 /* Footnotes / Endnotes */

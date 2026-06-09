@@ -128,3 +128,37 @@ export async function listProjectAssets(bookId: string): Promise<ProjectAsset[]>
   );
   return rows.map(toModel);
 }
+
+export interface SeparatorAssetInput {
+  dataBase64: string;
+  mediaType: string;
+  filename: string;
+}
+
+const SEPARATOR_ROLE = "scene-break-separator";
+
+export async function upsertSeparatorAsset(
+  bookId: string,
+  input: SeparatorAssetInput,
+): Promise<ProjectAsset> {
+  const existing = await listProjectAssets(bookId);
+  const match = existing.find(
+    (asset) =>
+      asset.role === SEPARATOR_ROLE && asset.dataBase64 === input.dataBase64,
+  );
+  if (match) return match;
+
+  const href = `assets/scene-break-${generateId()}-${input.filename}`;
+  const [inserted] = await insertProjectAssets(bookId, [
+    {
+      filename: input.filename,
+      href,
+      mediaType: input.mediaType,
+      role: SEPARATOR_ROLE,
+      dataBase64: input.dataBase64,
+      sizeBytes: input.dataBase64.length,
+      checksum: null,
+    },
+  ]);
+  return inserted;
+}

@@ -163,6 +163,9 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
 
   switch (tag) {
     case "p":
+      if (el.classList.contains("scene-break")) {
+        return renderSceneBreak(el, styles, key);
+      }
       return renderParagraph(el, styles, key);
     case "h1":
       return renderHeading(el, styles, "heading1", key);
@@ -183,9 +186,14 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
     case "blockquote":
       return renderBlockquote(el, styles, key);
     case "hr":
-      return renderSceneBreak(styles, key);
+      return createElement(View, { key, style: styles.sceneBreak });
     case "img":
       return renderImage(el, styles, key);
+    case "figure":
+      if (el.classList.contains("scene-break")) {
+        return renderSceneBreak(el, styles, key);
+      }
+      return createElement(View, { key }, ...renderBlockChildren(el, styles, key));
     case "table":
       return renderTable(el, styles, key);
     case "section":
@@ -278,11 +286,24 @@ function renderBlockquote(el: Element, styles: PdfStyles, key: string): ReactNod
   );
 }
 
-function renderSceneBreak(styles: PdfStyles, key: string): ReactNode {
+function renderSceneBreak(el: Element, styles: PdfStyles, key: string): ReactNode {
+  const img = el.querySelector("img");
+  if (img) {
+    const src = img.getAttribute("src");
+    if (src) {
+      return createElement(
+        View,
+        { key, style: styles.sceneBreak },
+        createElement(Image, { src, style: styles.image }),
+      );
+    }
+  }
+
+  const symbols = el.textContent?.trim() || "* * *";
   return createElement(
     View,
     { key, style: styles.sceneBreak },
-    createElement(Text, { style: styles.sceneBreakText }, "* * *")
+    createElement(Text, { style: styles.sceneBreakText }, symbols),
   );
 }
 

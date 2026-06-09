@@ -1,5 +1,6 @@
 import type { MetricsCategory, MetricsSettings } from "../metrics/types";
 import { DEFAULT_METRICS_SETTINGS } from "../metrics/settings";
+import type { SceneBreakDescriptor } from "../../components/editor/extensions/scene-break-utils";
 
 export { DEFAULT_METRICS_SETTINGS };
 export type { MetricsCategory, MetricsSettings };
@@ -81,6 +82,10 @@ export interface Settings {
   spellCheckEnabled: boolean;
   customDictionary: string[];
   dictionaryOpenInBrowser: boolean;
+
+  // Scene break settings
+  lastSceneBreak: SceneBreakDescriptor;
+  sceneBreakPresets: SceneBreakDescriptor[];
 
   // Footnote settings
   showInlineFootnotes: boolean;

@@ -26,6 +26,19 @@ function extractKeys(nodes: unknown[]): (string | number | null)[] {
     .map((n) => n.key);
 }
 
+function collectText(node: unknown, out: string[] = []): string[] {
+  if (typeof node === "string") {
+    out.push(node);
+  } else if (Array.isArray(node)) {
+    node.forEach((child) => {
+      collectText(child, out);
+    });
+  } else if (node && typeof node === "object" && "props" in node) {
+    collectText((node as { props?: { children?: unknown } }).props?.children, out);
+  }
+  return out;
+}
+
 /**
  * Recursively collect every `key` from an element tree.
  * Returns them grouped by parent so we can check siblings.
@@ -142,6 +155,27 @@ describe("renderHtmlContent() key uniqueness", () => {
     const html = "<p><abbr><em>A</em></abbr><cite><em>B</em></cite></p>";
     const nodes = renderHtmlContent(html, styles);
     assertNoDuplicateSiblingKeys(nodes);
+  });
+});
+
+describe("renderSceneBreak (PDF)", () => {
+  it("renders a text scene break with its symbols", () => {
+    const tree = renderHtmlContent('<p class="scene-break">❧</p>', styles);
+    const sceneBreak = tree[0] as { props?: { style?: unknown } };
+
+    expect(collectText(tree).join("")).toContain("❧");
+    expect(sceneBreak.props?.style).toBe(styles.sceneBreak);
+  });
+
+  it("renders an image scene break as an Image", () => {
+    const tree = renderHtmlContent(
+      '<figure class="scene-break"><img src="data:image/png;base64,AA" /></figure>',
+      styles,
+    );
+    const sceneBreak = tree[0] as { props?: { style?: unknown } };
+
+    expect(JSON.stringify(tree)).toContain("data:image/png;base64,AA");
+    expect(sceneBreak.props?.style).toBe(styles.sceneBreak);
   });
 });
 

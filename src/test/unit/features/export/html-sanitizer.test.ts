@@ -59,13 +59,31 @@ describe("sanitizeHtmlForEpub()", () => {
     expect(result.html).toContain('class="footnote-ref"');
   });
 
-  it("converts scene-break blocks to hr tags", () => {
+  it("converts a text scene-break block to a p.scene-break preserving symbols", () => {
     const html =
-      '<div data-scene-break class="scene-break"><span class="scene-break-symbols">* * *</span></div>';
+      '<div data-scene-break data-kind="text" class="scene-break"><span class="scene-break-symbols">❧</span></div>';
 
     const result = sanitizeHtmlForEpub(html);
 
-    expect(result.html).toContain('<hr class="scene-break" />');
+    expect(result.html).toContain('<p class="scene-break">❧</p>');
+  });
+
+  it("converts an image scene-break block to a figure.scene-break", () => {
+    const html =
+      '<div data-scene-break data-kind="image" class="scene-break"><img src="data:image/png;base64,AA" alt="o"></div>';
+
+    const result = sanitizeHtmlForEpub(html);
+
+    expect(result.html).toContain('<figure class="scene-break">');
+    expect(result.html).toContain('src="data:image/png;base64,AA"');
+  });
+
+  it("converts a legacy attribute-less scene break to '* * *'", () => {
+    const html = "<div data-scene-break></div>";
+
+    const result = sanitizeHtmlForEpub(html);
+
+    expect(result.html).toContain('<p class="scene-break">* * *</p>');
   });
 
   it("strips editor and ProseMirror classes", () => {
