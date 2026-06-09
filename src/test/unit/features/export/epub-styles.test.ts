@@ -28,6 +28,11 @@ describe("EPUB_STYLES", () => {
     expect(EPUB_STYLES).toContain(".scene-break");
   });
 
+  it("does not hardcode asterisks via ::before and centers scene breaks", () => {
+    expect(EPUB_STYLES).not.toContain('content: "* * *"');
+    expect(EPUB_STYLES).toContain("text-align: center");
+  });
+
   it("contains footnote/endnote styles", () => {
     expect(EPUB_STYLES).toContain(".footnote-ref");
     expect(EPUB_STYLES).toContain(".endnotes");

@@ -3,7 +3,7 @@
  *
  * Converts Tiptap editor HTML to EPUB-compatible HTML by:
  * - Converting footnotes to endnotes format
- * - Converting scene breaks to <hr>
+ * - Converting scene breaks to export-safe elements
  * - Stripping editor-specific CSS classes
  * - Preserving standard HTML formatting
  */
@@ -17,6 +17,38 @@ interface Footnote {
 interface SanitizeResult {
   html: string;
   footnotes: Footnote[];
+}
+
+function convertSceneBreaks(html: string): string {
+  if (!html.includes("data-scene-break")) return html;
+
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+
+  doc.querySelectorAll("div[data-scene-break]").forEach((div) => {
+    const kind = div.getAttribute("data-kind");
+    const img = div.querySelector("img");
+
+    if (kind === "image" && img) {
+      const figure = doc.createElement("figure");
+      figure.className = "scene-break";
+
+      const newImg = doc.createElement("img");
+      newImg.setAttribute("src", img.getAttribute("src") ?? "");
+      newImg.setAttribute("alt", img.getAttribute("alt") ?? "");
+      figure.appendChild(newImg);
+      div.replaceWith(figure);
+      return;
+    }
+
+    const symbols =
+      div.querySelector(".scene-break-symbols")?.textContent?.trim() || "* * *";
+    const paragraph = doc.createElement("p");
+    paragraph.className = "scene-break";
+    paragraph.textContent = symbols;
+    div.replaceWith(paragraph);
+  });
+
+  return doc.body.innerHTML;
 }
 
 /**
@@ -75,12 +107,8 @@ export function sanitizeHtmlForEpub(html: string): SanitizeResult {
     }
   );
 
-  // Convert scene breaks
-  // Scene breaks are: <div data-scene-break class="scene-break"><span class="scene-break-symbols">* * *</span></div>
-  sanitized = sanitized.replace(
-    /<div[^>]*data-scene-break[^>]*>.*?<\/div>/gi,
-    '<hr class="scene-break" />'
-  );
+  // Convert scene breaks (variant-aware: text -> p, image -> figure)
+  sanitized = convertSceneBreaks(sanitized);
 
   // Strip editor-specific classes while preserving the elements
   sanitized = sanitized.replace(/class="[^"]*editor-[^"]*"/gi, "");

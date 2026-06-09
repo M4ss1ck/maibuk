@@ -2,6 +2,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import i18n, { detectSystemLocale } from "../../i18n";
 import {
+  DEFAULT_SCENE_BREAK,
+  type SceneBreakDescriptor,
+} from "../../components/editor/extensions/scene-break-utils";
+import {
   DEFAULT_METRICS_SETTINGS,
   DEFAULT_PRIMARY_COLOR,
   DEFAULT_BACKUP_LIST_PAGE,
@@ -81,6 +85,9 @@ interface SettingsStore extends Settings {
   setMetricsCategoryEnabled: (category: MetricsCategory, enabled: boolean) => void;
   setMetricsSyncEnabled: (enabled: boolean) => void;
   setMetricsStreakDailyWordThreshold: (threshold: number) => void;
+  setLastSceneBreak: (descriptor: SceneBreakDescriptor) => void;
+  addSceneBreakPreset: (descriptor: SceneBreakDescriptor) => void;
+  removeSceneBreakPreset: (index: number) => void;
   lastPath: string | null;
   setLastPath: (path: string | null) => void;
   lastNoteId: string | null;
@@ -99,6 +106,8 @@ const defaultSettings: Settings = {
   spellCheckEnabled: true,
   customDictionary: [],
   dictionaryOpenInBrowser: false,
+  lastSceneBreak: DEFAULT_SCENE_BREAK,
+  sceneBreakPresets: [],
   showInlineFootnotes: true,
   showNotesChapter: false,
   hideKeyboardHints: false,
@@ -189,6 +198,46 @@ export function normalizePasteCleanup(value: unknown): PasteCleanupSettings {
     },
     rules,
   };
+}
+
+export function normalizeSceneBreak(value: unknown): SceneBreakDescriptor {
+  if (value && typeof value === "object") {
+    const candidate = value as Record<string, unknown>;
+
+    if (
+      candidate.kind === "image" &&
+      typeof candidate.src === "string" &&
+      candidate.src
+    ) {
+      return {
+        kind: "image",
+        src: candidate.src,
+        alt: typeof candidate.alt === "string" ? candidate.alt : undefined,
+        assetId:
+          typeof candidate.assetId === "string" ? candidate.assetId : undefined,
+      };
+    }
+
+    if (
+      candidate.kind === "text" &&
+      typeof candidate.symbols === "string" &&
+      candidate.symbols
+    ) {
+      return {
+        kind: "text",
+        symbols: candidate.symbols,
+        unit: typeof candidate.unit === "string" ? candidate.unit : undefined,
+        count:
+          typeof candidate.count === "number" ? candidate.count : undefined,
+        spaced:
+          typeof candidate.spaced === "boolean"
+            ? candidate.spaced
+            : undefined,
+      };
+    }
+  }
+
+  return DEFAULT_SCENE_BREAK;
 }
 
 export { normalizeMetrics };
@@ -368,6 +417,27 @@ export const useSettingsStore = create<SettingsStore>()(
             ),
           },
         })),
+      setLastSceneBreak: (lastSceneBreak) => set({ lastSceneBreak }),
+      addSceneBreakPreset: (descriptor) =>
+        set((state) => {
+          const key = JSON.stringify(descriptor);
+          if (
+            state.sceneBreakPresets.some(
+              (preset) => JSON.stringify(preset) === key,
+            )
+          ) {
+            return state;
+          }
+          return {
+            sceneBreakPresets: [...state.sceneBreakPresets, descriptor],
+          };
+        }),
+      removeSceneBreakPreset: (index) =>
+        set((state) => ({
+          sceneBreakPresets: state.sceneBreakPresets.filter(
+            (_preset, presetIndex) => presetIndex !== index,
+          ),
+        })),
       addCustomWord: (word) => {
         const normalized = word.trim();
         if (!normalized) return;
@@ -405,6 +475,7 @@ export const useSettingsStore = create<SettingsStore>()(
           ...currentState,
           ...persisted,
           pasteCleanup: normalizePasteCleanup(persisted.pasteCleanup),
+          lastSceneBreak: normalizeSceneBreak(persisted.lastSceneBreak),
           metrics: normalizeMetrics(persisted.metrics),
         };
       },

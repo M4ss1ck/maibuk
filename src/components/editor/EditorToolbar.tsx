@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { TableMenu } from "./TableMenu";
+import { SceneBreakMenu } from "./SceneBreakMenu";
 import { FindReplace } from "./FindReplace";
 import { ImageInsertDialog } from "./ImageInsertDialog";
 import { FootnoteDialog } from "./FootnoteDialog";
@@ -50,7 +51,6 @@ import {
   AlignRight,
   RemoveFormatting,
   Image,
-  Ellipsis,
   MessageSquareText,
   Minus,
   Undo2,
@@ -637,12 +637,7 @@ export function EditorToolbar({
             <Image className="w-4 h-4" />
           </ToolbarButton>
 
-          <ToolbarButton
-            onClick={() => (editor.commands as any).setSceneBreak?.()}
-            title={t("editor.sceneBreak")}
-          >
-            <Ellipsis className="w-4 h-4" />
-          </ToolbarButton>
+          <SceneBreakMenu editor={editor} bookId={bookId} />
 
           <ToolbarButton
             onClick={() => {

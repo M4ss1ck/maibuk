@@ -256,6 +256,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `metricsService`                                                   | `src/lib/metrics/MetricsService.ts`        |
 | `useNoteStore` / `saveCollapsedHeadings`                          | `src/features/notes/store.ts`              |
 | `CollapsibleHeading` / `collapsibleHeadingPluginKey`              | `src/components/editor/extensions/CollapsibleHeading.ts` |
+| `SceneBreakDescriptor` / scene-break attribute helpers             | `src/components/editor/extensions/scene-break-utils.ts` |
 
 ---
 
