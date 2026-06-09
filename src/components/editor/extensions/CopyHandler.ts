@@ -7,7 +7,11 @@ import i18n from "../../../i18n";
 import { toast } from "../../ui";
 
 const copyHandlerKey = new PluginKey("copyHandler");
-const BLOCK_SEPARATOR = "\n\n";
+const BLOCK_SEPARATOR = "\n";
+
+export function clipboardTextSerializer(slice: Slice): string {
+  return slice.content.textBetween(0, slice.content.size, BLOCK_SEPARATOR);
+}
 
 function serializeSlice(state: EditorState, slice: Slice): { html: string; text: string } {
   const serializer = DOMSerializer.fromSchema(state.schema);
@@ -15,7 +19,7 @@ function serializeSlice(state: EditorState, slice: Slice): { html: string; text:
   const container = document.createElement("div");
   container.appendChild(fragment);
 
-  const text = slice.content.textBetween(0, slice.content.size, BLOCK_SEPARATOR);
+  const text = clipboardTextSerializer(slice);
   return { html: container.innerHTML, text };
 }
 
@@ -27,6 +31,7 @@ export const CopyHandler = Extension.create({
       new Plugin({
         key: copyHandlerKey,
         props: {
+          clipboardTextSerializer,
           handleDOMEvents: {
             copy(view, event) {
               const clipboardData = (event as ClipboardEvent).clipboardData;
