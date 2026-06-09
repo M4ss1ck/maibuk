@@ -229,7 +229,7 @@ option {
 .editor-content ul[data-type="taskList"] li[data-checked] {
   display: flex;
   gap: 0.375rem;
-  align-items: center;
+  align-items: baseline;
   margin: 0.125em 0;
 }
 
@@ -240,6 +240,9 @@ option {
   gap: 0.25rem;
   margin-top: 0;
   flex: 0 0 auto;
+  /* optical nudge: align checkbox with the text's visual center, not its baseline */
+  position: relative;
+  top: -0.3em;
 }
 
 .editor-content ul[data-type="taskList"] li[data-checked] > label input[type="checkbox"] {
