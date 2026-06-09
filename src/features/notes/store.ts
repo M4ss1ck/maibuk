@@ -18,6 +18,16 @@ function parseTags(raw: unknown): string[] {
   }
 }
 
+function parseCollapsedHeadings(raw: unknown): string[] {
+  if (typeof raw !== "string" || raw.length === 0) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function toModel(row: Record<string, unknown>): Note {
   return {
     id: row.id as string,
@@ -27,6 +37,7 @@ function toModel(row: Record<string, unknown>): Note {
     pinned: Boolean(row.pinned),
     order: row.order as number,
     wordCount: (row.word_count as number) ?? 0,
+    collapsedHeadings: parseCollapsedHeadings(row.collapsed_headings),
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };
@@ -54,6 +65,7 @@ interface NoteStore {
   deleteNote: (id: string) => Promise<void>;
   reorderNotes: (orderedIds: string[]) => Promise<void>;
   setCurrentNote: (note: Note | null) => void;
+  saveCollapsedHeadings: (noteId: string, collapsedHeadings: string[]) => Promise<void>;
 }
 
 export const useNoteStore = create<NoteStore>((set) => ({
@@ -107,13 +119,14 @@ export const useNoteStore = create<NoteStore>((set) => ({
       pinned: input.pinned ?? false,
       order,
       wordCount: input.wordCount ?? 0,
+      collapsedHeadings: input.collapsedHeadings ?? [],
       createdAt: now,
       updatedAt: now,
     };
 
     await db.execute(
-      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         note.id,
         note.title,
@@ -122,6 +135,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
         note.pinned ? 1 : 0,
         note.order,
         note.wordCount,
+        JSON.stringify(note.collapsedHeadings),
         note.createdAt,
         note.updatedAt,
       ],
@@ -142,7 +156,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
     const updated: Note = { ...existing, ...input, updatedAt: nowSeconds() };
 
     await db.execute(
-      `UPDATE notes SET title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE notes SET title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ? WHERE id = ?`,
       [
         updated.title,
         updated.content,
@@ -150,6 +164,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
         updated.pinned ? 1 : 0,
         updated.order,
         updated.wordCount,
+        JSON.stringify(updated.collapsedHeadings),
         updated.updatedAt,
         updated.id,
       ],
@@ -206,6 +221,24 @@ export const useNoteStore = create<NoteStore>((set) => ({
           return idx >= 0 ? { ...n, order: idx } : n;
         }),
       ),
+    }));
+  },
+
+  saveCollapsedHeadings: async (noteId: string, collapsedHeadings: string[]) => {
+    const db = await getDatabase();
+    await db.execute(
+      'UPDATE notes SET collapsed_headings = ? WHERE id = ?',
+      [JSON.stringify(collapsedHeadings), noteId],
+    );
+
+    set((state) => ({
+      notes: state.notes.map((n) =>
+        n.id === noteId ? { ...n, collapsedHeadings } : n,
+      ),
+      currentNote:
+        state.currentNote?.id === noteId
+          ? { ...state.currentNote, collapsedHeadings }
+          : state.currentNote,
     }));
   },
 

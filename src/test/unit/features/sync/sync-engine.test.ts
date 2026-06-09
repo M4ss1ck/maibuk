@@ -14,6 +14,7 @@ const mockPushVersionBlob = vi.hoisted(() => vi.fn());
 const mockPullVersionBlob = vi.hoisted(() => vi.fn());
 const mockApplyBookSnapshot = vi.hoisted(() => vi.fn());
 const mockSerializeNote = vi.hoisted(() => vi.fn());
+const mockNormalizeNoteSnapshotForSync = vi.hoisted(() => vi.fn((json: string) => json));
 const mockApplyNoteSnapshot = vi.hoisted(() => vi.fn());
 const mockPushNoteBlob = vi.hoisted(() => vi.fn());
 const mockPullNoteBlob = vi.hoisted(() => vi.fn());
@@ -41,6 +42,7 @@ vi.mock("../../../../features/sync/serializer", () => ({
   serializeBook: mockSerializeBook,
   applyBookSnapshot: mockApplyBookSnapshot,
   serializeNote: mockSerializeNote,
+  normalizeNoteSnapshotForSync: mockNormalizeNoteSnapshotForSync,
   applyNoteSnapshot: mockApplyNoteSnapshot,
 }));
 

@@ -102,6 +102,7 @@ src/
 │   ├── covers/          # types.ts
 │   ├── export/          # generators, sanitizers, styles, types
 │   ├── metrics/         # writing metrics types, classifier, repo, settings, session tracking
+│   ├── notes/           # store.ts, types.ts
 │   ├── settings/        # store.ts, types.ts, AppSettingsProvider.tsx
 │   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts
 │   ├── theme/           # store.ts
@@ -253,6 +254,8 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `countWords()` / `classifyTransaction()`                           | `src/features/metrics/word-count.ts` / `classifier.ts` |
 | `ensureMetricsSchema()` / `insertEvents()`                         | `src/features/metrics/events-repo.ts`      |
 | `metricsService`                                                   | `src/lib/metrics/MetricsService.ts`        |
+| `useNoteStore` / `saveCollapsedHeadings`                          | `src/features/notes/store.ts`              |
+| `CollapsibleHeading` / `collapsibleHeadingPluginKey`              | `src/components/editor/extensions/CollapsibleHeading.ts` |
 
 ---
 

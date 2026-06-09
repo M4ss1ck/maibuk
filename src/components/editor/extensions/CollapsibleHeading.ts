@@ -1,27 +1,42 @@
-import { Extension } from "@tiptap/core";
+import { Extension, type Editor } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 interface CollapsibleHeadingOptions {
   collapseLabel: string;
   expandLabel: string;
+  collapsedHeadings: string[];
 }
 
 interface CollapsibleHeadingState {
-  collapsed: Set<number>;
+  collapsed: Set<string>;
 }
 
-const collapsibleHeadingKey = new PluginKey<CollapsibleHeadingState>("collapsibleHeading");
+export const collapsibleHeadingPluginKey = new PluginKey<CollapsibleHeadingState>("collapsibleHeading");
 
-// Chevron points down when expanded; CSS rotates it when collapsed.
 const CHEVRON_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 
-/**
- * Lets the reader collapse a heading and the content beneath it (up to the next
- * heading of equal or higher level). Collapse state is view-only: it lives in
- * plugin state and is never written to the saved HTML.
- */
+function assignMissingHeadingIds(editor: Editor): void {
+  const tr = editor.state.tr;
+  let modified = false;
+
+  editor.state.doc.descendants((node: ProseMirrorNode, pos: number) => {
+    if (node.type.name !== "heading") return;
+    if (node.attrs.headingId) return;
+    tr.setNodeMarkup(pos, undefined, {
+      ...node.attrs,
+      headingId: crypto.randomUUID(),
+    });
+    modified = true;
+  });
+
+  if (modified) {
+    editor.view.dispatch(tr);
+  }
+}
+
 export const CollapsibleHeading = Extension.create<CollapsibleHeadingOptions>({
   name: "collapsibleHeading",
 
@@ -29,115 +44,162 @@ export const CollapsibleHeading = Extension.create<CollapsibleHeadingOptions>({
     return {
       collapseLabel: "Collapse heading",
       expandLabel: "Expand heading",
+      collapsedHeadings: [] as string[],
     };
   },
 
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["heading"],
+        attributes: {
+          headingId: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-heading-id") ?? crypto.randomUUID(),
+            renderHTML: (attributes) => {
+              if (!attributes.headingId) return {};
+              return { "data-heading-id": attributes.headingId };
+            },
+          },
+        },
+      },
+    ];
+  },
+
+  onCreate() {
+    assignMissingHeadingIds(this.editor);
+  },
+
   addProseMirrorPlugins() {
-    const { collapseLabel, expandLabel } = this.options;
+    const { collapseLabel, expandLabel, collapsedHeadings } = this.options;
 
     return [
       new Plugin<CollapsibleHeadingState>({
-        key: collapsibleHeadingKey,
+        key: collapsibleHeadingPluginKey,
         state: {
-          init: () => ({ collapsed: new Set<number>() }),
-          apply(tr, value) {
+          init: () => ({ collapsed: new Set<string>(collapsedHeadings) }),
+          apply(tr, value, _oldState, newState) {
             let collapsed = value.collapsed;
 
             if (tr.docChanged) {
-              const remapped = new Set<number>();
-              for (const pos of collapsed) {
-                const mapped = tr.mapping.map(pos, -1);
-                const node = tr.doc.nodeAt(mapped);
-                if (node?.type.name === "heading") {
-                  remapped.add(mapped);
+              const verified = new Set<string>();
+              newState.doc.descendants((node) => {
+                const id = node.attrs.headingId as string | null;
+                if (id && collapsed.has(id)) {
+                  verified.add(id);
                 }
-              }
-              collapsed = remapped;
+              });
+              collapsed = verified;
             }
 
-            const meta = tr.getMeta(collapsibleHeadingKey) as { toggle: number } | undefined;
-            if (meta && typeof meta.toggle === "number") {
-              collapsed = new Set(collapsed);
-              if (collapsed.has(meta.toggle)) {
-                collapsed.delete(meta.toggle);
-              } else {
-                collapsed.add(meta.toggle);
+            const meta = tr.getMeta(collapsibleHeadingPluginKey) as
+              | { toggle: string }
+              | { replace: string[] }
+              | undefined;
+            if (meta) {
+              if ("toggle" in meta && typeof meta.toggle === "string") {
+                collapsed = new Set(collapsed);
+                if (collapsed.has(meta.toggle)) {
+                  collapsed.delete(meta.toggle);
+                } else {
+                  collapsed.add(meta.toggle);
+                }
+              } else if ("replace" in meta && Array.isArray(meta.replace)) {
+                collapsed = new Set(meta.replace);
               }
             }
 
             return { collapsed };
           },
         },
+        appendTransaction(_transactions, _oldState, newState) {
+          const tr = newState.tr;
+          let modified = false;
+
+          newState.doc.descendants((node, pos) => {
+            if (node.type.name !== "heading") return;
+            if (node.attrs.headingId) return;
+            tr.setNodeMarkup(pos, undefined, {
+              ...node.attrs,
+              headingId: crypto.randomUUID(),
+            });
+            modified = true;
+          });
+
+          return modified ? tr : null;
+        },
         props: {
           decorations(state) {
-            const pluginState = collapsibleHeadingKey.getState(state);
+            const pluginState = collapsibleHeadingPluginKey.getState(state);
             if (!pluginState) return null;
             const { collapsed } = pluginState;
 
-            const children: { type: string; offset: number; size: number; level: number }[] = [];
-            state.doc.forEach((node, offset) => {
-              children.push({
-                type: node.type.name,
-                offset,
-                size: node.nodeSize,
-                level: typeof node.attrs.level === "number" ? node.attrs.level : 0,
-              });
-            });
-
             const decorations: Decoration[] = [];
-            const hidden = new Set<number>();
+            let currentCollapsedLevel: number | null = null;
 
-            for (let i = 0; i < children.length; i++) {
-              const heading = children[i];
-              if (heading.type !== "heading") continue;
+            state.doc.descendants((node, pos) => {
+              if (node.type.name === "heading") {
+                const headingId = node.attrs.headingId as string | null;
+                if (!headingId) return;
 
-              const isCollapsed = collapsed.has(heading.offset);
+                const level = node.attrs.level as number;
+                const isCollapsed = collapsed.has(headingId);
 
-              decorations.push(
-                Decoration.node(heading.offset, heading.offset + heading.size, {
-                  class: isCollapsed ? "heading-collapsible is-collapsed" : "heading-collapsible",
-                }),
-                Decoration.widget(
-                  heading.offset + 1,
-                  (view) => {
-                    const button = document.createElement("button");
-                    button.type = "button";
-                    button.className = "heading-collapse-toggle";
-                    button.contentEditable = "false";
-                    button.setAttribute("data-collapsed", isCollapsed ? "true" : "false");
-                    button.setAttribute("aria-label", isCollapsed ? expandLabel : collapseLabel);
-                    button.innerHTML = CHEVRON_SVG;
-                    button.addEventListener("mousedown", (event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      view.dispatch(
-                        view.state.tr.setMeta(collapsibleHeadingKey, {
-                          toggle: heading.offset,
-                        })
-                      );
-                    });
-                    return button;
-                  },
-                  { side: -1, key: `heading-toggle-${heading.offset}-${isCollapsed}` }
-                )
-              );
-
-              if (!isCollapsed) continue;
-
-              for (let j = i + 1; j < children.length; j++) {
-                const child = children[j];
-                if (child.type === "heading" && child.level <= heading.level) {
-                  break;
+                if (currentCollapsedLevel !== null && level <= currentCollapsedLevel) {
+                  currentCollapsedLevel = null;
+                } else if (currentCollapsedLevel !== null) {
+                  decorations.push(
+                    Decoration.node(pos, pos + node.nodeSize, {
+                      class: "heading-section-hidden",
+                    })
+                  );
+                  return;
                 }
-                if (hidden.has(child.offset)) continue;
-                hidden.add(child.offset);
+
+                if (isCollapsed) {
+                  currentCollapsedLevel = level;
+                }
+
                 decorations.push(
-                  Decoration.node(child.offset, child.offset + child.size, {
+                  Decoration.node(pos, pos + node.nodeSize, {
+                    class: isCollapsed ? "heading-collapsible is-collapsed" : "heading-collapsible",
+                  }),
+                  Decoration.widget(
+                    pos + 1,
+                    (view) => {
+                      const button = document.createElement("button");
+                      button.type = "button";
+                      button.className = "heading-collapse-toggle";
+                      button.contentEditable = "false";
+                      button.setAttribute("data-collapsed", String(isCollapsed));
+                      button.setAttribute("aria-label", isCollapsed ? expandLabel : collapseLabel);
+                      button.setAttribute("data-heading-id", headingId);
+                      button.innerHTML = CHEVRON_SVG;
+                      button.addEventListener("mousedown", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        view.dispatch(
+                          view.state.tr.setMeta(collapsibleHeadingPluginKey, {
+                            toggle: headingId,
+                          })
+                        );
+                      });
+                      return button;
+                    },
+                    { side: -1, key: `heading-toggle-${headingId}` }
+                  )
+                );
+                return;
+              }
+
+              if (currentCollapsedLevel !== null) {
+                decorations.push(
+                  Decoration.node(pos, pos + node.nodeSize, {
                     class: "heading-section-hidden",
                   })
                 );
               }
-            }
+            });
 
             return DecorationSet.create(state.doc, decorations);
           },

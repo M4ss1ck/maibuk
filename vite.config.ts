@@ -102,6 +102,10 @@ export default defineConfig(() => ({
         "src/features/import/xhtml-to-editor.ts",
         // Phase 10: Project-aware export
         "src/features/export/project-epub-generator.ts",
+        // Phase 11: Persistent accordion state
+        "src/features/notes/store.ts",
+        "src/features/sync/serializer.ts",
+        "src/components/editor/extensions/CollapsibleHeading.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

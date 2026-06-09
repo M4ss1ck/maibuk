@@ -160,6 +160,7 @@ export interface NoteSnapshot {
     pinned: boolean;
     order: number;
     wordCount: number;
+    collapsedHeadings: string | null;
     createdAt: number; // Unix seconds
     updatedAt: number;
   };

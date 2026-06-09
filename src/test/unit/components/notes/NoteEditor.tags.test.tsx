@@ -13,6 +13,7 @@ const mockNotes: Note[] = [
     pinned: false,
     order: 0,
     wordCount: 10,
+    collapsedHeadings: [],
     createdAt: 1,
     updatedAt: 1,
   },
@@ -24,6 +25,7 @@ const mockNotes: Note[] = [
     pinned: false,
     order: 1,
     wordCount: 10,
+    collapsedHeadings: [],
     createdAt: 1,
     updatedAt: 1,
   },
@@ -96,6 +98,7 @@ function buildNote(overrides: Partial<Note>): Note {
     pinned: overrides.pinned ?? false,
     order: overrides.order ?? 0,
     wordCount: overrides.wordCount ?? 10,
+    collapsedHeadings: overrides.collapsedHeadings ?? [],
     createdAt: overrides.createdAt ?? 1,
     updatedAt: overrides.updatedAt ?? 1,
   };

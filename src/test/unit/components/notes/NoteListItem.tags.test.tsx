@@ -22,6 +22,7 @@ function buildNote(overrides: Partial<Note>): Note {
     pinned: overrides.pinned ?? false,
     order: overrides.order ?? 0,
     wordCount: overrides.wordCount ?? 5,
+    collapsedHeadings: overrides.collapsedHeadings ?? [],
     createdAt: overrides.createdAt ?? 1,
     updatedAt: overrides.updatedAt ?? 1,
   };

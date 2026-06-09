@@ -6,6 +6,7 @@ export interface Note {
   pinned: boolean;
   order: number;
   wordCount: number;
+  collapsedHeadings: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -17,6 +18,7 @@ export interface CreateNoteInput {
   pinned?: boolean;
   order?: number;
   wordCount?: number;
+  collapsedHeadings?: string[];
 }
 
 export interface UpdateNoteInput {
@@ -27,4 +29,5 @@ export interface UpdateNoteInput {
   pinned?: boolean;
   order?: number;
   wordCount?: number;
+  collapsedHeadings?: string[];
 }
