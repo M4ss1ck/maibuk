@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, NavLink } from "react-router-dom";
 import { ThemeToggle } from "./ThemeToggle";
-import { APP_VERSION } from "../constants";
+import { APP_VERSION, DOWNLOAD_PAGE } from "../constants";
+import { useVersionCheck } from "../features/version";
 import { useTranslation } from "react-i18next";
 import { ProjectsIcon, SettingsIcon, CloseIcon } from "./icons";
 import { BarChart3, Menu, NotebookPen } from "lucide-react";
@@ -11,6 +12,8 @@ import { useSettingsStore } from "../features/settings/store";
 
 export function Layout() {
   const { t } = useTranslation();
+  const { latestVersion, isOutdated } = useVersionCheck(APP_VERSION);
+  const updateAvailable = isOutdated && latestVersion;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const mainSidebarWidth = useSettingsStore((s) => s.mainSidebarWidth);
   const setMainSidebarWidth = useSettingsStore((s) => s.setMainSidebarWidth);
@@ -194,7 +197,19 @@ export function Layout() {
 
         <div className="p-4 border-t border-border space-y-3">
           <ThemeToggle />
-          <p className="text-sm text-muted-foreground">{APP_VERSION}</p>
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            {APP_VERSION}
+            {updateAvailable && (
+              <a
+                href={DOWNLOAD_PAGE}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs px-2 py-0.5 bg-update-bg text-update-text rounded-full hover:opacity-80 transition-opacity truncate"
+              >
+                {t("settings.updateAvailable", { version: latestVersion })}
+              </a>
+            )}
+          </p>
         </div>
 
         {/* Drag handle to resize the sidebar (desktop only) */}
