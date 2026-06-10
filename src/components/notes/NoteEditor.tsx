@@ -18,6 +18,12 @@ import { tagColor } from "./tagColor";
 import { timeAgo } from "./timeAgo";
 import { ThemeToggle } from "../ThemeToggle";
 import { SyncStatusButton } from "../sync/SyncStatusButton";
+import { toast } from "../ui/Toast";
+import {
+  editorHtmlToMarkdown,
+  markdownFilename,
+  saveMarkdownFile,
+} from "../../features/markdown";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
 import { useNavigate } from "react-router-dom";
@@ -337,6 +343,20 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
     setWordCount(count);
   }, []);
 
+  const handleExportMarkdown = useCallback(async () => {
+    try {
+      const markdown = editorHtmlToMarkdown(contentRef.current || "");
+      const saved = await saveMarkdownFile(
+        markdownFilename(title || note.title),
+        markdown,
+      );
+      if (saved) toast.success(t("editor.exportMarkdownSuccess"));
+    } catch (error) {
+      console.error("Markdown export failed:", error);
+      toast.error(t("editor.exportMarkdownFailed"));
+    }
+  }, [title, note.title, t]);
+
   const handleEditorReady = useCallback(
     (editor: import("@tiptap/core").Editor | null) => {
       editorRef.current = editor;
@@ -510,6 +530,7 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         content={note.content}
         onUpdate={handleContentUpdate}
         onWordCountChange={handleWordCountChange}
+        onExportMarkdown={handleExportMarkdown}
         placeholder={t("notes.bodyPlaceholder")}
         extraExtensions={allNotesExtensions}
         internalTargets={internalTargets}

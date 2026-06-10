@@ -310,7 +310,16 @@
     "themeDefault": "Predeterminado",
     "themeOneDark": "One Dark",
     "themeDracula": "Dracula",
-    "themeOneLight": "One Light"
+    "themeOneLight": "One Light",
+    "exportMarkdown": "Exportar como Markdown",
+    "formatAsMarkdown": "Formatear como Markdown",
+    "markdownDetectedTitle": "Markdown detectado",
+    "markdownDetectedBody": "Esto parece Markdown. ¿Convertirlo a texto con formato?",
+    "convert": "Convertir",
+    "pasteAsIs": "Pegar tal cual",
+    "exportMarkdownSuccess": "Exportado como Markdown",
+    "exportMarkdownFailed": "Error al exportar Markdown",
+    "importMarkdownFailed": "No se pudo importar el archivo Markdown"
   },
   "toc": {
     "sceneBreak": "Salto de escena",
@@ -535,7 +544,9 @@
           "unwrap": "Desenvolver elemento",
           "delete": "Eliminar elemento"
         }
-      }
+      },
+      "promptMarkdownLabel": "Preguntar al pegar Markdown",
+      "promptMarkdownDescription": "Al pegar texto Markdown, preguntar si convertirlo a contenido con formato."
     }
   },
   "cover": {
@@ -767,7 +778,7 @@
   },
   "backup": {
     "title": "Copias de seguridad",
-    "description": "Se crea una copia diaria autom\u00e1ticamente (una vez al d\u00eda), adem\u00e1s de antes de sincronizar y antes de restaurar.",
+    "description": "Se crea una copia diaria automáticamente (una vez al día), además de antes de sincronizar y antes de restaurar.",
     "directoryLabel": "Carpeta de copias",
     "directoryPlaceholder": "Usar la carpeta predeterminada de la app",
     "chooseDirectory": "Elegir carpeta",

@@ -2,8 +2,15 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
-import { Code2, BookOpen, ClipboardCopy, ClipboardPaste } from "lucide-react";
+import {
+  Code2,
+  BookOpen,
+  ClipboardCopy,
+  ClipboardPaste,
+  Sparkles,
+} from "lucide-react";
 import { spellCheckService } from "../../lib/spellcheck";
+import { looksLikeMarkdown, markdownToEditorHtml } from "../../features/markdown";
 import { Divider } from "./ToolbarButton";
 import { adjustPosition, clampPosition, getWordAtPosition } from "./editor-context-menu-utils";
 import { fallbackPaste, useClipboardProbe } from "./useClipboardProbe";
@@ -27,6 +34,7 @@ type MenuState = {
   isLoadingSuggestions: boolean;
   wordUnderCursor: string | null;
   canPaste: boolean;
+  markdown: { from: number; to: number; text: string } | null;
 };
 
 /**
@@ -123,6 +131,25 @@ export function EditorContextMenu({
         wordUnderCursor = extracted?.word ?? null;
       }
 
+      // --- Markdown detection (selection, or current block if no selection) ---
+      const selection = editor.state.selection;
+      let mdFrom: number;
+      let mdTo: number;
+      if (!selection.empty) {
+        mdFrom = selection.from;
+        mdTo = selection.to;
+      } else {
+        const $pos = editor.state.doc.resolve(pos.pos);
+        mdFrom = $pos.depth >= 1 ? $pos.before(1) : 0;
+        mdTo = $pos.depth >= 1 ? $pos.after(1) : editor.state.doc.content.size;
+      }
+      const mdText = editor.state.doc
+        .textBetween(mdFrom, mdTo, "\n", "\n")
+        .replace(/^\n+|\n+$/g, "");
+      const markdown = looksLikeMarkdown(mdText)
+        ? { from: mdFrom, to: mdTo, text: mdText }
+        : null;
+
       const menuPosition = clampPosition(event.clientX, event.clientY);
 
       const menuId = ++menuIdCounter;
@@ -135,6 +162,7 @@ export function EditorContextMenu({
         isLoadingSuggestions: !!misspelling,
         wordUnderCursor,
         canPaste: false,
+        markdown,
       });
 
       void consumeProbe().then((canPaste) => {
@@ -332,6 +360,27 @@ export function EditorContextMenu({
         >
           <BookOpen className="w-4 h-4 shrink-0" />
           <span className="truncate">{t("editor.lookUp", { word: menu.wordUnderCursor })}</span>
+        </button>
+      )}
+
+      {/* Format as Markdown — only when the text looks like Markdown */}
+      {menu.markdown && (
+        <button
+          type="button"
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
+          onClick={() => {
+            const { from, to, text } = menu.markdown!;
+            const html = markdownToEditorHtml(text);
+            editor
+              .chain()
+              .focus()
+              .insertContentAt({ from, to }, html)
+              .run();
+            close();
+          }}
+        >
+          <Sparkles className="w-4 h-4 shrink-0" />
+          <span className="truncate">{t("editor.formatAsMarkdown")}</span>
         </button>
       )}
 

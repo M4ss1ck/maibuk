@@ -41,6 +41,8 @@ import { useChapterStore } from "../../features/chapters/store";
 import { assignHeadingIds } from "../../features/links/heading-ids";
 import type { InternalTarget, InternalTargetChildrenLoader } from "./LinkDialog";
 import { setContentSilently } from "../../features/metrics/programmatic";
+import { markdownToEditorHtml } from "../../features/markdown";
+import { Modal, Button } from "../ui";
 
 export interface EditorStats {
   words: number;
@@ -69,6 +71,7 @@ interface EditorProps {
   extraExtensions?: Extensions;
   headerContent?: React.ReactNode;
   onEditorReady?: (editor: TiptapEditor | null) => void;
+  onExportMarkdown?: () => void;
 }
 
 export function Editor({
@@ -90,6 +93,7 @@ export function Editor({
   extraExtensions,
   headerContent,
   onEditorReady,
+  onExportMarkdown,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore(
@@ -97,6 +101,12 @@ export function Editor({
   );
   const language = useSettingsStore((state) => state.language);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
+  const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<
+    string | null
+  >(null);
+  const handleMarkdownPaste = useCallback((text: string) => {
+    setPendingMarkdownPaste(text);
+  }, []);
   const chapters = useChapterStore((s) => s.chapters);
   const bookInternalTargets: InternalTarget[] = bookId
     ? chapters.map((c) => ({
@@ -179,7 +189,9 @@ export function Editor({
       }),
       SceneBreak,
       Indent,
-      PasteHandler,
+      PasteHandler.configure({
+        onMarkdownPaste: handleMarkdownPaste,
+      }),
       CopyHandler,
       Footnote.configure({
         startIndex: footnoteStartIndex,
@@ -311,6 +323,7 @@ export function Editor({
           bookId={bookId}
           internalTargets={internalTargets}
           loadInternalTargetChildren={loadInternalTargetChildren}
+          onExportMarkdown={onExportMarkdown}
         />
       )}
 
@@ -351,6 +364,66 @@ export function Editor({
         internalTargets={internalTargets}
         loadInternalTargetChildren={loadInternalTargetChildren}
       />
+      <Modal
+        isOpen={pendingMarkdownPaste !== null}
+        onClose={() => setPendingMarkdownPaste(null)}
+        title={t("editor.markdownDetectedTitle")}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (pendingMarkdownPaste !== null) {
+                  editor
+                    .chain()
+                    .focus()
+                    .insertContent(plainTextToHtml(pendingMarkdownPaste))
+                    .run();
+                }
+                setPendingMarkdownPaste(null);
+              }}
+            >
+              {t("editor.pasteAsIs")}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (pendingMarkdownPaste !== null) {
+                  editor
+                    .chain()
+                    .focus()
+                    .insertContent(markdownToEditorHtml(pendingMarkdownPaste))
+                    .run();
+                }
+                setPendingMarkdownPaste(null);
+              }}
+            >
+              {t("editor.convert")}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          {t("editor.markdownDetectedBody")}
+        </p>
+      </Modal>
     </div>
   );
+}
+
+/**
+ * Converts plain text into simple HTML for "paste as-is": blank lines become
+ * paragraph breaks, single newlines become hard breaks. Mirrors the editor's
+ * default plain-text paste behaviour.
+ */
+function plainTextToHtml(text: string): string {
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  return text
+    .split(/\n{2,}/)
+    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`)
+    .join("");
 }

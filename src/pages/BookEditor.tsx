@@ -10,6 +10,13 @@ import type { EditorStats } from "../components/editor/Editor";
 import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ExportDialog } from "../components/export";
+import {
+  editorHtmlToMarkdown,
+  markdownFilename,
+  markdownToEditorHtml,
+  saveMarkdownFile,
+  titleFromMarkdown,
+} from "../features/markdown";
 import { useTranslation } from "react-i18next";
 import {
   SpinnerIcon,
@@ -216,6 +223,23 @@ export function BookEditor() {
     }
   }, [currentChapter, updateChapter]);
 
+  // Export the current chapter as a Markdown file
+  const handleExportMarkdown = useCallback(async () => {
+    if (!currentChapter) return;
+    const html = editorContentRef.current || currentChapter.content || "";
+    try {
+      const markdown = editorHtmlToMarkdown(html);
+      const saved = await saveMarkdownFile(
+        markdownFilename(currentChapter.title),
+        markdown,
+      );
+      if (saved) toast.success(t("editor.exportMarkdownSuccess"));
+    } catch (error) {
+      console.error("Markdown export failed:", error);
+      toast.error(t("editor.exportMarkdownFailed"));
+    }
+  }, [currentChapter, t]);
+
   // triggered save - uses ref to get latest editor content
   const handleSaveNow = useCallback(async () => {
     setSaveStatus("saving");
@@ -304,6 +328,24 @@ export function BookEditor() {
       }
     },
     [bookId, createChapter, setCurrentChapter, updateBook],
+  );
+
+  const handleImportMarkdown = useCallback(
+    async (markdown: string, filenameStem: string) => {
+      if (!bookId) return;
+      try {
+        const title = titleFromMarkdown(markdown, filenameStem);
+        const html = markdownToEditorHtml(markdown);
+        const newChapter = await createChapter({ bookId, title });
+        await updateChapter(newChapter.id, { content: html });
+        setCurrentChapter({ ...newChapter, content: html });
+        updateBook(bookId, { lastChapterId: newChapter.id });
+      } catch (error) {
+        console.error("Markdown import failed:", error);
+        toast.error(t("editor.importMarkdownFailed"));
+      }
+    },
+    [bookId, createChapter, updateChapter, setCurrentChapter, updateBook, t],
   );
 
   const handleDeleteChapter = useCallback(
@@ -553,6 +595,7 @@ export function BookEditor() {
               onUpdateChapter={handleUpdateChapter}
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
+              onImportMarkdown={handleImportMarkdown}
             />
           </div>
 
@@ -573,6 +616,7 @@ export function BookEditor() {
               onUpdateChapter={handleUpdateChapter}
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
+              onImportMarkdown={handleImportMarkdown}
             />
             {showSidebar && (
               <div
@@ -884,6 +928,7 @@ export function BookEditor() {
             bookId={bookId ?? null}
             chapterId={currentChapter.id}
             placeholder={`Start writing "${currentChapter.title}"...`}
+            onExportMarkdown={handleExportMarkdown}
           />
         ) : isChapterPreparing ? (
           <div className="flex-1 flex items-center justify-center">

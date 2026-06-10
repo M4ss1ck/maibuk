@@ -9,6 +9,7 @@ import { ChapterIcon, EditIcon } from "../icons";
 import { DeleteIcon } from "../icons/DeleteIcon";
 import { AddIcon } from "../icons/AddIcon";
 import { useSettingsStore } from "../../features/settings/store";
+import { useMarkdownFileDrop } from "../../hooks/useMarkdownFileDrop";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -19,6 +20,7 @@ interface ChapterListProps {
   onUpdateChapter: (id: string, title: string, type: ChapterType) => void;
   onDeleteChapter: (id: string) => void;
   onReorderChapters: (chapterIds: string[]) => void;
+  onImportMarkdown?: (markdown: string, filenameStem: string) => void;
 }
 
 const chapterTypeLabels: Record<ChapterType, string> = {
@@ -39,6 +41,7 @@ export function ChapterList({
   onUpdateChapter,
   onDeleteChapter,
   onReorderChapters,
+  onImportMarkdown,
 }: ChapterListProps) {
   const { t } = useTranslation();
   const chapterListView = useSettingsStore((state) => state.chapterListView);
@@ -48,6 +51,10 @@ export function ChapterList({
   const isCompactView = chapterListView === "compact";
   const listContainerRef = useRef<HTMLDivElement>(null);
   const selectedItemRef = useRef<HTMLLIElement>(null);
+  const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
+    listContainerRef,
+    onImportMarkdown ?? (() => {}),
+  );
 
   const toggleChapterListView = () => {
     setChapterListView(isCompactView ? "normal" : "compact");
@@ -213,7 +220,11 @@ export function ChapterList({
       )}
 
       {/* Chapter list */}
-      <div ref={listContainerRef} className="flex-1 overflow-auto">
+      <div
+        ref={listContainerRef}
+        className={`flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        {...(onImportMarkdown ? dropHandlers : {})}
+      >
         {chapters.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground text-sm">
             <p>{t("chapters.noChapters")}</p>
