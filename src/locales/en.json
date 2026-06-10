@@ -310,7 +310,16 @@
     "themeDefault": "Default",
     "themeOneDark": "One Dark",
     "themeDracula": "Dracula",
-    "themeOneLight": "One Light"
+    "themeOneLight": "One Light",
+    "exportMarkdown": "Export as Markdown",
+    "formatAsMarkdown": "Format as Markdown",
+    "markdownDetectedTitle": "Markdown detected",
+    "markdownDetectedBody": "This looks like Markdown. Convert it to formatted text?",
+    "convert": "Convert",
+    "pasteAsIs": "Paste as-is",
+    "exportMarkdownSuccess": "Exported as Markdown",
+    "exportMarkdownFailed": "Markdown export failed",
+    "importMarkdownFailed": "Could not import Markdown file"
   },
   "toc": {
     "sceneBreak": "Scene break",
@@ -535,7 +544,9 @@
           "unwrap": "Unwrap element",
           "delete": "Delete element"
         }
-      }
+      },
+      "promptMarkdownLabel": "Prompt to convert pasted Markdown",
+      "promptMarkdownDescription": "When you paste Markdown text, ask whether to convert it to formatted content."
     }
   },
   "cover": {

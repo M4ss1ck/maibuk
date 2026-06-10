@@ -82,6 +82,7 @@ interface SettingsStore extends Settings {
   ) => void;
   removePasteCleanupRule: (id: string) => void;
   movePasteCleanupRule: (id: string, direction: "up" | "down") => void;
+  setPromptMarkdownOnPaste: (enabled: boolean) => void;
   setMetricsCategoryEnabled: (category: MetricsCategory, enabled: boolean) => void;
   setMetricsSyncEnabled: (enabled: boolean) => void;
   setMetricsStreakDailyWordThreshold: (threshold: number) => void;
@@ -130,6 +131,7 @@ const defaultSettings: Settings = {
     options: { ...PASTE_CLEANUP_PRESETS.keepAll },
     rules: [],
   },
+  promptMarkdownOnPaste: false,
   metrics: {
     ...DEFAULT_METRICS_SETTINGS,
     enabled: { ...DEFAULT_METRICS_SETTINGS.enabled },
@@ -285,6 +287,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setSpellCheckEnabled: (spellCheckEnabled) => set({ spellCheckEnabled }),
       setDictionaryOpenInBrowser: (dictionaryOpenInBrowser) => set({ dictionaryOpenInBrowser }),
       setShowInlineFootnotes: (showInlineFootnotes) => set({ showInlineFootnotes }),
+      setPromptMarkdownOnPaste: (promptMarkdownOnPaste) =>
+        set({ promptMarkdownOnPaste }),
       setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
       setMainSidebarWidth: (mainSidebarWidth) =>

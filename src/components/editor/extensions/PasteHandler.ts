@@ -4,6 +4,25 @@ import { Extension } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
 import { useSettingsStore } from "../../../features/settings/store";
 import { cleanPastedHtml } from "../paste-cleanup";
+import { looksLikeMarkdown } from "../../../features/markdown";
+
+export interface PasteHandlerOptions {
+  /**
+   * Called when the user pastes plain text that looks like Markdown and the
+   * "prompt on Markdown paste" setting is enabled. Receives the raw text. When
+   * a handler is provided and chooses to intercept, the paste is swallowed and
+   * the handler is responsible for inserting content (e.g. after a dialog).
+   */
+  onMarkdownPaste: ((text: string) => void) | null;
+}
+
+/** True when the HTML clipboard payload carries real rich formatting we should
+ * keep on the normal cleanup path rather than treating as Markdown source. */
+function hasRichFormatting(html: string): boolean {
+  return /<(h[1-6]|ul|ol|li|strong|b|em|i|blockquote|a|img|table|pre)\b/i.test(
+    html,
+  );
+}
 
 /**
  * PasteHandler extension for content pasted from external sources like Google
@@ -13,10 +32,18 @@ import { cleanPastedHtml } from "../paste-cleanup";
  * paste-cleanup engine. This extension also handles image/blob paste and drop,
  * and preserves indent attributes on the pasted ProseMirror slice.
  */
-export const PasteHandler = Extension.create({
+export const PasteHandler = Extension.create<PasteHandlerOptions>({
   name: "pasteHandler",
 
+  addOptions() {
+    return {
+      onMarkdownPaste: null,
+    };
+  },
+
   addProseMirrorPlugins() {
+    const options = this.options;
+
     return [
       new Plugin({
         key: new PluginKey("pasteHandler"),
@@ -34,6 +61,24 @@ export const PasteHandler = Extension.create({
               const file = imageItem.getAsFile();
               if (file) {
                 readImageAsDataUrl(file, view);
+                return true;
+              }
+            }
+
+            // Offer Markdown conversion when the clipboard is plain Markdown
+            // text (no rich HTML) and the author enabled the prompt.
+            if (options.onMarkdownPaste) {
+              const text = clipboardData.getData("text/plain");
+              const htmlPayload = clipboardData.getData("text/html");
+              const isPlainSource =
+                !htmlPayload || !hasRichFormatting(htmlPayload);
+              if (
+                text &&
+                isPlainSource &&
+                useSettingsStore.getState().promptMarkdownOnPaste &&
+                looksLikeMarkdown(text)
+              ) {
+                options.onMarkdownPaste(text);
                 return true;
               }
             }

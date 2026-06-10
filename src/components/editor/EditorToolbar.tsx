@@ -62,6 +62,7 @@ import {
   ChevronUp,
   BookOpen,
   SpellCheck,
+  FileDown,
 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -70,6 +71,7 @@ interface EditorToolbarProps {
   bookId?: string | null;
   internalTargets?: InternalTarget[];
   loadInternalTargetChildren?: InternalTargetChildrenLoader;
+  onExportMarkdown?: () => void;
 }
 
 const HEADING_SIZES: Record<1 | 2 | 3, string> = {
@@ -85,6 +87,7 @@ export function EditorToolbar({
   bookId,
   internalTargets,
   loadInternalTargetChildren,
+  onExportMarkdown,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -685,6 +688,18 @@ export function EditorToolbar({
           >
             <Code2 className="w-4 h-4" />
           </ToolbarButton>
+
+          {onExportMarkdown && (
+            <>
+              <Divider />
+              <ToolbarButton
+                onClick={onExportMarkdown}
+                title={t("editor.exportMarkdown")}
+              >
+                <FileDown className="w-4 h-4" />
+              </ToolbarButton>
+            </>
+          )}
         </div>
       )}
 

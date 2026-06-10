@@ -4,6 +4,10 @@ import { useNoteStore } from "../features/notes";
 import type { Note, UpdateNoteInput } from "../features/notes";
 import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
 import { useSettingsStore } from "../features/settings/store";
+import {
+  markdownToEditorHtml,
+  titleFromMarkdown,
+} from "../features/markdown";
 
 export function Notes() {
   const notes = useNoteStore((s) => s.notes);
@@ -80,6 +84,17 @@ export function Notes() {
     void updateNote({ id: note.id, pinned: !note.pinned });
   };
 
+  const handleImportMarkdown = async (
+    markdown: string,
+    filenameStem: string,
+  ) => {
+    const title = titleFromMarkdown(markdown, filenameStem);
+    const content = markdownToEditorHtml(markdown);
+    const note = await createNote({ title, content });
+    setCurrentNote(note);
+    setLastNoteId(note.id);
+  };
+
   const handleDuplicateNote = async (note: Note) => {
     const duplicated = await createNote({
       title: `${note.title} (copy)`,
@@ -139,6 +154,7 @@ export function Notes() {
           onPinNote={handlePinNote}
           onDeleteNote={handleDelete}
           onDuplicateNote={handleDuplicateNote}
+          onImportMarkdown={handleImportMarkdown}
         />
         <div
           onMouseDown={handleResizeStart}

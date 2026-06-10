@@ -33,6 +33,13 @@ export function PasteCleanupSection() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [newProperty, setNewProperty] = useState("");
 
+  const promptMarkdownOnPaste = useSettingsStore(
+    (state) => state.promptMarkdownOnPaste,
+  );
+  const setPromptMarkdownOnPaste = useSettingsStore(
+    (state) => state.setPromptMarkdownOnPaste,
+  );
+
   const { preset, options, rules } = pasteCleanup;
   const { strippedProperties } = options;
 
@@ -76,6 +83,21 @@ export function PasteCleanupSection() {
           value={preset}
           onChange={setPasteCleanupPreset}
           options={presetOptions}
+        />
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+        <div>
+          <p className="font-medium">
+            {t("settings.pasteCleanup.promptMarkdownLabel")}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {t("settings.pasteCleanup.promptMarkdownDescription")}
+          </p>
+        </div>
+        <Switch
+          checked={promptMarkdownOnPaste}
+          onChange={setPromptMarkdownOnPaste}
         />
       </div>
 

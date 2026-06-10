@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { Note } from "../../features/notes";
 import { AddIcon } from "../icons/AddIcon";
 import { NoteListItem } from "./NoteListItem";
+import { useMarkdownFileDrop } from "../../hooks/useMarkdownFileDrop";
 
 interface NotesListProps {
   notes: Note[];
@@ -14,6 +15,7 @@ interface NotesListProps {
   onPinNote?: (note: Note) => void;
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: Note) => void;
+  onImportMarkdown?: (markdown: string, filenameStem: string) => void;
 }
 
 function matchesQuery(note: Note, query: string): boolean {
@@ -30,8 +32,14 @@ export function NotesList({
   onPinNote,
   onDeleteNote,
   onDuplicateNote,
+  onImportMarkdown,
 }: NotesListProps) {
   const { t } = useTranslation();
+  const listContainerRef = useRef<HTMLDivElement>(null);
+  const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
+    listContainerRef,
+    onImportMarkdown ?? (() => {}),
+  );
   const [search, setSearch] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
@@ -98,7 +106,11 @@ export function NotesList({
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-auto">
+      <div
+        ref={listContainerRef}
+        className={`flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        {...(onImportMarkdown ? dropHandlers : {})}
+      >
         {filtered.length === 0 ? (
           <div className="text-center py-8 px-4 text-muted-foreground text-sm">
             <p>{t("notes.empty")}</p>

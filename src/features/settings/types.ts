@@ -114,6 +114,7 @@ export interface Settings {
 
   // Paste cleanup settings
   pasteCleanup: PasteCleanupSettings;
+  promptMarkdownOnPaste: boolean;
 
   // Writing metrics settings
   metrics: MetricsSettings;
