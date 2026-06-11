@@ -31,6 +31,7 @@ import { LineHeight } from "./extensions/LineHeight";
 import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
 import { CopyHandler } from "./extensions/CopyHandler";
+import { CodeBlockWithCopy } from "./extensions/CodeBlock";
 import { SpellCheck } from "./extensions/SpellCheck";
 import { Footnote } from "./extensions/Footnote";
 import { MetricsObserver } from "./extensions/MetricsObserver";
@@ -72,6 +73,8 @@ interface EditorProps {
   headerContent?: React.ReactNode;
   onEditorReady?: (editor: TiptapEditor | null) => void;
   onExportMarkdown?: () => void;
+  onExportPdf?: () => void;
+  onExportImage?: () => void;
 }
 
 export function Editor({
@@ -94,6 +97,8 @@ export function Editor({
   headerContent,
   onEditorReady,
   onExportMarkdown,
+  onExportPdf,
+  onExportImage,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore(
@@ -146,7 +151,9 @@ export function Editor({
         // Disable extensions we configure separately
         link: false,
         underline: false,
+        codeBlock: false,
       }),
+      CodeBlockWithCopy,
       HeadingId,
       Placeholder.configure({
         placeholder,
@@ -324,6 +331,8 @@ export function Editor({
           internalTargets={internalTargets}
           loadInternalTargetChildren={loadInternalTargetChildren}
           onExportMarkdown={onExportMarkdown}
+          onExportPdf={onExportPdf}
+          onExportImage={onExportImage}
         />
       )}
 

@@ -63,6 +63,8 @@ import {
   BookOpen,
   SpellCheck,
   FileDown,
+  FileText,
+  ImageDown,
 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -72,6 +74,8 @@ interface EditorToolbarProps {
   internalTargets?: InternalTarget[];
   loadInternalTargetChildren?: InternalTargetChildrenLoader;
   onExportMarkdown?: () => void;
+  onExportPdf?: () => void;
+  onExportImage?: () => void;
 }
 
 const HEADING_SIZES: Record<1 | 2 | 3, string> = {
@@ -88,6 +92,8 @@ export function EditorToolbar({
   internalTargets,
   loadInternalTargetChildren,
   onExportMarkdown,
+  onExportPdf,
+  onExportImage,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -689,16 +695,27 @@ export function EditorToolbar({
             <Code2 className="w-4 h-4" />
           </ToolbarButton>
 
+          {(onExportMarkdown || onExportPdf || onExportImage) && <Divider />}
           {onExportMarkdown && (
-            <>
-              <Divider />
-              <ToolbarButton
-                onClick={onExportMarkdown}
-                title={t("editor.exportMarkdown")}
-              >
-                <FileDown className="w-4 h-4" />
-              </ToolbarButton>
-            </>
+            <ToolbarButton
+              onClick={onExportMarkdown}
+              title={t("editor.exportMarkdown")}
+            >
+              <FileDown className="w-4 h-4" />
+            </ToolbarButton>
+          )}
+          {onExportPdf && (
+            <ToolbarButton onClick={onExportPdf} title={t("editor.exportPdf")}>
+              <FileText className="w-4 h-4" />
+            </ToolbarButton>
+          )}
+          {onExportImage && (
+            <ToolbarButton
+              onClick={onExportImage}
+              title={t("editor.exportImage")}
+            >
+              <ImageDown className="w-4 h-4" />
+            </ToolbarButton>
           )}
         </div>
       )}

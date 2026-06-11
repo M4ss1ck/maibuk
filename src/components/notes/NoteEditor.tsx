@@ -24,6 +24,12 @@ import {
   markdownFilename,
   saveMarkdownFile,
 } from "../../features/markdown";
+import {
+  generateDocumentPdf,
+  elementToPngBytes,
+  saveBinaryFile,
+  exportFilename,
+} from "../../features/export";
 import { useSettingsStore } from "../../features/settings/store";
 import { IS_TAURI } from "../../lib/platform";
 import { useNavigate } from "react-router-dom";
@@ -357,6 +363,42 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
     }
   }, [title, note.title, t]);
 
+  const handleExportPdf = useCallback(async () => {
+    const noteTitle = title || note.title;
+    try {
+      const blob = await generateDocumentPdf(contentRef.current || "", noteTitle);
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const saved = await saveBinaryFile(
+        exportFilename(noteTitle, "pdf"),
+        bytes,
+        "application/pdf",
+        { name: "PDF", extensions: ["pdf"] },
+      );
+      if (saved) toast.success(t("editor.exportPdfSuccess"));
+    } catch (error) {
+      console.error("PDF export failed:", error);
+      toast.error(t("editor.exportPdfFailed"));
+    }
+  }, [title, note.title, t]);
+
+  const handleExportImage = useCallback(async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    try {
+      const bytes = await elementToPngBytes(editor.view.dom as HTMLElement);
+      const saved = await saveBinaryFile(
+        exportFilename(title || note.title, "png"),
+        bytes,
+        "image/png",
+        { name: "PNG Image", extensions: ["png"] },
+      );
+      if (saved) toast.success(t("editor.exportImageSuccess"));
+    } catch (error) {
+      console.error("Image export failed:", error);
+      toast.error(t("editor.exportImageFailed"));
+    }
+  }, [title, note.title, t]);
+
   const handleEditorReady = useCallback(
     (editor: import("@tiptap/core").Editor | null) => {
       editorRef.current = editor;
@@ -531,6 +573,8 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         onUpdate={handleContentUpdate}
         onWordCountChange={handleWordCountChange}
         onExportMarkdown={handleExportMarkdown}
+        onExportPdf={handleExportPdf}
+        onExportImage={handleExportImage}
         placeholder={t("notes.bodyPlaceholder")}
         extraExtensions={allNotesExtensions}
         internalTargets={internalTargets}

@@ -418,6 +418,37 @@ option {
   color: inherit;
 }
 
+/* Code block copy button (visible on hover/focus) */
+.editor-content .code-block-wrapper {
+  position: relative;
+}
+
+.code-block-copy {
+  position: absolute;
+  top: 0.5em;
+  right: 0.5em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375em;
+  border-radius: 0.375em;
+  color: #d4d4d4;
+  background-color: rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  z-index: 2;
+}
+
+.code-block-wrapper:hover .code-block-copy,
+.code-block-wrapper:focus-within .code-block-copy,
+.code-block-copy:focus-visible {
+  opacity: 1;
+}
+
+.code-block-copy:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
 /* Collapsible headings (notes editor) */
 .editor-content .heading-collapsible {
   position: relative;
@@ -565,7 +596,7 @@ option {
 
 /* Image figure node view */
 .editor-image-figure {
-  margin: 1.5em 0;
+  margin: 0.5em 0;
   position: relative;
   transition: width 0.15s ease;
 }
@@ -611,10 +642,24 @@ option {
   text-align: center;
   font-size: 0.875em;
   color: var(--color-muted-foreground);
-  padding: 0.5em 0.25em;
-  min-height: 1.5em;
+  padding: 0.25em;
   font-style: italic;
   position: relative;
+  transition: opacity 0.15s ease;
+}
+
+/*
+ * Collapse the caption row when it is empty and the user isn't interacting
+ * with the figure, so an image without a caption doesn't reserve blank space.
+ * The "add a caption" affordance appears on hover, focus, or selection.
+ */
+.editor-image-figure:not(:hover):not(.ProseMirror-selectednode)
+  .image-caption[data-empty="true"]:not(:focus-within) {
+  height: 0;
+  padding: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .image-caption[data-empty="true"]::before {

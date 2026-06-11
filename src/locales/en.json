@@ -215,6 +215,8 @@
     "insertLinkShortcut": "Insert Link (Ctrl+K)",
     "code": "Inline Code",
     "codeBlock": "Code Block",
+    "copyCode": "Copy code",
+    "copied": "Copied",
     "heading1": "Heading 1",
     "heading2": "Heading 2",
     "heading3": "Heading 3",
@@ -319,6 +321,12 @@
     "pasteAsIs": "Paste as-is",
     "exportMarkdownSuccess": "Exported as Markdown",
     "exportMarkdownFailed": "Markdown export failed",
+    "exportPdf": "Export as PDF",
+    "exportPdfSuccess": "Exported as PDF",
+    "exportPdfFailed": "PDF export failed",
+    "exportImage": "Export as Image",
+    "exportImageSuccess": "Exported as image",
+    "exportImageFailed": "Image export failed",
     "importMarkdownFailed": "Could not import Markdown file"
   },
   "toc": {

@@ -203,6 +203,26 @@ export function createPdfStyles(options: PdfExportOptions) {
       lineHeight: 1.6,
     },
 
+    // --- Code ---
+    codeBlock: {
+      backgroundColor: "#f4f4f5",
+      borderRadius: 4,
+      padding: 10,
+      marginTop: 12,
+      marginBottom: 12,
+    },
+    codeBlockText: {
+      fontFamily: "Courier",
+      fontSize: 10,
+      color: "#1e1e1e",
+      lineHeight: 1.5,
+    },
+    codeInline: {
+      fontFamily: "Courier",
+      fontSize: 10,
+      backgroundColor: "#f4f4f5",
+    },
+
     // --- Scene break ---
     sceneBreak: {
       marginTop: 24,
