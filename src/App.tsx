@@ -14,6 +14,7 @@ import { ToastViewport } from "./components/ui";
 import { GlobalShortcuts } from "./components/GlobalShortcuts";
 import { runDailyBackupOnce } from "./features/backup/lifecycle";
 import { installWindowCloseHandler } from "./lib/window/closeHandler";
+import { installAlwaysOnTopReapply } from "./lib/window/alwaysOnTop";
 
 function isEmbedPath(pathname: string): boolean {
   return pathname === "/embed";
@@ -27,6 +28,7 @@ function App() {
     if (embedMode) return;
     void runDailyBackupOnce();
     void installWindowCloseHandler();
+    void installAlwaysOnTopReapply();
   }, [embedMode]);
 
   if (embedMode) {
