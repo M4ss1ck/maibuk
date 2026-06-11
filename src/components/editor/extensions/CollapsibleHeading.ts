@@ -186,7 +186,10 @@ export const CollapsibleHeading = Extension.create<CollapsibleHeadingOptions>({
                       });
                       return button;
                     },
-                    { side: -1, key: `heading-toggle-${headingId}` }
+                    {
+                      side: -1,
+                      key: `heading-toggle-${headingId}-${isCollapsed ? "collapsed" : "expanded"}`,
+                    }
                   )
                 );
                 return;
