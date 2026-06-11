@@ -179,6 +179,28 @@ describe("renderSceneBreak (PDF)", () => {
   });
 });
 
+describe("code blocks (PDF)", () => {
+  it("renders a <pre><code> block with the code-block style and its text", () => {
+    const tree = renderHtmlContent("<pre><code>const x = 1;</code></pre>", styles);
+    const block = tree[0] as { props?: { style?: unknown } };
+
+    expect(block.props?.style).toBe(styles.codeBlock);
+    expect(collectText(tree).join("")).toContain("const x = 1;");
+  });
+
+  it("preserves newlines inside a code block", () => {
+    const tree = renderHtmlContent("<pre><code>line1\nline2</code></pre>", styles);
+    expect(collectText(tree).join("")).toBe("line1\nline2");
+  });
+
+  it("renders inline <code> with the inline code style", () => {
+    const tree = renderHtmlContent("<p>use <code>npm</code> now</p>", styles);
+    const inlineCode = JSON.stringify(tree);
+    expect(inlineCode).toContain("npm");
+    expect(collectText(tree).join("")).toContain("npm");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // mapCssFontToPdf()
 // ---------------------------------------------------------------------------

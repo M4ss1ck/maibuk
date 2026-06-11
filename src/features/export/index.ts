@@ -15,3 +15,6 @@ export { generatePdf, getPdfFilename, sanitizePdfText } from "./pdf-generator";
 export { createPdfStyles } from "./pdf-styles";
 export type { PdfStyles } from "./pdf-styles";
 export { mapCssFontToPdf } from "./pdf-content-renderer";
+export { generateDocumentPdf } from "./document-pdf";
+export { elementToPngBytes } from "./element-to-image";
+export { saveBinaryFile, exportFilename } from "./save-binary-file";

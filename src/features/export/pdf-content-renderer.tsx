@@ -194,6 +194,8 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
         return renderSceneBreak(el, styles, key);
       }
       return createElement(View, { key }, ...renderBlockChildren(el, styles, key));
+    case "pre":
+      return renderCodeBlock(el, styles, key);
     case "table":
       return renderTable(el, styles, key);
     case "section":
@@ -304,6 +306,15 @@ function renderSceneBreak(el: Element, styles: PdfStyles, key: string): ReactNod
     View,
     { key, style: styles.sceneBreak },
     createElement(Text, { style: styles.sceneBreakText }, symbols),
+  );
+}
+
+function renderCodeBlock(el: Element, styles: PdfStyles, key: string): ReactNode {
+  const code = el.textContent ?? "";
+  return createElement(
+    View,
+    { key, style: styles.codeBlock },
+    createElement(Text, { style: styles.codeBlockText }, code)
   );
 }
 
@@ -527,6 +538,15 @@ function renderInlineChildren(node: Element, styles: PdfStyles): ReactNode[] {
         }
         break;
       }
+      case "code":
+        result.push(
+          createElement(
+            Text,
+            { key: nextKey(), style: styles.codeInline },
+            ...renderInlineChildren(el, styles)
+          )
+        );
+        break;
       case "br":
         result.push("\n");
         break;

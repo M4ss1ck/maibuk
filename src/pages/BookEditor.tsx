@@ -11,6 +11,12 @@ import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ExportDialog } from "../components/export";
 import {
+  generateDocumentPdf,
+  elementToPngBytes,
+  saveBinaryFile,
+  exportFilename,
+} from "../features/export";
+import {
   editorHtmlToMarkdown,
   markdownFilename,
   markdownToEditorHtml,
@@ -239,6 +245,44 @@ export function BookEditor() {
       toast.error(t("editor.exportMarkdownFailed"));
     }
   }, [currentChapter, t]);
+
+  // Export the current chapter as a PDF file
+  const handleExportPdf = useCallback(async () => {
+    if (!currentChapter) return;
+    const html = editorContentRef.current || currentChapter.content || "";
+    try {
+      const blob = await generateDocumentPdf(html, currentChapter.title);
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const saved = await saveBinaryFile(
+        exportFilename(currentChapter.title, "pdf"),
+        bytes,
+        "application/pdf",
+        { name: "PDF", extensions: ["pdf"] },
+      );
+      if (saved) toast.success(t("editor.exportPdfSuccess"));
+    } catch (error) {
+      console.error("PDF export failed:", error);
+      toast.error(t("editor.exportPdfFailed"));
+    }
+  }, [currentChapter, t]);
+
+  // Export the current chapter as a PNG image
+  const handleExportImage = useCallback(async () => {
+    if (!currentChapter || !tocEditor) return;
+    try {
+      const bytes = await elementToPngBytes(tocEditor.view.dom as HTMLElement);
+      const saved = await saveBinaryFile(
+        exportFilename(currentChapter.title, "png"),
+        bytes,
+        "image/png",
+        { name: "PNG Image", extensions: ["png"] },
+      );
+      if (saved) toast.success(t("editor.exportImageSuccess"));
+    } catch (error) {
+      console.error("Image export failed:", error);
+      toast.error(t("editor.exportImageFailed"));
+    }
+  }, [currentChapter, tocEditor, t]);
 
   // triggered save - uses ref to get latest editor content
   const handleSaveNow = useCallback(async () => {
@@ -929,6 +973,8 @@ export function BookEditor() {
             chapterId={currentChapter.id}
             placeholder={`Start writing "${currentChapter.title}"...`}
             onExportMarkdown={handleExportMarkdown}
+            onExportPdf={handleExportPdf}
+            onExportImage={handleExportImage}
           />
         ) : isChapterPreparing ? (
           <div className="flex-1 flex items-center justify-center">

@@ -215,6 +215,8 @@
     "insertLinkShortcut": "Insertar Enlace (Ctrl+K)",
     "code": "Código en Línea",
     "codeBlock": "Bloque de Código",
+    "copyCode": "Copiar código",
+    "copied": "Copiado",
     "heading1": "Encabezado 1",
     "heading2": "Encabezado 2",
     "heading3": "Encabezado 3",
@@ -319,6 +321,12 @@
     "pasteAsIs": "Pegar tal cual",
     "exportMarkdownSuccess": "Exportado como Markdown",
     "exportMarkdownFailed": "Error al exportar Markdown",
+    "exportPdf": "Exportar como PDF",
+    "exportPdfSuccess": "Exportado como PDF",
+    "exportPdfFailed": "Error al exportar PDF",
+    "exportImage": "Exportar como imagen",
+    "exportImageSuccess": "Exportado como imagen",
+    "exportImageFailed": "Error al exportar imagen",
     "importMarkdownFailed": "No se pudo importar el archivo Markdown"
   },
   "toc": {
