@@ -208,6 +208,27 @@ describe("CollapsibleHeading", () => {
     editor.destroy();
   });
 
+  it("updates the decoration toggle state immediately after collapsing", () => {
+    const editor = createEditor('<h2 data-heading-id="h1">Title</h2><p>Body</p>');
+
+    const button = editor.view.dom.querySelector(
+      ".heading-collapse-toggle",
+    ) as HTMLElement | null;
+    expect(button).not.toBeNull();
+    expect(button?.getAttribute("data-collapsed")).toBe("false");
+    expect(button?.getAttribute("aria-label")).toBe("Collapse heading");
+
+    button?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+
+    const updatedButton = editor.view.dom.querySelector(
+      ".heading-collapse-toggle",
+    ) as HTMLElement | null;
+    expect(updatedButton).not.toBeNull();
+    expect(updatedButton?.getAttribute("data-collapsed")).toBe("true");
+    expect(updatedButton?.getAttribute("aria-label")).toBe("Expand heading");
+    editor.destroy();
+  });
+
   it("assigns an id to a heading inserted without one", () => {
     const editor = createEditor("<p>Body</p>");
     const { schema } = editor.state;
