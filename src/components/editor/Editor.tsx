@@ -18,7 +18,14 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { ImageFigure } from "./extensions/ImageFigure";
 import { Link } from "@tiptap/extension-link";
-import { useEffect, useCallback, useRef, useState } from "react";
+import {
+  useEffect,
+  useCallback,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { LinkClickHandler } from "./LinkClickHandler";
@@ -303,9 +310,17 @@ export function Editor({
     };
   }, [editor, onStatsChange]);
 
-  const handleFocus = useCallback(() => {
-    editor?.chain().focus().run();
-  }, [editor]);
+  const handleFocus = useCallback(
+    (event: ReactMouseEvent | ReactKeyboardEvent) => {
+      const target = event.target;
+      if (editor && target instanceof Node && editor.view.dom.contains(target)) {
+        return;
+      }
+
+      editor?.chain().focus().run();
+    },
+    [editor],
+  );
 
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
 

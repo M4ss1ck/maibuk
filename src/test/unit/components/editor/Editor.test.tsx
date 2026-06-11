@@ -1,6 +1,10 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Editor as TiptapEditor } from "@tiptap/core";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Editor } from "../../../../components/editor/Editor";
+import { CollapsibleHeading } from "../../../../components/editor/extensions";
 
 const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),
@@ -14,11 +18,21 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../../../features/settings/store", () => ({
-  useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      spellCheckEnabled: false,
-      language: "en",
-    }),
+  useSettingsStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) =>
+      selector({
+        spellCheckEnabled: false,
+        language: "en",
+        metrics: { enabled: { writing: false } },
+      }),
+    {
+      getState: () => ({
+        spellCheckEnabled: false,
+        language: "en",
+        metrics: { enabled: { writing: false } },
+      }),
+    },
+  ),
 }));
 
 vi.mock("../../../../features/metrics/programmatic", () => ({
@@ -101,4 +115,140 @@ describe("Editor", () => {
     expect(lastProps.bookId).toBe("b1");
     expect(lastProps.internalTargets).toBeDefined();
   });
+
+  it("focuses the editor when the blank editor surround is clicked", async () => {
+    let editor: TiptapEditor | null = null;
+
+    const { container } = render(
+      <Editor
+        content={"<p>Chapter</p>\n"}
+        onUpdate={vi.fn()}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(editor).not.toBeNull();
+    });
+
+    const focusCalls = trackFocusCalls(editor!);
+
+    const surround = container.querySelector(".max-w-editor-max") as HTMLElement | null;
+    expect(surround).not.toBeNull();
+    await userEvent.click(surround!);
+
+    expect(focusCalls.some((args) => args.length === 0)).toBe(true);
+  });
+
+  it("does not refocus the previous selection when a task checkbox is clicked", async () => {
+    let editor: TiptapEditor | null = null;
+
+    const { container } = render(
+      <Editor
+        content={
+          '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>item 1</p></li></ul>'
+        }
+        onUpdate={vi.fn()}
+        extraExtensions={[TaskList, TaskItem.configure({ nested: true })]}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector("input[type='checkbox']")).not.toBeNull();
+      expect(editor).not.toBeNull();
+    });
+
+    const focusCalls = trackFocusCalls(editor!);
+
+    await userEvent.click(container.querySelector("input[type='checkbox']")!);
+
+    expect(focusCalls.some((args) => args.length === 0)).toBe(false);
+  });
+
+  it("does not refocus the previous selection when the code block copy button is clicked", async () => {
+    let editor: TiptapEditor | null = null;
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <Editor
+        content={"<pre><code>copy me</code></pre>"}
+        onUpdate={vi.fn()}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />,
+    );
+
+    const copyButton = await screen.findByRole("button", { name: "editor.copyCode" });
+    await waitFor(() => {
+      expect(editor).not.toBeNull();
+    });
+
+    const focusCalls = trackFocusCalls(editor!);
+
+    await userEvent.click(copyButton);
+
+    expect(writeText).toHaveBeenCalledWith("copy me");
+    expect(focusCalls.some((args) => args.length === 0)).toBe(false);
+  });
+
+  it("does not refocus the previous selection when a heading toggle is clicked", async () => {
+    let editor: TiptapEditor | null = null;
+
+    const { container } = render(
+      <Editor
+        content={'<h2 data-heading-id="h1">Title</h2><p>Body</p>'}
+        onUpdate={vi.fn()}
+        extraExtensions={[
+          CollapsibleHeading.configure({
+            collapseLabel: "Collapse heading",
+            expandLabel: "Expand heading",
+            collapsedHeadings: [],
+          }),
+        ]}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".heading-collapse-toggle")).not.toBeNull();
+      expect(editor).not.toBeNull();
+    });
+
+    const focusCalls = trackFocusCalls(editor!);
+
+    const toggle = container.querySelector(".heading-collapse-toggle") as HTMLElement;
+    fireEvent.mouseDown(toggle, { bubbles: true, cancelable: true });
+    fireEvent.click(toggle, { bubbles: true, cancelable: true });
+
+    expect(focusCalls.some((args) => args.length === 0)).toBe(false);
+  });
 });
+
+function trackFocusCalls(editor: TiptapEditor): unknown[][] {
+  const focusCalls: unknown[][] = [];
+  const originalChain = editor.chain.bind(editor);
+
+  editor.chain = (() => {
+    const chain = originalChain();
+    const originalFocus = chain.focus.bind(chain);
+    chain.focus = ((...args: unknown[]) => {
+      focusCalls.push(args);
+      return originalFocus(...(args as Parameters<typeof originalFocus>));
+    }) as typeof chain.focus;
+    return chain;
+  }) as TiptapEditor["chain"];
+
+  return focusCalls;
+}
