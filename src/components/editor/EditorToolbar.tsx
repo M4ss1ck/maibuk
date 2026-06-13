@@ -117,6 +117,10 @@ export function EditorToolbar({
   const setShowNotesChapter = useSettingsStore(
     (state) => state.setShowNotesChapter,
   );
+  const bookSidePanelTab = useSettingsStore((state) => state.bookSidePanelTab);
+  const setBookSidePanelTab = useSettingsStore(
+    (state) => state.setBookSidePanelTab,
+  );
   const language = useSettingsStore((state) => state.language);
   const dictionaryOpenInBrowser = useSettingsStore(
     (state) => state.dictionaryOpenInBrowser,
@@ -652,8 +656,11 @@ export function EditorToolbar({
             onClick={() => {
               if (editorWasFocusedRef.current) {
                 setShowFootnoteDialog(true);
+              } else if (showNotesChapter && bookSidePanelTab === "footnotes") {
+                setShowNotesChapter(false);
               } else {
-                setShowNotesChapter(!showNotesChapter);
+                setBookSidePanelTab("footnotes");
+                setShowNotesChapter(true);
               }
             }}
             title={t("editor.footnote")}

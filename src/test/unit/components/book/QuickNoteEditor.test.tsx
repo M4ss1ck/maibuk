@@ -1,0 +1,60 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { QuickNoteEditor } from "../../../../components/book/QuickNoteEditor";
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+  initReactI18next: { type: "3rdParty", init: () => {} },
+}));
+
+describe("QuickNoteEditor", () => {
+  it("renders a writing canvas with the formatting toolbar hidden by default", async () => {
+    const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".editor-content")).not.toBeNull();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "editor.bold" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reveals the formatting toolbar when the advanced button is toggled", async () => {
+    const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".editor-content")).not.toBeNull();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "bookNotes.formatting" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "editor.bold" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers H1, H3 and task list controls in the advanced toolbar", async () => {
+    const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".editor-content")).not.toBeNull();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "bookNotes.formatting" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "editor.heading1" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "editor.heading3" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "editor.taskList" }),
+    ).toBeInTheDocument();
+  });
+});

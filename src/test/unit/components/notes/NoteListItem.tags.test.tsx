@@ -56,4 +56,29 @@ describe("NoteListItem tags", () => {
 
     expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
   });
+
+  it("positions the drag handle over the meta line on the right", () => {
+    render(
+      <ul>
+        <NoteListItem note={buildNote({ content: "<p>Preview text</p>" })} isSelected={false} onSelect={vi.fn()} />
+      </ul>,
+    );
+
+    const handle = screen.getByTestId("note-drag-handle");
+    expect(handle).toHaveClass("absolute");
+    expect(handle).toHaveClass("right-0");
+  });
+
+  it("uses a drag cursor for draggable rows", () => {
+    render(
+      <ul>
+        <NoteListItem note={buildNote({ title: "Draggable" })} isSelected={false} onSelect={vi.fn()} draggable />
+      </ul>,
+    );
+
+    const row = screen.getByText("Draggable").closest("li");
+    expect(row).not.toBeNull();
+    expect(row).toHaveClass("cursor-grab");
+    expect(row).toHaveClass("active:cursor-grabbing");
+  });
 });

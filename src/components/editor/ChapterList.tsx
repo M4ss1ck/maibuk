@@ -10,6 +10,7 @@ import { DeleteIcon } from "../icons/DeleteIcon";
 import { AddIcon } from "../icons/AddIcon";
 import { useSettingsStore } from "../../features/settings/store";
 import { useMarkdownFileDrop } from "../../hooks/useMarkdownFileDrop";
+import { useDragAutoScroll } from "../../hooks/useDragAutoScroll";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -55,6 +56,7 @@ export function ChapterList({
     listContainerRef,
     onImportMarkdown ?? (() => {}),
   );
+  const autoScroll = useDragAutoScroll(listContainerRef);
 
   const toggleChapterListView = () => {
     setChapterListView(isCompactView ? "normal" : "compact");
@@ -96,10 +98,12 @@ export function ChapterList({
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    autoScroll.onDragOver(e.clientY);
   };
 
   const handleDrop = (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
+    autoScroll.stop();
     if (!draggedId || draggedId === targetId) return;
 
     const draggedIndex = chapters.findIndex((c) => c.id === draggedId);
@@ -116,6 +120,7 @@ export function ChapterList({
   };
 
   const handleDragEnd = () => {
+    autoScroll.stop();
     setDraggedId(null);
   };
 
@@ -263,7 +268,7 @@ export function ChapterList({
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, chapter.id)}
                     onDragEnd={handleDragEnd}
-                    className={`group relative rounded transition-colors cursor-pointer ${draggedId === chapter.id ? "opacity-50" : ""
+                    className={`group relative select-none rounded transition-colors cursor-pointer ${draggedId === chapter.id ? "opacity-50" : ""
                       } ${isActive ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
                       }${isActive && showChapterOutline ? " sticky top-0 backdrop-blur-sm" : ""}`}
                   >

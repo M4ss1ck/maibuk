@@ -58,6 +58,18 @@ describe("useNoteStore", () => {
       expect(loaded?.tags).toEqual(["a", "b"]);
       expect(loaded?.pinned).toBe(true);
     });
+
+    it("persists an optional book association through the round-trip", async () => {
+      const created = await useNoteStore
+        .getState()
+        .createNote({ title: "Filed", bookId: "book-1" });
+
+      await useNoteStore.getState().loadNote(created.id);
+      const loaded = useNoteStore.getState().currentNote;
+
+      expect(created.bookId).toBe("book-1");
+      expect(loaded?.bookId).toBe("book-1");
+    });
   });
 
   describe("loadNotes()", () => {
@@ -95,6 +107,15 @@ describe("useNoteStore", () => {
       expect(updated?.content).toBe("<p>hi</p>");
       expect(updated?.wordCount).toBe(1);
       expect(useNoteStore.getState().currentNote?.title).toBe("Final");
+    });
+
+    it("updates a note book association", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Loose" });
+
+      await useNoteStore.getState().updateNote({ id: note.id, bookId: "book-2" });
+
+      const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+      expect(updated?.bookId).toBe("book-2");
     });
   });
 
@@ -140,6 +161,25 @@ describe("useNoteStore", () => {
       await useNoteStore.getState().loadNotes();
 
       expect(useNoteStore.getState().notes.map((n) => n.title)).toEqual(["C", "A", "B"]);
+    });
+
+    it("persists pin state and section order together", async () => {
+      const a = await useNoteStore.getState().createNote({ title: "A", pinned: true });
+      const b = await useNoteStore.getState().createNote({ title: "B" });
+      const c = await useNoteStore.getState().createNote({ title: "C" });
+
+      await useNoteStore.getState().reorderNotes([
+        { id: c.id, pinned: true },
+        { id: a.id, pinned: true },
+        { id: b.id, pinned: false },
+      ]);
+      await useNoteStore.getState().loadNotes();
+
+      expect(useNoteStore.getState().notes.map((n) => [n.title, n.pinned])).toEqual([
+        ["C", true],
+        ["A", true],
+        ["B", false],
+      ]);
     });
   });
 

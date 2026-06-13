@@ -1,5 +1,6 @@
 export interface Note {
   id: string;
+  bookId?: string | null;
   title: string;
   content: string;
   tags: string[];
@@ -13,6 +14,7 @@ export interface Note {
 
 export interface CreateNoteInput {
   title: string;
+  bookId?: string | null;
   content?: string;
   tags?: string[];
   pinned?: boolean;
@@ -23,6 +25,7 @@ export interface CreateNoteInput {
 
 export interface UpdateNoteInput {
   id: string;
+  bookId?: string | null;
   title?: string;
   content?: string;
   tags?: string[];
@@ -30,4 +33,9 @@ export interface UpdateNoteInput {
   order?: number;
   wordCount?: number;
   collapsedHeadings?: string[];
+}
+
+export interface ReorderNoteItem {
+  id: string;
+  pinned: boolean;
 }

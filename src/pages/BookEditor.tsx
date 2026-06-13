@@ -3,9 +3,10 @@ import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } fro
 import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
-import { Editor, ChapterList } from "../components/editor";
+import { Editor, ChapterList, SaveStatus } from "../components/editor";
 import type { Editor as TiptapEditor } from "@tiptap/core";
-import { NotesPanel } from "../components/editor/NotesPanel";
+import { BookSidePanel } from "../components/book/BookSidePanel";
+import { TruncatedText } from "../components/ui/TruncatedText";
 import type { EditorStats } from "../components/editor/Editor";
 import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -25,10 +26,7 @@ import {
 } from "../features/markdown";
 import { useTranslation } from "react-i18next";
 import {
-  SpinnerIcon,
-  CheckIcon,
   BackIcon,
-  SaveIcon,
   ExportIcon,
   CoverDesignIcon,
   FocusModeIcon,
@@ -37,11 +35,14 @@ import {
   CloseIcon,
 } from "../components/icons";
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
+import { deriveNoteTitle } from "../components/book/deriveNoteTitle";
+import { useNoteStore } from "../features/notes";
 import { useSettingsStore } from "../features/settings/store";
 import {
   History,
   Menu,
   MoreVertical,
+  NotebookText,
   PanelLeftClose,
   PanelLeftOpen,
   Pin,
@@ -111,15 +112,52 @@ export function BookEditor() {
   const [saveVersionName, setSaveVersionName] = useState("");
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
+  const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
+  const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
   const isResizing = useRef(false);
   const showInlineFootnotes = useSettingsStore((s) => s.showInlineFootnotes);
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
   const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
+  const bookSidePanelTab = useSettingsStore((s) => s.bookSidePanelTab);
+  const setBookSidePanelTab = useSettingsStore((s) => s.setBookSidePanelTab);
   const hideKeyboardHints = useSettingsStore((s) => s.hideKeyboardHints);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
   const saveVersionShortcut = isMac() ? "⌘⌥S" : "Ctrl+Alt+S";
   const panelShortcut = "g v";
+
+  const allNotes = useNoteStore((s) => s.notes);
+  const loadNotes = useNoteStore((s) => s.loadNotes);
+  const createNote = useNoteStore((s) => s.createNote);
+  const bookNotes = useMemo(
+    () => allNotes.filter((note) => note.bookId === bookId),
+    [allNotes, bookId],
+  );
+
+  useEffect(() => {
+    if (showNotesChapter && bookSidePanelTab === "notes") void loadNotes();
+  }, [showNotesChapter, bookSidePanelTab, loadNotes]);
+
+  const handleCreateBookNote = useCallback(
+    (html: string) => {
+      if (!bookId) return;
+      void createNote({ bookId, title: deriveNoteTitle(html), content: html });
+    },
+    [bookId, createNote],
+  );
+
+  const handleOpenBookNote = useCallback(
+    (noteId: string) => {
+      navigate("/notes", {
+        state: {
+          openNoteId: noteId,
+          returnTo: `/book/${bookId}`,
+          returnLabel: currentBook?.title ?? "",
+        },
+      });
+    },
+    [navigate, bookId, currentBook?.title],
+  );
 
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
@@ -460,6 +498,40 @@ export function BookEditor() {
     [sidebarWidth],
   );
 
+  // Notes/footnotes side panel drag-resize handler. The panel sits on the right,
+  // so dragging its left edge leftwards widens it (inverted delta).
+  const handleNotesResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizing.current = true;
+      const startX = e.clientX;
+      const startWidth = notesSidebarWidth;
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        if (!isResizing.current) return;
+        const newWidth = Math.max(
+          200,
+          Math.min(480, startWidth - (moveEvent.clientX - startX)),
+        );
+        setNotesSidebarWidth(newWidth);
+      };
+
+      const onMouseUp = () => {
+        isResizing.current = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [notesSidebarWidth, setNotesSidebarWidth],
+  );
+
   // Handle book info update
   const handleUpdateBookInfo = useCallback(
     async (input: Parameters<typeof updateBook>[1]) => {
@@ -720,44 +792,29 @@ export function BookEditor() {
             </button>
 
             <div className="flex-1 min-w-0">
-              <h1 className="font-medium truncate text-sm sm:text-base">
-                {currentBook.title}
-              </h1>
+              <TruncatedText
+                as="h1"
+                text={currentBook.title}
+                className="font-medium truncate text-sm sm:text-base"
+              />
               {currentChapter && (
-                <p className="text-xs text-muted-foreground truncate">
-                  {currentChapter.title}
-                </p>
+                <TruncatedText
+                  as="p"
+                  text={currentChapter.title}
+                  className="text-xs text-muted-foreground truncate"
+                />
               )}
             </div>
 
             {/* Save status */}
-            <div className="text-sm text-muted-foreground">
-              {saveStatus === "saving" && (
-                <span className="flex items-center gap-1">
-                  <SpinnerIcon className="w-4 h-4 animate-spin" />
-                  <span className="hidden sm:inline">{t("editor.saving")}</span>
-                </span>
-              )}
-              {saveStatus === "saved" && (
-                <span className="flex items-center gap-1 text-success">
-                  <CheckIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{t("editor.saved")}</span>
-                </span>
-              )}
-              {!["saving", "saved"].includes(saveStatus) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSaveNow();
-                  }}
-                  disabled={!currentChapter?.content}
-                  title={`${t("common.save")} (Ctrl+S)`}
-                  className={`p-2 rounded transition-colors text-muted-foreground hover:text-primary`}
-                >
-                  <SaveIcon className="w-5 h-5" />
-                </button>
-              )}
-            </div>
+            <SaveStatus
+              status={saveStatus}
+              onSave={() => {
+                handleSaveNow();
+              }}
+              disabled={!currentChapter?.content}
+              saveShortcut="Ctrl+S"
+            />
 
             {/* Sync */}
             <SyncStatusButton />
@@ -769,6 +826,18 @@ export function BookEditor() {
                 panelShortcut={panelShortcut}
               />
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setBookSidePanelTab("notes");
+                setShowNotesChapter(true);
+              }}
+              disabled={showNotesChapter && bookSidePanelTab === "notes"}
+              className="hidden md:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+              title={t("nav.bookNotes")}
+            >
+              <NotebookText className="w-5 h-5" />
+            </button>
 
             {/* Word count - hidden on mobile */}
             <div className="hidden sm:block text-sm text-muted-foreground">
@@ -823,11 +892,10 @@ export function BookEditor() {
                 <button
                   type="button"
                   onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-                  className={`p-2 rounded transition-colors ${
-                    alwaysOnTop
+                  className={`p-2 rounded transition-colors ${alwaysOnTop
                       ? "bg-muted text-primary"
                       : "hover:bg-muted text-foreground"
-                  }`}
+                    }`}
                   title={t("settings.alwaysOnTop")}
                 >
                   <Pin className="w-5 h-5" />
@@ -864,6 +932,19 @@ export function BookEditor() {
                     onKeyDown={() => setShowMobileMenu(false)}
                   />
                   <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border rounded-lg shadow-lg z-50 dropdown-enter">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBookSidePanelTab("notes");
+                        setShowNotesChapter(true);
+                        setShowMobileMenu(false);
+                      }}
+                      disabled={showNotesChapter && bookSidePanelTab === "notes"}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:hover:bg-transparent"
+                    >
+                      <NotebookText className="w-4 h-4" />
+                      {t("nav.bookNotes")}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -1009,15 +1090,21 @@ export function BookEditor() {
         )}
       </div>
 
-      {/* Notes Panel */}
-      {showNotesChapter && !focusMode && (
-        <NotesPanel
-          chapters={chapters}
-          currentChapterId={currentChapter?.id ?? null}
-          onSelectChapter={handleSelectChapter}
-          onClose={() => setShowNotesChapter(false)}
-        />
-      )}
+      {/* Book Side Panel (footnotes + book notes) */}
+      <BookSidePanel
+        isOpen={showNotesChapter && !focusMode}
+        activeTab={bookSidePanelTab}
+        onTabChange={setBookSidePanelTab}
+        onClose={() => setShowNotesChapter(false)}
+        width={notesSidebarWidth}
+        onResizeStart={handleNotesResizeStart}
+        chapters={chapters}
+        currentChapterId={currentChapter?.id ?? null}
+        onSelectChapter={handleSelectChapter}
+        notes={bookNotes}
+        onCreateNote={handleCreateBookNote}
+        onOpenNote={handleOpenBookNote}
+      />
 
       {/* Export Dialog */}
       <ExportDialog

@@ -175,6 +175,7 @@ export async function applyBookSnapshot(snapshot: BookSnapshot): Promise<void> {
 
 interface NoteRow {
   id: string;
+  book_id: string | null;
   title: string;
   content: string | null;
   tags: string | null;
@@ -199,6 +200,7 @@ export async function serializeNote(noteId: string): Promise<string> {
   const snapshot: NoteSnapshot = {
     note: {
       id: row.id,
+      bookId: row.book_id,
       title: row.title,
       content: row.content,
       tags: row.tags,
@@ -237,10 +239,11 @@ export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
 
   await db.execute(
     `INSERT OR REPLACE INTO notes (
-      id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       note.id,
+      note.bookId ?? null,
       note.title,
       note.content,
       note.tags,

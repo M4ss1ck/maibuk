@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
 import { recordTombstone } from "../sync/tombstones";
 import { reindexSource } from "../links/link-index";
-import type { CreateNoteInput, Note, UpdateNoteInput } from "./types";
+import type { CreateNoteInput, Note, ReorderNoteItem, UpdateNoteInput } from "./types";
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -31,6 +31,7 @@ function parseCollapsedHeadings(raw: unknown): string[] {
 function toModel(row: Record<string, unknown>): Note {
   return {
     id: row.id as string,
+    bookId: row.book_id as string | null | undefined,
     title: row.title as string,
     content: (row.content as string) ?? "",
     tags: parseTags(row.tags),
@@ -63,7 +64,7 @@ interface NoteStore {
   createNote: (input: CreateNoteInput) => Promise<Note>;
   updateNote: (input: UpdateNoteInput) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
-  reorderNotes: (orderedIds: string[]) => Promise<void>;
+  reorderNotes: (orderedItems: string[] | ReorderNoteItem[]) => Promise<void>;
   setCurrentNote: (note: Note | null) => void;
   saveCollapsedHeadings: (noteId: string, collapsedHeadings: string[]) => Promise<void>;
 }
@@ -113,6 +114,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
     const note: Note = {
       id,
+      bookId: input.bookId ?? null,
       title: input.title,
       content: input.content ?? "",
       tags: input.tags ?? [],
@@ -125,10 +127,11 @@ export const useNoteStore = create<NoteStore>((set) => ({
     };
 
     await db.execute(
-      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO notes (id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         note.id,
+        note.bookId ?? null,
         note.title,
         note.content,
         JSON.stringify(note.tags),
@@ -156,8 +159,9 @@ export const useNoteStore = create<NoteStore>((set) => ({
     const updated: Note = { ...existing, ...input, updatedAt: nowSeconds() };
 
     await db.execute(
-      `UPDATE notes SET title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE notes SET book_id = ?, title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ? WHERE id = ?`,
       [
+        updated.bookId ?? null,
         updated.title,
         updated.content,
         JSON.stringify(updated.tags),
@@ -204,23 +208,46 @@ export const useNoteStore = create<NoteStore>((set) => ({
     }));
   },
 
-  reorderNotes: async (orderedIds: string[]) => {
+  reorderNotes: async (orderedItems: string[] | ReorderNoteItem[]) => {
     const db = await getDatabase();
     const now = nowSeconds();
-    for (let i = 0; i < orderedIds.length; i++) {
-      await db.execute('UPDATE notes SET "order" = ?, updated_at = ? WHERE id = ?', [
-        i,
-        now,
-        orderedIds[i],
-      ]);
+    const ordered = orderedItems.map((item) =>
+      typeof item === "string" ? { id: item, pinned: undefined } : item,
+    );
+
+    for (let i = 0; i < ordered.length; i++) {
+      const item = ordered[i];
+      if (item.pinned === undefined) {
+        await db.execute('UPDATE notes SET "order" = ?, updated_at = ? WHERE id = ?', [
+          i,
+          now,
+          item.id,
+        ]);
+      } else {
+        await db.execute('UPDATE notes SET "order" = ?, pinned = ?, updated_at = ? WHERE id = ?', [
+          i,
+          item.pinned ? 1 : 0,
+          now,
+          item.id,
+        ]);
+      }
     }
+
+    const reorderById = new Map(ordered.map((item, index) => [item.id, { ...item, index }]));
+    const applyReorder = (note: Note) => {
+      const item = reorderById.get(note.id);
+      if (!item) return note;
+      return {
+        ...note,
+        order: item.index,
+        pinned: item.pinned ?? note.pinned,
+        updatedAt: now,
+      };
+    };
+
     set((state) => ({
-      notes: sortNotes(
-        state.notes.map((n) => {
-          const idx = orderedIds.indexOf(n.id);
-          return idx >= 0 ? { ...n, order: idx } : n;
-        }),
-      ),
+      notes: sortNotes(state.notes.map(applyReorder)),
+      currentNote: state.currentNote ? applyReorder(state.currentNote) : state.currentNote,
     }));
   },
 

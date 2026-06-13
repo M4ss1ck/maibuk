@@ -165,10 +165,11 @@ async function initializeSchema(): Promise<void> {
     )
   `);
 
-  // Create notes table (standalone Notes workspace, not tied to a book)
+  // Create notes table (standalone Notes workspace, optionally tied to a book)
   await db.execute(`
     CREATE TABLE IF NOT EXISTS notes (
       id TEXT PRIMARY KEY,
+      book_id TEXT,
       title TEXT NOT NULL,
       content TEXT,
       tags TEXT,
@@ -183,6 +184,9 @@ async function initializeSchema(): Promise<void> {
   // Migration: Add collapsed_headings column for existing databases
   await db
     .execute(`ALTER TABLE notes ADD COLUMN collapsed_headings TEXT DEFAULT '[]'`)
+    .catch(() => {});
+  await db
+    .execute(`ALTER TABLE notes ADD COLUMN book_id TEXT`)
     .catch(() => {});
 
   // Link index: edges extracted from note/chapter content (powers backlinks).
@@ -239,6 +243,9 @@ async function initializeSchema(): Promise<void> {
   // Create indexes for better performance
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)
+  `);
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id)
   `);
 
   await db.execute(`

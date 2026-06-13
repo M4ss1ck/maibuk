@@ -1,7 +1,8 @@
-import { useEffect, useRef, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useNoteStore } from "../features/notes";
 import type { Note, UpdateNoteInput } from "../features/notes";
+import { useBookStore } from "../features/books/store";
 import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
 import { useSettingsStore } from "../features/settings/store";
 import {
@@ -19,16 +20,24 @@ export function Notes() {
   const deleteNote = useNoteStore((s) => s.deleteNote);
   const reorderNotes = useNoteStore((s) => s.reorderNotes);
   const setCurrentNote = useNoteStore((s) => s.setCurrentNote);
+  const books = useBookStore((s) => s.books);
+  const loadBooks = useBookStore((s) => s.loadBooks);
   const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
   const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
   const lastNoteId = useSettingsStore((s) => s.lastNoteId);
   const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
   const isResizing = useRef(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const [returnTarget, setReturnTarget] = useState<{
+    to: string;
+    label: string;
+  } | null>(null);
 
   useEffect(() => {
     async function init() {
       await loadNotes();
+      await loadBooks();
       if (!useNoteStore.getState().currentNote && lastNoteId) {
         await loadNote(lastNoteId);
         if (!useNoteStore.getState().currentNote) {
@@ -37,13 +46,18 @@ export function Notes() {
       }
     }
     init();
-  }, [loadNotes, loadNote, lastNoteId, setLastNoteId]);
+  }, [loadNotes, loadBooks, loadNote, lastNoteId, setLastNoteId]);
 
   useEffect(() => {
     const state = location.state as {
       openNoteId?: string;
       scrollToHeadingId?: string;
+      returnTo?: string;
+      returnLabel?: string;
     } | null;
+    if (state?.returnTo) {
+      setReturnTarget({ to: state.returnTo, label: state.returnLabel ?? "" });
+    }
     if (state?.openNoteId) {
       void loadNote(state.openNoteId).then(() => {
         if (!state.scrollToHeadingId) return;
@@ -60,8 +74,8 @@ export function Notes() {
     }
   }, [location.state, loadNote]);
 
-  const handleCreateNote = async () => {
-    const note = await createNote({ title: "" });
+  const handleCreateNote = async (bookId?: string | null) => {
+    const note = await createNote({ title: "", bookId: bookId ?? null });
     setCurrentNote(note);
     setLastNoteId(note.id);
   };
@@ -80,8 +94,8 @@ export function Notes() {
     }
   };
 
-  const handlePinNote = (note: Note) => {
-    void updateNote({ id: note.id, pinned: !note.pinned });
+  const handleReassignNoteBook = (noteId: string, bookId: string | null) => {
+    void updateNote({ id: noteId, bookId });
   };
 
   const handleImportMarkdown = async (
@@ -98,6 +112,7 @@ export function Notes() {
   const handleDuplicateNote = async (note: Note) => {
     const duplicated = await createNote({
       title: `${note.title} (copy)`,
+      bookId: note.bookId ?? null,
       content: note.content,
       tags: [...note.tags],
       wordCount: note.wordCount,
@@ -147,11 +162,12 @@ export function Notes() {
       >
         <NotesList
           notes={notes}
+          books={books}
           currentNoteId={currentNote?.id ?? null}
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateNote}
           onReorderNotes={reorderNotes}
-          onPinNote={handlePinNote}
+          onReassignNoteBook={handleReassignNoteBook}
           onDeleteNote={handleDelete}
           onDuplicateNote={handleDuplicateNote}
           onImportMarkdown={handleImportMarkdown}
@@ -173,6 +189,10 @@ export function Notes() {
               setCurrentNote(null);
               setLastNoteId(null);
             }}
+            onReturnToBook={
+              returnTarget ? () => navigate(returnTarget.to) : undefined
+            }
+            returnLabel={returnTarget?.label}
           />
         ) : (
           <EmptyNotes onCreateNote={handleCreateNote} />

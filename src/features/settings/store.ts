@@ -22,6 +22,8 @@ import {
   type Language,
   type HtmlEditorTheme,
   type ChapterListView,
+  type NotesListViewMode,
+  type NotesTreeGroupMode,
   type BackupListPageSize,
   type PasteCleanupPreset,
   type PasteCleanupOptions,
@@ -58,6 +60,7 @@ interface SettingsStore extends Settings {
   setDictionaryOpenInBrowser: (enabled: boolean) => void;
   setShowInlineFootnotes: (enabled: boolean) => void;
   setShowNotesChapter: (enabled: boolean) => void;
+  setBookSidePanelTab: (tab: "footnotes" | "notes") => void;
   setHideKeyboardHints: (enabled: boolean) => void;
   setMainSidebarWidth: (width: number) => void;
   setSidebarWidth: (width: number) => void;
@@ -65,6 +68,8 @@ interface SettingsStore extends Settings {
   setToolbarExpanded: (expanded: boolean) => void;
   setChapterListView: (view: ChapterListView) => void;
   setShowChapterOutline: (enabled: boolean) => void;
+  setNotesListView: (view: NotesListViewMode) => void;
+  setNotesTreeGroupMode: (mode: NotesTreeGroupMode) => void;
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
   setHtmlPanelHeight: (height: number) => void;
@@ -111,6 +116,7 @@ const defaultSettings: Settings = {
   sceneBreakPresets: [],
   showInlineFootnotes: true,
   showNotesChapter: false,
+  bookSidePanelTab: "footnotes",
   hideKeyboardHints: false,
   defaultExportFormat: "epub",
   backupRetention: getDefaultBackupRetention(isWebBuild),
@@ -123,6 +129,8 @@ const defaultSettings: Settings = {
   toolbarExpanded: false,
   chapterListView: "normal",
   showChapterOutline: true,
+  notesListView: "list",
+  notesTreeGroupMode: "book",
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
   htmlPanelHeight: 200,
@@ -290,6 +298,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setPromptMarkdownOnPaste: (promptMarkdownOnPaste) =>
         set({ promptMarkdownOnPaste }),
       setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
+      setBookSidePanelTab: (bookSidePanelTab) => set({ bookSidePanelTab }),
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
       setMainSidebarWidth: (mainSidebarWidth) =>
         set({ mainSidebarWidth: Math.max(200, Math.min(480, mainSidebarWidth)) }),
@@ -300,6 +309,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
+      setNotesListView: (notesListView) => set({ notesListView }),
+      setNotesTreeGroupMode: (notesTreeGroupMode) => set({ notesTreeGroupMode }),
       setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
       setHtmlEditorDarkTheme: (htmlEditorDarkTheme) => set({ htmlEditorDarkTheme }),
       setHtmlPanelHeight: (htmlPanelHeight) =>

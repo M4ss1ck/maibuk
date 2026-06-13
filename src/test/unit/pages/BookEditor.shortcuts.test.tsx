@@ -81,6 +81,8 @@ vi.mock("../../../features/settings/store", () => ({
       showInlineFootnotes: true,
       showNotesChapter: false,
       setShowNotesChapter: vi.fn(),
+      bookSidePanelTab: "footnotes",
+      setBookSidePanelTab: vi.fn(),
       hideKeyboardHints: false,
       alwaysOnTop: false,
       setAlwaysOnTop: vi.fn(),
@@ -102,10 +104,11 @@ vi.mock("../../../features/versions/store", () => ({
 vi.mock("../../../components/editor", () => ({
   ChapterList: () => <div data-testid="chapter-list" />,
   Editor: () => <div data-testid="editor" />,
+  SaveStatus: () => null,
 }));
 
-vi.mock("../../../components/editor/NotesPanel", () => ({
-  NotesPanel: () => <div data-testid="notes-panel" />,
+vi.mock("../../../components/book/BookSidePanel", () => ({
+  BookSidePanel: () => <div data-testid="book-side-panel" />,
 }));
 
 vi.mock("../../../components/ThemeToggle", () => ({

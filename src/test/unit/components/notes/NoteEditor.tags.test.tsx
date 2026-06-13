@@ -83,6 +83,7 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("../../../../components/editor", () => ({
   Editor: ({ headerContent }: { headerContent?: React.ReactNode }) => <div>{headerContent}</div>,
+  SaveStatus: () => null,
 }));
 
 vi.mock("../../../../features/notes/store", () => ({

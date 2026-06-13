@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { GripVertical, Pin, Trash2, Copy } from "lucide-react";
+import { GripVertical, Trash2, Copy } from "lucide-react";
 import type { Note } from "../../features/notes";
 import { NoteTagsRow } from "./NoteTagsRow";
 
@@ -9,7 +9,6 @@ interface NoteListItemProps {
   note: Note;
   isSelected: boolean;
   onSelect: (note: Note) => void;
-  onPinToggle?: (note: Note) => void;
   onDelete?: (id: string) => void;
   onDuplicate?: (note: Note) => void;
   draggable?: boolean;
@@ -36,7 +35,6 @@ export function NoteListItem({
   note,
   isSelected,
   onSelect,
-  onPinToggle,
   onDelete,
   onDuplicate,
   draggable,
@@ -58,7 +56,7 @@ export function NoteListItem({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className={`group rounded transition-colors ${isDragging ? "opacity-50" : ""}`}
+      className={`group select-none rounded transition-colors ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "opacity-50" : ""}`}
     >
       {/* biome-ignore lint/a11y/useSemanticElements: Cannot use <button> because it contains nested action <button> elements */}
       <div
@@ -71,7 +69,6 @@ export function NoteListItem({
           }`}
       >
         <span className="flex items-center gap-1">
-          <GripVertical className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
           <span className="flex-1 min-w-0 block truncate font-medium text-sm">{title}</span>
           {confirmingDelete && onDelete ? (
             <span className="flex items-center gap-1 shrink-0">
@@ -101,24 +98,6 @@ export function NoteListItem({
             </span>
           ) : (
             <>
-              {onPinToggle && (
-                <button
-                  type="button"
-                  draggable={false}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPinToggle(note);
-                  }}
-                  title={note.pinned ? t("notes.unpin") : t("notes.pin")}
-                  aria-label={note.pinned ? t("notes.unpin") : t("notes.pin")}
-                  className={`shrink-0 p-1 rounded transition-colors ${note.pinned
-                    ? "text-primary bg-primary/10 hover:bg-primary/20"
-                    : "text-muted-foreground hover:bg-muted"
-                    }`}
-                >
-                  <Pin className={`w-3.5 h-3.5 ${note.pinned ? "fill-current" : ""}`} />
-                </button>
-              )}
               {onDuplicate && (
                 <button
                   type="button"
@@ -152,11 +131,17 @@ export function NoteListItem({
             </>
           )}
         </span>
-        {preview && (
-          <span className="mt-1 block text-xs text-muted-foreground truncate">
-            {preview}
-          </span>
-        )}
+        <span className="relative mt-1 block min-h-4 pr-4">
+          {preview && (
+            <span className="block truncate text-xs text-muted-foreground">
+              {preview}
+            </span>
+          )}
+          <GripVertical
+            data-testid="note-drag-handle"
+            className="absolute right-0 top-0 h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          />
+        </span>
         <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
       </div>
     </li>

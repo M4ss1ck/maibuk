@@ -10,11 +10,10 @@ interface FootnoteEntry {
   chapterId: string;
 }
 
-interface NotesPanelProps {
+interface FootnotesViewProps {
   chapters: Chapter[];
   currentChapterId: string | null;
   onSelectChapter: (chapter: Chapter) => void;
-  onClose: () => void;
 }
 
 const FOOTNOTE_REGEX =
@@ -56,47 +55,20 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
-export function NotesPanel({
+export function FootnotesView({
   chapters,
   currentChapterId,
   onSelectChapter,
-  onClose,
-}: NotesPanelProps) {
+}: FootnotesViewProps) {
   const { t } = useTranslation();
 
   const footnotes = useMemo(() => extractFootnotes(chapters), [chapters]);
 
   if (footnotes.length === 0) {
     return (
-      <div className="notes-panel">
-        <div className="notes-panel-header">
-          <h3 className="notes-panel-title">{t("editor.notesPanel")}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="notes-panel-close"
-            title={t("common.close")}
-          >
-            <svg
-              aria-label={t("common.close")}
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-        <p className="text-sm text-muted-foreground px-4 py-3">
-          {t("editor.noFootnotes")}
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground px-4 py-3">
+        {t("editor.noFootnotes")}
+      </p>
     );
   }
 
@@ -134,53 +106,27 @@ export function NotesPanel({
   };
 
   return (
-    <div className="notes-panel">
-      <div className="notes-panel-header">
-        <h3 className="notes-panel-title">{t("editor.notesPanel")}</h3>
-        <button
-          type="button"
-          onClick={onClose}
-          className="notes-panel-close"
-          title={t("common.close")}
-        >
-          <svg
-            aria-label={t("common.close")}
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
-      <div className="notes-panel-content">
-        {Array.from(grouped.entries()).map(([chapterId, group]) => (
-          <div key={chapterId} className="notes-chapter-group">
-            <h4 className="notes-chapter-title">{group.title}</h4>
-            <ol className="notes-list">
-              {group.items.map((fn) => (
-                <li key={fn.id} className="notes-item" value={fn.number}>
-                  <span className="footnote-content">{fn.content}</span>
-                  <a
-                    className="footnote-backref"
-                    href={`#fnref-${fn.id}`}
-                    onClick={(e) => handleGoToRef(e, fn)}
-                    title={t("editor.goToReference")}
-                  >
-                    ↩
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ))}
-      </div>
-    </div>
+    <>
+      {Array.from(grouped.entries()).map(([chapterId, group]) => (
+        <div key={chapterId} className="notes-chapter-group">
+          <h4 className="notes-chapter-title">{group.title}</h4>
+          <ol className="notes-list">
+            {group.items.map((fn) => (
+              <li key={fn.id} className="notes-item" value={fn.number}>
+                <span className="footnote-content">{fn.content}</span>
+                <a
+                  className="footnote-backref"
+                  href={`#fnref-${fn.id}`}
+                  onClick={(e) => handleGoToRef(e, fn)}
+                  title={t("editor.goToReference")}
+                >
+                  ↩
+                </a>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ))}
+    </>
   );
 }
