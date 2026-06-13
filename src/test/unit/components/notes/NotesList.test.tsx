@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "../../../../components/notes/NotesList";
 import type { Book } from "../../../../features/books/types";
 import type { Note } from "../../../../features/notes";
@@ -35,6 +35,10 @@ vi.mock("react-i18next", () => ({
   }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function buildNote(overrides: Partial<Note>): Note {
   return {
@@ -82,8 +86,8 @@ describe("NotesList", () => {
     expect(screen.getByRole("button", { name: "Tree" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New note" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tree" }).querySelector(".lucide-folder-tree")).not.toBeNull();
-    expect(screen.getByTestId("notes-view-label-list")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
-    expect(screen.getByTestId("notes-view-label-tree")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
+    expect(screen.getByTestId("notes-view-label-list")).not.toHaveClass("sr-only");
+    expect(screen.getByTestId("notes-view-label-tree")).not.toHaveClass("sr-only");
 
     fireEvent.click(screen.getByRole("button", { name: "New note" }));
     expect(onCreateNote).toHaveBeenCalledWith(null);
@@ -138,9 +142,9 @@ describe("NotesList", () => {
 
     expect(screen.getByText("Group")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Book" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("notes-group-label-book")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
-    expect(screen.getByTestId("notes-group-label-tag")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
-    expect(screen.getByTestId("notes-group-label-date")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
+    expect(screen.getByTestId("notes-group-label-book")).not.toHaveClass("@max-[340px]/notes-sidebar:sr-only");
+    expect(screen.getByTestId("notes-group-label-tag")).not.toHaveClass("@max-[340px]/notes-sidebar:sr-only");
+    expect(screen.getByTestId("notes-group-label-date")).not.toHaveClass("@max-[340px]/notes-sidebar:sr-only");
     expect(screen.getByText("Novel")).toBeInTheDocument();
     expect(screen.getByText("Novel note")).toBeInTheDocument();
     expect(screen.getByText("Empty Book")).toBeInTheDocument();
@@ -153,6 +157,51 @@ describe("NotesList", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Add note" })[0]);
     expect(onCreateNote).toHaveBeenCalledWith("book-a");
+  });
+
+  it("collapses toggle labels independently when each group's measured labels do not fit", async () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      const testId = this.getAttribute("data-testid");
+
+      if (testId === "notes-view-toggle-group") return 190;
+      if (testId === "notes-group-toggle-group") return 150;
+
+      return 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+      const testId = this.getAttribute("data-testid");
+
+      if (testId === "notes-view-toggle-measure") return 140;
+      if (testId === "notes-group-toggle-measure") return 210;
+
+      return 0;
+    });
+
+    render(
+      <NotesList
+        notes={[buildNote({ id: "a", title: "Novel note" })]}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("notes-view-toggle-group")).toHaveAttribute("data-label-mode", "full");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("notes-group-toggle-group")).toHaveAttribute("data-label-mode", "icon");
+    });
+
+    expect(screen.getByTestId("notes-view-label-list")).not.toHaveClass("sr-only");
+    expect(screen.getByTestId("notes-view-label-tree")).not.toHaveClass("sr-only");
+    expect(screen.getByTestId("notes-group-label-book")).toHaveClass("sr-only");
+    expect(screen.getByTestId("notes-group-label-tag")).toHaveClass("sr-only");
+    expect(screen.getByTestId("notes-group-label-date")).toHaveClass("sr-only");
   });
 
   it("shows empty book groups in tree mode when there are no notes", () => {

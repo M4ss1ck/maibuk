@@ -1,4 +1,4 @@
-import { Children, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -43,40 +43,144 @@ interface NotesListProps {
   onImportMarkdown?: (markdown: string, filenameStem: string) => void;
 }
 
-function ToggleButton({
+interface ToggleOption<T extends string> {
+  value: T;
+  label: string;
+  icon: ReactNode;
+  labelTestId: string;
+}
+
+const toggleButtonBaseClass =
+  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors";
+
+function ToggleButton<T extends string>({
+  option,
   isActive,
   onClick,
-  labelTestId,
-  children,
+  showLabel,
+  measureOnly = false,
 }: {
+  option: ToggleOption<T>;
   isActive: boolean;
   onClick: () => void;
-  labelTestId?: string;
-  children: ReactNode;
+  showLabel: boolean;
+  measureOnly?: boolean;
 }) {
-  const items = Children.toArray(children);
-
   return (
     <button
       type="button"
       aria-pressed={isActive}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors max-[340px]:px-1.5 ${isActive
+      aria-label={option.label}
+      tabIndex={measureOnly ? -1 : undefined}
+      className={`${toggleButtonBaseClass} ${isActive
         ? "bg-primary text-white"
         : "text-muted-foreground hover:bg-muted hover:text-foreground"
         }`}
     >
-      {labelTestId ? (
-        <>
-          {items[0]}
-          <span data-testid={labelTestId} className="@max-[340px]/notes-sidebar:sr-only">
-            {items.slice(1)}
-          </span>
-        </>
-      ) : (
-        children
-      )}
+      {option.icon}
+      <span
+        data-testid={measureOnly ? undefined : option.labelTestId}
+        className={showLabel ? undefined : "sr-only"}
+      >
+        {option.label}
+      </span>
     </button>
+  );
+}
+
+function ResponsiveToggleGroup<T extends string>({
+  value,
+  options,
+  onChange,
+  testId,
+  className = "",
+}: {
+  value: T;
+  options: ToggleOption<T>[];
+  onChange: (value: T) => void;
+  testId: string;
+  className?: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [showLabels, setShowLabels] = useState(true);
+
+  const updateLabelMode = useCallback(() => {
+    const container = containerRef.current;
+    const measure = measureRef.current;
+
+    if (!container || !measure) return;
+
+    const availableWidth = container.clientWidth;
+    const requiredWidth = measure.scrollWidth;
+
+    if (availableWidth <= 0 || requiredWidth <= 0) {
+      setShowLabels(true);
+      return;
+    }
+
+    setShowLabels((current) => {
+      const next = requiredWidth <= availableWidth;
+      return current === next ? current : next;
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    updateLabelMode();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateLabelMode);
+      return () => window.removeEventListener("resize", updateLabelMode);
+    }
+
+    const observer = new ResizeObserver(updateLabelMode);
+    if (containerRef.current) observer.observe(containerRef.current);
+    if (measureRef.current) observer.observe(measureRef.current);
+    window.addEventListener("resize", updateLabelMode);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateLabelMode);
+    };
+  }, [options, updateLabelMode]);
+
+  return (
+    <div
+      ref={containerRef}
+      data-testid={`${testId}-toggle-group`}
+      data-label-mode={showLabels ? "full" : "icon"}
+      className={`relative min-w-0 overflow-hidden ${className}`}
+    >
+      <div className="inline-flex max-w-full rounded-lg bg-muted/60 p-0.5">
+        {options.map((option) => (
+          <ToggleButton
+            key={option.value}
+            option={option}
+            isActive={value === option.value}
+            onClick={() => onChange(option.value)}
+            showLabel={showLabels}
+          />
+        ))}
+      </div>
+      <div
+        ref={measureRef}
+        data-testid={`${testId}-toggle-measure`}
+        aria-hidden="true"
+        className="pointer-events-none invisible absolute left-0 top-0 flex w-max rounded-lg bg-muted/60 p-0.5"
+      >
+        {options.map((option) => (
+          <ToggleButton
+            key={option.value}
+            option={option}
+            isActive={value === option.value}
+            onClick={() => {}}
+            showLabel
+            measureOnly
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -104,6 +208,46 @@ export function NotesList({
   const [treeGroupMode, setTreeGroupMode] = useState<NotesTreeGroupMode>("book");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [expandedEmptyGroups, setExpandedEmptyGroups] = useState<Set<string>>(new Set());
+  const viewToggleOptions = useMemo<ToggleOption<NotesListViewMode>[]>(
+    () => [
+      {
+        value: "list",
+        label: t("notes.viewList"),
+        icon: <List className="h-3.5 w-3.5" />,
+        labelTestId: "notes-view-label-list",
+      },
+      {
+        value: "tree",
+        label: t("notes.viewTree"),
+        icon: <FolderTree className="h-3.5 w-3.5" />,
+        labelTestId: "notes-view-label-tree",
+      },
+    ],
+    [t],
+  );
+  const groupToggleOptions = useMemo<ToggleOption<NotesTreeGroupMode>[]>(
+    () => [
+      {
+        value: "book",
+        label: t("notes.groupBook"),
+        icon: <BookOpen className="h-3.5 w-3.5" />,
+        labelTestId: "notes-group-label-book",
+      },
+      {
+        value: "tag",
+        label: t("notes.groupTag"),
+        icon: <Tags className="h-3.5 w-3.5" />,
+        labelTestId: "notes-group-label-tag",
+      },
+      {
+        value: "date",
+        label: t("notes.groupDate"),
+        icon: <CalendarDays className="h-3.5 w-3.5" />,
+        labelTestId: "notes-group-label-date",
+      },
+    ],
+    [t],
+  );
 
   const query = search.trim().toLowerCase();
   const filtered = filterNotes(notes, query);
@@ -319,27 +463,16 @@ export function NotesList({
   };
 
   return (
-    <aside className="@container/notes-sidebar w-full border-r border-border flex flex-col bg-background h-full shrink-0">
+    <aside className="w-full border-r border-border flex flex-col bg-background h-full shrink-0">
       <div className="p-4 pt-12 md:pt-4 flex items-center justify-between gap-2 bg-background z-10 shrink-0">
-        <h3 className="font-medium">{t("notes.title")}</h3>
-        <div className="flex shrink-0 rounded-lg bg-muted/60 p-0.5">
-          <ToggleButton
-            isActive={viewMode === "list"}
-            onClick={() => setViewMode("list")}
-            labelTestId="notes-view-label-list"
-          >
-            <List className="h-3.5 w-3.5" />
-            {t("notes.viewList")}
-          </ToggleButton>
-          <ToggleButton
-            isActive={viewMode === "tree"}
-            onClick={() => setViewMode("tree")}
-            labelTestId="notes-view-label-tree"
-          >
-            <FolderTree className="h-3.5 w-3.5" />
-            {t("notes.viewTree")}
-          </ToggleButton>
-        </div>
+        <h3 className="min-w-0 truncate font-medium">{t("notes.title")}</h3>
+        <ResponsiveToggleGroup
+          value={viewMode}
+          options={viewToggleOptions}
+          onChange={setViewMode}
+          testId="notes-view"
+          className="flex-1"
+        />
         <button
           type="button"
           onClick={() => onCreateNote(null)}
@@ -367,32 +500,13 @@ export function NotesList({
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {t("notes.group")}
             </span>
-            <div className="flex min-w-0 rounded-lg bg-muted/60 p-0.5">
-              <ToggleButton
-                isActive={treeGroupMode === "book"}
-                onClick={() => setTreeGroupMode("book")}
-                labelTestId="notes-group-label-book"
-              >
-                <BookOpen className="h-3.5 w-3.5" />
-                {t("notes.groupBook")}
-              </ToggleButton>
-              <ToggleButton
-                isActive={treeGroupMode === "tag"}
-                onClick={() => setTreeGroupMode("tag")}
-                labelTestId="notes-group-label-tag"
-              >
-                <Tags className="h-3.5 w-3.5" />
-                {t("notes.groupTag")}
-              </ToggleButton>
-              <ToggleButton
-                isActive={treeGroupMode === "date"}
-                onClick={() => setTreeGroupMode("date")}
-                labelTestId="notes-group-label-date"
-              >
-                <CalendarDays className="h-3.5 w-3.5" />
-                {t("notes.groupDate")}
-              </ToggleButton>
-            </div>
+            <ResponsiveToggleGroup
+              value={treeGroupMode}
+              options={groupToggleOptions}
+              onChange={setTreeGroupMode}
+              testId="notes-group"
+              className="flex-1"
+            />
           </div>
         )}
       </div>
