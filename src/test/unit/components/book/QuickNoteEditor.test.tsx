@@ -35,4 +35,26 @@ describe("QuickNoteEditor", () => {
       screen.getByRole("button", { name: "editor.bold" }),
     ).toBeInTheDocument();
   });
+
+  it("offers H1, H3 and task list controls in the advanced toolbar", async () => {
+    const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(container.querySelector(".editor-content")).not.toBeNull();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "bookNotes.formatting" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "editor.heading1" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "editor.heading3" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "editor.taskList" }),
+    ).toBeInTheDocument();
+  });
 });

@@ -4,7 +4,18 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Bold, Italic, Underline as UnderlineIcon, Heading2, List, Settings2 } from "lucide-react";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
+import {
+  Bold,
+  Italic,
+  Underline as UnderlineIcon,
+  Heading1,
+  Heading2,
+  Heading3,
+  List,
+  ListChecks,
+  Settings2,
+} from "lucide-react";
 
 interface QuickNoteEditorProps {
   onChange: (html: string) => void;
@@ -19,6 +30,8 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
     extensions: [
       StarterKit.configure({ underline: false }),
       Underline,
+      TaskList,
+      TaskItem.configure({ nested: true }),
       Placeholder.configure({ placeholder: placeholder ?? "" }),
     ],
     content: "",
@@ -66,16 +79,34 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
               () => editor.chain().focus().toggleUnderline().run(),
             )}
             {toolbarButton(
+              t("editor.heading1"),
+              Heading1,
+              editor.isActive("heading", { level: 1 }),
+              () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+            )}
+            {toolbarButton(
               t("editor.heading2"),
               Heading2,
               editor.isActive("heading", { level: 2 }),
               () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
             )}
             {toolbarButton(
+              t("editor.heading3"),
+              Heading3,
+              editor.isActive("heading", { level: 3 }),
+              () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+            )}
+            {toolbarButton(
               t("editor.bulletList"),
               List,
               editor.isActive("bulletList"),
               () => editor.chain().focus().toggleBulletList().run(),
+            )}
+            {toolbarButton(
+              t("editor.taskList"),
+              ListChecks,
+              editor.isActive("taskList"),
+              () => editor.chain().focus().toggleTaskList().run(),
             )}
           </div>
         ) : (
