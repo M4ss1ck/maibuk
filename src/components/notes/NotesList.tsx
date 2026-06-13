@@ -18,6 +18,7 @@ import { ResponsiveToggleGroup } from "../ui";
 import type { ResponsiveToggleOption } from "../ui";
 import { NoteListItem } from "./NoteListItem";
 import { useMarkdownFileDrop } from "../../hooks/useMarkdownFileDrop";
+import { useDragAutoScroll } from "../../hooks/useDragAutoScroll";
 import { tagColor } from "./tagColor";
 import {
   buildBookNoteGroups,
@@ -63,6 +64,7 @@ export function NotesList({
     listContainerRef,
     onImportMarkdown ?? (() => {}),
   );
+  const autoScroll = useDragAutoScroll(listContainerRef);
   const [search, setSearch] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<NotesListViewMode>("list");
@@ -126,10 +128,12 @@ export function NotesList({
   const handleDragOver = (e: DragEvent<HTMLLIElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    autoScroll.onDragOver(e.clientY);
   };
 
   const handleDrop = (e: DragEvent<HTMLLIElement>, targetId: string) => {
     e.preventDefault();
+    autoScroll.stop();
     if (!draggedId || draggedId === targetId || isSearchActive) return;
 
     const draggedIndex = notes.findIndex((n) => n.id === draggedId);
@@ -145,6 +149,7 @@ export function NotesList({
   };
 
   const handleDragEnd = () => {
+    autoScroll.stop();
     setDraggedId(null);
   };
 
