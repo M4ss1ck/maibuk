@@ -58,7 +58,7 @@ export function NoteListItem({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className={`group rounded transition-colors ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "opacity-50" : ""}`}
+      className={`group select-none rounded transition-colors ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "opacity-50" : ""}`}
     >
       {/* biome-ignore lint/a11y/useSemanticElements: Cannot use <button> because it contains nested action <button> elements */}
       <div
