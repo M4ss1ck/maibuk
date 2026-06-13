@@ -98,6 +98,10 @@ export function Notes() {
     void updateNote({ id: note.id, pinned: !note.pinned });
   };
 
+  const handleReassignNoteBook = (noteId: string, bookId: string | null) => {
+    void updateNote({ id: noteId, bookId });
+  };
+
   const handleImportMarkdown = async (
     markdown: string,
     filenameStem: string,
@@ -167,6 +171,7 @@ export function Notes() {
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateNote}
           onReorderNotes={reorderNotes}
+          onReassignNoteBook={handleReassignNoteBook}
           onPinNote={handlePinNote}
           onDeleteNote={handleDelete}
           onDuplicateNote={handleDuplicateNote}
