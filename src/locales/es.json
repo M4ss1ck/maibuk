@@ -56,7 +56,8 @@
   },
   "bookSidePanel": {
     "footnotes": "Notas al pie",
-    "notes": "Notas"
+    "notes": "Notas",
+    "resize": "Redimensionar panel"
   },
   "metrics": {
     "title": "Métricas",

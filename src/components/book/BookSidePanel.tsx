@@ -12,6 +12,8 @@ interface BookSidePanelProps {
   activeTab: BookSidePanelTab;
   onTabChange: (tab: BookSidePanelTab) => void;
   onClose: () => void;
+  width: number;
+  onResizeStart: (e: React.MouseEvent) => void;
   // footnotes
   chapters: Chapter[];
   currentChapterId: string | null;
@@ -27,6 +29,8 @@ export function BookSidePanel({
   activeTab,
   onTabChange,
   onClose,
+  width,
+  onResizeStart,
   chapters,
   currentChapterId,
   onSelectChapter,
@@ -54,7 +58,15 @@ export function BookSidePanel({
   );
 
   return (
-    <aside className="notes-panel">
+    <aside
+      className="notes-panel relative"
+      style={{ width: `${width}px`, minWidth: `${width}px` }}
+    >
+      <div
+        onMouseDown={onResizeStart}
+        title={t("bookSidePanel.resize")}
+        className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+      />
       <div className="notes-panel-header">
         <div className="flex items-center gap-1">
           {tab("footnotes", t("bookSidePanel.footnotes"))}

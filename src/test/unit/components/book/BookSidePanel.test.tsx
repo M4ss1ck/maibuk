@@ -8,6 +8,7 @@ vi.mock("react-i18next", () => ({
       const map: Record<string, string> = {
         "bookSidePanel.footnotes": "Footnotes",
         "bookSidePanel.notes": "Notes",
+        "bookSidePanel.resize": "Resize panel",
         "common.close": "Close",
       };
       return map[key] ?? key;
@@ -26,6 +27,8 @@ vi.mock("../../../../components/book/BookNotesView", () => ({
 const baseProps = {
   onTabChange: vi.fn(),
   onClose: vi.fn(),
+  width: 280,
+  onResizeStart: vi.fn(),
   chapters: [],
   currentChapterId: null,
   onSelectChapter: vi.fn(),
@@ -78,5 +81,26 @@ describe("BookSidePanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("applies the given width and starts a resize on the handle", () => {
+    const onResizeStart = vi.fn();
+    render(
+      <BookSidePanel
+        {...baseProps}
+        isOpen
+        activeTab="footnotes"
+        width={360}
+        onResizeStart={onResizeStart}
+      />,
+    );
+
+    const panel = screen.getByRole("complementary");
+    expect(panel).toHaveStyle({ width: "360px" });
+
+    const handle = panel.querySelector(".cursor-col-resize");
+    expect(handle).not.toBeNull();
+    fireEvent.mouseDown(handle as Element);
+    expect(onResizeStart).toHaveBeenCalled();
   });
 });

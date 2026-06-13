@@ -112,6 +112,8 @@ export function BookEditor() {
   const [saveVersionName, setSaveVersionName] = useState("");
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
+  const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
+  const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
   const isResizing = useRef(false);
   const showInlineFootnotes = useSettingsStore((s) => s.showInlineFootnotes);
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
@@ -494,6 +496,40 @@ export function BookEditor() {
       document.addEventListener("mouseup", onMouseUp);
     },
     [sidebarWidth],
+  );
+
+  // Notes/footnotes side panel drag-resize handler. The panel sits on the right,
+  // so dragging its left edge leftwards widens it (inverted delta).
+  const handleNotesResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizing.current = true;
+      const startX = e.clientX;
+      const startWidth = notesSidebarWidth;
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        if (!isResizing.current) return;
+        const newWidth = Math.max(
+          200,
+          Math.min(480, startWidth - (moveEvent.clientX - startX)),
+        );
+        setNotesSidebarWidth(newWidth);
+      };
+
+      const onMouseUp = () => {
+        isResizing.current = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [notesSidebarWidth, setNotesSidebarWidth],
   );
 
   // Handle book info update
@@ -1060,6 +1096,8 @@ export function BookEditor() {
         activeTab={bookSidePanelTab}
         onTabChange={setBookSidePanelTab}
         onClose={() => setShowNotesChapter(false)}
+        width={notesSidebarWidth}
+        onResizeStart={handleNotesResizeStart}
         chapters={chapters}
         currentChapterId={currentChapter?.id ?? null}
         onSelectChapter={handleSelectChapter}
