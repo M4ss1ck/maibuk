@@ -22,6 +22,8 @@ import {
   type Language,
   type HtmlEditorTheme,
   type ChapterListView,
+  type NotesListViewMode,
+  type NotesTreeGroupMode,
   type BackupListPageSize,
   type PasteCleanupPreset,
   type PasteCleanupOptions,
@@ -66,6 +68,8 @@ interface SettingsStore extends Settings {
   setToolbarExpanded: (expanded: boolean) => void;
   setChapterListView: (view: ChapterListView) => void;
   setShowChapterOutline: (enabled: boolean) => void;
+  setNotesListView: (view: NotesListViewMode) => void;
+  setNotesTreeGroupMode: (mode: NotesTreeGroupMode) => void;
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
   setHtmlPanelHeight: (height: number) => void;
@@ -125,6 +129,8 @@ const defaultSettings: Settings = {
   toolbarExpanded: false,
   chapterListView: "normal",
   showChapterOutline: true,
+  notesListView: "list",
+  notesTreeGroupMode: "book",
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
   htmlPanelHeight: 200,
@@ -303,6 +309,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
+      setNotesListView: (notesListView) => set({ notesListView }),
+      setNotesTreeGroupMode: (notesTreeGroupMode) => set({ notesTreeGroupMode }),
       setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
       setHtmlEditorDarkTheme: (htmlEditorDarkTheme) => set({ htmlEditorDarkTheme }),
       setHtmlPanelHeight: (htmlPanelHeight) =>

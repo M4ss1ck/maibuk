@@ -58,6 +58,8 @@ describe("useSettingsStore", () => {
       notesSidebarWidth: 256,
       toolbarExpanded: false,
       chapterListView: "normal",
+      notesListView: "list",
+      notesTreeGroupMode: "book",
       pasteCleanup: {
         preset: "keepAll",
         options: { ...PASTE_CLEANUP_PRESETS.keepAll },
@@ -86,12 +88,26 @@ describe("useSettingsStore", () => {
       expect(state.backupListPage).toBe(1);
       expect(state.backupListPageSize).toBe(10);
       expect(state.chapterListView).toBe("normal");
+      expect(state.notesListView).toBe("list");
+      expect(state.notesTreeGroupMode).toBe("book");
       expect(state.pasteCleanup.preset).toBe("keepAll");
       expect(state.pasteCleanup.rules).toEqual([]);
       expect(state.pasteCleanup.options.strippedProperties).toEqual([]);
       expect(state.metrics).toEqual(DEFAULT_METRICS_SETTINGS);
       expect(state.lastPath).toBeNull();
       expect(state.lastNoteId).toBeNull();
+    });
+  });
+
+  describe("notes list view settings", () => {
+    it("persists the notes list/tree view mode", () => {
+      useSettingsStore.getState().setNotesListView("tree");
+      expect(useSettingsStore.getState().notesListView).toBe("tree");
+    });
+
+    it("persists the notes tree grouping mode", () => {
+      useSettingsStore.getState().setNotesTreeGroupMode("tag");
+      expect(useSettingsStore.getState().notesTreeGroupMode).toBe("tag");
     });
   });
 

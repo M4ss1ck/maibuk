@@ -19,6 +19,7 @@ import type { ResponsiveToggleOption } from "../ui";
 import { NoteListItem } from "./NoteListItem";
 import { useMarkdownFileDrop } from "../../hooks/useMarkdownFileDrop";
 import { useDragAutoScroll } from "../../hooks/useDragAutoScroll";
+import { useSettingsStore } from "../../features/settings/store";
 import { tagColor } from "./tagColor";
 import {
   buildBookNoteGroups,
@@ -70,8 +71,10 @@ export function NotesList({
   const [search, setSearch] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<NotesListViewMode>("list");
-  const [treeGroupMode, setTreeGroupMode] = useState<NotesTreeGroupMode>("book");
+  const viewMode = useSettingsStore((s) => s.notesListView);
+  const setViewMode = useSettingsStore((s) => s.setNotesListView);
+  const treeGroupMode = useSettingsStore((s) => s.notesTreeGroupMode);
+  const setTreeGroupMode = useSettingsStore((s) => s.setNotesTreeGroupMode);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [expandedEmptyGroups, setExpandedEmptyGroups] = useState<Set<string>>(new Set());
   const viewToggleOptions = useMemo<ResponsiveToggleOption<NotesListViewMode>[]>(

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "../../../../components/notes/NotesList";
+import { useSettingsStore } from "../../../../features/settings/store";
 import type { Book } from "../../../../features/books/types";
 import type { Note } from "../../../../features/notes";
 
@@ -35,6 +36,12 @@ vi.mock("react-i18next", () => ({
   }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
+
+beforeEach(() => {
+  // The view/group toggles persist via the settings store; reset to defaults
+  // so tree-mode tests don't leak state into later list-mode tests.
+  useSettingsStore.setState({ notesListView: "list", notesTreeGroupMode: "book" });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
