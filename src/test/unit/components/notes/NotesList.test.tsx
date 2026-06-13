@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "../../../../components/notes/NotesList";
 import { useSettingsStore } from "../../../../features/settings/store";
@@ -75,6 +75,29 @@ function buildBook(overrides: Partial<Book>): Book {
     createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
     updatedAt: overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
   };
+}
+
+function setRowRect(row: Element, rect: Pick<DOMRect, "top" | "bottom" | "height">) {
+  void row;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(
+    {
+      top: rect.top,
+      bottom: rect.bottom,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: rect.height,
+      x: 0,
+      y: rect.top,
+      toJSON: () => ({}),
+    } as DOMRect,
+  );
+}
+
+function dragOverAt(target: Element, dataTransfer: DataTransfer, clientY: number) {
+  const event = createEvent.dragOver(target, { dataTransfer });
+  Object.defineProperty(event, "clientY", { value: clientY });
+  fireEvent(target, event);
 }
 
 describe("NotesList", () => {
@@ -332,8 +355,13 @@ describe("NotesList", () => {
     } as unknown as DataTransfer;
 
     fireEvent.dragStart(source, { dataTransfer });
-    fireEvent.dragOver(target, { dataTransfer });
-    fireEvent.drop(target, { dataTransfer });
+    const activeTarget = screen.getByText("Alpha").closest("li");
+    if (!activeTarget) {
+      throw new Error("Expected active target row to exist");
+    }
+    setRowRect(activeTarget, { top: 100, bottom: 140, height: 40 });
+    dragOverAt(activeTarget, dataTransfer, 110);
+    fireEvent.drop(activeTarget, { dataTransfer });
 
     expect(onReorderNotes).toHaveBeenCalledWith([
       { id: "c", pinned: false },
@@ -377,12 +405,63 @@ describe("NotesList", () => {
     } as unknown as DataTransfer;
 
     fireEvent.dragStart(source, { dataTransfer });
-    fireEvent.dragOver(target, { dataTransfer });
-    fireEvent.drop(target, { dataTransfer });
+    const activeTarget = screen.getByText("Alpha").closest("li");
+    if (!activeTarget) {
+      throw new Error("Expected active target row to exist");
+    }
+    setRowRect(activeTarget, { top: 100, bottom: 140, height: 40 });
+    dragOverAt(activeTarget, dataTransfer, 110);
+    fireEvent.drop(activeTarget, { dataTransfer });
 
     expect(onReorderNotes).toHaveBeenCalledWith([
       { id: "b", pinned: true },
       { id: "a", pinned: true },
+      { id: "c", pinned: false },
+    ]);
+  });
+
+  it("drops after the target row when the after-row indicator is active", () => {
+    const onReorderNotes = vi.fn();
+    const notes = [
+      buildNote({ id: "a", title: "Alpha", order: 0 }),
+      buildNote({ id: "b", title: "Bravo", order: 1 }),
+      buildNote({ id: "c", title: "Charlie", order: 2 }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={onReorderNotes}
+      />,
+    );
+
+    const source = screen.getByText("Alpha").closest("li");
+    if (!source) {
+      throw new Error("Expected source row to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    const target = screen.getByText("Bravo").closest("li");
+    if (!target) {
+      throw new Error("Expected target row to exist");
+    }
+
+    setRowRect(target, { top: 100, bottom: 140, height: 40 });
+    dragOverAt(target, dataTransfer, 130);
+    fireEvent.drop(target, { dataTransfer });
+
+    expect(onReorderNotes).toHaveBeenCalledWith([
+      { id: "b", pinned: false },
+      { id: "a", pinned: false },
       { id: "c", pinned: false },
     ]);
   });
@@ -422,6 +501,155 @@ describe("NotesList", () => {
       { id: "a", pinned: true },
       { id: "b", pinned: true },
     ]);
+  });
+
+  it("highlights the target section while dragging over it", () => {
+    const notes = [
+      buildNote({ id: "a", title: "Already pinned", pinned: true, order: 0 }),
+      buildNote({ id: "b", title: "Regular", pinned: false, order: 1 }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    const source = screen.getByText("Regular").closest("li");
+    if (!source) {
+      throw new Error("Expected note row to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId("notes-section-pinned"), { dataTransfer });
+
+    expect(screen.getByTestId("notes-section-pinned")).toHaveAttribute(
+      "data-drop-active",
+      "true",
+    );
+    expect(screen.getByTestId("notes-section-pinned")).toHaveClass("bg-primary/10");
+    expect(screen.getByTestId("notes-section-pinned")).toHaveClass("ring-primary/40");
+  });
+
+  it("shows an append indicator when dragging over a section empty area", () => {
+    const notes = [
+      buildNote({ id: "a", title: "Already pinned", pinned: true, order: 0 }),
+      buildNote({ id: "b", title: "Regular", pinned: false, order: 1 }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    const source = screen.getByText("Regular").closest("li");
+    if (!source) {
+      throw new Error("Expected note row to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId("notes-section-pinned"), { dataTransfer });
+
+    expect(screen.getByTestId("note-drop-indicator-section-pinned")).toBeInTheDocument();
+  });
+
+  it("shows an insertion indicator before a row when dragging over its top half", () => {
+    const notes = [
+      buildNote({ id: "a", title: "Alpha", order: 0 }),
+      buildNote({ id: "b", title: "Bravo", order: 1 }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    const source = screen.getByText("Bravo").closest("li");
+    const target = screen.getByText("Alpha").closest("li");
+    if (!source || !target) {
+      throw new Error("Expected note rows to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    const activeTarget = screen.getByText("Alpha").closest("li");
+    if (!activeTarget) {
+      throw new Error("Expected active target row to exist");
+    }
+    setRowRect(activeTarget, { top: 100, bottom: 140, height: 40 });
+    dragOverAt(activeTarget, dataTransfer, 110);
+
+    expect(screen.getByTestId("note-drop-indicator-before-a")).toBeInTheDocument();
+  });
+
+  it("shows an insertion indicator after a row when dragging over its bottom half", () => {
+    const notes = [
+      buildNote({ id: "a", title: "Alpha", order: 0 }),
+      buildNote({ id: "b", title: "Bravo", order: 1 }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    const source = screen.getByText("Bravo").closest("li");
+    const target = screen.getByText("Alpha").closest("li");
+    if (!source || !target) {
+      throw new Error("Expected note rows to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    const activeTarget = screen.getByText("Alpha").closest("li");
+    if (!activeTarget) {
+      throw new Error("Expected active target row to exist");
+    }
+    setRowRect(activeTarget, { top: 100, bottom: 140, height: 40 });
+    dragOverAt(activeTarget, dataTransfer, 130);
+
+    expect(screen.getByTestId("note-drop-indicator-after-a")).toBeInTheDocument();
   });
 
   it("unpins a pinned note when dropped on the all-notes section", () => {

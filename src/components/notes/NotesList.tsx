@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -36,6 +36,14 @@ import type {
   NotesTreeGroupMode,
 } from "./notes-list-model";
 
+type DropPlacement = "before" | "after";
+
+interface DropTarget {
+  sectionId: NoteSection["id"];
+  targetId: string | null;
+  placement: DropPlacement;
+}
+
 interface NotesListProps {
   notes: NoteWithBook[];
   books?: Book[];
@@ -70,6 +78,7 @@ export function NotesList({
   const autoScroll = useDragAutoScroll(listContainerRef);
   const [search, setSearch] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const viewMode = useSettingsStore((s) => s.notesListView);
   const setViewMode = useSettingsStore((s) => s.setNotesListView);
@@ -137,6 +146,34 @@ export function NotesList({
     autoScroll.onDragOver(e.clientY);
   };
 
+  const handleSectionDragOver = (
+    e: DragEvent<HTMLElement>,
+    sectionId: NoteSection["id"],
+  ) => {
+    handleDragOver(e);
+    if (!draggedId || isSearchActive) return;
+    setDropTarget({ sectionId, targetId: null, placement: "after" });
+  };
+
+  const handleNoteDragOver = (
+    e: DragEvent<HTMLLIElement>,
+    note: NoteWithBook,
+  ) => {
+    e.stopPropagation();
+    handleDragOver(e);
+    if (!draggedId || draggedId === note.id || isSearchActive) return;
+
+    const sectionId = listSections.find((section) =>
+      section.notes.some((sectionNote) => sectionNote.id === note.id),
+    )?.id;
+    if (!sectionId) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const placement: DropPlacement =
+      e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    setDropTarget({ sectionId, targetId: note.id, placement });
+  };
+
   const handleDrop = (e: DragEvent<HTMLLIElement>, targetId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -161,9 +198,14 @@ export function NotesList({
     const targetIndex = targetSection.notes.findIndex((note) => note.id === targetId);
     if (targetIndex === -1) return;
 
-    targetSection.notes.splice(targetIndex, 0, draggedNote);
+    const insertIndex =
+      dropTarget?.targetId === targetId && dropTarget.placement === "after"
+        ? targetIndex + 1
+        : targetIndex;
+    targetSection.notes.splice(insertIndex, 0, draggedNote);
     emitSectionOrder(nextSections);
     setDraggedId(null);
+    setDropTarget(null);
   };
 
   const emitSectionOrder = (sections: NoteSection[]) => {
@@ -199,11 +241,13 @@ export function NotesList({
     targetSection.notes.push(draggedNote);
     emitSectionOrder(nextSections);
     setDraggedId(null);
+    setDropTarget(null);
   };
 
   const handleDragEnd = () => {
     autoScroll.stop();
     setDraggedId(null);
+    setDropTarget(null);
   };
 
   const handleGroupDragOver = (e: DragEvent<HTMLDivElement>, groupId: string) => {
@@ -236,21 +280,50 @@ export function NotesList({
     onReassignNoteBook?.(noteId, targetBookId);
   };
 
+  const renderDropIndicator = (note: NoteWithBook, placement: DropPlacement) => {
+    if (dropTarget?.targetId !== note.id || dropTarget.placement !== placement) {
+      return null;
+    }
+
+    return (
+      <div
+        data-testid={`note-drop-indicator-${placement}-${note.id}`}
+        className="mx-2 my-1 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
+      />
+    );
+  };
+
+  const renderSectionAppendIndicator = (sectionId: NoteSection["id"]) => {
+    if (dropTarget?.sectionId !== sectionId || dropTarget.targetId !== null) {
+      return null;
+    }
+
+    return (
+      <div
+        data-testid={`note-drop-indicator-section-${sectionId}`}
+        className="mx-2 my-2 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
+      />
+    );
+  };
+
   const renderNote = (note: NoteWithBook) => (
-    <NoteListItem
-      key={note.id}
-      note={note}
-      isSelected={currentNoteId === note.id}
-      onSelect={onSelectNote}
-      onDelete={onDeleteNote}
-      onDuplicate={onDuplicateNote}
-      draggable={viewMode === "list" && !isSearchActive ? true : undefined}
-      onDragStart={(e) => handleDragStart(e, note.id)}
-      onDragOver={handleDragOver}
-      onDrop={(e) => handleDrop(e, note.id)}
-      onDragEnd={handleDragEnd}
-      isDragging={draggedId === note.id}
-    />
+    <Fragment key={note.id}>
+      {renderDropIndicator(note, "before")}
+      <NoteListItem
+        note={note}
+        isSelected={currentNoteId === note.id}
+        onSelect={onSelectNote}
+        onDelete={onDeleteNote}
+        onDuplicate={onDuplicateNote}
+        draggable={viewMode === "list" && !isSearchActive ? true : undefined}
+        onDragStart={(e) => handleDragStart(e, note.id)}
+        onDragOver={(e) => handleNoteDragOver(e, note)}
+        onDrop={(e) => handleDrop(e, note.id)}
+        onDragEnd={handleDragEnd}
+        isDragging={draggedId === note.id}
+      />
+      {renderDropIndicator(note, "after")}
+    </Fragment>
   );
 
   const renderTreeNote = (note: NoteWithBook) => (
@@ -501,14 +574,20 @@ export function NotesList({
               <section
                 key={section.id}
                 data-testid={`notes-section-${section.id}`}
-                onDragOver={handleDragOver}
+                data-drop-active={dropTarget?.sectionId === section.id ? "true" : undefined}
+                onDragOver={(e) => handleSectionDragOver(e, section.id)}
                 onDrop={(e) => handleSectionDrop(e, section.id)}
-                className="mb-3 min-h-8 rounded-md transition-colors last:mb-0"
+                className={`mb-3 min-h-8 rounded-md transition-colors last:mb-0 ${
+                  dropTarget?.sectionId === section.id
+                    ? "bg-primary/10 ring-1 ring-inset ring-primary/40"
+                    : ""
+                }`}
               >
                 <h4 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {section.id === "pinned" ? t("notes.sectionPinned") : t("notes.sectionAll")}
                 </h4>
                 {section.notes.length > 0 && <ul className="space-y-1">{section.notes.map(renderNote)}</ul>}
+                {renderSectionAppendIndicator(section.id)}
               </section>
             ))}
           </div>
