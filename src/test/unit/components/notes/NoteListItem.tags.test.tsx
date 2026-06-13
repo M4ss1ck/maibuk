@@ -66,6 +66,19 @@ describe("NoteListItem tags", () => {
 
     const handle = screen.getByTestId("note-drag-handle");
     expect(handle).toHaveClass("absolute");
-    expect(handle).toHaveClass("right-2");
+    expect(handle).toHaveClass("right-0");
+  });
+
+  it("uses a drag cursor for draggable rows", () => {
+    render(
+      <ul>
+        <NoteListItem note={buildNote({ title: "Draggable" })} isSelected={false} onSelect={vi.fn()} draggable />
+      </ul>,
+    );
+
+    const row = screen.getByText("Draggable").closest("li");
+    expect(row).not.toBeNull();
+    expect(row).toHaveClass("cursor-grab");
+    expect(row).toHaveClass("active:cursor-grabbing");
   });
 });

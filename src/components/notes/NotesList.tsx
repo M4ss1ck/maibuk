@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { Children, useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -6,10 +6,11 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  Feather,
+  FolderTree,
   List,
   Search,
   Tags,
-  TreePine,
 } from "lucide-react";
 import type { Book } from "../../features/books/types";
 import { AddIcon } from "../icons/AddIcon";
@@ -45,23 +46,36 @@ interface NotesListProps {
 function ToggleButton({
   isActive,
   onClick,
+  labelTestId,
   children,
 }: {
   isActive: boolean;
   onClick: () => void;
+  labelTestId?: string;
   children: ReactNode;
 }) {
+  const items = Children.toArray(children);
+
   return (
     <button
       type="button"
       aria-pressed={isActive}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${isActive
+      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors max-[340px]:px-1.5 ${isActive
         ? "bg-primary text-white"
         : "text-muted-foreground hover:bg-muted hover:text-foreground"
         }`}
     >
-      {children}
+      {labelTestId ? (
+        <>
+          {items[0]}
+          <span data-testid={labelTestId} className="@max-[340px]/notes-sidebar:sr-only">
+            {items.slice(1)}
+          </span>
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 }
@@ -89,6 +103,7 @@ export function NotesList({
   const [viewMode, setViewMode] = useState<NotesListViewMode>("list");
   const [treeGroupMode, setTreeGroupMode] = useState<NotesTreeGroupMode>("book");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedEmptyGroups, setExpandedEmptyGroups] = useState<Set<string>>(new Set());
 
   const query = search.trim().toLowerCase();
   const filtered = filterNotes(notes, query);
@@ -146,7 +161,20 @@ export function NotesList({
     />
   );
 
-  const toggleGroup = (id: string) => {
+  const toggleGroup = (id: string, defaultCollapsed = false) => {
+    if (defaultCollapsed) {
+      setExpandedEmptyGroups((current) => {
+        const next = new Set(current);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+      return;
+    }
+
     setCollapsedGroups((current) => {
       const next = new Set(current);
       if (next.has(id)) {
@@ -161,15 +189,19 @@ export function NotesList({
   const renderTreeGroups = () => {
     if (treeGroupMode === "book") {
       return buildBookNoteGroups(filtered, books).map((group) => {
-        const isCollapsed = collapsedGroups.has(group.id);
+        const defaultCollapsed = Boolean(group.book && group.notes.length === 0);
+        const isCollapsed = defaultCollapsed
+          ? !expandedEmptyGroups.has(group.id)
+          : collapsedGroups.has(group.id);
         const title = group.id === "unfiled" ? t("notes.unfiled") : group.title;
+        const GroupIcon = group.id === "unfiled" ? Feather : BookOpen;
 
         return (
           <div key={group.id} className="px-2 py-1">
             <div className="group flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50">
               <button
                 type="button"
-                onClick={() => toggleGroup(group.id)}
+                onClick={() => toggleGroup(group.id, defaultCollapsed)}
                 className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 {isCollapsed ? (
@@ -178,20 +210,28 @@ export function NotesList({
                   <ChevronDown className="h-3.5 w-3.5" />
                 )}
               </button>
-              <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">{title}</span>
-              {group.book && (
-                <button
-                  type="button"
-                  onClick={() => onCreateNote(group.book?.id ?? null)}
-                  title={t("notes.addNoteToBook")}
-                  aria-label={t("notes.addNoteToBook")}
-                  className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-                >
-                  <AddIcon className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <GroupIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span
+                data-testid={`book-title-action-${group.id}`}
+                className="flex min-w-0 items-center gap-1"
+              >
+                <span className="min-w-0 truncate text-sm font-medium">{title}</span>
+                {group.book && (
+                  <button
+                    type="button"
+                    onClick={() => onCreateNote(group.book?.id ?? null)}
+                    title={t("notes.addNoteToBook")}
+                    aria-label={t("notes.addNoteToBook")}
+                    className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                  >
+                    <AddIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </span>
+              <span
+                data-testid={`book-count-${group.id}`}
+                className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              >
                 {group.notes.length}
               </span>
             </div>
@@ -279,16 +319,24 @@ export function NotesList({
   };
 
   return (
-    <aside className="w-full border-r border-border flex flex-col bg-background h-full shrink-0">
+    <aside className="@container/notes-sidebar w-full border-r border-border flex flex-col bg-background h-full shrink-0">
       <div className="p-4 pt-12 md:pt-4 flex items-center justify-between gap-2 bg-background z-10 shrink-0">
         <h3 className="font-medium">{t("notes.title")}</h3>
-        <div className="flex rounded-lg bg-muted/60 p-0.5">
-          <ToggleButton isActive={viewMode === "list"} onClick={() => setViewMode("list")}>
+        <div className="flex shrink-0 rounded-lg bg-muted/60 p-0.5">
+          <ToggleButton
+            isActive={viewMode === "list"}
+            onClick={() => setViewMode("list")}
+            labelTestId="notes-view-label-list"
+          >
             <List className="h-3.5 w-3.5" />
             {t("notes.viewList")}
           </ToggleButton>
-          <ToggleButton isActive={viewMode === "tree"} onClick={() => setViewMode("tree")}>
-            <TreePine className="h-3.5 w-3.5" />
+          <ToggleButton
+            isActive={viewMode === "tree"}
+            onClick={() => setViewMode("tree")}
+            labelTestId="notes-view-label-tree"
+          >
+            <FolderTree className="h-3.5 w-3.5" />
             {t("notes.viewTree")}
           </ToggleButton>
         </div>
@@ -319,10 +367,11 @@ export function NotesList({
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {t("notes.group")}
             </span>
-            <div className="flex rounded-lg bg-muted/60 p-0.5">
+            <div className="flex min-w-0 rounded-lg bg-muted/60 p-0.5">
               <ToggleButton
                 isActive={treeGroupMode === "book"}
                 onClick={() => setTreeGroupMode("book")}
+                labelTestId="notes-group-label-book"
               >
                 <BookOpen className="h-3.5 w-3.5" />
                 {t("notes.groupBook")}
@@ -330,6 +379,7 @@ export function NotesList({
               <ToggleButton
                 isActive={treeGroupMode === "tag"}
                 onClick={() => setTreeGroupMode("tag")}
+                labelTestId="notes-group-label-tag"
               >
                 <Tags className="h-3.5 w-3.5" />
                 {t("notes.groupTag")}
@@ -337,6 +387,7 @@ export function NotesList({
               <ToggleButton
                 isActive={treeGroupMode === "date"}
                 onClick={() => setTreeGroupMode("date")}
+                labelTestId="notes-group-label-date"
               >
                 <CalendarDays className="h-3.5 w-3.5" />
                 {t("notes.groupDate")}

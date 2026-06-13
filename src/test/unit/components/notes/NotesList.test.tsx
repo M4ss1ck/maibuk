@@ -81,6 +81,9 @@ describe("NotesList", () => {
     expect(screen.getByRole("button", { name: "List" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tree" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New note" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tree" }).querySelector(".lucide-folder-tree")).not.toBeNull();
+    expect(screen.getByTestId("notes-view-label-list")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
+    expect(screen.getByTestId("notes-view-label-tree")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
 
     fireEvent.click(screen.getByRole("button", { name: "New note" }));
     expect(onCreateNote).toHaveBeenCalledWith(null);
@@ -135,12 +138,18 @@ describe("NotesList", () => {
 
     expect(screen.getByText("Group")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Book" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("notes-group-label-book")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
+    expect(screen.getByTestId("notes-group-label-tag")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
+    expect(screen.getByTestId("notes-group-label-date")).toHaveClass("@max-[340px]/notes-sidebar:sr-only");
     expect(screen.getByText("Novel")).toBeInTheDocument();
     expect(screen.getByText("Novel note")).toBeInTheDocument();
     expect(screen.getByText("Empty Book")).toBeInTheDocument();
-    expect(screen.getByText("No notes yet")).toBeInTheDocument();
     expect(screen.getByText("Unfiled")).toBeInTheDocument();
     expect(screen.getByText("Loose note")).toBeInTheDocument();
+    expect(screen.getByText("Unfiled").closest("div")?.querySelector(".lucide-feather")).not.toBeNull();
+    expect(screen.getByTestId("book-title-action-book-a")).toHaveTextContent("Novel");
+    expect(screen.getByTestId("book-title-action-book-a").querySelector('button[aria-label="Add note"]')).not.toBeNull();
+    expect(screen.getByTestId("book-count-book-a")).toHaveTextContent("1");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Add note" })[0]);
     expect(onCreateNote).toHaveBeenCalledWith("book-a");
@@ -162,6 +171,28 @@ describe("NotesList", () => {
 
     expect(screen.getByText("Empty Book")).toBeInTheDocument();
     expect(screen.getAllByText("No notes yet").length).toBeGreaterThan(0);
+  });
+
+  it("collapses book groups with no notes by default", () => {
+    const books = [buildBook({ id: "book-a", title: "Empty Book" })];
+    const notes = [buildNote({ id: "loose", title: "Loose note" })];
+
+    render(
+      <NotesList
+        notes={notes}
+        books={books}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+
+    const emptyBookHeader = screen.getByText("Empty Book").closest("div");
+    expect(emptyBookHeader?.querySelector(".lucide-chevron-right")).not.toBeNull();
+    expect(screen.queryByText("No notes yet")).not.toBeInTheDocument();
   });
 
   it("repeats notes across tag groups in tree mode", () => {
