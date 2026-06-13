@@ -796,7 +796,7 @@ export function BookEditor() {
                 setBookSidePanelTab("notes");
                 setShowNotesChapter(true);
               }}
-              disabled={showNotesChapter}
+              disabled={showNotesChapter && bookSidePanelTab === "notes"}
               className="hidden md:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
               title={t("nav.bookNotes")}
             >
@@ -856,11 +856,10 @@ export function BookEditor() {
                 <button
                   type="button"
                   onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-                  className={`p-2 rounded transition-colors ${
-                    alwaysOnTop
+                  className={`p-2 rounded transition-colors ${alwaysOnTop
                       ? "bg-muted text-primary"
                       : "hover:bg-muted text-foreground"
-                  }`}
+                    }`}
                   title={t("settings.alwaysOnTop")}
                 >
                   <Pin className="w-5 h-5" />
@@ -904,7 +903,7 @@ export function BookEditor() {
                         setShowNotesChapter(true);
                         setShowMobileMenu(false);
                       }}
-                      disabled={showNotesChapter}
+                      disabled={showNotesChapter && bookSidePanelTab === "notes"}
                       className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:hover:bg-transparent"
                     >
                       <NotebookText className="w-4 h-4" />
