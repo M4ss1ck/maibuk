@@ -241,6 +241,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `diffSnapshots()`                                                  | `src/features/versions/compare.ts`         |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
 | `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |
+| `ResponsiveToggleGroup` (measured segmented toggle; labels collapse to icons only when full labels do not fit) | `src/components/ui/ResponsiveToggleGroup.tsx` |
 | `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`             |
 | `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`      |
 | `isTypingTarget()` / `isModKey()`                                  | `src/lib/keyboard.ts`                      |

@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent, ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   BookOpen,
@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import type { Book } from "../../features/books/types";
 import { AddIcon } from "../icons/AddIcon";
+import { ResponsiveToggleGroup } from "../ui";
+import type { ResponsiveToggleOption } from "../ui";
 import { NoteListItem } from "./NoteListItem";
 import { useMarkdownFileDrop } from "../../hooks/useMarkdownFileDrop";
 import { tagColor } from "./tagColor";
@@ -43,147 +45,6 @@ interface NotesListProps {
   onImportMarkdown?: (markdown: string, filenameStem: string) => void;
 }
 
-interface ToggleOption<T extends string> {
-  value: T;
-  label: string;
-  icon: ReactNode;
-  labelTestId: string;
-}
-
-const toggleButtonBaseClass =
-  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors";
-
-function ToggleButton<T extends string>({
-  option,
-  isActive,
-  onClick,
-  showLabel,
-  measureOnly = false,
-}: {
-  option: ToggleOption<T>;
-  isActive: boolean;
-  onClick: () => void;
-  showLabel: boolean;
-  measureOnly?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={isActive}
-      onClick={onClick}
-      aria-label={option.label}
-      tabIndex={measureOnly ? -1 : undefined}
-      className={`${toggleButtonBaseClass} ${isActive
-        ? "bg-primary text-white"
-        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-        }`}
-    >
-      {option.icon}
-      <span
-        data-testid={measureOnly ? undefined : option.labelTestId}
-        className={showLabel ? undefined : "sr-only"}
-      >
-        {option.label}
-      </span>
-    </button>
-  );
-}
-
-function ResponsiveToggleGroup<T extends string>({
-  value,
-  options,
-  onChange,
-  testId,
-  className = "",
-}: {
-  value: T;
-  options: ToggleOption<T>[];
-  onChange: (value: T) => void;
-  testId: string;
-  className?: string;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [showLabels, setShowLabels] = useState(true);
-
-  const updateLabelMode = useCallback(() => {
-    const container = containerRef.current;
-    const measure = measureRef.current;
-
-    if (!container || !measure) return;
-
-    const availableWidth = container.clientWidth;
-    const requiredWidth = measure.scrollWidth;
-
-    if (availableWidth <= 0 || requiredWidth <= 0) {
-      setShowLabels(true);
-      return;
-    }
-
-    setShowLabels((current) => {
-      const next = requiredWidth <= availableWidth;
-      return current === next ? current : next;
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    updateLabelMode();
-
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateLabelMode);
-      return () => window.removeEventListener("resize", updateLabelMode);
-    }
-
-    const observer = new ResizeObserver(updateLabelMode);
-    if (containerRef.current) observer.observe(containerRef.current);
-    if (measureRef.current) observer.observe(measureRef.current);
-    window.addEventListener("resize", updateLabelMode);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", updateLabelMode);
-    };
-  }, [options, updateLabelMode]);
-
-  return (
-    <div
-      ref={containerRef}
-      data-testid={`${testId}-toggle-group`}
-      data-label-mode={showLabels ? "full" : "icon"}
-      className={`relative min-w-0 overflow-hidden ${className}`}
-    >
-      <div className="inline-flex max-w-full rounded-lg bg-muted/60 p-0.5">
-        {options.map((option) => (
-          <ToggleButton
-            key={option.value}
-            option={option}
-            isActive={value === option.value}
-            onClick={() => onChange(option.value)}
-            showLabel={showLabels}
-          />
-        ))}
-      </div>
-      <div
-        ref={measureRef}
-        data-testid={`${testId}-toggle-measure`}
-        aria-hidden="true"
-        className="pointer-events-none invisible absolute left-0 top-0 flex w-max rounded-lg bg-muted/60 p-0.5"
-      >
-        {options.map((option) => (
-          <ToggleButton
-            key={option.value}
-            option={option}
-            isActive={value === option.value}
-            onClick={() => {}}
-            showLabel
-            measureOnly
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function NotesList({
   notes,
   books = [],
@@ -208,7 +69,7 @@ export function NotesList({
   const [treeGroupMode, setTreeGroupMode] = useState<NotesTreeGroupMode>("book");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [expandedEmptyGroups, setExpandedEmptyGroups] = useState<Set<string>>(new Set());
-  const viewToggleOptions = useMemo<ToggleOption<NotesListViewMode>[]>(
+  const viewToggleOptions = useMemo<ResponsiveToggleOption<NotesListViewMode>[]>(
     () => [
       {
         value: "list",
@@ -225,7 +86,7 @@ export function NotesList({
     ],
     [t],
   );
-  const groupToggleOptions = useMemo<ToggleOption<NotesTreeGroupMode>[]>(
+  const groupToggleOptions = useMemo<ResponsiveToggleOption<NotesTreeGroupMode>[]>(
     () => [
       {
         value: "book",
