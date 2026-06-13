@@ -203,11 +203,11 @@ export function NotesList({
 
         return (
           <div key={group.id} className="px-2 py-1">
-            <div className="group flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50">
+            <div className="group flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
               <button
                 type="button"
                 onClick={() => toggleGroup(group.id, defaultCollapsed)}
-                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
               >
                 {isCollapsed ? (
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -227,7 +227,7 @@ export function NotesList({
                     onClick={() => onCreateNote(group.book?.id ?? null)}
                     title={t("notes.addNoteToBook")}
                     aria-label={t("notes.addNoteToBook")}
-                    className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-all duration-200 hover:bg-muted hover:text-foreground group-hover:opacity-100"
                   >
                     <AddIcon className="h-3.5 w-3.5" />
                   </button>
@@ -264,11 +264,11 @@ export function NotesList({
 
         return (
           <div key={group.id} className="px-2 py-1">
-            <div className="flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50">
+            <div className="flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
               <button
                 type="button"
                 onClick={() => toggleGroup(group.id)}
-                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
               >
                 {isCollapsed ? (
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -299,11 +299,11 @@ export function NotesList({
 
       return (
         <div key={group.id} className="px-2 py-1">
-          <div className="flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50">
+          <div className="flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
             <button
               type="button"
               onClick={() => toggleGroup(group.id)}
-              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
             >
               {isCollapsed ? (
                 <ChevronRight className="h-3.5 w-3.5" />
@@ -374,7 +374,7 @@ export function NotesList({
 
       <div
         ref={listContainerRef}
-        className={`flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        className={`flex-1 overflow-auto transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
         {...(onImportMarkdown ? dropHandlers : {})}
       >
         {filtered.length === 0 && (viewMode !== "tree" || treeGroupMode !== "book" || books.length === 0) ? (

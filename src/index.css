@@ -128,12 +128,14 @@ body {
 }
 
 /* Form elements - ensure visibility in both themes */
-input,
-select,
-textarea {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-  border-color: var(--color-border);
+@layer base {
+  input,
+  select,
+  textarea {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    border-color: var(--color-border);
+  }
 }
 
 input::-webkit-input-placeholder,
