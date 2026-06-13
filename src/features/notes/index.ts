@@ -1,2 +1,2 @@
 export { useNoteStore } from "./store";
-export type { Note, CreateNoteInput, UpdateNoteInput } from "./types";
+export type { Note, CreateNoteInput, ReorderNoteItem, UpdateNoteInput } from "./types";

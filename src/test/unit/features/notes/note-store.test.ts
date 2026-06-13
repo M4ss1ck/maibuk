@@ -162,6 +162,25 @@ describe("useNoteStore", () => {
 
       expect(useNoteStore.getState().notes.map((n) => n.title)).toEqual(["C", "A", "B"]);
     });
+
+    it("persists pin state and section order together", async () => {
+      const a = await useNoteStore.getState().createNote({ title: "A", pinned: true });
+      const b = await useNoteStore.getState().createNote({ title: "B" });
+      const c = await useNoteStore.getState().createNote({ title: "C" });
+
+      await useNoteStore.getState().reorderNotes([
+        { id: c.id, pinned: true },
+        { id: a.id, pinned: true },
+        { id: b.id, pinned: false },
+      ]);
+      await useNoteStore.getState().loadNotes();
+
+      expect(useNoteStore.getState().notes.map((n) => [n.title, n.pinned])).toEqual([
+        ["C", true],
+        ["A", true],
+        ["B", false],
+      ]);
+    });
   });
 
   describe("saveCollapsedHeadings()", () => {

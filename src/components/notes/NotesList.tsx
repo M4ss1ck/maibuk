@@ -13,6 +13,7 @@ import {
   Tags,
 } from "lucide-react";
 import type { Book } from "../../features/books/types";
+import type { ReorderNoteItem } from "../../features/notes";
 import { AddIcon } from "../icons/AddIcon";
 import { ResponsiveToggleGroup } from "../ui";
 import type { ResponsiveToggleOption } from "../ui";
@@ -30,6 +31,7 @@ import {
 } from "./notes-list-model";
 import type {
   NoteWithBook,
+  NoteSection,
   NotesListViewMode,
   NotesTreeGroupMode,
 } from "./notes-list-model";
@@ -40,9 +42,8 @@ interface NotesListProps {
   currentNoteId: string | null;
   onSelectNote: (note: NoteWithBook) => void;
   onCreateNote: (bookId?: string | null) => void;
-  onReorderNotes: (ids: string[]) => Promise<void>;
+  onReorderNotes: (items: string[] | ReorderNoteItem[]) => Promise<void>;
   onReassignNoteBook?: (noteId: string, bookId: string | null) => void;
-  onPinNote?: (note: NoteWithBook) => void;
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: NoteWithBook) => void;
   onImportMarkdown?: (markdown: string, filenameStem: string) => void;
@@ -56,7 +57,6 @@ export function NotesList({
   onCreateNote,
   onReorderNotes,
   onReassignNoteBook,
-  onPinNote,
   onDeleteNote,
   onDuplicateNote,
   onImportMarkdown,
@@ -131,7 +131,7 @@ export function NotesList({
     e.dataTransfer.setData("text/plain", id);
   };
 
-  const handleDragOver = (e: DragEvent<HTMLLIElement>) => {
+  const handleDragOver = (e: DragEvent<HTMLElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     autoScroll.onDragOver(e.clientY);
@@ -139,18 +139,65 @@ export function NotesList({
 
   const handleDrop = (e: DragEvent<HTMLLIElement>, targetId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     autoScroll.stop();
     if (!draggedId || draggedId === targetId || isSearchActive) return;
 
-    const draggedIndex = notes.findIndex((n) => n.id === draggedId);
-    const targetIndex = notes.findIndex((n) => n.id === targetId);
-    if (draggedIndex === -1 || targetIndex === -1) return;
+    const draggedNote = notes.find((note) => note.id === draggedId);
+    if (!draggedNote) return;
 
-    const newOrder = [...notes];
-    const [removed] = newOrder.splice(draggedIndex, 1);
-    newOrder.splice(targetIndex, 0, removed);
+    const targetSectionId = listSections.find((section) =>
+      section.notes.some((note) => note.id === targetId),
+    )?.id;
+    if (!targetSectionId) return;
 
-    void onReorderNotes(newOrder.map((n) => n.id));
+    const nextSections = listSections.map((section) => ({
+      ...section,
+      notes: section.notes.filter((note) => note.id !== draggedId),
+    }));
+    const targetSection = nextSections.find((section) => section.id === targetSectionId);
+    if (!targetSection) return;
+
+    const targetIndex = targetSection.notes.findIndex((note) => note.id === targetId);
+    if (targetIndex === -1) return;
+
+    targetSection.notes.splice(targetIndex, 0, draggedNote);
+    emitSectionOrder(nextSections);
+    setDraggedId(null);
+  };
+
+  const emitSectionOrder = (sections: NoteSection[]) => {
+    void onReorderNotes(
+      sections.flatMap((section) =>
+        section.notes.map((note) => ({
+          id: note.id,
+          pinned: section.id === "pinned",
+        })),
+      ),
+    );
+  };
+
+  const handleSectionDrop = (
+    e: DragEvent<HTMLElement>,
+    targetSectionId: NoteSection["id"],
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    autoScroll.stop();
+    if (!draggedId || isSearchActive) return;
+
+    const draggedNote = notes.find((note) => note.id === draggedId);
+    if (!draggedNote) return;
+
+    const nextSections = listSections.map((section) => ({
+      ...section,
+      notes: section.notes.filter((note) => note.id !== draggedId),
+    }));
+    const targetSection = nextSections.find((section) => section.id === targetSectionId);
+    if (!targetSection) return;
+
+    targetSection.notes.push(draggedNote);
+    emitSectionOrder(nextSections);
     setDraggedId(null);
   };
 
@@ -195,7 +242,6 @@ export function NotesList({
       note={note}
       isSelected={currentNoteId === note.id}
       onSelect={onSelectNote}
-      onPinToggle={onPinNote}
       onDelete={onDeleteNote}
       onDuplicate={onDuplicateNote}
       draggable={viewMode === "list" && !isSearchActive ? true : undefined}
@@ -213,7 +259,6 @@ export function NotesList({
       note={note}
       isSelected={currentNoteId === note.id}
       onSelect={onSelectNote}
-      onPinToggle={onPinNote}
       onDelete={onDeleteNote}
       onDuplicate={onDuplicateNote}
       draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
@@ -453,7 +498,13 @@ export function NotesList({
         ) : (
           <div className="p-2">
             {listSections.map((section) => (
-              <section key={section.id} className="mb-3 last:mb-0">
+              <section
+                key={section.id}
+                data-testid={`notes-section-${section.id}`}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleSectionDrop(e, section.id)}
+                className="mb-3 min-h-8 rounded-md transition-colors last:mb-0"
+              >
                 <h4 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {section.id === "pinned" ? t("notes.sectionPinned") : t("notes.sectionAll")}
                 </h4>

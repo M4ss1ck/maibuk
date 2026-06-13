@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
 import { recordTombstone } from "../sync/tombstones";
 import { reindexSource } from "../links/link-index";
-import type { CreateNoteInput, Note, UpdateNoteInput } from "./types";
+import type { CreateNoteInput, Note, ReorderNoteItem, UpdateNoteInput } from "./types";
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -64,7 +64,7 @@ interface NoteStore {
   createNote: (input: CreateNoteInput) => Promise<Note>;
   updateNote: (input: UpdateNoteInput) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
-  reorderNotes: (orderedIds: string[]) => Promise<void>;
+  reorderNotes: (orderedItems: string[] | ReorderNoteItem[]) => Promise<void>;
   setCurrentNote: (note: Note | null) => void;
   saveCollapsedHeadings: (noteId: string, collapsedHeadings: string[]) => Promise<void>;
 }
@@ -208,23 +208,46 @@ export const useNoteStore = create<NoteStore>((set) => ({
     }));
   },
 
-  reorderNotes: async (orderedIds: string[]) => {
+  reorderNotes: async (orderedItems: string[] | ReorderNoteItem[]) => {
     const db = await getDatabase();
     const now = nowSeconds();
-    for (let i = 0; i < orderedIds.length; i++) {
-      await db.execute('UPDATE notes SET "order" = ?, updated_at = ? WHERE id = ?', [
-        i,
-        now,
-        orderedIds[i],
-      ]);
+    const ordered = orderedItems.map((item) =>
+      typeof item === "string" ? { id: item, pinned: undefined } : item,
+    );
+
+    for (let i = 0; i < ordered.length; i++) {
+      const item = ordered[i];
+      if (item.pinned === undefined) {
+        await db.execute('UPDATE notes SET "order" = ?, updated_at = ? WHERE id = ?', [
+          i,
+          now,
+          item.id,
+        ]);
+      } else {
+        await db.execute('UPDATE notes SET "order" = ?, pinned = ?, updated_at = ? WHERE id = ?', [
+          i,
+          item.pinned ? 1 : 0,
+          now,
+          item.id,
+        ]);
+      }
     }
+
+    const reorderById = new Map(ordered.map((item, index) => [item.id, { ...item, index }]));
+    const applyReorder = (note: Note) => {
+      const item = reorderById.get(note.id);
+      if (!item) return note;
+      return {
+        ...note,
+        order: item.index,
+        pinned: item.pinned ?? note.pinned,
+        updatedAt: now,
+      };
+    };
+
     set((state) => ({
-      notes: sortNotes(
-        state.notes.map((n) => {
-          const idx = orderedIds.indexOf(n.id);
-          return idx >= 0 ? { ...n, order: idx } : n;
-        }),
-      ),
+      notes: sortNotes(state.notes.map(applyReorder)),
+      currentNote: state.currentNote ? applyReorder(state.currentNote) : state.currentNote,
     }));
   },
 

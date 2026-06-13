@@ -34,3 +34,8 @@ export interface UpdateNoteInput {
   wordCount?: number;
   collapsedHeadings?: string[];
 }
+
+export interface ReorderNoteItem {
+  id: string;
+  pinned: boolean;
+}

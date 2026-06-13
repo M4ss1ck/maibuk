@@ -94,10 +94,6 @@ export function Notes() {
     }
   };
 
-  const handlePinNote = (note: Note) => {
-    void updateNote({ id: note.id, pinned: !note.pinned });
-  };
-
   const handleReassignNoteBook = (noteId: string, bookId: string | null) => {
     void updateNote({ id: noteId, bookId });
   };
@@ -172,7 +168,6 @@ export function Notes() {
           onCreateNote={handleCreateNote}
           onReorderNotes={reorderNotes}
           onReassignNoteBook={handleReassignNoteBook}
-          onPinNote={handlePinNote}
           onDeleteNote={handleDelete}
           onDuplicateNote={handleDuplicateNote}
           onImportMarkdown={handleImportMarkdown}

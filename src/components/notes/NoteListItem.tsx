@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { GripVertical, Pin, Trash2, Copy } from "lucide-react";
+import { GripVertical, Trash2, Copy } from "lucide-react";
 import type { Note } from "../../features/notes";
 import { NoteTagsRow } from "./NoteTagsRow";
 
@@ -9,7 +9,6 @@ interface NoteListItemProps {
   note: Note;
   isSelected: boolean;
   onSelect: (note: Note) => void;
-  onPinToggle?: (note: Note) => void;
   onDelete?: (id: string) => void;
   onDuplicate?: (note: Note) => void;
   draggable?: boolean;
@@ -36,7 +35,6 @@ export function NoteListItem({
   note,
   isSelected,
   onSelect,
-  onPinToggle,
   onDelete,
   onDuplicate,
   draggable,
@@ -100,24 +98,6 @@ export function NoteListItem({
             </span>
           ) : (
             <>
-              {onPinToggle && (
-                <button
-                  type="button"
-                  draggable={false}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPinToggle(note);
-                  }}
-                  title={note.pinned ? t("notes.unpin") : t("notes.pin")}
-                  aria-label={note.pinned ? t("notes.unpin") : t("notes.pin")}
-                  className={`shrink-0 p-1 rounded transition-colors ${note.pinned
-                    ? "text-primary bg-primary/10 hover:bg-primary/20"
-                    : "text-muted-foreground hover:bg-muted"
-                    }`}
-                >
-                  <Pin className={`w-3.5 h-3.5 ${note.pinned ? "fill-current" : ""}`} />
-                </button>
-              )}
               {onDuplicate && (
                 <button
                   type="button"

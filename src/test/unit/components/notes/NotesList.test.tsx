@@ -13,6 +13,8 @@ vi.mock("react-i18next", () => ({
         "notes.newNote": "New note",
         "notes.search": "Search notes...",
         "notes.empty": "No notes",
+        "notes.pin": "Pin",
+        "notes.unpin": "Unpin",
         "notes.viewList": "List",
         "notes.viewTree": "Tree",
         "notes.sectionPinned": "Pinned",
@@ -120,6 +122,26 @@ describe("NotesList", () => {
     expect(screen.getByText("Pinned")).toBeInTheDocument();
     expect(screen.getByText("All notes")).toBeInTheDocument();
     expect(screen.getByText("2 pinned")).toBeInTheDocument();
+  });
+
+  it("does not render row-level pin controls in list mode", () => {
+    const notes = [
+      buildNote({ id: "a", title: "Pinned A", pinned: true }),
+      buildNote({ id: "b", title: "Regular" }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Pin" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Unpin" })).not.toBeInTheDocument();
   });
 
   it("switches to tree mode and renders book groups with empty books and unfiled last", () => {
@@ -275,7 +297,7 @@ describe("NotesList", () => {
     expect(screen.getAllByText("Shared")).toHaveLength(2);
   });
 
-  it("reorders the full list on drop when search is not active", () => {
+  it("sorts all notes within the all-notes section on row drop", () => {
     const onReorderNotes = vi.fn();
     const notes = [
       buildNote({ id: "a", title: "Alpha", order: 0 }),
@@ -313,7 +335,130 @@ describe("NotesList", () => {
     fireEvent.dragOver(target, { dataTransfer });
     fireEvent.drop(target, { dataTransfer });
 
-    expect(onReorderNotes).toHaveBeenCalledWith(["c", "a", "b"]);
+    expect(onReorderNotes).toHaveBeenCalledWith([
+      { id: "c", pinned: false },
+      { id: "a", pinned: false },
+      { id: "b", pinned: false },
+    ]);
+  });
+
+  it("sorts pinned notes within the pinned section on row drop", () => {
+    const onReorderNotes = vi.fn();
+    const notes = [
+      buildNote({ id: "a", title: "Alpha", pinned: true, order: 0 }),
+      buildNote({ id: "b", title: "Bravo", pinned: true, order: 1 }),
+      buildNote({ id: "c", title: "Charlie", pinned: false, order: 2 }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={onReorderNotes}
+      />,
+    );
+
+    const source = screen.getByText("Bravo").closest("li");
+    const target = screen.getByText("Alpha").closest("li");
+
+    expect(source).not.toBeNull();
+    expect(target).not.toBeNull();
+
+    if (!source || !target) {
+      throw new Error("Expected note rows to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragOver(target, { dataTransfer });
+    fireEvent.drop(target, { dataTransfer });
+
+    expect(onReorderNotes).toHaveBeenCalledWith([
+      { id: "b", pinned: true },
+      { id: "a", pinned: true },
+      { id: "c", pinned: false },
+    ]);
+  });
+
+  it("pins an all-note when dropped on the pinned section", () => {
+    const onReorderNotes = vi.fn();
+    const notes = [
+      buildNote({ id: "a", title: "Already pinned", pinned: true, order: 0 }),
+      buildNote({ id: "b", title: "Regular", pinned: false, order: 1 }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={onReorderNotes}
+      />,
+    );
+
+    const source = screen.getByText("Regular").closest("li");
+    if (!source) {
+      throw new Error("Expected note row to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.drop(screen.getByTestId("notes-section-pinned"), { dataTransfer });
+
+    expect(onReorderNotes).toHaveBeenCalledWith([
+      { id: "a", pinned: true },
+      { id: "b", pinned: true },
+    ]);
+  });
+
+  it("unpins a pinned note when dropped on the all-notes section", () => {
+    const onReorderNotes = vi.fn();
+    const notes = [
+      buildNote({ id: "a", title: "Already pinned", pinned: true, order: 0 }),
+      buildNote({ id: "b", title: "Regular", pinned: false, order: 1 }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={onReorderNotes}
+      />,
+    );
+
+    const source = screen.getByText("Already pinned").closest("li");
+    if (!source) {
+      throw new Error("Expected note row to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.drop(screen.getByTestId("notes-section-all"), { dataTransfer });
+
+    expect(onReorderNotes).toHaveBeenCalledWith([
+      { id: "b", pinned: false },
+      { id: "a", pinned: false },
+    ]);
   });
 
   it("reassigns a note's book when dropped on another book group in tree view", () => {
