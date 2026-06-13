@@ -87,9 +87,10 @@ export interface Settings {
   lastSceneBreak: SceneBreakDescriptor;
   sceneBreakPresets: SceneBreakDescriptor[];
 
-  // Footnote settings
+  // Footnote / side panel settings
   showInlineFootnotes: boolean;
   showNotesChapter: boolean;
+  bookSidePanelTab: "footnotes" | "notes";
   hideKeyboardHints: boolean;
 
   // Export settings

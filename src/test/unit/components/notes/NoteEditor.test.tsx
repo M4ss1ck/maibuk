@@ -5,7 +5,7 @@ import type { Note, UpdateNoteInput } from "../../../../features/notes";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, params?: { title?: string }) => {
       const map: Record<string, string> = {
         "common.back": "Back",
         "common.words": "words",
@@ -16,6 +16,7 @@ vi.mock("react-i18next", () => ({
         "notes.pin": "Pin",
         "notes.unpin": "Unpin",
       };
+      if (key === "notes.backToBook") return `Back to ${params?.title ?? ""}`;
       return map[key] ?? key;
     },
     i18n: { language: "en" },
@@ -121,5 +122,34 @@ describe("NoteEditor", () => {
     });
 
     vi.useRealTimers();
+  });
+
+  it("renders a back-to-book button that returns to the book when a target is set", () => {
+    const onReturnToBook = vi.fn();
+
+    render(
+      <NoteEditor
+        note={buildNote({})}
+        onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+        onBack={vi.fn()}
+        onReturnToBook={onReturnToBook}
+        returnLabel="My Book"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to My Book" }));
+    expect(onReturnToBook).toHaveBeenCalled();
+  });
+
+  it("omits the back-to-book button when no return target is provided", () => {
+    render(
+      <NoteEditor
+        note={buildNote({})}
+        onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Back to/ })).not.toBeInTheDocument();
   });
 });

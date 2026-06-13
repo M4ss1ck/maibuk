@@ -1,5 +1,5 @@
-import { useEffect, useRef, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useNoteStore } from "../features/notes";
 import type { Note, UpdateNoteInput } from "../features/notes";
 import { useBookStore } from "../features/books/store";
@@ -28,6 +28,11 @@ export function Notes() {
   const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
   const isResizing = useRef(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const [returnTarget, setReturnTarget] = useState<{
+    to: string;
+    label: string;
+  } | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -47,7 +52,12 @@ export function Notes() {
     const state = location.state as {
       openNoteId?: string;
       scrollToHeadingId?: string;
+      returnTo?: string;
+      returnLabel?: string;
     } | null;
+    if (state?.returnTo) {
+      setReturnTarget({ to: state.returnTo, label: state.returnLabel ?? "" });
+    }
     if (state?.openNoteId) {
       void loadNote(state.openNoteId).then(() => {
         if (!state.scrollToHeadingId) return;
@@ -179,6 +189,10 @@ export function Notes() {
               setCurrentNote(null);
               setLastNoteId(null);
             }}
+            onReturnToBook={
+              returnTarget ? () => navigate(returnTarget.to) : undefined
+            }
+            returnLabel={returnTarget?.label}
           />
         ) : (
           <EmptyNotes onCreateNote={handleCreateNote} />

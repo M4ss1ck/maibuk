@@ -6,7 +6,7 @@ export { FindReplace } from "./FindReplace";
 export { ImageInsertDialog } from "./ImageInsertDialog";
 export { FootnoteDialog } from "./FootnoteDialog";
 export { FootnoteList } from "./FootnoteList";
-export { NotesPanel } from "./NotesPanel";
+export { FootnotesView } from "./FootnotesView";
 export { ChapterOutline } from "./ChapterOutline";
 export { LinkDialog } from "./LinkDialog";
 export { HtmlViewPanel } from "./HtmlViewPanel";

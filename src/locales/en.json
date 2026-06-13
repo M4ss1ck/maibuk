@@ -45,7 +45,18 @@
     "exportBook": "Export Book",
     "designCover": "Design Cover",
     "focusMode": "Focus Mode (F11)",
-    "downloadApp": "Download App"
+    "downloadApp": "Download App",
+    "bookNotes": "Book Notes"
+  },
+  "bookNotes": {
+    "quickPlaceholder": "Write a quick note...",
+    "add": "Add note",
+    "empty": "No notes for this book yet",
+    "formatting": "Formatting"
+  },
+  "bookSidePanel": {
+    "footnotes": "Footnotes",
+    "notes": "Notes"
   },
   "metrics": {
     "title": "Metrics",
@@ -136,6 +147,7 @@
     "newNote": "New note",
     "search": "Search notes...",
     "untitled": "Untitled note",
+    "backToBook": "Back to {{title}}",
     "viewList": "List",
     "viewTree": "Tree",
     "sectionPinned": "Pinned",

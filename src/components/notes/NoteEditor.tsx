@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pin } from "lucide-react";
+import { ArrowLeft, Pin } from "lucide-react";
 import { Extension } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
@@ -213,9 +213,17 @@ interface NoteEditorProps {
   note: Note;
   onSave: (input: UpdateNoteInput) => Promise<void>;
   onBack: () => void;
+  onReturnToBook?: () => void;
+  returnLabel?: string;
 }
 
-export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
+export function NoteEditor({
+  note,
+  onSave,
+  onBack,
+  onReturnToBook,
+  returnLabel,
+}: NoteEditorProps) {
   const { t, i18n } = useTranslation();
   const [title, setTitle] = useState(note.title);
   const [wordCount, setWordCount] = useState(note.wordCount);
@@ -527,6 +535,19 @@ export function NoteEditor({ note, onSave, onBack }: NoteEditorProps) {
         >
           <BackIcon className="w-5 h-5" />
         </button>
+
+        {onReturnToBook && (
+          <button
+            type="button"
+            onClick={onReturnToBook}
+            className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="max-w-40 truncate">
+              {t("notes.backToBook", { title: returnLabel ?? "" })}
+            </span>
+          </button>
+        )}
 
         <div className="flex-1" />
 

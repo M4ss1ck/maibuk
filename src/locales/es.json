@@ -45,7 +45,18 @@
     "exportBook": "Exportar Libro",
     "designCover": "Diseñar Portada",
     "focusMode": "Modo Enfocado (F11)",
-    "downloadApp": "Descargar App"
+    "downloadApp": "Descargar App",
+    "bookNotes": "Notas del Libro"
+  },
+  "bookNotes": {
+    "quickPlaceholder": "Escribe una nota rápida...",
+    "add": "Añadir nota",
+    "empty": "Aún no hay notas para este libro",
+    "formatting": "Formato"
+  },
+  "bookSidePanel": {
+    "footnotes": "Notas al pie",
+    "notes": "Notas"
   },
   "metrics": {
     "title": "Métricas",
@@ -136,6 +147,7 @@
     "newNote": "Nueva nota",
     "search": "Buscar notas...",
     "untitled": "Nota sin título",
+    "backToBook": "Volver a {{title}}",
     "viewList": "Lista",
     "viewTree": "Árbol",
     "sectionPinned": "Fijadas",
