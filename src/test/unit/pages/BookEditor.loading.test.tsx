@@ -144,6 +144,7 @@ vi.mock("../../../features/versions/store", () => ({
 vi.mock("../../../components/editor", () => ({
   ChapterList: () => <div data-testid="chapter-list" />,
   Editor: () => <div data-testid="editor" />,
+  SaveStatus: () => null,
 }));
 
 vi.mock("../../../components/book/BookSidePanel", () => ({

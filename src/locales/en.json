@@ -167,8 +167,6 @@
     "bodyPlaceholder": "Start writing...",
     "noteCount_one": "{{count}} note",
     "noteCount_other": "{{count}} notes",
-    "saving": "Saving…",
-    "saved": "Saved",
     "secondsAgo": "seconds ago",
     "minutesAgo": "minutes ago",
     "pin": "Pin",

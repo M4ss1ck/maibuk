@@ -8,6 +8,7 @@ const {
   mockBookSidePanel,
   mockSetShowNotesChapter,
   mockSetBookSidePanelTab,
+  mockSettings,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockNoteState: {
@@ -22,6 +23,7 @@ const {
   mockBookSidePanel: vi.fn((_props: Record<string, unknown>) => null),
   mockSetShowNotesChapter: vi.fn(),
   mockSetBookSidePanelTab: vi.fn(),
+  mockSettings: { showNotesChapter: true },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -85,7 +87,7 @@ vi.mock("../../../features/settings/store", () => ({
       sidebarWidth: 256,
       setSidebarWidth: vi.fn(),
       showInlineFootnotes: true,
-      showNotesChapter: true,
+      showNotesChapter: mockSettings.showNotesChapter,
       setShowNotesChapter: mockSetShowNotesChapter,
       bookSidePanelTab: "notes",
       setBookSidePanelTab: mockSetBookSidePanelTab,
@@ -105,6 +107,7 @@ vi.mock("../../../features/versions/store", () => ({
 vi.mock("../../../components/editor", () => ({
   ChapterList: () => <div data-testid="chapter-list" />,
   Editor: () => <div data-testid="editor" />,
+  SaveStatus: () => null,
 }));
 vi.mock("../../../components/ThemeToggle", () => ({
   ThemeToggle: () => <button type="button">theme</button>,
@@ -137,6 +140,7 @@ describe("BookEditor book notes panel", () => {
     mockNavigate.mockClear();
     mockSetShowNotesChapter.mockClear();
     mockSetBookSidePanelTab.mockClear();
+    mockSettings.showNotesChapter = true;
   });
 
   it("passes only this book's notes to the side panel on the notes tab", () => {
@@ -152,6 +156,7 @@ describe("BookEditor book notes panel", () => {
   });
 
   it("opens the notes tab when the book notes button is clicked", async () => {
+    mockSettings.showNotesChapter = false;
     const user = userEvent.setup();
     render(<BookEditor />);
 
@@ -159,6 +164,15 @@ describe("BookEditor book notes panel", () => {
 
     expect(mockSetBookSidePanelTab).toHaveBeenCalledWith("notes");
     expect(mockSetShowNotesChapter).toHaveBeenCalledWith(true);
+  });
+
+  it("disables the book notes button while the side panel is open", () => {
+    mockSettings.showNotesChapter = true;
+    render(<BookEditor />);
+
+    expect(
+      screen.getByRole("button", { name: "nav.bookNotes" }),
+    ).toBeDisabled();
   });
 
   it("navigates to the note in the notes view with a return target", () => {

@@ -113,6 +113,7 @@ vi.mock("../../../../components/editor", () => ({
       {mockEditor(props)}
     </div>
   ),
+  SaveStatus: () => null,
 }));
 
 vi.mock("../../../../features/notes/store", () => ({

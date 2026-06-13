@@ -7,12 +7,12 @@ import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "../../features/notes";
 import { useNoteStore } from "../../features/notes/store";
-import { Editor } from "../editor";
+import { Editor, SaveStatus } from "../editor";
 import type { InternalTarget, InternalTargetChildrenLoader } from "../editor/LinkDialog";
 import { CollapsibleHeading } from "../editor/extensions";
 import { collapsibleHeadingPluginKey } from "../editor/extensions/CollapsibleHeading";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
-import { BackIcon, CheckIcon, SpinnerIcon } from "../icons";
+import { BackIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
 import { timeAgo } from "./timeAgo";
@@ -551,20 +551,7 @@ export function NoteEditor({
 
         <div className="flex-1" />
 
-        <span className="flex items-center gap-1 text-xs text-muted-foreground min-w-16 justify-end">
-          {saveStatus === "saving" && (
-            <>
-              <SpinnerIcon className="w-3.5 h-3.5 animate-spin" />
-              {t("notes.saving")}
-            </>
-          )}
-          {saveStatus === "saved" && (
-            <>
-              <CheckIcon className="w-3.5 h-3.5 text-success" />
-              {t("notes.saved")}
-            </>
-          )}
-        </span>
+        <SaveStatus status={saveStatus} onSave={() => void saveNow()} />
 
         <span className="text-xs text-muted-foreground">
           {wordCount.toLocaleString()} {t("common.words")}

@@ -3,9 +3,10 @@ import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } fro
 import { useBookStore } from "../features/books/store";
 import { useChapterStore } from "../features/chapters/store";
 import type { Chapter, ChapterType } from "../features/chapters/types";
-import { Editor, ChapterList } from "../components/editor";
+import { Editor, ChapterList, SaveStatus } from "../components/editor";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { BookSidePanel } from "../components/book/BookSidePanel";
+import { TruncatedText } from "../components/ui/TruncatedText";
 import type { EditorStats } from "../components/editor/Editor";
 import { useDebouncedCallback } from "../hooks/useAutoSave";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -25,10 +26,7 @@ import {
 } from "../features/markdown";
 import { useTranslation } from "react-i18next";
 import {
-  SpinnerIcon,
-  CheckIcon,
   BackIcon,
-  SaveIcon,
   ExportIcon,
   CoverDesignIcon,
   FocusModeIcon,
@@ -758,44 +756,29 @@ export function BookEditor() {
             </button>
 
             <div className="flex-1 min-w-0">
-              <h1 className="font-medium truncate text-sm sm:text-base">
-                {currentBook.title}
-              </h1>
+              <TruncatedText
+                as="h1"
+                text={currentBook.title}
+                className="font-medium truncate text-sm sm:text-base"
+              />
               {currentChapter && (
-                <p className="text-xs text-muted-foreground truncate">
-                  {currentChapter.title}
-                </p>
+                <TruncatedText
+                  as="p"
+                  text={currentChapter.title}
+                  className="text-xs text-muted-foreground truncate"
+                />
               )}
             </div>
 
             {/* Save status */}
-            <div className="text-sm text-muted-foreground">
-              {saveStatus === "saving" && (
-                <span className="flex items-center gap-1">
-                  <SpinnerIcon className="w-4 h-4 animate-spin" />
-                  <span className="hidden sm:inline">{t("editor.saving")}</span>
-                </span>
-              )}
-              {saveStatus === "saved" && (
-                <span className="flex items-center gap-1 text-success">
-                  <CheckIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{t("editor.saved")}</span>
-                </span>
-              )}
-              {!["saving", "saved"].includes(saveStatus) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSaveNow();
-                  }}
-                  disabled={!currentChapter?.content}
-                  title={`${t("common.save")} (Ctrl+S)`}
-                  className={`p-2 rounded transition-colors text-muted-foreground hover:text-primary`}
-                >
-                  <SaveIcon className="w-5 h-5" />
-                </button>
-              )}
-            </div>
+            <SaveStatus
+              status={saveStatus}
+              onSave={() => {
+                handleSaveNow();
+              }}
+              disabled={!currentChapter?.content}
+              saveShortcut="Ctrl+S"
+            />
 
             {/* Sync */}
             <SyncStatusButton />
@@ -813,7 +796,8 @@ export function BookEditor() {
                 setBookSidePanelTab("notes");
                 setShowNotesChapter(true);
               }}
-              className="hidden md:inline-flex p-2 hover:bg-muted rounded transition-colors"
+              disabled={showNotesChapter}
+              className="hidden md:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
               title={t("nav.bookNotes")}
             >
               <NotebookText className="w-5 h-5" />
@@ -920,7 +904,8 @@ export function BookEditor() {
                         setShowNotesChapter(true);
                         setShowMobileMenu(false);
                       }}
-                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                      disabled={showNotesChapter}
+                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:hover:bg-transparent"
                     >
                       <NotebookText className="w-4 h-4" />
                       {t("nav.bookNotes")}

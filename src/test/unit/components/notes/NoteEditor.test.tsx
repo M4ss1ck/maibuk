@@ -73,6 +73,11 @@ vi.mock("../../../../components/editor", () => ({
       </button>
     </div>
   ),
+  SaveStatus: ({ status, onSave }: { status: string; onSave: () => void }) => (
+    <button type="button" onClick={onSave}>
+      Save status: {status}
+    </button>
+  ),
 }));
 
 function buildNote(overrides: Partial<Note>): Note {
@@ -122,6 +127,26 @@ describe("NoteEditor", () => {
     });
 
     vi.useRealTimers();
+  });
+
+  it("saves immediately when the manual save button is clicked", async () => {
+    const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
+
+    render(
+      <NoteEditor
+        note={buildNote({ title: "Initial" })}
+        onSave={onSave}
+        onBack={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Save status/ }));
+    });
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "note-1", title: "Initial" }),
+    );
   });
 
   it("renders a back-to-book button that returns to the book when a target is set", () => {

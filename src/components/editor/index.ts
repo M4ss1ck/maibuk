@@ -13,4 +13,5 @@ export { HtmlViewPanel } from "./HtmlViewPanel";
 export { ColorPicker } from "./ColorPicker";
 export { LinkClickHandler } from "./LinkClickHandler";
 export { TableMenu } from "./TableMenu";
+export { SaveStatus } from "./SaveStatus";
 export * from "./extensions";
