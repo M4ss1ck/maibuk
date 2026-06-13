@@ -31,6 +31,7 @@ function parseCollapsedHeadings(raw: unknown): string[] {
 function toModel(row: Record<string, unknown>): Note {
   return {
     id: row.id as string,
+    bookId: row.book_id as string | null | undefined,
     title: row.title as string,
     content: (row.content as string) ?? "",
     tags: parseTags(row.tags),
@@ -113,6 +114,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
     const note: Note = {
       id,
+      bookId: input.bookId ?? null,
       title: input.title,
       content: input.content ?? "",
       tags: input.tags ?? [],
@@ -125,10 +127,11 @@ export const useNoteStore = create<NoteStore>((set) => ({
     };
 
     await db.execute(
-      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO notes (id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         note.id,
+        note.bookId ?? null,
         note.title,
         note.content,
         JSON.stringify(note.tags),
@@ -156,8 +159,9 @@ export const useNoteStore = create<NoteStore>((set) => ({
     const updated: Note = { ...existing, ...input, updatedAt: nowSeconds() };
 
     await db.execute(
-      `UPDATE notes SET title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE notes SET book_id = ?, title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ? WHERE id = ?`,
       [
+        updated.bookId ?? null,
         updated.title,
         updated.content,
         JSON.stringify(updated.tags),

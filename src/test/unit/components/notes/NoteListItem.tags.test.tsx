@@ -56,4 +56,16 @@ describe("NoteListItem tags", () => {
 
     expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
   });
+
+  it("positions the drag handle over the meta line on the right", () => {
+    render(
+      <ul>
+        <NoteListItem note={buildNote({ content: "<p>Preview text</p>" })} isSelected={false} onSelect={vi.fn()} />
+      </ul>,
+    );
+
+    const handle = screen.getByTestId("note-drag-handle");
+    expect(handle).toHaveClass("absolute");
+    expect(handle).toHaveClass("right-2");
+  });
 });

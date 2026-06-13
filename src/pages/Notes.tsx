@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { useNoteStore } from "../features/notes";
 import type { Note, UpdateNoteInput } from "../features/notes";
+import { useBookStore } from "../features/books/store";
 import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
 import { useSettingsStore } from "../features/settings/store";
 import {
@@ -19,6 +20,8 @@ export function Notes() {
   const deleteNote = useNoteStore((s) => s.deleteNote);
   const reorderNotes = useNoteStore((s) => s.reorderNotes);
   const setCurrentNote = useNoteStore((s) => s.setCurrentNote);
+  const books = useBookStore((s) => s.books);
+  const loadBooks = useBookStore((s) => s.loadBooks);
   const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
   const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
   const lastNoteId = useSettingsStore((s) => s.lastNoteId);
@@ -29,6 +32,7 @@ export function Notes() {
   useEffect(() => {
     async function init() {
       await loadNotes();
+      await loadBooks();
       if (!useNoteStore.getState().currentNote && lastNoteId) {
         await loadNote(lastNoteId);
         if (!useNoteStore.getState().currentNote) {
@@ -37,7 +41,7 @@ export function Notes() {
       }
     }
     init();
-  }, [loadNotes, loadNote, lastNoteId, setLastNoteId]);
+  }, [loadNotes, loadBooks, loadNote, lastNoteId, setLastNoteId]);
 
   useEffect(() => {
     const state = location.state as {
@@ -60,8 +64,8 @@ export function Notes() {
     }
   }, [location.state, loadNote]);
 
-  const handleCreateNote = async () => {
-    const note = await createNote({ title: "" });
+  const handleCreateNote = async (bookId?: string | null) => {
+    const note = await createNote({ title: "", bookId: bookId ?? null });
     setCurrentNote(note);
     setLastNoteId(note.id);
   };
@@ -98,6 +102,7 @@ export function Notes() {
   const handleDuplicateNote = async (note: Note) => {
     const duplicated = await createNote({
       title: `${note.title} (copy)`,
+      bookId: note.bookId ?? null,
       content: note.content,
       tags: [...note.tags],
       wordCount: note.wordCount,
@@ -147,6 +152,7 @@ export function Notes() {
       >
         <NotesList
           notes={notes}
+          books={books}
           currentNoteId={currentNote?.id ?? null}
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateNote}

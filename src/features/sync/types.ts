@@ -154,6 +154,7 @@ export interface BookSnapshot {
 export interface NoteSnapshot {
   note: {
     id: string;
+    bookId?: string | null;
     title: string;
     content: string | null;
     tags: string | null; // JSON array string, stored verbatim

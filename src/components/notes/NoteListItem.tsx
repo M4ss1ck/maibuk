@@ -71,7 +71,6 @@ export function NoteListItem({
           }`}
       >
         <span className="flex items-center gap-1">
-          <GripVertical className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
           <span className="flex-1 min-w-0 block truncate font-medium text-sm">{title}</span>
           {confirmingDelete && onDelete ? (
             <span className="flex items-center gap-1 shrink-0">
@@ -152,11 +151,17 @@ export function NoteListItem({
             </>
           )}
         </span>
-        {preview && (
-          <span className="mt-1 block text-xs text-muted-foreground truncate">
-            {preview}
-          </span>
-        )}
+        <span className="relative mt-1 block min-h-4 pr-6">
+          {preview && (
+            <span className="block truncate text-xs text-muted-foreground">
+              {preview}
+            </span>
+          )}
+          <GripVertical
+            data-testid="note-drag-handle"
+            className="absolute right-2 top-0 h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          />
+        </span>
         <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
       </div>
     </li>

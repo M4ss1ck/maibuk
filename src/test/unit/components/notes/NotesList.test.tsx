@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { NotesList } from "../../../../components/notes/NotesList";
+import type { Book } from "../../../../features/books/types";
 import type { Note } from "../../../../features/notes";
 
 vi.mock("react-i18next", () => ({
@@ -11,15 +12,23 @@ vi.mock("react-i18next", () => ({
         "notes.newNote": "New note",
         "notes.search": "Search notes...",
         "notes.empty": "No notes",
+        "notes.viewList": "List",
+        "notes.viewTree": "Tree",
+        "notes.sectionPinned": "Pinned",
+        "notes.sectionAll": "All notes",
+        "notes.group": "Group",
+        "notes.groupBook": "Book",
+        "notes.groupTag": "Tag",
+        "notes.groupDate": "Date",
+        "notes.unfiled": "Unfiled",
+        "notes.noNotesYet": "No notes yet",
+        "notes.addNoteToBook": "Add note",
+        "notes.today": "Today",
+        "notes.thisWeek": "This week",
       };
 
-      if (key === "notes.noteCount_one") {
-        return `${params?.count ?? 0} note`;
-      }
-
-      if (key === "notes.noteCount_other") {
-        return `${params?.count ?? 0} notes`;
-      }
+      if (key === "notes.noteCount") return `${params?.count ?? 0} notes`;
+      if (key === "notes.pinnedCount") return `${params?.count ?? 0} pinned`;
 
       return map[key] ?? key;
     },
@@ -42,7 +51,143 @@ function buildNote(overrides: Partial<Note>): Note {
   };
 }
 
+function buildBook(overrides: Partial<Book>): Book {
+  return {
+    id: overrides.id ?? crypto.randomUUID(),
+    title: overrides.title ?? "Book",
+    authorName: overrides.authorName ?? "Author",
+    language: overrides.language ?? "en",
+    wordCount: overrides.wordCount ?? 0,
+    status: overrides.status ?? "draft",
+    createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
+    updatedAt: overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
+  };
+}
+
 describe("NotesList", () => {
+  it("renders list and tree view toggle in the title bar", () => {
+    const onCreateNote = vi.fn();
+
+    render(
+      <NotesList
+        notes={[]}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={onCreateNote}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "List" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tree" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New note" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "New note" }));
+    expect(onCreateNote).toHaveBeenCalledWith(null);
+  });
+
+  it("renders pinned and all-notes sections with a pinned footer count", () => {
+    const notes = [
+      buildNote({ id: "a", title: "Pinned A", pinned: true }),
+      buildNote({ id: "b", title: "Pinned B", pinned: true }),
+      buildNote({ id: "c", title: "Regular" }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Pinned")).toBeInTheDocument();
+    expect(screen.getByText("All notes")).toBeInTheDocument();
+    expect(screen.getByText("2 pinned")).toBeInTheDocument();
+  });
+
+  it("switches to tree mode and renders book groups with empty books and unfiled last", () => {
+    const onCreateNote = vi.fn();
+    const books = [
+      buildBook({ id: "book-a", title: "Novel" }),
+      buildBook({ id: "book-b", title: "Empty Book" }),
+    ];
+    const notes = [
+      buildNote({ id: "a", title: "Novel note" }) as Note & { bookId: string },
+      buildNote({ id: "b", title: "Loose note" }),
+    ];
+    notes[0].bookId = "book-a";
+
+    render(
+      <NotesList
+        notes={notes}
+        books={books}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={onCreateNote}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+
+    expect(screen.getByText("Group")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Book" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Novel")).toBeInTheDocument();
+    expect(screen.getByText("Novel note")).toBeInTheDocument();
+    expect(screen.getByText("Empty Book")).toBeInTheDocument();
+    expect(screen.getByText("No notes yet")).toBeInTheDocument();
+    expect(screen.getByText("Unfiled")).toBeInTheDocument();
+    expect(screen.getByText("Loose note")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Add note" })[0]);
+    expect(onCreateNote).toHaveBeenCalledWith("book-a");
+  });
+
+  it("shows empty book groups in tree mode when there are no notes", () => {
+    render(
+      <NotesList
+        notes={[]}
+        books={[buildBook({ id: "book-a", title: "Empty Book" })]}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+
+    expect(screen.getByText("Empty Book")).toBeInTheDocument();
+    expect(screen.getAllByText("No notes yet").length).toBeGreaterThan(0);
+  });
+
+  it("repeats notes across tag groups in tree mode", () => {
+    const notes = [
+      buildNote({ id: "a", title: "Shared", tags: ["craft", "revision"] }),
+      buildNote({ id: "b", title: "Only revision", tags: ["revision"] }),
+    ];
+
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tag" }));
+
+    expect(screen.getAllByText("craft").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("revision").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Shared")).toHaveLength(2);
+  });
+
   it("reorders the full list on drop when search is not active", () => {
     const onReorderNotes = vi.fn();
     const notes = [

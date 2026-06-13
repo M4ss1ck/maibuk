@@ -150,9 +150,10 @@ export const chapterEpubMeta = sqliteTable("chapter_epub_meta", {
   capabilitiesJson: text("capabilities_json"),
 });
 
-// Notes table (separate Notes workspace, not tied to a book)
+// Notes table (separate Notes workspace, optionally associated with a book)
 export const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),
+  bookId: text("book_id"),
   title: text("title").notNull(),
   content: text("content"), // Tiptap JSON string
   tags: text("tags"), // JSON array of tag names
