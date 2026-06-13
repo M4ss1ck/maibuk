@@ -40,6 +40,7 @@ interface NotesListProps {
   onSelectNote: (note: NoteWithBook) => void;
   onCreateNote: (bookId?: string | null) => void;
   onReorderNotes: (ids: string[]) => Promise<void>;
+  onReassignNoteBook?: (noteId: string, bookId: string | null) => void;
   onPinNote?: (note: NoteWithBook) => void;
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: NoteWithBook) => void;
@@ -53,6 +54,7 @@ export function NotesList({
   onSelectNote,
   onCreateNote,
   onReorderNotes,
+  onReassignNoteBook,
   onPinNote,
   onDeleteNote,
   onDuplicateNote,
@@ -67,6 +69,7 @@ export function NotesList({
   const autoScroll = useDragAutoScroll(listContainerRef);
   const [search, setSearch] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<NotesListViewMode>("list");
   const [treeGroupMode, setTreeGroupMode] = useState<NotesTreeGroupMode>("book");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -153,6 +156,36 @@ export function NotesList({
     setDraggedId(null);
   };
 
+  const handleGroupDragOver = (e: DragEvent<HTMLDivElement>, groupId: string) => {
+    if (!draggedId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverGroupId(groupId);
+    autoScroll.onDragOver(e.clientY);
+  };
+
+  const handleGroupDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setDragOverGroupId(null);
+  };
+
+  const handleGroupDrop = (
+    e: DragEvent<HTMLDivElement>,
+    targetBookId: string | null,
+  ) => {
+    e.preventDefault();
+    autoScroll.stop();
+    setDragOverGroupId(null);
+    const noteId = draggedId;
+    setDraggedId(null);
+    if (!noteId) return;
+    const note = notes.find((n) => n.id === noteId);
+    if (!note) return;
+    const currentBookId = note.bookId ?? null;
+    if (currentBookId === targetBookId) return;
+    onReassignNoteBook?.(noteId, targetBookId);
+  };
+
   const renderNote = (note: NoteWithBook) => (
     <NoteListItem
       key={note.id}
@@ -166,6 +199,22 @@ export function NotesList({
       onDragStart={(e) => handleDragStart(e, note.id)}
       onDragOver={handleDragOver}
       onDrop={(e) => handleDrop(e, note.id)}
+      onDragEnd={handleDragEnd}
+      isDragging={draggedId === note.id}
+    />
+  );
+
+  const renderTreeNote = (note: NoteWithBook) => (
+    <NoteListItem
+      key={note.id}
+      note={note}
+      isSelected={currentNoteId === note.id}
+      onSelect={onSelectNote}
+      onPinToggle={onPinNote}
+      onDelete={onDeleteNote}
+      onDuplicate={onDuplicateNote}
+      draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
+      onDragStart={(e) => handleDragStart(e, note.id)}
       onDragEnd={handleDragEnd}
       isDragging={draggedId === note.id}
     />
@@ -206,8 +255,18 @@ export function NotesList({
         const title = group.id === "unfiled" ? t("notes.unfiled") : group.title;
         const GroupIcon = group.id === "unfiled" ? Feather : BookOpen;
 
+        const targetBookId = group.book?.id ?? null;
         return (
-          <div key={group.id} className="px-2 py-1">
+          <div
+            key={group.id}
+            data-testid={`book-group-${group.id}`}
+            onDragOver={(e) => handleGroupDragOver(e, group.id)}
+            onDragLeave={handleGroupDragLeave}
+            onDrop={(e) => handleGroupDrop(e, targetBookId)}
+            className={`px-2 py-1 rounded-md transition-colors ${
+              dragOverGroupId === group.id ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""
+            }`}
+          >
             <div className="group flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
               <button
                 type="button"
@@ -248,7 +307,7 @@ export function NotesList({
             {!isCollapsed && (
               <div className="ml-5">
                 {group.notes.length > 0 ? (
-                  <ul className="space-y-1">{group.notes.map(renderNote)}</ul>
+                  <ul className="space-y-1">{group.notes.map(renderTreeNote)}</ul>
                 ) : (
                   <p className="px-2 py-2 text-xs text-muted-foreground">
                     {t("notes.noNotesYet")}

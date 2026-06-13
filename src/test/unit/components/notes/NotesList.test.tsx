@@ -309,6 +309,92 @@ describe("NotesList", () => {
     expect(onReorderNotes).toHaveBeenCalledWith(["c", "a", "b"]);
   });
 
+  it("reassigns a note's book when dropped on another book group in tree view", () => {
+    const onReassignNoteBook = vi.fn();
+    const books = [
+      buildBook({ id: "book-a", title: "Novel" }),
+      buildBook({ id: "book-b", title: "Other" }),
+    ];
+    const noteA = buildNote({ id: "a", title: "Novel note" }) as Note & { bookId: string };
+    noteA.bookId = "book-a";
+    const notes = [noteA];
+
+    render(
+      <NotesList
+        notes={notes}
+        books={books}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onReassignNoteBook={onReassignNoteBook}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+
+    const source = screen.getByText("Novel note").closest("li");
+    const targetGroup = screen.getByTestId("book-group-book-b");
+    expect(source).not.toBeNull();
+
+    if (!source) {
+      throw new Error("Expected note row to exist");
+    }
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragOver(targetGroup, { dataTransfer });
+    fireEvent.drop(targetGroup, { dataTransfer });
+
+    expect(onReassignNoteBook).toHaveBeenCalledWith("a", "book-b");
+  });
+
+  it("reassigns to unfiled (null) and ignores drops on the same book group", () => {
+    const onReassignNoteBook = vi.fn();
+    const books = [buildBook({ id: "book-a", title: "Novel" })];
+    const noteA = buildNote({ id: "a", title: "Novel note" }) as Note & { bookId: string };
+    noteA.bookId = "book-a";
+
+    render(
+      <NotesList
+        notes={[noteA]}
+        books={books}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onReassignNoteBook={onReassignNoteBook}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+
+    const source = screen.getByText("Novel note").closest("li");
+    if (!source) {
+      throw new Error("Expected note row to exist");
+    }
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    // Drop on the same group -> no-op
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.drop(screen.getByTestId("book-group-book-a"), { dataTransfer });
+    expect(onReassignNoteBook).not.toHaveBeenCalled();
+
+    // Drop on unfiled -> null
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.drop(screen.getByTestId("book-group-unfiled"), { dataTransfer });
+    expect(onReassignNoteBook).toHaveBeenCalledWith("a", null);
+  });
+
   it("disables dragging while a search query is active", () => {
     const onReorderNotes = vi.fn();
     const notes = [
