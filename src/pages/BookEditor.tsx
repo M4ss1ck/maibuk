@@ -33,6 +33,7 @@ import {
   DocumentIcon,
   SettingsIcon,
   CloseIcon,
+  MaibukLogo,
 } from "../components/icons";
 import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { deriveNoteTitle } from "../components/book/deriveNoteTitle";
@@ -58,7 +59,6 @@ import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { toast } from "../components/ui/Toast";
 import { metricsService } from "../lib/metrics/MetricsService";
-import logo from "../../src-tauri/icons/icon.png";
 
 const VersionPanel = lazy(() =>
   import("../components/versions/VersionPanel").then((module) => ({
@@ -656,11 +656,7 @@ export function BookEditor() {
     return (
       <div className="flex items-center justify-center h-dvh bg-background">
         <div className="flex flex-col items-center gap-3">
-          <img
-            src={logo}
-            alt="Maibuk"
-            className="w-16 h-16 loading-entrance"
-          />
+          <MaibukLogo className="w-16 h-16 loading-entrance text-primary" />
           <p className="text-muted-foreground">{t("editor.loading")}</p>
         </div>
       </div>
@@ -1060,11 +1056,7 @@ export function BookEditor() {
         ) : isChapterPreparing ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3 text-muted-foreground">
-              <img
-                src={logo}
-                alt="Maibuk"
-                className="w-16 h-16 loading-entrance"
-              />
+              <MaibukLogo className="w-16 h-16 loading-entrance text-primary" />
               <span className="text-sm">{t("editor.loadingEditor")}</span>
             </div>
           </div>

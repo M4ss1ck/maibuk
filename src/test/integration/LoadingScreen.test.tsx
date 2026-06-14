@@ -5,15 +5,15 @@ import { LoadingScreen } from "../../components/LoadingScreen";
 describe("LoadingScreen", () => {
   it("renders the app logo", () => {
     render(<LoadingScreen />);
-    const logo = screen.getByAltText("Maibuk");
+    const logo = screen.getByLabelText("Maibuk");
     expect(logo).toBeInTheDocument();
-    expect(logo.tagName).toBe("IMG");
+    expect(logo.tagName).toBe("svg");
   });
 
   it("applies entrance animation to the logo", () => {
     render(<LoadingScreen />);
-    const logo = screen.getByAltText("Maibuk");
-    expect(logo.className).toContain("loading-entrance");
+    const logo = screen.getByLabelText("Maibuk");
+    expect(logo.classList.contains("loading-entrance")).toBe(true);
   });
 
   it("uses full dynamic viewport height", () => {

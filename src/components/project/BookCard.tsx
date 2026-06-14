@@ -1,7 +1,7 @@
 import type { Book } from "../../features/books/types";
 import { useTranslation } from "react-i18next";
 import { KeyboardShortcut } from "../ui";
-import logo from "../../../src-tauri/icons/icon.png";
+import { MaibukLogo } from "../icons";
 
 interface BookCardProps {
   book: Book;
@@ -57,11 +57,7 @@ export function BookCard({
             className="w-full h-full object-cover"
           />
         ) : (
-          <img
-            src={logo}
-            alt="Maibuk"
-            className="w-16 h-16 object-contain opacity-85"
-          />
+          <MaibukLogo className="w-16 h-16 text-primary opacity-85" />
         )}
       </div>
 

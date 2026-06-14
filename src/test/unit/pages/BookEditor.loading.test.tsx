@@ -205,10 +205,10 @@ describe("BookEditor loading state", () => {
 
     render(<BookEditor />);
 
-    const logo = screen.getByAltText("Maibuk");
+    const logo = screen.getByLabelText("Maibuk");
     const loadingSurface = logo.parentElement?.parentElement;
     expect(logo).toBeInTheDocument();
-    expect(logo.className).toContain("loading-entrance");
+    expect(logo.classList.contains("loading-entrance")).toBe(true);
     expect(loadingSurface).toHaveClass("h-dvh");
     expect(screen.getByText("editor.loading")).toBeInTheDocument();
   });
@@ -218,9 +218,9 @@ describe("BookEditor loading state", () => {
 
     render(<BookEditor />);
 
-    const logo = screen.getByAltText("Maibuk");
+    const logo = screen.getByLabelText("Maibuk");
     expect(logo).toBeInTheDocument();
-    expect(logo.className).toContain("loading-entrance");
+    expect(logo.classList.contains("loading-entrance")).toBe(true);
     expect(screen.getByText("editor.loadingEditor")).toBeInTheDocument();
     expect(screen.queryByText("editor.noChapter")).not.toBeInTheDocument();
   });
@@ -242,9 +242,9 @@ describe("BookEditor loading state", () => {
 
     render(<BookEditor />);
 
-    const logo = screen.getByAltText("Maibuk");
+    const logo = screen.getByLabelText("Maibuk");
     expect(logo).toBeInTheDocument();
-    expect(logo.className).toContain("loading-entrance");
+    expect(logo.classList.contains("loading-entrance")).toBe(true);
     expect(screen.getByText("editor.loadingEditor")).toBeInTheDocument();
     expect(screen.queryByText("editor.noChapter")).not.toBeInTheDocument();
     expect(mockSetCurrentChapter).toHaveBeenCalledWith(

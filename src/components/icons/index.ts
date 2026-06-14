@@ -32,3 +32,4 @@ export * from "./SaveIcon";
 export * from "./CoverDesignIcon";
 export * from "./DocumentIcon";
 export * from "./RefreshIcon";
+export * from "./MaibukLogo";

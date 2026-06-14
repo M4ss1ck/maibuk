@@ -6,7 +6,7 @@ import { NewBookDialog } from "../components/project/NewBookDialog";
 import { EpubImportDialog } from "../components/import";
 import { Button } from "../components/ui/Button";
 import { useTranslation } from "react-i18next";
-import { AddIcon } from "../components/icons";
+import { AddIcon, MaibukLogo } from "../components/icons";
 import { Download, FileUp } from "lucide-react";
 import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "../lib/platform";
 import { DOWNLOAD_PAGE } from "../constants";
@@ -15,7 +15,6 @@ import { isModKey, isTypingTarget } from "../lib/keyboard";
 import { useShortcuts } from "../lib/shortcuts";
 import { scanEpubForImport } from "../features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "../features/import";
-import logo from "../../src-tauri/icons/icon.png";
 
 interface EpubImportState {
   bytes: Uint8Array;
@@ -187,11 +186,7 @@ export function Home() {
         /* Empty state */
         <div className="empty-state-enter flex flex-col items-center justify-center py-20 sm:py-28 text-center">
           <div className="w-20 h-20 mb-8">
-            <img
-              src={logo}
-              alt="Maibuk"
-              className="w-full h-full object-contain opacity-70"
-            />
+            <MaibukLogo className="w-full h-full text-primary opacity-70" />
           </div>
           <h3 className="text-2xl sm:text-3xl font-semibold mb-3 tracking-tight">
             {t("books.noBooks")}
