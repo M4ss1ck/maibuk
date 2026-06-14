@@ -4,9 +4,8 @@ import { ThemeToggle } from "./ThemeToggle";
 import { APP_VERSION, DOWNLOAD_PAGE } from "../constants";
 import { useVersionCheck } from "../features/version";
 import { useTranslation } from "react-i18next";
-import { ProjectsIcon, SettingsIcon, CloseIcon } from "./icons";
+import { ProjectsIcon, SettingsIcon, CloseIcon, MaibukLogo } from "./icons";
 import { BarChart3, Menu, NotebookPen } from "lucide-react";
-import logo from "../../src-tauri/icons/icon.png";
 import { KeyboardShortcut } from "./ui";
 import { useSettingsStore } from "../features/settings/store";
 
@@ -80,7 +79,7 @@ export function Layout() {
           <Menu className="w-6 h-6" />
         </button>
         <div className="flex-1 flex items-center justify-center gap-2">
-          <img src={logo} alt="Maibuk" className="w-8" />
+          <MaibukLogo className="w-8 text-primary" />
           <h1 className="text-lg font-semibold">{t("app.title")}</h1>
         </div>
         <div className="w-10" /> {/* Spacer for symmetry */}
@@ -108,7 +107,7 @@ export function Layout() {
         `}
       >
         <div className="px-4 border-b border-border flex flex-row items-end gap-2 justify-start">
-          <img src={logo} alt="Maibuk" className="w-14" />
+          <MaibukLogo className="w-14 text-primary" />
           <h1 className="text-3xl mb-1 font-semibold">{t("app.title")}</h1>
           {/* Close button for mobile */}
           <button
