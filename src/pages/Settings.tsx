@@ -39,6 +39,7 @@ import { BackupSection } from "../components/settings/BackupSection";
 import { MetricsSection } from "../components/settings/MetricsSection";
 import { PasteCleanupSection } from "../components/settings/PasteCleanupSection";
 import { AsciiBanner } from "../components/settings/AsciiBanner";
+import { AsciiFieldBackground } from "../components/settings/AsciiFieldBackground";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -195,8 +196,9 @@ export function Settings() {
   };
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-4 sm:p-8 max-w-2xl">
+    <div className="h-full overflow-auto relative">
+      <AsciiFieldBackground color={primaryColor} />
+      <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background">
         <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">
           {t("settings.title")}
         </h2>
