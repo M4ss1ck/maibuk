@@ -221,8 +221,8 @@ export function Settings() {
                   type="button"
                   onClick={() => setTheme("light")}
                   className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "light"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
                   {t("settings.light")}
@@ -231,8 +231,8 @@ export function Settings() {
                   type="button"
                   onClick={() => setTheme("dark")}
                   className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "dark"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
                   {t("settings.dark")}
@@ -241,8 +241,8 @@ export function Settings() {
                   type="button"
                   onClick={() => setTheme("system")}
                   className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "system"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
                   {t("settings.system")}
@@ -773,7 +773,7 @@ export function Settings() {
           <div className="relative">
             <AsciiBanner color={primaryColor} />
             <div className="absolute bottom-0 right-0 flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-lg text-foreground">
                 {APP_VERSION}
               </span>
               {updateAvailable && (
