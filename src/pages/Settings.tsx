@@ -38,6 +38,8 @@ import { SyncControls } from "../components/sync/SyncControls";
 import { BackupSection } from "../components/settings/BackupSection";
 import { MetricsSection } from "../components/settings/MetricsSection";
 import { PasteCleanupSection } from "../components/settings/PasteCleanupSection";
+import { AsciiBanner } from "../components/settings/AsciiBanner";
+import { AsciiFieldBackground } from "../components/settings/AsciiFieldBackground";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -194,8 +196,9 @@ export function Settings() {
   };
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-4 sm:p-8 max-w-2xl">
+    <div className="h-full overflow-auto relative">
+      <AsciiFieldBackground color={primaryColor} />
+      <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background">
         <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">
           {t("settings.title")}
         </h2>
@@ -217,33 +220,30 @@ export function Settings() {
                 <button
                   type="button"
                   onClick={() => setTheme("light")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                    theme === "light"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "light"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   {t("settings.light")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setTheme("dark")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                    theme === "dark"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "dark"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   {t("settings.dark")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setTheme("system")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                    theme === "system"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${theme === "system"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   {t("settings.system")}
                 </button>
@@ -456,7 +456,7 @@ export function Settings() {
                   onSync={async (options) => {
                     // Errors surface via syncError in the store; swallow the
                     // rejection so it isn't an uncaught promise.
-                    await syncAllWithSessionPassphrase(options).catch(() => {});
+                    await syncAllWithSessionPassphrase(options).catch(() => { });
                   }}
                 />
               </div>
@@ -770,9 +770,12 @@ export function Settings() {
 
         {/* About */}
         <section className="pt-4 border-t border-border">
-          <div className="text-sm text-muted-foreground">
-            <p className="flex items-center gap-2">
-              Maibuk {APP_VERSION}
+          <div className="relative">
+            <AsciiBanner color={primaryColor} />
+            <div className="absolute bottom-0 right-0 flex items-center gap-2">
+              <span className="text-lg text-foreground">
+                {APP_VERSION}
+              </span>
               {updateAvailable && (
                 <a
                   href={DOWNLOAD_PAGE}
@@ -783,9 +786,11 @@ export function Settings() {
                   {t("settings.updateAvailable", { version: latestVersion })}
                 </a>
               )}
-            </p>
-            <p className="mt-1">{t("app.description")}</p>
+            </div>
           </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("app.description")}
+          </p>
         </section>
       </div>
     </div>

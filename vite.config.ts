@@ -109,6 +109,10 @@ export default defineConfig(() => ({
         "src/features/notes/store.ts",
         "src/features/sync/serializer.ts",
         "src/components/editor/extensions/CollapsibleHeading.ts",
+        // Phase 12: Settings ASCII easter egg
+        "src/components/settings/asciiBanner.helpers.ts",
+        "src/components/settings/AsciiBanner.tsx",
+        "src/components/settings/AsciiFieldBackground.tsx",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {
