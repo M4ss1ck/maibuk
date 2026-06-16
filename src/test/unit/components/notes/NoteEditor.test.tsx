@@ -149,6 +149,26 @@ describe("NoteEditor", () => {
     );
   });
 
+  it("saves immediately when Ctrl+S is pressed", async () => {
+    const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
+
+    render(
+      <NoteEditor
+        note={buildNote({ title: "Initial" })}
+        onSave={onSave}
+        onBack={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    });
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "note-1", title: "Initial" }),
+    );
+  });
+
   it("renders a back-to-book button that returns to the book when a target is set", () => {
     const onReturnToBook = vi.fn();
 

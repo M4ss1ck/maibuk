@@ -12,6 +12,7 @@ import type { InternalTarget, InternalTargetChildrenLoader } from "../editor/Lin
 import { CollapsibleHeading } from "../editor/extensions";
 import { collapsibleHeadingPluginKey } from "../editor/extensions/CollapsibleHeading";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
+import { useShortcuts } from "../../lib/shortcuts";
 import { BackIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
@@ -336,6 +337,16 @@ export function NoteEditor({
   const debouncedSave = useDebouncedCallback(async () => {
     await saveNow();
   }, 1000);
+
+  useShortcuts([
+    {
+      keys: ["ctrl+s", "meta+s"],
+      onTrigger: () => {
+        void saveNow();
+      },
+      allowInInput: true,
+    },
+  ]);
 
   const handleTitleChange = useCallback(
     (value: string) => {
