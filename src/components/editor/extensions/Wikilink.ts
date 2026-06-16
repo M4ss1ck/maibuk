@@ -15,6 +15,16 @@ export interface WikilinkSuggestionConfig {
   render: SuggestionOptions["render"];
 }
 
+// The suggestion option carries the base tiptap Suggestion fields plus the
+// wikilink-specific ones (onCreateNote, typed items/render). items/render come
+// solely from WikilinkSuggestionConfig to avoid intersecting conflicting
+// function signatures with SuggestionOptions.
+type WikilinkSuggestionOptions = Omit<
+  Partial<SuggestionOptions>,
+  "items" | "render"
+> &
+  Partial<WikilinkSuggestionConfig>;
+
 /**
  * Inline atom node for `[[ ]]` note links. Bound links render as a maibuk anchor;
  * unresolved links render with a `wikilink-broken` class and a `data-label` so the
@@ -32,7 +42,7 @@ export const Wikilink = Node.create({
       suggestion: {
         char: "[[",
         startOfLine: false,
-      } as Partial<SuggestionOptions>,
+      } as WikilinkSuggestionOptions,
     };
   },
 
