@@ -1,6 +1,33 @@
 import PocketBase from "pocketbase";
 import type { SyncItemMeta, NoteSyncItemMeta } from "./types";
 
+export type ObjectKind = "book" | "note" | "version" | "metric";
+export const APP_NAME = "maibuk";
+
+export interface RemoteObject {
+  remoteId: string;
+  kind: ObjectKind;
+  key: string;
+  group: string;
+  checksum: string;
+  deleted: boolean;
+  meta: string;
+  updatedAt: number;
+  updatedIso: string;
+}
+
+export interface PushObjectInput {
+  kind: ObjectKind;
+  key: string;
+  group?: string;
+  checksum?: string;
+  meta?: string;
+  content?: Blob;
+  remoteId?: string;
+}
+
+const OBJECT_LIST_FIELDS = "id,kind,key,group,checksum,deleted,meta,updated";
+
 let pb: PocketBase | null = null;
 
 /**
@@ -97,6 +124,148 @@ export function getAuthToken(): string | null {
 
 export function getAuthModel(): unknown {
   return pb?.authStore.record ?? null;
+}
+
+function toRemoteObject(record: Record<string, unknown>): RemoteObject {
+  const updatedIso = (record.updated as string | undefined) ?? "";
+  return {
+    remoteId: record.id as string,
+    kind: record.kind as ObjectKind,
+    key: record.key as string,
+    group: (record.group as string | undefined) ?? "",
+    checksum: (record.checksum as string | undefined) ?? "",
+    deleted: Boolean(record.deleted),
+    meta: (record.meta as string | undefined) ?? "",
+    updatedAt: parsePocketBaseDate(updatedIso),
+    updatedIso,
+  };
+}
+
+function buildObjectFormData(
+  input: PushObjectInput,
+  userId: string,
+  deleted: boolean,
+): FormData {
+  const formData = new FormData();
+  formData.append("user", userId);
+  formData.append("app_name", APP_NAME);
+  formData.append("kind", input.kind);
+  formData.append("key", input.key);
+  formData.append("group", input.group ?? "");
+  formData.append("checksum", input.checksum ?? "");
+  formData.append("meta", input.meta ?? "");
+  formData.append("deleted", String(deleted));
+  if (input.content) {
+    formData.append("content", input.content, `${input.key}.bin`);
+  }
+  return formData;
+}
+
+export async function pushObject(input: PushObjectInput): Promise<string> {
+  const client = getClient();
+  const userId = client.authStore.record?.id;
+  if (!userId) throw new Error("Not authenticated");
+
+  const formData = buildObjectFormData(input, userId, false);
+  if (input.remoteId) {
+    const record = await client.collection("objects").update(input.remoteId, formData);
+    return (record.id as string | undefined) ?? input.remoteId;
+  }
+
+  const record = await client.collection("objects").create(formData);
+  return (record.id as string | undefined) ?? "";
+}
+
+export async function pullObjectContent(remoteId: string): Promise<Uint8Array | null> {
+  const client = getClient();
+
+  try {
+    const record = await client.collection("objects").getOne(remoteId);
+    if (!record.content) return null;
+
+    const fileUrl = client.files.getURL(record, record.content);
+    const response = await fetch(fileUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+  } catch {
+    return null;
+  }
+}
+
+export async function listObjects(kind: ObjectKind, group?: string): Promise<RemoteObject[]> {
+  const client = getClient();
+
+  const filters = [`app_name = "${APP_NAME}"`, `kind = "${kind}"`, "deleted = false"];
+  if (group !== undefined) {
+    filters.push(`group = "${group}"`);
+  }
+
+  const records = await client.collection("objects").getFullList({
+    filter: filters.join(" && "),
+    sort: "updated",
+    fields: OBJECT_LIST_FIELDS,
+  });
+
+  return records.map((record) => toRemoteObject(record as Record<string, unknown>));
+}
+
+export async function pullObjectsSince(
+  kind: ObjectKind,
+  sinceIso: string,
+): Promise<RemoteObject[]> {
+  const client = getClient();
+
+  const filters = [`app_name = "${APP_NAME}"`, `kind = "${kind}"`];
+  if (sinceIso) {
+    filters.push(`updated > "${sinceIso}"`);
+  }
+
+  const records = await client.collection("objects").getFullList({
+    filter: filters.join(" && "),
+    sort: "updated",
+    fields: OBJECT_LIST_FIELDS,
+  });
+
+  return records.map((record) => toRemoteObject(record as Record<string, unknown>));
+}
+
+export async function softDeleteObject(
+  kind: ObjectKind,
+  key: string,
+  meta?: string,
+): Promise<void> {
+  const client = getClient();
+  const userId = client.authStore.record?.id;
+  if (!userId) throw new Error("Not authenticated");
+
+  const existing = await client.collection("objects").getList(1, 1, {
+    filter: `app_name = "${APP_NAME}" && kind = "${kind}" && key = "${key}"`,
+  });
+
+  const input: PushObjectInput = { kind, key, meta };
+  const formData = buildObjectFormData(input, userId, true);
+  if (existing.items.length > 0) {
+    await client.collection("objects").update(existing.items[0].id, formData);
+  } else {
+    await client.collection("objects").create(formData);
+  }
+}
+
+export function isKeyUniqueConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const status = (error as { status?: number }).status;
+  if (status !== 400 && status !== 409) return false;
+
+  const fieldErrors = (error as {
+    data?: { data?: Record<string, { code?: string; message?: string }> };
+  }).data?.data;
+  if (!fieldErrors) return false;
+
+  return Object.values(fieldErrors).some((fieldError) => {
+    const code = fieldError.code?.toLowerCase() ?? "";
+    const message = fieldError.message?.toLowerCase() ?? "";
+    return code.includes("unique") || message.includes("unique");
+  });
 }
 
 export async function pushBookBlob(
