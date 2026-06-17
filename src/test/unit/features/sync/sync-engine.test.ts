@@ -31,6 +31,7 @@ const mockListPendingTombstones = vi.hoisted(() => vi.fn());
 const mockHasTombstone = vi.hoisted(() => vi.fn());
 const mockGetTombstone = vi.hoisted(() => vi.fn());
 const mockMarkTombstonePushed = vi.hoisted(() => vi.fn());
+const mockEnsureGenericCollectionMigration = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
@@ -120,6 +121,10 @@ vi.mock("../../../../features/sync/tombstones", () => ({
   hasTombstone: mockHasTombstone,
   getTombstone: mockGetTombstone,
   markTombstonePushed: mockMarkTombstonePushed,
+}));
+
+vi.mock("../../../../features/sync/migration-reset", () => ({
+  ensureGenericCollectionMigration: mockEnsureGenericCollectionMigration,
 }));
 
 const { syncBook, syncAllBooks, syncSingleNote, resetSyncEngineForTests } = await import(
@@ -1158,6 +1163,30 @@ describe("syncMetrics — engine integration", () => {
 
     expect(result.outcome).toBe("cancelled");
     expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+  });
+
+  it("runs cutover reset before metrics in syncBook", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteBooks.mockResolvedValue([]);
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockEnsureGenericCollectionMigration).toHaveBeenCalled();
+  });
+
+  it("runs cutover reset before metrics in syncSingleNote", async () => {
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: true } });
+    mockListRemoteNotes.mockResolvedValue([]);
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("updated_at") && sql.includes("FROM notes")) return [{ updated_at: 5000 }];
+      if (sql.includes("SELECT title FROM notes")) return [{ title: "My Note" }];
+      return [];
+    });
+    mockSerializeNote.mockResolvedValue('{"note":{"id":"note-1"}}');
+
+    await syncSingleNote("note-1", "pass", vi.fn());
+
+    expect(mockEnsureGenericCollectionMigration).toHaveBeenCalled();
   });
 });
 

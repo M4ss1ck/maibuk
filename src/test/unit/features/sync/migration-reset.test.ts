@@ -18,6 +18,7 @@ describe("ensureGenericCollectionMigration", () => {
     expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining("UPDATE metrics_events SET pushed_at = NULL"));
     expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining("UPDATE metrics_event_tombstones SET pushed_at = NULL"));
     expect(localStorage.getItem("maibuk.metrics.lastEventPullAt")).toBeNull();
+    expect(localStorage.getItem("maibuk.metrics.lastTombstonePullAt")).toBeNull();
     expect(localStorage.getItem("maibuk.sync.genericMigrationDone")).toBe("1");
   });
 

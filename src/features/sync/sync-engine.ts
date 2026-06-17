@@ -759,6 +759,7 @@ export async function syncBook(
   isSyncing = true;
   const options = resolveSyncOptions({ scope: "books", ...optionsInput });
   try {
+    await ensureGenericCollectionMigration();
     await ensureAuth();
     await createPreSyncBackupOrThrow();
     emitLog(options, {
@@ -809,6 +810,7 @@ export async function syncSingleNote(
   isSyncing = true;
   const options = resolveSyncOptions({ scope: "notes", ...optionsInput });
   try {
+    await ensureGenericCollectionMigration();
     await ensureAuth();
     await createPreSyncBackupOrThrow();
     emitLog(options, {
