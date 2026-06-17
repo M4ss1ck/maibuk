@@ -49,6 +49,7 @@ import {
   listPendingTombstones,
   markTombstonePushed,
 } from "./tombstones";
+import { ensureGenericCollectionMigration } from "./migration-reset";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR =
@@ -850,6 +851,7 @@ export async function syncAllBooks(
   isSyncing = true;
   const options = resolveSyncOptions(optionsInput);
   try {
+    await ensureGenericCollectionMigration();
     await ensureAuth();
     assertOnline();
     const actions: SyncAction[] = [];
