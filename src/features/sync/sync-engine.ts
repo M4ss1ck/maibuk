@@ -329,7 +329,7 @@ async function syncBookInBatch(
 
   if (options.direction === "pull") {
     await useVersionStore.getState().createVersion({ bookId, triggerType: "pre-sync" });
-    const pulled = await pullBookBlob(bookId);
+    const pulled = await pullBookBlob(bookId, remote.remoteId);
     if (!pulled) return "skipped";
 
     const snapshot = await decryptSnapshot(pulled.data, passphrase);
@@ -476,7 +476,7 @@ async function syncNoteInBatch(
   }
 
   if (options.direction === "pull") {
-    const pulled = await pullNoteBlob(noteId);
+    const pulled = await pullNoteBlob(noteId, remote.remoteId);
     if (!pulled) return "skipped";
 
     const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
@@ -725,7 +725,7 @@ async function syncAllNotes(
         continue;
       }
 
-      const pulled = await pullNoteBlob(remote.noteId);
+      const pulled = await pullNoteBlob(remote.noteId, remote.remoteId);
       if (!pulled) continue;
 
       const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
@@ -929,7 +929,7 @@ export async function syncAllBooks(
             continue;
           }
 
-          const pulled = await pullBookBlob(remote.bookId);
+          const pulled = await pullBookBlob(remote.bookId, remote.remoteId);
           if (!pulled) continue;
 
           const snapshot = await decryptSnapshot(pulled.data, passphrase);

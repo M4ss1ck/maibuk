@@ -293,8 +293,16 @@ export async function pushBookBlob(
 }
 
 export async function pullBookBlob(
-  bookId: string
+  bookId: string,
+  remoteId?: string
 ): Promise<{ data: Uint8Array; checksum: string } | null> {
+  // Callers that already hold the remote object pass its remoteId so we skip the
+  // full-list lookup (otherwise pulling N books would re-list every book N times).
+  if (remoteId) {
+    const data = await pullObjectContent(remoteId);
+    return data ? { data, checksum: "" } : null;
+  }
+
   const rows = await listObjects("book");
   const row = rows.find((remoteObject) => remoteObject.key === bookId);
   if (!row) return null;
@@ -319,7 +327,15 @@ export async function pushNoteBlob(
 
 export async function pullNoteBlob(
   noteId: string,
+  remoteId?: string,
 ): Promise<{ data: Uint8Array; checksum: string } | null> {
+  // Callers that already hold the remote object pass its remoteId so we skip the
+  // full-list lookup (otherwise pulling N notes would re-list every note N times).
+  if (remoteId) {
+    const data = await pullObjectContent(remoteId);
+    return data ? { data, checksum: "" } : null;
+  }
+
   const rows = await listObjects("note");
   const row = rows.find((r) => r.key === noteId);
   if (!row) return null;

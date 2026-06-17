@@ -412,7 +412,12 @@ describe("syncAllBooks — truthful outcomes", () => {
       return [];
     });
     mockListRemoteBooks.mockResolvedValue([
-      { bookId: "book-remote", checksum: "remote-checksum", updatedAt: 5000 },
+      {
+        remoteId: "book-remote-id",
+        bookId: "book-remote",
+        checksum: "remote-checksum",
+        updatedAt: 5000,
+      },
     ]);
     mockPullBookBlob.mockResolvedValue({
       data: new Uint8Array([1, 2, 3]),
@@ -424,7 +429,7 @@ describe("syncAllBooks — truthful outcomes", () => {
 
     expect(result.outcome).toBe("success");
     expect(result.actions).toEqual(["pulled"]);
-    expect(mockPullBookBlob).toHaveBeenCalledWith("book-remote");
+    expect(mockPullBookBlob).toHaveBeenCalledWith("book-remote", "book-remote-id");
   });
 });
 

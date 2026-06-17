@@ -96,6 +96,7 @@ const {
   pushBookBlob,
   pushNoteBlob,
   pullBookBlob,
+  pullNoteBlob,
   deleteRemoteBook,
   deleteRemoteNote,
   listRemoteNotes,
@@ -971,6 +972,91 @@ describe("pullBookBlob()", () => {
     const result = await pullBookBlob("book-1");
 
     expect(result).toBeNull();
+  });
+
+  it("uses a provided remoteId and skips the object list", async () => {
+    const bytes = new Uint8Array([9, 9, 9]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "content.bin" });
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/remote-1/content.bin");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const result = await pullBookBlob("book-1", "remote-1");
+
+    expect(result).toEqual({ data: bytes, checksum: "" });
+    expect(mockGetOne).toHaveBeenCalledWith("remote-1");
+    expect(mockGetFullList).not.toHaveBeenCalled();
+  });
+});
+
+describe("pullNoteBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns null when no live generic note object exists", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    const result = await pullNoteBlob("note-1");
+
+    expect(result).toBeNull();
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "note" && deleted = false',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+  });
+
+  it("pulls content for the matching live generic note object", async () => {
+    const bytes = new Uint8Array([4, 5, 6]);
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "remote-1",
+        kind: "note",
+        key: "note-1",
+        checksum: "note-checksum",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+    ]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "content.bin" });
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/remote-1/content.bin");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const result = await pullNoteBlob("note-1");
+
+    expect(result).toEqual({ data: bytes, checksum: "note-checksum" });
+    expect(mockGetOne).toHaveBeenCalledWith("remote-1");
+  });
+
+  it("uses a provided remoteId and skips the object list", async () => {
+    const bytes = new Uint8Array([7, 7]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "content.bin" });
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/remote-1/content.bin");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const result = await pullNoteBlob("note-1", "remote-1");
+
+    expect(result).toEqual({ data: bytes, checksum: "" });
+    expect(mockGetOne).toHaveBeenCalledWith("remote-1");
+    expect(mockGetFullList).not.toHaveBeenCalled();
   });
 });
 
