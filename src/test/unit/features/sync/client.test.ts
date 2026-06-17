@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const {
   mockAuthRefresh,
@@ -11,6 +11,7 @@ const {
   mockDelete,
   mockSyncCreate,
   mockGetOne,
+  mockGetURL,
 } = vi.hoisted(() => ({
   mockAuthRefresh: vi.fn(),
   mockAuthWithPassword: vi.fn(),
@@ -22,6 +23,7 @@ const {
   mockDelete: vi.fn(),
   mockSyncCreate: vi.fn(),
   mockGetOne: vi.fn(),
+  mockGetURL: vi.fn(),
 }));
 
 let mockAuthStoreToken = "refreshed-token";
@@ -72,7 +74,7 @@ vi.mock("pocketbase", () => {
           create: mockSyncCreate,
         };
       });
-      files = { getURL: vi.fn() };
+      files = { getURL: mockGetURL };
       autoCancellation = vi.fn();
     },
   };
@@ -174,8 +176,14 @@ describe("parsePocketBaseDate()", () => {
 describe("generic object sync core", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/r1/content.bin");
     initClient("https://sync.example.com");
     mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("creates an object with routing fields and app_name when no remoteId is given", async () => {
@@ -205,6 +213,20 @@ describe("generic object sync core", () => {
     expect((formData.get("content") as File).name).toBe("book-1.bin");
   });
 
+  it("throws when pushing an object without authentication", async () => {
+    mockAuthStoreRecord = null;
+
+    await expect(
+      pushObject({
+        kind: "book",
+        key: "book-1",
+        content: new Blob(["ciphertext"]),
+      })
+    ).rejects.toThrow("Not authenticated");
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
   it("updates an existing object when remoteId is given", async () => {
     mockUpdate.mockResolvedValue({ id: "existing-1" });
 
@@ -232,6 +254,59 @@ describe("generic object sync core", () => {
 
     expect(content).toBeNull();
     expect(mockGetOne).toHaveBeenCalledWith("r1");
+  });
+
+  it("returns bytes from pulled object content when the file fetch succeeds", async () => {
+    const bytes = new Uint8Array([12, 34, 56]);
+    mockGetOne.mockResolvedValue({ id: "r1", content: "content.bin" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const content = await pullObjectContent("r1");
+
+    expect(content).toEqual(bytes);
+    expect(mockGetOne).toHaveBeenCalledWith("r1");
+    expect(mockGetURL).toHaveBeenCalledWith({ id: "r1", content: "content.bin" }, "content.bin");
+    expect(fetch).toHaveBeenCalledWith("https://sync.example.com/api/files/objects/r1/content.bin");
+  });
+
+  it("returns null when pulling an object record fails", async () => {
+    mockGetOne.mockRejectedValue(new Error("not found"));
+
+    const content = await pullObjectContent("missing");
+
+    expect(content).toBeNull();
+    expect(mockGetURL).not.toHaveBeenCalled();
+  });
+
+  it("returns null when fetching pulled object content rejects", async () => {
+    mockGetOne.mockResolvedValue({ id: "r1", content: "content.bin" });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+
+    const content = await pullObjectContent("r1");
+
+    expect(content).toBeNull();
+  });
+
+  it("returns null when fetching pulled object content returns a non-OK response", async () => {
+    const bytes = new Uint8Array([99]);
+    mockGetOne.mockResolvedValue({ id: "r1", content: "content.bin" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const content = await pullObjectContent("r1");
+
+    expect(content).toBeNull();
   });
 
   it("lists objects filtered by app_name, kind, and deleted=false", async () => {

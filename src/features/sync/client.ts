@@ -185,6 +185,7 @@ export async function pullObjectContent(remoteId: string): Promise<Uint8Array | 
 
     const fileUrl = client.files.getURL(record, record.content);
     const response = await fetch(fileUrl);
+    if (!response.ok) return null;
     const arrayBuffer = await response.arrayBuffer();
     return new Uint8Array(arrayBuffer);
   } catch {
