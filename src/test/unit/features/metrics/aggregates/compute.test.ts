@@ -106,6 +106,41 @@ describe("computeAggregate()", () => {
     expect(payload.timeOfDay.find((bucket) => bucket.hour === 21)?.words).toBe(40);
   });
 
+  it("computes dashboard and heatmap values from compact daily aggregate rows", () => {
+    const compact = event({
+      eventType: "aggregate.daily",
+      localDate: "2026-01-01",
+      payload: {
+        bucket: "daily-v1",
+        date: "2026-01-01",
+        rawEvents: 4,
+        typedWords: 100,
+        deletedWords: 25,
+        pastedWords: 10,
+        activeSec: 600,
+        deepestSessionSec: 240,
+        timeOfDay: [{ hour: 10, words: 85 }],
+        timeByWork: [{ workId: "book-1", activeSec: 600 }],
+      },
+    });
+
+    expect(computeAggregate("heatmap:2026", [compact])).toEqual({
+      days: [{ date: "2026-01-01", words: 110, events: 4 }],
+    });
+
+    const dashboard = computeAggregate("dashboard:last30d", [compact]) as DashboardAggregate;
+    expect(dashboard).toMatchObject({
+      typedWords: 100,
+      deletedWords: 25,
+      pastedWords: 10,
+      netWords: 75,
+      activeSec: 600,
+      deepestSessionSec: 240,
+      timeOfDay: [{ hour: 10, words: 85 }],
+      timeByWork: [{ workId: "book-1", activeSec: 600 }],
+    });
+  });
+
   it("merges chunked heatmap and dashboard payloads", () => {
     expect(
       mergeAggregatePayloads("heatmap:2026", [

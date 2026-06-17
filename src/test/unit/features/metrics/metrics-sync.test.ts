@@ -375,6 +375,68 @@ describe("metrics sync", () => {
       expect(progress[progress.length - 1]).toEqual({ pushed: 3, total: 3 });
     });
 
+    it("compacts old unpushed raw events into one stable daily bucket before upload", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-17T12:00:00.000Z"));
+      try {
+        await insertEvents(testDb, [
+          buildEvent({
+            id: "old-typed-1",
+            timestamp: "2026-01-01T10:00:00.000Z",
+            localDate: "2026-01-01",
+            deviceId: "device-a",
+            eventType: "writing.typed",
+            payload: { words: 10, chars: 50, chapterId: "chapter-1" },
+          }),
+          buildEvent({
+            id: "old-deleted-1",
+            timestamp: "2026-01-01T10:05:00.000Z",
+            localDate: "2026-01-01",
+            deviceId: "device-a",
+            eventType: "writing.deleted",
+            payload: { words: 3, chars: 15, chapterId: "chapter-1" },
+          }),
+          buildEvent({
+            id: "recent-typed-1",
+            timestamp: "2026-06-16T10:00:00.000Z",
+            localDate: "2026-06-16",
+            deviceId: "device-a",
+            eventType: "writing.typed",
+            payload: { words: 4, chars: 20, chapterId: "chapter-1" },
+          }),
+        ]);
+        mockPushEvent.mockReset().mockResolvedValue(undefined);
+
+        await syncMetricsRows("pass");
+
+        const pushedIds = mockPushEvent.mock.calls.map((call) => call[0].client_id);
+        expect(pushedIds).toEqual([
+          "aggregate:daily:v1:device-a:2026-01-01",
+          "recent-typed-1",
+        ]);
+        const aggregatePayload = JSON.parse(
+          new TextDecoder().decode(base64ToUint8(mockPushEvent.mock.calls[0][0].encrypted_payload)),
+        );
+        expect(aggregatePayload).toMatchObject({
+          bucket: "daily-v1",
+          date: "2026-01-01",
+          typedWords: 10,
+          deletedWords: 3,
+          rawEvents: 2,
+        });
+
+        const rows = await testDb.select<{ id: string; event_type: string }[]>(
+          "SELECT id, event_type FROM metrics_events ORDER BY id",
+        );
+        expect(rows).toEqual([
+          { id: "aggregate:daily:v1:device-a:2026-01-01", event_type: "aggregate.daily" },
+          { id: "recent-typed-1", event_type: "writing.typed" },
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("pulls remote events, decrypts them, and stores them as pushed", async () => {
       const encrypted = await mockEncrypt(
         JSON.stringify({ words: 7, chars: 35, chapterId: "c-1" }),
@@ -539,4 +601,11 @@ function uint8ToBase64(data: Uint8Array): string {
   let binary = "";
   for (let i = 0; i < data.byteLength; i++) binary += String.fromCharCode(data[i]);
   return btoa(binary);
+}
+
+function base64ToUint8(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const data = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) data[i] = binary.charCodeAt(i);
+  return data;
 }

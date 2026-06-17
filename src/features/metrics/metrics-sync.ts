@@ -3,6 +3,7 @@ import { decrypt, encrypt } from "../sync/crypto";
 import {
   applyRemoteEvent,
   applyRemoteTombstone,
+  compactOldUnpushedMetricEvents,
   countUnpushedEvents,
   insertIfNotTombstoned,
   invalidateAllAggregateCaches,
@@ -239,7 +240,11 @@ export async function syncMetricsRows(
     );
   }
 
-  // 4. PUSH local-only events.
+  // 4. Compact old local-only raw events before pushing. This keeps sync volume
+  // bounded after a first-device backlog or generic-collection cutover reset.
+  await compactOldUnpushedMetricEvents(db);
+
+  // 5. PUSH local-only events.
   const totalEvents = await countUnpushedEvents(db);
   let pushedEvents = 0;
   while (true) {

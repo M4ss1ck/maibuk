@@ -266,6 +266,13 @@ export async function softDeleteObject(
   }
 }
 
+async function objectExists(kind: ObjectKind, key: string): Promise<boolean> {
+  const client = getClient();
+  const filter = `app_name = "${APP_NAME}" && kind = "${kind}" && key = "${key}"`;
+  const existing = await client.collection("objects").getList(1, 1, { filter });
+  return existing.items.length > 0;
+}
+
 export function isKeyUniqueConstraintError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const status = (error as { status?: number }).status;
@@ -401,6 +408,8 @@ export interface RemoteMetricsTombstoneRow extends MetricsTombstoneRowPayload {
 }
 
 export async function pushMetricsEventRow(row: MetricsEventRowPayload): Promise<void> {
+  if (await objectExists("metric", row.client_id)) return;
+
   const meta = await encryptMeta({
     device_id: row.device_id, timestamp: row.timestamp, local_date: row.local_date,
     tz_offset_min: row.tz_offset_min, event_type: row.event_type, work_id: row.work_id,

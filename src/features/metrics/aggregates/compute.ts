@@ -1,4 +1,8 @@
-import type { MetricEvent, WritingMetricPayload } from "../types";
+import type {
+  DailyAggregateMetricPayload,
+  MetricEvent,
+  WritingMetricPayload,
+} from "../types";
 import type { DayWordTotal } from "../events-repo";
 import type {
   AggregateKey,
@@ -104,6 +108,15 @@ function computeHeatmap(rows: MetricEvent[]): HeatmapAggregate {
   // pasted words contribute.
   const byDate = new Map<string, { words: number; events: number }>();
   for (const row of rows) {
+    if (row.eventType === "aggregate.daily") {
+      const payload = getDailyAggregatePayload(row);
+      if (!payload) continue;
+      const current = byDate.get(payload.date) ?? { words: 0, events: 0 };
+      current.words += payload.typedWords + payload.pastedWords;
+      current.events += payload.rawEvents;
+      byDate.set(payload.date, current);
+      continue;
+    }
     if (row.eventType !== "writing.typed" && row.eventType !== "writing.pasted") continue;
     const words = getWords(row);
     if (words <= 0) continue;
@@ -128,6 +141,13 @@ function computeStreak(
   const byDate = new Map<string, number>();
 
   for (const row of rows) {
+    if (row.eventType === "aggregate.daily") {
+      const payload = getDailyAggregatePayload(row);
+      if (payload) {
+        byDate.set(payload.date, (byDate.get(payload.date) ?? 0) + payload.typedWords);
+      }
+      continue;
+    }
     if (row.eventType !== "writing.typed") continue;
     byDate.set(row.localDate, (byDate.get(row.localDate) ?? 0) + getWords(row));
   }
@@ -179,6 +199,31 @@ function computeDashboard(rows: MetricEvent[]): DashboardAggregate {
 
   for (const row of rows) {
     switch (row.eventType) {
+      case "aggregate.daily": {
+        const payload = getDailyAggregatePayload(row);
+        if (!payload) break;
+        acc.typedWords += payload.typedWords;
+        acc.deletedWords += payload.deletedWords;
+        acc.pastedWords += payload.pastedWords;
+        acc.activeSec += payload.activeSec;
+        acc.deepestSessionSec = Math.max(
+          acc.deepestSessionSec,
+          payload.deepestSessionSec,
+        );
+        for (const bucket of payload.timeOfDay) {
+          acc.timeOfDay.set(
+            bucket.hour,
+            (acc.timeOfDay.get(bucket.hour) ?? 0) + bucket.words,
+          );
+        }
+        for (const bucket of payload.timeByWork) {
+          acc.timeByWork.set(
+            bucket.workId,
+            (acc.timeByWork.get(bucket.workId) ?? 0) + bucket.activeSec,
+          );
+        }
+        break;
+      }
       case "writing.typed": {
         const words = getWords(row);
         acc.typedWords += words;
@@ -267,8 +312,50 @@ function getWords(event: MetricEvent): number {
   return getNumber(event.payload, "words");
 }
 
+function getDailyAggregatePayload(
+  event: MetricEvent,
+): DailyAggregateMetricPayload | null {
+  const payload = event.payload as Partial<DailyAggregateMetricPayload>;
+  if (payload.bucket !== "daily-v1") return null;
+  return {
+    bucket: "daily-v1",
+    date: typeof payload.date === "string" ? payload.date : event.localDate,
+    rawEvents: getFiniteNumber(payload.rawEvents),
+    typedWords: getFiniteNumber(payload.typedWords),
+    deletedWords: getFiniteNumber(payload.deletedWords),
+    pastedWords: getFiniteNumber(payload.pastedWords),
+    activeSec: getFiniteNumber(payload.activeSec),
+    deepestSessionSec: getFiniteNumber(payload.deepestSessionSec),
+    timeOfDay: Array.isArray(payload.timeOfDay)
+      ? payload.timeOfDay
+          .filter((bucket) => (
+            Number.isInteger(bucket.hour) &&
+            typeof bucket.words === "number" &&
+            Number.isFinite(bucket.words)
+          ))
+          .map((bucket) => ({ hour: bucket.hour, words: bucket.words }))
+      : [],
+    timeByWork: Array.isArray(payload.timeByWork)
+      ? payload.timeByWork
+          .filter((bucket) => (
+            typeof bucket.workId === "string" &&
+            typeof bucket.activeSec === "number" &&
+            Number.isFinite(bucket.activeSec)
+          ))
+          .map((bucket) => ({
+            workId: bucket.workId,
+            activeSec: bucket.activeSec,
+          }))
+      : [],
+  };
+}
+
 function getNumber(payload: MetricEvent["payload"], key: string): number {
   const value = (payload as WritingMetricPayload & Record<string, unknown>)[key];
+  return getFiniteNumber(value);
+}
+
+function getFiniteNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 

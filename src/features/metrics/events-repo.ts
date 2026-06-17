@@ -3,7 +3,12 @@ import type {
   AggregateKey,
   SnapshotMetrics,
 } from "./aggregates/types";
-import type { MetricEvent, MetricsCacheEntry, MetricsCategory } from "./types";
+import type {
+  DailyAggregateMetricPayload,
+  MetricEvent,
+  MetricsCacheEntry,
+  MetricsCategory,
+} from "./types";
 
 interface MetricEventRow {
   id: string;
@@ -31,6 +36,9 @@ interface SnapshotWorkRow {
   title: string;
   word_count: number | null;
 }
+
+const DAILY_AGGREGATE_BUCKET = "daily-v1";
+export const RAW_METRIC_RETENTION_DAYS = 90;
 
 export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
   await db.execute(`
@@ -270,10 +278,18 @@ export async function listDailyWritingTotals(
   db: DatabaseAdapter,
 ): Promise<DayWordTotal[]> {
   const rows = await db.select<{ local_date: string; total: number | null }[]>(
-    `SELECT local_date,
-            SUM(CAST(COALESCE(json_extract(payload, '$.words'), 0) AS INTEGER)) AS total
-       FROM metrics_events
-      WHERE event_type = 'writing.typed'
+    `SELECT local_date, SUM(words) AS total
+       FROM (
+         SELECT local_date,
+                CAST(COALESCE(json_extract(payload, '$.words'), 0) AS INTEGER) AS words
+           FROM metrics_events
+          WHERE event_type = 'writing.typed'
+         UNION ALL
+         SELECT local_date,
+                CAST(COALESCE(json_extract(payload, '$.typedWords'), 0) AS INTEGER) AS words
+           FROM metrics_events
+          WHERE event_type = 'aggregate.daily'
+       )
       GROUP BY local_date`,
   );
   return rows.map((row) => ({
@@ -379,6 +395,43 @@ export async function countUnpushedEvents(db: DatabaseAdapter): Promise<number> 
   return rows[0]?.n ?? 0;
 }
 
+export async function compactOldUnpushedMetricEvents(
+  db: DatabaseAdapter,
+  now: Date = new Date(),
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - RAW_METRIC_RETENTION_DAYS * 86_400_000)
+    .toISOString();
+  const rows = await db.select<MetricEventRow[]>(
+    `SELECT id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version
+       FROM metrics_events
+      WHERE pushed_at IS NULL
+        AND event_type != 'aggregate.daily'
+        AND timestamp < ?
+      ORDER BY device_id ASC, local_date ASC, timestamp ASC, id ASC`,
+    [cutoff],
+  );
+  if (rows.length === 0) return 0;
+
+  const buckets = new Map<string, DailyAggregateAccumulator>();
+  for (const row of rows) {
+    const key = `${row.device_id}\u0000${row.local_date}`;
+    const acc = buckets.get(key) ?? createDailyAggregateAccumulator(row);
+    addRowToDailyAggregate(acc, row);
+    buckets.set(key, acc);
+  }
+
+  for (const acc of buckets.values()) {
+    await upsertDailyAggregateEvent(db, acc);
+  }
+
+  for (const row of rows) {
+    await db.execute("DELETE FROM metrics_events WHERE id = ?", [row.id]);
+  }
+
+  await invalidateAllAggregateCaches(db);
+  return rows.length;
+}
+
 export async function markEventPushed(
   db: DatabaseAdapter,
   id: string,
@@ -481,6 +534,142 @@ function toMetricEvent(row: MetricEventRow): MetricEvent {
   };
 }
 
+interface DailyAggregateAccumulator {
+  id: string;
+  timestamp: string;
+  localDate: string;
+  tzOffsetMin: number;
+  deviceId: string;
+  rawEvents: number;
+  typedWords: number;
+  deletedWords: number;
+  pastedWords: number;
+  activeSec: number;
+  deepestSessionSec: number;
+  timeOfDay: Map<number, number>;
+  timeByWork: Map<string, number>;
+}
+
+function createDailyAggregateAccumulator(row: MetricEventRow): DailyAggregateAccumulator {
+  return {
+    id: `aggregate:daily:v1:${row.device_id}:${row.local_date}`,
+    timestamp: row.timestamp,
+    localDate: row.local_date,
+    tzOffsetMin: row.tz_offset_min,
+    deviceId: row.device_id,
+    rawEvents: 0,
+    typedWords: 0,
+    deletedWords: 0,
+    pastedWords: 0,
+    activeSec: 0,
+    deepestSessionSec: 0,
+    timeOfDay: new Map(),
+    timeByWork: new Map(),
+  };
+}
+
+function addRowToDailyAggregate(
+  acc: DailyAggregateAccumulator,
+  row: MetricEventRow,
+): void {
+  acc.rawEvents += 1;
+  if (row.timestamp > acc.timestamp) acc.timestamp = row.timestamp;
+
+  const payload = JSON.parse(row.payload) as Record<string, unknown>;
+  switch (row.event_type) {
+    case "writing.typed": {
+      const words = getNumber(payload.words);
+      acc.typedWords += words;
+      addHourWords(acc, row, words);
+      break;
+    }
+    case "writing.deleted": {
+      const words = getNumber(payload.words);
+      acc.deletedWords += words;
+      addHourWords(acc, row, -words);
+      break;
+    }
+    case "writing.pasted": {
+      const words = getNumber(payload.words);
+      acc.pastedWords += words;
+      addHourWords(acc, row, words);
+      break;
+    }
+    case "session.active": {
+      const activeSec = getNumber(payload.activeSec);
+      acc.activeSec += activeSec;
+      if (row.work_id) {
+        acc.timeByWork.set(
+          row.work_id,
+          (acc.timeByWork.get(row.work_id) ?? 0) + activeSec,
+        );
+      }
+      break;
+    }
+    case "session.ended":
+      acc.deepestSessionSec = Math.max(
+        acc.deepestSessionSec,
+        getNumber(payload.deepestStreakSec),
+      );
+      break;
+  }
+}
+
+async function upsertDailyAggregateEvent(
+  db: DatabaseAdapter,
+  acc: DailyAggregateAccumulator,
+): Promise<void> {
+  const payload: DailyAggregateMetricPayload = {
+    bucket: DAILY_AGGREGATE_BUCKET,
+    date: acc.localDate,
+    rawEvents: acc.rawEvents,
+    typedWords: acc.typedWords,
+    deletedWords: acc.deletedWords,
+    pastedWords: acc.pastedWords,
+    activeSec: acc.activeSec,
+    deepestSessionSec: acc.deepestSessionSec,
+    timeOfDay: Array.from(acc.timeOfDay.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([hour, words]) => ({ hour, words })),
+    timeByWork: Array.from(acc.timeByWork.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([workId, activeSec]) => ({ workId, activeSec })),
+  };
+
+  await db.execute(
+    `INSERT OR REPLACE INTO metrics_events
+      (id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version, pushed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    [
+      acc.id,
+      acc.timestamp,
+      acc.localDate,
+      acc.tzOffsetMin,
+      acc.deviceId,
+      "aggregate.daily",
+      null,
+      JSON.stringify(payload),
+      1,
+    ],
+  );
+}
+
+function addHourWords(
+  acc: DailyAggregateAccumulator,
+  row: MetricEventRow,
+  words: number,
+): void {
+  const localTime = new Date(
+    new Date(row.timestamp).getTime() + row.tz_offset_min * 60_000,
+  );
+  const hour = localTime.getUTCHours();
+  acc.timeOfDay.set(hour, (acc.timeOfDay.get(hour) ?? 0) + words);
+}
+
+function getNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 function buildAggregateWhere(key: AggregateKey): {
   where: string;
   params: unknown[];
@@ -489,7 +678,7 @@ function buildAggregateWhere(key: AggregateKey): {
     const year = key.split(":")[1];
     return {
       where:
-        "WHERE local_date >= ? AND local_date < ? AND event_type LIKE 'writing.%'",
+        "WHERE local_date >= ? AND local_date < ? AND (event_type LIKE 'writing.%' OR event_type = 'aggregate.daily')",
       params: [`${year}-01-01`, `${Number(year) + 1}-01-01`],
     };
   }

@@ -856,6 +856,7 @@ describe("pushMetricsEventRow()", () => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+    mockGetList.mockResolvedValue({ items: [] });
     setPassphrase("test-pass");
   });
 
@@ -870,6 +871,18 @@ describe("pushMetricsEventRow()", () => {
     schema_version: 1,
     encrypted_payload: "ciphertext",
   };
+
+  it("does not create a duplicate metric object when the event key already exists", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "remote-event-1", deleted: false }] });
+
+    await pushMetricsEventRow(row);
+
+    expect(mockGetList).toHaveBeenCalledWith(1, 1, {
+      filter: 'app_name = "maibuk" && kind = "metric" && key = "event-1"',
+    });
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
 
   it("treats key unique-constraint errors as already pushed", async () => {
     mockSyncCreate.mockRejectedValue({
@@ -1237,6 +1250,7 @@ describe("metric wrappers over objects", () => {
     initClient("https://sync.example.com");
     mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
     mockSyncCreate.mockReset(); mockGetFullList.mockReset(); mockGetList.mockReset(); mockUpdate.mockReset();
+    mockGetList.mockResolvedValue({ items: [] });
     setPassphrase("test-pass");
   });
 
