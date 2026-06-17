@@ -15,7 +15,6 @@ import {
   listRemoteVersions,
   pushVersionBlob,
   pullVersionBlob,
-  pullMetricsBlob,
   pushNoteBlob,
   pullNoteBlob,
   listRemoteNotes,
@@ -29,7 +28,6 @@ import type {
   NoteSyncItemMeta,
   SingleSyncResult,
   BatchSyncResult,
-  MetricsSyncBlob,
   SyncOptions,
   SyncScope,
   SyncDirection,
@@ -44,7 +42,6 @@ import { useSettingsStore } from "../settings/store";
 import { useSyncStore } from "./store";
 import { useVersionStore } from "../versions/store";
 import {
-  applyLegacyBlobAndMarkPushed,
   syncMetricsRows,
 } from "../metrics/metrics-sync";
 import {
@@ -52,8 +49,6 @@ import {
   listPendingTombstones,
   markTombstonePushed,
 } from "./tombstones";
-
-const BLOB_MIGRATED_KEY = "maibuk.metrics.blobMigrated";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR =
@@ -750,54 +745,7 @@ async function syncAllNotes(
 
 async function syncMetrics(passphrase: string): Promise<void> {
   if (!useSettingsStore.getState().metrics.syncMetrics) return;
-
-  // One-time migration: if a legacy `metrics_sync` blob exists on the server
-  // and we haven't migrated yet, decrypt + apply it locally and mark the
-  // local rows as already-pushed. After this, all sync goes through the row
-  // collections.
-  await migrateLegacyMetricsBlobIfNeeded(passphrase);
-
   await syncMetricsRows(passphrase);
-}
-
-async function migrateLegacyMetricsBlobIfNeeded(
-  passphrase: string,
-): Promise<void> {
-  if (typeof localStorage !== "undefined") {
-    if (localStorage.getItem(BLOB_MIGRATED_KEY) === "true") return;
-  }
-
-  let remote: { data: Uint8Array; checksum: string } | null = null;
-  try {
-    remote = await pullMetricsBlob();
-  } catch {
-    // Old collection may not exist on the server. That's expected on fresh
-    // deployments — just mark migration done so we don't keep probing.
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(BLOB_MIGRATED_KEY, "true");
-    }
-    return;
-  }
-
-  if (!remote) {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(BLOB_MIGRATED_KEY, "true");
-    }
-    return;
-  }
-
-  const decrypted = await decrypt(remote.data, passphrase);
-  let snapshot: MetricsSyncBlob;
-  try {
-    snapshot = JSON.parse(decrypted) as MetricsSyncBlob;
-  } catch {
-    throw new Error("Synced metrics payload is invalid or corrupted");
-  }
-  await applyLegacyBlobAndMarkPushed(snapshot);
-
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(BLOB_MIGRATED_KEY, "true");
-  }
 }
 
 export async function syncBook(

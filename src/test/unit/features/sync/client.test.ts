@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { setPassphrase, encryptMeta } from "../../../../features/sync/crypto";
+import * as clientModule from "../../../../features/sync/client";
 
 const {
   mockAuthRefresh,
@@ -104,8 +105,6 @@ const {
   pushMetricsTombstoneRow,
   pullMetricsEventRowsSince,
   pullMetricsTombstoneRowsSince,
-  pushMetricsBlob,
-  pullMetricsBlob,
   listRemoteVersions,
   pushVersionBlob,
   pullVersionBlob,
@@ -1084,67 +1083,6 @@ describe("pullMetricsTombstoneRowsSince()", () => {
   });
 });
 
-describe("pushMetricsBlob()", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initClient("https://sync.example.com");
-    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
-  });
-
-  it("creates a new metrics blob when none exists", async () => {
-    mockGetList.mockResolvedValue({ items: [] });
-    mockSyncCreate.mockResolvedValue({});
-
-    await pushMetricsBlob(new Blob(["data"]), "checksum-abc");
-
-    expect(mockSyncCreate).toHaveBeenCalled();
-    expect(mockUpdate).not.toHaveBeenCalled();
-  });
-
-  it("updates existing metrics blob", async () => {
-    mockGetList.mockResolvedValue({ items: [{ id: "existing-1" }] });
-    mockUpdate.mockResolvedValue({});
-
-    await pushMetricsBlob(new Blob(["data"]), "checksum-abc");
-
-    expect(mockUpdate).toHaveBeenCalledWith("existing-1", expect.any(FormData));
-    expect(mockSyncCreate).not.toHaveBeenCalled();
-  });
-
-  it("throws when not authenticated", async () => {
-    mockAuthStoreRecord = null;
-
-    await expect(pushMetricsBlob(new Blob(["data"]), "checksum")).rejects.toThrow(
-      "Not authenticated"
-    );
-  });
-});
-
-describe("pullMetricsBlob()", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initClient("https://sync.example.com");
-    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
-  });
-
-  it("returns null when not authenticated", async () => {
-    mockAuthStoreRecord = null;
-
-    const result = await pullMetricsBlob();
-
-    expect(result).toBeNull();
-  });
-
-  it("returns null when no blob exists", async () => {
-    mockGetList.mockResolvedValue({ items: [] });
-
-    const result = await pullMetricsBlob();
-
-    expect(result).toBeNull();
-  });
-});
-
-
 describe("pullVersionBlob()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1296,4 +1234,9 @@ describe("note wrappers over objects", () => {
     await deleteRemoteNote("n1");
     expect((mockUpdate.mock.calls[0][1] as FormData).get("deleted")).toBe("true");
   });
+});
+
+it("legacy metrics blob functions are removed", () => {
+  expect((clientModule as Record<string, unknown>).pushMetricsBlob).toBeUndefined();
+  expect((clientModule as Record<string, unknown>).pullMetricsBlob).toBeUndefined();
 });

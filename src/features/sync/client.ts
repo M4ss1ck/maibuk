@@ -1,3 +1,8 @@
+// Sync client. The server is blob-agnostic: it stores a generic `objects`
+// envelope and enforces only owner-CRUD. ALL app-specific invariants (kind
+// vocabulary, key/group conventions, plaintext-vs-encrypted split, version/
+// metric immutability, soft-delete-only) are enforced HERE, not by the server.
+// See the maibuk-sync repo's docs/object-contract.md before changing this file.
 import PocketBase from "pocketbase";
 import type { SyncItemMeta, NoteSyncItemMeta } from "./types";
 import { encryptMeta, decryptMeta } from "./crypto";
@@ -437,53 +442,6 @@ export async function pullMetricsTombstoneRowsSince(sinceIso: string): Promise<R
     });
   }
   return out;
-}
-
-export async function pushMetricsBlob(
-  encryptedData: Blob,
-  checksum: string,
-): Promise<void> {
-  const client = getClient();
-  const userId = client.authStore.record?.id;
-  if (!userId) throw new Error("Not authenticated");
-
-  const existing = await client
-    .collection("metrics_sync")
-    .getList(1, 1, { filter: `user = "${userId}"` });
-
-  const formData = new FormData();
-  formData.append("encrypted_data", encryptedData, "metrics.bin");
-  formData.append("checksum", checksum);
-  formData.append("user", userId);
-
-  if (existing.items.length > 0) {
-    await client.collection("metrics_sync").update(existing.items[0].id, formData);
-  } else {
-    await client.collection("metrics_sync").create(formData);
-  }
-}
-
-export async function pullMetricsBlob(
-): Promise<{ data: Uint8Array; checksum: string } | null> {
-  const client = getClient();
-  const userId = client.authStore.record?.id;
-  if (!userId) return null;
-
-  const records = await client
-    .collection("metrics_sync")
-    .getList(1, 1, { filter: `user = "${userId}"` });
-
-  if (records.items.length === 0) return null;
-
-  const record = records.items[0];
-  const fileUrl = client.files.getURL(record, record.encrypted_data);
-  const response = await fetch(fileUrl);
-  const arrayBuffer = await response.arrayBuffer();
-
-  return {
-    data: new Uint8Array(arrayBuffer),
-    checksum: record.checksum as string,
-  };
 }
 
 export async function listRemoteBooks(): Promise<SyncItemMeta[]> {
