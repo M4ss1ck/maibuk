@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { setPassphrase, encryptMeta } from "../../../../features/sync/crypto";
 
 const {
   mockAuthRefresh,
@@ -1133,120 +1134,6 @@ describe("pullMetricsBlob()", () => {
   });
 });
 
-describe("listRemoteVersions()", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initClient("https://sync.example.com");
-  });
-
-  it("returns mapped version metadata", async () => {
-    mockGetFullList.mockResolvedValue([
-      {
-        id: "rec-1",
-        version_id: "ver-1",
-        book_id: "book-1",
-        checksum: "abc123",
-        version_name: "Draft 1",
-        version_trigger: "auto",
-        version_created_at: 1_000_000,
-        word_count: 500,
-      },
-    ]);
-
-    const result = await listRemoteVersions("book-1");
-
-    expect(result).toEqual([
-      {
-        remoteId: "rec-1",
-        versionId: "ver-1",
-        bookId: "book-1",
-        checksum: "abc123",
-        name: "Draft 1",
-        triggerType: "auto",
-        createdAt: 1_000_000,
-        wordCount: 500,
-      },
-    ]);
-  });
-
-  it("returns all versions when no bookId is provided", async () => {
-    mockGetFullList.mockResolvedValue([]);
-
-    await listRemoteVersions();
-
-    const call = mockGetFullList.mock.calls[0][0];
-    expect(call.filter).toBe("");
-  });
-});
-
-describe("pushVersionBlob()", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initClient("https://sync.example.com");
-    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
-  });
-
-  it("creates a version item with all metadata", async () => {
-    mockSyncCreate.mockResolvedValue({});
-
-    await pushVersionBlob(
-      {
-        versionId: "ver-1",
-        bookId: "book-1",
-        checksum: "abc123",
-        name: "Draft 1",
-        triggerType: "manual",
-        createdAt: 1_000_000,
-        wordCount: 500,
-      },
-      new Blob(["data"])
-    );
-
-    expect(mockSyncCreate).toHaveBeenCalled();
-    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
-    expect(formData.has("encrypted_data")).toBe(true);
-    expect(formData.has("version_id")).toBe(true);
-  });
-
-  it("omits version_name when name is null", async () => {
-    mockSyncCreate.mockResolvedValue({});
-
-    await pushVersionBlob(
-      {
-        versionId: "ver-1",
-        bookId: "book-1",
-        checksum: "abc123",
-        name: null,
-        triggerType: "manual",
-        createdAt: 1_000_000,
-        wordCount: 500,
-      },
-      new Blob(["data"])
-    );
-
-    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
-    expect(formData.has("version_name")).toBe(false);
-  });
-
-  it("throws when not authenticated", async () => {
-    mockAuthStoreRecord = null;
-
-    await expect(
-      pushVersionBlob(
-        {
-          versionId: "ver-1",
-          bookId: "book-1",
-          checksum: "abc123",
-          name: null,
-          triggerType: "manual",
-          createdAt: 1_000_000,
-          wordCount: 500,
-        },
-        new Blob(["data"])
-      )
-    ).rejects.toThrow("Not authenticated");
-  });
-});
 
 describe("pullVersionBlob()", () => {
   beforeEach(() => {
@@ -1260,6 +1147,45 @@ describe("pullVersionBlob()", () => {
     const result = await pullVersionBlob("rec-1");
 
     expect(result).toBeNull();
+  });
+});
+
+describe("version wrappers with encrypted meta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    mockSyncCreate.mockReset(); mockGetFullList.mockReset();
+    setPassphrase("test-pass");
+  });
+
+  it("pushVersionBlob puts descriptive fields in encrypted meta, ids in key/group", async () => {
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
+    await pushVersionBlob(
+      { versionId: "v1", bookId: "b1", checksum: "c1", name: "Draft", triggerType: "manual", createdAt: 1000, wordCount: 42 },
+      new Blob(["x"]),
+    );
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("kind")).toBe("version");
+    expect(fd.get("key")).toBe("v1");
+    expect(fd.get("group")).toBe("b1");
+    expect(fd.get("checksum")).toBe("c1");
+    // meta is opaque/encrypted, not plaintext
+    expect(fd.get("meta")).not.toContain("Draft");
+    expect((fd.get("meta") as string).length).toBeGreaterThan(0);
+  });
+
+  it("listRemoteVersions filters by group=bookId and decrypts meta", async () => {
+    const meta = await encryptMeta({ name: "Draft", triggerType: "auto", createdAt: 1000, wordCount: 42 });
+    mockGetFullList.mockResolvedValue([
+      { id: "r1", kind: "version", key: "v1", group: "b1", checksum: "c1", deleted: false, meta, updated: "2026-06-16 10:00:00.000Z" },
+    ]);
+    const rows = await listRemoteVersions("b1");
+    expect(mockGetFullList.mock.calls[0][0].filter).toContain('group = "b1"');
+    expect(rows[0]).toMatchObject({
+      remoteId: "r1", versionId: "v1", bookId: "b1", checksum: "c1",
+      name: "Draft", triggerType: "auto", createdAt: 1000, wordCount: 42,
+    });
   });
 });
 

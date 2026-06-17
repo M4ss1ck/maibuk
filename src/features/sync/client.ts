@@ -1,5 +1,6 @@
 import PocketBase from "pocketbase";
 import type { SyncItemMeta, NoteSyncItemMeta } from "./types";
+import { encryptMeta, decryptMeta } from "./crypto";
 
 export type ObjectKind = "book" | "note" | "version" | "metric";
 export const APP_NAME = "maibuk";
@@ -542,72 +543,42 @@ export interface RemoteVersionMeta {
 }
 
 export async function listRemoteVersions(bookId?: string): Promise<RemoteVersionMeta[]> {
-  const client = getClient();
-
-  const filter = bookId ? `book_id = "${bookId}"` : "";
-  const records = await client
-    .collection("version_items")
-    .getFullList({
-      filter,
-      fields: "id,version_id,book_id,checksum,version_name,version_trigger,version_created_at,word_count",
+  const rows = await listObjects("version", bookId);
+  const out: RemoteVersionMeta[] = [];
+  for (const r of rows) {
+    const meta = await decryptMeta(r.meta);
+    out.push({
+      remoteId: r.remoteId,
+      versionId: r.key,
+      bookId: r.group,
+      checksum: r.checksum,
+      name: (meta.name as string | null) ?? null,
+      triggerType: (meta.triggerType as string) ?? "manual",
+      createdAt: (meta.createdAt as number) ?? 0,
+      wordCount: (meta.wordCount as number) ?? 0,
     });
-
-  return records.map((record) => ({
-    remoteId: record.id,
-    versionId: record.version_id as string,
-    bookId: record.book_id as string,
-    checksum: record.checksum as string,
-    name: (record.version_name as string | null) ?? null,
-    triggerType: (record.version_trigger as string) ?? "manual",
-    createdAt: (record.version_created_at as number) ?? 0,
-    wordCount: (record.word_count as number) ?? 0,
-  }));
+  }
+  return out;
 }
 
 export async function pushVersionBlob(
   meta: {
-    versionId: string;
-    bookId: string;
-    checksum: string;
-    name: string | null;
-    triggerType: string;
-    createdAt: number;
-    wordCount: number;
+    versionId: string; bookId: string; checksum: string;
+    name: string | null; triggerType: string; createdAt: number; wordCount: number;
   },
-  encryptedData: Blob
+  encryptedData: Blob,
 ): Promise<void> {
-  const client = getClient();
-  const userId = client.authStore.record?.id;
-  if (!userId) throw new Error("Not authenticated");
-
-  const formData = new FormData();
-  formData.append("encrypted_data", encryptedData, `${meta.versionId}.bin`);
-  formData.append("version_id", meta.versionId);
-  formData.append("book_id", meta.bookId);
-  formData.append("checksum", meta.checksum);
-  formData.append("user", userId);
-  if (meta.name !== null) {
-    formData.append("version_name", meta.name);
-  }
-  formData.append("version_trigger", meta.triggerType);
-  formData.append("version_created_at", String(meta.createdAt));
-  formData.append("word_count", String(meta.wordCount));
-
-  await client.collection("version_items").create(formData);
+  const encryptedMeta = await encryptMeta({
+    name: meta.name, triggerType: meta.triggerType,
+    createdAt: meta.createdAt, wordCount: meta.wordCount,
+  });
+  await pushObject({
+    kind: "version", key: meta.versionId, group: meta.bookId,
+    checksum: meta.checksum, meta: encryptedMeta, content: encryptedData,
+  });
 }
 
-export async function pullVersionBlob(
-  remoteId: string
-): Promise<{ data: Uint8Array } | null> {
-  const client = getClient();
-
-  try {
-    const record = await client.collection("version_items").getOne(remoteId);
-    const fileUrl = client.files.getURL(record, record.encrypted_data);
-    const response = await fetch(fileUrl);
-    const arrayBuffer = await response.arrayBuffer();
-    return { data: new Uint8Array(arrayBuffer) };
-  } catch {
-    return null;
-  }
+export async function pullVersionBlob(remoteId: string): Promise<{ data: Uint8Array } | null> {
+  const data = await pullObjectContent(remoteId);
+  return data ? { data } : null;
 }
