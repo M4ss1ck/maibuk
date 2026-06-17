@@ -149,6 +149,15 @@ describe("meta envelope", () => {
     });
   });
 
+  it("throws INVALID_PAYLOAD for encrypted primitive metadata", async () => {
+    const encrypted = await encrypt('"draft"', "test-pass");
+    const meta = uint8ArrayToBase64(encrypted);
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
   it("throws INVALID_PASSPHRASE for metadata encrypted with a different passphrase", async () => {
     setPassphrase("passphrase-a");
     const meta = await encryptMeta({ name: "Draft 2" });
