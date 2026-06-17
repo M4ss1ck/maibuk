@@ -379,98 +379,64 @@ export interface RemoteMetricsTombstoneRow extends MetricsTombstoneRowPayload {
   updated: string;
 }
 
-export async function pushMetricsEventRow(
-  row: MetricsEventRowPayload,
-): Promise<void> {
-  const client = getClient();
-  const userId = client.authStore.record?.id;
-  if (!userId) throw new Error("Not authenticated");
+export async function pushMetricsEventRow(row: MetricsEventRowPayload): Promise<void> {
+  const meta = await encryptMeta({
+    device_id: row.device_id, timestamp: row.timestamp, local_date: row.local_date,
+    tz_offset_min: row.tz_offset_min, event_type: row.event_type, work_id: row.work_id,
+    schema_version: row.schema_version, encrypted_payload: row.encrypted_payload,
+  });
   try {
-    await client.collection("metrics_events_rows").create({ ...row, user: userId });
+    await pushObject({ kind: "metric", key: row.client_id, meta });
   } catch (error) {
-    // PB returns 400 with a unique-constraint violation when the row already
-    // exists (a sibling device pushed it first). Treat as already-pushed.
-    if (isClientIdUniqueConstraintError(error)) return;
+    if (isKeyUniqueConstraintError(error)) return;
     throw error;
   }
 }
 
-export async function pushMetricsTombstoneRow(
-  row: MetricsTombstoneRowPayload,
-): Promise<void> {
-  const client = getClient();
-  const userId = client.authStore.record?.id;
-  if (!userId) throw new Error("Not authenticated");
-  try {
-    await client.collection("metrics_tombstones_rows").create({ ...row, user: userId });
-  } catch (error) {
-    if (isClientIdUniqueConstraintError(error)) return;
-    throw error;
+export async function pushMetricsTombstoneRow(row: MetricsTombstoneRowPayload): Promise<void> {
+  const meta = await encryptMeta({
+    device_id: row.device_id, deleted_at: row.deleted_at, reason: row.reason,
+  });
+  await softDeleteObject("metric", row.client_id, meta);
+}
+
+export async function pullMetricsEventRowsSince(sinceIso: string): Promise<RemoteMetricsEventRow[]> {
+  const rows = await pullObjectsSince("metric", sinceIso);
+  const out: RemoteMetricsEventRow[] = [];
+  for (const r of rows) {
+    if (r.deleted) continue;
+    const m = await decryptMeta(r.meta);
+    out.push({
+      client_id: r.key,
+      device_id: m.device_id as string,
+      timestamp: m.timestamp as string,
+      local_date: m.local_date as string,
+      tz_offset_min: m.tz_offset_min as number,
+      event_type: m.event_type as string,
+      work_id: (m.work_id as string | null) ?? null,
+      schema_version: m.schema_version as number,
+      encrypted_payload: m.encrypted_payload as string,
+      updated: r.updatedIso,
+    });
   }
+  return out;
 }
 
-export async function pullMetricsEventRowsSince(
-  sinceIsoTimestamp: string,
-): Promise<RemoteMetricsEventRow[]> {
-  const client = getClient();
-  const records = await client
-    .collection("metrics_events_rows")
-    .getFullList({
-      filter: sinceIsoTimestamp
-        ? `updated > "${sinceIsoTimestamp}"`
-        : undefined,
-      sort: "updated",
-      fields:
-        "client_id,device_id,timestamp,local_date,tz_offset_min,event_type,work_id,schema_version,encrypted_payload,updated",
+export async function pullMetricsTombstoneRowsSince(sinceIso: string): Promise<RemoteMetricsTombstoneRow[]> {
+  const rows = await pullObjectsSince("metric", sinceIso);
+  const out: RemoteMetricsTombstoneRow[] = [];
+  for (const r of rows) {
+    if (!r.deleted) continue;
+    const m = await decryptMeta(r.meta);
+    out.push({
+      client_id: r.key,
+      device_id: m.device_id as string,
+      deleted_at: m.deleted_at as string,
+      reason: m.reason as string,
+      updated: r.updatedIso,
     });
-  return records.map((record) => ({
-    client_id: record.client_id as string,
-    device_id: record.device_id as string,
-    timestamp: record.timestamp as string,
-    local_date: record.local_date as string,
-    tz_offset_min: record.tz_offset_min as number,
-    event_type: record.event_type as string,
-    work_id: (record.work_id as string | null) ?? null,
-    schema_version: record.schema_version as number,
-    encrypted_payload: record.encrypted_payload as string,
-    updated: record.updated as string,
-  }));
-}
-
-export async function pullMetricsTombstoneRowsSince(
-  sinceIsoTimestamp: string,
-): Promise<RemoteMetricsTombstoneRow[]> {
-  const client = getClient();
-  const records = await client
-    .collection("metrics_tombstones_rows")
-    .getFullList({
-      filter: sinceIsoTimestamp
-        ? `updated > "${sinceIsoTimestamp}"`
-        : undefined,
-      sort: "updated",
-      fields: "client_id,device_id,deleted_at,reason,updated",
-    });
-  return records.map((record) => ({
-    client_id: record.client_id as string,
-    device_id: record.device_id as string,
-    deleted_at: record.deleted_at as string,
-    reason: record.reason as string,
-    updated: record.updated as string,
-  }));
-}
-
-function isClientIdUniqueConstraintError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const status = (error as { status?: number }).status;
-  if (status !== 400 && status !== 409) return false;
-
-  const clientIdError = (error as {
-    data?: { data?: Record<string, { code?: string; message?: string }> };
-  }).data?.data?.client_id;
-
-  const code = clientIdError?.code?.toLowerCase() ?? "";
-  const message = clientIdError?.message?.toLowerCase() ?? "";
-  return code.includes("unique") || message.includes("unique");
+  }
+  return out;
 }
 
 export async function pushMetricsBlob(

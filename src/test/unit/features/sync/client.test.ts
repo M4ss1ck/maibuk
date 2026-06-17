@@ -856,6 +856,7 @@ describe("pushMetricsEventRow()", () => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+    setPassphrase("test-pass");
   });
 
   const row = {
@@ -870,12 +871,12 @@ describe("pushMetricsEventRow()", () => {
     encrypted_payload: "ciphertext",
   };
 
-  it("treats PocketBase client_id unique errors as already pushed", async () => {
+  it("treats key unique-constraint errors as already pushed", async () => {
     mockSyncCreate.mockRejectedValue({
       status: 400,
       data: {
         data: {
-          client_id: {
+          key: {
             code: "validation_not_unique",
           },
         },
@@ -890,7 +891,7 @@ describe("pushMetricsEventRow()", () => {
       status: 400,
       data: {
         data: {
-          encrypted_payload: {
+          key: {
             code: "validation_required",
           },
         },
@@ -979,6 +980,7 @@ describe("pushMetricsTombstoneRow()", () => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+    setPassphrase("test-pass");
   });
 
   const row = {
@@ -988,21 +990,28 @@ describe("pushMetricsTombstoneRow()", () => {
     reason: "user_purge",
   };
 
-  it("pushes a tombstone row", async () => {
-    mockSyncCreate.mockResolvedValue({});
+  it("soft-deletes an existing metric object", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "r1" }] });
+    mockUpdate.mockResolvedValue({ id: "r1" });
+
+    await pushMetricsTombstoneRow(row);
+
+    expect(mockUpdate).toHaveBeenCalledWith("r1", expect.any(FormData));
+    const fd = mockUpdate.mock.calls[0][1] as FormData;
+    expect(fd.get("deleted")).toBe("true");
+    expect(fd.get("kind")).toBe("metric");
+    expect(fd.get("key")).toBe("tomb-1");
+  });
+
+  it("creates a deleted metric object when none exists", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
 
     await pushMetricsTombstoneRow(row);
 
     expect(mockSyncCreate).toHaveBeenCalled();
-  });
-
-  it("treats client_id unique errors as already pushed", async () => {
-    mockSyncCreate.mockRejectedValue({
-      status: 400,
-      data: { data: { client_id: { code: "validation_not_unique" } } },
-    });
-
-    await expect(pushMetricsTombstoneRow(row)).resolves.toBeUndefined();
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("deleted")).toBe("true");
   });
 
   it("throws when not authenticated", async () => {
@@ -1016,37 +1025,37 @@ describe("pullMetricsEventRowsSince()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    setPassphrase("test-pass");
   });
 
-  it("returns mapped event rows", async () => {
+  it("returns only non-deleted rows with decrypted meta fields", async () => {
+    const liveMeta = await encryptMeta({
+      device_id: "d-1", timestamp: "2026-05-23T12:00:00.000Z", local_date: "2026-05-23",
+      tz_offset_min: 0, event_type: "writing.typed", work_id: "book-1",
+      schema_version: 1, encrypted_payload: "cipher",
+    });
     mockGetFullList.mockResolvedValue([
-      {
-        client_id: "e-1",
-        device_id: "d-1",
-        timestamp: "2026-05-23T12:00:00.000Z",
-        local_date: "2026-05-23",
-        tz_offset_min: 0,
-        event_type: "writing.typed",
-        work_id: "book-1",
-        schema_version: 1,
-        encrypted_payload: "cipher",
-        updated: "2026-05-23T12:00:00.000Z",
-      },
+      { id: "r1", kind: "metric", key: "e-1", group: "", checksum: "", deleted: false, meta: liveMeta, updated: "2026-05-23T12:00:00.000Z" },
+      { id: "r2", kind: "metric", key: "e-2", group: "", checksum: "", deleted: true, meta: liveMeta, updated: "2026-05-23T12:01:00.000Z" },
     ]);
 
     const result = await pullMetricsEventRowsSince("2026-05-22T00:00:00.000Z");
 
     expect(result).toHaveLength(1);
     expect(result[0].client_id).toBe("e-1");
+    expect(result[0].event_type).toBe("writing.typed");
   });
 
-  it("omits filter when since is empty", async () => {
+  it("includes app_name and kind in filter even when since is empty", async () => {
     mockGetFullList.mockResolvedValue([]);
 
     await pullMetricsEventRowsSince("");
 
     const call = mockGetFullList.mock.calls[0][0];
-    expect(call.filter).toBeUndefined();
+    expect(call.filter).toContain('app_name = "maibuk"');
+    expect(call.filter).toContain('kind = "metric"');
+    expect(call.filter).not.toContain("updated >");
   });
 });
 
@@ -1054,23 +1063,24 @@ describe("pullMetricsTombstoneRowsSince()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    setPassphrase("test-pass");
   });
 
-  it("returns mapped tombstone rows", async () => {
+  it("returns only deleted rows with decrypted meta fields", async () => {
+    const deadMeta = await encryptMeta({
+      device_id: "d-1", deleted_at: "2026-05-23T12:00:00.000Z", reason: "user_purge",
+    });
     mockGetFullList.mockResolvedValue([
-      {
-        client_id: "t-1",
-        device_id: "d-1",
-        deleted_at: "2026-05-23T12:00:00.000Z",
-        reason: "user_purge",
-        updated: "2026-05-23T12:00:00.000Z",
-      },
+      { id: "r1", kind: "metric", key: "t-1", group: "", checksum: "", deleted: true, meta: deadMeta, updated: "2026-05-23T12:00:00.000Z" },
+      { id: "r2", kind: "metric", key: "e-1", group: "", checksum: "", deleted: false, meta: deadMeta, updated: "2026-05-23T12:01:00.000Z" },
     ]);
 
     const result = await pullMetricsTombstoneRowsSince("2026-05-22T00:00:00.000Z");
 
     expect(result).toHaveLength(1);
     expect(result[0].client_id).toBe("t-1");
+    expect(result[0].reason).toBe("user_purge");
   });
 });
 
@@ -1194,6 +1204,65 @@ describe("version wrappers with encrypted meta", () => {
     const filter = mockGetFullList.mock.calls[0][0].filter as string;
     expect(filter).not.toContain("group");
     expect(filter).toContain('kind = "version"');
+  });
+});
+
+describe("metric wrappers over objects", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    mockSyncCreate.mockReset(); mockGetFullList.mockReset(); mockGetList.mockReset(); mockUpdate.mockReset();
+    setPassphrase("test-pass");
+  });
+
+  it("pushMetricsEventRow creates kind=metric, descriptive fields encrypted in meta", async () => {
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
+    await pushMetricsEventRow({
+      client_id: "m1", device_id: "d1", timestamp: "2026-06-16T10:00:00Z", local_date: "2026-06-16",
+      tz_offset_min: 0, event_type: "session", work_id: "w1", schema_version: 1, encrypted_payload: "PAY",
+    });
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("kind")).toBe("metric");
+    expect(fd.get("key")).toBe("m1");
+    expect(fd.get("meta")).not.toContain("session"); // encrypted
+  });
+
+  it("pushMetricsEventRow swallows unique-constraint (already pushed)", async () => {
+    mockSyncCreate.mockRejectedValue({ status: 400, data: { data: { key: { code: "validation_not_unique" } } } });
+    await expect(pushMetricsEventRow({
+      client_id: "m1", device_id: "d1", timestamp: "t", local_date: "d", tz_offset_min: 0,
+      event_type: "session", work_id: null, schema_version: 1, encrypted_payload: "PAY",
+    })).resolves.toBeUndefined();
+  });
+
+  it("pushMetricsTombstoneRow soft-deletes the metric by client_id", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
+    await pushMetricsTombstoneRow({ client_id: "m1", device_id: "d1", deleted_at: "2026-06-16T10:00:00Z", reason: "category-disabled" });
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("kind")).toBe("metric");
+    expect(fd.get("key")).toBe("m1");
+    expect(fd.get("deleted")).toBe("true");
+  });
+
+  it("pull splits deleted vs live metric rows and decrypts meta", async () => {
+    const liveMeta = await encryptMeta({ device_id: "d1", timestamp: "T", local_date: "D", tz_offset_min: 0, event_type: "session", work_id: null, schema_version: 1, encrypted_payload: "PAY" });
+    const deadMeta = await encryptMeta({ device_id: "d1", deleted_at: "DEL", reason: "category-disabled" });
+    mockGetFullList.mockResolvedValue([
+      { id: "r1", kind: "metric", key: "m1", group: "", checksum: "", deleted: false, meta: liveMeta, updated: "2026-06-16 10:00:00.000Z" },
+      { id: "r2", kind: "metric", key: "m2", group: "", checksum: "", deleted: true, meta: deadMeta, updated: "2026-06-16 11:00:00.000Z" },
+    ]);
+    const events = await pullMetricsEventRowsSince("");
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ client_id: "m1", event_type: "session", encrypted_payload: "PAY" });
+
+    mockGetFullList.mockResolvedValue([
+      { id: "r2", kind: "metric", key: "m2", group: "", checksum: "", deleted: true, meta: deadMeta, updated: "2026-06-16 11:00:00.000Z" },
+    ]);
+    const tombs = await pullMetricsTombstoneRowsSince("");
+    expect(tombs).toHaveLength(1);
+    expect(tombs[0]).toMatchObject({ client_id: "m2", deleted_at: "DEL", reason: "category-disabled" });
   });
 });
 
