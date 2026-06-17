@@ -283,56 +283,23 @@ export async function pushBookBlob(
   checksum: string,
   remoteId?: string
 ): Promise<void> {
-  const client = getClient();
-  const userId = client.authStore.record?.id;
-  if (!userId) throw new Error("Not authenticated");
-
-  const formData = new FormData();
-  formData.append("encrypted_data", encryptedData, `${bookId}.bin`);
-  formData.append("checksum", checksum);
-  formData.append("user", userId);
-  formData.append("book_id", bookId);
-
-  // The caller already knows the remote record id (from listRemoteBooks), so
-  // update it directly instead of re-querying. No id means a new record.
-  if (remoteId) {
-    await client.collection("sync_items").update(remoteId, formData);
-  } else {
-    await client.collection("sync_items").create(formData);
-  }
+  await pushObject({ kind: "book", key: bookId, checksum, content: encryptedData, remoteId });
 }
 
 export async function pullBookBlob(
   bookId: string
 ): Promise<{ data: Uint8Array; checksum: string } | null> {
-  const client = getClient();
+  const rows = await listObjects("book");
+  const row = rows.find((remoteObject) => remoteObject.key === bookId);
+  if (!row) return null;
 
-  const records = await client
-    .collection("sync_items")
-    .getList(1, 1, { filter: `book_id = "${bookId}"` });
-
-  if (records.items.length === 0) return null;
-
-  const record = records.items[0];
-  const fileUrl = client.files.getURL(record, record.encrypted_data);
-  const response = await fetch(fileUrl);
-  const arrayBuffer = await response.arrayBuffer();
-
-  return {
-    data: new Uint8Array(arrayBuffer),
-    checksum: record.checksum as string,
-  };
+  const data = await pullObjectContent(row.remoteId);
+  if (!data) return null;
+  return { data, checksum: row.checksum };
 }
 
 export async function deleteRemoteBook(bookId: string): Promise<void> {
-  const client = getClient();
-  const existing = await client
-    .collection("sync_items")
-    .getList(1, 1, { filter: `book_id = "${bookId}"` });
-
-  if (existing.items.length === 0) return;
-
-  await client.collection("sync_items").delete(existing.items[0].id);
+  await softDeleteObject("book", bookId);
 }
 
 export async function pushNoteBlob(
@@ -595,17 +562,13 @@ export async function pullMetricsBlob(
 }
 
 export async function listRemoteBooks(): Promise<SyncItemMeta[]> {
-  const client = getClient();
+  const rows = await listObjects("book");
 
-  const records = await client
-    .collection("sync_items")
-    .getFullList({ fields: "id,book_id,checksum,updated" });
-
-  return records.map((record) => ({
-    remoteId: record.id,
-    bookId: record.book_id as string,
-    checksum: record.checksum as string,
-    updatedAt: parsePocketBaseDate(record.updated as string),
+  return rows.map((row) => ({
+    remoteId: row.remoteId,
+    bookId: row.key,
+    checksum: row.checksum,
+    updatedAt: row.updatedAt,
   }));
 }
 

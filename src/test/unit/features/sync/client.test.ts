@@ -633,11 +633,11 @@ describe("listRemoteBooks()", () => {
     initClient("https://sync.example.com");
   });
 
-  it("maps PocketBase records to SyncItemMeta using parsePocketBaseDate", async () => {
+  it("maps live generic book objects to SyncItemMeta using parsePocketBaseDate", async () => {
     mockGetFullList.mockResolvedValue([
       {
         id: "rec-1",
-        book_id: "book-1",
+        key: "book-1",
         checksum: "abc123",
         updated: "2024-01-15 10:30:00.000Z",
       },
@@ -645,6 +645,11 @@ describe("listRemoteBooks()", () => {
 
     const result = await listRemoteBooks();
 
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "book" && deleted = false',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
     expect(result).toEqual([
       {
         remoteId: "rec-1",
@@ -668,22 +673,38 @@ describe("deleteRemoteBook()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
   });
 
-  it("deletes the matching remote book row", async () => {
+  it("soft-deletes the matching generic book object", async () => {
     mockGetList.mockResolvedValue({ items: [{ id: "remote-1" }] });
 
     await deleteRemoteBook("book-1");
 
-    expect(mockGetList).toHaveBeenCalledWith(1, 1, { filter: 'book_id = "book-1"' });
-    expect(mockDelete).toHaveBeenCalledWith("remote-1");
+    expect(mockGetList).toHaveBeenCalledWith(1, 1, {
+      filter: 'app_name = "maibuk" && kind = "book" && key = "book-1"',
+    });
+    expect(mockUpdate).toHaveBeenCalledWith("remote-1", expect.any(FormData));
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("user")).toBe("user-1");
+    expect(formData.get("app_name")).toBe("maibuk");
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("book-1");
+    expect(formData.get("deleted")).toBe("true");
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 
-  it("does nothing when no remote book row exists", async () => {
+  it("creates a deleted generic book object when no row exists", async () => {
     mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "deleted-1" });
 
     await deleteRemoteBook("missing-book");
 
+    expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("missing-book");
+    expect(formData.get("deleted")).toBe("true");
     expect(mockDelete).not.toHaveBeenCalled();
   });
 });
@@ -719,7 +740,7 @@ describe("pushBookBlob()", () => {
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
   });
 
-  it("creates a new record when no remoteId is given, without an extra lookup", async () => {
+  it("creates a new generic book object when no remoteId is given", async () => {
     mockSyncCreate.mockResolvedValue({});
 
     await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc");
@@ -727,9 +748,19 @@ describe("pushBookBlob()", () => {
     expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(mockGetList).not.toHaveBeenCalled();
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("user")).toBe("user-1");
+    expect(formData.get("app_name")).toBe("maibuk");
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("book-1");
+    expect(formData.get("checksum")).toBe("checksum-abc");
+    expect(formData.get("deleted")).toBe("false");
+    expect((formData.get("content") as File).name).toBe("book-1.bin");
+    expect(formData.get("encrypted_data")).toBeNull();
+    expect(formData.get("book_id")).toBeNull();
   });
 
-  it("updates the existing record directly when a remoteId is given", async () => {
+  it("updates the existing generic book object directly when a remoteId is given", async () => {
     mockUpdate.mockResolvedValue({});
 
     await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc", "existing-1");
@@ -737,6 +768,16 @@ describe("pushBookBlob()", () => {
     expect(mockUpdate).toHaveBeenCalledWith("existing-1", expect.any(FormData));
     expect(mockSyncCreate).not.toHaveBeenCalled();
     expect(mockGetList).not.toHaveBeenCalled();
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("user")).toBe("user-1");
+    expect(formData.get("app_name")).toBe("maibuk");
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("book-1");
+    expect(formData.get("checksum")).toBe("checksum-abc");
+    expect(formData.get("deleted")).toBe("false");
+    expect((formData.get("content") as File).name).toBe("book-1.bin");
+    expect(formData.get("encrypted_data")).toBeNull();
+    expect(formData.get("book_id")).toBeNull();
   });
 
   it("throws when not authenticated", async () => {
@@ -841,8 +882,65 @@ describe("pullBookBlob()", () => {
     initClient("https://sync.example.com");
   });
 
-  it("returns null when no remote record exists", async () => {
-    mockGetList.mockResolvedValue({ items: [] });
+  it("returns null when no live generic book object exists", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    const result = await pullBookBlob("book-1");
+
+    expect(result).toBeNull();
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "book" && deleted = false',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+    expect(mockGetList).not.toHaveBeenCalled();
+  });
+
+  it("pulls content for the matching live generic book object", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "remote-other",
+        kind: "book",
+        key: "other-book",
+        checksum: "other-checksum",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+      {
+        id: "remote-1",
+        kind: "book",
+        key: "book-1",
+        checksum: "checksum-abc",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+    ]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "content.bin" });
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/remote-1/content.bin");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const result = await pullBookBlob("book-1");
+
+    expect(result).toEqual({ data: bytes, checksum: "checksum-abc" });
+    expect(mockGetOne).toHaveBeenCalledWith("remote-1");
+  });
+
+  it("returns null when a matching generic book object has no content", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "remote-1",
+        kind: "book",
+        key: "book-1",
+        checksum: "checksum-abc",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+    ]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "" });
 
     const result = await pullBookBlob("book-1");
 
