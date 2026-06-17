@@ -1187,6 +1187,14 @@ describe("version wrappers with encrypted meta", () => {
       name: "Draft", triggerType: "auto", createdAt: 1000, wordCount: 42,
     });
   });
+
+  it("listRemoteVersions() without bookId does not filter by group", async () => {
+    mockGetFullList.mockResolvedValue([]);
+    await listRemoteVersions();
+    const filter = mockGetFullList.mock.calls[0][0].filter as string;
+    expect(filter).not.toContain("group");
+    expect(filter).toContain('kind = "version"');
+  });
 });
 
 describe("note wrappers over objects", () => {
