@@ -38,7 +38,6 @@ interface SnapshotWorkRow {
 }
 
 const DAILY_AGGREGATE_BUCKET = "daily-v1";
-export const RAW_METRIC_RETENTION_DAYS = 90;
 
 export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
   await db.execute(`
@@ -395,32 +394,36 @@ export async function countUnpushedEvents(db: DatabaseAdapter): Promise<number> 
   return rows[0]?.n ?? 0;
 }
 
-export async function compactOldUnpushedMetricEvents(
+export async function compactUnpushedRawMetricEvents(
   db: DatabaseAdapter,
-  now: Date = new Date(),
 ): Promise<number> {
-  const cutoff = new Date(now.getTime() - RAW_METRIC_RETENTION_DAYS * 86_400_000)
-    .toISOString();
   const rows = await db.select<MetricEventRow[]>(
     `SELECT id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version
        FROM metrics_events
       WHERE pushed_at IS NULL
         AND event_type != 'aggregate.daily'
-        AND timestamp < ?
       ORDER BY device_id ASC, local_date ASC, timestamp ASC, id ASC`,
-    [cutoff],
   );
   if (rows.length === 0) return 0;
 
-  const buckets = new Map<string, DailyAggregateAccumulator>();
+  const bucketRows = new Map<string, MetricEventRow[]>();
   for (const row of rows) {
     const key = `${row.device_id}\u0000${row.local_date}`;
-    const acc = buckets.get(key) ?? createDailyAggregateAccumulator(row);
-    addRowToDailyAggregate(acc, row);
-    buckets.set(key, acc);
+    const bucket = bucketRows.get(key) ?? [];
+    bucket.push(row);
+    bucketRows.set(key, bucket);
   }
 
-  for (const acc of buckets.values()) {
+  const buckets: DailyAggregateAccumulator[] = [];
+  for (const bucket of bucketRows.values()) {
+    const acc = createDailyAggregateAccumulator(bucket);
+    for (const row of bucket) {
+      addRowToDailyAggregate(acc, row);
+    }
+    buckets.push(acc);
+  }
+
+  for (const acc of buckets) {
     await upsertDailyAggregateEvent(db, acc);
   }
 
@@ -503,6 +506,9 @@ export async function applyRemoteEvent(
       pushedAt,
     ],
   );
+  if (event.eventType === "aggregate.daily") {
+    await suppressCompactedSourceEvents(db, event, pushedAt);
+  }
   return true;
 }
 
@@ -534,6 +540,26 @@ function toMetricEvent(row: MetricEventRow): MetricEvent {
   };
 }
 
+async function suppressCompactedSourceEvents(
+  db: DatabaseAdapter,
+  event: MetricEvent,
+  pushedAt: string,
+): Promise<void> {
+  const payload = event.payload as Partial<DailyAggregateMetricPayload>;
+  if (!Array.isArray(payload.sourceEventIds)) return;
+
+  for (const sourceId of payload.sourceEventIds) {
+    if (typeof sourceId !== "string" || sourceId === event.id) continue;
+    await db.execute(
+      `INSERT OR IGNORE INTO metrics_event_tombstones
+        (id, deleted_at, device_id, reason, pushed_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [sourceId, event.timestamp, event.deviceId, "compacted", pushedAt],
+    );
+    await db.execute("DELETE FROM metrics_events WHERE id = ?", [sourceId]);
+  }
+}
+
 interface DailyAggregateAccumulator {
   id: string;
   timestamp: string;
@@ -541,6 +567,7 @@ interface DailyAggregateAccumulator {
   tzOffsetMin: number;
   deviceId: string;
   rawEvents: number;
+  sourceEventIds: string[];
   typedWords: number;
   deletedWords: number;
   pastedWords: number;
@@ -550,14 +577,17 @@ interface DailyAggregateAccumulator {
   timeByWork: Map<string, number>;
 }
 
-function createDailyAggregateAccumulator(row: MetricEventRow): DailyAggregateAccumulator {
+function createDailyAggregateAccumulator(rows: MetricEventRow[]): DailyAggregateAccumulator {
+  const first = rows[0];
+  const segment = hashMetricIds(rows.map((row) => row.id));
   return {
-    id: `aggregate:daily:v1:${row.device_id}:${row.local_date}`,
-    timestamp: row.timestamp,
-    localDate: row.local_date,
-    tzOffsetMin: row.tz_offset_min,
-    deviceId: row.device_id,
+    id: `aggregate:daily:v1:${first.device_id}:${first.local_date}:${segment}`,
+    timestamp: first.timestamp,
+    localDate: first.local_date,
+    tzOffsetMin: first.tz_offset_min,
+    deviceId: first.device_id,
     rawEvents: 0,
+    sourceEventIds: [],
     typedWords: 0,
     deletedWords: 0,
     pastedWords: 0,
@@ -568,11 +598,25 @@ function createDailyAggregateAccumulator(row: MetricEventRow): DailyAggregateAcc
   };
 }
 
+function hashMetricIds(ids: string[]): string {
+  let hash = 0x811c9dc5;
+  for (const id of [...ids].sort()) {
+    for (let i = 0; i < id.length; i++) {
+      hash ^= id.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    hash ^= 0xff;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function addRowToDailyAggregate(
   acc: DailyAggregateAccumulator,
   row: MetricEventRow,
 ): void {
   acc.rawEvents += 1;
+  acc.sourceEventIds.push(row.id);
   if (row.timestamp > acc.timestamp) acc.timestamp = row.timestamp;
 
   const payload = JSON.parse(row.payload) as Record<string, unknown>;
@@ -623,6 +667,7 @@ async function upsertDailyAggregateEvent(
     bucket: DAILY_AGGREGATE_BUCKET,
     date: acc.localDate,
     rawEvents: acc.rawEvents,
+    sourceEventIds: [...acc.sourceEventIds].sort(),
     typedWords: acc.typedWords,
     deletedWords: acc.deletedWords,
     pastedWords: acc.pastedWords,
@@ -637,7 +682,7 @@ async function upsertDailyAggregateEvent(
   };
 
   await db.execute(
-    `INSERT OR REPLACE INTO metrics_events
+    `INSERT OR IGNORE INTO metrics_events
       (id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version, pushed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     [

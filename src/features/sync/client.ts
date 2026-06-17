@@ -373,12 +373,10 @@ export function parsePocketBaseDate(dateStr: string): number {
   return Math.floor(ms / 1000);
 }
 
-// --- Row-level metrics sync (replaces the old blob-per-everything model) ----
-// Schema requirements live in
-// docs/plans/2026-05-23-metrics-sync-pocketbase-schema.md. The two collections
-// (`metrics_events_rows`, `metrics_tombstones_rows`) are append-only and
-// owner-scoped via API rules. PB's system `id` is auto-generated; the
-// client-minted UUID lives in `client_id` with a unique-per-user index.
+// --- Metrics sync over generic objects -------------------------------------
+// Metric event uploads are compact aggregate segments, not one remote row per
+// keystroke event. PB's system `id` is auto-generated; the client-minted
+// segment/tombstone id lives in `client_id` and maps to generic object `key`.
 
 export interface MetricsEventRowPayload {
   client_id: string;

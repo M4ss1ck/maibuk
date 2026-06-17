@@ -34,6 +34,7 @@ export interface DailyAggregateMetricPayload {
   bucket: "daily-v1";
   date: string;
   rawEvents: number;
+  sourceEventIds?: string[];
   typedWords: number;
   deletedWords: number;
   pastedWords: number;

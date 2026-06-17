@@ -3,7 +3,7 @@ import { decrypt, encrypt } from "../sync/crypto";
 import {
   applyRemoteEvent,
   applyRemoteTombstone,
-  compactOldUnpushedMetricEvents,
+  compactUnpushedRawMetricEvents,
   countUnpushedEvents,
   insertIfNotTombstoned,
   invalidateAllAggregateCaches,
@@ -118,11 +118,9 @@ export async function applyMetricsBatch(
 }
 
 // --- Row-level sync ---------------------------------------------------------
-// New transport: each event / tombstone is one PocketBase row. Pulls are
-// incremental via a per-table `updated > since` watermark; pushes are deltas
-// driven by the local `pushed_at` columns. See
-// docs/plans/2026-05-23-metrics-sync-pocketbase-schema.md for the required
-// server schema.
+// New transport: metrics sync uses generic objects. Raw local events are
+// compacted into immutable daily aggregate segments before upload; tombstones
+// remain row-level so category purges keep tombstone-wins semantics.
 
 const PUSH_BATCH_SIZE = 200;
 // Upload events/tombstones a few at a time instead of one network round-trip
@@ -240,9 +238,9 @@ export async function syncMetricsRows(
     );
   }
 
-  // 4. Compact old local-only raw events before pushing. This keeps sync volume
-  // bounded after a first-device backlog or generic-collection cutover reset.
-  await compactOldUnpushedMetricEvents(db);
+  // 4. Compact local-only raw events before pushing. This keeps sync volume
+  // bounded after normal writing, first-device backlogs, and cutover resets.
+  await compactUnpushedRawMetricEvents(db);
 
   // 5. PUSH local-only events.
   const totalEvents = await countUnpushedEvents(db);
