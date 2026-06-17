@@ -239,16 +239,24 @@ export async function softDeleteObject(
   const userId = client.authStore.record?.id;
   if (!userId) throw new Error("Not authenticated");
 
-  const existing = await client.collection("objects").getList(1, 1, {
-    filter: `app_name = "${APP_NAME}" && kind = "${kind}" && key = "${key}"`,
-  });
+  const filter = `app_name = "${APP_NAME}" && kind = "${kind}" && key = "${key}"`;
+  const existing = await client.collection("objects").getList(1, 1, { filter });
 
   const input: PushObjectInput = { kind, key, meta };
   const formData = buildObjectFormData(input, userId, true);
   if (existing.items.length > 0) {
     await client.collection("objects").update(existing.items[0].id, formData);
   } else {
-    await client.collection("objects").create(formData);
+    try {
+      await client.collection("objects").create(formData);
+    } catch (error) {
+      if (!isKeyUniqueConstraintError(error)) throw error;
+
+      const racedExisting = await client.collection("objects").getList(1, 1, { filter });
+      if (racedExisting.items.length === 0) throw error;
+
+      await client.collection("objects").update(racedExisting.items[0].id, formData);
+    }
   }
 }
 

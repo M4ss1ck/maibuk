@@ -415,6 +415,38 @@ describe("generic object sync core", () => {
     expect(formData.get("deleted")).toBe("true");
   });
 
+  it("updates a raced existing object when deleted object creation hits a unique constraint", async () => {
+    let lookupCount = 0;
+    mockGetList.mockImplementation(async () => {
+      lookupCount += 1;
+      return lookupCount === 1 ? { items: [] } : { items: [{ id: "rRace" }] };
+    });
+    mockSyncCreate.mockRejectedValue({
+      status: 400,
+      data: {
+        data: {
+          key: { code: "validation_not_unique" },
+        },
+      },
+    });
+    mockUpdate.mockResolvedValue({ id: "rRace" });
+
+    let thrown: unknown;
+    try {
+      await softDeleteObject("book", "book-race");
+    } catch (error) {
+      thrown = error;
+    }
+
+    const expectedFilter = 'app_name = "maibuk" && kind = "book" && key = "book-race"';
+    expect(thrown).toBeUndefined();
+    expect(mockGetList).toHaveBeenNthCalledWith(1, 1, 1, { filter: expectedFilter });
+    expect(mockGetList).toHaveBeenNthCalledWith(2, 1, 1, { filter: expectedFilter });
+    expect(mockUpdate).toHaveBeenCalledWith("rRace", expect.any(FormData));
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("deleted")).toBe("true");
+  });
+
   it("detects unique constraint errors on arbitrary fields", () => {
     expect(
       isKeyUniqueConstraintError({
