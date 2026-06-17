@@ -76,8 +76,26 @@ export async function decryptMeta(meta: string): Promise<Record<string, unknown>
   const passphrase = getPassphrase() ?? "";
   assertPassphrase(passphrase);
 
-  const json = await decrypt(base64ToUint8Array(meta), passphrase);
-  return JSON.parse(json) as Record<string, unknown>;
+  let encrypted: Uint8Array;
+  try {
+    encrypted = base64ToUint8Array(meta);
+  } catch {
+    throw new SyncCryptoError(
+      "INVALID_PAYLOAD",
+      "Encrypted metadata payload is invalid or corrupted"
+    );
+  }
+
+  const json = await decrypt(encrypted, passphrase);
+
+  try {
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    throw new SyncCryptoError(
+      "INVALID_PAYLOAD",
+      "Encrypted metadata payload is invalid or corrupted"
+    );
+  }
 }
 
 async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {

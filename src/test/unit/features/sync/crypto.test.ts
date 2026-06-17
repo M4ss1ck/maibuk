@@ -10,6 +10,7 @@ import {
   getPassphrase,
   isSyncCryptoError,
   setPassphrase,
+  uint8ArrayToBase64,
 } from "../../../../features/sync/crypto";
 
 describe("sync crypto", () => {
@@ -112,5 +113,30 @@ describe("meta envelope", () => {
     clearPassphrase();
 
     await expect(encryptMeta({ a: 1 })).rejects.toMatchObject({ code: "MISSING_PASSPHRASE" });
+  });
+
+  it("throws INVALID_PAYLOAD for malformed base64 metadata", async () => {
+    await expect(decryptMeta("not valid base64!")).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PAYLOAD for encrypted non-JSON metadata", async () => {
+    const encrypted = await encrypt("not json", "test-pass");
+    const meta = uint8ArrayToBase64(encrypted);
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PASSPHRASE for metadata encrypted with a different passphrase", async () => {
+    setPassphrase("passphrase-a");
+    const meta = await encryptMeta({ name: "Draft 2" });
+    setPassphrase("passphrase-b");
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PASSPHRASE",
+    });
   });
 });
