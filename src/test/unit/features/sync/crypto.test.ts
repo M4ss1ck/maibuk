@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   clearPassphrase,
@@ -96,6 +96,7 @@ describe("sync crypto", () => {
 
 describe("meta envelope", () => {
   beforeEach(() => setPassphrase("test-pass"));
+  afterEach(() => clearPassphrase());
 
   it("round-trips a metadata object and embeds formatVersion", async () => {
     const meta = await encryptMeta({ name: "Draft 2", wordCount: 1200 });
@@ -123,6 +124,24 @@ describe("meta envelope", () => {
 
   it("throws INVALID_PAYLOAD for encrypted non-JSON metadata", async () => {
     const encrypted = await encrypt("not json", "test-pass");
+    const meta = uint8ArrayToBase64(encrypted);
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PAYLOAD for encrypted null metadata", async () => {
+    const encrypted = await encrypt("null", "test-pass");
+    const meta = uint8ArrayToBase64(encrypted);
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PAYLOAD for encrypted array metadata", async () => {
+    const encrypted = await encrypt("[]", "test-pass");
     const meta = uint8ArrayToBase64(encrypted);
 
     await expect(decryptMeta(meta)).rejects.toMatchObject({

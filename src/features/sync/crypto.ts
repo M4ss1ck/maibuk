@@ -88,14 +88,24 @@ export async function decryptMeta(meta: string): Promise<Record<string, unknown>
 
   const json = await decrypt(encrypted, passphrase);
 
+  let parsed: unknown;
   try {
-    return JSON.parse(json) as Record<string, unknown>;
+    parsed = JSON.parse(json);
   } catch {
     throw new SyncCryptoError(
       "INVALID_PAYLOAD",
       "Encrypted metadata payload is invalid or corrupted"
     );
   }
+
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new SyncCryptoError(
+      "INVALID_PAYLOAD",
+      "Encrypted metadata payload is invalid or corrupted"
+    );
+  }
+
+  return parsed as Record<string, unknown>;
 }
 
 async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
