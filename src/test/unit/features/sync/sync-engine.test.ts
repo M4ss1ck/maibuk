@@ -1141,7 +1141,7 @@ describe("syncMetrics — engine integration", () => {
 
     await syncBook("book-1", "pass", vi.fn());
 
-    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass", expect.any(Function));
   });
 
   it("runs metrics sync in syncAllBooks path when enabled", async () => {
@@ -1150,7 +1150,7 @@ describe("syncMetrics — engine integration", () => {
 
     await syncAllBooks("pass", vi.fn());
 
-    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass", expect.any(Function));
   });
 
   it("runs metrics sync even on cancelled syncAllBooks (partial outcome)", async () => {
@@ -1167,7 +1167,7 @@ describe("syncMetrics — engine integration", () => {
     const result = await syncAllBooks("pass", vi.fn().mockResolvedValue("cancel"));
 
     expect(result.outcome).toBe("cancelled");
-    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass");
+    expect(mockSyncMetricsRows).toHaveBeenCalledWith("pass", expect.any(Function));
   });
 
   it("runs cutover reset before metrics in syncBook", async () => {

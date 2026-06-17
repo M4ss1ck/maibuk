@@ -3,6 +3,7 @@ import { decrypt, encrypt } from "../sync/crypto";
 import {
   applyRemoteEvent,
   applyRemoteTombstone,
+  countUnpushedEvents,
   insertIfNotTombstoned,
   invalidateAllAggregateCaches,
   listUnpushedEvents,
@@ -169,7 +170,15 @@ function maxIso(values: string[]): string {
   return values.reduce((max, value) => (value > max ? value : max), "");
 }
 
-export async function syncMetricsRows(passphrase: string): Promise<void> {
+export interface MetricsPushProgress {
+  pushed: number;
+  total: number;
+}
+
+export async function syncMetricsRows(
+  passphrase: string,
+  onProgress?: (progress: MetricsPushProgress) => void,
+): Promise<void> {
   const db = await getDatabase();
 
   let touchedAggregateCache = false;
@@ -231,6 +240,8 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
   }
 
   // 4. PUSH local-only events.
+  const totalEvents = await countUnpushedEvents(db);
+  let pushedEvents = 0;
   while (true) {
     const batch = await listUnpushedEvents(db, PUSH_BATCH_SIZE);
     if (batch.length === 0) break;
@@ -252,6 +263,8 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
       },
       (event) => markEventPushed(db, event.id, new Date().toISOString()),
     );
+    pushedEvents += batch.length;
+    onProgress?.({ pushed: pushedEvents, total: totalEvents });
   }
 
   if (touchedAggregateCache) {

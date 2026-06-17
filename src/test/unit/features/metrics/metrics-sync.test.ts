@@ -360,6 +360,21 @@ describe("metrics sync", () => {
       expect(stillUnpushed).toEqual([]);
     });
 
+    it("reports cumulative push progress for the event backlog", async () => {
+      await insertEvents(testDb, [
+        buildEvent({ id: "p-1" }),
+        buildEvent({ id: "p-2" }),
+        buildEvent({ id: "p-3" }),
+      ]);
+      mockPushEvent.mockReset().mockResolvedValue(undefined);
+
+      const progress: { pushed: number; total: number }[] = [];
+      await syncMetricsRows("pass", (p) => progress.push(p));
+
+      expect(progress.length).toBeGreaterThan(0);
+      expect(progress[progress.length - 1]).toEqual({ pushed: 3, total: 3 });
+    });
+
     it("pulls remote events, decrypts them, and stores them as pushed", async () => {
       const encrypted = await mockEncrypt(
         JSON.stringify({ words: 7, chars: 35, chapterId: "c-1" }),

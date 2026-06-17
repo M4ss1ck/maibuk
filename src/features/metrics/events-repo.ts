@@ -372,6 +372,13 @@ export async function listUnpushedEvents(
   return rows.map(toMetricEvent);
 }
 
+export async function countUnpushedEvents(db: DatabaseAdapter): Promise<number> {
+  const rows = await db.select<{ n: number }[]>(
+    "SELECT COUNT(*) AS n FROM metrics_events WHERE pushed_at IS NULL",
+  );
+  return rows[0]?.n ?? 0;
+}
+
 export async function markEventPushed(
   db: DatabaseAdapter,
   id: string,

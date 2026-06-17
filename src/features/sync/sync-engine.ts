@@ -744,9 +744,22 @@ async function syncAllNotes(
   return { actions, cancelled: false };
 }
 
-async function syncMetrics(passphrase: string): Promise<void> {
+// Only log metrics push progress when there's a real backlog (e.g. the one-time
+// post-cutover re-upload), so ordinary incremental syncs stay quiet.
+const METRICS_PROGRESS_LOG_THRESHOLD = 200;
+
+async function syncMetrics(passphrase: string, options?: SyncOptions): Promise<void> {
   if (!useSettingsStore.getState().metrics.syncMetrics) return;
-  await syncMetricsRows(passphrase);
+  await syncMetricsRows(passphrase, ({ pushed, total }) => {
+    if (!options || total <= METRICS_PROGRESS_LOG_THRESHOLD) return;
+    emitLog(options, {
+      level: "info",
+      event: "push",
+      message: `Uploading metrics… ${pushed}/${total}`,
+      entityType: "metrics",
+      entityId: "metrics",
+    });
+  });
 }
 
 export async function syncBook(
@@ -781,7 +794,7 @@ export async function syncBook(
     if (action !== "cancelled") {
       await syncVersions(bookId, passphrase, options);
     }
-    await syncMetrics(passphrase);
+    await syncMetrics(passphrase, options);
     return {
       outcome: action === "cancelled" ? "cancelled" : "success",
       action,
@@ -829,7 +842,7 @@ export async function syncSingleNote(
       remoteNotes,
       localUpdatedAt
     );
-    await syncMetrics(passphrase);
+    await syncMetrics(passphrase, options);
     return {
       outcome: action === "cancelled" ? "cancelled" : "success",
       action,
@@ -904,7 +917,7 @@ export async function syncAllBooks(
         }
         actions.push(action);
         if (action === "cancelled") {
-          await syncMetrics(passphrase);
+          await syncMetrics(passphrase, options);
           return {
             outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
             actions,
@@ -953,7 +966,7 @@ export async function syncAllBooks(
       const noteResult = await syncAllNotes(passphrase, onConflict, options);
       actions.push(...noteResult.actions);
       if (noteResult.cancelled) {
-        await syncMetrics(passphrase);
+        await syncMetrics(passphrase, options);
         return {
           outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
           actions,
@@ -962,7 +975,7 @@ export async function syncAllBooks(
     }
 
     if (includesScope(options.scope, "metrics")) {
-      await syncMetrics(passphrase);
+      await syncMetrics(passphrase, options);
     }
 
     return { outcome: "success", actions };
