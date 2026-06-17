@@ -15,7 +15,6 @@ import {
   listRemoteVersions,
   pushVersionBlob,
   pullVersionBlob,
-  pullMetricsBlob,
   pushNoteBlob,
   pullNoteBlob,
   listRemoteNotes,
@@ -29,7 +28,6 @@ import type {
   NoteSyncItemMeta,
   SingleSyncResult,
   BatchSyncResult,
-  MetricsSyncBlob,
   SyncOptions,
   SyncScope,
   SyncDirection,
@@ -44,7 +42,6 @@ import { useSettingsStore } from "../settings/store";
 import { useSyncStore } from "./store";
 import { useVersionStore } from "../versions/store";
 import {
-  applyLegacyBlobAndMarkPushed,
   syncMetricsRows,
 } from "../metrics/metrics-sync";
 import {
@@ -52,8 +49,7 @@ import {
   listPendingTombstones,
   markTombstonePushed,
 } from "./tombstones";
-
-const BLOB_MIGRATED_KEY = "maibuk.metrics.blobMigrated";
+import { ensureGenericCollectionMigration } from "./migration-reset";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR =
@@ -333,7 +329,7 @@ async function syncBookInBatch(
 
   if (options.direction === "pull") {
     await useVersionStore.getState().createVersion({ bookId, triggerType: "pre-sync" });
-    const pulled = await pullBookBlob(bookId);
+    const pulled = await pullBookBlob(bookId, remote.remoteId);
     if (!pulled) return "skipped";
 
     const snapshot = await decryptSnapshot(pulled.data, passphrase);
@@ -480,7 +476,7 @@ async function syncNoteInBatch(
   }
 
   if (options.direction === "pull") {
-    const pulled = await pullNoteBlob(noteId);
+    const pulled = await pullNoteBlob(noteId, remote.remoteId);
     if (!pulled) return "skipped";
 
     const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
@@ -729,7 +725,7 @@ async function syncAllNotes(
         continue;
       }
 
-      const pulled = await pullNoteBlob(remote.noteId);
+      const pulled = await pullNoteBlob(remote.noteId, remote.remoteId);
       if (!pulled) continue;
 
       const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
@@ -748,56 +744,22 @@ async function syncAllNotes(
   return { actions, cancelled: false };
 }
 
-async function syncMetrics(passphrase: string): Promise<void> {
+// Only log metrics push progress when there's a real backlog (e.g. the one-time
+// post-cutover re-upload), so ordinary incremental syncs stay quiet.
+const METRICS_PROGRESS_LOG_THRESHOLD = 200;
+
+async function syncMetrics(passphrase: string, options?: SyncOptions): Promise<void> {
   if (!useSettingsStore.getState().metrics.syncMetrics) return;
-
-  // One-time migration: if a legacy `metrics_sync` blob exists on the server
-  // and we haven't migrated yet, decrypt + apply it locally and mark the
-  // local rows as already-pushed. After this, all sync goes through the row
-  // collections.
-  await migrateLegacyMetricsBlobIfNeeded(passphrase);
-
-  await syncMetricsRows(passphrase);
-}
-
-async function migrateLegacyMetricsBlobIfNeeded(
-  passphrase: string,
-): Promise<void> {
-  if (typeof localStorage !== "undefined") {
-    if (localStorage.getItem(BLOB_MIGRATED_KEY) === "true") return;
-  }
-
-  let remote: { data: Uint8Array; checksum: string } | null = null;
-  try {
-    remote = await pullMetricsBlob();
-  } catch {
-    // Old collection may not exist on the server. That's expected on fresh
-    // deployments — just mark migration done so we don't keep probing.
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(BLOB_MIGRATED_KEY, "true");
-    }
-    return;
-  }
-
-  if (!remote) {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(BLOB_MIGRATED_KEY, "true");
-    }
-    return;
-  }
-
-  const decrypted = await decrypt(remote.data, passphrase);
-  let snapshot: MetricsSyncBlob;
-  try {
-    snapshot = JSON.parse(decrypted) as MetricsSyncBlob;
-  } catch {
-    throw new Error("Synced metrics payload is invalid or corrupted");
-  }
-  await applyLegacyBlobAndMarkPushed(snapshot);
-
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(BLOB_MIGRATED_KEY, "true");
-  }
+  await syncMetricsRows(passphrase, ({ pushed, total }) => {
+    if (!options || total <= METRICS_PROGRESS_LOG_THRESHOLD) return;
+    emitLog(options, {
+      level: "info",
+      event: "push",
+      message: `Uploading metrics… ${pushed}/${total}`,
+      entityType: "metrics",
+      entityId: "metrics",
+    });
+  });
 }
 
 export async function syncBook(
@@ -810,6 +772,7 @@ export async function syncBook(
   isSyncing = true;
   const options = resolveSyncOptions({ scope: "books", ...optionsInput });
   try {
+    await ensureGenericCollectionMigration();
     await ensureAuth();
     await createPreSyncBackupOrThrow();
     emitLog(options, {
@@ -831,7 +794,7 @@ export async function syncBook(
     if (action !== "cancelled") {
       await syncVersions(bookId, passphrase, options);
     }
-    await syncMetrics(passphrase);
+    await syncMetrics(passphrase, options);
     return {
       outcome: action === "cancelled" ? "cancelled" : "success",
       action,
@@ -860,6 +823,7 @@ export async function syncSingleNote(
   isSyncing = true;
   const options = resolveSyncOptions({ scope: "notes", ...optionsInput });
   try {
+    await ensureGenericCollectionMigration();
     await ensureAuth();
     await createPreSyncBackupOrThrow();
     emitLog(options, {
@@ -878,7 +842,7 @@ export async function syncSingleNote(
       remoteNotes,
       localUpdatedAt
     );
-    await syncMetrics(passphrase);
+    await syncMetrics(passphrase, options);
     return {
       outcome: action === "cancelled" ? "cancelled" : "success",
       action,
@@ -902,6 +866,7 @@ export async function syncAllBooks(
   isSyncing = true;
   const options = resolveSyncOptions(optionsInput);
   try {
+    await ensureGenericCollectionMigration();
     await ensureAuth();
     assertOnline();
     const actions: SyncAction[] = [];
@@ -952,7 +917,7 @@ export async function syncAllBooks(
         }
         actions.push(action);
         if (action === "cancelled") {
-          await syncMetrics(passphrase);
+          await syncMetrics(passphrase, options);
           return {
             outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
             actions,
@@ -977,7 +942,7 @@ export async function syncAllBooks(
             continue;
           }
 
-          const pulled = await pullBookBlob(remote.bookId);
+          const pulled = await pullBookBlob(remote.bookId, remote.remoteId);
           if (!pulled) continue;
 
           const snapshot = await decryptSnapshot(pulled.data, passphrase);
@@ -1001,7 +966,7 @@ export async function syncAllBooks(
       const noteResult = await syncAllNotes(passphrase, onConflict, options);
       actions.push(...noteResult.actions);
       if (noteResult.cancelled) {
-        await syncMetrics(passphrase);
+        await syncMetrics(passphrase, options);
         return {
           outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
           actions,
@@ -1010,7 +975,7 @@ export async function syncAllBooks(
     }
 
     if (includesScope(options.scope, "metrics")) {
-      await syncMetrics(passphrase);
+      await syncMetrics(passphrase, options);
     }
 
     return { outcome: "success", actions };

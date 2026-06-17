@@ -13,6 +13,7 @@ export type EventType =
   | "session.started"
   | "session.ended"
   | "session.active"
+  | "aggregate.daily"
   | "ai.inserted" // reserved -- not emitted in v1
   | "ai.edited"; // reserved -- not emitted in v1
 
@@ -29,9 +30,24 @@ export interface SessionMetricPayload {
   deepestStreakSec?: number;
 }
 
+export interface DailyAggregateMetricPayload {
+  bucket: "daily-v1";
+  date: string;
+  rawEvents: number;
+  sourceEventIds?: string[];
+  typedWords: number;
+  deletedWords: number;
+  pastedWords: number;
+  activeSec: number;
+  deepestSessionSec: number;
+  timeOfDay: { hour: number; words: number }[];
+  timeByWork: { workId: string; activeSec: number }[];
+}
+
 export type MetricPayload =
   | WritingMetricPayload
   | SessionMetricPayload
+  | DailyAggregateMetricPayload
   | Record<string, string | number | boolean | null | undefined>;
 
 export interface MetricEvent {

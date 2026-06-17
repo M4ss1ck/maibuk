@@ -3,6 +3,8 @@ import { decrypt, encrypt } from "../sync/crypto";
 import {
   applyRemoteEvent,
   applyRemoteTombstone,
+  compactUnpushedRawMetricEvents,
+  countUnpushedEvents,
   insertIfNotTombstoned,
   invalidateAllAggregateCaches,
   listUnpushedEvents,
@@ -116,11 +118,9 @@ export async function applyMetricsBatch(
 }
 
 // --- Row-level sync ---------------------------------------------------------
-// New transport: each event / tombstone is one PocketBase row. Pulls are
-// incremental via a per-table `updated > since` watermark; pushes are deltas
-// driven by the local `pushed_at` columns. See
-// docs/plans/2026-05-23-metrics-sync-pocketbase-schema.md for the required
-// server schema.
+// New transport: metrics sync uses generic objects. Raw local events are
+// compacted into immutable daily aggregate segments before upload; tombstones
+// remain row-level so category purges keep tombstone-wins semantics.
 
 const PUSH_BATCH_SIZE = 200;
 // Upload events/tombstones a few at a time instead of one network round-trip
@@ -169,7 +169,15 @@ function maxIso(values: string[]): string {
   return values.reduce((max, value) => (value > max ? value : max), "");
 }
 
-export async function syncMetricsRows(passphrase: string): Promise<void> {
+export interface MetricsPushProgress {
+  pushed: number;
+  total: number;
+}
+
+export async function syncMetricsRows(
+  passphrase: string,
+  onProgress?: (progress: MetricsPushProgress) => void,
+): Promise<void> {
   const db = await getDatabase();
 
   let touchedAggregateCache = false;
@@ -230,7 +238,13 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
     );
   }
 
-  // 4. PUSH local-only events.
+  // 4. Compact local-only raw events before pushing. This keeps sync volume
+  // bounded after normal writing, first-device backlogs, and cutover resets.
+  await compactUnpushedRawMetricEvents(db);
+
+  // 5. PUSH local-only events.
+  const totalEvents = await countUnpushedEvents(db);
+  let pushedEvents = 0;
   while (true) {
     const batch = await listUnpushedEvents(db, PUSH_BATCH_SIZE);
     if (batch.length === 0) break;
@@ -252,6 +266,8 @@ export async function syncMetricsRows(passphrase: string): Promise<void> {
       },
       (event) => markEventPushed(db, event.id, new Date().toISOString()),
     );
+    pushedEvents += batch.length;
+    onProgress?.({ pushed: pushedEvents, total: totalEvents });
   }
 
   if (touchedAggregateCache) {

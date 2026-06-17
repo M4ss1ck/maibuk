@@ -1,13 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   clearPassphrase,
   computeChecksum,
   decrypt,
+  decryptMeta,
   encrypt,
+  encryptMeta,
   getPassphrase,
   isSyncCryptoError,
   setPassphrase,
+  uint8ArrayToBase64,
 } from "../../../../features/sync/crypto";
 
 describe("sync crypto", () => {
@@ -88,5 +91,80 @@ describe("sync crypto", () => {
 
     clearPassphrase();
     expect(getPassphrase()).toBeNull();
+  });
+});
+
+describe("meta envelope", () => {
+  beforeEach(() => setPassphrase("test-pass"));
+  afterEach(() => clearPassphrase());
+
+  it("round-trips a metadata object and embeds formatVersion", async () => {
+    const meta = await encryptMeta({ name: "Draft 2", wordCount: 1200 });
+
+    expect(typeof meta).toBe("string");
+    const decoded = await decryptMeta(meta);
+    expect(decoded).toMatchObject({ name: "Draft 2", wordCount: 1200, v: 1 });
+  });
+
+  it("returns {} for empty meta", async () => {
+    expect(await decryptMeta("")).toEqual({});
+  });
+
+  it("throws when no passphrase is set", async () => {
+    clearPassphrase();
+
+    await expect(encryptMeta({ a: 1 })).rejects.toMatchObject({ code: "MISSING_PASSPHRASE" });
+  });
+
+  it("throws INVALID_PAYLOAD for malformed base64 metadata", async () => {
+    await expect(decryptMeta("not valid base64!")).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PAYLOAD for encrypted non-JSON metadata", async () => {
+    const encrypted = await encrypt("not json", "test-pass");
+    const meta = uint8ArrayToBase64(encrypted);
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PAYLOAD for encrypted null metadata", async () => {
+    const encrypted = await encrypt("null", "test-pass");
+    const meta = uint8ArrayToBase64(encrypted);
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PAYLOAD for encrypted array metadata", async () => {
+    const encrypted = await encrypt("[]", "test-pass");
+    const meta = uint8ArrayToBase64(encrypted);
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PAYLOAD for encrypted primitive metadata", async () => {
+    const encrypted = await encrypt('"draft"', "test-pass");
+    const meta = uint8ArrayToBase64(encrypted);
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PAYLOAD",
+    });
+  });
+
+  it("throws INVALID_PASSPHRASE for metadata encrypted with a different passphrase", async () => {
+    setPassphrase("passphrase-a");
+    const meta = await encryptMeta({ name: "Draft 2" });
+    setPassphrase("passphrase-b");
+
+    await expect(decryptMeta(meta)).rejects.toMatchObject({
+      code: "INVALID_PASSPHRASE",
+    });
   });
 });

@@ -5,6 +5,7 @@ import {
   ensureMetricsSchema,
   getSnapshotMetrics,
   getCategoryMeasuringSince,
+  listDailyWritingTotals,
   getSourceHighWatermark,
   insertEvents,
   insertIfNotTombstoned,
@@ -129,6 +130,24 @@ describe("metrics events repository", () => {
     await insertEvents(testDb, [
       buildEvent({ id: "event-1", timestamp: "2026-05-23T12:00:00.000Z" }),
       buildEvent({ id: "event-2", timestamp: "2026-05-23T12:01:00.000Z" }),
+      buildEvent({
+        id: "aggregate:daily:v1:device-1:2026-05-22",
+        eventType: "aggregate.daily",
+        localDate: "2026-05-22",
+        timestamp: "2026-05-22T23:59:59.000Z",
+        payload: {
+          bucket: "daily-v1",
+          date: "2026-05-22",
+          rawEvents: 1,
+          typedWords: 20,
+          deletedWords: 0,
+          pastedWords: 0,
+          activeSec: 0,
+          deepestSessionSec: 0,
+          timeOfDay: [],
+          timeByWork: [],
+        },
+      }),
     ]);
 
     const firstPage = await listEventsForAggregate(testDb, "heatmap:2026", {
@@ -139,12 +158,53 @@ describe("metrics events repository", () => {
       limit: 1,
       offset: 1,
     });
+    const thirdPage = await listEventsForAggregate(testDb, "heatmap:2026", {
+      limit: 1,
+      offset: 2,
+    });
 
-    expect(firstPage.map((event) => event.id)).toEqual(["event-1"]);
-    expect(secondPage.map((event) => event.id)).toEqual(["event-2"]);
+    expect(firstPage.map((event) => event.id)).toEqual([
+      "aggregate:daily:v1:device-1:2026-05-22",
+    ]);
+    expect(secondPage.map((event) => event.id)).toEqual(["event-1"]);
+    expect(thirdPage.map((event) => event.id)).toEqual(["event-2"]);
     expect(await getSourceHighWatermark(testDb, "heatmap:2026")).toBe(
       "2026-05-23T12:01:00.000Z",
     );
+  });
+
+  it("includes compact daily aggregate rows in daily writing totals", async () => {
+    await insertEvents(testDb, [
+      buildEvent({
+        id: "aggregate:daily:v1:device-1:2026-01-01",
+        eventType: "aggregate.daily",
+        localDate: "2026-01-01",
+        timestamp: "2026-01-01T23:59:59.000Z",
+        payload: {
+          bucket: "daily-v1",
+          date: "2026-01-01",
+          rawEvents: 2,
+          typedWords: 90,
+          deletedWords: 5,
+          pastedWords: 10,
+          activeSec: 0,
+          deepestSessionSec: 0,
+          timeOfDay: [],
+          timeByWork: [],
+        },
+      }),
+      buildEvent({
+        id: "raw-typed",
+        eventType: "writing.typed",
+        localDate: "2026-01-01",
+        timestamp: "2026-01-01T12:00:00.000Z",
+        payload: { words: 15, chars: 75, chapterId: "chapter-1" },
+      }),
+    ]);
+
+    expect(await listDailyWritingTotals(testDb)).toEqual([
+      { date: "2026-01-01", words: 105 },
+    ]);
   });
 
   it("reports measuring-since dates by metrics category", async () => {

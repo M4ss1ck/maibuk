@@ -1,4 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { setPassphrase, encryptMeta } from "../../../../features/sync/crypto";
+import * as clientModule from "../../../../features/sync/client";
 
 const {
   mockAuthRefresh,
@@ -11,6 +13,7 @@ const {
   mockDelete,
   mockSyncCreate,
   mockGetOne,
+  mockGetURL,
 } = vi.hoisted(() => ({
   mockAuthRefresh: vi.fn(),
   mockAuthWithPassword: vi.fn(),
@@ -22,6 +25,7 @@ const {
   mockDelete: vi.fn(),
   mockSyncCreate: vi.fn(),
   mockGetOne: vi.fn(),
+  mockGetURL: vi.fn(),
 }));
 
 let mockAuthStoreToken = "refreshed-token";
@@ -64,6 +68,7 @@ vi.mock("pocketbase", () => {
           };
         }
         return {
+          getOne: mockGetOne,
           getFullList: mockGetFullList,
           getList: mockGetList,
           update: mockUpdate,
@@ -71,7 +76,7 @@ vi.mock("pocketbase", () => {
           create: mockSyncCreate,
         };
       });
-      files = { getURL: vi.fn() };
+      files = { getURL: mockGetURL };
       autoCancellation = vi.fn();
     },
   };
@@ -91,20 +96,26 @@ const {
   pushBookBlob,
   pushNoteBlob,
   pullBookBlob,
+  pullNoteBlob,
   deleteRemoteBook,
   deleteRemoteNote,
+  listRemoteNotes,
   listRemoteBooks,
   parsePocketBaseDate,
   pushMetricsEventRow,
   pushMetricsTombstoneRow,
   pullMetricsEventRowsSince,
   pullMetricsTombstoneRowsSince,
-  pushMetricsBlob,
-  pullMetricsBlob,
   listRemoteVersions,
   pushVersionBlob,
   pullVersionBlob,
   normalizeServerUrl,
+  pushObject,
+  pullObjectContent,
+  listObjects,
+  pullObjectsSince,
+  softDeleteObject,
+  isKeyUniqueConstraintError,
 } = await import("../../../../features/sync/client");
 
 describe("normalizeServerUrl()", () => {
@@ -161,6 +172,317 @@ describe("parsePocketBaseDate()", () => {
 
   it("returns 0 for undefined coerced to string", () => {
     expect(parsePocketBaseDate(undefined as unknown as string)).toBe(0);
+  });
+});
+
+describe("generic object sync core", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/r1/content.bin");
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("creates an object with routing fields and app_name when no remoteId is given", async () => {
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
+
+    const remoteId = await pushObject({
+      kind: "book",
+      key: "book-1",
+      group: "library-1",
+      checksum: "sum-1",
+      meta: "encrypted-meta",
+      content: new Blob(["ciphertext"]),
+    });
+
+    expect(remoteId).toBe("r1");
+    expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
+    expect(mockUpdate).not.toHaveBeenCalled();
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("user")).toBe("u1");
+    expect(formData.get("app_name")).toBe("maibuk");
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("book-1");
+    expect(formData.get("group")).toBe("library-1");
+    expect(formData.get("checksum")).toBe("sum-1");
+    expect(formData.get("meta")).toBe("encrypted-meta");
+    expect(formData.get("deleted")).toBe("false");
+    expect((formData.get("content") as File).name).toBe("book-1.bin");
+  });
+
+  it("throws when pushing an object without authentication", async () => {
+    mockAuthStoreRecord = null;
+
+    await expect(
+      pushObject({
+        kind: "book",
+        key: "book-1",
+        content: new Blob(["ciphertext"]),
+      })
+    ).rejects.toThrow("Not authenticated");
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("updates an existing object when remoteId is given", async () => {
+    mockUpdate.mockResolvedValue({ id: "existing-1" });
+
+    const remoteId = await pushObject({
+      kind: "note",
+      key: "note-1",
+      checksum: "sum-2",
+      remoteId: "existing-1",
+    });
+
+    expect(remoteId).toBe("existing-1");
+    expect(mockUpdate).toHaveBeenCalledWith("existing-1", expect.any(FormData));
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("group")).toBe("");
+    expect(formData.get("checksum")).toBe("sum-2");
+    expect(formData.get("meta")).toBe("");
+    expect(formData.get("deleted")).toBe("false");
+  });
+
+  it("returns null when pulled object content has no file", async () => {
+    mockGetOne.mockResolvedValue({ id: "r1", content: "" });
+
+    const content = await pullObjectContent("r1");
+
+    expect(content).toBeNull();
+    expect(mockGetOne).toHaveBeenCalledWith("r1");
+  });
+
+  it("returns bytes from pulled object content when the file fetch succeeds", async () => {
+    const bytes = new Uint8Array([12, 34, 56]);
+    mockGetOne.mockResolvedValue({ id: "r1", content: "content.bin" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const content = await pullObjectContent("r1");
+
+    expect(content).toEqual(bytes);
+    expect(mockGetOne).toHaveBeenCalledWith("r1");
+    expect(mockGetURL).toHaveBeenCalledWith({ id: "r1", content: "content.bin" }, "content.bin");
+    expect(fetch).toHaveBeenCalledWith("https://sync.example.com/api/files/objects/r1/content.bin");
+  });
+
+  it("returns null when pulling an object record fails", async () => {
+    mockGetOne.mockRejectedValue(new Error("not found"));
+
+    const content = await pullObjectContent("missing");
+
+    expect(content).toBeNull();
+    expect(mockGetURL).not.toHaveBeenCalled();
+  });
+
+  it("returns null when fetching pulled object content rejects", async () => {
+    mockGetOne.mockResolvedValue({ id: "r1", content: "content.bin" });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+
+    const content = await pullObjectContent("r1");
+
+    expect(content).toBeNull();
+  });
+
+  it("returns null when fetching pulled object content returns a non-OK response", async () => {
+    const bytes = new Uint8Array([99]);
+    mockGetOne.mockResolvedValue({ id: "r1", content: "content.bin" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const content = await pullObjectContent("r1");
+
+    expect(content).toBeNull();
+  });
+
+  it("lists objects filtered by app_name, kind, and deleted=false", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "r1",
+        kind: "book",
+        key: "book-1",
+        group: "",
+        checksum: "sum-1",
+        deleted: false,
+        meta: "meta-1",
+        updated: "2026-06-01 12:30:00.000Z",
+      },
+    ]);
+
+    const result = await listObjects("book");
+
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "book" && deleted = false',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+    expect(result).toEqual([
+      {
+        remoteId: "r1",
+        kind: "book",
+        key: "book-1",
+        group: "",
+        checksum: "sum-1",
+        deleted: false,
+        meta: "meta-1",
+        updatedAt: Math.floor(new Date("2026-06-01T12:30:00.000Z").getTime() / 1000),
+        updatedIso: "2026-06-01 12:30:00.000Z",
+      },
+    ]);
+  });
+
+  it("includes a group filter when listing objects with a group", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    await listObjects("note", "book-1");
+
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "note" && deleted = false && group = "book-1"',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+  });
+
+  it("pulls objects since an updated timestamp without filtering deleted records", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    await pullObjectsSince("version", "2026-06-01T00:00:00.000Z");
+
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "version" && updated > "2026-06-01T00:00:00.000Z"',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+  });
+
+  it("pulls all objects for a kind when sinceIso is empty and still does not filter deleted records", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    await pullObjectsSince("metric", "");
+
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "metric"',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+  });
+
+  it("soft-deletes an existing object", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "r1" }] });
+    mockUpdate.mockResolvedValue({ id: "r1" });
+
+    await softDeleteObject("book", "book-1");
+
+    expect(mockGetList).toHaveBeenCalledWith(1, 1, {
+      filter: 'app_name = "maibuk" && kind = "book" && key = "book-1"',
+    });
+    expect(mockUpdate).toHaveBeenCalledWith("r1", expect.any(FormData));
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("deleted")).toBe("true");
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates a deleted object when no existing object is found", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "deleted-1" });
+
+    await softDeleteObject("note", "note-1", "encrypted-delete-meta");
+
+    expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
+    expect(mockUpdate).not.toHaveBeenCalled();
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("user")).toBe("u1");
+    expect(formData.get("app_name")).toBe("maibuk");
+    expect(formData.get("kind")).toBe("note");
+    expect(formData.get("key")).toBe("note-1");
+    expect(formData.get("group")).toBe("");
+    expect(formData.get("checksum")).toBe("");
+    expect(formData.get("meta")).toBe("encrypted-delete-meta");
+    expect(formData.get("deleted")).toBe("true");
+  });
+
+  it("updates a raced existing object when deleted object creation hits a unique constraint", async () => {
+    let lookupCount = 0;
+    mockGetList.mockImplementation(async () => {
+      lookupCount += 1;
+      return lookupCount === 1 ? { items: [] } : { items: [{ id: "rRace" }] };
+    });
+    mockSyncCreate.mockRejectedValue({
+      status: 400,
+      data: {
+        data: {
+          key: { code: "validation_not_unique" },
+        },
+      },
+    });
+    mockUpdate.mockResolvedValue({ id: "rRace" });
+
+    let thrown: unknown;
+    try {
+      await softDeleteObject("book", "book-race");
+    } catch (error) {
+      thrown = error;
+    }
+
+    const expectedFilter = 'app_name = "maibuk" && kind = "book" && key = "book-race"';
+    expect(thrown).toBeUndefined();
+    expect(mockGetList).toHaveBeenNthCalledWith(1, 1, 1, { filter: expectedFilter });
+    expect(mockGetList).toHaveBeenNthCalledWith(2, 1, 1, { filter: expectedFilter });
+    expect(mockUpdate).toHaveBeenCalledWith("rRace", expect.any(FormData));
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("deleted")).toBe("true");
+  });
+
+  it("detects unique constraint errors on arbitrary fields", () => {
+    expect(
+      isKeyUniqueConstraintError({
+        status: 400,
+        data: {
+          data: {
+            key: { code: "validation_not_unique" },
+          },
+        },
+      })
+    ).toBe(true);
+    expect(
+      isKeyUniqueConstraintError({
+        status: 409,
+        data: {
+          data: {
+            checksum: { message: "Value must be unique." },
+          },
+        },
+      })
+    ).toBe(true);
+  });
+
+  it("does not treat non-unique validation as a key uniqueness error", () => {
+    expect(
+      isKeyUniqueConstraintError({
+        status: 400,
+        data: {
+          data: {
+            key: { code: "validation_required" },
+          },
+        },
+      })
+    ).toBe(false);
   });
 });
 
@@ -313,11 +635,11 @@ describe("listRemoteBooks()", () => {
     initClient("https://sync.example.com");
   });
 
-  it("maps PocketBase records to SyncItemMeta using parsePocketBaseDate", async () => {
+  it("maps live generic book objects to SyncItemMeta using parsePocketBaseDate", async () => {
     mockGetFullList.mockResolvedValue([
       {
         id: "rec-1",
-        book_id: "book-1",
+        key: "book-1",
         checksum: "abc123",
         updated: "2024-01-15 10:30:00.000Z",
       },
@@ -325,6 +647,11 @@ describe("listRemoteBooks()", () => {
 
     const result = await listRemoteBooks();
 
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "book" && deleted = false',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
     expect(result).toEqual([
       {
         remoteId: "rec-1",
@@ -348,22 +675,38 @@ describe("deleteRemoteBook()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
   });
 
-  it("deletes the matching remote book row", async () => {
+  it("soft-deletes the matching generic book object", async () => {
     mockGetList.mockResolvedValue({ items: [{ id: "remote-1" }] });
 
     await deleteRemoteBook("book-1");
 
-    expect(mockGetList).toHaveBeenCalledWith(1, 1, { filter: 'book_id = "book-1"' });
-    expect(mockDelete).toHaveBeenCalledWith("remote-1");
+    expect(mockGetList).toHaveBeenCalledWith(1, 1, {
+      filter: 'app_name = "maibuk" && kind = "book" && key = "book-1"',
+    });
+    expect(mockUpdate).toHaveBeenCalledWith("remote-1", expect.any(FormData));
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("user")).toBe("user-1");
+    expect(formData.get("app_name")).toBe("maibuk");
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("book-1");
+    expect(formData.get("deleted")).toBe("true");
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 
-  it("does nothing when no remote book row exists", async () => {
+  it("creates a deleted generic book object when no row exists", async () => {
     mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "deleted-1" });
 
     await deleteRemoteBook("missing-book");
 
+    expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("missing-book");
+    expect(formData.get("deleted")).toBe("true");
     expect(mockDelete).not.toHaveBeenCalled();
   });
 });
@@ -372,22 +715,35 @@ describe("deleteRemoteNote()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
   });
 
-  it("deletes the matching remote note row", async () => {
+  it("soft-deletes the matching generic note object", async () => {
     mockGetList.mockResolvedValue({ items: [{ id: "remote-note-1" }] });
+    mockUpdate.mockResolvedValue({ id: "remote-note-1" });
 
     await deleteRemoteNote("note-1");
 
-    expect(mockGetList).toHaveBeenCalledWith(1, 1, { filter: 'note_id = "note-1"' });
-    expect(mockDelete).toHaveBeenCalledWith("remote-note-1");
+    expect(mockGetList).toHaveBeenCalledWith(1, 1, {
+      filter: 'app_name = "maibuk" && kind = "note" && key = "note-1"',
+    });
+    expect(mockUpdate).toHaveBeenCalledWith("remote-note-1", expect.any(FormData));
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("deleted")).toBe("true");
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 
-  it("does nothing when no remote note row exists", async () => {
+  it("creates a deleted generic note object when no row exists", async () => {
     mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "deleted-1" });
 
     await deleteRemoteNote("missing-note");
 
+    expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("kind")).toBe("note");
+    expect(formData.get("key")).toBe("missing-note");
+    expect(formData.get("deleted")).toBe("true");
     expect(mockDelete).not.toHaveBeenCalled();
   });
 });
@@ -399,7 +755,7 @@ describe("pushBookBlob()", () => {
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
   });
 
-  it("creates a new record when no remoteId is given, without an extra lookup", async () => {
+  it("creates a new generic book object when no remoteId is given", async () => {
     mockSyncCreate.mockResolvedValue({});
 
     await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc");
@@ -407,9 +763,19 @@ describe("pushBookBlob()", () => {
     expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(mockGetList).not.toHaveBeenCalled();
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("user")).toBe("user-1");
+    expect(formData.get("app_name")).toBe("maibuk");
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("book-1");
+    expect(formData.get("checksum")).toBe("checksum-abc");
+    expect(formData.get("deleted")).toBe("false");
+    expect((formData.get("content") as File).name).toBe("book-1.bin");
+    expect(formData.get("encrypted_data")).toBeNull();
+    expect(formData.get("book_id")).toBeNull();
   });
 
-  it("updates the existing record directly when a remoteId is given", async () => {
+  it("updates the existing generic book object directly when a remoteId is given", async () => {
     mockUpdate.mockResolvedValue({});
 
     await pushBookBlob("book-1", new Blob(["data"]), "checksum-abc", "existing-1");
@@ -417,6 +783,16 @@ describe("pushBookBlob()", () => {
     expect(mockUpdate).toHaveBeenCalledWith("existing-1", expect.any(FormData));
     expect(mockSyncCreate).not.toHaveBeenCalled();
     expect(mockGetList).not.toHaveBeenCalled();
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("user")).toBe("user-1");
+    expect(formData.get("app_name")).toBe("maibuk");
+    expect(formData.get("kind")).toBe("book");
+    expect(formData.get("key")).toBe("book-1");
+    expect(formData.get("checksum")).toBe("checksum-abc");
+    expect(formData.get("deleted")).toBe("false");
+    expect((formData.get("content") as File).name).toBe("book-1.bin");
+    expect(formData.get("encrypted_data")).toBeNull();
+    expect(formData.get("book_id")).toBeNull();
   });
 
   it("throws when not authenticated", async () => {
@@ -435,17 +811,24 @@ describe("pushNoteBlob()", () => {
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
   });
 
-  it("creates a new record when no remoteId is given, without an extra lookup", async () => {
-    mockSyncCreate.mockResolvedValue({});
+  it("creates a new generic note object when no remoteId is given, without an extra lookup", async () => {
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
 
     await pushNoteBlob("note-1", new Blob(["data"]), "checksum-abc");
 
     expect(mockSyncCreate).toHaveBeenCalledWith(expect.any(FormData));
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(mockGetList).not.toHaveBeenCalled();
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("kind")).toBe("note");
+    expect(formData.get("key")).toBe("note-1");
+    expect(formData.get("checksum")).toBe("checksum-abc");
+    expect(formData.get("deleted")).toBe("false");
+    expect(formData.get("encrypted_data")).toBeNull();
+    expect(formData.get("note_id")).toBeNull();
   });
 
-  it("updates the existing record directly when a remoteId is given", async () => {
+  it("updates the existing generic note object directly when a remoteId is given", async () => {
     mockUpdate.mockResolvedValue({});
 
     await pushNoteBlob("note-1", new Blob(["data"]), "checksum-abc", "existing-note-1");
@@ -453,6 +836,10 @@ describe("pushNoteBlob()", () => {
     expect(mockUpdate).toHaveBeenCalledWith("existing-note-1", expect.any(FormData));
     expect(mockSyncCreate).not.toHaveBeenCalled();
     expect(mockGetList).not.toHaveBeenCalled();
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("kind")).toBe("note");
+    expect(formData.get("key")).toBe("note-1");
+    expect(formData.get("deleted")).toBe("false");
   });
 
   it("throws when not authenticated", async () => {
@@ -469,6 +856,8 @@ describe("pushMetricsEventRow()", () => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+    mockGetList.mockResolvedValue({ items: [] });
+    setPassphrase("test-pass");
   });
 
   const row = {
@@ -483,12 +872,24 @@ describe("pushMetricsEventRow()", () => {
     encrypted_payload: "ciphertext",
   };
 
-  it("treats PocketBase client_id unique errors as already pushed", async () => {
+  it("does not create a duplicate metric object when the event key already exists", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "remote-event-1", deleted: false }] });
+
+    await pushMetricsEventRow(row);
+
+    expect(mockGetList).toHaveBeenCalledWith(1, 1, {
+      filter: 'app_name = "maibuk" && kind = "metric" && key = "event-1"',
+    });
+    expect(mockSyncCreate).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("treats key unique-constraint errors as already pushed", async () => {
     mockSyncCreate.mockRejectedValue({
       status: 400,
       data: {
         data: {
-          client_id: {
+          key: {
             code: "validation_not_unique",
           },
         },
@@ -503,7 +904,7 @@ describe("pushMetricsEventRow()", () => {
       status: 400,
       data: {
         data: {
-          encrypted_payload: {
+          key: {
             code: "validation_required",
           },
         },
@@ -521,12 +922,154 @@ describe("pullBookBlob()", () => {
     initClient("https://sync.example.com");
   });
 
-  it("returns null when no remote record exists", async () => {
-    mockGetList.mockResolvedValue({ items: [] });
+  it("returns null when no live generic book object exists", async () => {
+    mockGetFullList.mockResolvedValue([]);
 
     const result = await pullBookBlob("book-1");
 
     expect(result).toBeNull();
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "book" && deleted = false',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+    expect(mockGetList).not.toHaveBeenCalled();
+  });
+
+  it("pulls content for the matching live generic book object", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "remote-other",
+        kind: "book",
+        key: "other-book",
+        checksum: "other-checksum",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+      {
+        id: "remote-1",
+        kind: "book",
+        key: "book-1",
+        checksum: "checksum-abc",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+    ]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "content.bin" });
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/remote-1/content.bin");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const result = await pullBookBlob("book-1");
+
+    expect(result).toEqual({ data: bytes, checksum: "checksum-abc" });
+    expect(mockGetOne).toHaveBeenCalledWith("remote-1");
+  });
+
+  it("returns null when a matching generic book object has no content", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "remote-1",
+        kind: "book",
+        key: "book-1",
+        checksum: "checksum-abc",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+    ]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "" });
+
+    const result = await pullBookBlob("book-1");
+
+    expect(result).toBeNull();
+  });
+
+  it("uses a provided remoteId and skips the object list", async () => {
+    const bytes = new Uint8Array([9, 9, 9]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "content.bin" });
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/remote-1/content.bin");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const result = await pullBookBlob("book-1", "remote-1");
+
+    expect(result).toEqual({ data: bytes, checksum: "" });
+    expect(mockGetOne).toHaveBeenCalledWith("remote-1");
+    expect(mockGetFullList).not.toHaveBeenCalled();
+  });
+});
+
+describe("pullNoteBlob()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+  });
+
+  it("returns null when no live generic note object exists", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    const result = await pullNoteBlob("note-1");
+
+    expect(result).toBeNull();
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "note" && deleted = false',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+  });
+
+  it("pulls content for the matching live generic note object", async () => {
+    const bytes = new Uint8Array([4, 5, 6]);
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "remote-1",
+        kind: "note",
+        key: "note-1",
+        checksum: "note-checksum",
+        updated: "2024-01-15 10:30:00.000Z",
+      },
+    ]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "content.bin" });
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/remote-1/content.bin");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const result = await pullNoteBlob("note-1");
+
+    expect(result).toEqual({ data: bytes, checksum: "note-checksum" });
+    expect(mockGetOne).toHaveBeenCalledWith("remote-1");
+  });
+
+  it("uses a provided remoteId and skips the object list", async () => {
+    const bytes = new Uint8Array([7, 7]);
+    mockGetOne.mockResolvedValue({ id: "remote-1", content: "content.bin" });
+    mockGetURL.mockReturnValue("https://sync.example.com/api/files/objects/remote-1/content.bin");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      })
+    );
+
+    const result = await pullNoteBlob("note-1", "remote-1");
+
+    expect(result).toEqual({ data: bytes, checksum: "" });
+    expect(mockGetOne).toHaveBeenCalledWith("remote-1");
+    expect(mockGetFullList).not.toHaveBeenCalled();
   });
 });
 
@@ -535,6 +1078,7 @@ describe("pushMetricsTombstoneRow()", () => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
     mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
+    setPassphrase("test-pass");
   });
 
   const row = {
@@ -544,21 +1088,28 @@ describe("pushMetricsTombstoneRow()", () => {
     reason: "user_purge",
   };
 
-  it("pushes a tombstone row", async () => {
-    mockSyncCreate.mockResolvedValue({});
+  it("soft-deletes an existing metric object", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "r1" }] });
+    mockUpdate.mockResolvedValue({ id: "r1" });
+
+    await pushMetricsTombstoneRow(row);
+
+    expect(mockUpdate).toHaveBeenCalledWith("r1", expect.any(FormData));
+    const fd = mockUpdate.mock.calls[0][1] as FormData;
+    expect(fd.get("deleted")).toBe("true");
+    expect(fd.get("kind")).toBe("metric");
+    expect(fd.get("key")).toBe("tomb-1");
+  });
+
+  it("creates a deleted metric object when none exists", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
 
     await pushMetricsTombstoneRow(row);
 
     expect(mockSyncCreate).toHaveBeenCalled();
-  });
-
-  it("treats client_id unique errors as already pushed", async () => {
-    mockSyncCreate.mockRejectedValue({
-      status: 400,
-      data: { data: { client_id: { code: "validation_not_unique" } } },
-    });
-
-    await expect(pushMetricsTombstoneRow(row)).resolves.toBeUndefined();
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("deleted")).toBe("true");
   });
 
   it("throws when not authenticated", async () => {
@@ -572,37 +1123,37 @@ describe("pullMetricsEventRowsSince()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    setPassphrase("test-pass");
   });
 
-  it("returns mapped event rows", async () => {
+  it("returns only non-deleted rows with decrypted meta fields", async () => {
+    const liveMeta = await encryptMeta({
+      device_id: "d-1", timestamp: "2026-05-23T12:00:00.000Z", local_date: "2026-05-23",
+      tz_offset_min: 0, event_type: "writing.typed", work_id: "book-1",
+      schema_version: 1, encrypted_payload: "cipher",
+    });
     mockGetFullList.mockResolvedValue([
-      {
-        client_id: "e-1",
-        device_id: "d-1",
-        timestamp: "2026-05-23T12:00:00.000Z",
-        local_date: "2026-05-23",
-        tz_offset_min: 0,
-        event_type: "writing.typed",
-        work_id: "book-1",
-        schema_version: 1,
-        encrypted_payload: "cipher",
-        updated: "2026-05-23T12:00:00.000Z",
-      },
+      { id: "r1", kind: "metric", key: "e-1", group: "", checksum: "", deleted: false, meta: liveMeta, updated: "2026-05-23T12:00:00.000Z" },
+      { id: "r2", kind: "metric", key: "e-2", group: "", checksum: "", deleted: true, meta: liveMeta, updated: "2026-05-23T12:01:00.000Z" },
     ]);
 
     const result = await pullMetricsEventRowsSince("2026-05-22T00:00:00.000Z");
 
     expect(result).toHaveLength(1);
     expect(result[0].client_id).toBe("e-1");
+    expect(result[0].event_type).toBe("writing.typed");
   });
 
-  it("omits filter when since is empty", async () => {
+  it("includes app_name and kind in filter even when since is empty", async () => {
     mockGetFullList.mockResolvedValue([]);
 
     await pullMetricsEventRowsSince("");
 
     const call = mockGetFullList.mock.calls[0][0];
-    expect(call.filter).toBeUndefined();
+    expect(call.filter).toContain('app_name = "maibuk"');
+    expect(call.filter).toContain('kind = "metric"');
+    expect(call.filter).not.toContain("updated >");
   });
 });
 
@@ -610,198 +1161,24 @@ describe("pullMetricsTombstoneRowsSince()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    setPassphrase("test-pass");
   });
 
-  it("returns mapped tombstone rows", async () => {
+  it("returns only deleted rows with decrypted meta fields", async () => {
+    const deadMeta = await encryptMeta({
+      device_id: "d-1", deleted_at: "2026-05-23T12:00:00.000Z", reason: "user_purge",
+    });
     mockGetFullList.mockResolvedValue([
-      {
-        client_id: "t-1",
-        device_id: "d-1",
-        deleted_at: "2026-05-23T12:00:00.000Z",
-        reason: "user_purge",
-        updated: "2026-05-23T12:00:00.000Z",
-      },
+      { id: "r1", kind: "metric", key: "t-1", group: "", checksum: "", deleted: true, meta: deadMeta, updated: "2026-05-23T12:00:00.000Z" },
+      { id: "r2", kind: "metric", key: "e-1", group: "", checksum: "", deleted: false, meta: deadMeta, updated: "2026-05-23T12:01:00.000Z" },
     ]);
 
     const result = await pullMetricsTombstoneRowsSince("2026-05-22T00:00:00.000Z");
 
     expect(result).toHaveLength(1);
     expect(result[0].client_id).toBe("t-1");
-  });
-});
-
-describe("pushMetricsBlob()", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initClient("https://sync.example.com");
-    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
-  });
-
-  it("creates a new metrics blob when none exists", async () => {
-    mockGetList.mockResolvedValue({ items: [] });
-    mockSyncCreate.mockResolvedValue({});
-
-    await pushMetricsBlob(new Blob(["data"]), "checksum-abc");
-
-    expect(mockSyncCreate).toHaveBeenCalled();
-    expect(mockUpdate).not.toHaveBeenCalled();
-  });
-
-  it("updates existing metrics blob", async () => {
-    mockGetList.mockResolvedValue({ items: [{ id: "existing-1" }] });
-    mockUpdate.mockResolvedValue({});
-
-    await pushMetricsBlob(new Blob(["data"]), "checksum-abc");
-
-    expect(mockUpdate).toHaveBeenCalledWith("existing-1", expect.any(FormData));
-    expect(mockSyncCreate).not.toHaveBeenCalled();
-  });
-
-  it("throws when not authenticated", async () => {
-    mockAuthStoreRecord = null;
-
-    await expect(pushMetricsBlob(new Blob(["data"]), "checksum")).rejects.toThrow(
-      "Not authenticated"
-    );
-  });
-});
-
-describe("pullMetricsBlob()", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initClient("https://sync.example.com");
-    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
-  });
-
-  it("returns null when not authenticated", async () => {
-    mockAuthStoreRecord = null;
-
-    const result = await pullMetricsBlob();
-
-    expect(result).toBeNull();
-  });
-
-  it("returns null when no blob exists", async () => {
-    mockGetList.mockResolvedValue({ items: [] });
-
-    const result = await pullMetricsBlob();
-
-    expect(result).toBeNull();
-  });
-});
-
-describe("listRemoteVersions()", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initClient("https://sync.example.com");
-  });
-
-  it("returns mapped version metadata", async () => {
-    mockGetFullList.mockResolvedValue([
-      {
-        id: "rec-1",
-        version_id: "ver-1",
-        book_id: "book-1",
-        checksum: "abc123",
-        version_name: "Draft 1",
-        version_trigger: "auto",
-        version_created_at: 1_000_000,
-        word_count: 500,
-      },
-    ]);
-
-    const result = await listRemoteVersions("book-1");
-
-    expect(result).toEqual([
-      {
-        remoteId: "rec-1",
-        versionId: "ver-1",
-        bookId: "book-1",
-        checksum: "abc123",
-        name: "Draft 1",
-        triggerType: "auto",
-        createdAt: 1_000_000,
-        wordCount: 500,
-      },
-    ]);
-  });
-
-  it("returns all versions when no bookId is provided", async () => {
-    mockGetFullList.mockResolvedValue([]);
-
-    await listRemoteVersions();
-
-    const call = mockGetFullList.mock.calls[0][0];
-    expect(call.filter).toBe("");
-  });
-});
-
-describe("pushVersionBlob()", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initClient("https://sync.example.com");
-    mockAuthStoreRecord = { id: "user-1", email: "user@test.com" };
-  });
-
-  it("creates a version item with all metadata", async () => {
-    mockSyncCreate.mockResolvedValue({});
-
-    await pushVersionBlob(
-      {
-        versionId: "ver-1",
-        bookId: "book-1",
-        checksum: "abc123",
-        name: "Draft 1",
-        triggerType: "manual",
-        createdAt: 1_000_000,
-        wordCount: 500,
-      },
-      new Blob(["data"])
-    );
-
-    expect(mockSyncCreate).toHaveBeenCalled();
-    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
-    expect(formData.has("encrypted_data")).toBe(true);
-    expect(formData.has("version_id")).toBe(true);
-  });
-
-  it("omits version_name when name is null", async () => {
-    mockSyncCreate.mockResolvedValue({});
-
-    await pushVersionBlob(
-      {
-        versionId: "ver-1",
-        bookId: "book-1",
-        checksum: "abc123",
-        name: null,
-        triggerType: "manual",
-        createdAt: 1_000_000,
-        wordCount: 500,
-      },
-      new Blob(["data"])
-    );
-
-    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
-    expect(formData.has("version_name")).toBe(false);
-  });
-
-  it("throws when not authenticated", async () => {
-    mockAuthStoreRecord = null;
-
-    await expect(
-      pushVersionBlob(
-        {
-          versionId: "ver-1",
-          bookId: "book-1",
-          checksum: "abc123",
-          name: null,
-          triggerType: "manual",
-          createdAt: 1_000_000,
-          wordCount: 500,
-        },
-        new Blob(["data"])
-      )
-    ).rejects.toThrow("Not authenticated");
+    expect(result[0].reason).toBe("user_purge");
   });
 });
 
@@ -818,4 +1195,148 @@ describe("pullVersionBlob()", () => {
 
     expect(result).toBeNull();
   });
+});
+
+describe("version wrappers with encrypted meta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    mockSyncCreate.mockReset(); mockGetFullList.mockReset();
+    setPassphrase("test-pass");
+  });
+
+  it("pushVersionBlob puts descriptive fields in encrypted meta, ids in key/group", async () => {
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
+    await pushVersionBlob(
+      { versionId: "v1", bookId: "b1", checksum: "c1", name: "Draft", triggerType: "manual", createdAt: 1000, wordCount: 42 },
+      new Blob(["x"]),
+    );
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("kind")).toBe("version");
+    expect(fd.get("key")).toBe("v1");
+    expect(fd.get("group")).toBe("b1");
+    expect(fd.get("checksum")).toBe("c1");
+    // meta is opaque/encrypted, not plaintext
+    expect(fd.get("meta")).not.toContain("Draft");
+    expect((fd.get("meta") as string).length).toBeGreaterThan(0);
+  });
+
+  it("listRemoteVersions filters by group=bookId and decrypts meta", async () => {
+    const meta = await encryptMeta({ name: "Draft", triggerType: "auto", createdAt: 1000, wordCount: 42 });
+    mockGetFullList.mockResolvedValue([
+      { id: "r1", kind: "version", key: "v1", group: "b1", checksum: "c1", deleted: false, meta, updated: "2026-06-16 10:00:00.000Z" },
+    ]);
+    const rows = await listRemoteVersions("b1");
+    expect(mockGetFullList.mock.calls[0][0].filter).toContain('group = "b1"');
+    expect(rows[0]).toMatchObject({
+      remoteId: "r1", versionId: "v1", bookId: "b1", checksum: "c1",
+      name: "Draft", triggerType: "auto", createdAt: 1000, wordCount: 42,
+    });
+  });
+
+  it("listRemoteVersions() without bookId does not filter by group", async () => {
+    mockGetFullList.mockResolvedValue([]);
+    await listRemoteVersions();
+    const filter = mockGetFullList.mock.calls[0][0].filter as string;
+    expect(filter).not.toContain("group");
+    expect(filter).toContain('kind = "version"');
+  });
+});
+
+describe("metric wrappers over objects", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    mockSyncCreate.mockReset(); mockGetFullList.mockReset(); mockGetList.mockReset(); mockUpdate.mockReset();
+    mockGetList.mockResolvedValue({ items: [] });
+    setPassphrase("test-pass");
+  });
+
+  it("pushMetricsEventRow creates kind=metric, descriptive fields encrypted in meta", async () => {
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
+    await pushMetricsEventRow({
+      client_id: "m1", device_id: "d1", timestamp: "2026-06-16T10:00:00Z", local_date: "2026-06-16",
+      tz_offset_min: 0, event_type: "session", work_id: "w1", schema_version: 1, encrypted_payload: "PAY",
+    });
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("kind")).toBe("metric");
+    expect(fd.get("key")).toBe("m1");
+    expect(fd.get("meta")).not.toContain("session"); // encrypted
+  });
+
+  it("pushMetricsEventRow swallows unique-constraint (already pushed)", async () => {
+    mockSyncCreate.mockRejectedValue({ status: 400, data: { data: { key: { code: "validation_not_unique" } } } });
+    await expect(pushMetricsEventRow({
+      client_id: "m1", device_id: "d1", timestamp: "t", local_date: "d", tz_offset_min: 0,
+      event_type: "session", work_id: null, schema_version: 1, encrypted_payload: "PAY",
+    })).resolves.toBeUndefined();
+  });
+
+  it("pushMetricsTombstoneRow soft-deletes the metric by client_id", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
+    await pushMetricsTombstoneRow({ client_id: "m1", device_id: "d1", deleted_at: "2026-06-16T10:00:00Z", reason: "category-disabled" });
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("kind")).toBe("metric");
+    expect(fd.get("key")).toBe("m1");
+    expect(fd.get("deleted")).toBe("true");
+  });
+
+  it("pull splits deleted vs live metric rows and decrypts meta", async () => {
+    const liveMeta = await encryptMeta({ device_id: "d1", timestamp: "T", local_date: "D", tz_offset_min: 0, event_type: "session", work_id: null, schema_version: 1, encrypted_payload: "PAY" });
+    const deadMeta = await encryptMeta({ device_id: "d1", deleted_at: "DEL", reason: "category-disabled" });
+    mockGetFullList.mockResolvedValue([
+      { id: "r1", kind: "metric", key: "m1", group: "", checksum: "", deleted: false, meta: liveMeta, updated: "2026-06-16 10:00:00.000Z" },
+      { id: "r2", kind: "metric", key: "m2", group: "", checksum: "", deleted: true, meta: deadMeta, updated: "2026-06-16 11:00:00.000Z" },
+    ]);
+    const events = await pullMetricsEventRowsSince("");
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ client_id: "m1", event_type: "session", encrypted_payload: "PAY" });
+
+    mockGetFullList.mockResolvedValue([
+      { id: "r2", kind: "metric", key: "m2", group: "", checksum: "", deleted: true, meta: deadMeta, updated: "2026-06-16 11:00:00.000Z" },
+    ]);
+    const tombs = await pullMetricsTombstoneRowsSince("");
+    expect(tombs).toHaveLength(1);
+    expect(tombs[0]).toMatchObject({ client_id: "m2", deleted_at: "DEL", reason: "category-disabled" });
+  });
+});
+
+describe("note wrappers over objects", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+    mockCreate.mockReset(); mockGetFullList.mockReset(); mockGetList.mockReset(); mockUpdate.mockReset();
+  });
+
+  it("pushNoteBlob writes kind=note", async () => {
+    mockSyncCreate.mockResolvedValue({ id: "r1" });
+    await pushNoteBlob("n1", new Blob(["x"]), "sum1");
+    const fd = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(fd.get("kind")).toBe("note");
+    expect(fd.get("key")).toBe("n1");
+  });
+
+  it("listRemoteNotes maps key->noteId", async () => {
+    mockGetFullList.mockResolvedValue([
+      { id: "r1", kind: "note", key: "n1", group: "", checksum: "c", deleted: false, meta: "", updated: "2026-06-16 10:00:00.000Z" },
+    ]);
+    const rows = await listRemoteNotes();
+    expect(rows[0]).toMatchObject({ remoteId: "r1", noteId: "n1", checksum: "c" });
+  });
+
+  it("deleteRemoteNote soft-deletes", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "r1" }] });
+    mockUpdate.mockResolvedValue({ id: "r1" });
+    await deleteRemoteNote("n1");
+    expect((mockUpdate.mock.calls[0][1] as FormData).get("deleted")).toBe("true");
+  });
+});
+
+it("legacy metrics blob functions are removed", () => {
+  expect((clientModule as Record<string, unknown>).pushMetricsBlob).toBeUndefined();
+  expect((clientModule as Record<string, unknown>).pullMetricsBlob).toBeUndefined();
 });

@@ -312,7 +312,7 @@ describe("metrics sync", () => {
       );
     });
 
-    it("pushes locally-only events and marks them pushed", async () => {
+    it("pushes locally-only events as a compact aggregate segment and marks it pushed", async () => {
       await insertEvents(testDb, [
         buildEvent({ id: "local-1" }),
         buildEvent({ id: "local-2" }),
@@ -320,10 +320,12 @@ describe("metrics sync", () => {
 
       await syncMetricsRows("pass");
 
-      expect(mockPushEvent).toHaveBeenCalledTimes(2);
+      expect(mockPushEvent).toHaveBeenCalledTimes(1);
       // Push payload uses `client_id`, not `id` — PB auto-generates its own
       // system id and dedups via the (user, client_id) unique index.
-      expect(mockPushEvent.mock.calls[0][0]).toMatchObject({ client_id: "local-1" });
+      expect(mockPushEvent.mock.calls[0][0].client_id).toMatch(
+        /^aggregate:daily:v1:device-a:2026-05-23:/,
+      );
       // Verify they're no longer in the unpushed queue.
       const stillUnpushed = await testDb.select<{ id: string }[]>(
         "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
@@ -332,7 +334,11 @@ describe("metrics sync", () => {
     });
 
     it("pushes a backlog of events with bounded concurrency, not one-at-a-time", async () => {
-      const events = Array.from({ length: 25 }, (_, i) => buildEvent({ id: `local-${i}` }));
+      const events = Array.from({ length: 25 }, (_, i) => buildEvent({
+        id: `local-${i}`,
+        timestamp: `2026-05-${String(i + 1).padStart(2, "0")}T12:00:00.000Z`,
+        localDate: `2026-05-${String(i + 1).padStart(2, "0")}`,
+      }));
       await insertEvents(testDb, events);
       // This suite doesn't clear mock call history between tests; reset so the
       // count below reflects only this test's pushes.
@@ -358,6 +364,81 @@ describe("metrics sync", () => {
         "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
       );
       expect(stillUnpushed).toEqual([]);
+    });
+
+    it("reports cumulative push progress for the event backlog", async () => {
+      await insertEvents(testDb, [
+        buildEvent({ id: "p-1" }),
+        buildEvent({ id: "p-2" }),
+        buildEvent({ id: "p-3" }),
+      ]);
+      mockPushEvent.mockReset().mockResolvedValue(undefined);
+
+      const progress: { pushed: number; total: number }[] = [];
+      await syncMetricsRows("pass", (p) => progress.push(p));
+
+      expect(progress.length).toBeGreaterThan(0);
+      expect(progress[progress.length - 1]).toEqual({ pushed: 1, total: 1 });
+    });
+
+    it("compacts unpushed raw events into stable daily segments before upload", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-17T12:00:00.000Z"));
+      try {
+        await insertEvents(testDb, [
+          buildEvent({
+            id: "old-typed-1",
+            timestamp: "2026-01-01T10:00:00.000Z",
+            localDate: "2026-01-01",
+            deviceId: "device-a",
+            eventType: "writing.typed",
+            payload: { words: 10, chars: 50, chapterId: "chapter-1" },
+          }),
+          buildEvent({
+            id: "old-deleted-1",
+            timestamp: "2026-01-01T10:05:00.000Z",
+            localDate: "2026-01-01",
+            deviceId: "device-a",
+            eventType: "writing.deleted",
+            payload: { words: 3, chars: 15, chapterId: "chapter-1" },
+          }),
+          buildEvent({
+            id: "recent-typed-1",
+            timestamp: "2026-06-16T10:00:00.000Z",
+            localDate: "2026-06-16",
+            deviceId: "device-a",
+            eventType: "writing.typed",
+            payload: { words: 4, chars: 20, chapterId: "chapter-1" },
+          }),
+        ]);
+        mockPushEvent.mockReset().mockResolvedValue(undefined);
+
+        await syncMetricsRows("pass");
+
+        const pushedIds = mockPushEvent.mock.calls.map((call) => call[0].client_id);
+        expect(pushedIds).toHaveLength(2);
+        expect(pushedIds[0]).toMatch(/^aggregate:daily:v1:device-a:2026-01-01:/);
+        expect(pushedIds[1]).toMatch(/^aggregate:daily:v1:device-a:2026-06-16:/);
+        const aggregatePayload = JSON.parse(
+          new TextDecoder().decode(base64ToUint8(mockPushEvent.mock.calls[0][0].encrypted_payload)),
+        );
+        expect(aggregatePayload).toMatchObject({
+          bucket: "daily-v1",
+          date: "2026-01-01",
+          typedWords: 10,
+          deletedWords: 3,
+          rawEvents: 2,
+        });
+
+        const rows = await testDb.select<{ id: string; event_type: string }[]>(
+          "SELECT id, event_type FROM metrics_events ORDER BY id",
+        );
+        expect(rows).toHaveLength(2);
+        expect(rows.every((row) => row.event_type === "aggregate.daily")).toBe(true);
+        expect(rows.map((row) => row.id)).toEqual(expect.arrayContaining(pushedIds));
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("pulls remote events, decrypts them, and stores them as pushed", async () => {
@@ -389,6 +470,86 @@ describe("metrics sync", () => {
       expect(localStorage.getItem(EVENT_WATERMARK_KEY)).toBe(
         "2026-05-23T13:00:00.123Z",
       );
+    });
+
+    it("pulls compact segments and suppresses matching raw source events", async () => {
+      const rawPayload = await mockEncrypt(
+        JSON.stringify({ words: 7, chars: 35, chapterId: "c-1" }),
+        "pass",
+      );
+      const aggregatePayload = await mockEncrypt(
+        JSON.stringify({
+          bucket: "daily-v1",
+          date: "2026-05-23",
+          rawEvents: 1,
+          sourceEventIds: ["raw-remote-1"],
+          typedWords: 7,
+          deletedWords: 0,
+          pastedWords: 0,
+          activeSec: 0,
+          deepestSessionSec: 0,
+          timeOfDay: [{ hour: 13, words: 7 }],
+          timeByWork: [],
+        }),
+        "pass",
+      );
+      mockPullEvents.mockResolvedValue([
+        {
+          client_id: "raw-remote-1",
+          device_id: "device-b",
+          timestamp: "2026-05-23T13:00:00.000Z",
+          local_date: "2026-05-23",
+          tz_offset_min: 0,
+          event_type: "writing.typed",
+          work_id: "book-2",
+          schema_version: 1,
+          encrypted_payload: uint8ToBase64(rawPayload as Uint8Array),
+          updated: "2026-05-23T13:00:00.100Z",
+        },
+        {
+          client_id: "aggregate:daily:v1:device-b:2026-05-23:segment",
+          device_id: "device-b",
+          timestamp: "2026-05-23T13:00:00.000Z",
+          local_date: "2026-05-23",
+          tz_offset_min: 0,
+          event_type: "aggregate.daily",
+          work_id: null,
+          schema_version: 1,
+          encrypted_payload: uint8ToBase64(aggregatePayload as Uint8Array),
+          updated: "2026-05-23T13:00:00.200Z",
+        },
+        {
+          client_id: "raw-remote-1",
+          device_id: "device-b",
+          timestamp: "2026-05-23T13:00:00.000Z",
+          local_date: "2026-05-23",
+          tz_offset_min: 0,
+          event_type: "writing.typed",
+          work_id: "book-2",
+          schema_version: 1,
+          encrypted_payload: uint8ToBase64(rawPayload as Uint8Array),
+          updated: "2026-05-23T13:00:00.300Z",
+        },
+      ]);
+
+      await syncMetricsRows("pass");
+
+      const events = await testDb.select<{ id: string; event_type: string }[]>(
+        "SELECT id, event_type FROM metrics_events ORDER BY id",
+      );
+      const tombstones = await testDb.select<{ id: string; pushed_at: string | null }[]>(
+        "SELECT id, pushed_at FROM metrics_event_tombstones WHERE id = ?",
+        ["raw-remote-1"],
+      );
+      expect(events).toEqual([
+        {
+          id: "aggregate:daily:v1:device-b:2026-05-23:segment",
+          event_type: "aggregate.daily",
+        },
+      ]);
+      expect(tombstones).toEqual([
+        { id: "raw-remote-1", pushed_at: "2026-05-23T13:00:00.200Z" },
+      ]);
     });
 
     it("applies a remote tombstone before pulled events so the event is dropped", async () => {
@@ -524,4 +685,11 @@ function uint8ToBase64(data: Uint8Array): string {
   let binary = "";
   for (let i = 0; i < data.byteLength; i++) binary += String.fromCharCode(data[i]);
   return btoa(binary);
+}
+
+function base64ToUint8(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const data = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) data[i] = binary.charCodeAt(i);
+  return data;
 }
