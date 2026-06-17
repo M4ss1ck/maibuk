@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   clearPassphrase,
   computeChecksum,
   decrypt,
+  decryptMeta,
   encrypt,
+  encryptMeta,
   getPassphrase,
   isSyncCryptoError,
   setPassphrase,
@@ -88,5 +90,27 @@ describe("sync crypto", () => {
 
     clearPassphrase();
     expect(getPassphrase()).toBeNull();
+  });
+});
+
+describe("meta envelope", () => {
+  beforeEach(() => setPassphrase("test-pass"));
+
+  it("round-trips a metadata object and embeds formatVersion", async () => {
+    const meta = await encryptMeta({ name: "Draft 2", wordCount: 1200 });
+
+    expect(typeof meta).toBe("string");
+    const decoded = await decryptMeta(meta);
+    expect(decoded).toMatchObject({ name: "Draft 2", wordCount: 1200, v: 1 });
+  });
+
+  it("returns {} for empty meta", async () => {
+    expect(await decryptMeta("")).toEqual({});
+  });
+
+  it("throws when no passphrase is set", async () => {
+    clearPassphrase();
+
+    await expect(encryptMeta({ a: 1 })).rejects.toMatchObject({ code: "MISSING_PASSPHRASE" });
   });
 });
