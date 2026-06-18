@@ -25,6 +25,18 @@ export const DEFAULT_BACKUP_LIST_PAGE = 1;
 export const DEFAULT_BACKUP_LIST_PAGE_SIZE: BackupListPageSize = 10;
 export const BACKUP_LIST_PAGE_SIZE_OPTIONS: BackupListPageSize[] = [5, 10, 25, 50];
 
+export const EDITOR_ZOOM_MIN = 30;
+export const EDITOR_ZOOM_MAX = 300;
+export const EDITOR_ZOOM_STEP = 10;
+export const DEFAULT_EDITOR_ZOOM = 100;
+
+/** Snap a zoom percent to the 10% grid and clamp to [30, 300]. */
+export function clampEditorZoom(percent: number): number {
+  if (!Number.isFinite(percent)) return DEFAULT_EDITOR_ZOOM;
+  const snapped = Math.round(percent / EDITOR_ZOOM_STEP) * EDITOR_ZOOM_STEP;
+  return Math.max(EDITOR_ZOOM_MIN, Math.min(EDITOR_ZOOM_MAX, snapped));
+}
+
 export function getDefaultBackupRetention(isWeb: boolean): number {
   return isWeb ? DEFAULT_WEB_BACKUP_RETENTION : DEFAULT_TAURI_BACKUP_RETENTION;
 }
@@ -119,6 +131,9 @@ export interface Settings {
   htmlEditorLightTheme: HtmlEditorTheme;
   htmlEditorDarkTheme: HtmlEditorTheme;
   htmlPanelHeight: number;
+
+  // Editor zoom (view-only, decoupled from content font size)
+  editorZoom: number;
 
   // Paste cleanup settings
   pasteCleanup: PasteCleanupSettings;
