@@ -319,6 +319,10 @@
     "uppercase": "Mayúsculas",
     "lowercase": "Minúsculas",
     "textCase": "Mayús/Minús",
+    "zoom": "Zoom",
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar",
+    "resetZoom": "Restablecer",
     "alternatingCase": "aLtErNaDo",
     "sentenceCase": "Oración",
     "titleCase": "Título",
@@ -764,6 +768,9 @@
     "toggleFocusMode": "Alternar modo enfoque",
     "toggleSidebar": "Alternar barra lateral",
     "backFromEditor": "Volver desde el editor",
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar",
+    "zoomReset": "Restablecer zoom",
     "deleteSelection": "Eliminar objeto seleccionado"
   },
   "versions": {

@@ -12,6 +12,9 @@ import {
   DEFAULT_BACKUP_LIST_PAGE_SIZE,
   BACKUP_LIST_PAGE_SIZE_OPTIONS,
   getDefaultBackupRetention,
+  DEFAULT_EDITOR_ZOOM,
+  EDITOR_ZOOM_STEP,
+  clampEditorZoom,
   PASTE_CLEANUP_PRESETS,
   PASTE_CLEANUP_PRESET_VALUES,
   type Settings,
@@ -73,6 +76,10 @@ interface SettingsStore extends Settings {
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
   setHtmlPanelHeight: (height: number) => void;
+  setEditorZoom: (percent: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
   setPasteCleanupPreset: (preset: PasteCleanupPreset) => void;
   setPasteCleanupOption: <K extends PasteStructuralOptionKey>(
     key: K,
@@ -134,6 +141,7 @@ const defaultSettings: Settings = {
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
   htmlPanelHeight: 200,
+  editorZoom: DEFAULT_EDITOR_ZOOM,
   pasteCleanup: {
     preset: "keepAll",
     options: { ...PASTE_CLEANUP_PRESETS.keepAll },
@@ -317,6 +325,17 @@ export const useSettingsStore = create<SettingsStore>()(
         set({
           htmlPanelHeight: Math.max(100, Math.min(window.innerHeight * 0.6, htmlPanelHeight)),
         }),
+      setEditorZoom: (editorZoom) =>
+        set({ editorZoom: clampEditorZoom(editorZoom) }),
+      zoomIn: () =>
+        set((state) => ({
+          editorZoom: clampEditorZoom(state.editorZoom + EDITOR_ZOOM_STEP),
+        })),
+      zoomOut: () =>
+        set((state) => ({
+          editorZoom: clampEditorZoom(state.editorZoom - EDITOR_ZOOM_STEP),
+        })),
+      resetZoom: () => set({ editorZoom: DEFAULT_EDITOR_ZOOM }),
       setPasteCleanupPreset: (preset) =>
         set((state) => ({
           pasteCleanup: {

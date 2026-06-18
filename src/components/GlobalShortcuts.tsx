@@ -75,7 +75,10 @@ export function GlobalShortcuts() {
         { id: "editor.versionHistory", label: t("shortcuts.versionHistory"), keys: ["g v"] },
         { id: "editor.focusMode", label: t("shortcuts.toggleFocusMode"), keys: ["F11"] },
         { id: "editor.toggleSidebar", label: t("shortcuts.toggleSidebar"), keys: ["Ctrl+\\"] },
-        { id: "editor.back", label: t("shortcuts.backFromEditor"), keys: ["Backspace"] }
+        { id: "editor.back", label: t("shortcuts.backFromEditor"), keys: ["Backspace"] },
+        { id: "editor.zoomIn", label: t("shortcuts.zoomIn"), keys: ["Ctrl++"] },
+        { id: "editor.zoomOut", label: t("shortcuts.zoomOut"), keys: ["Ctrl+-"] },
+        { id: "editor.zoomReset", label: t("shortcuts.zoomReset"), keys: ["Ctrl+0"] }
       );
     }
 

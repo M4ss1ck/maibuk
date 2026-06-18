@@ -319,6 +319,10 @@
     "uppercase": "Uppercase",
     "lowercase": "Lowercase",
     "textCase": "Text Case",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "resetZoom": "Reset",
     "alternatingCase": "aLtErNaTiNg",
     "sentenceCase": "Sentence case",
     "titleCase": "Title Case",
@@ -764,6 +768,9 @@
     "toggleFocusMode": "Toggle focus mode",
     "toggleSidebar": "Toggle sidebar",
     "backFromEditor": "Back from editor",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset zoom",
     "deleteSelection": "Delete selected object"
   },
   "versions": {

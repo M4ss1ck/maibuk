@@ -20,6 +20,7 @@ import { TextCaseMenu } from "./TextCaseMenu";
 import { FontSizeSelect } from "./FontSizeSelect";
 import { LineHeightSelect } from "./LineHeightSelect";
 import { FontFamilySelect } from "./FontFamilySelect";
+import { ZoomControl } from "./ZoomControl";
 import { DictionaryDialog } from "./DictionaryDialog";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
@@ -417,7 +418,8 @@ export function EditorToolbar({
         </ToolbarButton>
 
         {/* Expand/collapse toggle */}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-0.5">
+          <ZoomControl />
           <button
             type="button"
             onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}

@@ -567,6 +567,50 @@ describe("useSettingsStore", () => {
   });
 });
 
+import { clampEditorZoom } from "../../../../features/settings/types";
+
+describe("editorZoom", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useSettingsStore.setState({ editorZoom: 100 } as any);
+  });
+
+  it("clampEditorZoom snaps to the 10% grid and clamps to [30, 300]", () => {
+    expect(clampEditorZoom(104)).toBe(100);
+    expect(clampEditorZoom(105)).toBe(110);
+    expect(clampEditorZoom(7)).toBe(30);
+    expect(clampEditorZoom(9999)).toBe(300);
+    expect(clampEditorZoom(Number.NaN)).toBe(100);
+  });
+
+  it("setEditorZoom clamps and snaps", () => {
+    useSettingsStore.getState().setEditorZoom(137);
+    expect(useSettingsStore.getState().editorZoom).toBe(140);
+    useSettingsStore.getState().setEditorZoom(1000);
+    expect(useSettingsStore.getState().editorZoom).toBe(300);
+  });
+
+  it("zoomIn / zoomOut step by 10 and respect bounds", () => {
+    useSettingsStore.getState().setEditorZoom(290);
+    useSettingsStore.getState().zoomIn();
+    expect(useSettingsStore.getState().editorZoom).toBe(300);
+    useSettingsStore.getState().zoomIn();
+    expect(useSettingsStore.getState().editorZoom).toBe(300);
+
+    useSettingsStore.getState().setEditorZoom(40);
+    useSettingsStore.getState().zoomOut();
+    expect(useSettingsStore.getState().editorZoom).toBe(30);
+    useSettingsStore.getState().zoomOut();
+    expect(useSettingsStore.getState().editorZoom).toBe(30);
+  });
+
+  it("resetZoom returns to 100", () => {
+    useSettingsStore.getState().setEditorZoom(200);
+    useSettingsStore.getState().resetZoom();
+    expect(useSettingsStore.getState().editorZoom).toBe(100);
+  });
+});
+
 describe("normalizePasteCleanup()", () => {
   it("repairs a v1 settings blob that has no strippedProperties", () => {
     const v1Blob = {
