@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { CollapsibleHeading, collapsibleHeadingPluginKey } from "../../../../components/editor/extensions/CollapsibleHeading";
+import {
+  CollapsibleHeading,
+  collapsibleHeadingPluginKey,
+} from "../../../../components/editor/extensions/CollapsibleHeading";
 
 function createEditor(content: string, collapsedHeadings: string[] = []) {
   const editor = new Editor({
@@ -28,6 +31,18 @@ function getHeadingIds(editor: Editor): string[] {
     }
   });
   return ids;
+}
+
+function posOfText(editor: Editor, needle: string): number {
+  let found = -1;
+  editor.state.doc.descendants((node, pos) => {
+    if (found !== -1) return false;
+    if (node.isText && node.text) {
+      const idx = node.text.indexOf(needle);
+      if (idx !== -1) found = pos + idx;
+    }
+  });
+  return found;
 }
 
 describe("CollapsibleHeading", () => {
@@ -59,11 +74,11 @@ describe("CollapsibleHeading", () => {
 
   it("hides lower-level headings inside a collapsed parent section", () => {
     const editor = createEditor(
-      '<h2 data-heading-id="parent">Parent</h2><p>Intro</p><h3 data-heading-id="child">Child</h3><p>Child text</p>',
+      '<h2 data-heading-id="parent">Parent</h2><p>Intro</p><h3 data-heading-id="child">Child</h3><p>Child text</p>'
     );
 
     editor.view.dispatch(
-      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { toggle: "parent" }),
+      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { toggle: "parent" })
     );
 
     const childHeading = editor.view.dom.querySelector("h3");
@@ -134,7 +149,7 @@ describe("CollapsibleHeading", () => {
 
     const tr = editor.state.tr.insert(
       editor.state.doc.content.size,
-      editor.state.schema.nodes.paragraph.create(null, editor.state.schema.text("Added text")),
+      editor.state.schema.nodes.paragraph.create(null, editor.state.schema.text("Added text"))
     );
     editor.view.dispatch(tr);
 
@@ -173,10 +188,7 @@ describe("CollapsibleHeading", () => {
     document.body.appendChild(element);
     const editor = new Editor({
       element,
-      extensions: [
-        StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-        CollapsibleHeading,
-      ],
+      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } }), CollapsibleHeading],
       content: {
         type: "doc",
         content: [
@@ -197,9 +209,7 @@ describe("CollapsibleHeading", () => {
   it("toggles collapse when the decoration toggle button is pressed", () => {
     const editor = createEditor('<h2 data-heading-id="h1">Title</h2><p>Body</p>');
 
-    const button = editor.view.dom.querySelector(
-      ".heading-collapse-toggle",
-    ) as HTMLElement | null;
+    const button = editor.view.dom.querySelector(".heading-collapse-toggle") as HTMLElement | null;
     expect(button).not.toBeNull();
 
     button?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
@@ -211,9 +221,7 @@ describe("CollapsibleHeading", () => {
   it("updates the decoration toggle state immediately after collapsing", () => {
     const editor = createEditor('<h2 data-heading-id="h1">Title</h2><p>Body</p>');
 
-    const button = editor.view.dom.querySelector(
-      ".heading-collapse-toggle",
-    ) as HTMLElement | null;
+    const button = editor.view.dom.querySelector(".heading-collapse-toggle") as HTMLElement | null;
     expect(button).not.toBeNull();
     expect(button?.getAttribute("data-collapsed")).toBe("false");
     expect(button?.getAttribute("aria-label")).toBe("Collapse heading");
@@ -221,7 +229,7 @@ describe("CollapsibleHeading", () => {
     button?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
 
     const updatedButton = editor.view.dom.querySelector(
-      ".heading-collapse-toggle",
+      ".heading-collapse-toggle"
     ) as HTMLElement | null;
     expect(updatedButton).not.toBeNull();
     expect(updatedButton?.getAttribute("data-collapsed")).toBe("true");
@@ -242,12 +250,10 @@ describe("CollapsibleHeading", () => {
 
   it("stops hiding once a sibling heading at the same level is reached", () => {
     const editor = createEditor(
-      '<h2 data-heading-id="a">A</h2><p>under a</p><h2 data-heading-id="b">B</h2><p>under b</p>',
+      '<h2 data-heading-id="a">A</h2><p>under a</p><h2 data-heading-id="b">B</h2><p>under b</p>'
     );
 
-    editor.view.dispatch(
-      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { toggle: "a" }),
-    );
+    editor.view.dispatch(editor.state.tr.setMeta(collapsibleHeadingPluginKey, { toggle: "a" }));
 
     const headings = editor.view.dom.querySelectorAll("h2");
     // Section under A is hidden, but sibling B at the same level is not.
@@ -263,7 +269,7 @@ describe("CollapsibleHeading", () => {
     const ids = getHeadingIds(editor);
 
     editor.view.dispatch(
-      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { replace: [ids[0]] }),
+      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { replace: [ids[0]] })
     );
 
     const collapsed = getCollapsedSet(editor);
@@ -271,6 +277,52 @@ describe("CollapsibleHeading", () => {
     expect(collapsed.has(ids[0])).toBe(true);
     expect(collapsed.has("pre-existing-id")).toBe(false);
 
+    editor.destroy();
+  });
+
+  it("revealPosition expands the collapsed heading containing the position", () => {
+    const editor = createEditor('<h2 data-heading-id="h2a">Title</h2><p>body text</p>', ["h2a"]);
+    expect(getCollapsedSet(editor).has("h2a")).toBe(true);
+
+    const result = editor.commands.revealPosition(posOfText(editor, "body"));
+
+    expect(result).toBe(true);
+    expect(getCollapsedSet(editor).has("h2a")).toBe(false);
+    editor.destroy();
+  });
+
+  it("revealPosition expands all collapsed ancestor headings", () => {
+    const editor = createEditor(
+      '<h1 data-heading-id="h1a">A</h1><h2 data-heading-id="h2a">B</h2><p>deep body</p>',
+      ["h1a", "h2a"]
+    );
+
+    editor.commands.revealPosition(posOfText(editor, "deep"));
+
+    const collapsed = getCollapsedSet(editor);
+    expect(collapsed.has("h1a")).toBe(false);
+    expect(collapsed.has("h2a")).toBe(false);
+    editor.destroy();
+  });
+
+  it("revealPosition leaves unrelated collapsed siblings untouched", () => {
+    const editor = createEditor(
+      '<h2 data-heading-id="s1">One</h2><p>alpha</p><h2 data-heading-id="s2">Two</h2><p>beta</p>',
+      ["s1", "s2"]
+    );
+
+    editor.commands.revealPosition(posOfText(editor, "beta"));
+
+    const collapsed = getCollapsedSet(editor);
+    expect(collapsed.has("s2")).toBe(false);
+    expect(collapsed.has("s1")).toBe(true);
+    editor.destroy();
+  });
+
+  it("revealPosition is a no-op when nothing is collapsed at the position", () => {
+    const editor = createEditor('<h2 data-heading-id="h2a">Title</h2><p>body</p>', []);
+
+    expect(editor.commands.revealPosition(posOfText(editor, "body"))).toBe(false);
     editor.destroy();
   });
 });
