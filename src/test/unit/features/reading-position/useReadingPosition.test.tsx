@@ -59,7 +59,10 @@ function makeScrollEl(): HTMLElement {
       height: 600,
     }),
     addEventListener: (type: string, fn: EventListener) => {
-      (listeners[type] ??= []).push(fn);
+      if (!listeners[type]) {
+        listeners[type] = [];
+      }
+      listeners[type].push(fn);
     },
     removeEventListener: (type: string, fn: EventListener) => {
       listeners[type] = (listeners[type] ?? []).filter((listener) => listener !== fn);
