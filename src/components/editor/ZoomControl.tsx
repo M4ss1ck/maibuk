@@ -24,7 +24,9 @@ export function ZoomControl() {
   const handleShowMenu = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      setMenuPosition({ top: rect.bottom + 4, left: rect.left });
+      const popoverWidth = 320;
+      const left = Math.min(rect.left, window.innerWidth - popoverWidth - 8);
+      setMenuPosition({ top: rect.bottom + 4, left: Math.max(8, left) });
     }
     setShowMenu(true);
   };
