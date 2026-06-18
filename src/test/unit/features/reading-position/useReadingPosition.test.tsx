@@ -14,6 +14,7 @@ interface FakeEditor {
     tr: { setSelection: ReturnType<typeof vi.fn> };
   };
   view: {
+    dom: { getBoundingClientRect: ReturnType<typeof vi.fn> };
     posAtCoords: ReturnType<typeof vi.fn>;
     coordsAtPos: ReturnType<typeof vi.fn>;
     dispatch: ReturnType<typeof vi.fn>;
@@ -31,6 +32,16 @@ function makeEditor(docSize = 100, caretFrom = 0): FakeEditor {
       tr,
     },
     view: {
+      dom: {
+        getBoundingClientRect: vi.fn(() => ({
+          top: 100,
+          left: 200,
+          bottom: 700,
+          right: 920,
+          width: 720,
+          height: 600,
+        })),
+      },
       posAtCoords: vi.fn(() => ({ pos: 42 })),
       coordsAtPos: vi.fn(() => ({
         top: 500,
@@ -168,6 +179,28 @@ describe("useReadingPosition", () => {
     expect(useReadingPositionStore.getState().getPosition("chapter:a")).toMatchObject({
       caret: 17,
       top: 42,
+    });
+  });
+
+  it("probes inside the editor content when the scroll container is wider", () => {
+    const editor = makeEditor(100, 17);
+    const scrollEl = makeScrollEl() as HTMLElement & {
+      __emit: (type: string) => void;
+    };
+
+    renderHook(() =>
+      useReadingPosition({
+        editor: editor as never,
+        scrollEl,
+        storageKey: "chapter:a",
+      }),
+    );
+
+    scrollEl.__emit("scroll");
+
+    expect(editor.view.posAtCoords).toHaveBeenCalledWith({
+      left: 208,
+      top: 101,
     });
   });
 

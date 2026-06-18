@@ -63,10 +63,11 @@ export function useReadingPosition({
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const stash = () => {
-      const rect = scrollEl.getBoundingClientRect();
+      const scrollRect = scrollEl.getBoundingClientRect();
+      const editorRect = editor.view.dom.getBoundingClientRect();
       const probe = editor.view.posAtCoords({
-        left: rect.left + PROBE_INSET_X,
-        top: rect.top + 1,
+        left: editorRect.left + PROBE_INSET_X,
+        top: scrollRect.top + 1,
       });
       pending = {
         caret: editor.state.selection.from,
