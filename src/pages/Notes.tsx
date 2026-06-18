@@ -29,6 +29,10 @@ export function Notes() {
   const isResizing = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const hasPendingHeadingScroll = Boolean(
+    (location.state as { scrollToHeadingId?: string } | null)
+      ?.scrollToHeadingId,
+  );
   const [returnTarget, setReturnTarget] = useState<{
     to: string;
     label: string;
@@ -193,6 +197,7 @@ export function Notes() {
               returnTarget ? () => navigate(returnTarget.to) : undefined
             }
             returnLabel={returnTarget?.label}
+            suppressRestore={hasPendingHeadingScroll}
           />
         ) : (
           <EmptyNotes onCreateNote={handleCreateNote} />

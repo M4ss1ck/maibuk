@@ -1,13 +1,23 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Notes } from "../../../pages/Notes";
 
-const { mockNavigate, mockLocation, noteState } = vi.hoisted(() => ({
+const { mockNavigate, mockLocation, noteState, noteEditorProps } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockLocation: {
-    state: { openNoteId: "n1", returnTo: "/book/book-1", returnLabel: "My Book" },
+    state: {
+      openNoteId: "n1",
+      returnTo: "/book/book-1",
+      returnLabel: "My Book",
+    } as {
+      openNoteId?: string;
+      returnTo?: string;
+      returnLabel?: string;
+      scrollToHeadingId?: string;
+    } | null,
     pathname: "/notes",
   },
+  noteEditorProps: [] as Array<Record<string, unknown>>,
   noteState: {
     notes: [{ id: "n1", title: "Chapter idea", bookId: "book-1" }],
     currentNote: {
@@ -77,23 +87,30 @@ vi.mock("../../../features/markdown", () => ({
 vi.mock("../../../components/notes", () => ({
   NotesList: () => <div data-testid="notes-list" />,
   EmptyNotes: () => <div data-testid="empty-notes" />,
-  NoteEditor: ({
-    returnLabel,
-    onReturnToBook,
-  }: {
-    returnLabel?: string;
-    onReturnToBook?: () => void;
-  }) => (
-    <div>
-      <span data-testid="return-label">{returnLabel}</span>
-      <button type="button" onClick={onReturnToBook}>
-        back-to-book
-      </button>
-    </div>
-  ),
+  NoteEditor: (props: Record<string, unknown>) => {
+    noteEditorProps.push(props);
+    return (
+      <div>
+        <span data-testid="return-label">{props.returnLabel as string}</span>
+        <button type="button" onClick={props.onReturnToBook as () => void}>
+          back-to-book
+        </button>
+      </div>
+    );
+  },
 }));
 
 describe("Notes page return-to-book navigation", () => {
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    noteEditorProps.length = 0;
+    mockLocation.state = {
+      openNoteId: "n1",
+      returnTo: "/book/book-1",
+      returnLabel: "My Book",
+    };
+  });
+
   it("passes the return label and navigates to the book on return", async () => {
     render(<Notes />);
 
@@ -103,5 +120,14 @@ describe("Notes page return-to-book navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "back-to-book" }));
     expect(mockNavigate).toHaveBeenCalledWith("/book/book-1");
+  });
+
+  it("passes suppressRestore while a note heading deep-link is pending", () => {
+    mockLocation.state = { openNoteId: "n1", scrollToHeadingId: "heading-1" };
+
+    render(<Notes />);
+
+    const last = noteEditorProps[noteEditorProps.length - 1];
+    expect(last?.suppressRestore).toBe(true);
   });
 });

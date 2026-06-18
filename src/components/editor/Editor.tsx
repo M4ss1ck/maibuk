@@ -46,6 +46,7 @@ import { HeadingId } from "./extensions/HeadingId";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 import { useChapterStore } from "../../features/chapters/store";
+import { useReadingPosition } from "../../features/reading-position/useReadingPosition";
 import { assignHeadingIds } from "../../features/links/heading-ids";
 import type { InternalTarget, InternalTargetChildrenLoader } from "./LinkDialog";
 import { setContentSilently } from "../../features/metrics/programmatic";
@@ -71,6 +72,10 @@ interface EditorProps {
   showInlineFootnotes?: boolean;
   bookId?: string | null;
   chapterId?: string | null;
+  /** Namespaced reading-position key, e.g. `chapter:<id>` / `note:<id>`. */
+  restoreKey?: string | null;
+  /** Skip position restore when an explicit deep-link scroll is in play. */
+  suppressRestore?: boolean;
   internalTargets?: InternalTarget[];
   loadInternalTargetChildren?: InternalTargetChildrenLoader;
   resolveBookIdForChapter?: (
@@ -97,6 +102,8 @@ export function Editor({
   showInlineFootnotes = true,
   bookId = null,
   chapterId = null,
+  restoreKey = null,
+  suppressRestore = false,
   internalTargets: providedInternalTargets = [],
   loadInternalTargetChildren: providedLoadInternalTargetChildren,
   resolveBookIdForChapter,
@@ -116,6 +123,8 @@ export function Editor({
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<
     string | null
   >(null);
+  const [scrollContainerEl, setScrollContainerEl] =
+    useState<HTMLDivElement | null>(null);
   const handleMarkdownPaste = useCallback((text: string) => {
     setPendingMarkdownPaste(text);
   }, []);
@@ -254,6 +263,13 @@ export function Editor({
     appliedContentRef.current = content;
   }, [editor, content]);
 
+  useReadingPosition({
+    editor,
+    scrollEl: scrollContainerEl,
+    storageKey: restoreKey,
+    suppressRestore,
+  });
+
   useEffect(() => {
     if (!editor?.commands?.setSpellCheckEnabled) return;
     editor.commands.setSpellCheckEnabled(spellCheckEnabled);
@@ -354,6 +370,7 @@ export function Editor({
       {headerContent}
 
       <div
+        ref={setScrollContainerEl}
         className="flex-1 overflow-auto min-h-0"
         onClick={handleFocus}
         onKeyDown={handleFocus}

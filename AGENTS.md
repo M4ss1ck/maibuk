@@ -103,6 +103,7 @@ src/
 │   ├── export/          # generators, sanitizers, styles, types
 │   ├── metrics/         # writing metrics types, classifier, repo, settings, session tracking
 │   ├── notes/           # store.ts, types.ts
+│   ├── reading-position/ # local-only editor caret/viewport persistence
 │   ├── settings/        # store.ts, types.ts, AppSettingsProvider.tsx
 │   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts
 │   ├── theme/           # store.ts
@@ -239,6 +240,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useAutoCheckpoint`                                                | `src/features/versions/useAutoCheckpoint.ts` |
 | `sanitizeChapterHtml()`                                            | `src/features/versions/sanitize.ts`        |
 | `diffSnapshots()`                                                  | `src/features/versions/compare.ts`         |
+| `useReadingPositionStore` / `useReadingPosition()`                 | `src/features/reading-position/`           |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
 | `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |
 | `ResponsiveToggleGroup` (measured segmented toggle; labels collapse to icons only when full labels do not fit) | `src/components/ui/ResponsiveToggleGroup.tsx` |

@@ -71,6 +71,10 @@ export function BookEditor() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const hasPendingHeadingScroll = Boolean(
+    (location.state as { scrollToHeadingId?: string } | null)
+      ?.scrollToHeadingId,
+  );
 
   // Stores
   const {
@@ -1048,6 +1052,8 @@ export function BookEditor() {
             showInlineFootnotes={showInlineFootnotes}
             bookId={bookId ?? null}
             chapterId={currentChapter.id}
+            restoreKey={`chapter:${currentChapter.id}`}
+            suppressRestore={hasPendingHeadingScroll}
             placeholder={`Start writing "${currentChapter.title}"...`}
             onExportMarkdown={handleExportMarkdown}
             onExportPdf={handleExportPdf}

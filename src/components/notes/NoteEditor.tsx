@@ -216,6 +216,7 @@ interface NoteEditorProps {
   onBack: () => void;
   onReturnToBook?: () => void;
   returnLabel?: string;
+  suppressRestore?: boolean;
 }
 
 export function NoteEditor({
@@ -224,6 +225,7 @@ export function NoteEditor({
   onBack,
   onReturnToBook,
   returnLabel,
+  suppressRestore = false,
 }: NoteEditorProps) {
   const { t, i18n } = useTranslation();
   const [title, setTitle] = useState(note.title);
@@ -594,6 +596,8 @@ export function NoteEditor({
         onExportMarkdown={handleExportMarkdown}
         onExportPdf={handleExportPdf}
         onExportImage={handleExportImage}
+        restoreKey={`note:${note.id}`}
+        suppressRestore={suppressRestore}
         placeholder={t("notes.bodyPlaceholder")}
         extraExtensions={allNotesExtensions}
         internalTargets={internalTargets}
