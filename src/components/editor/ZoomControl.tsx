@@ -20,6 +20,7 @@ export function ZoomControl() {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleShowMenu = () => {
     if (buttonRef.current) {
@@ -34,13 +35,11 @@ export function ZoomControl() {
   useEffect(() => {
     if (!showMenu) return;
     const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node | null;
       if (
-        buttonRef.current &&
-        !buttonRef.current.contains(e.target as Node) &&
-        !(
-          e.target instanceof HTMLElement &&
-          e.target.closest(".zoom-control-portal")
-        )
+        target &&
+        !buttonRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
       ) {
         setShowMenu(false);
       }
@@ -66,6 +65,7 @@ export function ZoomControl() {
       {showMenu &&
         createPortal(
           <div
+            ref={menuRef}
             className="zoom-control-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 flex items-center gap-2"
             style={{ top: menuPosition.top, left: menuPosition.left }}
           >
