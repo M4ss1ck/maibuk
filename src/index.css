@@ -169,6 +169,11 @@ option {
   color: var(--color-foreground);
 }
 
+/* View-only page zoom for the editor content surface */
+.editor-zoom-surface {
+  zoom: var(--editor-zoom, 1);
+}
+
 /* Editor typography */
 .editor-content {
   font-family: var(--editor-font-family, var(--font-serif));

@@ -44,6 +44,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     language,
     hideKeyboardHints,
     alwaysOnTop,
+    editorZoom,
   } = useSettingsStore();
 
   useEffect(() => {
@@ -51,6 +52,13 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     root.style.setProperty("--app-font-size", `${appFontSize}px`);
     root.style.setProperty("--app-font-family", FONT_FAMILY_MAP[appFont]);
   }, [appFontSize, appFont]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--editor-zoom",
+      `${editorZoom / 100}`
+    );
+  }, [editorZoom]);
 
   useEffect(() => {
     const root = document.documentElement;

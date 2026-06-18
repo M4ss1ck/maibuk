@@ -47,6 +47,7 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 import { useChapterStore } from "../../features/chapters/store";
 import { useReadingPosition } from "../../features/reading-position/useReadingPosition";
+import { useEditorZoomControls } from "./useEditorZoomControls";
 import { assignHeadingIds } from "../../features/links/heading-ids";
 import type { InternalTarget, InternalTargetChildrenLoader } from "./LinkDialog";
 import { setContentSilently } from "../../features/metrics/programmatic";
@@ -125,6 +126,7 @@ export function Editor({
   >(null);
   const [scrollContainerEl, setScrollContainerEl] =
     useState<HTMLDivElement | null>(null);
+  useEditorZoomControls(scrollContainerEl);
   const handleMarkdownPaste = useCallback((text: string) => {
     setPendingMarkdownPaste(text);
   }, []);
@@ -376,7 +378,7 @@ export function Editor({
         onKeyDown={handleFocus}
         onBlur={onBlur}
       >
-        <div className="max-w-editor-max mx-auto p-8">
+        <div className="max-w-editor-max mx-auto p-8 editor-zoom-surface">
           <EditorContent editor={editor} />
           {showInlineFootnotes && (
             <FootnoteList editor={editor} startIndex={footnoteStartIndex} />
