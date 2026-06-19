@@ -95,91 +95,87 @@ export function NoteListItem({
         if (!isEditing) onSelect(note);
       }}
     >
-      <div className="flex min-w-0 items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1">
-            {isEditing ? (
-              <input
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
-                onBlur={commitTitle}
-                onKeyDown={handleEditKeyDown}
-                onClick={(event) => event.stopPropagation()}
-                className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                autoFocus
-              />
-            ) : (
-              <>
-                <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {title}
-                </h3>
-                {onRename && (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setDraftTitle(note.title);
-                      setIsEditing(true);
-                    }}
-                    className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
-                    title={t("common.edit")}
-                    aria-label={t("common.edit")}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          {preview && (
-            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-              {preview}
-            </p>
-          )}
-
-          <div className="mt-2 min-h-4 pr-4">
-            <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-          {onDuplicate && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDuplicate(note);
-              }}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              title={t("notes.duplicate")}
-              aria-label={t("notes.duplicate")}
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </button>
-          )}
-
-          {onDelete && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete(note.id);
-              }}
-              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              title={t("common.delete")}
-              aria-label={t("common.delete")}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+      {/* Line 1: title + action buttons (edit, duplicate, delete) */}
+      <div className="flex min-w-0 items-center gap-1">
+        {isEditing ? (
+          <input
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={handleEditKeyDown}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            autoFocus
+          />
+        ) : (
+          <>
+            <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              {title}
+            </h3>
+            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+              {onRename && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setDraftTitle(note.title);
+                    setIsEditing(true);
+                  }}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  title={t("common.edit")}
+                  aria-label={t("common.edit")}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {onDuplicate && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDuplicate(note);
+                  }}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  title={t("notes.duplicate")}
+                  aria-label={t("notes.duplicate")}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete(note.id);
+                  }}
+                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  title={t("common.delete")}
+                  aria-label={t("common.delete")}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
-      <GripVertical
-        data-testid="note-drag-handle"
-        className="absolute right-0 top-0 h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-      />
+      {/* Line 2: description + drag handle */}
+      <div className="mt-1 flex min-h-4 min-w-0 items-center gap-1">
+        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {preview}
+        </p>
+        <GripVertical
+          data-testid="note-drag-handle"
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+        />
+      </div>
+
+      {/* Line 3: tags + last-modified */}
+      <div className="mt-2 min-h-4">
+        <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
+      </div>
     </li>
   );
 }

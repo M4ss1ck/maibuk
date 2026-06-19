@@ -6,6 +6,7 @@ const GAP = 4;
 interface NoteTagsRowProps {
   tags: string[];
   dateLabel: string;
+  datePosition?: "left" | "right";
 }
 
 function TagChip({
@@ -28,7 +29,7 @@ function TagChip({
   );
 }
 
-export function NoteTagsRow({ tags, dateLabel }: NoteTagsRowProps) {
+export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTagsRowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(tags.length > 0 ? 1 : 0);
@@ -87,8 +88,20 @@ export function NoteTagsRow({ tags, dateLabel }: NoteTagsRowProps) {
   const hiddenTags = tags.slice(visibleCount);
   const hiddenCount = hiddenTags.length;
 
+  const dateEl = (
+    <span
+      className={`shrink-0 text-xs text-muted-foreground ${
+        datePosition === "right" ? "ml-auto" : ""
+      }`}
+    >
+      {dateLabel}
+    </span>
+  );
+
   return (
     <div ref={containerRef} className="relative flex min-w-0 items-center gap-1">
+      {datePosition === "left" && dateEl}
+
       {tags.slice(0, visibleCount).map((tag) => (
         <TagChip key={tag} tag={tag} className="min-w-0 truncate" />
       ))}
@@ -112,9 +125,7 @@ export function NoteTagsRow({ tags, dateLabel }: NoteTagsRowProps) {
         </button>
       )}
 
-      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-        {dateLabel}
-      </span>
+      {datePosition === "right" && dateEl}
 
       {showHiddenTags && hiddenCount > 0 && (
         <div className="absolute left-0 top-full z-20 mt-1 flex max-w-56 flex-wrap gap-1 rounded-lg border border-border bg-background p-2 shadow-lg">

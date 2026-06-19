@@ -232,6 +232,7 @@ export function NoteEditor({
   const [wordCount, setWordCount] = useState(note.wordCount);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
   const [showTagEditor, setShowTagEditor] = useState(false);
+  const tagEditorRef = useRef<HTMLDivElement>(null);
   const notes = useNoteStore((s) => s.notes);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
@@ -239,6 +240,20 @@ export function NoteEditor({
   const navigate = useNavigate();
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
+
+  // Dismiss the tag editor popover when clicking outside of it.
+  useEffect(() => {
+    if (!showTagEditor) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tagEditorRef.current && !tagEditorRef.current.contains(event.target as Node)) {
+        setShowTagEditor(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showTagEditor]);
 
   const wikilinkExtension = useMemo(
     () =>
@@ -532,7 +547,7 @@ export function NoteEditor({
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Header */}
-      <div className="px-4 py-2 border-b border-border flex items-center gap-2 shrink-0">
+      <div className="px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
         <button
           type="button"
           onClick={onBack}
@@ -556,21 +571,22 @@ export function NoteEditor({
         )}
 
         <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground">
+          <span className="block truncate text-sm font-medium leading-tight text-foreground">
             {title || note.title || t("notes.untitled")}
           </span>
-          <div className="mt-0.5 flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1">
               <NoteTagsRow
                 tags={note.tags}
                 dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
+                datePosition="left"
               />
             </div>
-            <div className="relative shrink-0">
+            <div ref={tagEditorRef} className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setShowTagEditor((current) => !current)}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                 title={t("notes.addTag")}
                 aria-label={t("notes.addTag")}
                 aria-expanded={showTagEditor}
