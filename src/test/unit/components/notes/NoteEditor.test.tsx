@@ -96,7 +96,7 @@ function buildNote(overrides: Partial<Note>): Note {
 }
 
 describe("NoteEditor", () => {
-  it("debounces and saves full payload after title and content changes", async () => {
+  it("debounces and saves full payload after content changes", async () => {
     vi.useFakeTimers();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
@@ -108,9 +108,8 @@ describe("NoteEditor", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Note title"), {
-      target: { value: "Edited title" },
-    });
+    expect(screen.queryByPlaceholderText("Note title")).not.toBeInTheDocument();
+    expect(screen.getByText("Initial")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Apply editor update" }));
 
@@ -121,7 +120,7 @@ describe("NoteEditor", () => {
 
     expect(onSave).toHaveBeenCalledWith({
       id: "note-1",
-      title: "Edited title",
+      title: "Initial",
       content: "<p>Updated body</p>",
       wordCount: 42,
     });
