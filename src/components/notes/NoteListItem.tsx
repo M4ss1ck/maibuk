@@ -1,7 +1,7 @@
+import type { DragEvent, KeyboardEvent } from "react";
 import { useState } from "react";
-import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { GripVertical, Trash2, Copy } from "lucide-react";
+import { Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
 import type { Note } from "../../features/notes";
 import { NoteTagsRow } from "./NoteTagsRow";
 
@@ -11,24 +11,27 @@ interface NoteListItemProps {
   onSelect: (note: Note) => void;
   onDelete?: (id: string) => void;
   onDuplicate?: (note: Note) => void;
+  onRename?: (note: Note, title: string) => void;
   draggable?: boolean;
+  isDragging?: boolean;
   onDragStart?: (e: DragEvent<HTMLLIElement>) => void;
   onDragOver?: (e: DragEvent<HTMLLIElement>) => void;
   onDrop?: (e: DragEvent<HTMLLIElement>) => void;
   onDragEnd?: (e: DragEvent<HTMLLIElement>) => void;
-  isDragging?: boolean;
 }
 
-// Strip HTML tags for a plain-text preview (content is TipTap HTML).
-function toPreview(html: string): string {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function formatDate(unixSeconds: number): string {
+function formatDate(unixSeconds: number) {
   return new Date(unixSeconds * 1000).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
+}
+
+function toPreview(content: string) {
+  return content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function NoteListItem({
@@ -37,113 +40,146 @@ export function NoteListItem({
   onSelect,
   onDelete,
   onDuplicate,
-  draggable,
+  onRename,
+  draggable = false,
+  isDragging = false,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
-  isDragging = false,
 }: NoteListItemProps) {
   const { t } = useTranslation();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const title = note.title.trim() || t("notes.untitled");
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(note.title);
+  const title = note.title || t("notes.untitled");
   const preview = toPreview(note.content);
+
+  const commitTitle = () => {
+    const nextTitle = draftTitle.trim();
+    if (nextTitle && nextTitle !== note.title) {
+      onRename?.(note, nextTitle);
+    }
+    setIsEditing(false);
+  };
+
+  const cancelTitleEdit = () => {
+    setDraftTitle(note.title);
+    setIsEditing(false);
+  };
+
+  const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitTitle();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelTitleEdit();
+    }
+  };
 
   return (
     <li
-      draggable={draggable}
+      draggable={draggable && !isEditing ? true : undefined}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className={`group select-none rounded transition-colors ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "opacity-50" : ""}`}
+      className={`group relative border-l-2 py-3 pl-2 pr-3 transition-colors ${
+        draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+      } ${
+        isSelected
+          ? "border-primary bg-primary/10"
+          : "border-transparent hover:bg-muted/50"
+      } ${isDragging ? "opacity-50" : ""}`}
+      onClick={() => {
+        if (!isEditing) onSelect(note);
+      }}
     >
-      {/* biome-ignore lint/a11y/useSemanticElements: Cannot use <button> because it contains nested action <button> elements */}
-      <div
-        role="button"
-        tabIndex={0}
-        draggable={false}
-        onClick={() => onSelect(note)}
-        onKeyDown={() => onSelect(note)}
-        className={`w-full text-left rounded py-3 pl-2 pr-3 transition-colors ${isSelected ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
-          }`}
-      >
-        <span className="flex items-center gap-1">
-          <span className="flex-1 min-w-0 block truncate font-medium text-sm">{title}</span>
-          {confirmingDelete && onDelete ? (
-            <span className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                draggable={false}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(note.id);
-                  setConfirmingDelete(false);
-                }}
-                className="px-1.5 py-0.5 text-[10px] bg-destructive text-white rounded hover:bg-destructive-hover"
-              >
-                {t("common.yes")}
-              </button>
-              <button
-                type="button"
-                draggable={false}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmingDelete(false);
-                }}
-                className="px-1.5 py-0.5 text-[10px] border border-border rounded hover:bg-muted"
-              >
-                {t("common.no")}
-              </button>
-            </span>
-          ) : (
-            <>
-              {onDuplicate && (
-                <button
-                  type="button"
-                  draggable={false}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDuplicate(note);
-                  }}
-                  title={t("notes.duplicate")}
-                  aria-label={t("notes.duplicate")}
-                  className="shrink-0 p-1 rounded transition-colors text-muted-foreground hover:bg-muted"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  type="button"
-                  draggable={false}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirmingDelete(true);
-                  }}
-                  title={t("notes.delete")}
-                  aria-label={t("notes.delete")}
-                  className="shrink-0 p-1 rounded transition-colors text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </>
-          )}
-        </span>
-        <span className="relative mt-1 block min-h-4 pr-4">
+      <div className="flex min-w-0 items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-1">
+            {isEditing ? (
+              <input
+                value={draftTitle}
+                onChange={(event) => setDraftTitle(event.target.value)}
+                onBlur={commitTitle}
+                onKeyDown={handleEditKeyDown}
+                onClick={(event) => event.stopPropagation()}
+                className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                autoFocus
+              />
+            ) : (
+              <>
+                <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                  {title}
+                </h3>
+                {onRename && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDraftTitle(note.title);
+                      setIsEditing(true);
+                    }}
+                    className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
+                    title={t("common.edit")}
+                    aria-label={t("common.edit")}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
           {preview && (
-            <span className="block truncate text-xs text-muted-foreground">
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
               {preview}
-            </span>
+            </p>
           )}
-          <GripVertical
-            data-testid="note-drag-handle"
-            className="absolute right-0 top-0 h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-          />
-        </span>
-        <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
+
+          <div className="mt-2 min-h-4 pr-4">
+            <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {onDuplicate && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDuplicate(note);
+              }}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              title={t("notes.duplicate")}
+              aria-label={t("notes.duplicate")}
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete(note.id);
+              }}
+              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              title={t("common.delete")}
+              aria-label={t("common.delete")}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
+
+      <GripVertical
+        data-testid="note-drag-handle"
+        className="absolute right-0 top-0 h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+      />
     </li>
   );
 }

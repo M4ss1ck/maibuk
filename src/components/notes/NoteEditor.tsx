@@ -17,6 +17,7 @@ import { BackIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
 import { tagColor } from "./tagColor";
 import { timeAgo } from "./timeAgo";
+import { NoteTagsRow } from "./NoteTagsRow";
 import { ThemeToggle } from "../ThemeToggle";
 import { SyncStatusButton } from "../sync/SyncStatusButton";
 import { toast } from "../ui/Toast";
@@ -562,7 +563,19 @@ export function NoteEditor({
           </button>
         )}
 
-        <div className="flex-1" />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="max-w-56 truncate text-sm font-medium text-foreground">
+              {title || note.title || t("notes.untitled")}
+            </span>
+            <div className="min-w-0 max-w-96 flex-1">
+              <NoteTagsRow
+                tags={note.tags}
+                dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
+              />
+            </div>
+          </div>
+        </div>
 
         <SaveStatus status={saveStatus} onSave={() => void saveNow()} />
 

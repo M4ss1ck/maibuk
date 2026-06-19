@@ -54,6 +54,7 @@ interface NotesListProps {
   onReassignNoteBook?: (noteId: string, bookId: string | null) => void;
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: NoteWithBook) => void;
+  onRenameNote?: (id: string, title: string) => void;
   onImportMarkdown?: (markdown: string, filenameStem: string) => void;
 }
 
@@ -67,6 +68,7 @@ export function NotesList({
   onReassignNoteBook,
   onDeleteNote,
   onDuplicateNote,
+  onRenameNote,
   onImportMarkdown,
 }: NotesListProps) {
   const { t } = useTranslation();
@@ -321,7 +323,10 @@ export function NotesList({
         isSelected={currentNoteId === note.id}
         onSelect={onSelectNote}
         onDelete={onDeleteNote}
-        onDuplicate={onDuplicateNote}
+              onDuplicate={onDuplicateNote}
+              onRename={(targetNote, title) =>
+                onRenameNote?.(targetNote.id, title)
+              }
         draggable={viewMode === "list" && !isSearchActive ? true : undefined}
         onDragStart={(e) => handleDragStart(e, note.id)}
         onDragOver={(e) => handleNoteDragOver(e, note)}

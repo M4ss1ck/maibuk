@@ -174,6 +174,7 @@ export function Notes() {
           onReassignNoteBook={handleReassignNoteBook}
           onDeleteNote={handleDelete}
           onDuplicateNote={handleDuplicateNote}
+          onRenameNote={(id, title) => updateNote({ id, title })}
           onImportMarkdown={handleImportMarkdown}
         />
         <div
