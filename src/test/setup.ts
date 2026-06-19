@@ -5,13 +5,12 @@ import { afterEach } from "vitest";
 // Polyfill getClientRects for TipTap/ProseMirror in jsdom
 // ProseMirror calls this during scrollToSelection / dispatch, which crashes in jsdom
 if (typeof Element.prototype.getClientRects !== "function") {
-  Element.prototype.getClientRects = function () {
-    return {
+  Element.prototype.getClientRects = () =>
+    ({
       length: 0,
       item: () => null,
       [Symbol.iterator]: function* () {},
-    } as unknown as DOMRectList;
-  };
+    } as unknown as DOMRectList);
 }
 
 // Polyfill ResizeObserver for Headless UI components in jsdom
