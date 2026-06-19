@@ -3,6 +3,8 @@ import type { DatabaseAdapter } from "../../../../lib/platform/types";
 import { createTestDatabase } from "../../../support/db-test-context";
 import {
   ensureMetricsSchema,
+  compactUnpushedRawMetricEvents,
+  MAX_SOURCE_EVENTS_PER_SEGMENT,
   getSnapshotMetrics,
   getCategoryMeasuringSince,
   listDailyWritingTotals,
@@ -101,6 +103,61 @@ describe("metrics events repository", () => {
     expect(events.map((event) => event.id)).toEqual(["session-1"]);
     expect(tombstones).toEqual([{ id: "typed-1" }]);
     expect(cacheRows).toEqual([]);
+  });
+
+  it("compacts a day's raw events into a single aggregate when under the segment cap", async () => {
+    await insertEvents(testDb, [
+      buildEvent({ id: "e-1", eventType: "writing.typed", payload: { words: 2, chars: 5, chapterId: "c" } }),
+      buildEvent({ id: "e-2", eventType: "writing.typed", payload: { words: 3, chars: 9, chapterId: "c" } }),
+    ]);
+
+    await compactUnpushedRawMetricEvents(testDb);
+
+    const rows = await listEvents(testDb);
+    const aggregates = rows.filter((row) => row.eventType === "aggregate.daily");
+    expect(aggregates).toHaveLength(1);
+    expect(rows.filter((row) => row.eventType === "writing.typed")).toHaveLength(0);
+    expect((aggregates[0].payload as { typedWords: number }).typedWords).toBe(5);
+  });
+
+  it("splits a day's raw events into multiple disjoint segments above the cap", async () => {
+    const total = MAX_SOURCE_EVENTS_PER_SEGMENT * 2 + 1;
+    const events = Array.from({ length: total }, (_, i) =>
+      buildEvent({
+        id: `e-${String(i).padStart(5, "0")}`,
+        timestamp: `2026-05-23T12:00:${String(i % 60).padStart(2, "0")}.000Z`,
+        eventType: "writing.typed",
+        payload: { words: 1, chars: 1, chapterId: "c" },
+      }),
+    );
+    await insertEvents(testDb, events);
+
+    await compactUnpushedRawMetricEvents(testDb);
+
+    const aggregates = (await listEvents(testDb)).filter(
+      (row) => row.eventType === "aggregate.daily",
+    );
+    expect(aggregates).toHaveLength(Math.ceil(total / MAX_SOURCE_EVENTS_PER_SEGMENT));
+
+    // No segment exceeds the cap.
+    for (const aggregate of aggregates) {
+      const ids = (aggregate.payload as { sourceEventIds: string[] }).sourceEventIds;
+      expect(ids.length).toBeLessThanOrEqual(MAX_SOURCE_EVENTS_PER_SEGMENT);
+    }
+
+    // Segments partition the day's events: every raw id appears exactly once.
+    const allIds = aggregates.flatMap(
+      (aggregate) => (aggregate.payload as { sourceEventIds: string[] }).sourceEventIds,
+    );
+    expect(allIds).toHaveLength(total);
+    expect(new Set(allIds).size).toBe(total);
+
+    // Word totals are preserved across the split.
+    const typedWords = aggregates.reduce(
+      (sum, aggregate) => sum + (aggregate.payload as { typedWords: number }).typedWords,
+      0,
+    );
+    expect(typedWords).toBe(total);
   });
 
   it("reads snapshot totals directly from books", async () => {
