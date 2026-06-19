@@ -94,6 +94,12 @@ export function NoteListItem({
       onClick={() => {
         if (!isEditing) onSelect(note);
       }}
+      onKeyDown={(e) => {
+        if (!isEditing && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onSelect(note);
+        }
+      }}
     >
       {/* Line 1: title + action buttons (edit, duplicate, delete) */}
       <div className="flex min-w-0 items-center gap-1">
