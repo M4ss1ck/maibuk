@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Pin } from "lucide-react";
+import { ArrowLeft, Pin, Tags } from "lucide-react";
 import { Extension } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
@@ -15,8 +15,8 @@ import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { useShortcuts } from "../../lib/shortcuts";
 import { BackIcon } from "../icons";
 import { TagEditor } from "./TagEditor";
-import { tagColor } from "./tagColor";
 import { timeAgo } from "./timeAgo";
+import { NoteTagsRow } from "./NoteTagsRow";
 import { ThemeToggle } from "../ThemeToggle";
 import { SyncStatusButton } from "../sync/SyncStatusButton";
 import { toast } from "../ui/Toast";
@@ -228,9 +228,11 @@ export function NoteEditor({
   suppressRestore = false,
 }: NoteEditorProps) {
   const { t, i18n } = useTranslation();
-  const [title, setTitle] = useState(note.title);
+  const title = note.title;
   const [wordCount, setWordCount] = useState(note.wordCount);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
+  const [showTagEditor, setShowTagEditor] = useState(false);
+  const tagEditorRef = useRef<HTMLDivElement>(null);
   const notes = useNoteStore((s) => s.notes);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
@@ -238,6 +240,20 @@ export function NoteEditor({
   const navigate = useNavigate();
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
+
+  // Dismiss the tag editor popover when clicking outside of it.
+  useEffect(() => {
+    if (!showTagEditor) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tagEditorRef.current && !tagEditorRef.current.contains(event.target as Node)) {
+        setShowTagEditor(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showTagEditor]);
 
   const wikilinkExtension = useMemo(
     () =>
@@ -349,14 +365,6 @@ export function NoteEditor({
       allowInInput: true,
     },
   ]);
-
-  const handleTitleChange = useCallback(
-    (value: string) => {
-      setTitle(value);
-      debouncedSave();
-    },
-    [debouncedSave]
-  );
 
   const handleContentUpdate = useCallback(
     (content: string) => {
@@ -539,7 +547,7 @@ export function NoteEditor({
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Header */}
-      <div className="px-4 py-2 border-b border-border flex items-center gap-2 shrink-0">
+      <div className="px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
         <button
           type="button"
           onClick={onBack}
@@ -562,7 +570,44 @@ export function NoteEditor({
           </button>
         )}
 
-        <div className="flex-1" />
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium leading-tight text-foreground">
+            {title || note.title || t("notes.untitled")}
+          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <NoteTagsRow
+                tags={note.tags}
+                dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
+                datePosition="left"
+              />
+            </div>
+            <div ref={tagEditorRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowTagEditor((current) => !current)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title={t("notes.addTag")}
+                aria-label={t("notes.addTag")}
+                aria-expanded={showTagEditor}
+              >
+                <Tags className="h-4 w-4" />
+              </button>
+              {showTagEditor && (
+                <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-border bg-background p-3 shadow-lg">
+                  <TagEditor
+                    tags={note.tags}
+                    allTags={allTags}
+                    onChange={(nextTags) => {
+                      handleTagsChange(nextTags);
+                      setShowTagEditor(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         <SaveStatus status={saveStatus} onSave={() => void saveNow()} />
 
@@ -604,42 +649,6 @@ export function NoteEditor({
         onEditorReady={handleEditorReady}
         loadInternalTargetChildren={loadInternalTargetChildren}
         resolveBookIdForChapter={resolveBookIdForChapter}
-        headerContent={
-          <div className="px-8 pt-6 max-w-editor-max mx-auto w-full">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder={t("notes.titlePlaceholder")}
-              className="w-full bg-transparent text-3xl font-serif font-semibold outline-none placeholder:text-muted-foreground"
-            />
-            <div className="relative mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {timeAgo(note.updatedAt, i18n.language, t)}
-              </span>
-              {note.tags.map((tag) => {
-                const color = tagColor(tag);
-                return (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
-                    style={{ borderColor: color, backgroundColor: `${color}22`, color }}
-                  >
-                    <span>{tag}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleTagsChange(note.tags.filter((t) => t !== tag))}
-                      className="leading-none opacity-80 hover:opacity-100"
-                    >
-                      ×
-                    </button>
-                  </span>
-                );
-              })}
-              <TagEditor tags={note.tags} allTags={allTags} onChange={handleTagsChange} />
-            </div>
-          </div>
-        }
       />
       <NoteBacklinks
         noteId={note.id}

@@ -128,6 +128,8 @@ export interface Settings {
   showChapterOutline: boolean;
   notesListView: NotesListViewMode;
   notesTreeGroupMode: NotesTreeGroupMode;
+  notesCollapsedGroups: string[];
+  notesExpandedEmptyGroups: string[];
   htmlEditorLightTheme: HtmlEditorTheme;
   htmlEditorDarkTheme: HtmlEditorTheme;
   htmlPanelHeight: number;

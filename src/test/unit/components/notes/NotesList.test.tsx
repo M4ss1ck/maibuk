@@ -42,7 +42,12 @@ vi.mock("react-i18next", () => ({
 beforeEach(() => {
   // The view/group toggles persist via the settings store; reset to defaults
   // so tree-mode tests don't leak state into later list-mode tests.
-  useSettingsStore.setState({ notesListView: "list", notesTreeGroupMode: "book" });
+  useSettingsStore.setState({
+    notesListView: "list",
+    notesTreeGroupMode: "book",
+    notesCollapsedGroups: [],
+    notesExpandedEmptyGroups: [],
+  });
 });
 
 afterEach(() => {
@@ -211,6 +216,34 @@ describe("NotesList", () => {
     expect(onCreateNote).toHaveBeenCalledWith("book-a");
   });
 
+  it("renames a note inline from the book-tree view", () => {
+    const onRenameNote = vi.fn();
+    const books = [buildBook({ id: "book-a", title: "Novel" })];
+    const notes = [buildNote({ id: "a", title: "Novel note" }) as Note & { bookId: string }];
+    notes[0].bookId = "book-a";
+
+    render(
+      <NotesList
+        notes={notes}
+        books={books}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onRenameNote={onRenameNote}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "common.edit" }));
+
+    const input = screen.getByDisplayValue("Novel note");
+    fireEvent.change(input, { target: { value: "Renamed note" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onRenameNote).toHaveBeenCalledWith("a", "Renamed note");
+  });
+
   it("collapses toggle labels independently when each group's measured labels do not fit", async () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
       const testId = this.getAttribute("data-testid");
@@ -294,6 +327,85 @@ describe("NotesList", () => {
     const emptyBookHeader = screen.getByText("Empty Book").closest("div");
     expect(emptyBookHeader?.querySelector(".lucide-chevron-right")).not.toBeNull();
     expect(screen.queryByText("No notes yet")).not.toBeInTheDocument();
+  });
+
+  it("remembers a collapsed book group across remounts", () => {
+    const books = [buildBook({ id: "book-a", title: "Alpha" })];
+    const notes = [{ ...buildNote({ id: "n1", title: "Note one" }), bookId: "book-a" }];
+    const props = {
+      notes,
+      books,
+      currentNoteId: null,
+      onSelectNote: vi.fn(),
+      onCreateNote: vi.fn(),
+      onReorderNotes: vi.fn(),
+    };
+
+    const { unmount } = render(<NotesList {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    expect(screen.getByText("Note one")).toBeInTheDocument();
+
+    const toggle = screen.getByTestId("book-group-book-a").querySelector("button");
+    fireEvent.click(toggle as HTMLButtonElement);
+    expect(screen.queryByText("Note one")).not.toBeInTheDocument();
+
+    unmount();
+    render(<NotesList {...props} />);
+    // View/group mode persist too, so the list reopens in collapsed tree mode.
+    expect(screen.queryByText("Note one")).not.toBeInTheDocument();
+  });
+
+  it("remembers a collapsed tag group across remounts", () => {
+    const notes = [buildNote({ id: "n1", title: "Tagged note", tags: ["solo"] })];
+    const props = {
+      notes,
+      currentNoteId: null,
+      onSelectNote: vi.fn(),
+      onCreateNote: vi.fn(),
+      onReorderNotes: vi.fn(),
+    };
+
+    const { unmount } = render(<NotesList {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tag" }));
+    expect(screen.getByText("Tagged note")).toBeInTheDocument();
+
+    const header = screen
+      .getAllByText("solo")
+      .find((el) => el.className.includes("font-medium"))
+      ?.closest("div");
+    fireEvent.click(header?.querySelector("button") as HTMLButtonElement);
+    expect(screen.queryByText("Tagged note")).not.toBeInTheDocument();
+
+    unmount();
+    render(<NotesList {...props} />);
+    expect(screen.queryByText("Tagged note")).not.toBeInTheDocument();
+  });
+
+  it("remembers a collapsed date group across remounts", () => {
+    const notes = [
+      buildNote({ id: "n1", title: "Fresh note", updatedAt: Date.now() / 1000 }),
+    ];
+    const props = {
+      notes,
+      currentNoteId: null,
+      onSelectNote: vi.fn(),
+      onCreateNote: vi.fn(),
+      onReorderNotes: vi.fn(),
+    };
+
+    const { unmount } = render(<NotesList {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Date" }));
+    expect(screen.getByText("Fresh note")).toBeInTheDocument();
+
+    const header = screen.getByText("Today").closest("div");
+    fireEvent.click(header?.querySelector("button") as HTMLButtonElement);
+    expect(screen.queryByText("Fresh note")).not.toBeInTheDocument();
+
+    unmount();
+    render(<NotesList {...props} />);
+    expect(screen.queryByText("Fresh note")).not.toBeInTheDocument();
   });
 
   it("repeats notes across tag groups in tree mode", () => {

@@ -512,6 +512,17 @@ option {
   text-underline-offset: 3px;
 }
 
+/* Find & Replace match highlights */
+.search-result {
+  background-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  border-radius: 2px;
+}
+
+.search-result-active {
+  background-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
 /* Placeholder styles */
 .editor-content.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

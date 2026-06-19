@@ -57,7 +57,7 @@ describe("NoteListItem tags", () => {
     expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
   });
 
-  it("positions the drag handle over the meta line on the right", () => {
+  it("places the drag handle at the end of the description line", () => {
     render(
       <ul>
         <NoteListItem note={buildNote({ content: "<p>Preview text</p>" })} isSelected={false} onSelect={vi.fn()} />
@@ -65,8 +65,10 @@ describe("NoteListItem tags", () => {
     );
 
     const handle = screen.getByTestId("note-drag-handle");
-    expect(handle).toHaveClass("absolute");
-    expect(handle).toHaveClass("right-0");
+    expect(handle).not.toHaveClass("absolute");
+    expect(handle).toHaveClass("shrink-0");
+    // The handle shares its row with the (flex-1) description.
+    expect(handle.parentElement).toHaveTextContent("Preview text");
   });
 
   it("uses a drag cursor for draggable rows", () => {

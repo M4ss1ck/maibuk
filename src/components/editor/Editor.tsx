@@ -40,6 +40,7 @@ import { PasteHandler } from "./extensions/PasteHandler";
 import { CopyHandler } from "./extensions/CopyHandler";
 import { CodeBlockWithCopy } from "./extensions/CodeBlock";
 import { SpellCheck } from "./extensions/SpellCheck";
+import { SearchReplace } from "./extensions/SearchReplace";
 import { Footnote } from "./extensions/Footnote";
 import { MetricsObserver } from "./extensions/MetricsObserver";
 import { HeadingId } from "./extensions/HeadingId";
@@ -79,9 +80,7 @@ interface EditorProps {
   suppressRestore?: boolean;
   internalTargets?: InternalTarget[];
   loadInternalTargetChildren?: InternalTargetChildrenLoader;
-  resolveBookIdForChapter?: (
-    chapterId: string,
-  ) => string | undefined | Promise<string | undefined>;
+  resolveBookIdForChapter?: (chapterId: string) => string | undefined | Promise<string | undefined>;
   extraExtensions?: Extensions;
   headerContent?: React.ReactNode;
   onEditorReady?: (editor: TiptapEditor | null) => void;
@@ -116,16 +115,11 @@ export function Editor({
   onExportImage,
 }: EditorProps) {
   const { t } = useTranslation();
-  const spellCheckEnabled = useSettingsStore(
-    (state) => state.spellCheckEnabled,
-  );
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
-  const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<
-    string | null
-  >(null);
-  const [scrollContainerEl, setScrollContainerEl] =
-    useState<HTMLDivElement | null>(null);
+  const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
+  const [scrollContainerEl, setScrollContainerEl] = useState<HTMLDivElement | null>(null);
   useEditorZoomControls(scrollContainerEl);
   const handleMarkdownPaste = useCallback((text: string) => {
     setPendingMarkdownPaste(text);
@@ -157,7 +151,7 @@ export function Editor({
         headingId: heading.id,
       }));
     },
-    [chapters, providedLoadInternalTargetChildren],
+    [chapters, providedLoadInternalTargetChildren]
   );
   const appliedContentRef = useRef(content);
   const editor = useEditor({
@@ -225,6 +219,7 @@ export function Editor({
         enabled: spellCheckEnabled,
         language,
       }),
+      SearchReplace,
       MetricsObserver.configure({
         workId: bookId,
         chapterId,
@@ -337,7 +332,7 @@ export function Editor({
 
       editor?.chain().focus().run();
     },
-    [editor],
+    [editor]
   );
 
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
@@ -345,17 +340,13 @@ export function Editor({
   if (!editor) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">
-          {t("editor.loadingEditor")}
-        </div>
+        <div className="animate-pulse text-muted-foreground">{t("editor.loadingEditor")}</div>
       </div>
     );
   }
 
   return (
-    <div
-      className={`flex-1 flex flex-col min-h-0 ${focusMode ? "focus-mode" : ""}`}
-    >
+    <div className={`flex-1 flex flex-col min-h-0 ${focusMode ? "focus-mode" : ""}`}>
       {!focusMode && (
         <EditorToolbar
           editor={editor}
@@ -380,24 +371,16 @@ export function Editor({
       >
         <div className="max-w-editor-max mx-auto p-8 editor-zoom-surface">
           <EditorContent editor={editor} />
-          {showInlineFootnotes && (
-            <FootnoteList editor={editor} startIndex={footnoteStartIndex} />
-          )}
+          {showInlineFootnotes && <FootnoteList editor={editor} startIndex={footnoteStartIndex} />}
         </div>
       </div>
 
-      <LinkClickHandler
-        editor={editor}
-        resolveBookIdForChapter={resolveBookIdForChapter}
-      />
+      <LinkClickHandler editor={editor} resolveBookIdForChapter={resolveBookIdForChapter} />
       <ImageContextMenu editor={editor} />
 
       {/* Floating selection toolbar — hidden when the context menu is open */}
       {!focusMode && !isContextMenuOpen && (
-        <SelectionToolbar
-          editor={editor}
-          onLinkClick={() => setShowBubbleLinkDialog(true)}
-        />
+        <SelectionToolbar editor={editor} onLinkClick={() => setShowBubbleLinkDialog(true)} />
       )}
       <LinkDialog
         editor={editor}
@@ -417,11 +400,7 @@ export function Editor({
               variant="ghost"
               onClick={() => {
                 if (pendingMarkdownPaste !== null) {
-                  editor
-                    .chain()
-                    .focus()
-                    .insertContent(plainTextToHtml(pendingMarkdownPaste))
-                    .run();
+                  editor.chain().focus().insertContent(plainTextToHtml(pendingMarkdownPaste)).run();
                 }
                 setPendingMarkdownPaste(null);
               }}
@@ -446,9 +425,7 @@ export function Editor({
           </>
         }
       >
-        <p className="text-sm text-muted-foreground">
-          {t("editor.markdownDetectedBody")}
-        </p>
+        <p className="text-sm text-muted-foreground">{t("editor.markdownDetectedBody")}</p>
       </Modal>
     </div>
   );
@@ -461,10 +438,7 @@ export function Editor({
  */
 function plainTextToHtml(text: string): string {
   const escapeHtml = (value: string) =>
-    value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return text
     .split(/\n{2,}/)
     .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`)

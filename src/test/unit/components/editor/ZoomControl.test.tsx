@@ -52,4 +52,13 @@ describe("ZoomControl", () => {
     fireEvent.click(screen.getByText("editor.resetZoom"));
     expect(useSettingsStore.getState().editorZoom).toBe(100);
   });
+
+  it("stays open when a click lands on a control's svg icon", () => {
+    render(<ZoomControl />);
+    fireEvent.click(screen.getByText("100%"));
+    const icon = screen.getByTitle("editor.zoomIn").querySelector("svg");
+    expect(icon).not.toBeNull();
+    fireEvent.mouseDown(icon as SVGSVGElement);
+    expect(screen.queryByRole("slider")).toBeInTheDocument();
+  });
 });

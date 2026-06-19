@@ -54,6 +54,7 @@ interface NotesListProps {
   onReassignNoteBook?: (noteId: string, bookId: string | null) => void;
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: NoteWithBook) => void;
+  onRenameNote?: (id: string, title: string) => void;
   onImportMarkdown?: (markdown: string, filenameStem: string) => void;
 }
 
@@ -67,6 +68,7 @@ export function NotesList({
   onReassignNoteBook,
   onDeleteNote,
   onDuplicateNote,
+  onRenameNote,
   onImportMarkdown,
 }: NotesListProps) {
   const { t } = useTranslation();
@@ -84,8 +86,15 @@ export function NotesList({
   const setViewMode = useSettingsStore((s) => s.setNotesListView);
   const treeGroupMode = useSettingsStore((s) => s.notesTreeGroupMode);
   const setTreeGroupMode = useSettingsStore((s) => s.setNotesTreeGroupMode);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const [expandedEmptyGroups, setExpandedEmptyGroups] = useState<Set<string>>(new Set());
+  const collapsedGroupsList = useSettingsStore((s) => s.notesCollapsedGroups);
+  const expandedEmptyGroupsList = useSettingsStore((s) => s.notesExpandedEmptyGroups);
+  const toggleCollapsed = useSettingsStore((s) => s.toggleNotesGroupCollapsed);
+  const toggleEmptyExpanded = useSettingsStore((s) => s.toggleNotesEmptyGroupExpanded);
+  const collapsedGroups = useMemo(() => new Set(collapsedGroupsList), [collapsedGroupsList]);
+  const expandedEmptyGroups = useMemo(
+    () => new Set(expandedEmptyGroupsList),
+    [expandedEmptyGroupsList],
+  );
   const viewToggleOptions = useMemo<ResponsiveToggleOption<NotesListViewMode>[]>(
     () => [
       {
@@ -314,7 +323,10 @@ export function NotesList({
         isSelected={currentNoteId === note.id}
         onSelect={onSelectNote}
         onDelete={onDeleteNote}
-        onDuplicate={onDuplicateNote}
+              onDuplicate={onDuplicateNote}
+              onRename={(targetNote, title) =>
+                onRenameNote?.(targetNote.id, title)
+              }
         draggable={viewMode === "list" && !isSearchActive ? true : undefined}
         onDragStart={(e) => handleDragStart(e, note.id)}
         onDragOver={(e) => handleNoteDragOver(e, note)}
@@ -334,6 +346,7 @@ export function NotesList({
       onSelect={onSelectNote}
       onDelete={onDeleteNote}
       onDuplicate={onDuplicateNote}
+      onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
       draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
       onDragStart={(e) => handleDragStart(e, note.id)}
       onDragEnd={handleDragEnd}
@@ -341,29 +354,17 @@ export function NotesList({
     />
   );
 
+  // Namespace group keys by mode so identical ids across book/tag/date groups
+  // (e.g. a tag named "today" and the "today" date bucket) don't share state.
+  const groupKey = (id: string) => `${treeGroupMode}:${id}`;
+
   const toggleGroup = (id: string, defaultCollapsed = false) => {
+    const key = groupKey(id);
     if (defaultCollapsed) {
-      setExpandedEmptyGroups((current) => {
-        const next = new Set(current);
-        if (next.has(id)) {
-          next.delete(id);
-        } else {
-          next.add(id);
-        }
-        return next;
-      });
+      toggleEmptyExpanded(key);
       return;
     }
-
-    setCollapsedGroups((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    toggleCollapsed(key);
   };
 
   const renderTreeGroups = () => {
@@ -371,8 +372,8 @@ export function NotesList({
       return buildBookNoteGroups(filtered, books).map((group) => {
         const defaultCollapsed = Boolean(group.book && group.notes.length === 0);
         const isCollapsed = defaultCollapsed
-          ? !expandedEmptyGroups.has(group.id)
-          : collapsedGroups.has(group.id);
+          ? !expandedEmptyGroups.has(groupKey(group.id))
+          : collapsedGroups.has(groupKey(group.id));
         const title = group.id === "unfiled" ? t("notes.unfiled") : group.title;
         const GroupIcon = group.id === "unfiled" ? Feather : BookOpen;
 
@@ -444,7 +445,7 @@ export function NotesList({
     if (treeGroupMode === "tag") {
       const groups = buildTagNoteGroups(filtered);
       return groups.map((group) => {
-        const isCollapsed = collapsedGroups.has(group.id);
+        const isCollapsed = collapsedGroups.has(groupKey(group.id));
         const color = tagColor(group.tag);
 
         return (
@@ -474,7 +475,7 @@ export function NotesList({
     }
 
     return buildDateNoteGroups(filtered).map((group) => {
-      const isCollapsed = collapsedGroups.has(group.id);
+      const isCollapsed = collapsedGroups.has(groupKey(group.id));
       const title =
         group.id === "today"
           ? t("notes.today")

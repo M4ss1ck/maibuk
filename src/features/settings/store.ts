@@ -73,6 +73,8 @@ interface SettingsStore extends Settings {
   setShowChapterOutline: (enabled: boolean) => void;
   setNotesListView: (view: NotesListViewMode) => void;
   setNotesTreeGroupMode: (mode: NotesTreeGroupMode) => void;
+  toggleNotesGroupCollapsed: (key: string) => void;
+  toggleNotesEmptyGroupExpanded: (key: string) => void;
   setHtmlEditorLightTheme: (theme: HtmlEditorTheme) => void;
   setHtmlEditorDarkTheme: (theme: HtmlEditorTheme) => void;
   setHtmlPanelHeight: (height: number) => void;
@@ -138,6 +140,8 @@ const defaultSettings: Settings = {
   showChapterOutline: true,
   notesListView: "list",
   notesTreeGroupMode: "book",
+  notesCollapsedGroups: [],
+  notesExpandedEmptyGroups: [],
   htmlEditorLightTheme: "default" as HtmlEditorTheme,
   htmlEditorDarkTheme: "default" as HtmlEditorTheme,
   htmlPanelHeight: 200,
@@ -319,6 +323,18 @@ export const useSettingsStore = create<SettingsStore>()(
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setNotesListView: (notesListView) => set({ notesListView }),
       setNotesTreeGroupMode: (notesTreeGroupMode) => set({ notesTreeGroupMode }),
+      toggleNotesGroupCollapsed: (key) =>
+        set((state) => ({
+          notesCollapsedGroups: state.notesCollapsedGroups.includes(key)
+            ? state.notesCollapsedGroups.filter((entry) => entry !== key)
+            : [...state.notesCollapsedGroups, key],
+        })),
+      toggleNotesEmptyGroupExpanded: (key) =>
+        set((state) => ({
+          notesExpandedEmptyGroups: state.notesExpandedEmptyGroups.includes(key)
+            ? state.notesExpandedEmptyGroups.filter((entry) => entry !== key)
+            : [...state.notesExpandedEmptyGroups, key],
+        })),
       setHtmlEditorLightTheme: (htmlEditorLightTheme) => set({ htmlEditorLightTheme }),
       setHtmlEditorDarkTheme: (htmlEditorDarkTheme) => set({ htmlEditorDarkTheme }),
       setHtmlPanelHeight: (htmlPanelHeight) =>

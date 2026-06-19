@@ -13,7 +13,18 @@ interface CollapsibleHeadingState {
   collapsed: Set<string>;
 }
 
-export const collapsibleHeadingPluginKey = new PluginKey<CollapsibleHeadingState>("collapsibleHeading");
+export const collapsibleHeadingPluginKey = new PluginKey<CollapsibleHeadingState>(
+  "collapsibleHeading"
+);
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    collapsibleHeading: {
+      /** Expands any collapsed headings whose section contains the given position. */
+      revealPosition: (pos: number) => ReturnType;
+    };
+  }
+}
 
 const CHEVRON_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
@@ -68,6 +79,42 @@ export const CollapsibleHeading = Extension.create<CollapsibleHeadingOptions>({
 
   onCreate() {
     assignMissingHeadingIds(this.editor);
+  },
+
+  addCommands() {
+    return {
+      revealPosition:
+        (pos: number) =>
+        ({ state, dispatch }) => {
+          const pluginState = collapsibleHeadingPluginKey.getState(state);
+          if (!pluginState || pluginState.collapsed.size === 0) return false;
+
+          // Build the chain of headings whose section contains `pos`.
+          const stack: { id: string | null; level: number }[] = [];
+          state.doc.descendants((node, nodePos) => {
+            if (node.type.name !== "heading" || nodePos >= pos) return;
+            const level = node.attrs.level as number;
+            while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+              stack.pop();
+            }
+            stack.push({ id: node.attrs.headingId as string | null, level });
+          });
+
+          const next = new Set(pluginState.collapsed);
+          let changed = false;
+          for (const heading of stack) {
+            if (heading.id && next.delete(heading.id)) {
+              changed = true;
+            }
+          }
+
+          if (!changed) return false;
+          if (dispatch) {
+            dispatch(state.tr.setMeta(collapsibleHeadingPluginKey, { replace: [...next] }));
+          }
+          return true;
+        },
+    };
   },
 
   addProseMirrorPlugins() {

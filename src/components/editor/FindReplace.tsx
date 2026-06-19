@@ -1,9 +1,26 @@
-import { useState, useCallback, useEffect } from "react";
 import type { Editor } from "@tiptap/react";
-import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
+import {
+  CaseSensitive,
+  ChevronDown,
+  ChevronUp,
+  Regex,
+  Replace,
+  ReplaceAll,
+  WholeWord,
+  X,
+} from "lucide-react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { CloseIcon, ChevronDownIcon } from "../icons";
+
+import { buildSearchRegExp, findMatches, type SearchMatch } from "./extensions/SearchReplace";
 
 interface FindReplaceProps {
   editor: Editor;
@@ -11,242 +28,347 @@ interface FindReplaceProps {
   onClose: () => void;
 }
 
+function IconButton({
+  onClick,
+  disabled,
+  active,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+        active ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"
+      } ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
   const { t } = useTranslation();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceTerm, setReplaceTerm] = useState("");
-  const [matchCount, setMatchCount] = useState(0);
-  const [currentMatch, setCurrentMatch] = useState(0);
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
+  const [regex, setRegex] = useState(false);
+  const [matches, setMatches] = useState<SearchMatch[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [regexError, setRegexError] = useState(false);
 
-  const findMatches = useCallback(() => {
-    if (!searchTerm) {
-      setMatchCount(0);
-      setCurrentMatch(0);
-      return [];
-    }
+  const findInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-    const matches: { from: number; to: number }[] = [];
-    const searchLower = searchTerm.toLowerCase();
-
-    editor.state.doc.descendants((node, nodePos) => {
-      if (node.isText && node.text) {
-        const text = node.text.toLowerCase();
-        let offset = 0;
-        let matchIndex = text.indexOf(searchLower, offset);
-
-        while (matchIndex !== -1) {
-          matches.push({
-            from: nodePos + matchIndex,
-            to: nodePos + matchIndex + searchTerm.length,
-          });
-          offset = matchIndex + 1;
-          matchIndex = text.indexOf(searchLower, offset);
-        }
-      }
-    });
-
-    setMatchCount(matches.length);
-    if (matches.length > 0 && currentMatch === 0) {
-      setCurrentMatch(1);
-    } else if (matches.length === 0) {
-      setCurrentMatch(0);
-    }
-
-    return matches;
-  }, [editor, searchTerm, currentMatch]);
-
-  const goToMatch = useCallback(
-    (matchIndex: number) => {
-      const matches = findMatches();
-      if (matches.length === 0 || matchIndex < 1 || matchIndex > matches.length)
-        return;
-
-      const match = matches[matchIndex - 1];
-      editor.commands.setTextSelection(match);
-
-      // Scroll to selection
-      const element = editor.view.domAtPos(match.from);
-      if (element.node instanceof Element) {
-        element.node.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    },
-    [editor, findMatches],
+  const options = useMemo(
+    () => ({ caseSensitive, wholeWord, regex }),
+    [caseSensitive, wholeWord, regex]
   );
 
-  const findNext = useCallback(() => {
-    const newMatch = currentMatch < matchCount ? currentMatch + 1 : 1;
-    setCurrentMatch(newMatch);
-    goToMatch(newMatch);
-  }, [currentMatch, matchCount, goToMatch]);
+  const scrollToMatch = useCallback(
+    (match: SearchMatch) => {
+      // Expand any collapsed heading section the match lives in first.
+      // Only present when the CollapsibleHeading extension is loaded.
+      editor.commands.revealPosition?.(match.from);
+      const { node } = editor.view.domAtPos(match.from);
+      const element = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as HTMLElement);
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    },
+    [editor]
+  );
 
-  const findPrev = useCallback(() => {
-    const newMatch = currentMatch > 1 ? currentMatch - 1 : matchCount;
-    setCurrentMatch(newMatch);
-    goToMatch(newMatch);
-  }, [currentMatch, matchCount, goToMatch]);
-
-  const replaceOne = useCallback(() => {
-    const matches = findMatches();
-    if (matches.length === 0 || currentMatch < 1) return;
-
-    const match = matches[currentMatch - 1];
-    editor
-      .chain()
-      .focus()
-      .setTextSelection(match)
-      .deleteSelection()
-      .insertContent(replaceTerm)
-      .run();
-
-    // Re-find after replace
-    setTimeout(() => {
-      const newMatches = findMatches();
-      if (currentMatch > newMatches.length) {
-        setCurrentMatch(newMatches.length);
+  // Recompute matches against the current document. `preserveIndex` keeps the
+  // active match position (clamped) instead of jumping back to the first.
+  const recompute = useCallback(
+    (preserveIndex: boolean): SearchMatch[] => {
+      if (!searchTerm) {
+        setRegexError(false);
+        setMatches([]);
+        setActiveIndex(0);
+        return [];
       }
-    }, 0);
-  }, [editor, replaceTerm, currentMatch, findMatches]);
 
-  const replaceAll = useCallback(() => {
-    const matches = findMatches();
-    if (matches.length === 0) return;
+      try {
+        buildSearchRegExp(searchTerm, options);
+      } catch {
+        setRegexError(true);
+        setMatches([]);
+        setActiveIndex(0);
+        return [];
+      }
 
-    // Replace from end to start to maintain positions
-    const sortedMatches = [...matches].sort((a, b) => b.from - a.from);
+      setRegexError(false);
+      const found = findMatches(editor.state.doc, searchTerm, options);
+      setMatches(found);
+      setActiveIndex((prev) => {
+        if (found.length === 0) return 0;
+        return preserveIndex ? Math.min(prev, found.length - 1) : 0;
+      });
+      return found;
+    },
+    [editor, searchTerm, options]
+  );
 
-    let chain = editor.chain().focus();
-
-    for (const match of sortedMatches) {
-      chain = chain
-        .setTextSelection(match)
-        .deleteSelection()
-        .insertContent(replaceTerm);
-    }
-
-    chain.run();
-
-    setMatchCount(0);
-    setCurrentMatch(0);
-  }, [editor, replaceTerm, findMatches]);
-
+  // Prefill from the current editor selection when the panel opens.
   useEffect(() => {
-    if (searchTerm) {
-      findMatches();
-    } else {
-      setMatchCount(0);
-      setCurrentMatch(0);
+    if (!isOpen) return;
+    const { from, to } = editor.state.selection;
+    if (from !== to) {
+      const selected = editor.state.doc.textBetween(from, to);
+      if (selected && !selected.includes("\n")) {
+        setSearchTerm(selected);
+      }
     }
-  }, [searchTerm, findMatches]);
+    findInputRef.current?.focus();
+    findInputRef.current?.select();
+  }, [isOpen, editor]);
 
+  // Dismiss when clicking outside the panel.
   useEffect(() => {
-    if (!isOpen) {
-      setSearchTerm("");
-      setReplaceTerm("");
-      setMatchCount(0);
-      setCurrentMatch(0);
-    }
-  }, [isOpen]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-
-      if (e.key === "Escape") {
+    if (!isOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) {
         onClose();
-      } else if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        findNext();
-      } else if (e.key === "Enter" && e.shiftKey) {
-        e.preventDefault();
-        findPrev();
       }
     };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [isOpen, onClose]);
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose, findNext, findPrev]);
+  // Re-run the search when the query or options change.
+  useEffect(() => {
+    if (!isOpen) return;
+    const found = recompute(false);
+    if (found.length > 0) scrollToMatch(found[0]);
+  }, [isOpen, recompute, scrollToMatch]);
+
+  // Keep matches in sync when the document changes (typing, replacing, etc.).
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = () => recompute(true);
+    editor.on("update", handler);
+    return () => {
+      editor.off("update", handler);
+    };
+  }, [isOpen, editor, recompute]);
+
+  // Push decorations whenever the match set or active match changes.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (matches.length === 0) {
+      editor.commands.clearSearchHighlights();
+      return;
+    }
+    editor.commands.setSearchHighlights({ matches, activeIndex });
+  }, [isOpen, editor, matches, activeIndex]);
+
+  // Clear highlights when the panel closes, but preserve the search criteria
+  // (query, replacement and toggles) so they are restored on reopen.
+  useEffect(() => {
+    if (isOpen) return;
+    editor.commands.clearSearchHighlights();
+    setMatches([]);
+  }, [isOpen, editor]);
+
+  const goToMatch = useCallback(
+    (index: number) => {
+      if (matches.length === 0) return;
+      const wrapped = (index + matches.length) % matches.length;
+      setActiveIndex(wrapped);
+      scrollToMatch(matches[wrapped]);
+    },
+    [matches, scrollToMatch]
+  );
+
+  const findNext = useCallback(() => goToMatch(activeIndex + 1), [goToMatch, activeIndex]);
+  const findPrev = useCallback(() => goToMatch(activeIndex - 1), [goToMatch, activeIndex]);
+
+  const replaceRange = useCallback(
+    (match: SearchMatch) => {
+      const tr = editor.state.tr;
+      if (replaceTerm) {
+        tr.insertText(replaceTerm, match.from, match.to);
+      } else {
+        tr.delete(match.from, match.to);
+      }
+      editor.view.dispatch(tr);
+    },
+    [editor, replaceTerm]
+  );
+
+  const replaceCurrent = useCallback(() => {
+    if (matches.length === 0 || regexError) return;
+    const index = activeIndex;
+    replaceRange(matches[index]);
+    const found = findMatches(editor.state.doc, searchTerm, options);
+    setMatches(found);
+    if (found.length === 0) {
+      setActiveIndex(0);
+      return;
+    }
+    const nextIndex = Math.min(index, found.length - 1);
+    setActiveIndex(nextIndex);
+    scrollToMatch(found[nextIndex]);
+  }, [matches, regexError, activeIndex, replaceRange, editor, searchTerm, options, scrollToMatch]);
+
+  const replaceAll = useCallback(() => {
+    if (matches.length === 0 || regexError) return;
+    const tr = editor.state.tr;
+    // Replace from the end so earlier positions stay valid.
+    for (const match of [...matches].sort((a, b) => b.from - a.from)) {
+      if (replaceTerm) {
+        tr.insertText(replaceTerm, match.from, match.to);
+      } else {
+        tr.delete(match.from, match.to);
+      }
+    }
+    editor.view.dispatch(tr);
+    setMatches(findMatches(editor.state.doc, searchTerm, options));
+    setActiveIndex(0);
+  }, [matches, regexError, replaceTerm, editor, searchTerm, options]);
+
+  // Route editor undo/redo while focus is in the find/replace inputs, so
+  // replacements can be reverted without first clicking back into the editor.
+  const handleUndoRedo = (e: KeyboardEvent<HTMLInputElement>): boolean => {
+    if (!(e.ctrlKey || e.metaKey)) return false;
+    const key = e.key.toLowerCase();
+    if (key === "z") {
+      e.preventDefault();
+      if (e.shiftKey) editor.commands.redo();
+      else editor.commands.undo();
+      return true;
+    }
+    if (key === "y") {
+      e.preventDefault();
+      editor.commands.redo();
+      return true;
+    }
+    return false;
+  };
+
+  const handleFindKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (handleUndoRedo(e)) return;
+    if (e.key === "Escape") {
+      onClose();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (e.shiftKey) findPrev();
+      else findNext();
+    }
+  };
+
+  const handleReplaceKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (handleUndoRedo(e)) return;
+    if (e.key === "Escape") {
+      onClose();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      replaceCurrent();
+    }
+  };
 
   if (!isOpen) return null;
 
-  return (
-    <div className="absolute top-14 right-4 bg-card border border-border rounded-lg shadow-lg p-4 z-50 w-80">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-medium text-foreground">
-          {t("editor.findReplace")}
-        </h3>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
-        >
-          <CloseIcon className="w-4 h-4" />
-        </button>
-      </div>
+  const hasMatches = matches.length > 0;
+  const status = regexError
+    ? t("editor.invalidRegex")
+    : searchTerm
+      ? hasMatches
+        ? t("editor.matchesOf", {
+            current: activeIndex + 1,
+            total: matches.length,
+          })
+        : t("editor.noMatches")
+      : "";
 
-      <div className="space-y-3">
-        <div>
-          <Input
+  return (
+    <div
+      ref={panelRef}
+      className="absolute top-2 right-2 z-50 flex flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg"
+    >
+      {/* Find row */}
+      <div className="flex items-center gap-1">
+        <div className="relative">
+          <input
+            ref={findInputRef}
+            type="text"
             placeholder={t("editor.find")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            autoFocus
+            onKeyDown={handleFindKeyDown}
+            className={`h-7 w-56 rounded border bg-background pr-[68px] pl-2 text-sm text-foreground outline-none focus:border-primary ${
+              regexError ? "border-destructive" : "border-border"
+            }`}
           />
-          {searchTerm && (
-            <div className="text-xs text-muted-foreground mt-1">
-              {matchCount > 0
-                ? t("editor.matchesOf", {
-                    current: currentMatch,
-                    total: matchCount,
-                  })
-                : t("editor.noMatches")}
-            </div>
-          )}
+          <div className="absolute inset-y-0 right-1 flex items-center gap-0.5">
+            <IconButton
+              active={caseSensitive}
+              onClick={() => setCaseSensitive((v) => !v)}
+              title={t("editor.matchCase")}
+            >
+              <CaseSensitive className="h-4 w-4" />
+            </IconButton>
+            <IconButton
+              active={wholeWord}
+              onClick={() => setWholeWord((v) => !v)}
+              title={t("editor.matchWholeWord")}
+            >
+              <WholeWord className="h-4 w-4" />
+            </IconButton>
+            <IconButton
+              active={regex}
+              onClick={() => setRegex((v) => !v)}
+              title={t("editor.useRegex")}
+            >
+              <Regex className="h-4 w-4" />
+            </IconButton>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={findPrev}
-            disabled={matchCount === 0}
-          >
-            <ChevronDownIcon className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={findNext}
-            disabled={matchCount === 0}
-          >
-            <ChevronDownIcon className="w-4 h-4" />
-          </Button>
-        </div>
+        <span className="min-w-[72px] text-center text-xs text-muted-foreground tabular-nums">
+          {status}
+        </span>
 
-        <Input
+        <IconButton onClick={findPrev} disabled={!hasMatches} title={t("editor.findPrevious")}>
+          <ChevronUp className="h-4 w-4" />
+        </IconButton>
+        <IconButton onClick={findNext} disabled={!hasMatches} title={t("editor.findNext")}>
+          <ChevronDown className="h-4 w-4" />
+        </IconButton>
+        <IconButton onClick={onClose} title={t("editor.closeFindReplace")}>
+          <X className="h-4 w-4" />
+        </IconButton>
+      </div>
+
+      {/* Replace row */}
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
           placeholder={t("editor.replaceWith")}
           value={replaceTerm}
           onChange={(e) => setReplaceTerm(e.target.value)}
+          onKeyDown={handleReplaceKeyDown}
+          className="h-7 w-56 rounded border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary"
         />
-
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={replaceOne}
-            disabled={matchCount === 0}
-          >
-            {t("editor.replace")}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={replaceAll}
-            disabled={matchCount === 0}
-          >
-            {t("editor.replaceAll")}
-          </Button>
-        </div>
+        <IconButton onClick={replaceCurrent} disabled={!hasMatches} title={t("editor.replace")}>
+          <Replace className="h-4 w-4" />
+        </IconButton>
+        <IconButton onClick={replaceAll} disabled={!hasMatches} title={t("editor.replaceAll")}>
+          <ReplaceAll className="h-4 w-4" />
+        </IconButton>
       </div>
     </div>
   );

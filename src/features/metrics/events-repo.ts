@@ -39,6 +39,14 @@ interface SnapshotWorkRow {
 
 const DAILY_AGGREGATE_BUCKET = "daily-v1";
 
+/**
+ * Max raw events folded into a single daily aggregate segment. Bounds the
+ * encrypted `meta` payload (which inlines each segment's source event ids) so
+ * it stays well under the sync server's per-field character limit and keeps
+ * bulk pull responses lean. Days with more events split into several segments.
+ */
+export const MAX_SOURCE_EVENTS_PER_SEGMENT = 250;
+
 export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS metrics_events (
@@ -416,11 +424,19 @@ export async function compactUnpushedRawMetricEvents(
 
   const buckets: DailyAggregateAccumulator[] = [];
   for (const bucket of bucketRows.values()) {
-    const acc = createDailyAggregateAccumulator(bucket);
-    for (const row of bucket) {
-      addRowToDailyAggregate(acc, row);
+    // Each aggregate embeds the ids of the raw events it absorbed (for
+    // cross-device dedup), and that payload is synced inline in the object's
+    // `meta` field. Cap the source events per segment so meta stays bounded;
+    // a busy day produces several disjoint aggregates instead of one huge row.
+    // The read side already sums aggregates per date, so the split is lossless.
+    for (let start = 0; start < bucket.length; start += MAX_SOURCE_EVENTS_PER_SEGMENT) {
+      const segment = bucket.slice(start, start + MAX_SOURCE_EVENTS_PER_SEGMENT);
+      const acc = createDailyAggregateAccumulator(segment);
+      for (const row of segment) {
+        addRowToDailyAggregate(acc, row);
+      }
+      buckets.push(acc);
     }
-    buckets.push(acc);
   }
 
   for (const acc of buckets) {
