@@ -216,6 +216,34 @@ describe("NotesList", () => {
     expect(onCreateNote).toHaveBeenCalledWith("book-a");
   });
 
+  it("renames a note inline from the book-tree view", () => {
+    const onRenameNote = vi.fn();
+    const books = [buildBook({ id: "book-a", title: "Novel" })];
+    const notes = [buildNote({ id: "a", title: "Novel note" }) as Note & { bookId: string }];
+    notes[0].bookId = "book-a";
+
+    render(
+      <NotesList
+        notes={notes}
+        books={books}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onRenameNote={onRenameNote}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "common.edit" }));
+
+    const input = screen.getByDisplayValue("Novel note");
+    fireEvent.change(input, { target: { value: "Renamed note" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onRenameNote).toHaveBeenCalledWith("a", "Renamed note");
+  });
+
   it("collapses toggle labels independently when each group's measured labels do not fit", async () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
       const testId = this.getAttribute("data-testid");

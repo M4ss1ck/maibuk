@@ -556,11 +556,11 @@ export function NoteEditor({
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="max-w-56 truncate text-sm font-medium text-foreground">
-              {title || note.title || t("notes.untitled")}
-            </span>
-            <div className="min-w-0 max-w-96 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground">
+            {title || note.title || t("notes.untitled")}
+          </span>
+          <div className="mt-0.5 flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
               <NoteTagsRow
                 tags={note.tags}
                 dateLabel={timeAgo(note.updatedAt, i18n.language, t)}

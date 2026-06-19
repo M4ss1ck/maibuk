@@ -346,6 +346,7 @@ export function NotesList({
       onSelect={onSelectNote}
       onDelete={onDeleteNote}
       onDuplicate={onDuplicateNote}
+      onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
       draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
       onDragStart={(e) => handleDragStart(e, note.id)}
       onDragEnd={handleDragEnd}

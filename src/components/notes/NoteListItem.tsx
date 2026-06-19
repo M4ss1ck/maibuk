@@ -133,7 +133,7 @@ export function NoteListItem({
           </div>
 
           {preview && (
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
               {preview}
             </p>
           )}
