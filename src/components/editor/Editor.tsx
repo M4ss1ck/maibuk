@@ -39,6 +39,7 @@ import { Indent } from "./extensions/Indent";
 import { PasteHandler } from "./extensions/PasteHandler";
 import { CopyHandler } from "./extensions/CopyHandler";
 import { CodeBlockWithCopy } from "./extensions/CodeBlock";
+import { SmartItalic } from "./extensions/SmartItalic";
 import { SpellCheck } from "./extensions/SpellCheck";
 import { SearchReplace } from "./extensions/SearchReplace";
 import { Footnote } from "./extensions/Footnote";
@@ -164,8 +165,10 @@ export function Editor({
         link: false,
         underline: false,
         codeBlock: false,
+        italic: false,
       }),
       CodeBlockWithCopy,
+      SmartItalic,
       HeadingId,
       Placeholder.configure({
         placeholder,

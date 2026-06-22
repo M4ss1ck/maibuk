@@ -3,21 +3,17 @@
 A cross-platform writing app for authors. Built with Tauri, React, and TypeScript.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.1.4-green.svg)
+![Release](https://img.shields.io/github/v/release/M4ss1ck/maibuk)
 
 ## Features
 
-- 📝 **Rich Text Editor** - Full-featured editor with formatting options powered by TipTap
-- 📚 **Book & Chapter Management** - Organize your writing into books and chapters
-- 🎨 **Cover Designer** - Create custom book covers with an integrated canvas editor
-- 📖 **EPUB Export** - Export your books to EPUB format
-- 📄 **PDF Export** - Generate PDF versions of your work
-- 🌙 **Dark/Light Theme** - Toggle between themes for comfortable writing
-- 💾 **Auto-save** - Never lose your work with automatic saving
-- 🖼️ **Image Support** - Insert and manage images in your documents
-- 🔗 **Link Management** - Add and edit hyperlinks
-- 📊 **Tables** - Create and edit tables in your documents
-- 🔍 **Find & Replace** - Search and replace text across your document
+- **Rich text editor** powered by TipTap, with formatting, tables, links, and images
+- **Book and chapter management** to organize your writing
+- **Cover designer** with an integrated canvas editor
+- **EPUB and PDF export**
+- **Dark and light themes**
+- **Auto-save**
+- **Find and replace**
 
 ## Tech Stack
 
@@ -26,7 +22,7 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 - **Editor**: TipTap
 - **Database**: SQLite (via Drizzle ORM)
 - **UI**: Tailwind CSS + Headless UI
-- **Canvas**: Fabric.js (for cover design)
+- **Canvas**: Fabric.js (cover designer)
 
 ## Installation
 
@@ -37,7 +33,7 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 - [Node.js](https://nodejs.org/) (v18 or higher)
 - [pnpm](https://pnpm.io/)
 - [Rust](https://www.rust-lang.org/tools/install)
-- [Tauri Prerequisites](https://tauri.app/start/prerequisites/)
+- [Tauri prerequisites](https://tauri.app/start/prerequisites/)
 
 ##### Linux system libraries (Debian / Ubuntu / Linux Mint)
 
@@ -51,8 +47,8 @@ The file `gio-2.0.pc` needs to be installed and the PKG_CONFIG_PATH
 environment variable must contain its parent directory.
 ```
 
-Install the required development packages (this pulls in `glib`, `gobject`,
-`gio`, and `gtk` dev files that provide the missing `pkg-config` `.pc` files):
+Install the required development packages (these provide the `glib`, `gobject`,
+`gio`, and `gtk` dev files with the missing `pkg-config` `.pc` files):
 
 ```bash
 sudo apt update
@@ -68,13 +64,13 @@ sudo apt install \
   librsvg2-dev
 ```
 
-After installing, verify `pkg-config` can find the libraries:
+Then verify `pkg-config` can find the libraries:
 
 ```bash
 pkg-config --exists webkit2gtk-4.1 && echo "OK"
 ```
 
-For other distributions (Fedora, Arch, openSUSE, etc.), see the
+For other distributions (Fedora, Arch, openSUSE), see the
 [Tauri prerequisites guide](https://tauri.app/start/prerequisites/#linux).
 
 #### Development
@@ -108,10 +104,14 @@ pnpm build:web
 
 ## Embed Mode (iframe)
 
-`/embed` is a **standalone Tiptap editor playground** — a chrome-less page for iframe embedding on external sites. It shares nothing stateful with the rest of the app: no books, no sync, no persistence. Reloading the iframe resets the editor.
+`/embed` is a standalone TipTap editor playground: a chrome-less page for iframe
+embedding on external sites. It shares nothing stateful with the rest of the app
+(no books, no sync, no persistence). Reloading the iframe resets the editor.
 
 - URL: `/embed`
-- Optional query param: `theme=light` · `theme=dark` · `theme=system` (default `system`). Theme is applied locally to the iframe document only; it does **not** write to the app's persisted theme.
+- Optional query param: `theme=light` / `theme=dark` / `theme=system` (default
+  `system`). The theme is applied to the iframe document only; it does not write
+  to the app's persisted theme.
 
 ### Frame/CSP headers (Cloudflare Pages)
 
@@ -125,8 +125,9 @@ The production `frame-ancestors` policy lives in `public/_headers`:
 Notes:
 
 - Cloudflare Pages requires header lines to be indented under the path.
-- Do not send `X-Frame-Options` on `/embed` — it would conflict with `frame-ancestors`.
-- `public/_headers` is applied by Cloudflare Pages only; `pnpm dev:web` does not enforce CSP, so local iframe verification will succeed from any origin.
+- Do not send `X-Frame-Options` on `/embed`; it conflicts with `frame-ancestors`.
+- `public/_headers` is applied by Cloudflare Pages only. `pnpm dev:web` does not
+  enforce CSP, so local iframe verification succeeds from any origin.
 
 ### Local iframe verification
 
@@ -143,15 +144,13 @@ Notes:
 ></iframe>
 ```
 
-## Testing (TDD)
+## Testing
 
-This project now uses **Vitest + Testing Library** and follows a **test-driven development workflow**:
+The project uses Vitest + Testing Library and follows a test-driven workflow:
 
-1. Write a failing test first
-2. Implement the smallest change to make it pass
-3. Refactor while keeping tests green
-
-Commands:
+1. Write a failing test.
+2. Implement the smallest change to make it pass.
+3. Refactor while keeping tests green.
 
 ```bash
 # Watch mode (local TDD loop)
@@ -164,12 +163,12 @@ pnpm test:run
 pnpm test:coverage
 ```
 
-Test organization (to keep features uncluttered):
+Test organization:
 
 - Unit tests: `src/test/unit/**/*.test.ts`
 - Integration tests: `src/test/integration/**/*.test.ts`
 
-CI and release pipelines enforce coverage thresholds before build/release jobs.
+CI and release pipelines enforce coverage thresholds before build and release jobs.
 
 ## Project Structure
 
@@ -206,11 +205,11 @@ maibuk/
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Please open a pull request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Author
 

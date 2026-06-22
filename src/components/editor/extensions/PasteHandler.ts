@@ -5,6 +5,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import { useSettingsStore } from "../../../features/settings/store";
 import { cleanPastedHtml } from "../paste-cleanup";
 import { looksLikeMarkdown } from "../../../features/markdown";
+import { shouldPromptMarkdownPaste } from "./paste-markdown-guard";
 
 export interface PasteHandlerOptions {
   /**
@@ -72,9 +73,17 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
               const htmlPayload = clipboardData.getData("text/html");
               const isPlainSource =
                 !htmlPayload || !hasRichFormatting(htmlPayload);
+              // `view.input.shiftKey` reflects a paste-without-formatting
+              // (Ctrl/Cmd+Shift+V); never prompt for conversion there or inside
+              // code blocks.
+              const plainPaste = Boolean(
+                (view as unknown as { input?: { shiftKey?: boolean } }).input
+                  ?.shiftKey,
+              );
               if (
                 text &&
                 isPlainSource &&
+                shouldPromptMarkdownPaste(view.state, { plainPaste }) &&
                 useSettingsStore.getState().promptMarkdownOnPaste &&
                 looksLikeMarkdown(text)
               ) {

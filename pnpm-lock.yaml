@@ -86,6 +86,9 @@ importers:
       '@tiptap/extension-image':
         specifier: ^3.15.1
         version: 3.15.1(@tiptap/core@3.15.1(@tiptap/pm@3.15.1))
+      '@tiptap/extension-italic':
+        specifier: ^3.15.1
+        version: 3.15.1(@tiptap/core@3.15.1(@tiptap/pm@3.15.1))
       '@tiptap/extension-link':
         specifier: ^3.15.1
         version: 3.15.1(@tiptap/core@3.15.1(@tiptap/pm@3.15.1))(@tiptap/pm@3.15.1)
