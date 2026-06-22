@@ -39,6 +39,44 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 - [Rust](https://www.rust-lang.org/tools/install)
 - [Tauri Prerequisites](https://tauri.app/start/prerequisites/)
 
+##### Linux system libraries (Debian / Ubuntu / Linux Mint)
+
+Tauri's Rust backend links against the system GTK/WebKit libraries. On a fresh
+machine these are not installed, and `pnpm tauri dev` fails while building the
+`glib-sys` / `gobject-sys` / `gio-sys` crates with errors like:
+
+```
+The system library `gio-2.0` required by crate `gio-sys` was not found.
+The file `gio-2.0.pc` needs to be installed and the PKG_CONFIG_PATH
+environment variable must contain its parent directory.
+```
+
+Install the required development packages (this pulls in `glib`, `gobject`,
+`gio`, and `gtk` dev files that provide the missing `pkg-config` `.pc` files):
+
+```bash
+sudo apt update
+sudo apt install \
+  libwebkit2gtk-4.1-dev \
+  build-essential \
+  curl \
+  wget \
+  file \
+  libxdo-dev \
+  libssl-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev
+```
+
+After installing, verify `pkg-config` can find the libraries:
+
+```bash
+pkg-config --exists webkit2gtk-4.1 && echo "OK"
+```
+
+For other distributions (Fedora, Arch, openSUSE, etc.), see the
+[Tauri prerequisites guide](https://tauri.app/start/prerequisites/#linux).
+
 #### Development
 
 ```bash
