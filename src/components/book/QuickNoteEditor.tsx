@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { SmartItalic } from "../editor/extensions/SmartItalic";
 import {
   Bold,
   Italic,
@@ -28,7 +29,8 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ underline: false }),
+      StarterKit.configure({ underline: false, italic: false }),
+      SmartItalic,
       Underline,
       TaskList,
       TaskItem.configure({ nested: true }),

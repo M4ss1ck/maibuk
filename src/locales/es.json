@@ -352,6 +352,7 @@
     "themeOneLight": "One Light",
     "exportMarkdown": "Exportar como Markdown",
     "formatAsMarkdown": "Formatear como Markdown",
+    "pasteWithoutFormatting": "Pegar sin formato",
     "markdownDetectedTitle": "Markdown detectado",
     "markdownDetectedBody": "Esto parece Markdown. ¿Convertirlo a texto con formato?",
     "convert": "Convertir",

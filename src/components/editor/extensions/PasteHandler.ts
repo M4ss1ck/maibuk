@@ -5,6 +5,8 @@ import type { EditorView } from "@tiptap/pm/view";
 import { useSettingsStore } from "../../../features/settings/store";
 import { cleanPastedHtml } from "../paste-cleanup";
 import { looksLikeMarkdown } from "../../../features/markdown";
+import { shouldPromptMarkdownPaste } from "./paste-markdown-guard";
+import { hasRichFormatting } from "../clipboard";
 
 export interface PasteHandlerOptions {
   /**
@@ -14,14 +16,6 @@ export interface PasteHandlerOptions {
    * the handler is responsible for inserting content (e.g. after a dialog).
    */
   onMarkdownPaste: ((text: string) => void) | null;
-}
-
-/** True when the HTML clipboard payload carries real rich formatting we should
- * keep on the normal cleanup path rather than treating as Markdown source. */
-function hasRichFormatting(html: string): boolean {
-  return /<(h[1-6]|ul|ol|li|strong|b|em|i|blockquote|a|img|table|pre)\b/i.test(
-    html,
-  );
 }
 
 /**
@@ -72,9 +66,17 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
               const htmlPayload = clipboardData.getData("text/html");
               const isPlainSource =
                 !htmlPayload || !hasRichFormatting(htmlPayload);
+              // `view.input.shiftKey` reflects a paste-without-formatting
+              // (Ctrl/Cmd+Shift+V); never prompt for conversion there or inside
+              // code blocks.
+              const plainPaste = Boolean(
+                (view as unknown as { input?: { shiftKey?: boolean } }).input
+                  ?.shiftKey,
+              );
               if (
                 text &&
                 isPlainSource &&
+                shouldPromptMarkdownPaste(view.state, { plainPaste }) &&
                 useSettingsStore.getState().promptMarkdownOnPaste &&
                 looksLikeMarkdown(text)
               ) {
