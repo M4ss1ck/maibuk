@@ -6,6 +6,7 @@ import { useSettingsStore } from "../../../features/settings/store";
 import { cleanPastedHtml } from "../paste-cleanup";
 import { looksLikeMarkdown } from "../../../features/markdown";
 import { shouldPromptMarkdownPaste } from "./paste-markdown-guard";
+import { hasRichFormatting } from "../clipboard";
 
 export interface PasteHandlerOptions {
   /**
@@ -15,14 +16,6 @@ export interface PasteHandlerOptions {
    * the handler is responsible for inserting content (e.g. after a dialog).
    */
   onMarkdownPaste: ((text: string) => void) | null;
-}
-
-/** True when the HTML clipboard payload carries real rich formatting we should
- * keep on the normal cleanup path rather than treating as Markdown source. */
-function hasRichFormatting(html: string): boolean {
-  return /<(h[1-6]|ul|ol|li|strong|b|em|i|blockquote|a|img|table|pre)\b/i.test(
-    html,
-  );
 }
 
 /**

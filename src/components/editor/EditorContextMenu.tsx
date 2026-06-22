@@ -7,13 +7,18 @@ import {
   BookOpen,
   ClipboardCopy,
   ClipboardPaste,
+  RemoveFormatting,
   Sparkles,
 } from "lucide-react";
 import { spellCheckService } from "../../lib/spellcheck";
 import { looksLikeMarkdown, markdownToEditorHtml } from "../../features/markdown";
 import { Divider } from "./ToolbarButton";
 import { adjustPosition, clampPosition, getWordAtPosition } from "./editor-context-menu-utils";
-import { fallbackPaste, useClipboardProbe } from "./useClipboardProbe";
+import {
+  fallbackPaste,
+  pasteWithoutFormatting,
+  useClipboardProbe,
+} from "./useClipboardProbe";
 
 interface EditorContextMenuProps {
   editor: Editor;
@@ -34,6 +39,7 @@ type MenuState = {
   isLoadingSuggestions: boolean;
   wordUnderCursor: string | null;
   canPaste: boolean;
+  hasFormatting: boolean;
   markdown: { from: number; to: number; text: string } | null;
 };
 
@@ -162,14 +168,15 @@ export function EditorContextMenu({
         isLoadingSuggestions: !!misspelling,
         wordUnderCursor,
         canPaste: false,
+        hasFormatting: false,
         markdown,
       });
 
-      void consumeProbe().then((canPaste) => {
-        if (!canPaste) return;
+      void consumeProbe().then(({ canPaste, hasFormatting }) => {
+        if (!canPaste && !hasFormatting) return;
         setMenu((prev) => {
           if (!prev || prev.id !== menuId) return prev;
-          return { ...prev, canPaste: true };
+          return { ...prev, canPaste, hasFormatting };
         });
       });
 
@@ -291,6 +298,19 @@ export function EditorContextMenu({
           <span className="truncate">{t("common.paste")}</span>
         </button>
       </div>
+      {menu.hasFormatting && (
+        <button
+          type="button"
+          onClick={() => {
+            void pasteWithoutFormatting(editor);
+            close();
+          }}
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
+        >
+          <RemoveFormatting className="w-4 h-4 shrink-0" />
+          <span className="truncate">{t("editor.pasteWithoutFormatting")}</span>
+        </button>
+      )}
       <Divider />
       {/* Spelling section */}
       {hasMisspelling && (
