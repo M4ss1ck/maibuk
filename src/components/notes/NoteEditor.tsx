@@ -573,13 +573,6 @@ export function NoteEditor({
             {title || note.title || t("notes.untitled")}
           </span>
           <div className="flex min-w-0 items-center gap-2">
-            <div className="min-w-0 max-w-full">
-              <NoteTagsRow
-                tags={note.tags}
-                dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
-                datePosition="left"
-              />
-            </div>
             <div ref={tagEditorRef} className="relative shrink-0">
               <button
                 type="button"
@@ -592,7 +585,7 @@ export function NoteEditor({
                 <Tags className="h-4 w-4" />
               </button>
               {showTagEditor && (
-                <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-border bg-background p-3 shadow-lg">
+                <div className="absolute left-0 top-full z-30 mt-2 w-64 rounded-lg border border-border bg-background p-3 shadow-lg">
                   <TagEditor
                     tags={note.tags}
                     allTags={allTags}
@@ -601,6 +594,13 @@ export function NoteEditor({
                   />
                 </div>
               )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <NoteTagsRow
+                tags={note.tags}
+                dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
+                datePosition="left"
+              />
             </div>
           </div>
         </div>

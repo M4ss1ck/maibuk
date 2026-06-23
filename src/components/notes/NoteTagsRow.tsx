@@ -32,7 +32,7 @@ function TagChip({
 export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTagsRowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
-  const [visibleCount, setVisibleCount] = useState(tags.length > 0 ? 1 : 0);
+  const [visibleCount, setVisibleCount] = useState(0);
   const [showHiddenTags, setShowHiddenTags] = useState(false);
 
   useLayoutEffect(() => {
@@ -55,7 +55,7 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
       const availableForTags = container.clientWidth - dateWidth;
 
       if (availableForTags <= 0 || tagWidths.every((width) => width === 0)) {
-        setVisibleCount(tags.length > 0 ? 1 : 0);
+        setVisibleCount(0);
         return;
       }
 
@@ -75,7 +75,7 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
         nextVisibleCount += 1;
       }
 
-      setVisibleCount(Math.max(tags.length > 0 ? 1 : 0, nextVisibleCount));
+      setVisibleCount(nextVisibleCount);
     };
 
     calculateVisibleTags();

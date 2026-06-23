@@ -15,13 +15,8 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("TagEditor", () => {
-  it("reveals the combobox when the add button is clicked", async () => {
-    const user = userEvent.setup();
-
+  it("renders the tag combobox immediately", () => {
     render(<TagEditor tags={[]} allTags={["draft"]} onChange={vi.fn()} />);
-
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "+ Add" }));
     expect(screen.getByRole("combobox")).toBeInTheDocument();
   });
 
@@ -33,9 +28,8 @@ describe("TagEditor", () => {
       <TagEditor tags={["draft"]} allTags={["draft", "ideas", "research"]} onChange={onChange} />
     );
 
-    await user.click(screen.getByRole("button", { name: "+ Add" }));
     await user.type(screen.getByRole("combobox"), "ide");
-    await user.click(await screen.findByText("ideas"));
+    await user.click(await screen.findByRole("button", { name: "ideas" }));
 
     expect(onChange).toHaveBeenCalledWith(["draft", "ideas"]);
   });
@@ -45,7 +39,6 @@ describe("TagEditor", () => {
 
     render(<TagEditor tags={["draft"]} allTags={["draft", "ideas"]} onChange={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "+ Add" }));
     await user.click(screen.getByRole("combobox"));
     await screen.findByText("ideas");
     expect(screen.getByRole("checkbox", { name: "draft" })).toBeChecked();
@@ -57,12 +50,9 @@ describe("TagEditor", () => {
 
     render(<TagEditor tags={["draft"]} allTags={["draft"]} onChange={onChange} />);
 
-    await user.click(screen.getByRole("button", { name: "+ Add" }));
     await user.type(screen.getByRole("combobox"), "plot{Enter}");
 
     expect(onChange).toHaveBeenCalledWith(["draft", "plot"]);
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "+ Add" })).toBeInTheDocument();
   });
 
   it("ignores adding a tag that is already selected", async () => {
@@ -71,7 +61,6 @@ describe("TagEditor", () => {
 
     render(<TagEditor tags={["draft"]} allTags={["draft"]} onChange={onChange} />);
 
-    await user.click(screen.getByRole("button", { name: "+ Add" }));
     await user.type(screen.getByRole("combobox"), "draft{Enter}");
 
     expect(onChange).not.toHaveBeenCalled();
