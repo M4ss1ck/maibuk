@@ -46,11 +46,11 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
-          <Route path="notes" element={<Notes />} />
           <Route path="metrics" element={<Metrics />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         {/* Full-page editors without sidebar */}
+        <Route path="notes" element={<Notes />} />
         <Route path="book/:bookId" element={<BookEditor />} />
         <Route path="book/:bookId/cover" element={<CoverDesigner />} />
       </Routes>

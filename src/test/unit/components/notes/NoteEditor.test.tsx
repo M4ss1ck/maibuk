@@ -15,6 +15,7 @@ vi.mock("react-i18next", () => ({
         "notes.bodyPlaceholder": "Start writing...",
         "notes.pin": "Pin",
         "notes.unpin": "Unpin",
+        "notes.backToProjects": "Back to Projects",
       };
       if (key === "notes.backToBook") return `Back to ${params?.title ?? ""}`;
       return map[key] ?? key;
@@ -185,7 +186,7 @@ describe("NoteEditor", () => {
     expect(onReturnToBook).toHaveBeenCalled();
   });
 
-  it("omits the back-to-book button when no return target is provided", () => {
+  it("falls back to a back-to-projects button when no return target is provided", () => {
     render(
       <NoteEditor
         note={buildNote({})}
@@ -194,6 +195,11 @@ describe("NoteEditor", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: /Back to/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Back to Projects" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Back to My Book/ }),
+    ).not.toBeInTheDocument();
   });
 });

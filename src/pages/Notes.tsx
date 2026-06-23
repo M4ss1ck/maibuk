@@ -159,7 +159,7 @@ export function Notes() {
   );
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-dvh overflow-hidden">
       <div
         className={`h-full relative shrink-0 ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
         style={{ width: `${notesSidebarWidth}px` }}
@@ -201,7 +201,10 @@ export function Notes() {
             suppressRestore={hasPendingHeadingScroll}
           />
         ) : (
-          <EmptyNotes onCreateNote={handleCreateNote} />
+          <EmptyNotes
+            onCreateNote={handleCreateNote}
+            onBack={() => navigate("/")}
+          />
         )}
       </div>
     </div>

@@ -149,6 +149,7 @@
     "search": "Search notes...",
     "untitled": "Untitled note",
     "backToBook": "Back to {{title}}",
+    "backToProjects": "Back to Projects",
     "viewList": "List",
     "viewTree": "Tree",
     "sectionPinned": "Pinned",

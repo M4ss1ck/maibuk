@@ -557,18 +557,18 @@ export function NoteEditor({
           <BackIcon className="w-5 h-5" />
         </button>
 
-        {onReturnToBook && (
-          <button
-            type="button"
-            onClick={onReturnToBook}
-            className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="max-w-40 truncate">
-              {t("notes.backToBook", { title: returnLabel ?? "" })}
-            </span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onReturnToBook ?? (() => navigate("/"))}
+          className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="max-w-40 truncate">
+            {onReturnToBook
+              ? t("notes.backToBook", { title: returnLabel ?? "" })
+              : t("notes.backToProjects")}
+          </span>
+        </button>
 
         <div className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium leading-tight text-foreground">
