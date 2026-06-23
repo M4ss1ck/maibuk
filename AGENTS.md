@@ -244,6 +244,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
 | `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |
 | `ResponsiveToggleGroup` (measured segmented toggle; labels collapse to icons only when full labels do not fit) | `src/components/ui/ResponsiveToggleGroup.tsx` |
+| `MultiSelectCombobox` (multi-select chips, checkbox dropdown, optional custom values) | `src/components/ui/MultiSelectCombobox.tsx` |
 | `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`             |
 | `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`      |
 | `isTypingTarget()` / `isModKey()`                                  | `src/lib/keyboard.ts`                      |
@@ -290,6 +291,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 - **Typography**: Three font families defined — `font-sans` (Inter), `font-serif` (Literata), `font-mono`
 - **Button variants**: `primary`, `secondary`, `ghost`, `destructive` — use the existing `Button` component, don't create ad-hoc button styles
 - **Border radius**: Consistently `rounded-lg` across the codebase
+- **Keyboard compatibility**: Any UI feature with interactive controls must support keyboard navigation, clear focus placement, and relevant shortcuts via `useShortcuts` when a shortcut is part of the workflow
 
 ---
 
@@ -353,6 +355,7 @@ src/test/
     │       ├── Combobox.test.tsx
     │       ├── Input.test.tsx
     │       ├── Modal.test.tsx
+    │       ├── MultiSelectCombobox.test.tsx
     │       ├── Select.test.tsx
     │       ├── Switch.test.tsx
     │       └── Toast.test.tsx

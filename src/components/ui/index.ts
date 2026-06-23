@@ -3,6 +3,7 @@ export { Combobox } from "./Combobox";
 export { Input } from "./Input";
 export { KeyboardShortcut } from "./KeyboardShortcut";
 export { Modal } from "./Modal";
+export { MultiSelectCombobox } from "./MultiSelectCombobox";
 export { ResponsiveToggleGroup } from "./ResponsiveToggleGroup";
 export type { ResponsiveToggleOption } from "./ResponsiveToggleGroup";
 export { Select } from "./Select";

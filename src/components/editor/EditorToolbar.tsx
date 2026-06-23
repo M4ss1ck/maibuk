@@ -26,6 +26,7 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 import { openExternal } from "../../lib/platform";
 import { isModKey } from "../../lib/keyboard";
+import { useShortcuts } from "../../lib/shortcuts";
 import {
   Bold,
   Italic,
@@ -98,6 +99,7 @@ export function EditorToolbar({
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [findReplaceFocusSignal, setFindReplaceFocusSignal] = useState(0);
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [showFootnoteDialog, setShowFootnoteDialog] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
@@ -154,6 +156,11 @@ export function EditorToolbar({
     },
     [editor],
   );
+
+  const openFindReplace = useCallback(() => {
+    setShowFindReplace(true);
+    setFindReplaceFocusSignal((current) => current + 1);
+  }, []);
 
   const handleHtmlPanelReady = useCallback(
     (handle: { highlightRange: (from: number, to: number) => void } | null) => {
@@ -292,12 +299,6 @@ export function EditorToolbar({
 
       const key = event.key.toLowerCase();
 
-      if (key === "f") {
-        event.preventDefault();
-        setShowFindReplace(true);
-        return;
-      }
-
       if (key === "k") {
         event.preventDefault();
         setShowLinkDialog(true);
@@ -321,6 +322,14 @@ export function EditorToolbar({
       dom.removeEventListener("keydown", handleEditorKeyDown);
     };
   }, [editor]);
+
+  useShortcuts([
+    {
+      keys: ["ctrl+f", "meta+f"],
+      allowInInput: true,
+      onTrigger: openFindReplace,
+    },
+  ]);
 
   return (
     <div className="border-b border-border bg-background sticky top-0 z-10">
@@ -410,7 +419,13 @@ export function EditorToolbar({
         <Divider />
 
         <ToolbarButton
-          onClick={() => setShowFindReplace(!showFindReplace)}
+          onClick={() => {
+            if (showFindReplace) {
+              setShowFindReplace(false);
+            } else {
+              openFindReplace();
+            }
+          }}
           isActive={showFindReplace}
           title={t("editor.findReplaceShortcut")}
         >
@@ -753,6 +768,7 @@ export function EditorToolbar({
         editor={editor}
         isOpen={showFindReplace}
         onClose={() => setShowFindReplace(false)}
+        focusSignal={findReplaceFocusSignal}
       />
       <ImageInsertDialog
         editor={editor}

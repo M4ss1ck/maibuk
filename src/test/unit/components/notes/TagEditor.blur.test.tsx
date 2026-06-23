@@ -12,22 +12,21 @@ vi.mock("react-i18next", () => ({
 }));
 
 describe("TagEditor blur behavior", () => {
-  it("dismisses the add tag input when focus leaves the tag editor", async () => {
+  it("notifies when the open tag combobox is dismissed", async () => {
     const user = userEvent.setup();
+    const onClose = vi.fn();
 
     render(
       <>
-        <TagEditor tags={[]} allTags={["draft"]} onChange={vi.fn()} />
+        <TagEditor tags={[]} allTags={["draft"]} onChange={vi.fn()} onClose={onClose} />
         <button type="button">Outside</button>
       </>,
     );
-
-    await user.click(screen.getByRole("button", { name: "+ common.add" }));
 
     expect(screen.getByRole("combobox")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Outside" }));
 
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(onClose).toHaveBeenCalled();
   });
 });

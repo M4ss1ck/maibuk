@@ -26,6 +26,7 @@ interface FindReplaceProps {
   editor: Editor;
   isOpen: boolean;
   onClose: () => void;
+  focusSignal?: number;
 }
 
 function IconButton({
@@ -56,7 +57,7 @@ function IconButton({
   );
 }
 
-export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
+export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindReplaceProps) {
   const { t } = useTranslation();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -130,9 +131,13 @@ export function FindReplace({ editor, isOpen, onClose }: FindReplaceProps) {
         setSearchTerm(selected);
       }
     }
+  }, [isOpen, editor]);
+
+  useEffect(() => {
+    if (!isOpen) return;
     findInputRef.current?.focus();
     findInputRef.current?.select();
-  }, [isOpen, editor]);
+  }, [isOpen, focusSignal]);
 
   // Dismiss when clicking outside the panel.
   useEffect(() => {

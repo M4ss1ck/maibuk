@@ -52,6 +52,7 @@ export default defineConfig(() => ({
         "src/components/ui/Switch.tsx",
         "src/components/ui/Toast.tsx",
         "src/components/ui/Combobox.tsx",
+        "src/components/ui/MultiSelectCombobox.tsx",
         // Phase 4: Integration (routing, providers, layout)
         "src/components/LoadingScreen.tsx",
         "src/components/PathTracker.tsx",

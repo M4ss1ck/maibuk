@@ -102,7 +102,7 @@ describe("GlobalShortcuts — context-aware Sync Now", () => {
   });
 
   it("pushes only the current note when one is open on the notes page", () => {
-    currentPathname = "/notes";
+    currentPathname = "/notes/note-1";
     currentNote = { id: "note-1" };
     render(<GlobalShortcuts />);
 

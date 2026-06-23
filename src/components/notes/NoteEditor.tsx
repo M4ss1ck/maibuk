@@ -459,7 +459,7 @@ export function NoteEditor({
               .getState()
               .createNote({ title: label })
               .then((created) => {
-                navigate("/notes", { state: { openNoteId: created.id } });
+                navigate(`/notes/${created.id}`);
               });
           }
         }
@@ -557,18 +557,16 @@ export function NoteEditor({
           <BackIcon className="w-5 h-5" />
         </button>
 
-        {onReturnToBook && (
-          <button
-            type="button"
-            onClick={onReturnToBook}
-            className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="max-w-40 truncate">
-              {t("notes.backToBook", { title: returnLabel ?? "" })}
-            </span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onReturnToBook ?? (() => navigate("/notes"))}
+          className="inline-flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          {onReturnToBook && returnLabel ? <span className="max-w-40 truncate">
+            {t("notes.backToBook", { title: returnLabel ?? "" })}
+          </span> : null}
+        </button>
 
         <div className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium leading-tight text-foreground">
@@ -580,31 +578,31 @@ export function NoteEditor({
                 tags={note.tags}
                 dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
                 datePosition="left"
+                action={
+                  <div ref={tagEditorRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowTagEditor((current) => !current)}
+                      className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      title={t("notes.addTag")}
+                      aria-label={t("notes.addTag")}
+                      aria-expanded={showTagEditor}
+                    >
+                      <Tags className="h-4 w-4" />
+                    </button>
+                    {showTagEditor && (
+                      <div className="absolute left-0 top-full z-30 mt-2">
+                        <TagEditor
+                          tags={note.tags}
+                          allTags={allTags}
+                          onChange={handleTagsChange}
+                          onClose={() => setShowTagEditor(false)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                }
               />
-            </div>
-            <div ref={tagEditorRef} className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowTagEditor((current) => !current)}
-                className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                title={t("notes.addTag")}
-                aria-label={t("notes.addTag")}
-                aria-expanded={showTagEditor}
-              >
-                <Tags className="h-4 w-4" />
-              </button>
-              {showTagEditor && (
-                <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-border bg-background p-3 shadow-lg">
-                  <TagEditor
-                    tags={note.tags}
-                    allTags={allTags}
-                    onChange={(nextTags) => {
-                      handleTagsChange(nextTags);
-                      setShowTagEditor(false);
-                    }}
-                  />
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -614,7 +612,7 @@ export function NoteEditor({
         <span className="text-xs text-muted-foreground">
           {wordCount.toLocaleString()} {t("common.words")}
         </span>
-        
+
         <SyncStatusButton />
 
         <ThemeToggle variant="dropdown" />
@@ -623,9 +621,8 @@ export function NoteEditor({
           <button
             type="button"
             onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-            className={`p-1 rounded transition-colors ${
-              alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
-            }`}
+            className={`p-1 rounded transition-colors ${alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
+              }`}
             title={t("settings.alwaysOnTop")}
           >
             <Pin className="w-4 h-4" />

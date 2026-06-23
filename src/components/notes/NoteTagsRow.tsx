@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { tagColor } from "./tagColor";
 
@@ -7,6 +8,8 @@ interface NoteTagsRowProps {
   tags: string[];
   dateLabel: string;
   datePosition?: "left" | "right";
+  action?: ReactNode;
+  interactiveOverflow?: boolean;
 }
 
 function TagChip({
@@ -29,10 +32,17 @@ function TagChip({
   );
 }
 
-export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTagsRowProps) {
+export function NoteTagsRow({
+  tags,
+  dateLabel,
+  datePosition = "right",
+  action,
+  interactiveOverflow = true,
+}: NoteTagsRowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
-  const [visibleCount, setVisibleCount] = useState(tags.length > 0 ? 1 : 0);
+  const actionRef = useRef<HTMLSpanElement>(null);
+  const [visibleCount, setVisibleCount] = useState(0);
   const [showHiddenTags, setShowHiddenTags] = useState(false);
 
   useLayoutEffect(() => {
@@ -52,10 +62,12 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
       const tagWidths = children
         .slice(1, 1 + tags.length)
         .map((el) => el.offsetWidth);
-      const availableForTags = container.clientWidth - dateWidth;
+      const actionWidth = actionRef.current?.offsetWidth ?? 0;
+      const actionGap = actionWidth > 0 ? GAP : 0;
+      const availableForTags = container.clientWidth - dateWidth - actionWidth - actionGap;
 
       if (availableForTags <= 0 || tagWidths.every((width) => width === 0)) {
-        setVisibleCount(tags.length > 0 ? 1 : 0);
+        setVisibleCount(0);
         return;
       }
 
@@ -75,15 +87,16 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
         nextVisibleCount += 1;
       }
 
-      setVisibleCount(Math.max(tags.length > 0 ? 1 : 0, nextVisibleCount));
+      setVisibleCount(nextVisibleCount);
     };
 
     calculateVisibleTags();
 
     const observer = new ResizeObserver(calculateVisibleTags);
     observer.observe(container);
+    if (actionRef.current) observer.observe(actionRef.current);
     return () => observer.disconnect();
-  }, [tags]);
+  }, [tags, action]);
 
   const hiddenTags = tags.slice(visibleCount);
   const hiddenCount = hiddenTags.length;
@@ -101,12 +114,17 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
   return (
     <div ref={containerRef} className="relative flex min-w-0 items-center gap-1">
       {datePosition === "left" && dateEl}
+      {action && (
+        <span ref={actionRef} className="shrink-0">
+          {action}
+        </span>
+      )}
 
       {tags.slice(0, visibleCount).map((tag) => (
         <TagChip key={tag} tag={tag} className="min-w-0 truncate" />
       ))}
 
-      {hiddenCount > 0 && (
+      {hiddenCount > 0 && interactiveOverflow && (
         <button
           type="button"
           className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -125,9 +143,15 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
         </button>
       )}
 
+      {hiddenCount > 0 && !interactiveOverflow && (
+        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          +{hiddenCount}
+        </span>
+      )}
+
       {datePosition === "right" && dateEl}
 
-      {showHiddenTags && hiddenCount > 0 && (
+      {showHiddenTags && hiddenCount > 0 && interactiveOverflow && (
         <div className="absolute left-0 top-full z-20 mt-1 flex max-w-56 flex-wrap gap-1 rounded-lg border border-border bg-background p-2 shadow-lg">
           {hiddenTags.map((tag) => (
             <TagChip key={tag} tag={tag} className="shrink-0" />

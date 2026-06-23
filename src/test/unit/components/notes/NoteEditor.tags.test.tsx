@@ -113,9 +113,8 @@ describe("NoteEditor tags", () => {
     render(<NoteEditor note={buildNote({ tags: ["draft"] })} onSave={onSave} onBack={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "Add tag" }));
-    await user.click(screen.getByRole("button", { name: "+ Add" }));
     await user.type(screen.getByRole("combobox"), "rese");
-    await user.click(await screen.findByText("research"));
+    await user.click(await screen.findByRole("button", { name: "research" }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith({
@@ -137,7 +136,6 @@ describe("NoteEditor task bar tag editing", () => {
     render(<NoteEditor note={buildNote({ tags: ["draft"] })} onSave={onSave} onBack={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "Add tag" }));
-    await user.click(screen.getByRole("button", { name: "+ Add" }));
     await user.type(screen.getByRole("combobox"), "research{Enter}");
 
     await waitFor(() =>
