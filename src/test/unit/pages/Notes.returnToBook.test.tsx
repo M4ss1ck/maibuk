@@ -53,6 +53,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mockNavigate,
   useLocation: () => mockLocation,
+  useParams: () => ({ noteId: "n1" }),
 }));
 
 vi.mock("../../../features/notes", () => {

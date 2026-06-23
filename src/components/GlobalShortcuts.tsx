@@ -162,7 +162,7 @@ export function GlobalShortcuts() {
           return;
         }
 
-        if (location.pathname === "/notes") {
+        if (location.pathname.startsWith("/notes/")) {
           const { currentNote } = useNoteStore.getState();
           if (currentNote) {
             store.syncSingleNote(currentNote.id, passphrase, skipConflicts).catch(() => { });

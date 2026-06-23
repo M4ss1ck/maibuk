@@ -3,12 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { navigateToLinkTarget } from "../../../../features/links/navigate";
 
 describe("navigateToLinkTarget", () => {
-  it("routes a note URI to /notes with note state", () => {
+  it("routes a note URI to the note editor", () => {
     const navigate = vi.fn();
     navigateToLinkTarget("maibuk://note/n1", navigate);
-    expect(navigate).toHaveBeenCalledWith("/notes", {
-      state: { openNoteId: "n1" },
-    });
+    expect(navigate).toHaveBeenCalledWith("/notes/n1");
   });
 
   it("routes a heading URI to the book editor with chapter+heading state", () => {
@@ -21,11 +19,11 @@ describe("navigateToLinkTarget", () => {
     });
   });
 
-  it("routes a note-heading URI to notes with note+heading state", () => {
+  it("routes a note-heading URI to the note editor with heading state", () => {
     const navigate = vi.fn();
     navigateToLinkTarget("maibuk://note-heading/n1/h-research", navigate);
-    expect(navigate).toHaveBeenCalledWith("/notes", {
-      state: { openNoteId: "n1", scrollToHeadingId: "h-research" },
+    expect(navigate).toHaveBeenCalledWith("/notes/n1", {
+      state: { scrollToHeadingId: "h-research" },
     });
   });
 

@@ -459,7 +459,7 @@ export function NoteEditor({
               .getState()
               .createNote({ title: label })
               .then((created) => {
-                navigate("/notes", { state: { openNoteId: created.id } });
+                navigate(`/notes/${created.id}`);
               });
           }
         }
@@ -559,15 +559,13 @@ export function NoteEditor({
 
         <button
           type="button"
-          onClick={onReturnToBook ?? (() => navigate("/"))}
-          className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={onReturnToBook ?? (() => navigate("/notes"))}
+          className="inline-flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="max-w-40 truncate">
-            {onReturnToBook
-              ? t("notes.backToBook", { title: returnLabel ?? "" })
-              : t("notes.backToProjects")}
-          </span>
+          <ArrowLeft className="w-5 h-5" />
+          {onReturnToBook && returnLabel ? <span className="max-w-40 truncate">
+            {t("notes.backToBook", { title: returnLabel ?? "" })}
+          </span> : null}
         </button>
 
         <div className="min-w-0 flex-1">
@@ -614,7 +612,7 @@ export function NoteEditor({
         <span className="text-xs text-muted-foreground">
           {wordCount.toLocaleString()} {t("common.words")}
         </span>
-        
+
         <SyncStatusButton />
 
         <ThemeToggle variant="dropdown" />
@@ -623,9 +621,8 @@ export function NoteEditor({
           <button
             type="button"
             onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-            className={`p-1 rounded transition-colors ${
-              alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
-            }`}
+            className={`p-1 rounded transition-colors ${alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
+              }`}
             title={t("settings.alwaysOnTop")}
           >
             <Pin className="w-4 h-4" />

@@ -20,7 +20,7 @@ export function EmptyNotes({ onCreateNote, onBack }: EmptyNotesProps) {
             className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="max-w-40 truncate">{t("notes.backToProjects")}</span>
+            <span className="max-w-40 truncate">{t("common.back")}</span>
           </button>
         </div>
       )}

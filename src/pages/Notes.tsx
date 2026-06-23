@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useNoteStore } from "../features/notes";
 import type { Note, UpdateNoteInput } from "../features/notes";
 import { useBookStore } from "../features/books/store";
@@ -29,6 +29,7 @@ export function Notes() {
   const isResizing = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { noteId } = useParams();
   const hasPendingHeadingScroll = Boolean(
     (location.state as { scrollToHeadingId?: string } | null)
       ?.scrollToHeadingId,
@@ -39,44 +40,43 @@ export function Notes() {
   } | null>(null);
 
   useEffect(() => {
-    async function init() {
-      await loadNotes();
-      await loadBooks();
-      if (!useNoteStore.getState().currentNote && lastNoteId) {
-        await loadNote(lastNoteId);
-        if (!useNoteStore.getState().currentNote) {
-          setLastNoteId(null);
-        }
-      }
-    }
-    init();
-  }, [loadNotes, loadBooks, loadNote, lastNoteId, setLastNoteId]);
+    void loadNotes();
+    void loadBooks();
+  }, [loadNotes, loadBooks]);
 
   useEffect(() => {
     const state = location.state as {
-      openNoteId?: string;
-      scrollToHeadingId?: string;
       returnTo?: string;
       returnLabel?: string;
     } | null;
     if (state?.returnTo) {
       setReturnTarget({ to: state.returnTo, label: state.returnLabel ?? "" });
     }
-    if (state?.openNoteId) {
-      void loadNote(state.openNoteId).then(() => {
-        if (!state.scrollToHeadingId) return;
-        const headingId = state.scrollToHeadingId;
+  }, [location.state]);
+
+  // Open the note named in the route. Fall back to the gallery if it is gone.
+  useEffect(() => {
+    if (!noteId) return;
+    const scrollToHeadingId = (
+      location.state as { scrollToHeadingId?: string } | null
+    )?.scrollToHeadingId;
+    void loadNote(noteId).then(() => {
+      if (!useNoteStore.getState().currentNote) {
+        navigate("/notes", { replace: true });
+        return;
+      }
+      setLastNoteId(noteId);
+      if (!scrollToHeadingId) return;
+      requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            document.getElementById(headingId)?.scrollIntoView({
-              behavior: "smooth",
-              block: "start",
-            });
+          document.getElementById(scrollToHeadingId)?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
           });
         });
       });
-    }
-  }, [location.state, loadNote]);
+    });
+  }, [noteId, loadNote, navigate, setLastNoteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreateNote = async (bookId?: string | null) => {
     const note = await createNote({ title: "", bookId: bookId ?? null });
@@ -203,7 +203,7 @@ export function Notes() {
         ) : (
           <EmptyNotes
             onCreateNote={handleCreateNote}
-            onBack={() => navigate("/")}
+            onBack={() => navigate("/notes")}
           />
         )}
       </div>

@@ -184,8 +184,8 @@ describe("BookEditor book notes panel", () => {
     };
     props.onOpenNote("n1");
 
-    expect(mockNavigate).toHaveBeenCalledWith("/notes", {
-      state: { openNoteId: "n1", returnTo: "/book/book-1", returnLabel: "Draft" },
+    expect(mockNavigate).toHaveBeenCalledWith("/notes/n1", {
+      state: { returnTo: "/book/book-1", returnLabel: "Draft" },
     });
   });
 });

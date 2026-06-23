@@ -152,9 +152,8 @@ export function BookEditor() {
 
   const handleOpenBookNote = useCallback(
     (noteId: string) => {
-      navigate("/notes", {
+      navigate(`/notes/${noteId}`, {
         state: {
-          openNoteId: noteId,
           returnTo: `/book/${bookId}`,
           returnLabel: currentBook?.title ?? "",
         },
