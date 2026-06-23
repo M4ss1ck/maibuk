@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { tagColor } from "./tagColor";
 
@@ -7,6 +8,7 @@ interface NoteTagsRowProps {
   tags: string[];
   dateLabel: string;
   datePosition?: "left" | "right";
+  action?: ReactNode;
 }
 
 function TagChip({
@@ -29,9 +31,15 @@ function TagChip({
   );
 }
 
-export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTagsRowProps) {
+export function NoteTagsRow({
+  tags,
+  dateLabel,
+  datePosition = "right",
+  action,
+}: NoteTagsRowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef<HTMLSpanElement>(null);
   const [visibleCount, setVisibleCount] = useState(0);
   const [showHiddenTags, setShowHiddenTags] = useState(false);
 
@@ -52,7 +60,9 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
       const tagWidths = children
         .slice(1, 1 + tags.length)
         .map((el) => el.offsetWidth);
-      const availableForTags = container.clientWidth - dateWidth;
+      const actionWidth = actionRef.current?.offsetWidth ?? 0;
+      const actionGap = actionWidth > 0 ? GAP : 0;
+      const availableForTags = container.clientWidth - dateWidth - actionWidth - actionGap;
 
       if (availableForTags <= 0 || tagWidths.every((width) => width === 0)) {
         setVisibleCount(0);
@@ -82,8 +92,9 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
 
     const observer = new ResizeObserver(calculateVisibleTags);
     observer.observe(container);
+    if (actionRef.current) observer.observe(actionRef.current);
     return () => observer.disconnect();
-  }, [tags]);
+  }, [tags, action]);
 
   const hiddenTags = tags.slice(visibleCount);
   const hiddenCount = hiddenTags.length;
@@ -101,6 +112,11 @@ export function NoteTagsRow({ tags, dateLabel, datePosition = "right" }: NoteTag
   return (
     <div ref={containerRef} className="relative flex min-w-0 items-center gap-1">
       {datePosition === "left" && dateEl}
+      {action && (
+        <span ref={actionRef} className="shrink-0">
+          {action}
+        </span>
+      )}
 
       {tags.slice(0, visibleCount).map((tag) => (
         <TagChip key={tag} tag={tag} className="min-w-0 truncate" />

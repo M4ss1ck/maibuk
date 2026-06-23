@@ -13,6 +13,7 @@ describe("NoteTagsRow", () => {
     offsetWidthSpy.mockImplementation(function getOffsetWidth(this: HTMLElement) {
       const text = this.textContent ?? "";
       if (text === "Edited today") return 70;
+      if (text === "Add tag") return 36;
       if (text === "research") return 56;
       if (text.startsWith("+")) return 20;
       return 36;
@@ -53,6 +54,25 @@ describe("NoteTagsRow", () => {
       />,
     );
 
+    expect(await screen.findByRole("button", { name: "+3" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+2" })).not.toBeInTheDocument();
+  });
+
+  it("accounts for the action slot between the date and tags", async () => {
+    clientWidthSpy.mockReturnValue(135);
+
+    render(
+      <NoteTagsRow
+        tags={["draft", "ideas", "research"]}
+        dateLabel="Edited today"
+        datePosition="left"
+        action={<button type="button">Add tag</button>}
+      />,
+    );
+
+    const row = screen.getAllByText("Edited today")[0].parentElement;
+
+    expect(row?.textContent).toMatch(/^Edited todayAdd tag/);
     expect(await screen.findByRole("button", { name: "+3" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "+2" })).not.toBeInTheDocument();
   });
