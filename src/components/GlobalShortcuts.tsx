@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useShortcuts } from "../lib/shortcuts";
 import { useTranslation } from "react-i18next";
 import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
-import { useThemeStore } from "../features/theme";
+import { useThemeStore, getCycledTheme } from "../features/theme";
 import { useSettingsStore } from "../features/settings/store";
 import { useSyncStore } from "../features/sync/store";
 import { useNoteStore } from "../features/notes";
@@ -21,20 +21,6 @@ export function GlobalShortcuts() {
   const setHideKeyboardHints = useSettingsStore((state) => state.setHideKeyboardHints);
   const alwaysOnTop = useSettingsStore((state) => state.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((state) => state.setAlwaysOnTop);
-
-  const cycleTheme = () => {
-    if (theme === "light") {
-      setTheme("dark");
-      return;
-    }
-
-    if (theme === "dark") {
-      setTheme("system");
-      return;
-    }
-
-    setTheme("light");
-  };
 
   const activeShortcuts = useMemo(() => {
     const list: { id: string; label: string; keys: string[] }[] = [
@@ -128,7 +114,8 @@ export function GlobalShortcuts() {
     {
       sequence: ["g", "t"],
       onTrigger: () => {
-        cycleTheme();
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        setTheme(getCycledTheme(theme, prefersDark));
       },
     },
     {

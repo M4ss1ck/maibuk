@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useThemeStore, applyTheme } from "../../../../features/theme/store";
+import { useThemeStore, applyTheme, getCycledTheme } from "../../../../features/theme/store";
 
 describe("useThemeStore", () => {
   beforeEach(() => {
@@ -92,5 +92,23 @@ describe("applyTheme()", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(false);
 
     window.matchMedia = originalMatchMedia;
+  });
+});
+
+describe("getCycledTheme()", () => {
+  it("cycles light to dark", () => {
+    expect(getCycledTheme("light", false)).toBe("dark");
+  });
+
+  it("cycles dark to light", () => {
+    expect(getCycledTheme("dark", false)).toBe("light");
+  });
+
+  it("cycles system to light when the effective theme is dark", () => {
+    expect(getCycledTheme("system", true)).toBe("light");
+  });
+
+  it("cycles system to dark when the effective theme is light", () => {
+    expect(getCycledTheme("system", false)).toBe("dark");
   });
 });

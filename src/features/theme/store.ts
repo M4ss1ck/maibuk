@@ -20,6 +20,12 @@ export const useThemeStore = create<ThemeStore>()(
   )
 );
 
+export function getCycledTheme(theme: Theme, prefersDark: boolean): Theme {
+  if (theme === "light") return "dark";
+  if (theme === "dark") return "light";
+  return prefersDark ? "light" : "dark";
+}
+
 // Apply theme to document
 export function applyTheme(theme: Theme) {
   const root = document.documentElement;
