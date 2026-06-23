@@ -1,1 +1,1 @@
-export { useThemeStore, useTheme, applyTheme } from "./store";
+export { useThemeStore, useTheme, applyTheme, getCycledTheme } from "./store";
