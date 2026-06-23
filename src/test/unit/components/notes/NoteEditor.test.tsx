@@ -185,8 +185,8 @@ describe("NoteEditor", () => {
     expect(onReturnToBook).toHaveBeenCalled();
   });
 
-  it("falls back to a simple back button when no return target is provided", () => {
-    render(
+  it("shows an icon-only back button when no return target is provided", () => {
+    const { container } = render(
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
@@ -194,9 +194,9 @@ describe("NoteEditor", () => {
       />,
     );
 
-    expect(screen.getByText("Back")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Back to My Book/ }),
-    ).not.toBeInTheDocument();
+    // No book label is rendered for the gallery-back case…
+    expect(screen.queryByText(/Back to/)).not.toBeInTheDocument();
+    // …but the back arrow is still present.
+    expect(container.querySelector(".lucide-arrow-left")).toBeInTheDocument();
   });
 });

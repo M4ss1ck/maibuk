@@ -5,6 +5,7 @@ import type { Note, UpdateNoteInput } from "../features/notes";
 import { useBookStore } from "../features/books/store";
 import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
 import { useSettingsStore } from "../features/settings/store";
+import { useShortcuts } from "../lib/shortcuts";
 import {
   markdownToEditorHtml,
   titleFromMarkdown,
@@ -77,6 +78,15 @@ export function Notes() {
       });
     });
   }, [noteId, loadNote, navigate, setLastNoteId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useShortcuts([
+    {
+      keys: "backspace",
+      onTrigger: () => {
+        navigate(returnTarget?.to ?? "/notes");
+      },
+    },
+  ]);
 
   const handleCreateNote = async (bookId?: string | null) => {
     const note = await createNote({ title: "", bookId: bookId ?? null });

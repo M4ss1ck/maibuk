@@ -131,4 +131,20 @@ describe("Notes page return-to-book navigation", () => {
     const last = noteEditorProps[noteEditorProps.length - 1];
     expect(last?.suppressRestore).toBe(true);
   });
+
+  it("returns to the book on Backspace when there is a return target", () => {
+    render(<Notes />);
+
+    fireEvent.keyDown(document.body, { key: "Backspace" });
+    expect(mockNavigate).toHaveBeenCalledWith("/book/book-1");
+  });
+
+  it("returns to the gallery on Backspace without a return target", () => {
+    mockLocation.state = { openNoteId: "n1" };
+
+    render(<Notes />);
+
+    fireEvent.keyDown(document.body, { key: "Backspace" });
+    expect(mockNavigate).toHaveBeenCalledWith("/notes");
+  });
 });
