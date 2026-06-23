@@ -9,6 +9,7 @@ interface NoteTagsRowProps {
   dateLabel: string;
   datePosition?: "left" | "right";
   action?: ReactNode;
+  interactiveOverflow?: boolean;
 }
 
 function TagChip({
@@ -36,6 +37,7 @@ export function NoteTagsRow({
   dateLabel,
   datePosition = "right",
   action,
+  interactiveOverflow = true,
 }: NoteTagsRowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
@@ -122,7 +124,7 @@ export function NoteTagsRow({
         <TagChip key={tag} tag={tag} className="min-w-0 truncate" />
       ))}
 
-      {hiddenCount > 0 && (
+      {hiddenCount > 0 && interactiveOverflow && (
         <button
           type="button"
           className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -141,9 +143,15 @@ export function NoteTagsRow({
         </button>
       )}
 
+      {hiddenCount > 0 && !interactiveOverflow && (
+        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          +{hiddenCount}
+        </span>
+      )}
+
       {datePosition === "right" && dateEl}
 
-      {showHiddenTags && hiddenCount > 0 && (
+      {showHiddenTags && hiddenCount > 0 && interactiveOverflow && (
         <div className="absolute left-0 top-full z-20 mt-1 flex max-w-56 flex-wrap gap-1 rounded-lg border border-border bg-background p-2 shadow-lg">
           {hiddenTags.map((tag) => (
             <TagChip key={tag} tag={tag} className="shrink-0" />

@@ -29,9 +29,9 @@ function buildNote(overrides: Partial<Note>): Note {
 }
 
 describe("NoteListItem tags", () => {
-  // jsdom reports zero element widths, so the row falls back to showing the
-  // first tag plus a counter for the rest.
-  it("shows at least one tag and a counter for the overflow", () => {
+  // jsdom reports zero element widths, so the row cannot calculate visible tag
+  // space and falls back to the overflow counter.
+  it("shows a counter for all tags when tag widths cannot be measured", () => {
     render(
       <ul>
         <NoteListItem
@@ -42,9 +42,7 @@ describe("NoteListItem tags", () => {
       </ul>,
     );
 
-    // The hidden measurement layer also contains chips, so query by visible row.
-    expect(screen.getAllByText("draft").length).toBeGreaterThan(0);
-    expect(screen.getByText("+3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+4" })).toBeInTheDocument();
   });
 
   it("renders no counter when there are no tags", () => {

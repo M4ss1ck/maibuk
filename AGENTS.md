@@ -291,6 +291,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 - **Typography**: Three font families defined — `font-sans` (Inter), `font-serif` (Literata), `font-mono`
 - **Button variants**: `primary`, `secondary`, `ghost`, `destructive` — use the existing `Button` component, don't create ad-hoc button styles
 - **Border radius**: Consistently `rounded-lg` across the codebase
+- **Keyboard compatibility**: Any UI feature with interactive controls must support keyboard navigation, clear focus placement, and relevant shortcuts via `useShortcuts` when a shortcut is part of the workflow
 
 ---
 

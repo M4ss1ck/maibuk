@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -18,6 +18,7 @@ import { filterNotes } from "../components/notes/notes-list-model";
 import { Button } from "../components/ui/Button";
 import { MultiSelectCombobox } from "../components/ui/MultiSelectCombobox";
 import { AddIcon, MaibukLogo } from "../components/icons";
+import { useShortcuts } from "../lib/shortcuts";
 
 export function NotesGallery() {
   const { t, i18n } = useTranslation();
@@ -33,6 +34,8 @@ export function NotesGallery() {
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const tagFilterInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void loadNotes();
@@ -87,6 +90,43 @@ export function NotesGallery() {
     setDateTo("");
   };
 
+  const openAdvancedFilters = useCallback(() => {
+    setShowAdvanced(true);
+    window.setTimeout(() => {
+      tagFilterInputRef.current?.focus();
+    }, 0);
+  }, []);
+
+  const focusSearch = useCallback(() => {
+    const searchInput = searchInputRef.current;
+    if (!searchInput) return;
+    searchInput.focus();
+    searchInput.select();
+  }, []);
+
+  useShortcuts(
+    [
+      {
+        keys: ["ctrl+f", "meta+f"],
+        allowInInput: true,
+        onTrigger: () => {
+          if (document.activeElement === searchInputRef.current) {
+            openAdvancedFilters();
+            return;
+          }
+
+          focusSearch();
+        },
+      },
+      {
+        keys: ["ctrl+shift+f", "meta+shift+f"],
+        allowInInput: true,
+        onTrigger: openAdvancedFilters,
+      },
+    ],
+    { enabled: notes.length > 0 },
+  );
+
   return (
     <div className="p-4 sm:p-8 overflow-auto h-full">
       <div className="mb-6 flex flex-col gap-4 sm:mb-8">
@@ -118,6 +158,7 @@ export function NotesGallery() {
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
+                  ref={searchInputRef}
                   type="search"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -160,6 +201,7 @@ export function NotesGallery() {
                     {t("notes.tagFilter")}
                   </span>
                   <MultiSelectCombobox
+                    ref={tagFilterInputRef}
                     value={tagFilters}
                     onChange={setTagFilters}
                     options={tagOptions}

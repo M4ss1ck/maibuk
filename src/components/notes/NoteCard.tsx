@@ -39,6 +39,7 @@ export function NoteCard({ note, bookTitle, onClick }: NoteCardProps) {
         <NoteTagsRow
           tags={note.tags}
           dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
+          interactiveOverflow={false}
         />
       </div>
     </button>

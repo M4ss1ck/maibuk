@@ -1,5 +1,5 @@
-import type { CSSProperties, KeyboardEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, ForwardedRef, KeyboardEvent } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 
 interface MultiSelectComboboxProps {
@@ -38,22 +38,26 @@ function uniqueValues(values: string[]) {
   return next;
 }
 
-export function MultiSelectCombobox({
-  value,
-  onChange,
-  options,
-  placeholder = "",
-  allowCustom = false,
-  customOptionLabel = (item) => `"${item}"`,
-  removeLabel = (item) => `Remove ${item}`,
-  closeOnOptionClick = true,
-  closeOnCreate = true,
-  onOpenChange,
-  className = "",
-  chipClassName = "",
-  getChipStyle,
-  autoFocus = false,
-}: MultiSelectComboboxProps) {
+export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectComboboxProps>(
+  function MultiSelectCombobox(
+    {
+      value,
+      onChange,
+      options,
+      placeholder = "",
+      allowCustom = false,
+      customOptionLabel = (item) => `"${item}"`,
+      removeLabel = (item) => `Remove ${item}`,
+      closeOnOptionClick = true,
+      closeOnCreate = true,
+      onOpenChange,
+      className = "",
+      chipClassName = "",
+      getChipStyle,
+      autoFocus = false,
+    },
+    forwardedRef,
+  ) {
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -73,6 +77,14 @@ export function MultiSelectCombobox({
     setIsOpen(open);
     onOpenChange?.(open);
   };
+
+  const setInputRef = useCallback(
+    (node: HTMLInputElement | null) => {
+      inputRef.current = node;
+      assignForwardedRef(forwardedRef, node);
+    },
+    [forwardedRef],
+  );
 
   useEffect(() => {
     if (autoFocus) {
@@ -164,7 +176,7 @@ export function MultiSelectCombobox({
           </span>
         ))}
         <input
-          ref={inputRef}
+          ref={setInputRef}
           type="text"
           role="combobox"
           aria-expanded={isOpen}
@@ -223,6 +235,17 @@ export function MultiSelectCombobox({
       )}
     </div>
   );
+  },
+);
+
+MultiSelectCombobox.displayName = "MultiSelectCombobox";
+
+function assignForwardedRef<T>(ref: ForwardedRef<T>, value: T | null) {
+  if (typeof ref === "function") {
+    ref(value);
+  } else if (ref) {
+    ref.current = value;
+  }
 }
 
 interface OptionRowProps {

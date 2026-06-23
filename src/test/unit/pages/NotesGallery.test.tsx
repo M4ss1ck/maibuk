@@ -92,4 +92,37 @@ describe("NotesGallery", () => {
       expect(mockNavigate).toHaveBeenCalledWith("/notes/n3");
     });
   });
+
+  it("focuses search with Ctrl+F and opens filters when search is already focused", async () => {
+    noteState.notes = [
+      { id: "n1", title: "First", bookId: "book-1", tags: ["Work"], content: "" },
+    ];
+    render(<NotesGallery />);
+
+    const searchInput = screen.getByPlaceholderText("notes.search");
+
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    expect(searchInput).toHaveFocus();
+
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox")).toHaveFocus();
+    });
+    expect(screen.getByText("Work")).toBeInTheDocument();
+  });
+
+  it("opens filters directly with Ctrl+Shift+F", async () => {
+    noteState.notes = [
+      { id: "n1", title: "First", bookId: "book-1", tags: ["Research"], content: "" },
+    ];
+    render(<NotesGallery />);
+
+    fireEvent.keyDown(window, { key: "F", ctrlKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox")).toHaveFocus();
+    });
+    expect(screen.getByText("Research")).toBeInTheDocument();
+  });
 });

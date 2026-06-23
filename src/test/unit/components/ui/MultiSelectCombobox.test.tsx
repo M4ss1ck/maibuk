@@ -1,3 +1,4 @@
+import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -81,5 +82,22 @@ describe("MultiSelectCombobox", () => {
     await user.click(screen.getByRole("button", { name: "Remove draft" }));
 
     expect(onChange).toHaveBeenCalledWith(["ideas"]);
+  });
+
+  it("exposes the text input through its ref", () => {
+    const inputRef = createRef<HTMLInputElement>();
+
+    render(
+      <MultiSelectCombobox
+        ref={inputRef}
+        value={[]}
+        onChange={() => {}}
+        options={options}
+      />,
+    );
+
+    inputRef.current?.focus();
+
+    expect(screen.getByRole("combobox")).toHaveFocus();
   });
 });
