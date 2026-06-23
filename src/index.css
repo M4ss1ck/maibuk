@@ -411,18 +411,142 @@ option {
 }
 
 .editor-content pre {
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  background-color: #f6f8fa;
+  color: #1c1917;
   padding: 1em;
   border-radius: 0.5em;
   overflow-x: auto;
   margin: 1em 0;
+  border: 1px solid var(--color-border);
+}
+
+.dark .editor-content pre {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  border-color: transparent;
 }
 
 .editor-content pre code {
   background: none;
   padding: 0;
   color: inherit;
+}
+
+/* Syntax highlighting (highlight.js / lowlight) — light theme */
+.editor-content pre code .hljs-comment,
+.editor-content pre code .hljs-quote {
+  color: #6e7781;
+  font-style: italic;
+}
+
+.editor-content pre code .hljs-keyword,
+.editor-content pre code .hljs-selector-tag,
+.editor-content pre code .hljs-literal,
+.editor-content pre code .hljs-meta .hljs-keyword,
+.editor-content pre code .hljs-doctag {
+  color: #cf222e;
+}
+
+.editor-content pre code .hljs-string,
+.editor-content pre code .hljs-regexp,
+.editor-content pre code .hljs-addition {
+  color: #0a3069;
+}
+
+.editor-content pre code .hljs-number,
+.editor-content pre code .hljs-bullet {
+  color: #0550ae;
+}
+
+.editor-content pre code .hljs-title,
+.editor-content pre code .hljs-section,
+.editor-content pre code .hljs-name,
+.editor-content pre code .hljs-selector-id,
+.editor-content pre code .hljs-selector-class {
+  color: #6639ba;
+}
+
+.editor-content pre code .hljs-built_in,
+.editor-content pre code .hljs-type,
+.editor-content pre code .hljs-class,
+.editor-content pre code .hljs-symbol {
+  color: #953800;
+}
+
+.editor-content pre code .hljs-attr,
+.editor-content pre code .hljs-attribute,
+.editor-content pre code .hljs-variable,
+.editor-content pre code .hljs-template-variable,
+.editor-content pre code .hljs-params {
+  color: #0550ae;
+}
+
+.editor-content pre code .hljs-tag,
+.editor-content pre code .hljs-meta,
+.editor-content pre code .hljs-deletion {
+  color: #116329;
+}
+
+.editor-content pre code .hljs-emphasis {
+  font-style: italic;
+}
+
+.editor-content pre code .hljs-strong {
+  font-weight: 600;
+}
+
+/* Syntax highlighting — dark theme */
+.dark .editor-content pre code .hljs-comment,
+.dark .editor-content pre code .hljs-quote {
+  color: #6a9955;
+}
+
+.dark .editor-content pre code .hljs-keyword,
+.dark .editor-content pre code .hljs-selector-tag,
+.dark .editor-content pre code .hljs-literal,
+.dark .editor-content pre code .hljs-meta .hljs-keyword,
+.dark .editor-content pre code .hljs-doctag {
+  color: #569cd6;
+}
+
+.dark .editor-content pre code .hljs-string,
+.dark .editor-content pre code .hljs-regexp,
+.dark .editor-content pre code .hljs-addition {
+  color: #ce9178;
+}
+
+.dark .editor-content pre code .hljs-number,
+.dark .editor-content pre code .hljs-bullet {
+  color: #b5cea8;
+}
+
+.dark .editor-content pre code .hljs-title,
+.dark .editor-content pre code .hljs-section,
+.dark .editor-content pre code .hljs-name,
+.dark .editor-content pre code .hljs-selector-id,
+.dark .editor-content pre code .hljs-selector-class {
+  color: #dcdcaa;
+}
+
+.dark .editor-content pre code .hljs-built_in,
+.dark .editor-content pre code .hljs-type,
+.dark .editor-content pre code .hljs-class,
+.dark .editor-content pre code .hljs-symbol {
+  color: #4ec9b0;
+}
+
+.dark .editor-content pre code .hljs-attr,
+.dark .editor-content pre code .hljs-attribute,
+.dark .editor-content pre code .hljs-variable,
+.dark .editor-content pre code .hljs-template-variable,
+.dark .editor-content pre code .hljs-params {
+  color: #9cdcfe;
+}
+
+.dark .editor-content pre code .hljs-tag,
+.dark .editor-content pre code .hljs-meta,
+.dark .editor-content pre code .hljs-deletion {
+  color: #c586c0;
 }
 
 /* Code block copy button (visible on hover/focus) */
@@ -439,11 +563,16 @@ option {
   justify-content: center;
   padding: 0.375em;
   border-radius: 0.375em;
-  color: #d4d4d4;
-  background-color: rgba(255, 255, 255, 0.08);
+  color: #57606a;
+  background-color: rgba(0, 0, 0, 0.06);
   opacity: 0;
   transition: opacity 0.15s ease, background-color 0.15s ease;
   z-index: 2;
+}
+
+.dark .code-block-copy {
+  color: #d4d4d4;
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .code-block-wrapper:hover .code-block-copy,
@@ -453,6 +582,10 @@ option {
 }
 
 .code-block-copy:hover {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+.dark .code-block-copy:hover {
   background-color: rgba(255, 255, 255, 0.16);
 }
 
