@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   CalendarDays,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -17,6 +16,7 @@ import { useSettingsStore } from "../features/settings/store";
 import { NoteCard } from "../components/notes";
 import { filterNotes } from "../components/notes/notes-list-model";
 import { Button } from "../components/ui/Button";
+import { MultiSelectCombobox } from "../components/ui/MultiSelectCombobox";
 import { AddIcon, MaibukLogo } from "../components/icons";
 
 export function NotesGallery() {
@@ -159,8 +159,8 @@ export function NotesGallery() {
                     <Tags className="h-3.5 w-3.5" />
                     {t("notes.tagFilter")}
                   </span>
-                  <TagFilterCombobox
-                    selectedTags={tagFilters}
+                  <MultiSelectCombobox
+                    value={tagFilters}
                     onChange={setTagFilters}
                     options={tagOptions}
                     placeholder={t("notes.anyTag")}
@@ -242,158 +242,6 @@ export function NotesGallery() {
               onClick={() => openNote(note.id)}
             />
           ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface TagFilterComboboxProps {
-  selectedTags: string[];
-  onChange: (tags: string[]) => void;
-  options: string[];
-  placeholder: string;
-  removeLabel: (tag: string) => string;
-}
-
-function TagFilterCombobox({
-  selectedTags,
-  onChange,
-  options,
-  placeholder,
-  removeLabel,
-}: TagFilterComboboxProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const selected = new Set(selectedTags.map((tag) => tag.toLowerCase()));
-  const filteredOptions = options.filter(
-    (option) => option.toLowerCase().includes(query.trim().toLowerCase()),
-  );
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-        setQuery("");
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [isOpen]);
-
-  const toggleTag = (tag: string) => {
-    if (selected.has(tag.toLowerCase())) {
-      onChange(selectedTags.filter((selectedTag) => selectedTag !== tag));
-      return;
-    }
-
-    onChange([...selectedTags, tag]);
-  };
-
-  const removeTag = (tag: string) => {
-    onChange(selectedTags.filter((selectedTag) => selectedTag !== tag));
-  };
-
-  return (
-    <div
-      ref={rootRef}
-      className="relative"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          setIsOpen(false);
-          setQuery("");
-        }
-      }}
-    >
-      <div
-        role="button"
-        tabIndex={-1}
-        onClick={() => {
-          setIsOpen(true);
-          inputRef.current?.focus();
-        }}
-        className="flex min-h-9 w-full cursor-text flex-wrap items-center gap-1 rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
-      >
-        {selectedTags.map((tag) => (
-          <span
-            key={tag}
-            className="inline-flex min-w-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground"
-          >
-            <span className="truncate">{tag}</span>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                removeTag(tag);
-              }}
-              className="rounded-full text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              aria-label={removeLabel(tag)}
-              title={removeLabel(tag)}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onFocus={() => setIsOpen(true)}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setIsOpen(true);
-          }}
-          placeholder={selectedTags.length === 0 ? placeholder : ""}
-          className="min-w-24 flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-        />
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            setIsOpen((current) => !current);
-            inputRef.current?.focus();
-          }}
-          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-          aria-expanded={isOpen}
-        >
-          <ChevronDown className="h-4 w-4" />
-        </button>
-      </div>
-
-      {isOpen && filteredOptions.length > 0 && (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-background p-1 shadow-lg">
-          {filteredOptions.map((option) => {
-            const isChecked = selected.has(option.toLowerCase());
-
-            return (
-              <div key={option} className="flex items-center rounded-md hover:bg-muted">
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={() => toggleTag(option)}
-                  onClick={(event) => event.stopPropagation()}
-                  className="ml-2 h-4 w-4 rounded border-border accent-primary"
-                  aria-label={option}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    toggleTag(option);
-                    setIsOpen(false);
-                    setQuery("");
-                  }}
-                  className="min-w-0 flex-1 px-2 py-1.5 text-left text-sm text-foreground"
-                >
-                  <span className="block truncate">{option}</span>
-                </button>
-              </div>
-            );
-          })}
         </div>
       )}
     </div>

@@ -1,40 +1,25 @@
-import type { FocusEvent } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Combobox } from "../ui/Combobox";
+import { MultiSelectCombobox } from "../ui/MultiSelectCombobox";
 import { tagColor } from "./tagColor";
 
 interface TagEditorProps {
   tags: string[];
   allTags: string[];
   onChange: (tags: string[]) => void;
+  onClose?: () => void;
 }
 
-export function TagEditor({ tags, allTags, onChange }: TagEditorProps) {
+export function TagEditor({ tags, allTags, onChange, onClose }: TagEditorProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const available = allTags.filter((tag) => !tags.includes(tag));
-
-  const addTag = (tag: string) => {
-    const trimmed = tag.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      onChange([...tags, trimmed]);
-    }
-    setOpen(false);
-  };
 
   const removeTag = (tag: string) => {
     onChange(tags.filter((current) => current !== tag));
   };
 
-  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
-    if (!event.currentTarget.contains(event.relatedTarget)) {
-      setOpen(false);
-    }
-  };
-
   return (
-    <div className="flex flex-wrap items-center gap-1" onBlur={handleBlur}>
+    <div className="flex flex-wrap items-center gap-1">
       {!open &&
         tags.map((tag) => {
           const color = tagColor(tag);
@@ -54,12 +39,23 @@ export function TagEditor({ tags, allTags, onChange }: TagEditorProps) {
         })}
 
       {open ? (
-        <Combobox
-          value=""
-          onChange={addTag}
-          options={available}
+        <MultiSelectCombobox
+          value={tags}
+          onChange={onChange}
+          options={allTags}
           placeholder={t("notes.addTag")}
-          inputClasses="w-40"
+          allowCustom
+          customOptionLabel={(tag) => `"${tag}"`}
+          removeLabel={(tag) => t("notes.removeTag", { tag })}
+          chipClassName="transition-opacity hover:opacity-75"
+          getChipStyle={(tag) => ({ backgroundColor: `${tagColor(tag)}22` })}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setOpen(false);
+              onClose?.();
+            }
+          }}
+          className="w-64"
           autoFocus
         />
       ) : (

@@ -573,7 +573,7 @@ export function NoteEditor({
             {title || note.title || t("notes.untitled")}
           </span>
           <div className="flex min-w-0 items-center gap-2">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 max-w-full">
               <NoteTagsRow
                 tags={note.tags}
                 dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
@@ -596,10 +596,8 @@ export function NoteEditor({
                   <TagEditor
                     tags={note.tags}
                     allTags={allTags}
-                    onChange={(nextTags) => {
-                      handleTagsChange(nextTags);
-                      setShowTagEditor(false);
-                    }}
+                    onChange={handleTagsChange}
+                    onClose={() => setShowTagEditor(false)}
                   />
                 </div>
               )}

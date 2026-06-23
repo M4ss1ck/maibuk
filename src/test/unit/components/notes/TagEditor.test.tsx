@@ -40,15 +40,15 @@ describe("TagEditor", () => {
     expect(onChange).toHaveBeenCalledWith(["draft", "ideas"]);
   });
 
-  it("excludes already-selected tags from the options", async () => {
+  it("marks already-selected tags in the options", async () => {
     const user = userEvent.setup();
 
     render(<TagEditor tags={["draft"]} allTags={["draft", "ideas"]} onChange={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: "+ Add" }));
-    await user.click(screen.getByRole("button", { name: "Chevron Down" }));
+    await user.click(screen.getByRole("combobox"));
     await screen.findByText("ideas");
-    expect(screen.queryByText("draft")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "draft" })).toBeChecked();
   });
 
   it("creates a new tag via the Enter key and collapses back to the add button", async () => {
