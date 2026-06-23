@@ -31,22 +31,94 @@ export interface DateNoteGroup {
   notes: NoteWithBook[];
 }
 
-function plainText(html: string): string {
-  return html.replace(/<[^>]*>/g, " ");
+export interface NoteFilterCriteria {
+  query?: string;
+  tag?: string;
+  tags?: string[];
+  dateFrom?: string;
+  dateTo?: string;
 }
 
-export function filterNotes(notes: NoteWithBook[], rawQuery: string): NoteWithBook[] {
-  const query = rawQuery.trim().toLowerCase();
-  if (!query) return notes;
+function collectText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return "";
+
+  if (Array.isArray(value)) {
+    return value.map(collectText).join(" ");
+  }
+
+  const node = value as Record<string, unknown>;
+  return [node.text, node.content].map(collectText).join(" ");
+}
+
+export function notePlainText(content: string): string {
+  try {
+    return collectText(JSON.parse(content)).replace(/\s+/g, " ").trim();
+  } catch {
+    return content
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+}
+
+function parseDateBoundary(value: string | undefined, boundary: "start" | "end") {
+  if (!value) return null;
+
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
+
+  const [year, month, day] = parts;
+  const date =
+    boundary === "start"
+      ? new Date(year, month - 1, day, 0, 0, 0, 0)
+      : new Date(year, month - 1, day, 23, 59, 59, 999);
+
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+}
+
+function normalizeCriteria(criteria: string | NoteFilterCriteria): NoteFilterCriteria {
+  return typeof criteria === "string" ? { query: criteria } : criteria;
+}
+
+export function filterNotes(
+  notes: NoteWithBook[],
+  criteria: string | NoteFilterCriteria,
+): NoteWithBook[] {
+  const filters = normalizeCriteria(criteria);
+  const query = filters.query?.trim().toLowerCase() ?? "";
+  const tags = (filters.tags ?? (filters.tag ? [filters.tag] : []))
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean);
+  const dateFrom = parseDateBoundary(filters.dateFrom, "start");
+  const dateTo = parseDateBoundary(filters.dateTo, "end");
+
+  if (!query && tags.length === 0 && dateFrom === null && dateTo === null) return notes;
 
   return notes.filter((note) => {
-    const haystack = `${note.title} ${plainText(note.content)}`.toLowerCase();
-    return haystack.includes(query);
+    if (query) {
+      const haystack = `${note.title} ${notePlainText(note.content)}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+
+    if (tags.length > 0) {
+      const noteTags = new Set(note.tags.map((noteTag) => noteTag.trim().toLowerCase()));
+      if (!tags.every((tag) => noteTags.has(tag))) return false;
+    }
+
+    const updatedTime = noteDate(note).getTime();
+    if (dateFrom !== null && updatedTime < dateFrom) return false;
+    if (dateTo !== null && updatedTime > dateTo) return false;
+
+    return true;
   });
 }
 
-export function buildListNoteSections(notes: NoteWithBook[], query: string): NoteSection[] {
-  const filtered = filterNotes(notes, query);
+export function buildListNoteSections(
+  notes: NoteWithBook[],
+  criteria: string | NoteFilterCriteria,
+): NoteSection[] {
+  const filtered = filterNotes(notes, criteria);
   return [
     { id: "pinned", notes: filtered.filter((note) => note.pinned) },
     { id: "all", notes: filtered.filter((note) => !note.pinned) },

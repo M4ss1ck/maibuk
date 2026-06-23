@@ -7,6 +7,7 @@ import {
   buildListNoteSections,
   buildTagNoteGroups,
   filterNotes,
+  notePlainText,
 } from "../../../../components/notes/notes-list-model";
 
 type NoteInput = Partial<Note> & { id: string; title: string; bookId?: string | null };
@@ -48,6 +49,95 @@ describe("notes list model", () => {
     expect(filterNotes(notes, "moon")).toEqual([notes[0]]);
     expect(filterNotes(notes, "scene")).toEqual([notes[1]]);
     expect(filterNotes(notes, "   ")).toEqual(notes);
+  });
+
+  it("extracts searchable text from TipTap JSON content", () => {
+    const content = JSON.stringify({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Hidden orchard" }],
+        },
+      ],
+    });
+
+    expect(notePlainText(content)).toBe("Hidden orchard");
+    expect(filterNotes([note({ id: "a", title: "Research", content })], "orchard")).toHaveLength(1);
+  });
+
+  it("filters notes by exact tag case-insensitively", () => {
+    const notes = [
+      note({ id: "a", title: "Research", tags: ["Craft", "revision"] }),
+      note({ id: "b", title: "Scene", tags: ["draft"] }),
+    ];
+
+    expect(filterNotes(notes, { tag: "craft" })).toEqual([notes[0]]);
+  });
+
+  it("filters notes by multiple selected tags", () => {
+    const notes = [
+      note({ id: "a", title: "Research", tags: ["craft", "revision"] }),
+      note({ id: "b", title: "Scene", tags: ["craft"] }),
+      note({ id: "c", title: "Draft", tags: ["revision"] }),
+    ];
+
+    expect(filterNotes(notes, { tags: ["craft", "revision"] })).toEqual([notes[0]]);
+  });
+
+  it("filters notes by inclusive updated date range", () => {
+    const notes = [
+      note({
+        id: "a",
+        title: "Before",
+        updatedAt: new Date(2026, 5, 9, 23, 59, 59).getTime() / 1000,
+      }),
+      note({
+        id: "b",
+        title: "Inside",
+        updatedAt: new Date(2026, 5, 10, 12).getTime() / 1000,
+      }),
+      note({
+        id: "c",
+        title: "After",
+        updatedAt: new Date(2026, 5, 12).getTime() / 1000,
+      }),
+    ];
+
+    expect(filterNotes(notes, { dateFrom: "2026-06-10", dateTo: "2026-06-11" })).toEqual([
+      notes[1],
+    ]);
+  });
+
+  it("combines query, tag, and date filters", () => {
+    const notes = [
+      note({
+        id: "a",
+        title: "Moon research",
+        tags: ["craft"],
+        updatedAt: Date.parse("2026-06-11T12:00:00Z") / 1000,
+      }),
+      note({
+        id: "b",
+        title: "Moon scene",
+        tags: ["draft"],
+        updatedAt: Date.parse("2026-06-11T12:00:00Z") / 1000,
+      }),
+      note({
+        id: "c",
+        title: "Moon archive",
+        tags: ["craft"],
+        updatedAt: Date.parse("2026-05-01T12:00:00Z") / 1000,
+      }),
+    ];
+
+    expect(
+      filterNotes(notes, {
+        query: "moon",
+        tag: "craft",
+        dateFrom: "2026-06-01",
+      }),
+    ).toEqual([notes[0]]);
   });
 
   it("splits list mode into pinned and all-notes sections", () => {

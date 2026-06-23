@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { BookOpen } from "lucide-react";
 import type { Note } from "../../features/notes";
+import { notePlainText } from "./notes-list-model";
 import { NoteTagsRow } from "./NoteTagsRow";
 import { timeAgo } from "./timeAgo";
 
@@ -10,17 +11,10 @@ interface NoteCardProps {
   onClick: () => void;
 }
 
-function toPreview(content: string) {
-  return content
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export function NoteCard({ note, bookTitle, onClick }: NoteCardProps) {
   const { t, i18n } = useTranslation();
   const title = note.title || t("notes.untitled");
-  const preview = toPreview(note.content);
+  const preview = notePlainText(note.content);
 
   return (
     <button
