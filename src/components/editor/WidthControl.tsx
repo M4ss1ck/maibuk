@@ -21,8 +21,11 @@ export function WidthControl() {
 
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [isEditingWidth, setIsEditingWidth] = useState(false);
+  const [widthInputDraft, setWidthInputDraft] = useState("");
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const widthInputRef = useRef<HTMLInputElement>(null);
 
   const handleShowMenu = () => {
     if (buttonRef.current) {
@@ -50,13 +53,17 @@ export function WidthControl() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showMenu]);
 
-  // The slider shows the measure; "Full" sits at the top of the track.
-  const sliderValue = Math.min(editorContentWidth, EDITOR_CONTENT_WIDTH_MAX);
+  // The slider gets one extra stop after the max px value for "Full".
+  const sliderFullValue = EDITOR_CONTENT_WIDTH_MAX + EDITOR_CONTENT_WIDTH_STEP;
+  const isFullWidth = editorContentWidth >= EDITOR_CONTENT_WIDTH_FULL;
+  const sliderValue = isFullWidth
+    ? sliderFullValue
+    : Math.min(editorContentWidth, EDITOR_CONTENT_WIDTH_MAX);
   const measuredPresets = EDITOR_CONTENT_WIDTH_PRESETS.filter(
     (preset) => preset.value !== EDITOR_CONTENT_WIDTH_FULL,
   );
   const visualPresetValue =
-    editorContentWidth >= EDITOR_CONTENT_WIDTH_FULL
+    isFullWidth
       ? EDITOR_CONTENT_WIDTH_FULL
       : measuredPresets.reduce((nearest, preset) =>
           Math.abs(preset.value - editorContentWidth) <
@@ -67,6 +74,30 @@ export function WidthControl() {
 
   const formatPresetValue = (value: number) =>
     value === EDITOR_CONTENT_WIDTH_FULL ? "100%" : `${value}px`;
+  const displayedWidthValue = isFullWidth
+    ? t("editor.widthFull")
+    : `${editorContentWidth}px`;
+  const valueControlBaseClass =
+    "h-8 w-20 shrink-0 rounded px-2 text-right text-sm text-foreground";
+
+  useEffect(() => {
+    setWidthInputDraft(isFullWidth ? "" : String(editorContentWidth));
+  }, [editorContentWidth, isFullWidth]);
+
+  const commitWidthInput = () => {
+    if (!widthInputDraft.trim()) {
+      setWidthInputDraft(isFullWidth ? "" : String(editorContentWidth));
+      return;
+    }
+    setEditorContentWidth(Number(widthInputDraft));
+  };
+
+  useEffect(() => {
+    if (isEditingWidth) {
+      widthInputRef.current?.focus();
+      widthInputRef.current?.select();
+    }
+  }, [isEditingWidth]);
 
   return (
     <>
@@ -110,16 +141,66 @@ export function WidthControl() {
                 </button>
               ))}
             </div>
-            <input
-              type="range"
-              min={EDITOR_CONTENT_WIDTH_MIN}
-              max={EDITOR_CONTENT_WIDTH_MAX}
-              step={EDITOR_CONTENT_WIDTH_STEP}
-              value={sliderValue}
-              onChange={(e) => setEditorContentWidth(Number(e.target.value))}
-              aria-label={t("editor.contentWidth")}
-              className="w-full"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={EDITOR_CONTENT_WIDTH_MIN}
+                max={sliderFullValue}
+                step={EDITOR_CONTENT_WIDTH_STEP}
+                value={sliderValue}
+                onChange={(e) => {
+                  const nextValue = Number(e.target.value);
+                  setEditorContentWidth(
+                    nextValue >= sliderFullValue
+                      ? EDITOR_CONTENT_WIDTH_FULL
+                      : nextValue,
+                  );
+                }}
+                aria-label={t("editor.contentWidth")}
+                className="min-w-0 flex-1"
+              />
+              {isEditingWidth ? (
+                <input
+                  ref={widthInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={widthInputDraft}
+                  placeholder={isFullWidth ? t("editor.widthFull") : undefined}
+                  onChange={(e) =>
+                    setWidthInputDraft(e.target.value.replace(/\D/g, ""))
+                  }
+                  onBlur={() => {
+                    commitWidthInput();
+                    setIsEditingWidth(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      commitWidthInput();
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === "Escape") {
+                      setWidthInputDraft(
+                        isFullWidth ? "" : String(editorContentWidth),
+                      );
+                      setIsEditingWidth(false);
+                    }
+                  }}
+                  aria-label={`${t("editor.contentWidth")} px`}
+                  className={`${valueControlBaseClass} border border-border bg-background shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30`}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingWidth(true)}
+                  onFocus={() => setIsEditingWidth(true)}
+                  aria-label={`${t("editor.contentWidth")} px`}
+                  className={`${valueControlBaseClass} transition-colors text-muted-foreground hover:text-foreground`}
+                >
+                  {displayedWidthValue}
+                </button>
+              )}
+            </div>
             <label className="flex items-center gap-2 text-sm text-foreground">
               <input
                 type="checkbox"
