@@ -66,6 +66,7 @@ describe("PasteCleanupSection — open from HTML view", () => {
       screen.getByDisplayValue("MsoNormal"),
     );
     expect(valueInput).toBeInTheDocument();
+    expect(valueInput.tagName).toBe("TEXTAREA");
     expect(document.activeElement).toBe(valueInput);
   });
 
@@ -91,31 +92,6 @@ describe("PasteCleanupSection — open from HTML view", () => {
 
     expect(document.activeElement).toBe(nameInput);
     expect(nameInput).toHaveValue("Hi");
-  });
-
-  it("shows a code preview of the rule target", async () => {
-    render(
-      <MemoryRouter
-        initialEntries={[
-          {
-            pathname: "/settings",
-            state: { openPasteCleanupRules: true, focusPasteRuleId: "rule-1" },
-          },
-        ]}
-      >
-        <PasteCleanupSection />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => screen.getByDisplayValue("MsoNormal"));
-
-    expect(
-      screen.getByText("settings.pasteCleanup.rules.preview"),
-    ).toBeInTheDocument();
-    expect(screen.getByText(".MsoNormal").closest("pre")).toHaveClass(
-      "whitespace-pre-wrap",
-      "break-words",
-    );
   });
 
   it("navigates back to the editor when opened from the HTML source view", async () => {

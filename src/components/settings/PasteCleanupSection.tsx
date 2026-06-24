@@ -1,4 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useLayoutEffect,
+  forwardRef,
+  type TextareaHTMLAttributes,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, ChevronUp, ChevronDown, X } from "lucide-react";
@@ -13,7 +21,6 @@ import {
   type PasteCleanupPreset,
   type PasteRuleTarget,
   type PasteRuleAction,
-  type PasteCleanupRule,
 } from "../../features/settings/types";
 import { Select, Switch, Button, Modal, Input } from "../ui";
 import { ChevronDownIcon } from "../icons";
@@ -46,10 +53,10 @@ export function PasteCleanupSection() {
   useEffect(() => {
     const state = location.state as
       | {
-          openPasteCleanupRules?: boolean;
-          focusPasteRuleId?: string;
-          returnToEditorPath?: string;
-        }
+        openPasteCleanupRules?: boolean;
+        focusPasteRuleId?: string;
+        returnToEditorPath?: string;
+      }
       | null;
     if (!state?.openPasteCleanupRules) return;
     setAdvancedOpen(true);
@@ -63,8 +70,8 @@ export function PasteCleanupSection() {
   // Capture the targeted rule's value input without focusing as a side effect:
   // the focus is driven by a one-shot effect below so it fires exactly once
   // (on open) instead of on every keystroke/re-render.
-  const focusRuleNodeRef = useRef<HTMLInputElement | null>(null);
-  const captureFocusRule = useCallback((node: HTMLInputElement | null) => {
+  const focusRuleNodeRef = useRef<HTMLTextAreaElement | null>(null);
+  const captureFocusRule = useCallback((node: HTMLTextAreaElement | null) => {
     focusRuleNodeRef.current = node;
   }, []);
   useEffect(() => {
@@ -338,7 +345,7 @@ export function PasteCleanupSection() {
                       label={t("settings.pasteCleanup.rules.enabled")}
                     />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col flex-wrap justify-center gap-2">
                     <Select<PasteRuleTarget>
                       value={rule.target}
                       onChange={(value) =>
@@ -346,7 +353,7 @@ export function PasteCleanupSection() {
                       }
                       options={targetOptions}
                     />
-                    <Input
+                    <AutoGrowTextarea
                       ref={rule.id === focusRuleId ? captureFocusRule : undefined}
                       value={rule.value}
                       onChange={(e) =>
@@ -356,7 +363,6 @@ export function PasteCleanupSection() {
                       }
                       placeholder={PASTE_RULE_TARGET_META[rule.target].example}
                       aria-label={t("settings.pasteCleanup.rules.value")}
-                      className="flex-1 min-w-32"
                     />
                     <Select<PasteRuleAction>
                       value={rule.action}
@@ -366,11 +372,6 @@ export function PasteCleanupSection() {
                       options={actionOptions}
                     />
                   </div>
-                  <RuleTargetPreview
-                    label={t("settings.pasteCleanup.rules.preview")}
-                    emptyLabel={t("settings.pasteCleanup.rules.previewEmpty")}
-                    value={getRuleTargetPreview(rule)}
-                  />
                   <div className="flex items-center justify-end gap-1">
                     <Button
                       variant="ghost"
@@ -417,49 +418,40 @@ export function PasteCleanupSection() {
   );
 }
 
-interface RuleTargetPreviewProps {
-  label: string;
-  emptyLabel: string;
-  value: string;
-}
+/**
+ * Single-line-looking textarea that grows to fit its content, so long style
+ * declarations stay fully visible while editing a rule's value.
+ */
+const AutoGrowTextarea = forwardRef<
+  HTMLTextAreaElement,
+  TextareaHTMLAttributes<HTMLTextAreaElement>
+>(({ className = "", ...props }, ref) => {
+  const innerRef = useRef<HTMLTextAreaElement | null>(null);
 
-function RuleTargetPreview({
-  label,
-  emptyLabel,
-  value,
-}: RuleTargetPreviewProps) {
-  const preview = value || emptyLabel;
+  const setRef = (node: HTMLTextAreaElement | null) => {
+    innerRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) ref.current = node;
+  };
+
+  const resize = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  useLayoutEffect(() => {
+    resize(innerRef.current);
+  }, [props.value]);
 
   return (
-    <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <pre className="rounded-md bg-muted/50 px-2 py-1 text-xs text-foreground whitespace-pre-wrap break-words">
-        <code>{preview}</code>
-      </pre>
-    </div>
+    <textarea
+      ref={setRef}
+      rows={1}
+      onInput={(e) => resize(e.currentTarget)}
+      className={`resize-none overflow-hidden w-full px-3 py-2 border rounded-lg bg-background text-foreground transition-colors border-border focus:border-primary focus:ring-primary focus:outline-none focus:ring-2 focus:ring-offset-0 placeholder:text-muted-foreground ${className}`}
+      {...props}
+    />
   );
-}
-
-function getRuleTargetPreview(rule: PasteCleanupRule): string {
-  const value = rule.value.trim();
-  if (!value) return "";
-
-  switch (rule.target) {
-    case "cssSelector":
-      return value;
-    case "cssClass":
-      return value.startsWith(".") ? value : `.${value}`;
-    case "tag":
-      return value.toLowerCase();
-    case "fontFamily":
-      return `[style*="font-family: ${value}"]`;
-    case "textColor":
-      return `[style*="color: ${value}"]`;
-    case "backgroundColor":
-      return `[style*="background-color: ${value}"]`;
-    case "styleDeclaration":
-      return value;
-    default:
-      return value;
-  }
-}
+});
+AutoGrowTextarea.displayName = "AutoGrowTextarea";
