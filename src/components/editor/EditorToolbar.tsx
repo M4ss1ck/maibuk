@@ -21,6 +21,7 @@ import { FontSizeSelect } from "./FontSizeSelect";
 import { LineHeightSelect } from "./LineHeightSelect";
 import { FontFamilySelect } from "./FontFamilySelect";
 import { ZoomControl } from "./ZoomControl";
+import { WidthControl } from "./WidthControl";
 import { DictionaryDialog } from "./DictionaryDialog";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
@@ -434,6 +435,8 @@ export function EditorToolbar({
 
         {/* Expand/collapse toggle */}
         <div className="ml-auto flex items-center gap-0.5">
+          <WidthControl />
+          <Divider />
           <ZoomControl />
           <button
             type="button"

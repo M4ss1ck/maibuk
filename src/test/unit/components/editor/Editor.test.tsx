@@ -23,12 +23,14 @@ vi.mock("../../../../features/settings/store", () => ({
       selector({
         spellCheckEnabled: false,
         language: "en",
+        editorShowBorder: false,
         metrics: { enabled: { writing: false } },
       }),
     {
       getState: () => ({
         spellCheckEnabled: false,
         language: "en",
+        editorShowBorder: false,
         metrics: { enabled: { writing: false } },
       }),
     },
@@ -135,7 +137,7 @@ describe("Editor", () => {
 
     const focusCalls = trackFocusCalls(editor!);
 
-    const surround = container.querySelector(".max-w-editor-max") as HTMLElement | null;
+    const surround = container.querySelector(".editor-content-surface") as HTMLElement | null;
     expect(surround).not.toBeNull();
     await userEvent.click(surround!);
 

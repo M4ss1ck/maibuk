@@ -14,6 +14,13 @@ import {
   PASTE_RULE_TARGET_META,
   BOOK_STRIP_PROPERTIES,
   PASTE_STRIP_COMMON_PROPERTIES,
+  DEFAULT_EDITOR_CONTENT_WIDTH,
+  EDITOR_CONTENT_WIDTH_MIN,
+  EDITOR_CONTENT_WIDTH_MAX,
+  EDITOR_CONTENT_WIDTH_STEP,
+  EDITOR_CONTENT_WIDTH_FULL,
+  EDITOR_CONTENT_WIDTH_PRESETS,
+  clampEditorContentWidth,
 } from "../../../../features/settings/types";
 
 describe("DEFAULT_PRIMARY_COLOR", () => {
@@ -148,6 +155,54 @@ describe("PASTE_RULE_TARGET_META", () => {
   it("has a non-empty example for every rule target", () => {
     for (const target of PASTE_RULE_TARGET_VALUES) {
       expect(PASTE_RULE_TARGET_META[target].example.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("clampEditorContentWidth", () => {
+  it("returns the default for non-finite input", () => {
+    expect(clampEditorContentWidth(Number.NaN)).toBe(DEFAULT_EDITOR_CONTENT_WIDTH);
+  });
+
+  it("clamps below the minimum up to the minimum", () => {
+    expect(clampEditorContentWidth(100)).toBe(EDITOR_CONTENT_WIDTH_MIN);
+  });
+
+  it("clamps above the maximum down to the maximum", () => {
+    expect(clampEditorContentWidth(EDITOR_CONTENT_WIDTH_MAX + 500)).toBe(
+      EDITOR_CONTENT_WIDTH_MAX,
+    );
+  });
+
+  it("snaps to the step grid", () => {
+    expect(clampEditorContentWidth(731)).toBe(740);
+  });
+
+  it("passes the Full sentinel through unchanged", () => {
+    expect(clampEditorContentWidth(EDITOR_CONTENT_WIDTH_FULL)).toBe(
+      EDITOR_CONTENT_WIDTH_FULL,
+    );
+  });
+});
+
+describe("EDITOR_CONTENT_WIDTH_PRESETS", () => {
+  it("default value matches the Comfortable preset", () => {
+    const comfortable = EDITOR_CONTENT_WIDTH_PRESETS.find(
+      (p) => p.value === DEFAULT_EDITOR_CONTENT_WIDTH,
+    );
+    expect(comfortable).toBeDefined();
+  });
+
+  it("ends with the Full preset", () => {
+    const last =
+      EDITOR_CONTENT_WIDTH_PRESETS[EDITOR_CONTENT_WIDTH_PRESETS.length - 1];
+    expect(last.value).toBe(EDITOR_CONTENT_WIDTH_FULL);
+  });
+
+  it("non-Full preset values lie on the step grid", () => {
+    for (const preset of EDITOR_CONTENT_WIDTH_PRESETS) {
+      if (preset.value === EDITOR_CONTENT_WIDTH_FULL) continue;
+      expect(preset.value % EDITOR_CONTENT_WIDTH_STEP).toBe(0);
     }
   });
 });
