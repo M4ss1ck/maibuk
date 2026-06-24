@@ -436,6 +436,7 @@ export function EditorToolbar({
         {/* Expand/collapse toggle */}
         <div className="ml-auto flex items-center gap-0.5">
           <WidthControl />
+          <Divider />
           <ZoomControl />
           <button
             type="button"

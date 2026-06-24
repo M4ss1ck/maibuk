@@ -50,6 +50,21 @@ describe("WidthControl", () => {
     expect(useSettingsStore.getState().editorContentWidth).toBe(600);
   });
 
+  it("keeps the nearest preset visually selected while the slider moves", () => {
+    render(<WidthControl />);
+    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "860" } });
+
+    expect(
+      screen.getByRole("button", { name: /editor\.widthWide/i }),
+    ).toHaveClass("bg-background");
+    expect(
+      screen.getByRole("button", { name: /editor\.widthComfortable/i }),
+    ).not.toHaveClass("bg-background");
+    expect(screen.getByText("960px")).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
   it("toggles the show-border checkbox", () => {
     render(<WidthControl />);
     fireEvent.click(screen.getByTitle("editor.contentWidth"));

@@ -8,6 +8,7 @@ import {
   EDITOR_CONTENT_WIDTH_MAX,
   EDITOR_CONTENT_WIDTH_STEP,
   EDITOR_CONTENT_WIDTH_PRESETS,
+  EDITOR_CONTENT_WIDTH_FULL,
   DEFAULT_EDITOR_CONTENT_WIDTH,
 } from "../../features/settings/types";
 
@@ -26,7 +27,7 @@ export function WidthControl() {
   const handleShowMenu = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      const popoverWidth = 320;
+      const popoverWidth = 352;
       const left = Math.min(rect.left, window.innerWidth - popoverWidth - 8);
       setMenuPosition({ top: rect.bottom + 4, left: Math.max(8, left) });
     }
@@ -51,6 +52,21 @@ export function WidthControl() {
 
   // The slider shows the measure; "Full" sits at the top of the track.
   const sliderValue = Math.min(editorContentWidth, EDITOR_CONTENT_WIDTH_MAX);
+  const measuredPresets = EDITOR_CONTENT_WIDTH_PRESETS.filter(
+    (preset) => preset.value !== EDITOR_CONTENT_WIDTH_FULL,
+  );
+  const visualPresetValue =
+    editorContentWidth >= EDITOR_CONTENT_WIDTH_FULL
+      ? EDITOR_CONTENT_WIDTH_FULL
+      : measuredPresets.reduce((nearest, preset) =>
+          Math.abs(preset.value - editorContentWidth) <
+          Math.abs(nearest.value - editorContentWidth)
+            ? preset
+            : nearest,
+        ).value;
+
+  const formatPresetValue = (value: number) =>
+    value === EDITOR_CONTENT_WIDTH_FULL ? "100%" : `${value}px`;
 
   return (
     <>
@@ -70,22 +86,27 @@ export function WidthControl() {
         createPortal(
           <div
             ref={menuRef}
-            className="width-control-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 flex flex-col gap-3 w-72"
+            className="width-control-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 flex flex-col gap-3 w-[22rem] max-w-[calc(100vw-1rem)]"
             style={{ top: menuPosition.top, left: menuPosition.left }}
           >
-            <div className="flex flex-wrap gap-1">
+            <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-1">
               {EDITOR_CONTENT_WIDTH_PRESETS.map((preset) => (
                 <button
                   key={preset.labelKey}
                   type="button"
                   onClick={() => setEditorContentWidth(preset.value)}
-                  className={`px-2 py-1 text-sm rounded ${
-                    editorContentWidth === preset.value
-                      ? "bg-primary text-white"
-                      : "hover:bg-muted text-foreground"
+                  className={`min-w-0 rounded-md px-1.5 py-1.5 text-center transition-colors ${
+                    visualPresetValue === preset.value
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {t(preset.labelKey)}
+                  <span className="block truncate text-xs font-medium leading-tight">
+                    {t(preset.labelKey)}
+                  </span>
+                  <span className="block text-[11px] leading-tight">
+                    {formatPresetValue(preset.value)}
+                  </span>
                 </button>
               ))}
             </div>
