@@ -100,6 +100,7 @@ export type PasteRuleTarget =
   | "fontFamily"
   | "textColor"
   | "backgroundColor"
+  | "styleDeclaration"
   | "cssClass"
   | "tag"
   | "cssSelector";
@@ -203,6 +204,7 @@ export const PASTE_RULE_TARGET_VALUES: PasteRuleTarget[] = [
   "fontFamily",
   "textColor",
   "backgroundColor",
+  "styleDeclaration",
   "cssClass",
   "tag",
   "cssSelector",
@@ -220,6 +222,7 @@ export const PASTE_RULE_TARGET_META: Record<PasteRuleTarget, { example: string }
     fontFamily: { example: "-webkit-standard" },
     textColor: { example: "rgb(51, 51, 51)" },
     backgroundColor: { example: "yellow" },
+    styleDeclaration: { example: "span { font-size: medium; color: rgb(0, 0, 0); }" },
     cssClass: { example: "MsoNormal" },
     tag: { example: "span" },
     cssSelector: { example: 'span[style*="font-size"]' },

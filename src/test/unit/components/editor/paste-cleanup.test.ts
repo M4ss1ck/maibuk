@@ -410,6 +410,45 @@ describe("cleanPastedHtml() — custom rules", () => {
     expect(span?.style.color).not.toBe("");
   });
 
+  it("clears only matching styleDeclaration values", () => {
+    const out = clean(
+      '<span style="font-size: medium; color: rgb(0, 0, 0); font-weight: 700">drop</span><span style="font-size: medium; color: red">keep</span>',
+      settings({
+        rules: [
+          rule({
+            target: "styleDeclaration",
+            value: "span { font-size: medium; color: rgb(0, 0, 0); }",
+            action: "removeStyle",
+          }),
+        ],
+      }),
+    );
+    const spans = out.querySelectorAll("span");
+    expect(spans[0]?.style.fontSize).toBe("");
+    expect(spans[0]?.style.color).toBe("");
+    expect(spans[0]?.style.fontWeight).toBe("700");
+    expect(spans[1]?.style.fontSize).toBe("");
+    expect(spans[1]?.style.color).toBe("red");
+  });
+
+  it("matches a styleDeclaration when only one selected declaration remains", () => {
+    const out = clean(
+      '<span style="font-size: medium; color: rgb(0, 0, 0);">x</span>',
+      settings({
+        rules: [
+          rule({
+            target: "styleDeclaration",
+            value:
+              "span { font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0); }",
+            action: "removeStyle",
+          }),
+        ],
+      }),
+    );
+    expect(out.textContent).toBe("x");
+    expect(out.querySelector("span")).toBeNull();
+  });
+
   it("deletes elements matching a raw cssSelector rule", () => {
     const out = clean(
       '<p>a</p><p class="x">b</p>',

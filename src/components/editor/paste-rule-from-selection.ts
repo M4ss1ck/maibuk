@@ -32,11 +32,16 @@ export function inferPasteRuleFromSelection(
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
+  const htmlStyleRule = buildHtmlStyleRule(trimmed);
+  if (htmlStyleRule) {
+    return { target: "styleDeclaration", value: htmlStyleRule };
+  }
+
   const inlineStyle = extractInlineStyle(trimmed);
   if (inlineStyle) {
     return {
-      target: "cssSelector",
-      value: buildInlineStyleSelector(inlineStyle),
+      target: "styleDeclaration",
+      value: normalizeDeclarationBlock(inlineStyle),
     };
   }
 
@@ -60,6 +65,25 @@ export function inferPasteRuleFromSelection(
   }
 
   return { target: "cssClass", value };
+}
+
+function buildHtmlStyleRule(text: string): string | null {
+  const blocks: string[] = [];
+  const seen = new Set<string>();
+  const attrRe =
+    /<?\s*([a-z][\w-]*)\b(?=[^<>]*\bstyle\s*=)[^<>]*\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gis;
+
+  for (const match of text.matchAll(attrRe)) {
+    const tag = match[1].toLowerCase();
+    const style = (match[2] ?? match[3] ?? "").trim();
+    if (!style) continue;
+    const block = `${tag} { ${normalizeDeclarationBlock(style)} }`;
+    if (seen.has(block)) continue;
+    seen.add(block);
+    blocks.push(block);
+  }
+
+  return blocks.length > 0 ? blocks.join("\n") : null;
 }
 
 /**
@@ -87,31 +111,10 @@ function extractInlineStyle(text: string): string | null {
   return null;
 }
 
-function buildInlineStyleSelector(style: string): string {
-  const properties = extractStylePropertyNames(style);
-  if (properties.length === 0) {
-    return `[style*="${escapeAttrSelectorValue(style)}"]`;
-  }
-  return properties
-    .map((property) => `[style*="${escapeAttrSelectorValue(property)}"]`)
-    .join("");
-}
-
-function extractStylePropertyNames(style: string): string[] {
-  const seen = new Set<string>();
-  const properties: string[] = [];
-  for (const declaration of style.split(";")) {
-    const match = declaration.match(/^\s*(-{0,2}[a-z][\w-]*)\s*:/i);
-    if (!match) continue;
-    const property = match[1].toLowerCase();
-    if (seen.has(property)) continue;
-    seen.add(property);
-    properties.push(property);
-  }
-  return properties;
-}
-
-/** Escape a value for embedding inside a double-quoted `[attr*="…"]` selector. */
-function escapeAttrSelectorValue(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+function normalizeDeclarationBlock(style: string): string {
+  const declarations = style
+    .split(";")
+    .map((declaration) => declaration.trim())
+    .filter(Boolean);
+  return declarations.length > 0 ? `${declarations.join("; ")};` : style.trim();
 }

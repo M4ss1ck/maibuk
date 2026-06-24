@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronUp, ChevronDown, X } from "lucide-react";
+import { ArrowLeft, ChevronUp, ChevronDown, X } from "lucide-react";
 import { useSettingsStore } from "../../features/settings/store";
 import {
   PASTE_CLEANUP_PRESET_VALUES,
@@ -13,6 +13,7 @@ import {
   type PasteCleanupPreset,
   type PasteRuleTarget,
   type PasteRuleAction,
+  type PasteCleanupRule,
 } from "../../features/settings/types";
 import { Select, Switch, Button, Modal, Input } from "../ui";
 import { ChevronDownIcon } from "../icons";
@@ -34,6 +35,9 @@ export function PasteCleanupSection() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [newProperty, setNewProperty] = useState("");
   const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
+  const [returnToEditorPath, setReturnToEditorPath] = useState<string | null>(
+    null,
+  );
 
   // Opened via "Add cleanup rule" from the HTML source view: jump straight to
   // the rules editor with the new rule revealed and focused.
@@ -41,12 +45,17 @@ export function PasteCleanupSection() {
   const navigate = useNavigate();
   useEffect(() => {
     const state = location.state as
-      | { openPasteCleanupRules?: boolean; focusPasteRuleId?: string }
+      | {
+          openPasteCleanupRules?: boolean;
+          focusPasteRuleId?: string;
+          returnToEditorPath?: string;
+        }
       | null;
     if (!state?.openPasteCleanupRules) return;
     setAdvancedOpen(true);
     setRulesOpen(true);
     setFocusRuleId(state.focusPasteRuleId ?? null);
+    setReturnToEditorPath(state.returnToEditorPath ?? null);
     // Consume the navigation state so the modal does not reopen on re-render.
     navigate(location.pathname, { replace: true, state: null });
   }, [location, navigate]);
@@ -100,6 +109,11 @@ export function PasteCleanupSection() {
     if (!value) return;
     addStrippedProperty(value);
     setNewProperty("");
+  };
+
+  const handleBackToEditor = () => {
+    if (!returnToEditorPath) return;
+    navigate(returnToEditorPath);
   };
 
   return (
@@ -273,9 +287,17 @@ export function PasteCleanupSection() {
         onClose={() => setRulesOpen(false)}
         title={t("settings.pasteCleanup.rules.title")}
         footer={
-          <Button variant="ghost" onClick={() => setRulesOpen(false)}>
-            {t("common.close")}
-          </Button>
+          <>
+            {returnToEditorPath && (
+              <Button variant="secondary" onClick={handleBackToEditor}>
+                <ArrowLeft className="w-4 h-4" />
+                {t("settings.pasteCleanup.rules.backToEditor")}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => setRulesOpen(false)}>
+              {t("common.close")}
+            </Button>
+          </>
         }
       >
         <div className="space-y-4">
@@ -344,6 +366,17 @@ export function PasteCleanupSection() {
                       options={actionOptions}
                     />
                   </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {t("settings.pasteCleanup.rules.preview")}
+                    </p>
+                    <pre className="overflow-x-auto rounded-md bg-muted/50 px-2 py-1 text-xs text-foreground">
+                      <code>
+                        {getRuleTargetPreview(rule) ||
+                          t("settings.pasteCleanup.rules.previewEmpty")}
+                      </code>
+                    </pre>
+                  </div>
                   <div className="flex items-center justify-end gap-1">
                     <Button
                       variant="ghost"
@@ -388,4 +421,28 @@ export function PasteCleanupSection() {
       </Modal>
     </div>
   );
+}
+
+function getRuleTargetPreview(rule: PasteCleanupRule): string {
+  const value = rule.value.trim();
+  if (!value) return "";
+
+  switch (rule.target) {
+    case "cssSelector":
+      return value;
+    case "cssClass":
+      return value.startsWith(".") ? value : `.${value}`;
+    case "tag":
+      return value.toLowerCase();
+    case "fontFamily":
+      return `[style*="font-family: ${value}"]`;
+    case "textColor":
+      return `[style*="color: ${value}"]`;
+    case "backgroundColor":
+      return `[style*="background-color: ${value}"]`;
+    case "styleDeclaration":
+      return value;
+    default:
+      return value;
+  }
 }

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PasteCleanupSection } from "../../../../components/settings/PasteCleanupSection";
 import { useSettingsStore } from "../../../../features/settings/store";
@@ -91,6 +91,56 @@ describe("PasteCleanupSection — open from HTML view", () => {
 
     expect(document.activeElement).toBe(nameInput);
     expect(nameInput).toHaveValue("Hi");
+  });
+
+  it("shows a code preview of the rule target", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/settings",
+            state: { openPasteCleanupRules: true, focusPasteRuleId: "rule-1" },
+          },
+        ]}
+      >
+        <PasteCleanupSection />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => screen.getByDisplayValue("MsoNormal"));
+
+    expect(
+      screen.getByText("settings.pasteCleanup.rules.preview"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(".MsoNormal")).toBeInTheDocument();
+  });
+
+  it("navigates back to the editor when opened from the HTML source view", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/settings",
+            state: {
+              openPasteCleanupRules: true,
+              focusPasteRuleId: "rule-1",
+              returnToEditorPath: "/book/book-1",
+            },
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/settings" element={<PasteCleanupSection />} />
+          <Route path="/book/:bookId" element={<p>Book editor</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => screen.getByDisplayValue("MsoNormal"));
+    await user.click(screen.getByText("settings.pasteCleanup.rules.backToEditor"));
+
+    expect(screen.getByText("Book editor")).toBeInTheDocument();
   });
 
   it("does not open the rules editor without navigation state", () => {

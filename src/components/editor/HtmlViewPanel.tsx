@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { Editor } from "@tiptap/react";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
@@ -27,6 +27,7 @@ const MAX_HEIGHT_RATIO = 0.6;
 export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPanelProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const addPasteCleanupRule = useSettingsStore((s) => s.addPasteCleanupRule);
   const persistedHeight = useSettingsStore((s) => s.htmlPanelHeight);
   const setPersistedHeight = useSettingsStore((s) => s.setHtmlPanelHeight);
@@ -82,9 +83,13 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
     if (!inferred) return;
     const id = addPasteCleanupRule(inferred);
     navigate("/settings", {
-      state: { openPasteCleanupRules: true, focusPasteRuleId: id },
+      state: {
+        openPasteCleanupRules: true,
+        focusPasteRuleId: id,
+        returnToEditorPath: `${location.pathname}${location.search}${location.hash}`,
+      },
     });
-  }, [addPasteCleanupRule, navigate]);
+  }, [addPasteCleanupRule, location, navigate]);
 
   const debouncedSyncToHtml = useDebouncedCallback(syncWysiwygToHtml, 300);
   const debouncedSyncToWysiwyg = useDebouncedCallback(syncHtmlToWysiwyg, 500);

@@ -595,6 +595,9 @@
         "value": "Value",
         "target": "Match",
         "action": "Action",
+        "preview": "Targets",
+        "previewEmpty": "Enter a value to preview the target",
+        "backToEditor": "Back to editor",
         "enabled": "Enabled",
         "remove": "Remove",
         "moveUp": "Move up",
@@ -603,6 +606,7 @@
           "fontFamily": "Font",
           "textColor": "Text color",
           "backgroundColor": "Highlight color",
+          "styleDeclaration": "Style declaration",
           "cssClass": "CSS class",
           "tag": "HTML tag",
           "cssSelector": "CSS selector"
