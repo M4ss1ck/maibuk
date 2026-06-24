@@ -220,10 +220,15 @@ export async function serializeNote(noteId: string): Promise<string> {
 
 export function normalizeNoteSnapshotForSync(json: string): string {
   const snapshot = JSON.parse(json) as NoteSnapshot;
+  // contentUpdatedAt is derived from content (already in the checksum) and is
+  // absent from snapshots pushed by older clients. Drop the key entirely —
+  // rather than nulling it — so the checksum byte-matches a legacy snapshot and
+  // unchanged notes don't hit the conflict path on the first sync after upgrade.
+  const { contentUpdatedAt: _contentUpdatedAt, ...note } = snapshot.note;
   return JSON.stringify({
     ...snapshot,
     note: {
-      ...snapshot.note,
+      ...note,
       collapsedHeadings: null,
     },
   });

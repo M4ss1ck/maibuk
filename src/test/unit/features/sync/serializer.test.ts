@@ -134,6 +134,29 @@ describe("note snapshot serializer", () => {
     expect(rows[0].content_updated_at).toBe(30);
   });
 
+  it("produces identical sync checksums for snapshots with and without contentUpdatedAt", () => {
+    // A note pushed by an older client has no contentUpdatedAt key at all. Its
+    // checksum must still match an unchanged note serialized by a new client,
+    // otherwise every note hits the conflict path on the first sync.
+    const fields = {
+      id: "note-1",
+      bookId: null,
+      title: "Same",
+      content: "<p>x</p>",
+      tags: "[]",
+      pinned: false,
+      order: 0,
+      wordCount: 1,
+      collapsedHeadings: "[]",
+      createdAt: 10,
+      updatedAt: 20,
+    };
+    const legacy = JSON.stringify({ note: fields });
+    const current = JSON.stringify({ note: { ...fields, contentUpdatedAt: 15 } });
+
+    expect(normalizeNoteSnapshotForSync(current)).toBe(normalizeNoteSnapshotForSync(legacy));
+  });
+
   it("normalizes collapsed headings out of note snapshots used for sync checksums", () => {
     const first = JSON.stringify({
       note: {
