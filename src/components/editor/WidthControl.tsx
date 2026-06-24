@@ -59,18 +59,33 @@ export function WidthControl() {
   const sliderValue = isFullWidth
     ? sliderFullValue
     : Math.min(editorContentWidth, EDITOR_CONTENT_WIDTH_MAX);
-  const measuredPresets = EDITOR_CONTENT_WIDTH_PRESETS.filter(
+  // Measured presets (ascending), excluding the Full sentinel.
+  const measuredPresetValues = EDITOR_CONTENT_WIDTH_PRESETS.filter(
     (preset) => preset.value !== EDITOR_CONTENT_WIDTH_FULL,
-  );
-  const visualPresetValue =
-    isFullWidth
-      ? EDITOR_CONTENT_WIDTH_FULL
-      : measuredPresets.reduce((nearest, preset) =>
-          Math.abs(preset.value - editorContentWidth) <
-          Math.abs(nearest.value - editorContentWidth)
-            ? preset
-            : nearest,
-        ).value;
+  ).map((preset) => preset.value);
+
+  // How strongly a preset is "active" for the current width, in [0, 1].
+  // Adjacent presets blend linearly so the value's position between them is
+  // visible; the tail regions and the Full sentinel stay fully lit / discrete.
+  const presetWeight = (presetValue: number): number => {
+    if (presetValue === EDITOR_CONTENT_WIDTH_FULL) return isFullWidth ? 1 : 0;
+    if (isFullWidth) return 0;
+    const first = measuredPresetValues[0];
+    const last = measuredPresetValues[measuredPresetValues.length - 1];
+    if (editorContentWidth <= first) return presetValue === first ? 1 : 0;
+    if (editorContentWidth >= last) return presetValue === last ? 1 : 0;
+    for (let i = 0; i < measuredPresetValues.length - 1; i++) {
+      const lo = measuredPresetValues[i];
+      const hi = measuredPresetValues[i + 1];
+      if (editorContentWidth >= lo && editorContentWidth <= hi) {
+        const t = (editorContentWidth - lo) / (hi - lo);
+        if (presetValue === lo) return 1 - t;
+        if (presetValue === hi) return t;
+        return 0;
+      }
+    }
+    return 0;
+  };
 
   const formatPresetValue = (value: number) =>
     value === EDITOR_CONTENT_WIDTH_FULL ? "100%" : `${value}px`;
@@ -121,25 +136,36 @@ export function WidthControl() {
             style={{ top: menuPosition.top, left: menuPosition.left }}
           >
             <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-1">
-              {EDITOR_CONTENT_WIDTH_PRESETS.map((preset) => (
-                <button
-                  key={preset.labelKey}
-                  type="button"
-                  onClick={() => setEditorContentWidth(preset.value)}
-                  className={`min-w-0 rounded-md px-1.5 py-1.5 text-center transition-colors ${
-                    visualPresetValue === preset.value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <span className="block truncate text-xs font-medium leading-tight">
-                    {t(preset.labelKey)}
-                  </span>
-                  <span className="block text-[11px] leading-tight">
-                    {formatPresetValue(preset.value)}
-                  </span>
-                </button>
-              ))}
+              {EDITOR_CONTENT_WIDTH_PRESETS.map((preset) => {
+                const weight = presetWeight(preset.value);
+                return (
+                  <button
+                    key={preset.labelKey}
+                    type="button"
+                    onClick={() => setEditorContentWidth(preset.value)}
+                    className="relative min-w-0 rounded-md px-1.5 py-1.5 text-center text-muted-foreground transition-colors duration-200 ease-out hover:text-foreground"
+                    style={
+                      weight > 0
+                        ? {
+                            color: `color-mix(in srgb, var(--color-foreground) ${weight * 100}%, var(--color-muted-foreground))`,
+                          }
+                        : undefined
+                    }
+                  >
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 rounded-md bg-background shadow-sm transition-opacity duration-200 ease-out"
+                      style={{ opacity: weight }}
+                    />
+                    <span className="relative block truncate text-xs font-medium leading-tight">
+                      {t(preset.labelKey)}
+                    </span>
+                    <span className="relative block text-[11px] leading-tight">
+                      {formatPresetValue(preset.value)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <div className="flex items-center gap-2">
               <input
