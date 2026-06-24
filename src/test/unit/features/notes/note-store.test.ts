@@ -119,6 +119,120 @@ describe("useNoteStore", () => {
     });
   });
 
+  describe("contentUpdatedAt", () => {
+    it("initializes contentUpdatedAt to the creation time", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-06-08T00:00:00Z"));
+        const note = await useNoteStore.getState().createNote({ title: "New" });
+        expect(note.contentUpdatedAt).toBe(note.createdAt);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("bumps contentUpdatedAt when content changes", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-06-08T00:00:00Z"));
+        const note = await useNoteStore.getState().createNote({ title: "Draft" });
+
+        vi.setSystemTime(new Date("2026-06-08T01:00:00Z"));
+        await useNoteStore.getState().updateNote({ id: note.id, content: "<p>new</p>" });
+
+        const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+        expect(updated?.contentUpdatedAt).toBeGreaterThan(note.contentUpdatedAt);
+        expect(updated?.updatedAt).toBe(updated?.contentUpdatedAt);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("bumps contentUpdatedAt when the title changes", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-06-08T00:00:00Z"));
+        const note = await useNoteStore.getState().createNote({ title: "Draft" });
+
+        vi.setSystemTime(new Date("2026-06-08T01:00:00Z"));
+        await useNoteStore.getState().updateNote({ id: note.id, title: "Final" });
+
+        const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+        expect(updated?.contentUpdatedAt).toBeGreaterThan(note.contentUpdatedAt);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not bump contentUpdatedAt when only tags change, but still bumps updatedAt", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-06-08T00:00:00Z"));
+        const note = await useNoteStore.getState().createNote({ title: "Draft" });
+
+        vi.setSystemTime(new Date("2026-06-08T01:00:00Z"));
+        await useNoteStore.getState().updateNote({ id: note.id, tags: ["new-tag"] });
+
+        const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+        expect(updated?.contentUpdatedAt).toBe(note.contentUpdatedAt);
+        expect(updated?.updatedAt).toBeGreaterThan(note.updatedAt);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not bump contentUpdatedAt when only the pin state changes", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-06-08T00:00:00Z"));
+        const note = await useNoteStore.getState().createNote({ title: "Draft" });
+
+        vi.setSystemTime(new Date("2026-06-08T01:00:00Z"));
+        await useNoteStore.getState().updateNote({ id: note.id, pinned: true });
+
+        const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+        expect(updated?.contentUpdatedAt).toBe(note.contentUpdatedAt);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not bump contentUpdatedAt when notes are reordered", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-06-08T00:00:00Z"));
+        const a = await useNoteStore.getState().createNote({ title: "A" });
+        const b = await useNoteStore.getState().createNote({ title: "B" });
+
+        vi.setSystemTime(new Date("2026-06-08T01:00:00Z"));
+        await useNoteStore.getState().reorderNotes([b.id, a.id]);
+
+        const reordered = useNoteStore.getState().notes.find((n) => n.id === a.id);
+        expect(reordered?.contentUpdatedAt).toBe(a.contentUpdatedAt);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("persists contentUpdatedAt through a round-trip", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-06-08T00:00:00Z"));
+        const note = await useNoteStore.getState().createNote({ title: "Persist" });
+
+        vi.setSystemTime(new Date("2026-06-08T01:00:00Z"));
+        await useNoteStore.getState().updateNote({ id: note.id, content: "<p>edit</p>" });
+        const expected = useNoteStore.getState().notes.find((n) => n.id === note.id)
+          ?.contentUpdatedAt;
+
+        await useNoteStore.getState().loadNote(note.id);
+        expect(useNoteStore.getState().currentNote?.contentUpdatedAt).toBe(expected);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe("deleteNote()", () => {
     it("records a pending sync tombstone before deleting the note", async () => {
       const note = await useNoteStore.getState().createNote({ title: "Idea" });

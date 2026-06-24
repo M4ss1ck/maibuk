@@ -163,6 +163,7 @@ export const notes = sqliteTable("notes", {
   collapsedHeadings: text("collapsed_headings").default("[]"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
+  contentUpdatedAt: integer("content_updated_at"),
 });
 
 // Link index: edges extracted from note/chapter content (powers backlinks).

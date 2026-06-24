@@ -180,7 +180,7 @@ export function NoteListItem({
 
       {/* Line 3: tags + last-modified */}
       <div className="mt-2 min-h-4">
-        <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.updatedAt)} />
+        <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.contentUpdatedAt)} />
       </div>
     </li>
   );

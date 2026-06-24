@@ -576,7 +576,7 @@ export function NoteEditor({
             <div className="min-w-0 flex-1">
               <NoteTagsRow
                 tags={note.tags}
-                dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
+                dateLabel={timeAgo(note.contentUpdatedAt, i18n.language, t)}
                 datePosition="left"
                 action={
                   <div ref={tagEditorRef} className="relative">

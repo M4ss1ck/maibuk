@@ -24,6 +24,8 @@ function buildNote(overrides: Partial<Note>): Note {
     bookId: overrides.bookId ?? null,
     createdAt: overrides.createdAt ?? 1,
     updatedAt: overrides.updatedAt ?? Math.floor(Date.now() / 1000),
+    contentUpdatedAt:
+      overrides.contentUpdatedAt ?? overrides.updatedAt ?? Math.floor(Date.now() / 1000),
   };
 }
 

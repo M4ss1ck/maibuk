@@ -85,6 +85,7 @@ function buildNote(overrides: Partial<Note> = {}): Note {
     bookId: overrides.bookId ?? null,
     createdAt: overrides.createdAt ?? 1,
     updatedAt: overrides.updatedAt ?? 1,
+    contentUpdatedAt: overrides.contentUpdatedAt ?? overrides.updatedAt ?? 1,
   };
 }
 

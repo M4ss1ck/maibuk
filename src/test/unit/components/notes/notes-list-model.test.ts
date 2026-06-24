@@ -13,6 +13,7 @@ import {
 type NoteInput = Partial<Note> & { id: string; title: string; bookId?: string | null };
 
 function note(input: NoteInput): Note & { bookId?: string | null } {
+  const updatedAt = input.updatedAt ?? 1;
   return {
     content: "",
     tags: [],
@@ -21,7 +22,8 @@ function note(input: NoteInput): Note & { bookId?: string | null } {
     wordCount: 0,
     collapsedHeadings: [],
     createdAt: 1,
-    updatedAt: 1,
+    updatedAt,
+    contentUpdatedAt: updatedAt,
     ...input,
   };
 }
@@ -170,6 +172,34 @@ describe("notes list model", () => {
     expect(buildTagNoteGroups([craft, revision])).toEqual([
       { id: "craft", title: "craft", tag: "craft", notes: [craft] },
       { id: "revision", title: "revision", tag: "revision", notes: [craft, revision] },
+    ]);
+  });
+
+  it("groups by contentUpdatedAt, ignoring a later updatedAt from a non-content change", () => {
+    const now = new Date("2026-06-12T12:00:00Z");
+    // Content last edited last year, but re-tagged today (updatedAt bumped).
+    const retagged = note({
+      id: "retagged",
+      title: "Retagged",
+      contentUpdatedAt: Date.parse("2025-03-01T08:00:00Z") / 1000,
+      updatedAt: Date.parse("2026-06-12T08:00:00Z") / 1000,
+    });
+
+    expect(buildDateNoteGroups([retagged], now)).toEqual([
+      { id: "2025", title: "2025", notes: [retagged] },
+    ]);
+  });
+
+  it("filters by contentUpdatedAt date range, ignoring updatedAt", () => {
+    const retagged = note({
+      id: "retagged",
+      title: "Retagged",
+      contentUpdatedAt: new Date(2026, 5, 10, 12).getTime() / 1000,
+      updatedAt: new Date(2026, 5, 20, 12).getTime() / 1000,
+    });
+
+    expect(filterNotes([retagged], { dateFrom: "2026-06-10", dateTo: "2026-06-11" })).toEqual([
+      retagged,
     ]);
   });
 
