@@ -433,21 +433,9 @@ function RuleTargetPreview({
   return (
     <div className="space-y-1">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <div className="group relative max-w-full">
-        <button
-          type="button"
-          className="block w-full rounded-md bg-muted/50 px-2 py-1 text-left text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-          aria-label={label}
-        >
-          <code className="block truncate">{preview}</code>
-        </button>
-        <div className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-[min(34rem,calc(100vw-3rem))] rounded-md border border-border bg-background p-3 text-xs text-foreground shadow-xl group-hover:block group-focus-within:block">
-          <code className="block whitespace-pre-wrap break-words leading-relaxed">
-            {preview}
-          </code>
-          <div className="absolute -bottom-1 left-4 h-2 w-2 rotate-45 border-b border-r border-border bg-background" />
-        </div>
-      </div>
+      <pre className="rounded-md bg-muted/50 px-2 py-1 text-xs text-foreground whitespace-pre-wrap break-words">
+        <code>{preview}</code>
+      </pre>
     </div>
   );
 }

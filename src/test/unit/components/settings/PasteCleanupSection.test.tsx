@@ -112,13 +112,7 @@ describe("PasteCleanupSection — open from HTML view", () => {
     expect(
       screen.getByText("settings.pasteCleanup.rules.preview"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", {
-        name: "settings.pasteCleanup.rules.preview",
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText(".MsoNormal")).toHaveLength(2);
-    expect(screen.getAllByText(".MsoNormal")[1]).toHaveClass(
+    expect(screen.getByText(".MsoNormal").closest("pre")).toHaveClass(
       "whitespace-pre-wrap",
       "break-words",
     );
