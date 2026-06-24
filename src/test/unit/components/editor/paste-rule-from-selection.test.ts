@@ -100,6 +100,18 @@ describe("inferPasteRuleFromSelection", () => {
     });
   });
 
+  it("normalizes selected font-size and red color declarations with or without a trailing semicolon", () => {
+    for (const selection of [
+      "font-size: medium; color: red;",
+      "font-size: medium; color: red",
+    ]) {
+      expect(inferPasteRuleFromSelection(selection)).toEqual({
+        target: "styleDeclaration",
+        value: "font-size: medium; color: red;",
+      });
+    }
+  });
+
   it("uses the style property name when the value contains quotes", () => {
     expect(
       inferPasteRuleFromSelection('style="font-family: \'Times New Roman\';"'),

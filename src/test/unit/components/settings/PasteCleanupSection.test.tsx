@@ -112,7 +112,16 @@ describe("PasteCleanupSection — open from HTML view", () => {
     expect(
       screen.getByText("settings.pasteCleanup.rules.preview"),
     ).toBeInTheDocument();
-    expect(screen.getByText(".MsoNormal")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "settings.pasteCleanup.rules.preview",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(".MsoNormal")).toHaveLength(2);
+    expect(screen.getAllByText(".MsoNormal")[1]).toHaveClass(
+      "whitespace-pre-wrap",
+      "break-words",
+    );
   });
 
   it("navigates back to the editor when opened from the HTML source view", async () => {
