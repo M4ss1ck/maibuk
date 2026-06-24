@@ -410,6 +410,120 @@ describe("cleanPastedHtml() — custom rules", () => {
     expect(span?.style.color).not.toBe("");
   });
 
+  it("clears only matching styleDeclaration values", () => {
+    const out = clean(
+      '<span style="font-size: medium; color: rgb(0, 0, 0); font-weight: 700">drop</span><span style="font-size: medium; color: red">keep</span>',
+      settings({
+        rules: [
+          rule({
+            target: "styleDeclaration",
+            value: "span { font-size: medium; color: rgb(0, 0, 0); }",
+            action: "removeStyle",
+          }),
+        ],
+      }),
+    );
+    const spans = out.querySelectorAll("span");
+    expect(spans[0]?.style.fontSize).toBe("");
+    expect(spans[0]?.style.color).toBe("");
+    expect(spans[0]?.style.fontWeight).toBe("700");
+    expect(spans[1]?.style.fontSize).toBe("");
+    expect(spans[1]?.style.color).toBe("red");
+  });
+
+  it("clears only the selected -webkit-standard font family", () => {
+    const out = clean(
+      '<span style="font-family: -webkit-standard; color: red">drop</span><span style="font-family: Georgia; color: red">keep</span>',
+      settings({
+        rules: [
+          rule({
+            target: "styleDeclaration",
+            value: "font-family: -webkit-standard",
+            action: "removeStyle",
+          }),
+        ],
+      }),
+    );
+    const spans = out.querySelectorAll("span");
+    expect(spans[0]?.style.fontFamily).toBe("");
+    expect(spans[0]?.style.color).toBe("red");
+    expect(spans[1]?.style.fontFamily).toBe("Georgia");
+    expect(spans[1]?.style.color).toBe("red");
+  });
+
+  it("clears selected font-size and red color values with or without trailing semicolons", () => {
+    const input =
+      '<span style="font-size: medium; color: red; font-weight: 700">drop</span><span style="font-size: 12px; color: red">keep-color</span><span style="font-size: medium; color: blue">keep-size</span>';
+
+    for (const value of [
+      "font-size: medium; color: red;",
+      "font-size: medium; color: red",
+    ]) {
+      const out = clean(
+        input,
+        settings({
+          rules: [
+            rule({
+              target: "styleDeclaration",
+              value,
+              action: "removeStyle",
+            }),
+          ],
+        }),
+      );
+      const spans = out.querySelectorAll("span");
+      expect(spans[0]?.style.fontSize).toBe("");
+      expect(spans[0]?.style.color).toBe("");
+      expect(spans[0]?.style.fontWeight).toBe("700");
+      expect(spans[1]?.style.fontSize).toBe("12px");
+      expect(spans[1]?.style.color).toBe("");
+      expect(spans[2]?.style.fontSize).toBe("");
+      expect(spans[2]?.style.color).toBe("blue");
+    }
+  });
+
+  it("applies styleDeclaration blocks to their nested tag targets", () => {
+    const out = clean(
+      '<p><span style="font-size: medium; color: red">span</span><em style="font-size: medium; color: red">em</em><strong style="font-size: medium; color: red">strong</strong></p>',
+      settings({
+        rules: [
+          rule({
+            target: "styleDeclaration",
+            value: "span { font-size: medium; }\nem { color: red; }",
+            action: "removeStyle",
+          }),
+        ],
+      }),
+    );
+    const span = out.querySelector("span");
+    const em = out.querySelector("em");
+    const strong = out.querySelector("strong");
+    expect(span?.style.fontSize).toBe("");
+    expect(span?.style.color).toBe("red");
+    expect(em?.style.fontSize).toBe("medium");
+    expect(em?.style.color).toBe("");
+    expect(strong?.style.fontSize).toBe("medium");
+    expect(strong?.style.color).toBe("red");
+  });
+
+  it("matches a styleDeclaration when only one selected declaration remains", () => {
+    const out = clean(
+      '<span style="font-size: medium; color: rgb(0, 0, 0);">x</span>',
+      settings({
+        rules: [
+          rule({
+            target: "styleDeclaration",
+            value:
+              "span { font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0); }",
+            action: "removeStyle",
+          }),
+        ],
+      }),
+    );
+    expect(out.textContent).toBe("x");
+    expect(out.querySelector("span")).toBeNull();
+  });
+
   it("deletes elements matching a raw cssSelector rule", () => {
     const out = clean(
       '<p>a</p><p class="x">b</p>',

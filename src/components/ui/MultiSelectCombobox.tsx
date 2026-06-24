@@ -148,7 +148,14 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <div
-        onClick={() => {
+        onMouseDown={(event) => {
+          if (
+            event.target instanceof HTMLElement &&
+            event.target.closest("button,input")
+          ) {
+            return;
+          }
+          event.preventDefault();
           setOpen(true);
           inputRef.current?.focus();
         }}

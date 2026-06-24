@@ -1,6 +1,15 @@
-import { useState } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useLayoutEffect,
+  forwardRef,
+  type TextareaHTMLAttributes,
+} from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronUp, ChevronDown, X } from "lucide-react";
+import { ArrowLeft, ChevronUp, ChevronDown, X } from "lucide-react";
 import { useSettingsStore } from "../../features/settings/store";
 import {
   PASTE_CLEANUP_PRESET_VALUES,
@@ -32,6 +41,47 @@ export function PasteCleanupSection() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [newProperty, setNewProperty] = useState("");
+  const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
+  const [returnToEditorPath, setReturnToEditorPath] = useState<string | null>(
+    null,
+  );
+
+  // Opened via "Add cleanup rule" from the HTML source view: jump straight to
+  // the rules editor with the new rule revealed and focused.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const state = location.state as
+      | {
+        openPasteCleanupRules?: boolean;
+        focusPasteRuleId?: string;
+        returnToEditorPath?: string;
+      }
+      | null;
+    if (!state?.openPasteCleanupRules) return;
+    setAdvancedOpen(true);
+    setRulesOpen(true);
+    setFocusRuleId(state.focusPasteRuleId ?? null);
+    setReturnToEditorPath(state.returnToEditorPath ?? null);
+    // Consume the navigation state so the modal does not reopen on re-render.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate]);
+
+  // Capture the targeted rule's value input without focusing as a side effect:
+  // the focus is driven by a one-shot effect below so it fires exactly once
+  // (on open) instead of on every keystroke/re-render.
+  const focusRuleNodeRef = useRef<HTMLTextAreaElement | null>(null);
+  const captureFocusRule = useCallback((node: HTMLTextAreaElement | null) => {
+    focusRuleNodeRef.current = node;
+  }, []);
+  useEffect(() => {
+    if (!rulesOpen || !focusRuleId) return;
+    const node = focusRuleNodeRef.current;
+    if (!node) return;
+    node.focus();
+    node.scrollIntoView({ block: "center" });
+    setFocusRuleId(null);
+  }, [rulesOpen, focusRuleId]);
 
   const promptMarkdownOnPaste = useSettingsStore(
     (state) => state.promptMarkdownOnPaste,
@@ -66,6 +116,11 @@ export function PasteCleanupSection() {
     if (!value) return;
     addStrippedProperty(value);
     setNewProperty("");
+  };
+
+  const handleBackToEditor = () => {
+    if (!returnToEditorPath) return;
+    navigate(returnToEditorPath);
   };
 
   return (
@@ -239,9 +294,17 @@ export function PasteCleanupSection() {
         onClose={() => setRulesOpen(false)}
         title={t("settings.pasteCleanup.rules.title")}
         footer={
-          <Button variant="ghost" onClick={() => setRulesOpen(false)}>
-            {t("common.close")}
-          </Button>
+          <>
+            {returnToEditorPath && (
+              <Button variant="secondary" onClick={handleBackToEditor}>
+                <ArrowLeft className="w-4 h-4" />
+                {t("settings.pasteCleanup.rules.backToEditor")}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => setRulesOpen(false)}>
+              {t("common.close")}
+            </Button>
+          </>
         }
       >
         <div className="space-y-4">
@@ -282,7 +345,7 @@ export function PasteCleanupSection() {
                       label={t("settings.pasteCleanup.rules.enabled")}
                     />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col flex-wrap justify-center gap-2">
                     <Select<PasteRuleTarget>
                       value={rule.target}
                       onChange={(value) =>
@@ -290,7 +353,8 @@ export function PasteCleanupSection() {
                       }
                       options={targetOptions}
                     />
-                    <Input
+                    <AutoGrowTextarea
+                      ref={rule.id === focusRuleId ? captureFocusRule : undefined}
                       value={rule.value}
                       onChange={(e) =>
                         updatePasteCleanupRule(rule.id, {
@@ -299,7 +363,6 @@ export function PasteCleanupSection() {
                       }
                       placeholder={PASTE_RULE_TARGET_META[rule.target].example}
                       aria-label={t("settings.pasteCleanup.rules.value")}
-                      className="flex-1 min-w-32"
                     />
                     <Select<PasteRuleAction>
                       value={rule.action}
@@ -342,7 +405,11 @@ export function PasteCleanupSection() {
             </div>
           )}
 
-          <Button variant="primary" size="sm" onClick={addPasteCleanupRule}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => addPasteCleanupRule()}
+          >
             {t("settings.pasteCleanup.rules.add")}
           </Button>
         </div>
@@ -350,3 +417,41 @@ export function PasteCleanupSection() {
     </div>
   );
 }
+
+/**
+ * Single-line-looking textarea that grows to fit its content, so long style
+ * declarations stay fully visible while editing a rule's value.
+ */
+const AutoGrowTextarea = forwardRef<
+  HTMLTextAreaElement,
+  TextareaHTMLAttributes<HTMLTextAreaElement>
+>(({ className = "", ...props }, ref) => {
+  const innerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const setRef = (node: HTMLTextAreaElement | null) => {
+    innerRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) ref.current = node;
+  };
+
+  const resize = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  useLayoutEffect(() => {
+    resize(innerRef.current);
+  }, [props.value]);
+
+  return (
+    <textarea
+      ref={setRef}
+      rows={1}
+      onInput={(e) => resize(e.currentTarget)}
+      className={`resize-none overflow-hidden w-full px-3 py-2 border rounded-lg bg-background text-foreground transition-colors border-border focus:border-primary focus:ring-primary focus:outline-none focus:ring-2 focus:ring-offset-0 placeholder:text-muted-foreground ${className}`}
+      {...props}
+    />
+  );
+});
+AutoGrowTextarea.displayName = "AutoGrowTextarea";

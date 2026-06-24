@@ -26,6 +26,14 @@ const {
   EDITOR_CONTENT_WIDTH_STEP,
 } = await import("../../../../features/settings/types");
 
+function getPresetHighlightOpacity(name: RegExp): number {
+  const button = screen.getByRole("button", { name });
+  const highlight = button.querySelector("span[aria-hidden='true']");
+
+  expect(highlight).toHaveClass("bg-background");
+  return Number((highlight as HTMLElement).style.opacity);
+}
+
 describe("WidthControl", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -68,9 +76,7 @@ describe("WidthControl", () => {
     expect(useSettingsStore.getState().editorContentWidth).toBe(
       EDITOR_CONTENT_WIDTH_FULL,
     );
-    expect(
-      screen.getByRole("button", { name: /editor\.widthFull/i }),
-    ).toHaveClass("bg-background");
+    expect(getPresetHighlightOpacity(/editor\.widthFull/i)).toBe(1);
   });
 
   it("commits a typed px value from the input", () => {
@@ -105,12 +111,9 @@ describe("WidthControl", () => {
     fireEvent.click(screen.getByTitle("editor.contentWidth"));
     fireEvent.change(screen.getByRole("slider"), { target: { value: "860" } });
 
-    expect(
-      screen.getByRole("button", { name: /editor\.widthWide/i }),
-    ).toHaveClass("bg-background");
-    expect(
-      screen.getByRole("button", { name: /editor\.widthComfortable/i }),
-    ).not.toHaveClass("bg-background");
+    expect(getPresetHighlightOpacity(/editor\.widthWide/i)).toBeGreaterThan(
+      getPresetHighlightOpacity(/editor\.widthComfortable/i),
+    );
     expect(screen.getByText("960px")).toBeInTheDocument();
     expect(screen.getByText("100%")).toBeInTheDocument();
   });

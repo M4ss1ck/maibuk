@@ -486,6 +486,24 @@ describe("useSettingsStore", () => {
       expect(rules[0].action).toBe("removeStyle");
     });
 
+    it("returns the new rule's id", () => {
+      const id = useSettingsStore.getState().addPasteCleanupRule();
+      expect(useSettingsStore.getState().pasteCleanup.rules[0].id).toBe(id);
+    });
+
+    it("applies pre-filled fields from the init argument", () => {
+      useSettingsStore.getState().addPasteCleanupRule({
+        target: "cssClass",
+        value: "MsoNormal",
+      });
+      const rule = useSettingsStore.getState().pasteCleanup.rules[0];
+      expect(rule.target).toBe("cssClass");
+      expect(rule.value).toBe("MsoNormal");
+      // Unspecified fields keep their defaults.
+      expect(rule.enabled).toBe(true);
+      expect(rule.action).toBe("removeStyle");
+    });
+
     it("updates only the targeted rule", () => {
       useSettingsStore.getState().addPasteCleanupRule();
       useSettingsStore.getState().addPasteCleanupRule();

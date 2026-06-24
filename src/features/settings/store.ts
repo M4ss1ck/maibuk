@@ -93,7 +93,9 @@ interface SettingsStore extends Settings {
   ) => void;
   addStrippedProperty: (property: string) => void;
   removeStrippedProperty: (property: string) => void;
-  addPasteCleanupRule: () => void;
+  addPasteCleanupRule: (
+    init?: Partial<Omit<PasteCleanupRule, "id">>
+  ) => string;
   updatePasteCleanupRule: (
     id: string,
     patch: Partial<Omit<PasteCleanupRule, "id">>
@@ -412,23 +414,27 @@ export const useSettingsStore = create<SettingsStore>()(
             },
           };
         }),
-      addPasteCleanupRule: () =>
+      addPasteCleanupRule: (init) => {
+        const id = crypto.randomUUID();
         set((state) => ({
           pasteCleanup: {
             ...state.pasteCleanup,
             rules: [
               ...state.pasteCleanup.rules,
               {
-                id: crypto.randomUUID(),
+                id,
                 enabled: true,
                 label: "",
                 target: "fontFamily",
                 value: "",
                 action: "removeStyle",
+                ...init,
               },
             ],
           },
-        })),
+        }));
+        return id;
+      },
       updatePasteCleanupRule: (id, patch) =>
         set((state) => ({
           pasteCleanup: {

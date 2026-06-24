@@ -15,6 +15,8 @@ export type CodeMirrorHandle = {
   isWrapped: () => boolean;
   /** Scroll to and highlight a character range */
   highlightRange: (from: number, to: number) => void;
+  /** Get the currently selected text (empty string if nothing is selected) */
+  getSelection: () => string;
   /** Get current warning count from linter */
   getWarningCount: () => number;
   /** Apply a CodeMirror theme extension */
@@ -26,6 +28,7 @@ type UseCodeMirrorOptions = {
   onChange: (content: string) => void;
   onFocus: () => void;
   onBlur: () => void;
+  onSelectionChange?: (hasSelection: boolean) => void;
 };
 
 export function useCodeMirror(options: UseCodeMirrorOptions) {
@@ -103,6 +106,11 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
           } else {
             optionsRef.current.onBlur();
           }
+        }
+        if (update.selectionSet) {
+          optionsRef.current.onSelectionChange?.(
+            !update.state.selection.main.empty,
+          );
         }
         warningCount = diagnosticCount(update.state);
       });
@@ -211,6 +219,11 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
             scrollIntoView: true,
           });
           view.focus();
+        },
+
+        getSelection: () => {
+          const { from, to } = view.state.selection.main;
+          return view.state.sliceDoc(from, to);
         },
 
         getWarningCount: () => warningCount,

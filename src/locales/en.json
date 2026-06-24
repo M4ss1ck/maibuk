@@ -362,6 +362,7 @@
     "imageAlignment": "Alignment",
     "prettify": "Prettify",
     "wordWrap": "Word Wrap",
+    "addCleanupRule": "Add cleanup rule from selection",
     "editorTheme": "Editor Theme",
     "inspectInHtml": "Inspect",
     "lookUp": "Look up \"{{word}}\"",
@@ -594,6 +595,7 @@
         "value": "Value",
         "target": "Match",
         "action": "Action",
+        "backToEditor": "Back to editor",
         "enabled": "Enabled",
         "remove": "Remove",
         "moveUp": "Move up",
@@ -602,6 +604,7 @@
           "fontFamily": "Font",
           "textColor": "Text color",
           "backgroundColor": "Highlight color",
+          "styleDeclaration": "Style declaration",
           "cssClass": "CSS class",
           "tag": "HTML tag",
           "cssSelector": "CSS selector"

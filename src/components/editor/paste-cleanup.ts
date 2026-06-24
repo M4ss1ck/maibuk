@@ -210,6 +210,10 @@ function applyCustomRules(body: HTMLElement, rules: PasteCleanupRule[]): void {
     const value = rule.value.trim();
     if (!value) continue;
     try {
+      if (rule.target === "styleDeclaration") {
+        applyStyleDeclarationRule(body, value, rule.action);
+        continue;
+      }
       const elements = matchRuleElements(body, rule.target, value);
       for (const el of elements) {
         applyRuleAction(el, rule.target, rule.action);
@@ -241,9 +245,100 @@ function matchRuleElements(
       return matchByStyle(body, "color", value);
     case "backgroundColor":
       return matchByStyle(body, "backgroundColor", value);
+    case "styleDeclaration":
+      return [];
     default:
       return [];
   }
+}
+
+interface StyleDeclarationBlock {
+  tag: string | null;
+  declarations: StyleDeclaration[];
+}
+
+interface StyleDeclaration {
+  property: string;
+  value: string;
+}
+
+function applyStyleDeclarationRule(
+  body: HTMLElement,
+  value: string,
+  action: PasteRuleAction,
+): void {
+  const blocks = parseStyleDeclarationRule(value);
+  for (const block of blocks) {
+    const selector = block.tag ? `${block.tag}[style]` : "[style]";
+    for (const el of Array.from(body.querySelectorAll<HTMLElement>(selector))) {
+      const matchingDeclarations = block.declarations.filter((declaration) =>
+        styleDeclarationMatches(el, declaration),
+      );
+      if (matchingDeclarations.length === 0) continue;
+
+      if (action === "delete") {
+        el.remove();
+        continue;
+      }
+      if (action === "unwrap") {
+        unwrapElement(el);
+        continue;
+      }
+
+      for (const declaration of matchingDeclarations) {
+        el.style.removeProperty(declaration.property);
+        if (declaration.property === "background-color") {
+          el.removeAttribute("data-color");
+        }
+      }
+      if (!el.getAttribute("style")) el.removeAttribute("style");
+    }
+  }
+}
+
+function parseStyleDeclarationRule(value: string): StyleDeclarationBlock[] {
+  const blocks: StyleDeclarationBlock[] = [];
+  const blockRe = /(?:([a-z][\w-]*)\s*)?\{([^{}]+)\}/gi;
+
+  for (const match of value.matchAll(blockRe)) {
+    const declarations = parseStyleDeclarations(match[2]);
+    if (declarations.length === 0) continue;
+    blocks.push({
+      tag: match[1]?.toLowerCase() ?? null,
+      declarations,
+    });
+  }
+
+  if (blocks.length > 0) return blocks;
+
+  const declarations = parseStyleDeclarations(value);
+  return declarations.length > 0 ? [{ tag: null, declarations }] : [];
+}
+
+function parseStyleDeclarations(value: string): StyleDeclaration[] {
+  const declarations: StyleDeclaration[] = [];
+  for (const part of value.split(";")) {
+    const index = part.indexOf(":");
+    if (index === -1) continue;
+    const property = part.slice(0, index).trim().toLowerCase();
+    const declarationValue = part.slice(index + 1).trim();
+    if (!/^-{0,2}[a-z][\w-]*$/i.test(property) || !declarationValue) {
+      continue;
+    }
+    declarations.push({ property, value: declarationValue });
+  }
+  return declarations;
+}
+
+function styleDeclarationMatches(
+  el: HTMLElement,
+  declaration: StyleDeclaration,
+): boolean {
+  const actual = normalizeStyleValue(
+    el.style.getPropertyValue(declaration.property),
+  );
+  const expected = normalizeStyleValue(declaration.value);
+  return actual !== "" && expected !== "" && actual.includes(expected);
 }
 
 function matchByStyle(

@@ -362,6 +362,7 @@
     "imageAlignment": "Alineación",
     "prettify": "Formatear",
     "wordWrap": "Ajuste de línea",
+    "addCleanupRule": "Añadir regla de limpieza desde la selección",
     "editorTheme": "Tema del editor",
     "inspectInHtml": "Ver código",
     "lookUp": "Buscar \"{{word}}\"",
@@ -594,6 +595,7 @@
         "value": "Valor",
         "target": "Coincidencia",
         "action": "Acción",
+        "backToEditor": "Volver al editor",
         "enabled": "Activada",
         "remove": "Quitar",
         "moveUp": "Subir",
@@ -602,6 +604,7 @@
           "fontFamily": "Fuente",
           "textColor": "Color de texto",
           "backgroundColor": "Color de resaltado",
+          "styleDeclaration": "Declaración de estilo",
           "cssClass": "Clase CSS",
           "tag": "Etiqueta HTML",
           "cssSelector": "Selector CSS"
