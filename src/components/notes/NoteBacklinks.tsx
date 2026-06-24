@@ -27,7 +27,7 @@ export function NoteBacklinks({ noteId, onOpen }: NoteBacklinksProps) {
   if (entries.length === 0) return null;
 
   return (
-    <div className="border-t border-border px-8 py-4 max-w-editor-max mx-auto w-full">
+    <div className="border-t border-border px-8 py-4 editor-content-surface mx-auto w-full">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
         {t("notes.backlinks")}
       </h3>

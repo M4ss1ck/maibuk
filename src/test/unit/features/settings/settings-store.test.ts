@@ -57,6 +57,8 @@ describe("useSettingsStore", () => {
       sidebarWidth: 256,
       notesSidebarWidth: 256,
       toolbarExpanded: false,
+      editorContentWidth: 720,
+      editorShowBorder: false,
       chapterListView: "normal",
       notesListView: "list",
       notesTreeGroupMode: "book",
@@ -608,6 +610,32 @@ describe("editorZoom", () => {
     useSettingsStore.getState().setEditorZoom(200);
     useSettingsStore.getState().resetZoom();
     expect(useSettingsStore.getState().editorZoom).toBe(100);
+  });
+});
+
+describe("editor content width settings", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useSettingsStore.setState({
+      editorContentWidth: 720,
+      editorShowBorder: false,
+    } as any);
+  });
+
+  it("defaults editorContentWidth to 720 and editorShowBorder to false", () => {
+    const state = useSettingsStore.getState();
+    expect(state.editorContentWidth).toBe(720);
+    expect(state.editorShowBorder).toBe(false);
+  });
+
+  it("clamps width through setEditorContentWidth", () => {
+    useSettingsStore.getState().setEditorContentWidth(100);
+    expect(useSettingsStore.getState().editorContentWidth).toBe(480);
+  });
+
+  it("toggles editorShowBorder", () => {
+    useSettingsStore.getState().setEditorShowBorder(true);
+    expect(useSettingsStore.getState().editorShowBorder).toBe(true);
   });
 });
 

@@ -118,6 +118,7 @@ export function Editor({
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
+  const editorShowBorder = useSettingsStore((state) => state.editorShowBorder);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const [scrollContainerEl, setScrollContainerEl] = useState<HTMLDivElement | null>(null);
@@ -372,7 +373,11 @@ export function Editor({
         onKeyDown={handleFocus}
         onBlur={onBlur}
       >
-        <div className="max-w-editor-max mx-auto p-8 editor-zoom-surface">
+        <div
+          className={`editor-content-surface mx-auto p-8 editor-zoom-surface${
+            editorShowBorder ? " editor-show-border" : ""
+          }`}
+        >
           <EditorContent editor={editor} />
           {showInlineFootnotes && <FootnoteList editor={editor} startIndex={footnoteStartIndex} />}
         </div>

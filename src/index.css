@@ -174,6 +174,15 @@ option {
   zoom: var(--editor-zoom, 1);
 }
 
+/* Editor content measure (line length) + optional side "page" borders */
+.editor-content-surface {
+  max-width: min(var(--editor-content-width, 720px), 100%);
+}
+
+.editor-content-surface.editor-show-border {
+  border-inline: 1px solid var(--color-border);
+}
+
 /* Editor typography */
 .editor-content {
   font-family: var(--editor-font-family, var(--font-serif));

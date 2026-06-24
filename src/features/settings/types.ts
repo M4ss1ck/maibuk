@@ -37,6 +37,43 @@ export function clampEditorZoom(percent: number): number {
   return Math.max(EDITOR_ZOOM_MIN, Math.min(EDITOR_ZOOM_MAX, snapped));
 }
 
+export const EDITOR_CONTENT_WIDTH_MIN = 480;
+export const EDITOR_CONTENT_WIDTH_MAX = 1400;
+export const EDITOR_CONTENT_WIDTH_STEP = 20;
+/** Sentinel meaning "fill the pane"; resolves to 100% via CSS min(). */
+export const EDITOR_CONTENT_WIDTH_FULL = 100000;
+export const DEFAULT_EDITOR_CONTENT_WIDTH = 720;
+
+export type EditorContentWidthPresetLabelKey =
+  | "editor.widthNarrow"
+  | "editor.widthComfortable"
+  | "editor.widthWide"
+  | "editor.widthFull";
+
+export interface EditorContentWidthPreset {
+  labelKey: EditorContentWidthPresetLabelKey;
+  value: number;
+}
+
+export const EDITOR_CONTENT_WIDTH_PRESETS: EditorContentWidthPreset[] = [
+  { labelKey: "editor.widthNarrow", value: 600 },
+  { labelKey: "editor.widthComfortable", value: DEFAULT_EDITOR_CONTENT_WIDTH },
+  { labelKey: "editor.widthWide", value: 960 },
+  { labelKey: "editor.widthFull", value: EDITOR_CONTENT_WIDTH_FULL },
+];
+
+/** Snap a width to the step grid and clamp to [MIN, MAX]; pass the Full sentinel through. */
+export function clampEditorContentWidth(px: number): number {
+  if (!Number.isFinite(px)) return DEFAULT_EDITOR_CONTENT_WIDTH;
+  if (px >= EDITOR_CONTENT_WIDTH_FULL) return EDITOR_CONTENT_WIDTH_FULL;
+  const snapped =
+    Math.round(px / EDITOR_CONTENT_WIDTH_STEP) * EDITOR_CONTENT_WIDTH_STEP;
+  return Math.max(
+    EDITOR_CONTENT_WIDTH_MIN,
+    Math.min(EDITOR_CONTENT_WIDTH_MAX, snapped),
+  );
+}
+
 export function getDefaultBackupRetention(isWeb: boolean): number {
   return isWeb ? DEFAULT_WEB_BACKUP_RETENTION : DEFAULT_TAURI_BACKUP_RETENTION;
 }
@@ -124,6 +161,8 @@ export interface Settings {
   sidebarWidth: number;
   notesSidebarWidth: number;
   toolbarExpanded: boolean;
+  editorContentWidth: number;
+  editorShowBorder: boolean;
   chapterListView: ChapterListView;
   showChapterOutline: boolean;
   notesListView: NotesListViewMode;

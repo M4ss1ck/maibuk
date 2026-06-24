@@ -45,6 +45,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     hideKeyboardHints,
     alwaysOnTop,
     editorZoom,
+    editorContentWidth,
   } = useSettingsStore();
 
   useEffect(() => {
@@ -59,6 +60,13 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
       `${editorZoom / 100}`
     );
   }, [editorZoom]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--editor-content-width",
+      `${editorContentWidth}px`,
+    );
+  }, [editorContentWidth]);
 
   useEffect(() => {
     const root = document.documentElement;
