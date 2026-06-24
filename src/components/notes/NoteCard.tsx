@@ -38,7 +38,7 @@ export function NoteCard({ note, bookTitle, onClick }: NoteCardProps) {
       <div className="mt-auto pt-2">
         <NoteTagsRow
           tags={note.tags}
-          dateLabel={timeAgo(note.updatedAt, i18n.language, t)}
+          dateLabel={timeAgo(note.contentUpdatedAt, i18n.language, t)}
           interactiveOverflow={false}
         />
       </div>

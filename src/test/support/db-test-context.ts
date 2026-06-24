@@ -311,7 +311,8 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
       word_count INTEGER DEFAULT 0,
       collapsed_headings TEXT DEFAULT '[]',
       created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
+      updated_at INTEGER NOT NULL,
+      content_updated_at INTEGER
     )
   `);
 

@@ -164,5 +164,7 @@ export interface NoteSnapshot {
     collapsedHeadings: string | null;
     createdAt: number; // Unix seconds
     updatedAt: number;
+    // Optional for backward compatibility with snapshots from older clients.
+    contentUpdatedAt?: number;
   };
 }

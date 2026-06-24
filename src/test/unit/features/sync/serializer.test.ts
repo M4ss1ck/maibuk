@@ -89,6 +89,74 @@ describe("note snapshot serializer", () => {
     });
   });
 
+  it("round-trips contentUpdatedAt through serialize and apply", async () => {
+    await testDb.execute(
+      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["note-1", "Title", "<p>Body</p>", "[]", 0, 0, 1, "[]", 10, 40, 25],
+    );
+
+    const snapshot = JSON.parse(await serializeNote("note-1")) as NoteSnapshot;
+    expect(snapshot.note.contentUpdatedAt).toBe(25);
+
+    await testDb.execute("DELETE FROM notes");
+    await applyNoteSnapshot(snapshot);
+
+    const rows = await testDb.select<{ content_updated_at: number }[]>(
+      "SELECT content_updated_at FROM notes WHERE id = ?",
+      ["note-1"],
+    );
+    expect(rows[0].content_updated_at).toBe(25);
+  });
+
+  it("falls back to updatedAt when applying a snapshot without contentUpdatedAt", async () => {
+    const snapshot: NoteSnapshot = {
+      note: {
+        id: "legacy",
+        title: "Legacy",
+        content: "<p>Old client</p>",
+        tags: "[]",
+        pinned: false,
+        order: 0,
+        wordCount: 1,
+        collapsedHeadings: "[]",
+        createdAt: 10,
+        updatedAt: 30,
+      },
+    };
+
+    await applyNoteSnapshot(snapshot);
+
+    const rows = await testDb.select<{ content_updated_at: number }[]>(
+      "SELECT content_updated_at FROM notes WHERE id = ?",
+      ["legacy"],
+    );
+    expect(rows[0].content_updated_at).toBe(30);
+  });
+
+  it("produces identical sync checksums for snapshots with and without contentUpdatedAt", () => {
+    // A note pushed by an older client has no contentUpdatedAt key at all. Its
+    // checksum must still match an unchanged note serialized by a new client,
+    // otherwise every note hits the conflict path on the first sync.
+    const fields = {
+      id: "note-1",
+      bookId: null,
+      title: "Same",
+      content: "<p>x</p>",
+      tags: "[]",
+      pinned: false,
+      order: 0,
+      wordCount: 1,
+      collapsedHeadings: "[]",
+      createdAt: 10,
+      updatedAt: 20,
+    };
+    const legacy = JSON.stringify({ note: fields });
+    const current = JSON.stringify({ note: { ...fields, contentUpdatedAt: 15 } });
+
+    expect(normalizeNoteSnapshotForSync(current)).toBe(normalizeNoteSnapshotForSync(legacy));
+  });
+
   it("normalizes collapsed headings out of note snapshots used for sync checksums", () => {
     const first = JSON.stringify({
       note: {

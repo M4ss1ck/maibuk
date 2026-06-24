@@ -10,6 +10,7 @@ export interface Note {
   collapsedHeadings: string[];
   createdAt: number;
   updatedAt: number;
+  contentUpdatedAt: number;
 }
 
 export interface CreateNoteInput {

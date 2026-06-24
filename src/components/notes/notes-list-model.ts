@@ -172,7 +172,7 @@ function startOfWeek(date: Date): Date {
 }
 
 function noteDate(note: Note): Date {
-  return new Date(note.updatedAt * 1000);
+  return new Date(note.contentUpdatedAt * 1000);
 }
 
 export function buildDateNoteGroups(notes: NoteWithBook[], now = new Date()): DateNoteGroup[] {

@@ -23,6 +23,7 @@ function buildNote(overrides: Partial<Note> = {}): Note {
     wordCount: 1,
     createdAt: 1,
     updatedAt: 1,
+    contentUpdatedAt: 1,
     pinned: false,
     collapsedHeadings: [],
     ...overrides,

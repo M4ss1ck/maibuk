@@ -41,6 +41,8 @@ function toModel(row: Record<string, unknown>): Note {
     collapsedHeadings: parseCollapsedHeadings(row.collapsed_headings),
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
+    // Fall back to updated_at for rows created before the column existed.
+    contentUpdatedAt: (row.content_updated_at as number | null) ?? (row.updated_at as number),
   };
 }
 
@@ -124,11 +126,12 @@ export const useNoteStore = create<NoteStore>((set) => ({
       collapsedHeadings: input.collapsedHeadings ?? [],
       createdAt: now,
       updatedAt: now,
+      contentUpdatedAt: now,
     };
 
     await db.execute(
-      `INSERT INTO notes (id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO notes (id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         note.id,
         note.bookId ?? null,
@@ -141,6 +144,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
         JSON.stringify(note.collapsedHeadings),
         note.createdAt,
         note.updatedAt,
+        note.contentUpdatedAt,
       ],
     );
 
@@ -156,10 +160,22 @@ export const useNoteStore = create<NoteStore>((set) => ({
     );
     if (rows.length === 0) return;
     const existing = toModel(rows[0]);
-    const updated: Note = { ...existing, ...input, updatedAt: nowSeconds() };
+    const now = nowSeconds();
+    // Tagging, pinning, filing, and reordering are organizational changes, not
+    // edits to the note's text. Only title/content changes bump the user-facing
+    // "modified" time; updated_at always bumps as the sync conflict clock.
+    const contentChanged =
+      (input.title !== undefined && input.title !== existing.title) ||
+      (input.content !== undefined && input.content !== existing.content);
+    const updated: Note = {
+      ...existing,
+      ...input,
+      updatedAt: now,
+      contentUpdatedAt: contentChanged ? now : existing.contentUpdatedAt,
+    };
 
     await db.execute(
-      `UPDATE notes SET book_id = ?, title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE notes SET book_id = ?, title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ?, content_updated_at = ? WHERE id = ?`,
       [
         updated.bookId ?? null,
         updated.title,
@@ -170,6 +186,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
         updated.wordCount,
         JSON.stringify(updated.collapsedHeadings),
         updated.updatedAt,
+        updated.contentUpdatedAt,
         updated.id,
       ],
     );

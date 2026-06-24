@@ -185,6 +185,7 @@ interface NoteRow {
   collapsed_headings: string | null;
   created_at: number;
   updated_at: number;
+  content_updated_at: number | null;
 }
 
 export async function serializeNote(noteId: string): Promise<string> {
@@ -210,6 +211,7 @@ export async function serializeNote(noteId: string): Promise<string> {
       collapsedHeadings: row.collapsed_headings,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      contentUpdatedAt: row.content_updated_at ?? row.updated_at,
     },
   };
 
@@ -218,10 +220,15 @@ export async function serializeNote(noteId: string): Promise<string> {
 
 export function normalizeNoteSnapshotForSync(json: string): string {
   const snapshot = JSON.parse(json) as NoteSnapshot;
+  // contentUpdatedAt is derived from content (already in the checksum) and is
+  // absent from snapshots pushed by older clients. Drop the key entirely —
+  // rather than nulling it — so the checksum byte-matches a legacy snapshot and
+  // unchanged notes don't hit the conflict path on the first sync after upgrade.
+  const { contentUpdatedAt: _contentUpdatedAt, ...note } = snapshot.note;
   return JSON.stringify({
     ...snapshot,
     note: {
-      ...snapshot.note,
+      ...note,
       collapsedHeadings: null,
     },
   });
@@ -239,8 +246,8 @@ export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
 
   await db.execute(
     `INSERT OR REPLACE INTO notes (
-      id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       note.id,
       note.bookId ?? null,
@@ -253,6 +260,7 @@ export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
       collapsedHeadings,
       note.createdAt,
       note.updatedAt,
+      note.contentUpdatedAt ?? note.updatedAt,
     ]
   );
 

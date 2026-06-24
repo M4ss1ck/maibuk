@@ -28,6 +28,7 @@ const { mockEditor, mockNotes, mockBooks, mockListAllChaptersForLinking } = vi.h
       collapsedHeadings: [],
       createdAt: 1,
       updatedAt: 1,
+      contentUpdatedAt: 1,
     },
     {
       id: "note-2",
@@ -40,6 +41,7 @@ const { mockEditor, mockNotes, mockBooks, mockListAllChaptersForLinking } = vi.h
       collapsedHeadings: [],
       createdAt: 1,
       updatedAt: 1,
+      contentUpdatedAt: 1,
     },
   ] satisfies Note[],
   mockBooks: [
@@ -160,6 +162,7 @@ function buildNote(overrides: Partial<Note>): Note {
     collapsedHeadings: overrides.collapsedHeadings ?? [],
     createdAt: overrides.createdAt ?? 1,
     updatedAt: overrides.updatedAt ?? 1,
+    contentUpdatedAt: overrides.contentUpdatedAt ?? overrides.updatedAt ?? 1,
   };
 }
 
