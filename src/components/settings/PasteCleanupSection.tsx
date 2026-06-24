@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronUp, ChevronDown, X } from "lucide-react";
 import { useSettingsStore } from "../../features/settings/store";
@@ -32,6 +33,39 @@ export function PasteCleanupSection() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [newProperty, setNewProperty] = useState("");
+  const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
+
+  // Opened via "Add cleanup rule" from the HTML source view: jump straight to
+  // the rules editor with the new rule revealed and focused.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const state = location.state as
+      | { openPasteCleanupRules?: boolean; focusPasteRuleId?: string }
+      | null;
+    if (!state?.openPasteCleanupRules) return;
+    setAdvancedOpen(true);
+    setRulesOpen(true);
+    setFocusRuleId(state.focusPasteRuleId ?? null);
+    // Consume the navigation state so the modal does not reopen on re-render.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate]);
+
+  // Capture the targeted rule's value input without focusing as a side effect:
+  // the focus is driven by a one-shot effect below so it fires exactly once
+  // (on open) instead of on every keystroke/re-render.
+  const focusRuleNodeRef = useRef<HTMLInputElement | null>(null);
+  const captureFocusRule = useCallback((node: HTMLInputElement | null) => {
+    focusRuleNodeRef.current = node;
+  }, []);
+  useEffect(() => {
+    if (!rulesOpen || !focusRuleId) return;
+    const node = focusRuleNodeRef.current;
+    if (!node) return;
+    node.focus();
+    node.scrollIntoView({ block: "center" });
+    setFocusRuleId(null);
+  }, [rulesOpen, focusRuleId]);
 
   const promptMarkdownOnPaste = useSettingsStore(
     (state) => state.promptMarkdownOnPaste,
@@ -291,6 +325,7 @@ export function PasteCleanupSection() {
                       options={targetOptions}
                     />
                     <Input
+                      ref={rule.id === focusRuleId ? captureFocusRule : undefined}
                       value={rule.value}
                       onChange={(e) =>
                         updatePasteCleanupRule(rule.id, {
@@ -342,7 +377,11 @@ export function PasteCleanupSection() {
             </div>
           )}
 
-          <Button variant="primary" size="sm" onClick={addPasteCleanupRule}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => addPasteCleanupRule()}
+          >
             {t("settings.pasteCleanup.rules.add")}
           </Button>
         </div>

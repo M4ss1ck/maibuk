@@ -1,16 +1,18 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Editor } from "@tiptap/react";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, XIcon } from "../icons";
 import { useCodeMirror, type CodeMirrorHandle } from "./useCodeMirror";
+import { inferPasteRuleFromSelection } from "./paste-rule-from-selection";
 import type { Extension } from "@codemirror/state";
 import { useDebouncedCallback } from "../../hooks/useAutoSave";
 import { useSettingsStore } from "../../features/settings/store";
 import { useThemeStore } from "../../features/theme/store";
 import type { HtmlEditorTheme } from "../../features/settings/types";
-import { WrapText, Sparkles } from "lucide-react";
+import { WrapText, Sparkles, ListPlus } from "lucide-react";
 
 interface HtmlViewPanelProps {
   editor: Editor;
@@ -24,11 +26,14 @@ const MAX_HEIGHT_RATIO = 0.6;
 
 export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPanelProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const addPasteCleanupRule = useSettingsStore((s) => s.addPasteCleanupRule);
   const persistedHeight = useSettingsStore((s) => s.htmlPanelHeight);
   const setPersistedHeight = useSettingsStore((s) => s.setHtmlPanelHeight);
   const [panelHeight, setPanelHeight] = useState(persistedHeight);
   const [error, setError] = useState("");
   const [warningCount, setWarningCount] = useState(0);
+  const [hasSelection, setHasSelection] = useState(false);
   const activeSourceRef = useRef<"wysiwyg" | "html">("wysiwyg");
   const isResizingRef = useRef(false);
 
@@ -71,6 +76,16 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
     [editor, t]
   );
 
+  const handleAddRuleFromSelection = useCallback(() => {
+    const selection = cmHandleRef.current?.getSelection() ?? "";
+    const inferred = inferPasteRuleFromSelection(selection);
+    if (!inferred) return;
+    const id = addPasteCleanupRule(inferred);
+    navigate("/settings", {
+      state: { openPasteCleanupRules: true, focusPasteRuleId: id },
+    });
+  }, [addPasteCleanupRule, navigate]);
+
   const debouncedSyncToHtml = useDebouncedCallback(syncWysiwygToHtml, 300);
   const debouncedSyncToWysiwyg = useDebouncedCallback(syncHtmlToWysiwyg, 500);
 
@@ -92,6 +107,7 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
     onBlur: () => {
       /* keep activeSource as-is until wysiwyg focuses */
     },
+    onSelectionChange: setHasSelection,
   });
 
   // Keep ref in sync with handle state
@@ -219,6 +235,15 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
           )}
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleAddRuleFromSelection}
+            disabled={!cmHandle || !hasSelection}
+            title={t("editor.addCleanupRule")}
+          >
+            <ListPlus className="w-4 h-4" />
+          </Button>
           <Button
             size="sm"
             variant="ghost"

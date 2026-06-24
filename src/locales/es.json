@@ -362,6 +362,7 @@
     "imageAlignment": "Alineación",
     "prettify": "Formatear",
     "wordWrap": "Ajuste de línea",
+    "addCleanupRule": "Añadir regla de limpieza desde la selección",
     "editorTheme": "Tema del editor",
     "inspectInHtml": "Ver código",
     "lookUp": "Buscar \"{{word}}\"",

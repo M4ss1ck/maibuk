@@ -362,6 +362,7 @@
     "imageAlignment": "Alignment",
     "prettify": "Prettify",
     "wordWrap": "Word Wrap",
+    "addCleanupRule": "Add cleanup rule from selection",
     "editorTheme": "Editor Theme",
     "inspectInHtml": "Inspect",
     "lookUp": "Look up \"{{word}}\"",
