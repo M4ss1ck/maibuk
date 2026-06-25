@@ -39,6 +39,7 @@ import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
 import { deriveNoteTitle } from "../components/book/deriveNoteTitle";
 import { useNoteStore } from "../features/notes";
 import { useSettingsStore } from "../features/settings/store";
+import { normalizeLanguage, type Language } from "../features/settings/types";
 import {
   History,
   Menu,
@@ -145,9 +146,14 @@ export function BookEditor() {
   const handleCreateBookNote = useCallback(
     (html: string) => {
       if (!bookId) return;
-      void createNote({ bookId, title: deriveNoteTitle(html), content: html });
+      void createNote({
+        bookId,
+        title: deriveNoteTitle(html),
+        content: html,
+        language: normalizeLanguage(currentBook?.language),
+      });
     },
-    [bookId, createNote],
+    [bookId, createNote, currentBook?.language],
   );
 
   const handleOpenBookNote = useCallback(
@@ -541,6 +547,13 @@ export function BookEditor() {
       if (bookId) {
         await updateBook(bookId, input);
       }
+    },
+    [bookId, updateBook],
+  );
+
+  const handleSpellCheckLanguageChange = useCallback(
+    (language: Language) => {
+      if (bookId) void updateBook(bookId, { language });
     },
     [bookId, updateBook],
   );
@@ -1051,6 +1064,8 @@ export function BookEditor() {
             showInlineFootnotes={showInlineFootnotes}
             bookId={bookId ?? null}
             chapterId={currentChapter.id}
+            spellCheckLanguage={normalizeLanguage(currentBook.language)}
+            onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
             restoreKey={`chapter:${currentChapter.id}`}
             suppressRestore={hasPendingHeadingScroll}
             placeholder={`Start writing "${currentChapter.title}"...`}

@@ -305,6 +305,7 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
       book_id TEXT,
       title TEXT NOT NULL,
       content TEXT,
+      language TEXT DEFAULT 'en',
       tags TEXT,
       pinned INTEGER DEFAULT 0,
       "order" INTEGER NOT NULL,

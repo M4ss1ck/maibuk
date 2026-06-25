@@ -77,6 +77,7 @@ function buildNote(overrides: Partial<Note> = {}): Note {
     id: overrides.id ?? "n1",
     title: overrides.title ?? "T",
     content: overrides.content ?? "<p>x</p>",
+    language: overrides.language ?? "en",
     tags: overrides.tags ?? [],
     pinned: overrides.pinned ?? false,
     order: overrides.order ?? 0,

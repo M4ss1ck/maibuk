@@ -47,6 +47,7 @@ import { MetricsObserver } from "./extensions/MetricsObserver";
 import { HeadingId } from "./extensions/HeadingId";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
+import type { Language } from "../../features/settings/types";
 import { useChapterStore } from "../../features/chapters/store";
 import { useReadingPosition } from "../../features/reading-position/useReadingPosition";
 import { useEditorZoomControls } from "./useEditorZoomControls";
@@ -85,6 +86,8 @@ interface EditorProps {
   extraExtensions?: Extensions;
   headerContent?: React.ReactNode;
   onEditorReady?: (editor: TiptapEditor | null) => void;
+  spellCheckLanguage?: Language;
+  onSpellCheckLanguageChange?: (language: Language) => void;
   onExportMarkdown?: () => void;
   onExportPdf?: () => void;
   onExportImage?: () => void;
@@ -111,13 +114,16 @@ export function Editor({
   extraExtensions,
   headerContent,
   onEditorReady,
+  spellCheckLanguage,
+  onSpellCheckLanguageChange,
   onExportMarkdown,
   onExportPdf,
   onExportImage,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
-  const language = useSettingsStore((state) => state.language);
+  const settingsLanguage = useSettingsStore((state) => state.language);
+  const activeSpellCheckLanguage = spellCheckLanguage ?? settingsLanguage;
   const editorShowBorder = useSettingsStore((state) => state.editorShowBorder);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
@@ -221,7 +227,7 @@ export function Editor({
       }),
       SpellCheck.configure({
         enabled: spellCheckEnabled,
-        language,
+        language: activeSpellCheckLanguage,
       }),
       SearchReplace,
       MetricsObserver.configure({
@@ -278,8 +284,8 @@ export function Editor({
 
   useEffect(() => {
     if (!editor?.commands?.setSpellCheckLanguage) return;
-    editor.commands.setSpellCheckLanguage(language);
-  }, [editor?.commands?.setSpellCheckLanguage, language]);
+    editor.commands.setSpellCheckLanguage(activeSpellCheckLanguage);
+  }, [editor?.commands?.setSpellCheckLanguage, activeSpellCheckLanguage]);
 
   // Update word count on initial load
   useEffect(() => {
@@ -356,6 +362,8 @@ export function Editor({
           editor={editor}
           onContextMenuOpenChange={setIsContextMenuOpen}
           bookId={bookId}
+          spellCheckLanguage={activeSpellCheckLanguage}
+          onSpellCheckLanguageChange={onSpellCheckLanguageChange}
           internalTargets={internalTargets}
           loadInternalTargetChildren={loadInternalTargetChildren}
           onExportMarkdown={onExportMarkdown}

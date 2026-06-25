@@ -172,6 +172,7 @@ async function initializeSchema(): Promise<void> {
       book_id TEXT,
       title TEXT NOT NULL,
       content TEXT,
+      language TEXT DEFAULT 'en',
       tags TEXT,
       pinned INTEGER DEFAULT 0,
       "order" INTEGER NOT NULL,
@@ -187,6 +188,19 @@ async function initializeSchema(): Promise<void> {
     .catch(() => {});
   await db
     .execute(`ALTER TABLE notes ADD COLUMN book_id TEXT`)
+    .catch(() => {});
+  await db
+    .execute(`ALTER TABLE notes ADD COLUMN language TEXT`)
+    .catch(() => {});
+  await db
+    .execute(`
+      UPDATE notes
+      SET language = COALESCE(
+        (SELECT books.language FROM books WHERE books.id = notes.book_id),
+        'en'
+      )
+      WHERE language IS NULL
+    `)
     .catch(() => {});
   // Migration: Add content_updated_at (user-facing "modified" time, bumped only
   // by title/content edits — not by tagging, pinning, or reordering). Backfill

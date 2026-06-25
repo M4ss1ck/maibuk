@@ -118,6 +118,27 @@ describe("Editor", () => {
     expect(lastProps.internalTargets).toBeDefined();
   });
 
+  it("passes the document spellcheck language to EditorToolbar", async () => {
+    const onSpellCheckLanguageChange = vi.fn();
+
+    render(
+      <Editor
+        content={"<p>Chapter</p>\n"}
+        onUpdate={vi.fn()}
+        spellCheckLanguage="es"
+        onSpellCheckLanguageChange={onSpellCheckLanguageChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(capturedToolbarProps.length).toBeGreaterThan(0);
+    });
+
+    const lastProps = capturedToolbarProps[capturedToolbarProps.length - 1];
+    expect(lastProps.spellCheckLanguage).toBe("es");
+    expect(lastProps.onSpellCheckLanguageChange).toBe(onSpellCheckLanguageChange);
+  });
+
   it("focuses the editor when the blank editor surround is clicked", async () => {
     let editor: TiptapEditor | null = null;
 

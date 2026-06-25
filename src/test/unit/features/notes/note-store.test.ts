@@ -70,6 +70,18 @@ describe("useNoteStore", () => {
       expect(created.bookId).toBe("book-1");
       expect(loaded?.bookId).toBe("book-1");
     });
+
+    it("persists the spellcheck language through the round-trip", async () => {
+      const created = await useNoteStore
+        .getState()
+        .createNote({ title: "Español", language: "es" });
+
+      await useNoteStore.getState().loadNote(created.id);
+      const loaded = useNoteStore.getState().currentNote;
+
+      expect(created.language).toBe("es");
+      expect(loaded?.language).toBe("es");
+    });
   });
 
   describe("loadNotes()", () => {
@@ -116,6 +128,15 @@ describe("useNoteStore", () => {
 
       const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
       expect(updated?.bookId).toBe("book-2");
+    });
+
+    it("updates a note spellcheck language", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Draft" });
+
+      await useNoteStore.getState().updateNote({ id: note.id, language: "es" });
+
+      const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
+      expect(updated?.language).toBe("es");
     });
   });
 

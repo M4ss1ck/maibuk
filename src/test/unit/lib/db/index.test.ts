@@ -90,6 +90,21 @@ describe("src/lib/db/index.ts", () => {
         ])
       );
     });
+
+    it("backfills note spellcheck language from linked books during initialization", async () => {
+      const { getDatabase } = await import("../../../../lib/db");
+
+      await getDatabase();
+
+      const executedSql = mockDb.execute.mock.calls.map(([sql]) => sql);
+      expect(executedSql).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining("ALTER TABLE notes ADD COLUMN language TEXT"),
+          expect.stringContaining("SELECT books.language FROM books WHERE books.id = notes.book_id"),
+          expect.stringContaining("WHERE language IS NULL"),
+        ]),
+      );
+    });
   });
 
   describe("waitForDatabaseReady()", () => {

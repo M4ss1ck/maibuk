@@ -5,6 +5,7 @@ import type { Note, UpdateNoteInput } from "../features/notes";
 import { useBookStore } from "../features/books/store";
 import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
 import { useSettingsStore } from "../features/settings/store";
+import { normalizeLanguage } from "../features/settings/types";
 import { useShortcuts } from "../lib/shortcuts";
 import {
   markdownToEditorHtml,
@@ -39,6 +40,12 @@ export function Notes() {
     to: string;
     label: string;
   } | null>(null);
+
+  const getBookLanguage = useCallback(
+    (bookId?: string | null) =>
+      normalizeLanguage(books.find((book) => book.id === bookId)?.language),
+    [books],
+  );
 
   useEffect(() => {
     void loadNotes();
@@ -89,7 +96,11 @@ export function Notes() {
   ]);
 
   const handleCreateNote = async (bookId?: string | null) => {
-    const note = await createNote({ title: "", bookId: bookId ?? null });
+    const note = await createNote({
+      title: "",
+      bookId: bookId ?? null,
+      language: getBookLanguage(bookId),
+    });
     setCurrentNote(note);
     setLastNoteId(note.id);
   };
@@ -109,7 +120,7 @@ export function Notes() {
   };
 
   const handleReassignNoteBook = (noteId: string, bookId: string | null) => {
-    void updateNote({ id: noteId, bookId });
+    void updateNote({ id: noteId, bookId, language: getBookLanguage(bookId) });
   };
 
   const handleImportMarkdown = async (
@@ -118,7 +129,7 @@ export function Notes() {
   ) => {
     const title = titleFromMarkdown(markdown, filenameStem);
     const content = markdownToEditorHtml(markdown);
-    const note = await createNote({ title, content });
+    const note = await createNote({ title, content, language: "en" });
     setCurrentNote(note);
     setLastNoteId(note.id);
   };
@@ -128,6 +139,7 @@ export function Notes() {
       title: `${note.title} (copy)`,
       bookId: note.bookId ?? null,
       content: note.content,
+      language: note.language,
       tags: [...note.tags],
       wordCount: note.wordCount,
     });

@@ -288,6 +288,7 @@
     "redo": "Rehacer (Ctrl+Shift+Z)",
     "findReplaceShortcut": "Buscar y Reemplazar (Ctrl+F)",
     "spellCheck": "Corrector ortográfico",
+    "spellCheckLanguage": "Idioma del corrector ortográfico",
     "dictionary": "Diccionario",
     "addToDictionary": "Agregar al diccionario",
     "noSuggestions": "Sin sugerencias",
