@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.13] - 2026-06-24
+
+### Added
+- Document spellcheck language selector in the editor
+- Sort-by dropdown in the notes gallery (by date or title; preference saved)
+- Adjustable editor content width with presets, slider, and side borders
+- Paste cleanup rule creation from selected text in the HTML source view
+
+### Changed
+- Notes now use a separate content-modified timestamp; organizing actions like tagging or pinning no longer update the note's modified date
+- Paste cleanup rule values are edited in an auto-growing textarea, and the target preview tooltip was removed to prevent overflow
+
 ## [0.4.12] - 2026-06-22
 
 ### Added
