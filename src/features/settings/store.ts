@@ -28,6 +28,7 @@ import {
   type HtmlEditorTheme,
   type ChapterListView,
   type NotesListViewMode,
+  type NotesSortOption,
   type NotesTreeGroupMode,
   type BackupListPageSize,
   type PasteCleanupPreset,
@@ -37,6 +38,7 @@ import {
   type MetricsCategory,
 } from "./types";
 import { normalizeMetrics } from "../metrics/settings";
+import { DEFAULT_NOTES_SORT } from "../../components/notes/notes-list-model";
 import { setLaunchOnStartup as applyLaunchOnStartup } from "../../lib/platform";
 
 const STORAGE_KEY = "maibuk-settings";
@@ -74,6 +76,7 @@ interface SettingsStore extends Settings {
   setChapterListView: (view: ChapterListView) => void;
   setShowChapterOutline: (enabled: boolean) => void;
   setNotesListView: (view: NotesListViewMode) => void;
+  setNotesSort: (sort: NotesSortOption) => void;
   setNotesTreeGroupMode: (mode: NotesTreeGroupMode) => void;
   toggleNotesGroupCollapsed: (key: string) => void;
   toggleNotesEmptyGroupExpanded: (key: string) => void;
@@ -145,6 +148,7 @@ const defaultSettings: Settings = {
   chapterListView: "normal",
   showChapterOutline: true,
   notesListView: "list",
+  notesSort: DEFAULT_NOTES_SORT,
   notesTreeGroupMode: "book",
   notesCollapsedGroups: [],
   notesExpandedEmptyGroups: [],
@@ -330,6 +334,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setNotesListView: (notesListView) => set({ notesListView }),
+      setNotesSort: (notesSort) => set({ notesSort }),
       setNotesTreeGroupMode: (notesTreeGroupMode) => set({ notesTreeGroupMode }),
       toggleNotesGroupCollapsed: (key) =>
         set((state) => ({

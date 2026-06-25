@@ -3,12 +3,13 @@ import { DEFAULT_METRICS_SETTINGS } from "../metrics/settings";
 import type { SceneBreakDescriptor } from "../../components/editor/extensions/scene-break-utils";
 import type {
   NotesListViewMode,
+  NotesSortOption,
   NotesTreeGroupMode,
 } from "../../components/notes/notes-list-model";
 
 export { DEFAULT_METRICS_SETTINGS };
 export type { MetricsCategory, MetricsSettings };
-export type { NotesListViewMode, NotesTreeGroupMode };
+export type { NotesListViewMode, NotesSortOption, NotesTreeGroupMode };
 
 export type FontSize = 14 | 16 | 18 | 20;
 export type FontFamily = "serif" | "sans" | "mono";
@@ -167,6 +168,7 @@ export interface Settings {
   chapterListView: ChapterListView;
   showChapterOutline: boolean;
   notesListView: NotesListViewMode;
+  notesSort: NotesSortOption;
   notesTreeGroupMode: NotesTreeGroupMode;
   notesCollapsedGroups: string[];
   notesExpandedEmptyGroups: string[];
