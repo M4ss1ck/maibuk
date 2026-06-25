@@ -156,6 +156,7 @@ export const notes = sqliteTable("notes", {
   bookId: text("book_id"),
   title: text("title").notNull(),
   content: text("content"), // Tiptap JSON string
+  language: text("language").default("en"),
   tags: text("tags"), // JSON array of tag names
   pinned: integer("pinned", { mode: "boolean" }).default(false),
   order: integer("order").notNull(),

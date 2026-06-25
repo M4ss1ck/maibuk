@@ -109,6 +109,26 @@ describe("note snapshot serializer", () => {
     expect(rows[0].content_updated_at).toBe(25);
   });
 
+  it("round-trips note language through serialize and apply", async () => {
+    await testDb.execute(
+      `INSERT INTO notes (id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["note-1", "Title", "<p>Body</p>", "es", "[]", 0, 0, 1, "[]", 10, 40],
+    );
+
+    const snapshot = JSON.parse(await serializeNote("note-1")) as NoteSnapshot;
+    expect(snapshot.note.language).toBe("es");
+
+    await testDb.execute("DELETE FROM notes");
+    await applyNoteSnapshot(snapshot);
+
+    const rows = await testDb.select<{ language: string }[]>(
+      "SELECT language FROM notes WHERE id = ?",
+      ["note-1"],
+    );
+    expect(rows[0].language).toBe("es");
+  });
+
   it("falls back to updatedAt when applying a snapshot without contentUpdatedAt", async () => {
     const snapshot: NoteSnapshot = {
       note: {
@@ -134,6 +154,31 @@ describe("note snapshot serializer", () => {
     expect(rows[0].content_updated_at).toBe(30);
   });
 
+  it("defaults old note snapshots without language to English", async () => {
+    const snapshot: NoteSnapshot = {
+      note: {
+        id: "legacy",
+        title: "Legacy",
+        content: "<p>Old client</p>",
+        tags: "[]",
+        pinned: false,
+        order: 0,
+        wordCount: 1,
+        collapsedHeadings: "[]",
+        createdAt: 10,
+        updatedAt: 30,
+      },
+    };
+
+    await applyNoteSnapshot(snapshot);
+
+    const rows = await testDb.select<{ language: string }[]>(
+      "SELECT language FROM notes WHERE id = ?",
+      ["legacy"],
+    );
+    expect(rows[0].language).toBe("en");
+  });
+
   it("produces identical sync checksums for snapshots with and without contentUpdatedAt", () => {
     // A note pushed by an older client has no contentUpdatedAt key at all. Its
     // checksum must still match an unchanged note serialized by a new client,
@@ -152,9 +197,31 @@ describe("note snapshot serializer", () => {
       updatedAt: 20,
     };
     const legacy = JSON.stringify({ note: fields });
-    const current = JSON.stringify({ note: { ...fields, contentUpdatedAt: 15 } });
+    const current = JSON.stringify({ note: { ...fields, language: "en", contentUpdatedAt: 15 } });
 
     expect(normalizeNoteSnapshotForSync(current)).toBe(normalizeNoteSnapshotForSync(legacy));
+  });
+
+  it("keeps explicit note language in sync checksums", () => {
+    const fields = {
+      id: "note-1",
+      title: "Same",
+      content: "<p>x</p>",
+      tags: "[]",
+      pinned: false,
+      order: 0,
+      wordCount: 1,
+      collapsedHeadings: "[]",
+      createdAt: 10,
+      updatedAt: 20,
+    };
+
+    const english = normalizeNoteSnapshotForSync(JSON.stringify({ note: fields }));
+    const spanish = normalizeNoteSnapshotForSync(
+      JSON.stringify({ note: { ...fields, language: "es" } }),
+    );
+
+    expect(spanish).not.toBe(english);
   });
 
   it("normalizes collapsed headings out of note snapshots used for sync checksums", () => {
@@ -384,6 +451,7 @@ describe("serializeNote", () => {
     const snapshot = JSON.parse(await serializeNote("note-1")) as NoteSnapshot;
 
     expect(snapshot.note.id).toBe("note-1");
+    expect(snapshot.note.language).toBe("en");
     expect(snapshot.note.pinned).toBe(true);
     expect(snapshot.note.collapsedHeadings).toBe('["h"]');
   });

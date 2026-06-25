@@ -32,6 +32,7 @@ import {
   exportFilename,
 } from "../../features/export";
 import { useSettingsStore } from "../../features/settings/store";
+import { normalizeLanguage, type Language } from "../../features/settings/types";
 import { IS_TAURI } from "../../lib/platform";
 import { useNavigate } from "react-router-dom";
 import { isInternalLink, parseLinkUri } from "../../features/links/link-uri";
@@ -481,6 +482,13 @@ export function NoteEditor({
     [navigate, note.id],
   );
 
+  const handleSpellCheckLanguageChange = useCallback(
+    (language: Language) => {
+      void saveNow({ language });
+    },
+    [saveNow],
+  );
+
   const collapsedHeadingsKey = note.collapsedHeadings.join(",");
 
   // Sync persisted collapsed state into the ProseMirror plugin when
@@ -639,6 +647,8 @@ export function NoteEditor({
         onExportPdf={handleExportPdf}
         onExportImage={handleExportImage}
         restoreKey={`note:${note.id}`}
+        spellCheckLanguage={normalizeLanguage(note.language)}
+        onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
         suppressRestore={suppressRestore}
         placeholder={t("notes.bodyPlaceholder")}
         extraExtensions={allNotesExtensions}

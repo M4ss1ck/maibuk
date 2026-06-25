@@ -39,6 +39,7 @@ function buildNote(overrides: Partial<Note>): Note {
     id: overrides.id ?? crypto.randomUUID(),
     title: overrides.title ?? "",
     content: overrides.content ?? "",
+    language: overrides.language ?? "en",
     tags: overrides.tags ?? [],
     pinned: overrides.pinned ?? false,
     order: overrides.order ?? 0,

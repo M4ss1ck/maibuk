@@ -157,6 +157,7 @@ export interface NoteSnapshot {
     bookId?: string | null;
     title: string;
     content: string | null;
+    language?: string;
     tags: string | null; // JSON array string, stored verbatim
     pinned: boolean;
     order: number;

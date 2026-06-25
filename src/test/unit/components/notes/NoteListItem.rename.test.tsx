@@ -18,6 +18,7 @@ function buildNote(overrides: Partial<Note> = {}): Note {
     bookId: null,
     title: "Old title",
     content: "<p>Preview</p>",
+    language: "en",
     tags: [],
     order: 0,
     wordCount: 1,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { TableMenu } from "./TableMenu";
@@ -25,6 +26,7 @@ import { WidthControl } from "./WidthControl";
 import { DictionaryDialog } from "./DictionaryDialog";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
+import { LANGUAGE_OPTIONS, type Language } from "../../features/settings/types";
 import { openExternal } from "../../lib/platform";
 import { isModKey } from "../../lib/keyboard";
 import { useShortcuts } from "../../lib/shortcuts";
@@ -74,6 +76,8 @@ interface EditorToolbarProps {
   editor: Editor;
   onContextMenuOpenChange?: (open: boolean) => void;
   bookId?: string | null;
+  spellCheckLanguage: Language;
+  onSpellCheckLanguageChange?: (language: Language) => void;
   internalTargets?: InternalTarget[];
   loadInternalTargetChildren?: InternalTargetChildrenLoader;
   onExportMarkdown?: () => void;
@@ -92,6 +96,8 @@ export function EditorToolbar({
   editor,
   onContextMenuOpenChange,
   bookId,
+  spellCheckLanguage,
+  onSpellCheckLanguageChange,
   internalTargets,
   loadInternalTargetChildren,
   onExportMarkdown,
@@ -125,7 +131,6 @@ export function EditorToolbar({
   const setBookSidePanelTab = useSettingsStore(
     (state) => state.setBookSidePanelTab,
   );
-  const language = useSettingsStore((state) => state.language);
   const dictionaryOpenInBrowser = useSettingsStore(
     (state) => state.dictionaryOpenInBrowser,
   );
@@ -280,14 +285,22 @@ export function EditorToolbar({
   const handleLookupWord = useCallback(
     (word: string) => {
       if (dictionaryOpenInBrowser) {
-        const url = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
+        const url = `https://${spellCheckLanguage}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
         openExternal(url);
         return;
       }
       setDictionaryWord(word);
       setShowDictionaryDialog(true);
     },
-    [dictionaryOpenInBrowser, language],
+    [dictionaryOpenInBrowser, spellCheckLanguage],
+  );
+
+  const handleSpellCheckLanguageChange = useCallback(
+    (nextLanguage: Language) => {
+      editor.commands.setSpellCheckLanguage(nextLanguage);
+      onSpellCheckLanguageChange?.(nextLanguage);
+    },
+    [editor, onSpellCheckLanguageChange],
   );
 
   useEffect(() => {
@@ -704,6 +717,11 @@ export function EditorToolbar({
           >
             <SpellCheck className="w-4 h-4" />
           </ToolbarButton>
+          <SpellCheckLanguageMenu
+            value={spellCheckLanguage}
+            onChange={handleSpellCheckLanguageChange}
+            label={t("editor.spellCheckLanguage")}
+          />
 
           <ToolbarButton
             onClick={handleOpenDictionary}
@@ -794,9 +812,90 @@ export function EditorToolbar({
       <DictionaryDialog
         isOpen={showDictionaryDialog}
         word={dictionaryWord}
-        language={language}
+        language={spellCheckLanguage}
         onClose={() => setShowDictionaryDialog(false)}
       />
     </div>
+  );
+}
+
+interface SpellCheckLanguageMenuProps {
+  value: Language;
+  onChange: (language: Language) => void;
+  label: string;
+}
+
+function SpellCheckLanguageMenu({
+  value,
+  onChange,
+  label,
+}: SpellCheckLanguageMenuProps) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const selected = LANGUAGE_OPTIONS.find((option) => option.value === value) ?? LANGUAGE_OPTIONS[0];
+
+  const toggle = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPosition({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen((current) => !current);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const isMenuTarget =
+        target instanceof HTMLElement && target.closest(".spellcheck-language-menu-portal");
+      if (buttonRef.current?.contains(target) || isMenuTarget) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggle}
+        title={label}
+        aria-label={label}
+        className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${
+          open ? "bg-primary text-white" : "hover:bg-muted"
+        }`}
+      >
+        <span className="uppercase">{selected.value}</span>
+        <ChevronDown className="h-2.5 w-2.5" />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            className="spellcheck-language-menu-portal fixed z-50 min-w-32 rounded-lg border border-border bg-card py-1 shadow-lg"
+            style={{ top: position.top, left: position.left }}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
+                  option.value === value ? "text-primary" : "text-foreground"
+                }`}
+              >
+                <span>{option.label}</span>
+                <span className="text-xs uppercase text-muted-foreground">{option.value}</span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }

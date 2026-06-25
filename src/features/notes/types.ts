@@ -3,6 +3,7 @@ export interface Note {
   bookId?: string | null;
   title: string;
   content: string;
+  language: string;
   tags: string[];
   pinned: boolean;
   order: number;
@@ -17,6 +18,7 @@ export interface CreateNoteInput {
   title: string;
   bookId?: string | null;
   content?: string;
+  language?: string;
   tags?: string[];
   pinned?: boolean;
   order?: number;
@@ -29,6 +31,7 @@ export interface UpdateNoteInput {
   bookId?: string | null;
   title?: string;
   content?: string;
+  language?: string;
   tags?: string[];
   pinned?: boolean;
   order?: number;

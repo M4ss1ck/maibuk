@@ -34,6 +34,7 @@ function toModel(row: Record<string, unknown>): Note {
     bookId: row.book_id as string | null | undefined,
     title: row.title as string,
     content: (row.content as string) ?? "",
+    language: (row.language as string | null) ?? "en",
     tags: parseTags(row.tags),
     pinned: Boolean(row.pinned),
     order: row.order as number,
@@ -119,6 +120,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
       bookId: input.bookId ?? null,
       title: input.title,
       content: input.content ?? "",
+      language: input.language ?? "en",
       tags: input.tags ?? [],
       pinned: input.pinned ?? false,
       order,
@@ -130,13 +132,14 @@ export const useNoteStore = create<NoteStore>((set) => ({
     };
 
     await db.execute(
-      `INSERT INTO notes (id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO notes (id, book_id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         note.id,
         note.bookId ?? null,
         note.title,
         note.content,
+        note.language,
         JSON.stringify(note.tags),
         note.pinned ? 1 : 0,
         note.order,
@@ -175,11 +178,12 @@ export const useNoteStore = create<NoteStore>((set) => ({
     };
 
     await db.execute(
-      `UPDATE notes SET book_id = ?, title = ?, content = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ?, content_updated_at = ? WHERE id = ?`,
+      `UPDATE notes SET book_id = ?, title = ?, content = ?, language = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ?, content_updated_at = ? WHERE id = ?`,
       [
         updated.bookId ?? null,
         updated.title,
         updated.content,
+        updated.language,
         JSON.stringify(updated.tags),
         updated.pinned ? 1 : 0,
         updated.order,

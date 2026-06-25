@@ -17,6 +17,7 @@ function note(input: NoteInput): Note & { bookId?: string | null } {
   const updatedAt = input.updatedAt ?? 1;
   return {
     content: "",
+    language: "en",
     tags: [],
     pinned: false,
     order: 0,

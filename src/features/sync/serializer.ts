@@ -178,6 +178,7 @@ interface NoteRow {
   book_id: string | null;
   title: string;
   content: string | null;
+  language: string | null;
   tags: string | null;
   pinned: number;
   order: number;
@@ -204,6 +205,7 @@ export async function serializeNote(noteId: string): Promise<string> {
       bookId: row.book_id,
       title: row.title,
       content: row.content,
+      language: row.language ?? "en",
       tags: row.tags,
       pinned: Boolean(row.pinned),
       order: row.order,
@@ -228,6 +230,7 @@ export function normalizeNoteSnapshotForSync(json: string): string {
   return JSON.stringify({
     ...snapshot,
     note: {
+      language: "en",
       ...note,
       collapsedHeadings: null,
     },
@@ -246,13 +249,14 @@ export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
 
   await db.execute(
     `INSERT OR REPLACE INTO notes (
-      id, book_id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, book_id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       note.id,
       note.bookId ?? null,
       note.title,
       note.content,
+      note.language ?? "en",
       note.tags,
       note.pinned ? 1 : 0,
       note.order,

@@ -316,3 +316,7 @@ export const LANGUAGE_OPTIONS: { value: Language; label: string }[] = [
   { value: "en", label: "English" },
   { value: "es", label: "Español" },
 ];
+
+export function normalizeLanguage(value: string | null | undefined): Language {
+  return value === "es" ? "es" : "en";
+}
