@@ -14,7 +14,8 @@ import { useNoteStore } from "../features/notes";
 import { useBookStore } from "../features/books/store";
 import { useSettingsStore } from "../features/settings/store";
 import { NoteCard } from "../components/notes";
-import { filterNotes } from "../components/notes/notes-list-model";
+import { NotesSortMenu } from "../components/notes/NotesSortMenu";
+import { filterNotes, sortNotesBy } from "../components/notes/notes-list-model";
 import { Button } from "../components/ui/Button";
 import { MultiSelectCombobox } from "../components/ui/MultiSelectCombobox";
 import { AddIcon, MaibukLogo } from "../components/icons";
@@ -29,6 +30,8 @@ export function NotesGallery() {
   const books = useBookStore((s) => s.books);
   const loadBooks = useBookStore((s) => s.loadBooks);
   const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
+  const sort = useSettingsStore((s) => s.notesSort);
+  const setSort = useSettingsStore((s) => s.setNotesSort);
   const [search, setSearch] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
@@ -62,13 +65,16 @@ export function NotesGallery() {
 
   const filteredNotes = useMemo(
     () =>
-      filterNotes(notes, {
-        query: search,
-        tags: tagFilters,
-        dateFrom,
-        dateTo,
-      }),
-    [notes, search, tagFilters, dateFrom, dateTo],
+      sortNotesBy(
+        filterNotes(notes, {
+          query: search,
+          tags: tagFilters,
+          dateFrom,
+          dateTo,
+        }),
+        sort,
+      ),
+    [notes, search, tagFilters, dateFrom, dateTo, sort],
   );
 
   const hasFilters = Boolean(search.trim() || tagFilters.length > 0 || dateFrom || dateTo);
@@ -146,10 +152,13 @@ export function NotesGallery() {
               </p>
             )}
           </div>
-          <Button onClick={handleCreateNote} className="text-sm">
-            <AddIcon className="w-5 h-5" />
-            <span>{t("notes.newNote")}</span>
-          </Button>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            {notes.length > 0 && <NotesSortMenu value={sort} onChange={setSort} />}
+            <Button onClick={handleCreateNote} className="text-sm">
+              <AddIcon className="w-5 h-5" />
+              <span>{t("notes.newNote")}</span>
+            </Button>
+          </div>
         </div>
 
         {notes.length > 0 && (

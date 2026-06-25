@@ -16,7 +16,11 @@ const { mockNavigate, noteState, bookState, settingsState } = vi.hoisted(() => (
     books: [{ id: "book-1", title: "My Book" }],
     loadBooks: vi.fn(() => Promise.resolve()),
   },
-  settingsState: { setLastNoteId: vi.fn() },
+  settingsState: {
+    setLastNoteId: vi.fn(),
+    notesSort: "date-desc" as const,
+    setNotesSort: vi.fn(),
+  },
 }));
 
 vi.mock("react-i18next", () => ({

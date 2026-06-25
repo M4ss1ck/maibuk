@@ -8,6 +8,7 @@ import {
   buildTagNoteGroups,
   filterNotes,
   notePlainText,
+  sortNotesBy,
 } from "../../../../components/notes/notes-list-model";
 
 type NoteInput = Partial<Note> & { id: string; title: string; bookId?: string | null };
@@ -150,6 +151,16 @@ describe("notes list model", () => {
       { id: "pinned", notes: [pinned] },
       { id: "all", notes: [regular] },
     ]);
+  });
+
+  it("sorts notes by last modified date and by title in both directions", () => {
+    const older = note({ id: "old", title: "Beta", updatedAt: 100 });
+    const newer = note({ id: "new", title: "Alpha", updatedAt: 200 });
+
+    expect(sortNotesBy([older, newer], "date-desc")).toEqual([newer, older]);
+    expect(sortNotesBy([newer, older], "date-asc")).toEqual([older, newer]);
+    expect(sortNotesBy([older, newer], "title-asc")).toEqual([newer, older]);
+    expect(sortNotesBy([newer, older], "title-desc")).toEqual([older, newer]);
   });
 
   it("groups notes by book, keeps empty books, and appends unfiled notes last", () => {

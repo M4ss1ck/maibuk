@@ -4,6 +4,29 @@ import type { Note } from "../../features/notes";
 export type NotesListViewMode = "list" | "tree";
 export type NotesTreeGroupMode = "book" | "tag" | "date";
 
+// Sort key for the notes list, encoded as `<field>-<direction>`.
+export type NotesSortOption = "date-desc" | "date-asc" | "title-asc" | "title-desc";
+
+export const DEFAULT_NOTES_SORT: NotesSortOption = "date-desc";
+
+export function sortNotesBy(
+  notes: NoteWithBook[],
+  option: NotesSortOption,
+): NoteWithBook[] {
+  const [field, direction] = option.split("-");
+  const sign = direction === "asc" ? 1 : -1;
+  return [...notes].sort((a, b) => {
+    const comparison =
+      field === "title"
+        ? a.title.localeCompare(b.title, undefined, {
+            numeric: true,
+            sensitivity: "base",
+          })
+        : a.contentUpdatedAt - b.contentUpdatedAt;
+    return comparison * sign;
+  });
+}
+
 export type NoteWithBook = Note & { bookId?: string | null };
 
 export interface NoteSection {
