@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.notes }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -33,6 +34,23 @@ jobs:
           VERSION=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
+
+      - name: Extract changelog notes
+        id: changelog
+        run: |
+          # Pull the top (latest) section from CHANGELOG.md, dropping the version
+          # header line. Falls back to empty if CHANGELOG.md is missing, in which
+          # case the release steps use GitHub's auto-generated notes.
+          if [ -f CHANGELOG.md ]; then
+            NOTES=$(awk '/^## \[/{c++} c==1' CHANGELOG.md | tail -n +2)
+          else
+            NOTES=""
+          fi
+          {
+            echo 'notes<<CHANGELOG_EOF'
+            echo "$NOTES"
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Verify versions are in sync
         run: |
@@ -121,7 +139,7 @@ jobs:
         with:
           tagName: v${{ needs.prepare.outputs.version }}
           releaseName: "Maibuk v${{ needs.prepare.outputs.version }}"
-          releaseBody: ""
+          releaseBody: ${{ needs.prepare.outputs.changelog }}
           releaseDraft: true
           prerelease: false
           args: --target x86_64-unknown-linux-gnu
@@ -186,7 +204,7 @@ jobs:
         with:
           tagName: v${{ needs.prepare.outputs.version }}
           releaseName: "Maibuk v${{ needs.prepare.outputs.version }}"
-          releaseBody: ""
+          releaseBody: ${{ needs.prepare.outputs.changelog }}
           releaseDraft: true
           prerelease: false
           args: --target x86_64-pc-windows-gnu
@@ -241,6 +259,7 @@ jobs:
           files: src-tauri/target/release/bundle/arch/*.pkg.tar.zst
           tag_name: v${{ needs.prepare.outputs.version }}
           draft: true
-          generate_release_notes: true
+          body: ${{ needs.prepare.outputs.changelog }}
+          generate_release_notes: ${{ needs.prepare.outputs.changelog == '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

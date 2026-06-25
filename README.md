@@ -170,6 +170,58 @@ Test organization:
 
 CI and release pipelines enforce coverage thresholds before build and release jobs.
 
+## Releasing
+
+Releases are cut locally with `scripts/release.sh` and built on GitHub Actions.
+The script runs from your machine:
+
+```bash
+# Preview what would happen (no changes made)
+./scripts/release.sh 0.4.13 --dry-run
+
+# Cut the release
+./scripts/release.sh 0.4.13
+```
+
+What it does:
+
+1. Ensures you are on a `release/v<version>` branch, creating it if needed.
+2. Bumps the version in `package.json`, `src-tauri/Cargo.toml`,
+   `src-tauri/Cargo.lock` and `src-tauri/tauri.conf.json`.
+3. Generates a `CHANGELOG.md` section for the commits since the last tag.
+4. Commits the bump + changelog, creates the `v<version>` tag, and (after a
+   confirmation) pushes the branch and the tag. Pushing the tag triggers the
+   release workflow, which reads the latest `CHANGELOG.md` section into the
+   GitHub release notes.
+
+After the build finishes, open a PR from the `release/v<version>` branch into
+`main`, merge it, then review and publish the draft release.
+
+### AI-assisted changelog (optional)
+
+The changelog can be written by an AI model. This is entirely optional — with no
+configuration the script falls back to a grouped list of commit messages and
+never errors out. Configure it via a local `.env` file (git-ignored; copy
+`.env.example` to get started):
+
+Both providers are OpenAI-compatible HTTP APIs and require an API key.
+
+| Variable | Purpose |
+| --- | --- |
+| `CHANGELOG_AI_PROVIDER` | `opencode`, `openai`, or empty to disable AI |
+| `CHANGELOG_AI_MODEL` | Model id. opencode: required (e.g. `deepseek-v4-pro`); openai: defaults to `gpt-4o-mini` |
+| `OPENCODE_API_KEY` | Required for `opencode` (from [opencode.ai/auth](https://opencode.ai/auth)) |
+| `OPENCODE_BASE_URL` | Optional; defaults to `https://opencode.ai/zen/go/v1` |
+| `OPENAI_API_KEY` | Required for `openai` |
+| `OPENAI_BASE_URL` | Optional; any OpenAI-compatible endpoint (defaults to `https://api.openai.com/v1`) |
+
+- **opencode** targets [opencode Go](https://opencode.ai/docs/go/), an
+  OpenAI-compatible API at `https://opencode.ai/zen/go/v1`.
+- **openai** targets OpenAI or any other OpenAI-compatible `/chat/completions`
+  endpoint via `OPENAI_BASE_URL` (OpenRouter, Groq, local, ...).
+
+Use `--dry-run` to preview the generated changelog before committing anything.
+
 ## Project Structure
 
 ```
