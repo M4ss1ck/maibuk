@@ -25,12 +25,18 @@ describe("code block syntax highlighting", () => {
   });
 
   it("highlights a fenced code block's language as token spans", () => {
-    const editor = makeEditor(
-      '<pre><code class="language-sh">echo hello</code></pre>',
-    );
+    const editor = makeEditor('<pre><code class="language-sh">echo hello</code></pre>');
 
     const html = editor.view.dom.innerHTML;
     expect(html).toContain("hljs-");
+    editor.destroy();
+  });
+
+  it("does not highlight a code block without a language", () => {
+    const editor = makeEditor("<pre><code>for item in items</code></pre>");
+
+    const html = editor.view.dom.innerHTML;
+    expect(html).not.toContain("hljs-");
     editor.destroy();
   });
 
