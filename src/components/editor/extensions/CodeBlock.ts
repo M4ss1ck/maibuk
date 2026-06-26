@@ -8,7 +8,14 @@ import { CodeBlockView } from "../CodeBlockView";
  * popular languages — including their aliases, so the ```sh fenced shortcut
  * resolves to the shell grammar.
  */
-export const lowlight = createLowlight(common);
+const baseLowlight = createLowlight(common);
+
+export const lowlight: typeof baseLowlight = {
+  ...baseLowlight,
+  highlightAuto(value) {
+    return { type: "root", children: [{ type: "text", value }] };
+  },
+};
 
 /**
  * Code block with syntax highlighting and a copy-to-clipboard button that

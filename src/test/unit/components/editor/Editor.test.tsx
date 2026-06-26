@@ -224,6 +224,33 @@ describe("Editor", () => {
     expect(focusCalls.some((args) => args.length === 0)).toBe(false);
   });
 
+  it("updates a code block language from the hover control", async () => {
+    const onUpdate = vi.fn();
+
+    render(
+      <Editor
+        content={'<pre><code class="language-javascript">const value = 1</code></pre>'}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    const languageButton = await screen.findByRole("button", {
+      name: "editor.editCodeBlockLanguage",
+    });
+    expect(languageButton).toHaveTextContent("javascript");
+
+    await userEvent.click(languageButton);
+    const languageInput = screen.getByLabelText("editor.codeBlockLanguage");
+    await userEvent.clear(languageInput);
+    await userEvent.type(languageInput, "python{Enter}");
+
+    await waitFor(() => {
+      expect(onUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('class="language-python"'),
+      );
+    });
+  });
+
   it("does not refocus the previous selection when a heading toggle is clicked", async () => {
     let editor: TiptapEditor | null = null;
 

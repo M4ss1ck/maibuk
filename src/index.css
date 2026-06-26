@@ -561,42 +561,78 @@ option {
   color: #c586c0;
 }
 
-/* Code block copy button (visible on hover/focus) */
+/* Code block controls (visible on hover/focus) */
 .editor-content .code-block-wrapper {
   position: relative;
 }
 
+.code-block-language,
+.code-block-language-input,
 .code-block-copy {
   position: absolute;
   top: 0.5em;
-  right: 0.5em;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.375em;
   border-radius: 0.375em;
   color: #57606a;
   background-color: rgba(0, 0, 0, 0.06);
   opacity: 0;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
   z-index: 2;
 }
 
+.code-block-language,
+.code-block-language-input {
+  left: 0.5em;
+  max-width: calc(100% - 4.5em);
+  min-height: 1.75rem;
+  padding: 0.25em 0.5em;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.code-block-language-input {
+  width: 9rem;
+  border: 1px solid var(--color-border);
+  outline: none;
+  opacity: 1;
+}
+
+.code-block-language-input:focus {
+  border-color: var(--color-primary);
+}
+
+.code-block-copy {
+  right: 0.5em;
+  padding: 0.375em;
+}
+
+.dark .code-block-language,
+.dark .code-block-language-input,
 .dark .code-block-copy {
   color: #d4d4d4;
   background-color: rgba(255, 255, 255, 0.08);
 }
 
+.code-block-wrapper:hover .code-block-language,
+.code-block-wrapper:focus-within .code-block-language,
+.code-block-language:focus-visible,
 .code-block-wrapper:hover .code-block-copy,
 .code-block-wrapper:focus-within .code-block-copy,
 .code-block-copy:focus-visible {
   opacity: 1;
 }
 
+.code-block-language:hover,
 .code-block-copy:hover {
   background-color: rgba(0, 0, 0, 0.12);
 }
 
+.dark .code-block-language:hover,
 .dark .code-block-copy:hover {
   background-color: rgba(255, 255, 255, 0.16);
 }
