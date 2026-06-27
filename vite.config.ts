@@ -74,6 +74,7 @@ export default defineConfig(() => ({
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
         "src/components/editor/paste-cleanup.ts",
+        "src/components/editor/PagePaddingControl.tsx",
         "src/components/editor/extensions/scene-break-utils.ts",
         "src/components/editor/extensions/SceneBreak.ts",
         "src/features/export/pdf-content-renderer.tsx",
