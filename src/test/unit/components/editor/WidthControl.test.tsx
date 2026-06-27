@@ -40,13 +40,16 @@ describe("WidthControl", () => {
     useSettingsStore.setState({
       editorContentWidth: 720,
       editorShowBorder: false,
+      editorPagePadding: { top: 32, right: 32, bottom: 32, left: 32 },
     });
   });
 
   it("opens the popover from the trigger", () => {
     render(<WidthControl />);
     fireEvent.click(screen.getByTitle("editor.contentWidth"));
-    expect(screen.getByRole("slider")).toBeInTheDocument();
+    expect(
+      screen.getByRole("slider", { name: "editor.contentWidth" }),
+    ).toBeInTheDocument();
   });
 
   it("selects a preset", () => {
@@ -59,7 +62,9 @@ describe("WidthControl", () => {
   it("drives width via the slider", () => {
     render(<WidthControl />);
     fireEvent.click(screen.getByTitle("editor.contentWidth"));
-    fireEvent.change(screen.getByRole("slider"), { target: { value: "600" } });
+    fireEvent.change(screen.getByRole("slider", { name: "editor.contentWidth" }), {
+      target: { value: "600" },
+    });
     expect(useSettingsStore.getState().editorContentWidth).toBe(600);
   });
 
@@ -67,7 +72,7 @@ describe("WidthControl", () => {
     render(<WidthControl />);
     fireEvent.click(screen.getByTitle("editor.contentWidth"));
 
-    const slider = screen.getByRole("slider");
+    const slider = screen.getByRole("slider", { name: "editor.contentWidth" });
     const fullSliderValue = EDITOR_CONTENT_WIDTH_MAX + EDITOR_CONTENT_WIDTH_STEP;
     expect(slider).toHaveAttribute("max", String(fullSliderValue));
 
@@ -109,7 +114,9 @@ describe("WidthControl", () => {
   it("keeps the nearest preset visually selected while the slider moves", () => {
     render(<WidthControl />);
     fireEvent.click(screen.getByTitle("editor.contentWidth"));
-    fireEvent.change(screen.getByRole("slider"), { target: { value: "860" } });
+    fireEvent.change(screen.getByRole("slider", { name: "editor.contentWidth" }), {
+      target: { value: "860" },
+    });
 
     expect(getPresetHighlightOpacity(/editor\.widthWide/i)).toBeGreaterThan(
       getPresetHighlightOpacity(/editor\.widthComfortable/i),
@@ -125,11 +132,29 @@ describe("WidthControl", () => {
     expect(useSettingsStore.getState().editorShowBorder).toBe(true);
   });
 
-  it("resets to the default width", () => {
-    useSettingsStore.setState({ editorContentWidth: 960 });
+  it("resets width and padding to defaults", () => {
+    useSettingsStore.setState({
+      editorContentWidth: 960,
+      editorPagePadding: { top: 64, right: 64, bottom: 64, left: 64 },
+    });
     render(<WidthControl />);
     fireEvent.click(screen.getByTitle("editor.contentWidth"));
-    fireEvent.click(screen.getByText("editor.resetWidth"));
+    fireEvent.click(screen.getByText("editor.resetLayout"));
     expect(useSettingsStore.getState().editorContentWidth).toBe(720);
+    expect(useSettingsStore.getState().editorPagePadding).toEqual({
+      top: 32,
+      right: 32,
+      bottom: 32,
+      left: 32,
+    });
+  });
+
+  it("renders the page padding control", () => {
+    render(<WidthControl />);
+    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    expect(screen.getByText("editor.pagePadding")).toBeInTheDocument();
+    expect(
+      screen.getByRole("slider", { name: "editor.pagePadding" }),
+    ).toBeInTheDocument();
   });
 });
