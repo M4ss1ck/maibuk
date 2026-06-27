@@ -57,4 +57,113 @@ describe("PagePaddingControl", () => {
     fireEvent.change(sliders[0], { target: { value: "48" } });
     expect(onChange).toHaveBeenCalledWith({ top: 48 });
   });
+
+  it("calls onChange with the clamped value when the simple input is edited and Enter is pressed", () => {
+    const onChange = vi.fn();
+    render(
+      <PagePaddingControl
+        padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("32px"));
+    const input = screen.getByLabelText("editor.pagePadding px");
+    fireEvent.input(input, { target: { value: "64" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).toHaveBeenLastCalledWith(64);
+  });
+
+  it("reverts the simple input and does not call onChange when Escape is pressed", () => {
+    const onChange = vi.fn();
+    render(
+      <PagePaddingControl
+        padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("32px"));
+    const input = screen.getByLabelText("editor.pagePadding px");
+    fireEvent.input(input, { target: { value: "80" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText("32px")).toBeInTheDocument();
+  });
+
+  it("reverts the simple input to the original value when cleared and blurred", () => {
+    const onChange = vi.fn();
+    render(
+      <PagePaddingControl
+        padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("32px"));
+    const input = screen.getByLabelText("editor.pagePadding px");
+    fireEvent.input(input, { target: { value: "" } });
+    fireEvent.blur(input);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText("32px")).toBeInTheDocument();
+  });
+
+  it("reverts the simple input to the placeholder when custom padding is cleared and blurred", () => {
+    const onChange = vi.fn();
+    render(
+      <PagePaddingControl
+        padding={{ top: 32, right: 48, bottom: 32, left: 32 }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("editor.paddingCustom"));
+    const input = screen.getByPlaceholderText("editor.paddingCustom");
+    fireEvent.input(input, { target: { value: "" } });
+    fireEvent.blur(input);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText("editor.paddingCustom")).toBeInTheDocument();
+  });
+
+  it("clamps simple input values above the maximum to the maximum", () => {
+    const onChange = vi.fn();
+    render(
+      <PagePaddingControl
+        padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("32px"));
+    const input = screen.getByLabelText("editor.pagePadding px");
+    fireEvent.input(input, { target: { value: "120" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).toHaveBeenLastCalledWith(96);
+  });
+
+  it("clamps simple input values below the minimum to the minimum", () => {
+    const onChange = vi.fn();
+    render(
+      <PagePaddingControl
+        padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("32px"));
+    const input = screen.getByLabelText("editor.pagePadding px");
+    fireEvent.input(input, { target: { value: "-5" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).toHaveBeenLastCalledWith(0);
+  });
+
+  it("calls onChange with the clamped side value when a custom side input is edited and Enter is pressed", () => {
+    const onChange = vi.fn();
+    render(
+      <PagePaddingControl
+        padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("editor.customizePadding"));
+    fireEvent.click(screen.getByLabelText("editor.pagePaddingTop px"));
+    const input = screen.getByLabelText("editor.pagePaddingTop px");
+    fireEvent.input(input, { target: { value: "56" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).toHaveBeenLastCalledWith({ top: 56 });
+  });
 });

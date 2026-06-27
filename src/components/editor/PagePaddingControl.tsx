@@ -8,6 +8,10 @@ import {
   clampEditorPagePadding,
 } from "../../features/settings/types";
 
+function sanitizeNumericInput(value: string): string {
+  return value.replace(/[^0-9-]/g, "").replace(/(?!^)-/g, "");
+}
+
 interface PagePaddingControlProps {
   padding: EditorPagePadding;
   onChange: (value: number | Partial<EditorPagePadding>) => void;
@@ -107,7 +111,7 @@ function SimplePaddingControl({ value, onChange }: SimplePaddingControlProps) {
           pattern="[0-9]*"
           value={draft}
           placeholder={value === null ? t("editor.paddingCustom") : undefined}
-          onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+          onChange={(e) => setDraft(sanitizeNumericInput(e.target.value))}
           onBlur={() => {
             commit();
             setIsEditing(false);
@@ -128,11 +132,10 @@ function SimplePaddingControl({ value, onChange }: SimplePaddingControlProps) {
       ) : (
         <button
           type="button"
-          disabled={value === null}
-          onClick={() => value !== null && setIsEditing(true)}
-          onFocus={() => value !== null && setIsEditing(true)}
+          onClick={() => setIsEditing(true)}
+          onFocus={() => setIsEditing(true)}
           aria-label={`${t("editor.pagePadding")} px`}
-          className="h-8 w-20 shrink-0 rounded px-2 text-right text-sm transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-8 w-20 shrink-0 rounded px-2 text-right text-sm transition-colors text-muted-foreground hover:text-foreground"
         >
           {displayedValue}
         </button>
@@ -220,7 +223,7 @@ function PaddingSideControl({ side, value, onChange }: PaddingSideControlProps) 
           inputMode="numeric"
           pattern="[0-9]*"
           value={draft}
-          onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+          onChange={(e) => setDraft(sanitizeNumericInput(e.target.value))}
           onBlur={() => {
             commit();
             setIsEditing(false);
