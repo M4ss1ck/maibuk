@@ -114,6 +114,7 @@ export default defineConfig(() => ({
         "src/components/settings/asciiBanner.helpers.ts",
         "src/components/settings/AsciiBanner.tsx",
         "src/components/settings/AsciiFieldBackground.tsx",
+        "src/features/settings/AppSettingsProvider.tsx",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

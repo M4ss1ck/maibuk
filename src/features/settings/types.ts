@@ -187,6 +187,7 @@ export interface Settings {
   notesSidebarWidth: number;
   toolbarExpanded: boolean;
   editorContentWidth: number;
+  editorPagePadding: EditorPagePadding;
   editorShowBorder: boolean;
   chapterListView: ChapterListView;
   showChapterOutline: boolean;

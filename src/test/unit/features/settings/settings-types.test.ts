@@ -212,6 +212,18 @@ describe("EDITOR_CONTENT_WIDTH_PRESETS", () => {
   });
 });
 
+describe("DEFAULT_EDITOR_PAGE_PADDING", () => {
+  it("is a multiple of the step and within bounds", () => {
+    expect(DEFAULT_EDITOR_PAGE_PADDING % EDITOR_PAGE_PADDING_STEP).toBe(0);
+    expect(DEFAULT_EDITOR_PAGE_PADDING).toBeGreaterThanOrEqual(
+      EDITOR_PAGE_PADDING_MIN,
+    );
+    expect(DEFAULT_EDITOR_PAGE_PADDING).toBeLessThanOrEqual(
+      EDITOR_PAGE_PADDING_MAX,
+    );
+  });
+});
+
 describe("clampEditorPagePadding", () => {
   it("returns the default for non-finite input", () => {
     expect(clampEditorPagePadding(Number.NaN)).toBe(DEFAULT_EDITOR_PAGE_PADDING);
