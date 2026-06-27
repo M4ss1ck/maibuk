@@ -153,7 +153,6 @@ function CustomPaddingControl({
   padding,
   onChange,
 }: CustomPaddingControlProps) {
-  const { t } = useTranslation();
   const sides: Array<keyof EditorPagePadding> = ["top", "right", "bottom", "left"];
 
   return (
@@ -178,6 +177,13 @@ interface PaddingSideControlProps {
 
 function PaddingSideControl({ side, value, onChange }: PaddingSideControlProps) {
   const { t } = useTranslation();
+  const sideLabels: Record<keyof EditorPagePadding, string> = {
+    top: t("editor.pagePaddingTop"),
+    right: t("editor.pagePaddingRight"),
+    bottom: t("editor.pagePaddingBottom"),
+    left: t("editor.pagePaddingLeft"),
+  };
+  const label = sideLabels[side];
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
   const inputRef = useRef<HTMLInputElement>(null);
@@ -204,7 +210,7 @@ function PaddingSideControl({ side, value, onChange }: PaddingSideControlProps) 
   return (
     <div className="flex items-center gap-2">
       <span className="w-14 shrink-0 text-sm text-muted-foreground">
-        {t(`editor.pagePadding${side.charAt(0).toUpperCase()}${side.slice(1)}`)}
+        {label}
       </span>
       <input
         type="range"
@@ -213,7 +219,7 @@ function PaddingSideControl({ side, value, onChange }: PaddingSideControlProps) 
         step={EDITOR_PAGE_PADDING_STEP}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        aria-label={t(`editor.pagePadding${side.charAt(0).toUpperCase()}${side.slice(1)}`)}
+        aria-label={label}
         className="min-w-0 flex-1"
       />
       {isEditing ? (
@@ -238,7 +244,7 @@ function PaddingSideControl({ side, value, onChange }: PaddingSideControlProps) 
               setIsEditing(false);
             }
           }}
-          aria-label={`${t(`editor.pagePadding${side.charAt(0).toUpperCase()}${side.slice(1)}`)} px`}
+          aria-label={`${label} px`}
           className="h-8 w-20 shrink-0 rounded px-2 text-right text-sm text-foreground border border-border bg-background shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       ) : (
@@ -246,7 +252,7 @@ function PaddingSideControl({ side, value, onChange }: PaddingSideControlProps) 
           type="button"
           onClick={() => setIsEditing(true)}
           onFocus={() => setIsEditing(true)}
-          aria-label={`${t(`editor.pagePadding${side.charAt(0).toUpperCase()}${side.slice(1)}`)} px`}
+          aria-label={`${label} px`}
           className="h-8 w-20 shrink-0 rounded px-2 text-right text-sm transition-colors text-muted-foreground hover:text-foreground"
         >
           {value}px
