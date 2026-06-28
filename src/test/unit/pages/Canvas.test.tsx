@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     addNode: vi.fn(),
     addEdge: vi.fn(),
     updateEdge: vi.fn(),
+    updateTextNode: vi.fn(),
     moveNodeLive: vi.fn(),
     beginLiveChange: vi.fn(),
     endLiveChange: vi.fn(),
@@ -22,6 +23,11 @@ const mocks = vi.hoisted(() => {
     undo: vi.fn(),
     redo: vi.fn(),
     renameCanvas: vi.fn().mockResolvedValue(undefined),
+    setToolMode: vi.fn(),
+    setPenWidth: vi.fn(),
+    setPenColor: vi.fn(),
+    addStroke: vi.fn(),
+    removeStroke: vi.fn(),
   };
   const state: Record<string, unknown> = {};
   return { actions, state, flowProps: { current: null as Record<string, unknown> | null } };
@@ -42,6 +48,7 @@ vi.mock("../../../features/notes", () => ({
 vi.mock("../../../features/canvas/nodes", () => ({ nodeTypes: {} }));
 
 vi.mock("@xyflow/react", () => ({
+  ConnectionMode: { Loose: "loose" },
   MarkerType: { ArrowClosed: "arrowclosed" },
   ReactFlowProvider: ({ children }: { children: React.ReactNode }) => children,
   ReactFlow: (props: Record<string, unknown>) => {
@@ -50,7 +57,13 @@ vi.mock("@xyflow/react", () => ({
   },
   Background: () => null,
   Controls: () => null,
-  useReactFlow: () => ({ screenToFlowPosition: (point: { x: number; y: number }) => point }),
+  useReactFlow: () => ({
+    screenToFlowPosition: (point: { x: number; y: number }) => point,
+    flowToScreenPosition: (point: { x: number; y: number }) => point,
+    getZoom: () => 1,
+    fitView: vi.fn(),
+  }),
+  ViewportPortal: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -61,9 +74,12 @@ const { Canvas } = await import("../../../pages/Canvas");
 
 function readyState() {
   const doc = {
-    schemaVersion: 1,
-    nodes: [{ id: "node", kind: "text", text: "Idea", position: { x: 0, y: 0 } }],
+    schemaVersion: 2,
+    nodes: [
+      { id: "node", kind: "text", html: "<p>Idea</p>", position: { x: 0, y: 0 } },
+    ],
     edges: [{ id: "edge", source: "node", target: "node", label: "Old" }],
+    strokes: [],
     viewport: { x: 0, y: 0, zoom: 1 },
   };
   Object.assign(mocks.state, mocks.actions, {
@@ -82,6 +98,9 @@ function readyState() {
     future: [],
     selectedNodeId: null,
     selectedEdgeId: "edge",
+    toolMode: "select",
+    penWidth: 3,
+    penColor: "#ef4444",
   });
 }
 
@@ -105,6 +124,7 @@ describe("Canvas page", () => {
   it("disables built-in deletion and synchronizes React Flow node selection to the store", () => {
     renderCanvas();
     expect(mocks.flowProps.current?.deleteKeyCode).toBeNull();
+    expect(mocks.flowProps.current?.connectionMode).toBe("loose");
     act(() => {
       const onSelectionChange = mocks.flowProps.current?.onSelectionChange as (
         value: Record<string, unknown>,
@@ -119,6 +139,14 @@ describe("Canvas page", () => {
       onSelectionChange({ nodes: [], edges: [{ id: "edge" }] });
     });
     expect(mocks.actions.selectEdge).not.toHaveBeenCalled();
+  });
+
+  it("adds an html text node from the floating tool panel", () => {
+    renderCanvas();
+    fireEvent.click(screen.getByRole("button", { name: "canvas.addTextNode" }));
+    expect(mocks.actions.addNode).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "text", html: "<p>canvas.newTextNode</p>" }),
+    );
   });
 
   it("selects an edge on click and clears selection on pane click", () => {

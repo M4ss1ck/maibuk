@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   Controls,
+  ConnectionMode,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -15,8 +16,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   ArrowLeft,
-  FilePlus2,
-  Link2,
   Network,
   Redo2,
   Trash2,
@@ -28,7 +27,10 @@ import { maibukArt } from "../assets/ascii/maibuk";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
-import { Switch } from "../components/ui/Switch";
+import { CanvasToolPanel } from "../features/canvas/CanvasToolPanel";
+import { EdgeInspectorCard } from "../features/canvas/EdgeInspectorCard";
+import { CanvasDrawingLayer } from "../features/canvas/drawing/CanvasDrawingLayer";
+import { DrawingCaptureOverlay } from "../features/canvas/drawing/DrawingCaptureOverlay";
 import { nodeTypes } from "../features/canvas/nodes";
 import { fromConnection, toFlowEdges, toFlowNodes } from "../features/canvas/reactFlowAdapter";
 import { useCanvasStore } from "../features/canvas/store";
@@ -79,6 +81,7 @@ function CanvasBackground() {
   const patternId = "maibuk-canvas-pattern";
   return (
     <svg
+      aria-hidden="true"
       className="react-flow__background text-foreground"
       style={{
         position: "absolute",
@@ -145,6 +148,7 @@ function CanvasEditor() {
   const future = useCanvasStore((state) => state.future);
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
   const selectedEdgeId = useCanvasStore((state) => state.selectedEdgeId);
+  const toolMode = useCanvasStore((state) => state.toolMode);
   const loadCanvas = useCanvasStore((state) => state.loadCanvas);
   const closeCanvas = useCanvasStore((state) => state.closeCanvas);
   const persistCanvas = useCanvasStore((state) => state.persistCanvas);
@@ -263,7 +267,7 @@ function CanvasEditor() {
     addNode({
       id: crypto.randomUUID(),
       kind: "text",
-      text: t("canvas.newTextNode"),
+      html: `<p>${t("canvas.newTextNode")}</p>`,
       position: viewportCenter(),
     });
   };
@@ -400,14 +404,6 @@ function CanvasEditor() {
         >
           {saveLabel}
         </span>
-        <Button size="sm" onClick={handleAddTextNode}>
-          <FilePlus2 className="size-4" aria-hidden="true" />
-          {t("canvas.addTextNode")}
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setNotePickerOpen(true)}>
-          <Link2 className="size-4" aria-hidden="true" />
-          {t("canvas.addNoteRef")}
-        </Button>
         <Button variant="ghost" size="sm" disabled={past.length === 0} onClick={undo} aria-label={t("canvas.undo")}>
           <Undo2 className="size-4" aria-hidden="true" />
         </Button>
@@ -425,34 +421,6 @@ function CanvasEditor() {
         </Button>
       </header>
 
-      {selectedEdge && (
-        <div className="z-10 flex items-end gap-4 border-b border-border bg-card px-4 py-2">
-          <div className="w-72">
-            <Input
-              id="canvas-edge-label"
-              label={t("canvas.edgeLabel")}
-              value={edgeLabelDraft}
-              onChange={(event) => setEdgeLabelDraft(event.target.value)}
-              onBlur={() => updateEdge(selectedEdge.id, { label: edgeLabelDraft })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-              }}
-            />
-          </div>
-          <div className="mb-2 flex items-center gap-2 text-sm">
-            <Switch
-              checked={selectedEdge.directed ?? false}
-              onChange={(directed) => updateEdge(selectedEdge.id, { directed })}
-              label={t("canvas.directedEdge")}
-            />
-            {t("canvas.directedEdge")}
-          </div>
-          <Button variant="destructive" size="sm" className="mb-1" onClick={deleteSelection}>
-            {t("canvas.deleteEdge")}
-          </Button>
-        </div>
-      )}
-
       <div ref={surfaceRef} className="relative min-h-0 flex-1">
         <ReactFlow
           colorMode={theme}
@@ -460,6 +428,7 @@ function CanvasEditor() {
           nodes={flowNodes as Node[]}
           edges={flowEdges as Edge[]}
           nodeTypes={nodeTypes}
+          connectionMode={ConnectionMode.Loose}
           onNodesChange={handleNodeChanges}
           onEdgesChange={noopEdgesChange}
           onSelectionChange={handleSelectionChange}
@@ -470,12 +439,32 @@ function CanvasEditor() {
           onNodeDragStop={endLiveChange}
           onMoveEnd={handleMoveEnd}
           deleteKeyCode={null}
+          panOnDrag={toolMode === "select"}
+          nodesDraggable={toolMode === "select"}
+          elementsSelectable={toolMode === "select"}
           defaultViewport={doc.viewport}
           fitView={!hasMeaningfulViewport(doc) && doc.nodes.length > 0}
         >
           <CanvasBackground />
+          <CanvasDrawingLayer />
           <Controls />
         </ReactFlow>
+        <DrawingCaptureOverlay surfaceRef={surfaceRef} />
+        <CanvasToolPanel
+          onAddText={handleAddTextNode}
+          onAddNoteRef={() => setNotePickerOpen(true)}
+          onFitView={() => reactFlow.fitView()}
+        />
+        {selectedEdge && (
+          <EdgeInspectorCard
+            edge={selectedEdge}
+            labelDraft={edgeLabelDraft}
+            onLabelChange={setEdgeLabelDraft}
+            onLabelCommit={() => updateEdge(selectedEdge.id, { label: edgeLabelDraft })}
+            onDirectedChange={(directed) => updateEdge(selectedEdge.id, { directed })}
+            onDelete={deleteSelection}
+          />
+        )}
       </div>
 
       <Modal
