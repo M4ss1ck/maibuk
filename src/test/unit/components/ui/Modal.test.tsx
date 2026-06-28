@@ -142,13 +142,15 @@ describe("Modal", () => {
     });
 
     it("does not render footer section when not provided", () => {
-      const { container } = render(
+      render(
         <Modal isOpen={true} onClose={() => {}} title="No Footer">
           <p>Content</p>
         </Modal>,
       );
-      // The footer has border-t border-border bg-muted/30 class
-      expect(container.querySelector(".bg-muted\\/30")).toBeNull();
+      // The footer has border-t border-border bg-muted/30 class. The modal is
+      // portaled to document.body, so query the document rather than the test
+      // container.
+      expect(document.querySelector(".bg-muted\\/30")).toBeNull();
     });
   });
 

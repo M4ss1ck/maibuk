@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { CloseIcon } from "../icons";
 import { useModalStore } from "./modal-store";
 
@@ -51,7 +52,7 @@ export function Modal({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
       <button
@@ -95,6 +96,7 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
