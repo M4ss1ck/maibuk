@@ -28,8 +28,7 @@ import { useEditorZoomControls } from "./useEditorZoomControls";
 import { assignHeadingIds } from "../../features/links/heading-ids";
 import type { InternalTarget, InternalTargetChildrenLoader } from "./LinkDialog";
 import { setContentSilently } from "../../features/metrics/programmatic";
-import { markdownToEditorHtml } from "../../features/markdown";
-import { Modal, Button } from "../ui";
+import { MarkdownPasteDialog } from "./MarkdownPasteDialog";
 
 export interface EditorStats {
   words: number;
@@ -325,57 +324,11 @@ export function Editor({
         internalTargets={internalTargets}
         loadInternalTargetChildren={loadInternalTargetChildren}
       />
-      <Modal
-        isOpen={pendingMarkdownPaste !== null}
+      <MarkdownPasteDialog
+        editor={editor}
+        markdown={pendingMarkdownPaste}
         onClose={() => setPendingMarkdownPaste(null)}
-        title={t("editor.markdownDetectedTitle")}
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                if (pendingMarkdownPaste !== null) {
-                  editor.chain().focus().insertContent(plainTextToHtml(pendingMarkdownPaste)).run();
-                }
-                setPendingMarkdownPaste(null);
-              }}
-            >
-              {t("editor.pasteAsIs")}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                if (pendingMarkdownPaste !== null) {
-                  editor
-                    .chain()
-                    .focus()
-                    .insertContent(markdownToEditorHtml(pendingMarkdownPaste))
-                    .run();
-                }
-                setPendingMarkdownPaste(null);
-              }}
-            >
-              {t("editor.convert")}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-muted-foreground">{t("editor.markdownDetectedBody")}</p>
-      </Modal>
+      />
     </div>
   );
-}
-
-/**
- * Converts plain text into simple HTML for "paste as-is": blank lines become
- * paragraph breaks, single newlines become hard breaks. Mirrors the editor's
- * default plain-text paste behaviour.
- */
-function plainTextToHtml(text: string): string {
-  const escapeHtml = (value: string) =>
-    value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return text
-    .split(/\n{2,}/)
-    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`)
-    .join("");
 }

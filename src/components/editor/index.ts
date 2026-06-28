@@ -15,4 +15,6 @@ export { ColorPicker } from "./ColorPicker";
 export { LinkClickHandler } from "./LinkClickHandler";
 export { TableMenu } from "./TableMenu";
 export { SaveStatus } from "./SaveStatus";
+export { MarkdownPasteDialog } from "./MarkdownPasteDialog";
+export { plainTextToEditorHtml } from "./plain-text-html";
 export * from "./extensions";

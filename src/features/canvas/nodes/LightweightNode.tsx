@@ -12,6 +12,7 @@ import { useSettingsStore } from "../../settings/store";
 import type { CanvasFlowNodeData } from "../reactFlowAdapter";
 import type { LightweightCanvasNode } from "../types";
 import { createRichTextExtensions } from "../../../components/editor/extensions/createRichTextExtensions";
+import { MarkdownPasteDialog } from "../../../components/editor/MarkdownPasteDialog";
 import { CanvasNodeHandles } from "./CanvasNodeHandles";
 import { NodeFormatBubble } from "./NodeFormatBubble";
 
@@ -91,6 +92,11 @@ function ActiveNodeEditor({
         onLinkDialogOpenChange={(open) => {
           linkDialogOpen.current = open;
         }}
+      />
+      <MarkdownPasteDialog
+        editor={editor}
+        markdown={pendingMarkdownPaste}
+        onClose={() => setPendingMarkdownPaste(null)}
       />
     </>
   );

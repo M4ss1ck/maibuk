@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { createRichTextExtensions } from "../editor/extensions/createRichTextExtensions";
+import { MarkdownPasteDialog } from "../editor/MarkdownPasteDialog";
 import { useSettingsStore } from "../../features/settings/store";
 import {
   Bold,
@@ -25,12 +26,14 @@ interface QuickNoteEditorProps {
 export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps) {
   const { t } = useTranslation();
   const [showToolbar, setShowToolbar] = useState(false);
+  const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
 
   const editor = useEditor({
     extensions: [
       ...createRichTextExtensions({
+        onMarkdownPaste: setPendingMarkdownPaste,
         spellCheck: { enabled: spellCheckEnabled, language },
       }),
       TaskList,
@@ -131,6 +134,13 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
       <div className="max-h-64 overflow-y-auto px-2">
         <EditorContent editor={editor} />
       </div>
+      {editor && (
+        <MarkdownPasteDialog
+          editor={editor}
+          markdown={pendingMarkdownPaste}
+          onClose={() => setPendingMarkdownPaste(null)}
+        />
+      )}
     </div>
   );
 }
