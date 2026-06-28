@@ -241,8 +241,9 @@ function CanvasEditor() {
         selectedNodeId,
         canvasId,
         canvasTitle: current?.title ?? "",
+        edges: doc.edges,
       }),
-    [canvasId, current?.title, doc.nodes, selectedNodeId],
+    [canvasId, current?.title, doc.nodes, doc.edges, selectedNodeId],
   );
   const flowEdges = useMemo(
     () => toFlowEdges(doc.edges, { selectedEdgeId }),
