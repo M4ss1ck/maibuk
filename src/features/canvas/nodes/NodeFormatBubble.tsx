@@ -30,6 +30,7 @@ export function NodeFormatBubble({
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [toolbarElement, setToolbarElement] = useState<HTMLDivElement | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [editorFocused, setEditorFocused] = useState(editor.isFocused);
   const [translateX, translateY, zoom] = useStore((flowState) => flowState.transform);
   const notes = useNoteStore((state) => state.notes);
   const books = useBookStore((state) => state.books);
@@ -104,14 +105,19 @@ export function NodeFormatBubble({
   }, [loadBooks]);
 
   const updatePosition = useCallback(() => {
-    if (editor.state.selection.empty) {
+    if (!editorFocused) {
       setPos(null);
       return;
     }
 
     const { from, to } = editor.state.selection;
-    const start = editor.view.coordsAtPos(from);
-    const end = editor.view.coordsAtPos(to);
+    const editorRect = editor.view.dom.getBoundingClientRect();
+    const start = editor.state.selection.empty
+      ? { top: editorRect.top, left: editorRect.left }
+      : editor.view.coordsAtPos(from);
+    const end = editor.state.selection.empty
+      ? { bottom: editorRect.bottom, right: editorRect.right }
+      : editor.view.coordsAtPos(to);
     const canvasRect = editor.view.dom.closest(".react-flow")?.getBoundingClientRect();
     const bounds = canvasRect ?? {
       top: 0,
@@ -134,11 +140,22 @@ export function NodeFormatBubble({
         : Math.min(end.bottom + gap, bounds.bottom - toolbarHeight - gap);
 
     setPos({ top, left });
-  }, [editor, toolbarElement]);
+  }, [editor, editorFocused, toolbarElement]);
 
   useEffect(() => {
     updatePosition();
   }, [state.hasSelection, translateX, translateY, updatePosition, zoom]);
+
+  useEffect(() => {
+    const onFocus = () => setEditorFocused(true);
+    const onBlur = () => setEditorFocused(false);
+    editor.on("focus", onFocus);
+    editor.on("blur", onBlur);
+    return () => {
+      editor.off("focus", onFocus);
+      editor.off("blur", onBlur);
+    };
+  }, [editor]);
 
   useEffect(() => {
     let animationFrame = 0;
@@ -155,7 +172,8 @@ export function NodeFormatBubble({
 
   return (
     <>
-      {state.hasSelection &&
+      {editorFocused &&
+        !linkDialogOpen &&
         pos &&
         createPortal(
           <div

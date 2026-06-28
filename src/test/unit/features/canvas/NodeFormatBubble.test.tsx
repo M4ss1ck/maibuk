@@ -1,14 +1,21 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   coordsTop: 100,
+  editorRectTop: 150,
   loadBooks: vi.fn(),
   transform: [0, 0, 1] as [number, number, number],
 }));
 
 vi.mock("@tiptap/react", () => ({
-  useEditorState: () => ({ hasSelection: true }),
+  useEditorState: ({
+    editor,
+    selector,
+  }: {
+    editor: unknown;
+    selector: (value: { editor: unknown }) => unknown;
+  }) => selector({ editor }),
 }));
 
 vi.mock("@xyflow/react", () => ({
@@ -17,9 +24,17 @@ vi.mock("@xyflow/react", () => ({
 }));
 
 vi.mock("../../../../components/editor", () => ({
-  FormattingButtons: () => <button type="button">Format selection</button>,
+  FormattingButtons: ({ onLinkClick }: { onLinkClick: () => void }) => (
+    <>
+      <button type="button">Format selection</button>
+      <button type="button" onClick={onLinkClick}>
+        Insert link
+      </button>
+    </>
+  ),
   LinkClickHandler: () => null,
-  LinkDialog: () => null,
+  LinkDialog: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div role="dialog">Link dialog</div> : null,
 }));
 
 vi.mock("../../../../features/books/store", () => ({
@@ -45,9 +60,28 @@ const { NodeFormatBubble } = await import(
   "../../../../features/canvas/nodes/NodeFormatBubble"
 );
 
-function buildEditor() {
-  return {
-    state: { selection: { empty: false, from: 1, to: 3 } },
+function buildEditor({
+  empty = false,
+  isFocused = true,
+}: { empty?: boolean; isFocused?: boolean } = {}) {
+  const listeners = new Map<string, () => void>();
+  const dom = document.createElement("div");
+  Object.defineProperty(dom, "getBoundingClientRect", {
+    value: () => ({
+      top: mocks.editorRectTop,
+      bottom: mocks.editorRectTop + 60,
+      left: 180,
+      right: 300,
+      width: 120,
+      height: 60,
+      x: 180,
+      y: mocks.editorRectTop,
+      toJSON: () => ({}),
+    }),
+  });
+  const editor = {
+    isFocused,
+    state: { selection: { empty, from: 1, to: empty ? 1 : 3 } },
     view: {
       coordsAtPos: (position: number) => ({
         top: mocks.coordsTop,
@@ -55,18 +89,28 @@ function buildEditor() {
         left: position === 1 ? 200 : 260,
         right: position === 1 ? 200 : 260,
       }),
-      dom: document.createElement("div"),
+      dom,
     },
-    on: vi.fn(),
-    off: vi.fn(),
+    on: vi.fn((event: string, listener: () => void) => {
+      listeners.set(event, listener);
+    }),
+    off: vi.fn((event: string) => {
+      listeners.delete(event);
+    }),
     commands: { focus: vi.fn() },
+    emit(event: "focus" | "blur" | "selectionUpdate") {
+      editor.isFocused = event === "focus" ? true : event === "blur" ? false : editor.isFocused;
+      listeners.get(event)?.();
+    },
   };
+  return editor;
 }
 
 describe("NodeFormatBubble", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.coordsTop = 100;
+    mocks.editorRectTop = 150;
     mocks.transform = [0, 0, 1];
   });
 
@@ -84,6 +128,44 @@ describe("NodeFormatBubble", () => {
     await waitFor(() => {
       expect(screen.getByTestId("canvas-node")).not.toContainElement(bubble);
     });
+  });
+
+  it("shows above the editor when focused with a collapsed cursor", async () => {
+    const editor = buildEditor({ empty: true, isFocused: true });
+    render(<NodeFormatBubble editor={editor as never} />);
+
+    const bubble = (await screen.findByRole("button", { name: "Format selection" }))
+      .parentElement;
+    expect(bubble).toHaveStyle({ top: "102px" });
+  });
+
+  it("hides when the editor loses focus", async () => {
+    const editor = buildEditor({ empty: true, isFocused: true });
+    render(<NodeFormatBubble editor={editor as never} />);
+
+    expect(
+      await screen.findByRole("button", { name: "Format selection" }),
+    ).toBeInTheDocument();
+    expect(editor.on).toHaveBeenCalledWith("blur", expect.any(Function));
+    editor.emit("blur");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Format selection" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("hides while the insert-link dialog is open", async () => {
+    const editor = buildEditor({ empty: true, isFocused: true });
+    render(<NodeFormatBubble editor={editor as never} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Insert link" }));
+
+    expect(screen.getByRole("dialog", { name: "" })).toHaveTextContent("Link dialog");
+    expect(
+      screen.queryByRole("button", { name: "Format selection" }),
+    ).not.toBeInTheDocument();
   });
 
   it("repositions when the editor selection changes", async () => {
