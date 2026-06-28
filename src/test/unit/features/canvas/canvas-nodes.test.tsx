@@ -106,6 +106,38 @@ describe("Canvas custom nodes", () => {
     );
   });
 
+  it("preserves empty paragraphs with the shared idle content renderer", () => {
+    render(
+      <LightweightNode
+        {...({
+          selected: false,
+          data: {
+            node: {
+              id: "node",
+              kind: "text",
+              html: "<p>First</p><p></p><p>Third</p>",
+              position: { x: 0, y: 0 },
+            },
+            canvasId: "canvas",
+            canvasTitle: "Map",
+            connectedSides: {
+              top: { connected: false, incoming: false, outgoing: false },
+              right: { connected: false, incoming: false, outgoing: false },
+              bottom: { connected: false, incoming: false, outgoing: false },
+              left: { connected: false, incoming: false, outgoing: false },
+            },
+          },
+        } as Parameters<typeof LightweightNode>[0])}
+      />,
+    );
+
+    const content = screen.getByText("First").closest(".canvas-node-content");
+    expect(content).not.toBeNull();
+    const paragraphs = content?.querySelectorAll("p") ?? [];
+    expect(paragraphs).toHaveLength(3);
+    expect(paragraphs[1]?.querySelector("br")).not.toBeNull();
+  });
+
   it("shows a cached label and disables opening when the note is missing", () => {
     render(
       <MemoryRouter>

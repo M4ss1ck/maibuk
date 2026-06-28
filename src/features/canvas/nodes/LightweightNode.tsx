@@ -16,7 +16,7 @@ function sanitizeNodeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
     ADD_ATTR: ["class"],
     ALLOWED_URI_REGEXP: CANVAS_LINK_URI,
-  });
+  }).replace(/<p><\/p>/g, "<p><br></p>");
 }
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
@@ -36,7 +36,9 @@ function ActiveNodeEditor({
     extensions: nodeEditorExtensions,
     content: node.html,
     editable: true,
-    editorProps: { attributes: { class: "outline-none" } },
+    editorProps: {
+      attributes: { class: "canvas-node-content outline-none" },
+    },
   });
 
   useEffect(() => {
@@ -54,7 +56,7 @@ function ActiveNodeEditor({
     <>
       <EditorContent
         editor={editor}
-        className="nodrag nopan prose prose-sm max-w-none"
+        className="nodrag nopan max-w-none"
         onBlur={() => {
           if (!linkDialogOpen.current) commit();
         }}
@@ -107,7 +109,7 @@ export function LightweightNode({
         />
       ) : (
         <div
-          className="prose prose-sm max-w-none whitespace-pre-wrap"
+          className="canvas-node-content max-w-none"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
           dangerouslySetInnerHTML={{ __html: safeHtml }}
         />

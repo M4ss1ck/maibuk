@@ -196,6 +196,88 @@ option {
   word-break: break-word;
 }
 
+/* Canvas text nodes use this in both editable and idle modes. */
+.canvas-node-content {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.canvas-node-content p {
+  margin: 0;
+}
+
+.canvas-node-content h1,
+.canvas-node-content h2,
+.canvas-node-content h3 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.canvas-node-content h1 {
+  font-size: 1.5em;
+}
+
+.canvas-node-content h2 {
+  font-size: 1.25em;
+}
+
+.canvas-node-content h3 {
+  font-size: 1.125em;
+}
+
+.canvas-node-content ul,
+.canvas-node-content ol {
+  margin: 0;
+  padding-left: 1.25em;
+}
+
+.canvas-node-content ul {
+  list-style-type: disc;
+}
+
+.canvas-node-content ol {
+  list-style-type: decimal;
+}
+
+.canvas-node-content blockquote {
+  margin: 0;
+  border-left: 2px solid var(--color-border);
+  padding-left: 0.75em;
+  color: var(--color-muted-foreground);
+}
+
+.canvas-node-content code {
+  border-radius: 0.25em;
+  background-color: var(--color-muted);
+  padding: 0.125em 0.25em;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.canvas-node-content pre {
+  margin: 0;
+  overflow-x: auto;
+  border-radius: 0.5em;
+  background-color: var(--color-muted);
+  padding: 0.75em;
+}
+
+.canvas-node-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.canvas-node-content mark {
+  background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.canvas-node-content a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
 /* Tiptap editor styles */
 .editor-content p {
   margin: 1em 0;
