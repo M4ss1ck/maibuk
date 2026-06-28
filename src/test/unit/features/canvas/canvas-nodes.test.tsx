@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,12 +9,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@xyflow/react", () => ({
   Handle: () => <span data-testid="handle" />,
-  Position: { Left: "left", Right: "right" },
+  Position: { Top: "top", Right: "right", Bottom: "bottom", Left: "left" },
 }));
 
 vi.mock("../../../../features/canvas/store", () => ({
   useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ updateTextNode: mocks.updateTextNode }),
+    selector({ updateTextNode: mocks.updateTextNode, editorReadOnly: false }),
 }));
 
 vi.mock("../../../../features/notes", () => ({
@@ -23,6 +23,7 @@ vi.mock("../../../../features/notes", () => ({
 }));
 
 vi.mock("react-i18next", () => ({
+  initReactI18next: { type: "3rdParty", init: () => {} },
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
@@ -37,26 +38,38 @@ describe("Canvas custom nodes", () => {
     mocks.notes = [];
   });
 
-  it("keeps Backspace inside text editing and saves with Enter", () => {
+  it("renders text node html without a card border/background and shows a connected stub", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     render(
       <LightweightNode
         {...({
           selected: false,
           data: {
-            node: { id: "node", kind: "text", text: "Idea", position: { x: 0, y: 0 } },
+            node: {
+              id: "node",
+              kind: "text",
+              html: "<p>Idea</p>",
+              position: { x: 0, y: 0 },
+            },
             canvasId: "canvas",
             canvasTitle: "Map",
+            connectedSides: {
+              top: { connected: false, incoming: false, outgoing: false },
+              right: { connected: true, incoming: false, outgoing: false },
+              bottom: { connected: false, incoming: false, outgoing: false },
+              left: { connected: false, incoming: false, outgoing: false },
+            },
           },
         } as Parameters<typeof LightweightNode>[0])}
       />,
     );
-    fireEvent.doubleClick(screen.getByText("Idea"));
-    const input = screen.getByDisplayValue("Idea");
-    fireEvent.keyDown(input, { key: "Backspace" });
-    expect(mocks.updateTextNode).not.toHaveBeenCalled();
-    fireEvent.change(input, { target: { value: "Edited" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(mocks.updateTextNode).toHaveBeenCalledWith("node", { text: "Edited" });
+    expect(screen.getByText("Idea")).toBeInTheDocument();
+    expect(document.querySelector(".bg-card")).toBeNull();
+    expect(document.querySelector(".border-r-2")).not.toBeNull();
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("Duplicate extension names"),
+    );
+    warn.mockRestore();
   });
 
   it("shows a cached label and disables opening when the note is missing", () => {
@@ -75,6 +88,12 @@ describe("Canvas custom nodes", () => {
               },
               canvasId: "canvas",
               canvasTitle: "Map",
+              connectedSides: {
+                top: { connected: false, incoming: false, outgoing: false },
+                right: { connected: false, incoming: false, outgoing: false },
+                bottom: { connected: false, incoming: false, outgoing: false },
+                left: { connected: false, incoming: false, outgoing: false },
+              },
             },
           } as Parameters<typeof NoteRefNode>[0])}
         />
