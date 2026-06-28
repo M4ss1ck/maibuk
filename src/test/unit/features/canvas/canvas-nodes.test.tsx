@@ -91,14 +91,15 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByTestId("resize-right")).toHaveAttribute("data-direction", "horizontal");
   });
 
-  it("hides resize controls when unselected", () => {
+  it("reveals resize controls on hover when unselected", () => {
     render(
       <LightweightNode
         {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />,
     );
-    expect(screen.queryByTestId("resize-left")).toBeNull();
-    expect(screen.queryByTestId("resize-right")).toBeNull();
+    const control = screen.getByTestId("resize-left");
+    expect(control.className).toContain("opacity-0");
+    expect(control.className).toContain("group-hover:opacity-100");
   });
 
   it("hides resize controls when read-only", () => {

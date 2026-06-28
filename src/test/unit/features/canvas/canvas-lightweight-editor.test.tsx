@@ -14,6 +14,8 @@ vi.mock("@tiptap/react", () => ({
 vi.mock("@xyflow/react", () => ({
   Handle: () => null,
   Position: { Top: "top", Right: "right", Bottom: "bottom", Left: "left" },
+  NodeResizeControl: () => null,
+  ResizeControlVariant: { Line: "line", Handle: "handle" },
 }));
 
 vi.mock("../../../../features/canvas/store", () => ({

@@ -141,6 +141,7 @@ export interface CanvasStoreState {
   redo: () => void;
   beginLiveChange: () => void;
   moveNodeLive: (id: string, position: CanvasPosition) => void;
+  resizeNodeLive: (id: string, input: ResizeTextNodeInput) => void;
   endLiveChange: () => void;
   addNode: (node: CanvasNode) => void;
   updateTextNode: (id: string, patch: UpdateTextNodePatch) => void;
@@ -391,14 +392,48 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     });
   },
 
+  resizeNodeLive: (id, input) => {
+    const state = get();
+    if (state.editorReadOnly || !state.liveBaseDoc) return;
+    if (!isFinitePosition(input.position)) return;
+    if (typeof input.width !== "number" || !Number.isFinite(input.width) || input.width < 160) {
+      return;
+    }
+    const node = state.doc.nodes.find((candidate) => candidate.id === id);
+    if (!node || node.kind !== "text") return;
+    if (
+      node.width === input.width &&
+      node.position.x === input.position.x &&
+      node.position.y === input.position.y
+    ) {
+      return;
+    }
+    set({
+      doc: {
+        ...state.doc,
+        nodes: state.doc.nodes.map((candidate) =>
+          candidate.id === id
+            ? { ...candidate, position: { ...input.position }, width: input.width }
+            : candidate,
+        ),
+      },
+      dirty: true,
+      revision: state.revision + 1,
+    });
+  },
+
   endLiveChange: () => {
     const state = get();
     if (!state.liveBaseDoc) return;
     const changed = state.doc.nodes.some((node) => {
       const baseNode = state.liveBaseDoc?.nodes.find((candidate) => candidate.id === node.id);
+      if (baseNode === undefined) return false;
+      const baseWidth = baseNode.kind === "text" ? baseNode.width : undefined;
+      const nextWidth = node.kind === "text" ? node.width : undefined;
       return (
-        baseNode !== undefined &&
-        (baseNode.position.x !== node.position.x || baseNode.position.y !== node.position.y)
+        baseNode.position.x !== node.position.x ||
+        baseNode.position.y !== node.position.y ||
+        baseWidth !== nextWidth
       );
     });
     set({

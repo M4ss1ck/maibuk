@@ -231,6 +231,25 @@ describe("useCanvasStore", () => {
     expect(useCanvasStore.getState().revision).toBe(revision);
   });
 
+  it("creates exactly one undo step for a live resize", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    useCanvasStore.getState().addNode({
+      id: "t1",
+      kind: "text",
+      html: "<p>a</p>",
+      position: { x: 0, y: 0 },
+    });
+    const before = useCanvasStore.getState().past.length;
+    useCanvasStore.getState().beginLiveChange();
+    useCanvasStore.getState().resizeNodeLive("t1", { position: { x: 0, y: 0 }, width: 200 });
+    useCanvasStore.getState().resizeNodeLive("t1", { position: { x: 0, y: 0 }, width: 240 });
+    useCanvasStore.getState().endLiveChange();
+    expect(useCanvasStore.getState().past).toHaveLength(before + 1);
+    expect(useCanvasStore.getState().doc.nodes[0]).toMatchObject({ width: 240 });
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().doc.nodes[0]).not.toHaveProperty("width");
+  });
+
   it("validates edges, preserves handles, and prevents duplicate connections", () => {
     useCanvasStore.setState({ loadState: "ready" });
     useCanvasStore.getState().addNode(textNode("a"));

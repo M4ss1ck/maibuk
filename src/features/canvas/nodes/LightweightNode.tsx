@@ -102,16 +102,16 @@ export function LightweightNode({
 }: NodeProps<LightweightFlowNode>) {
   const node = data.node;
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
-  const resizeTextNode = useCanvasStore((state) => state.resizeTextNode);
+  const beginLiveChange = useCanvasStore((state) => state.beginLiveChange);
+  const resizeNodeLive = useCanvasStore((state) => state.resizeNodeLive);
+  const endLiveChange = useCanvasStore((state) => state.endLiveChange);
   const [editing, setEditing] = useState(false);
-  const safeHtml = useMemo(
-    () => (node.kind === "text" ? prepareStaticCanvasHtml(node.html) : ""),
-    [node],
-  );
+  const html = node.kind === "text" ? node.html : null;
+  const safeHtml = useMemo(() => (html === null ? "" : prepareStaticCanvasHtml(html)), [html]);
 
   if (node.kind !== "text") return null;
 
-  const resizable = selected && !editorReadOnly && !editing;
+  const resizable = !editorReadOnly && !editing;
 
   return (
     <div
@@ -129,13 +129,17 @@ export function LightweightNode({
             variant={ResizeControlVariant.Line}
             resizeDirection="horizontal"
             minWidth={160}
-            className="nodrag !z-0 !border-primary/50"
-            onResizeEnd={(_event, params) =>
-              resizeTextNode(node.id, {
+            className={`nodrag !z-0 !border-primary transition-opacity ${
+              selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
+            onResizeStart={beginLiveChange}
+            onResize={(_event, params) =>
+              resizeNodeLive(node.id, {
                 position: { x: params.x, y: params.y },
                 width: params.width,
               })
             }
+            onResizeEnd={endLiveChange}
           />
         ))}
       {editing ? (
