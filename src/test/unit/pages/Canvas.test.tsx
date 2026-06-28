@@ -164,6 +164,18 @@ describe("Canvas page", () => {
     expect(mocks.actions.updateTextNode).toHaveBeenCalledWith("node", { color: "" });
   });
 
+  it("selects a node on click", () => {
+    renderCanvas();
+    act(() => {
+      const onNodeClick = mocks.flowProps.current?.onNodeClick as (
+        event: Record<string, unknown>,
+        node: { id: string },
+      ) => void;
+      onNodeClick({}, { id: "node" });
+    });
+    expect(mocks.actions.selectNode).toHaveBeenCalledWith("node");
+  });
+
   it("selects an edge on click and clears selection on pane click", () => {
     renderCanvas();
     const stopPropagation = vi.fn();

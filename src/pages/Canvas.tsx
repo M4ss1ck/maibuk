@@ -298,6 +298,14 @@ function CanvasEditor() {
     [moveNodeLive],
   );
 
+  const handleNodeClick = useCallback(
+    (_event: ReactMouseEvent, node: Node) => {
+      if (interactivityLocked) return;
+      selectNode(node.id);
+    },
+    [interactivityLocked, selectNode],
+  );
+
   const handleEdgeClick = useCallback(
     (event: ReactMouseEvent<Element>, edge: Edge) => {
       if (interactivityLocked) return;
@@ -443,6 +451,7 @@ function CanvasEditor() {
           onNodesChange={handleNodeChanges}
           onEdgesChange={noopEdgesChange}
           onSelectionChange={handleSelectionChange}
+          onNodeClick={handleNodeClick}
           onEdgeClick={handleEdgeClick}
           onPaneClick={handlePaneClick}
           onConnect={handleConnect}
