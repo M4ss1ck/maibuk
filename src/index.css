@@ -285,6 +285,15 @@ option {
  * `.editor-content`, so they are mirrored here. These selectors deliberately
  * never touch resize controls, connection handles, portals, or dialogs.
  */
+/*
+ * While dragging a connection, reveal every node's handles so the available
+ * connection targets are visible. Handles are otherwise hover-only, and text
+ * nodes have no border to hint at where they can be connected.
+ */
+.canvas-connecting .react-flow__handle {
+  opacity: 1;
+}
+
 .canvas-node-content .editor-table {
   margin: 0.75em 0;
 }

@@ -178,6 +178,7 @@ function CanvasEditor() {
   const [noteQuery, setNoteQuery] = useState("");
   const [titleDraft, setTitleDraft] = useState("");
   const [edgeLabelDraft, setEdgeLabelDraft] = useState("");
+  const [connecting, setConnecting] = useState(false);
 
   useEffect(() => {
     void loadCanvas(canvasId);
@@ -282,6 +283,9 @@ function CanvasEditor() {
     },
     [addEdge],
   );
+
+  const handleConnectStart = useCallback(() => setConnecting(true), []);
+  const handleConnectEnd = useCallback(() => setConnecting(false), []);
 
   const handleNodeChanges = useCallback(
     (changes: NodeChange[]) => {
@@ -427,6 +431,7 @@ function CanvasEditor() {
       <div ref={surfaceRef} className="relative min-h-0 flex-1">
         <ReactFlow
           colorMode={theme}
+          className={connecting ? "canvas-connecting" : undefined}
           style={{ backgroundColor: "transparent" }}
           nodes={flowNodes as Node[]}
           edges={flowEdges as Edge[]}
@@ -438,6 +443,8 @@ function CanvasEditor() {
           onEdgeClick={handleEdgeClick}
           onPaneClick={handlePaneClick}
           onConnect={handleConnect}
+          onConnectStart={handleConnectStart}
+          onConnectEnd={handleConnectEnd}
           onNodeDragStart={beginLiveChange}
           onNodeDragStop={endLiveChange}
           onMoveEnd={handleMoveEnd}
