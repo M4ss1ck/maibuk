@@ -243,6 +243,7 @@
     "penColor": "Pen color",
     "nodeColor": "Node color",
     "defaultNodeColor": "Automatic text color",
+    "moreFormatting": "More rich-text tools",
     "fitView": "Fit view",
     "loading": "Loading canvas…",
     "saved": "Saved",

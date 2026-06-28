@@ -25,6 +25,14 @@ vi.mock("../../../../features/canvas/nodes/NodeFormatBubble", () => ({
   NodeFormatBubble: () => null,
 }));
 
+vi.mock("../../../../components/editor/FootnoteList", () => ({
+  FootnoteList: () => <div data-testid="footnote-list" />,
+}));
+
+vi.mock("../../../../components/editor/ImageContextMenu", () => ({
+  ImageContextMenu: () => null,
+}));
+
 const { LightweightNode } = await import(
   "../../../../features/canvas/nodes/LightweightNode"
 );

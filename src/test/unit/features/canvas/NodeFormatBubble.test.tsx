@@ -56,6 +56,18 @@ vi.mock("../../../../features/notes/store", () => ({
     selector({ notes: [] }),
 }));
 
+vi.mock("../../../../features/canvas/nodes/CanvasRichContentMenu", () => ({
+  CanvasRichContentMenu: ({
+    onOverlayOpenChange,
+  }: {
+    onOverlayOpenChange?: (open: boolean) => void;
+  }) => (
+    <button type="button" onClick={() => onOverlayOpenChange?.(true)}>
+      More tools
+    </button>
+  ),
+}));
+
 const { NodeFormatBubble } = await import(
   "../../../../features/canvas/nodes/NodeFormatBubble"
 );
@@ -166,6 +178,28 @@ describe("NodeFormatBubble", () => {
     expect(
       screen.queryByRole("button", { name: "Format selection" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("notifies the parent when the link dialog opens", async () => {
+    const editor = buildEditor();
+    const onOverlayOpenChange = vi.fn();
+    render(
+      <NodeFormatBubble editor={editor as never} onOverlayOpenChange={onOverlayOpenChange} />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Insert link" }));
+    expect(onOverlayOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it("notifies the parent when the rich-content menu reports an overlay", async () => {
+    const editor = buildEditor();
+    const onOverlayOpenChange = vi.fn();
+    render(
+      <NodeFormatBubble editor={editor as never} onOverlayOpenChange={onOverlayOpenChange} />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "More tools" }));
+    expect(onOverlayOpenChange).toHaveBeenCalledWith(true);
   });
 
   it("repositions when the editor selection changes", async () => {

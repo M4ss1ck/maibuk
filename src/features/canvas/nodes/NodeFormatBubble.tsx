@@ -19,17 +19,19 @@ import {
 } from "../../chapters/store";
 import { assignHeadingIds } from "../../links/heading-ids";
 import { useNoteStore } from "../../notes/store";
+import { CanvasRichContentMenu } from "./CanvasRichContentMenu";
 
 export function NodeFormatBubble({
   editor,
-  onLinkDialogOpenChange,
+  onOverlayOpenChange,
 }: {
   editor: Editor;
-  onLinkDialogOpenChange?: (open: boolean) => void;
+  onOverlayOpenChange?: (open: boolean) => void;
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [toolbarElement, setToolbarElement] = useState<HTMLDivElement | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [menuOverlayOpen, setMenuOverlayOpen] = useState(false);
   const [editorFocused, setEditorFocused] = useState(editor.isFocused);
   const [translateX, translateY, zoom] = useStore((flowState) => flowState.transform);
   const notes = useNoteStore((state) => state.notes);
@@ -104,8 +106,14 @@ export function NodeFormatBubble({
     void loadBooks();
   }, [loadBooks]);
 
+  useEffect(() => {
+    onOverlayOpenChange?.(linkDialogOpen || menuOverlayOpen);
+  }, [linkDialogOpen, menuOverlayOpen, onOverlayOpenChange]);
+
   const updatePosition = useCallback(() => {
-    if (!editorFocused) {
+    // Keep the toolbar anchored while a child overlay is open so its dialogs
+    // survive the editor losing focus.
+    if (!editorFocused && !menuOverlayOpen) {
       setPos(null);
       return;
     }
@@ -140,7 +148,7 @@ export function NodeFormatBubble({
         : Math.min(end.bottom + gap, bounds.bottom - toolbarHeight - gap);
 
     setPos({ top, left });
-  }, [editor, editorFocused, toolbarElement]);
+  }, [editor, editorFocused, menuOverlayOpen, toolbarElement]);
 
   useEffect(() => {
     updatePosition();
@@ -172,7 +180,7 @@ export function NodeFormatBubble({
 
   return (
     <>
-      {editorFocused &&
+      {(editorFocused || menuOverlayOpen) &&
         !linkDialogOpen &&
         pos &&
         createPortal(
@@ -187,11 +195,9 @@ export function NodeFormatBubble({
           >
             <FormattingButtons
               editor={editor}
-              onLinkClick={() => {
-                onLinkDialogOpenChange?.(true);
-                setLinkDialogOpen(true);
-              }}
+              onLinkClick={() => setLinkDialogOpen(true)}
             />
+            <CanvasRichContentMenu editor={editor} onOverlayOpenChange={setMenuOverlayOpen} />
           </div>,
           document.body,
         )}
@@ -200,7 +206,6 @@ export function NodeFormatBubble({
         isOpen={linkDialogOpen}
         onClose={() => {
           setLinkDialogOpen(false);
-          onLinkDialogOpenChange?.(false);
           editor.commands.focus();
         }}
         internalTargets={internalTargets}

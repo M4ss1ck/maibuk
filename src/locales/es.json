@@ -243,6 +243,7 @@
     "penColor": "Color del lápiz",
     "nodeColor": "Color del nodo",
     "defaultNodeColor": "Color de texto automático",
+    "moreFormatting": "Más herramientas de texto enriquecido",
     "fitView": "Ajustar vista",
     "loading": "Cargando lienzo…",
     "saved": "Guardado",

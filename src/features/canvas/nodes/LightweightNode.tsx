@@ -13,6 +13,8 @@ import type { CanvasFlowNodeData } from "../reactFlowAdapter";
 import type { LightweightCanvasNode } from "../types";
 import { createRichTextExtensions } from "../../../components/editor/extensions/createRichTextExtensions";
 import { MarkdownPasteDialog } from "../../../components/editor/MarkdownPasteDialog";
+import { FootnoteList } from "../../../components/editor/FootnoteList";
+import { ImageContextMenu } from "../../../components/editor/ImageContextMenu";
 import { CanvasNodeHandles } from "./CanvasNodeHandles";
 import { NodeFormatBubble } from "./NodeFormatBubble";
 
@@ -40,7 +42,7 @@ function ActiveNodeEditor({
   const updateTextNode = useCanvasStore((state) => state.updateTextNode);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
-  const linkDialogOpen = useRef(false);
+  const overlayOpen = useRef(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const editor = useEditor({
     extensions: createRichTextExtensions({
@@ -76,7 +78,7 @@ function ActiveNodeEditor({
           editor={editor}
           className="nodrag nopan max-w-none"
           onBlur={() => {
-            if (!linkDialogOpen.current && pendingMarkdownPaste === null) commit();
+            if (!overlayOpen.current && pendingMarkdownPaste === null) commit();
           }}
           onKeyDown={(event) => {
             event.stopPropagation();
@@ -86,13 +88,15 @@ function ActiveNodeEditor({
             }
           }}
         />
+        <FootnoteList editor={editor} startIndex={1} />
       </div>
       <NodeFormatBubble
         editor={editor}
-        onLinkDialogOpenChange={(open) => {
-          linkDialogOpen.current = open;
+        onOverlayOpenChange={(open) => {
+          overlayOpen.current = open;
         }}
       />
+      <ImageContextMenu editor={editor} />
       <MarkdownPasteDialog
         editor={editor}
         markdown={pendingMarkdownPaste}
