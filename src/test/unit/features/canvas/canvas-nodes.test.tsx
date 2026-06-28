@@ -228,6 +228,29 @@ describe("Canvas custom nodes", () => {
     expect(paragraphs[1]?.querySelector("br")).not.toBeNull();
   });
 
+  it("renders idle tables, images, and numbered footnotes for canvas CSS parity", () => {
+    render(
+      <LightweightNode
+        {...({
+          selected: false,
+          data: textNodeData({
+            html:
+              '<table class="editor-table"><tbody><tr><td>Cell</td></tr></tbody></table>' +
+              '<figure class="editor-image-figure"><img src="data:image/png;base64,AAA" alt="x"></figure>' +
+              '<p>Ref<sup data-footnote="" data-footnote-content="A note" data-footnote-id="a">*</sup></p>',
+          }),
+        } as Parameters<typeof LightweightNode>[0])}
+      />,
+    );
+
+    expect(document.querySelector(".canvas-node-content .editor-table")).not.toBeNull();
+    expect(document.querySelector(".canvas-node-content .editor-image-figure img")).not.toBeNull();
+    expect(document.querySelector("sup[data-footnote]")?.textContent).toBe("1");
+    expect(document.querySelector(".footnote-section .footnote-content")?.textContent).toBe(
+      "A note",
+    );
+  });
+
   it("shows a cached label and disables opening when the note is missing", () => {
     render(
       <MemoryRouter>

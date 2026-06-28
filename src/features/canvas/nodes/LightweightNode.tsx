@@ -6,7 +6,6 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import DOMPurify from "dompurify";
 import { useCanvasStore } from "../store";
 import { useSettingsStore } from "../../settings/store";
 import type { CanvasFlowNodeData } from "../reactFlowAdapter";
@@ -17,16 +16,7 @@ import { FootnoteList } from "../../../components/editor/FootnoteList";
 import { ImageContextMenu } from "../../../components/editor/ImageContextMenu";
 import { CanvasNodeHandles } from "./CanvasNodeHandles";
 import { NodeFormatBubble } from "./NodeFormatBubble";
-
-const CANVAS_LINK_URI =
-  /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|maibuk):|[^a-z]|[-a-z+.]+(?:[^-a-z+.:]|$))/i;
-
-function sanitizeNodeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ADD_ATTR: ["class"],
-    ALLOWED_URI_REGEXP: CANVAS_LINK_URI,
-  }).replace(/<p><\/p>/g, "<p><br></p>");
-}
+import { prepareStaticCanvasHtml } from "./staticRichText";
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
 
@@ -115,7 +105,7 @@ export function LightweightNode({
   const resizeTextNode = useCanvasStore((state) => state.resizeTextNode);
   const [editing, setEditing] = useState(false);
   const safeHtml = useMemo(
-    () => (node.kind === "text" ? sanitizeNodeHtml(node.html) : ""),
+    () => (node.kind === "text" ? prepareStaticCanvasHtml(node.html) : ""),
     [node],
   );
 

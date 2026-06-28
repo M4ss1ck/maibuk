@@ -278,6 +278,38 @@ option {
   text-decoration: underline;
 }
 
+/*
+ * Rich-content parity for idle and active canvas nodes. Tables, images,
+ * footnotes, and scene breaks share most styling with the main editor through
+ * global rules; the table cell borders/headers below are otherwise scoped to
+ * `.editor-content`, so they are mirrored here. These selectors deliberately
+ * never touch resize controls, connection handles, portals, or dialogs.
+ */
+.canvas-node-content .editor-table {
+  margin: 0.75em 0;
+}
+
+.canvas-node-content table th,
+.canvas-node-content table td {
+  border: 1px solid var(--color-table-border);
+  padding: 0 0.5em;
+  vertical-align: top;
+  text-align: left;
+}
+
+.canvas-node-content table th {
+  background-color: var(--color-table-header);
+  font-weight: 600;
+}
+
+.canvas-node-content .editor-image-figure {
+  margin: 0.5em 0;
+}
+
+.canvas-node-content .footnote-section {
+  margin-top: 1.5rem;
+}
+
 /* Tiptap editor styles */
 .editor-content p {
   margin: 1em 0;

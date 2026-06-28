@@ -124,6 +124,7 @@ export default defineConfig(() => ({
         // Phase 14: Canvas rich-text parity
         "src/components/editor/extensions/createRichTextExtensions.ts",
         "src/components/editor/plain-text-html.ts",
+        "src/features/canvas/nodes/staticRichText.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {
