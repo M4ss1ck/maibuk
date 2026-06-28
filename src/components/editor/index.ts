@@ -1,6 +1,7 @@
 export { Editor } from "./Editor";
 export { EditorToolbar } from "./EditorToolbar";
 export { SelectionToolbar } from "./SelectionToolbar";
+export { FormattingButtons } from "./FormattingButtons";
 export { ChapterList } from "./ChapterList";
 export { FindReplace } from "./FindReplace";
 export { ImageInsertDialog } from "./ImageInsertDialog";

@@ -2,21 +2,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
-import { ToolbarButton, Divider } from "./ToolbarButton";
 import { useModalStore } from "../ui/modal-store";
-import { useTranslation } from "react-i18next";
-import {
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  Highlighter,
-  Link,
-  Code,
-  Heading1,
-  Heading2,
-  Heading3,
-} from "lucide-react";
+import { FormattingButtons } from "./FormattingButtons";
 
 interface SelectionToolbarProps {
   editor: Editor;
@@ -29,23 +16,12 @@ interface Position {
 }
 
 export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps) {
-  const { t } = useTranslation();
   const [position, setPosition] = useState<Position | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const editorState = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
-      isBold: e.isActive("bold"),
-      isItalic: e.isActive("italic"),
-      isUnderline: e.isActive("underline"),
-      isStrike: e.isActive("strike"),
-      isHighlight: e.isActive("highlight"),
-      isLink: e.isActive("link"),
-      isCode: e.isActive("code"),
-      isH1: e.isActive("heading", { level: 1 }),
-      isH2: e.isActive("heading", { level: 2 }),
-      isH3: e.isActive("heading", { level: 3 }),
       hasSelection: !e.state.selection.empty && !(e.state.selection instanceof NodeSelection),
     }),
   });
@@ -126,89 +102,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
       className="fixed z-50 flex items-center gap-0.5 px-1.5 py-1 bg-card border border-border rounded-lg shadow-lg selection-toolbar-enter"
       style={{ top: `${position.top}px`, left: `${position.left}px` }}
     >
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        isActive={editorState.isBold}
-        title={t("editor.bold")}
-      >
-        <Bold className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        isActive={editorState.isItalic}
-        title={t("editor.italic")}
-      >
-        <Italic className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
-        isActive={editorState.isUnderline}
-        title={t("editor.underline")}
-      >
-        <Underline className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-        isActive={editorState.isStrike}
-        title={t("editor.strikethrough")}
-      >
-        <Strikethrough className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleHighlight({ color: "#FFFF00" }).run()}
-        isActive={editorState.isHighlight}
-        title={t("editor.highlight")}
-      >
-        <Highlighter className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <Divider />
-
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        isActive={editorState.isH1}
-        title={t("editor.heading1")}
-      >
-        <Heading1 className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        isActive={editorState.isH2}
-        title={t("editor.heading2")}
-      >
-        <Heading2 className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        isActive={editorState.isH3}
-        title={t("editor.heading3")}
-      >
-        <Heading3 className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <Divider />
-
-      <ToolbarButton
-        onClick={onLinkClick}
-        isActive={editorState.isLink}
-        title={t("editor.insertLinkShortcut")}
-      >
-        <Link className="w-3.5 h-3.5" />
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={() => editor.chain().focus().toggleCode().run()}
-        isActive={editorState.isCode}
-        title={t("editor.code")}
-      >
-        <Code className="w-3.5 h-3.5" />
-      </ToolbarButton>
+      <FormattingButtons editor={editor} onLinkClick={onLinkClick} />
     </div>
   );
 }
