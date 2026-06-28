@@ -50,7 +50,7 @@ export function PagePaddingControl({
       <button
         type="button"
         onClick={() => setIsCustom((prev) => !prev)}
-        className="self-start text-sm text-primary hover:underline"
+        className="px-2 py-1 text-sm rounded hover:bg-muted self-start"
       >
         {isCustom ? t("editor.simplePadding") : t("editor.customizePadding")}
       </button>
