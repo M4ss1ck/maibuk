@@ -7,6 +7,13 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
+// The shared rich-text factory includes the worker-backed spell-check extension,
+// which jsdom cannot instantiate. Replace it with a no-op for these DOM tests.
+vi.mock("../../../../components/editor/extensions/SpellCheck", async () => {
+  const { Extension } = await vi.importActual<typeof import("@tiptap/core")>("@tiptap/core");
+  return { SpellCheck: Extension.create({ name: "mockSpellCheck" }) };
+});
+
 describe("QuickNoteEditor", () => {
   it("renders a writing canvas with the formatting toolbar hidden by default", async () => {
     const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);

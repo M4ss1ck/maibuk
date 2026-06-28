@@ -1,23 +1,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import type { Editor as TiptapEditor, Extensions } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
-import Underline from "@tiptap/extension-underline";
-import TextAlign from "@tiptap/extension-text-align";
-import { CustomHighlight } from "./extensions/CustomHighlight";
-import Typography from "@tiptap/extension-typography";
-import { TextStyle } from "@tiptap/extension-text-style";
-import { FontFamily } from "@tiptap/extension-font-family";
-import { Color } from "@tiptap/extension-color";
-import Subscript from "@tiptap/extension-subscript";
-import Superscript from "@tiptap/extension-superscript";
-import { Table } from "@tiptap/extension-table";
-import { TableRow } from "@tiptap/extension-table-row";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TableHeader } from "@tiptap/extension-table-header";
-import { ImageFigure } from "./extensions/ImageFigure";
-import { Link } from "@tiptap/extension-link";
 import {
   useEffect,
   useCallback,
@@ -32,19 +16,9 @@ import { LinkClickHandler } from "./LinkClickHandler";
 import { LinkDialog } from "./LinkDialog";
 import { ImageContextMenu } from "./ImageContextMenu";
 import { FootnoteList } from "./FootnoteList";
-import { SceneBreak } from "./extensions/SceneBreak";
-import { FontSize } from "./extensions/FontSize";
-import { LineHeight } from "./extensions/LineHeight";
-import { Indent } from "./extensions/Indent";
-import { PasteHandler } from "./extensions/PasteHandler";
-import { CopyHandler } from "./extensions/CopyHandler";
-import { CodeBlockWithCopy } from "./extensions/CodeBlock";
-import { SmartItalic } from "./extensions/SmartItalic";
-import { SpellCheck } from "./extensions/SpellCheck";
 import { SearchReplace } from "./extensions/SearchReplace";
-import { Footnote } from "./extensions/Footnote";
 import { MetricsObserver } from "./extensions/MetricsObserver";
-import { HeadingId } from "./extensions/HeadingId";
+import { createRichTextExtensions } from "./extensions/createRichTextExtensions";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../features/settings/store";
 import type { Language } from "../../features/settings/types";
@@ -164,71 +138,16 @@ export function Editor({
   const appliedContentRef = useRef(content);
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3],
-        },
-        // Disable extensions we configure separately
-        link: false,
-        underline: false,
-        codeBlock: false,
-        italic: false,
+      ...createRichTextExtensions({
+        onMarkdownPaste: handleMarkdownPaste,
+        footnoteStartIndex,
+        spellCheck: { enabled: spellCheckEnabled, language: activeSpellCheckLanguage },
       }),
-      CodeBlockWithCopy,
-      SmartItalic,
-      HeadingId,
       Placeholder.configure({
         placeholder,
         emptyEditorClass: "is-editor-empty",
       }),
       CharacterCount,
-      Underline,
-      TextAlign.configure({
-        types: ["heading", "paragraph"],
-      }),
-      CustomHighlight.configure({
-        multicolor: true,
-      }),
-      Typography,
-      TextStyle,
-      FontFamily,
-      FontSize,
-      LineHeight,
-      Color,
-      Subscript,
-      Superscript,
-      Table.configure({
-        resizable: true,
-        HTMLAttributes: {
-          class: "editor-table",
-        },
-      }),
-      TableRow,
-      TableCell,
-      TableHeader,
-      ImageFigure.configure({
-        allowBase64: true,
-      }),
-      Link.configure({
-        openOnClick: false,
-        protocols: ["maibuk"],
-        HTMLAttributes: {
-          class: "editor-link",
-        },
-      }),
-      SceneBreak,
-      Indent,
-      PasteHandler.configure({
-        onMarkdownPaste: handleMarkdownPaste,
-      }),
-      CopyHandler,
-      Footnote.configure({
-        startIndex: footnoteStartIndex,
-      }),
-      SpellCheck.configure({
-        enabled: spellCheckEnabled,
-        language: activeSpellCheckLanguage,
-      }),
       SearchReplace,
       MetricsObserver.configure({
         workId: bookId,

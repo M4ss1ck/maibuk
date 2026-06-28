@@ -121,6 +121,8 @@ export default defineConfig(() => ({
         "src/features/canvas/serialization.ts",
         "src/features/canvas/reactFlowAdapter.ts",
         "src/features/canvas/store.ts",
+        // Phase 14: Canvas rich-text parity
+        "src/components/editor/extensions/createRichTextExtensions.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

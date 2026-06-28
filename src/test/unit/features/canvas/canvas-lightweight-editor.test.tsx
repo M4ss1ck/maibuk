@@ -109,4 +109,45 @@ describe("LightweightNode editor lifecycle", () => {
       color: "#ef4444",
     });
   });
+
+  it("builds the editor from the shared rich-text factory with a markdown callback", async () => {
+    mocks.useEditor.mockReturnValue({
+      commands: { focus: vi.fn() },
+      getHTML: vi.fn(() => "<p>Idea</p>"),
+    });
+    render(
+      <LightweightNode
+        {...({
+          selected: false,
+          data: {
+            node: {
+              id: "node",
+              kind: "text",
+              html: "<p>Idea</p>",
+              position: { x: 0, y: 0 },
+            },
+            canvasId: "canvas",
+            canvasTitle: "Map",
+            connectedSides: {
+              top: { connected: false, incoming: false, outgoing: false },
+              right: { connected: false, incoming: false, outgoing: false },
+              bottom: { connected: false, incoming: false, outgoing: false },
+              left: { connected: false, incoming: false, outgoing: false },
+            },
+          },
+        } as Parameters<typeof LightweightNode>[0])}
+      />,
+    );
+
+    fireEvent.doubleClick(screen.getByText("Idea"));
+    await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
+    const extensions = mocks.useEditor.mock.calls[0][0].extensions as Array<{
+      name: string;
+      options: Record<string, unknown>;
+    }>;
+    const names = extensions.map((extension) => extension.name);
+    expect(names).toEqual(expect.arrayContaining(["table", "image", "footnote", "pasteHandler"]));
+    const pasteHandler = extensions.find((extension) => extension.name === "pasteHandler");
+    expect(typeof pasteHandler?.options.onMarkdownPaste).toBe("function");
+  });
 });

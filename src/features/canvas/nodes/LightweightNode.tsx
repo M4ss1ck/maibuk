@@ -8,9 +8,10 @@ import {
 import { EditorContent, useEditor } from "@tiptap/react";
 import DOMPurify from "dompurify";
 import { useCanvasStore } from "../store";
+import { useSettingsStore } from "../../settings/store";
 import type { CanvasFlowNodeData } from "../reactFlowAdapter";
 import type { LightweightCanvasNode } from "../types";
-import { nodeEditorExtensions } from "./nodeEditorExtensions";
+import { createRichTextExtensions } from "../../../components/editor/extensions/createRichTextExtensions";
 import { CanvasNodeHandles } from "./CanvasNodeHandles";
 import { NodeFormatBubble } from "./NodeFormatBubble";
 
@@ -36,9 +37,16 @@ function ActiveNodeEditor({
   onCancel: () => void;
 }) {
   const updateTextNode = useCanvasStore((state) => state.updateTextNode);
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
+  const language = useSettingsStore((state) => state.language);
   const linkDialogOpen = useRef(false);
+  const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const editor = useEditor({
-    extensions: nodeEditorExtensions,
+    extensions: createRichTextExtensions({
+      onMarkdownPaste: setPendingMarkdownPaste,
+      footnoteStartIndex: 1,
+      spellCheck: { enabled: spellCheckEnabled, language },
+    }),
     content: node.html,
     editable: true,
     editorProps: {
@@ -67,7 +75,7 @@ function ActiveNodeEditor({
           editor={editor}
           className="nodrag nopan max-w-none"
           onBlur={() => {
-            if (!linkDialogOpen.current) commit();
+            if (!linkDialogOpen.current && pendingMarkdownPaste === null) commit();
           }}
           onKeyDown={(event) => {
             event.stopPropagation();

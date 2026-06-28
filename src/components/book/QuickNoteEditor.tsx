@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { SmartItalic } from "../editor/extensions/SmartItalic";
+import { createRichTextExtensions } from "../editor/extensions/createRichTextExtensions";
+import { useSettingsStore } from "../../features/settings/store";
 import {
   Bold,
   Italic,
@@ -26,12 +25,14 @@ interface QuickNoteEditorProps {
 export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps) {
   const { t } = useTranslation();
   const [showToolbar, setShowToolbar] = useState(false);
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
+  const language = useSettingsStore((state) => state.language);
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ underline: false, italic: false }),
-      SmartItalic,
-      Underline,
+      ...createRichTextExtensions({
+        spellCheck: { enabled: spellCheckEnabled, language },
+      }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Placeholder.configure({ placeholder: placeholder ?? "" }),
