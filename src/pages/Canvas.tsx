@@ -316,9 +316,8 @@ function CanvasEditor() {
     ({ nodes }: OnSelectionChangeParams) => {
       if (interactivityLocked) return;
       if (nodes[0]) selectNode(nodes[0].id);
-      else if (selectedNodeId) selectNode(null);
     },
-    [interactivityLocked, selectedNodeId, selectNode],
+    [interactivityLocked, selectNode],
   );
 
   const handleMoveEnd = useCallback(
