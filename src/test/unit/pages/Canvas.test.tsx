@@ -26,11 +26,17 @@ const mocks = vi.hoisted(() => {
     setToolMode: vi.fn(),
     setPenWidth: vi.fn(),
     setPenColor: vi.fn(),
+    toggleInteractivityLocked: vi.fn(),
     addStroke: vi.fn(),
     removeStroke: vi.fn(),
   };
+  const flowActions = {
+    fitView: vi.fn(),
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+  };
   const state: Record<string, unknown> = {};
-  return { actions, state, flowProps: { current: null as Record<string, unknown> | null } };
+  return { actions, flowActions, state, flowProps: { current: null as Record<string, unknown> | null } };
 });
 
 vi.mock("../../../features/canvas/store", () => {
@@ -58,10 +64,10 @@ vi.mock("@xyflow/react", () => ({
   Background: () => null,
   Controls: () => null,
   useReactFlow: () => ({
+    ...mocks.flowActions,
     screenToFlowPosition: (point: { x: number; y: number }) => point,
     flowToScreenPosition: (point: { x: number; y: number }) => point,
     getZoom: () => 1,
-    fitView: vi.fn(),
   }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -101,6 +107,7 @@ function readyState() {
     toolMode: "select",
     penWidth: 3,
     penColor: "#ef4444",
+    interactivityLocked: false,
   });
 }
 
@@ -195,6 +202,33 @@ describe("Canvas page", () => {
     fireEvent.click(screen.getByRole("switch"));
     expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { label: "New label" });
     expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { directed: true });
+  });
+
+  it("zooms and fits the view from the floating toolbar", () => {
+    renderCanvas();
+    fireEvent.click(screen.getByRole("button", { name: "canvas.zoomIn" }));
+    fireEvent.click(screen.getByRole("button", { name: "canvas.zoomOut" }));
+    fireEvent.click(screen.getByRole("button", { name: "canvas.fitView" }));
+    expect(mocks.flowActions.zoomIn).toHaveBeenCalledTimes(1);
+    expect(mocks.flowActions.zoomOut).toHaveBeenCalledTimes(1);
+    expect(mocks.flowActions.fitView).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables React Flow interactions when the canvas is locked", () => {
+    Object.assign(mocks.state, { interactivityLocked: true });
+    renderCanvas();
+    expect(mocks.flowProps.current?.panOnDrag).toBe(false);
+    expect(mocks.flowProps.current?.nodesDraggable).toBe(false);
+    expect(mocks.flowProps.current?.elementsSelectable).toBe(false);
+    expect(mocks.flowProps.current?.zoomOnScroll).toBe(false);
+    expect(mocks.flowProps.current?.zoomOnPinch).toBe(false);
+    expect(mocks.flowProps.current?.zoomOnDoubleClick).toBe(false);
+  });
+
+  it("toggles canvas interactivity lock from the toolbar", () => {
+    renderCanvas();
+    fireEvent.click(screen.getByRole("button", { name: "canvas.lockInteractivity" }));
+    expect(mocks.actions.toggleInteractivityLocked).toHaveBeenCalledTimes(1);
   });
 
   it("renders recovery UI instead of React Flow for a corrupt document", () => {

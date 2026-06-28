@@ -94,6 +94,7 @@ function editorResetState() {
     past: [],
     future: [],
     liveBaseDoc: null,
+    interactivityLocked: false,
   };
 }
 
@@ -122,11 +123,13 @@ export interface CanvasStoreState {
   toolMode: "select" | "pen" | "eraser";
   penWidth: number;
   penColor: string;
+  interactivityLocked: boolean;
   addStroke: (stroke: CanvasStroke) => void;
   removeStroke: (id: string) => void;
   setToolMode: (mode: "select" | "pen" | "eraser") => void;
   setPenWidth: (width: number) => void;
   setPenColor: (color: string) => void;
+  toggleInteractivityLocked: () => void;
   loadCanvases: () => Promise<void>;
   createCanvas: (input?: CreateCanvasInput) => Promise<Canvas>;
   deleteCanvas: (id: string) => Promise<void>;
@@ -172,6 +175,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   toolMode: "select",
   penWidth: 3,
   penColor: "#ef4444",
+  interactivityLocked: false,
 
   loadCanvases: async () => {
     set({ galleryLoading: true, galleryError: null });
@@ -573,6 +577,8 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   setToolMode: (toolMode) => set({ toolMode }),
   setPenWidth: (penWidth) => set({ penWidth }),
   setPenColor: (penColor) => set({ penColor }),
+  toggleInteractivityLocked: () =>
+    set((state) => ({ interactivityLocked: !state.interactivityLocked })),
 
   updateEdge: (id, patch) => {
     const state = get();

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
-  Controls,
   ConnectionMode,
   ReactFlow,
   ReactFlowProvider,
@@ -29,6 +28,8 @@ import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
 import { CanvasToolPanel } from "../features/canvas/CanvasToolPanel";
 import { EdgeInspectorCard } from "../features/canvas/EdgeInspectorCard";
+import { NodeColorPanel } from "../features/canvas/NodeColorPanel";
+import { PenSettingsPanel } from "../features/canvas/PenSettingsPanel";
 import { CanvasDrawingLayer } from "../features/canvas/drawing/CanvasDrawingLayer";
 import { DrawingCaptureOverlay } from "../features/canvas/drawing/DrawingCaptureOverlay";
 import { nodeTypes } from "../features/canvas/nodes";
@@ -149,6 +150,7 @@ function CanvasEditor() {
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
   const selectedEdgeId = useCanvasStore((state) => state.selectedEdgeId);
   const toolMode = useCanvasStore((state) => state.toolMode);
+  const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
   const loadCanvas = useCanvasStore((state) => state.loadCanvas);
   const closeCanvas = useCanvasStore((state) => state.closeCanvas);
   const persistCanvas = useCanvasStore((state) => state.persistCanvas);
@@ -201,6 +203,7 @@ function CanvasEditor() {
   }, [current?.id, current?.title]);
 
   const selectedEdge = doc.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
+  const selectedNode = doc.nodes.find((node) => node.id === selectedNodeId) ?? null;
 
   useEffect(() => {
     setEdgeLabelDraft(selectedEdge?.label ?? "");
@@ -439,22 +442,30 @@ function CanvasEditor() {
           onNodeDragStop={endLiveChange}
           onMoveEnd={handleMoveEnd}
           deleteKeyCode={null}
-          panOnDrag={toolMode === "select"}
-          nodesDraggable={toolMode === "select"}
-          elementsSelectable={toolMode === "select"}
+          panOnDrag={!interactivityLocked && toolMode === "select"}
+          nodesDraggable={!interactivityLocked && toolMode === "select"}
+          elementsSelectable={!interactivityLocked && toolMode === "select"}
+          zoomOnScroll={!interactivityLocked}
+          zoomOnPinch={!interactivityLocked}
+          zoomOnDoubleClick={!interactivityLocked}
           defaultViewport={doc.viewport}
           fitView={!hasMeaningfulViewport(doc) && doc.nodes.length > 0}
         >
           <CanvasBackground />
           <CanvasDrawingLayer />
-          <Controls />
         </ReactFlow>
         <DrawingCaptureOverlay surfaceRef={surfaceRef} />
-        <CanvasToolPanel
-          onAddText={handleAddTextNode}
-          onAddNoteRef={() => setNotePickerOpen(true)}
-          onFitView={() => reactFlow.fitView()}
-        />
+        <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-2">
+          <CanvasToolPanel
+            onAddText={handleAddTextNode}
+            onAddNoteRef={() => setNotePickerOpen(true)}
+            onZoomIn={() => reactFlow.zoomIn()}
+            onZoomOut={() => reactFlow.zoomOut()}
+            onFitView={() => reactFlow.fitView()}
+          />
+          {toolMode === "pen" && <PenSettingsPanel />}
+          {selectedNode?.kind === "text" && <NodeColorPanel />}
+        </div>
         {selectedEdge && (
           <EdgeInspectorCard
             edge={selectedEdge}

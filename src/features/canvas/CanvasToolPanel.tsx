@@ -1,48 +1,70 @@
+import { ButtonHTMLAttributes, forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  MousePointer2,
-  Pencil,
-  Eraser,
-  Square,
   ArrowUpRight,
   Circle,
   FilePlus2,
   Link2,
+  Lock,
   Maximize,
+  MousePointer2,
+  Pencil,
+  Eraser,
+  Square,
+  Unlock,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
-import { Button } from "../../components/ui/Button";
 import { useCanvasStore } from "./store";
 
-const NODE_COLORS = [
-  "#ef4444",
-  "#f59e0b",
-  "#10b981",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-];
+interface ToolbarButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  active?: boolean;
+}
+
+const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
+  ({ className = "", active = false, children, ...props }, ref) => (
+    <button
+      ref={ref}
+      type="button"
+      className={`inline-flex size-7 items-center justify-center rounded-md border text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-40 ${
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-card hover:bg-muted"
+      } ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  ),
+);
+ToolbarButton.displayName = "ToolbarButton";
+
+function ToolbarGroup({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-1">{children}</div>;
+}
+
+function ToolbarDivider() {
+  return <div className="h-px w-full bg-border" />;
+}
 
 export function CanvasToolPanel({
   onAddText,
   onAddNoteRef,
+  onZoomIn,
+  onZoomOut,
   onFitView,
 }: {
   onAddText: () => void;
   onAddNoteRef: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
   onFitView: () => void;
 }) {
   const { t } = useTranslation();
   const toolMode = useCanvasStore((state) => state.toolMode);
   const setToolMode = useCanvasStore((state) => state.setToolMode);
-  const penWidth = useCanvasStore((state) => state.penWidth);
-  const setPenWidth = useCanvasStore((state) => state.setPenWidth);
-  const penColor = useCanvasStore((state) => state.penColor);
-  const setPenColor = useCanvasStore((state) => state.setPenColor);
-  const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
-  const selectedNode = useCanvasStore((state) =>
-    state.doc.nodes.find((node) => node.id === state.selectedNodeId),
-  );
-  const updateTextNode = useCanvasStore((state) => state.updateTextNode);
+  const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
+  const toggleInteractivityLocked = useCanvasStore((state) => state.toggleInteractivityLocked);
 
   const tools = [
     { mode: "select" as const, icon: MousePointer2, label: t("canvas.toolSelect") },
@@ -56,110 +78,77 @@ export function CanvasToolPanel({
   ];
 
   return (
-    <div className="absolute right-4 top-4 z-20 flex w-56 flex-col gap-3 rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur">
-      <div className="flex flex-wrap items-center gap-1">
+    <div className="flex w-9 flex-col gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-lg backdrop-blur">
+      <ToolbarGroup>
         {tools.map(({ mode, icon: Icon, label }) => (
-          <Button
+          <ToolbarButton
             key={mode}
-            size="sm"
-            variant={toolMode === mode ? "primary" : "ghost"}
+            active={toolMode === mode}
             onClick={() => setToolMode(mode)}
             aria-label={label}
             title={label}
           >
             <Icon className="size-4" aria-hidden="true" />
-          </Button>
+          </ToolbarButton>
         ))}
+      </ToolbarGroup>
+
+      <ToolbarDivider />
+
+      <ToolbarGroup>
         {comingSoon.map(({ icon: Icon, label }) => (
-          <Button
+          <ToolbarButton
             key={label}
-            size="sm"
-            variant="ghost"
             disabled
             aria-label={label}
             title={`${label} — ${t("canvas.comingSoon")}`}
           >
             <Icon className="size-4" aria-hidden="true" />
-          </Button>
+          </ToolbarButton>
         ))}
-      </div>
+      </ToolbarGroup>
 
-      {toolMode === "pen" && (
-        <div className="flex flex-col gap-2">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            {t("canvas.penWidth")}
-            <input
-              type="range"
-              min={1}
-              max={20}
-              value={penWidth}
-              onChange={(event) => setPenWidth(Number(event.target.value))}
-              className="flex-1"
-            />
-          </label>
-          <div className="flex items-center gap-1">
-            {NODE_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                aria-label={`${t("canvas.penColor")} ${color}`}
-                onClick={() => setPenColor(color)}
-                className={`size-5 rounded-full border ${
-                  penColor === color ? "ring-2 ring-primary" : "border-border"
-                }`}
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <ToolbarDivider />
 
-      <div className="flex flex-col gap-1">
-        <Button size="sm" onClick={onAddText}>
+      <ToolbarGroup>
+        <ToolbarButton onClick={onAddText} aria-label={t("canvas.addTextNode")} title={t("canvas.addTextNode")}>
           <FilePlus2 className="size-4" aria-hidden="true" />
-          {t("canvas.addTextNode")}
-        </Button>
-        <Button size="sm" variant="secondary" onClick={onAddNoteRef}>
+        </ToolbarButton>
+        <ToolbarButton onClick={onAddNoteRef} aria-label={t("canvas.addNoteRef")} title={t("canvas.addNoteRef")}>
           <Link2 className="size-4" aria-hidden="true" />
-          {t("canvas.addNoteRef")}
-        </Button>
-      </div>
+        </ToolbarButton>
+      </ToolbarGroup>
 
-      {selectedNode?.kind === "text" && (
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">{t("canvas.nodeColor")}</span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label={t("canvas.defaultNodeColor")}
-              onClick={() => selectedNodeId && updateTextNode(selectedNodeId, { color: "" })}
-              className="rounded-full"
-            >
-              <span className="flex size-5 overflow-hidden rounded-full border border-border">
-                <span className="h-full w-1/2 bg-black" />
-                <span className="h-full w-1/2 bg-white" />
-              </span>
-            </button>
-            {NODE_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                aria-label={`${t("canvas.nodeColor")} ${color}`}
-                onClick={() =>
-                  selectedNodeId && updateTextNode(selectedNodeId, { color })
-                }
-                className="size-5 rounded-full border border-border"
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <ToolbarDivider />
 
-      <Button size="sm" variant="ghost" onClick={onFitView} className="justify-start">
-        <Maximize className="size-4" aria-hidden="true" />
-        {t("canvas.fitView")}
-      </Button>
+      <ToolbarGroup>
+        <ToolbarButton onClick={onZoomIn} aria-label={t("canvas.zoomIn")} title={t("canvas.zoomIn")}>
+          <ZoomIn className="size-4" aria-hidden="true" />
+        </ToolbarButton>
+        <ToolbarButton onClick={onZoomOut} aria-label={t("canvas.zoomOut")} title={t("canvas.zoomOut")}>
+          <ZoomOut className="size-4" aria-hidden="true" />
+        </ToolbarButton>
+        <ToolbarButton onClick={onFitView} aria-label={t("canvas.fitView")} title={t("canvas.fitView")}>
+          <Maximize className="size-4" aria-hidden="true" />
+        </ToolbarButton>
+      </ToolbarGroup>
+
+      <ToolbarDivider />
+
+      <ToolbarGroup>
+        <ToolbarButton
+          active={interactivityLocked}
+          onClick={toggleInteractivityLocked}
+          aria-label={interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")}
+          title={interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")}
+        >
+          {interactivityLocked ? (
+            <Lock className="size-4" aria-hidden="true" />
+          ) : (
+            <Unlock className="size-4" aria-hidden="true" />
+          )}
+        </ToolbarButton>
+      </ToolbarGroup>
     </div>
   );
 }

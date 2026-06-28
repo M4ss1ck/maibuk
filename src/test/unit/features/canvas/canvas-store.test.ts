@@ -176,6 +176,16 @@ describe("useCanvasStore", () => {
     expect(s.revision).toBe(before);
   });
 
+  it("toggles canvas interactivity lock and resets it on close", () => {
+    useCanvasStore.getState().toggleInteractivityLocked();
+    expect(useCanvasStore.getState().interactivityLocked).toBe(true);
+    useCanvasStore.getState().toggleInteractivityLocked();
+    expect(useCanvasStore.getState().interactivityLocked).toBe(false);
+    useCanvasStore.getState().toggleInteractivityLocked();
+    useCanvasStore.getState().closeCanvas();
+    expect(useCanvasStore.getState().interactivityLocked).toBe(false);
+  });
+
   it("updates a text node's html", () => {
     const store = useCanvasStore.getState();
     store.addNode({
