@@ -25,6 +25,18 @@ describe("Canvas React Flow adapter", () => {
     });
   });
 
+  it("passes a persisted width as a node style and omits style otherwise", () => {
+    const nodes = toFlowNodes(
+      [
+        { id: "sized", kind: "text", html: "<p>a</p>", position: { x: 0, y: 0 }, width: 360 },
+        { id: "auto", kind: "text", html: "<p>b</p>", position: { x: 0, y: 0 } },
+      ],
+      { selectedNodeId: null, canvasId: "canvas", canvasTitle: "Map", edges: [] },
+    );
+    expect(nodes[0].style).toEqual({ width: 360 });
+    expect(nodes[1].style).toBeUndefined();
+  });
+
   it("preserves handle IDs when creating a domain edge", () => {
     expect(
       fromConnection({ source: "a", target: "b", sourceHandle: "out", targetHandle: "in" }),

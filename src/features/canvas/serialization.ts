@@ -31,6 +31,10 @@ function normalizedOptionalString(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizedOptionalWidth(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 160 ? value : undefined;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -116,6 +120,7 @@ function normalizeNode(node: CanvasNode): CanvasNode {
       position: { ...node.position },
       html: node.html,
       color: normalizedOptionalString(node.color),
+      width: normalizedOptionalWidth(node.width),
     };
   }
 

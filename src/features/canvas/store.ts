@@ -1,7 +1,12 @@
 import { create } from "zustand";
 import { getDatabase } from "../../lib/db";
 import { recordTombstone } from "../sync/tombstones";
-import { parseCanvasDoc, serializeCanvasDoc, type CanvasDocLoadError } from "./serialization";
+import {
+  isFinitePosition,
+  parseCanvasDoc,
+  serializeCanvasDoc,
+  type CanvasDocLoadError,
+} from "./serialization";
 import {
   createDefaultCanvasDoc,
   type Canvas,
@@ -15,6 +20,7 @@ import {
   type ReorderCanvasItem,
   type UpdateCanvasInput,
   type UpdateEdgePatch,
+  type ResizeTextNodeInput,
   type UpdateNoteRefNodePatch,
   type UpdateTextNodePatch,
 } from "./types";
@@ -138,6 +144,7 @@ export interface CanvasStoreState {
   endLiveChange: () => void;
   addNode: (node: CanvasNode) => void;
   updateTextNode: (id: string, patch: UpdateTextNodePatch) => void;
+  resizeTextNode: (id: string, input: ResizeTextNodeInput) => void;
   updateNoteRefNode: (id: string, patch: UpdateNoteRefNodePatch) => void;
   removeNode: (id: string) => void;
   addEdge: (edge: CanvasEdge) => void;
@@ -425,6 +432,25 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       ...state.doc,
       nodes: state.doc.nodes.map((candidate) =>
         candidate.id === id ? { ...node, ...patch, color } : candidate,
+      ),
+    });
+  },
+
+  resizeTextNode: (id, input) => {
+    const state = get();
+    if (state.editorReadOnly) return;
+    const node = state.doc.nodes.find((candidate) => candidate.id === id);
+    if (!node || node.kind !== "text") return;
+    if (!isFinitePosition(input.position)) return;
+    if (typeof input.width !== "number" || !Number.isFinite(input.width) || input.width < 160) {
+      return;
+    }
+    get().commit({
+      ...state.doc,
+      nodes: state.doc.nodes.map((candidate) =>
+        candidate.id === id
+          ? { ...node, position: { ...input.position }, width: input.width }
+          : candidate,
       ),
     });
   },

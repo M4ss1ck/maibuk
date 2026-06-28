@@ -103,6 +103,33 @@ describe("canvas document serialization", () => {
   it("uses the canonical default JSON", () => {
     expect(serializeCanvasDoc(createDefaultCanvasDoc())).toBe(DEFAULT_CANVAS_DOC_JSON);
   });
+
+  it("keeps valid text-node widths and drops invalid ones", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: 2,
+      nodes: [
+        { id: "valid", kind: "text", html: "<p>a</p>", position: { x: 0, y: 0 }, width: 320 },
+        { id: "small", kind: "text", html: "<p>b</p>", position: { x: 0, y: 0 }, width: 100 },
+        {
+          id: "nonfinite",
+          kind: "text",
+          html: "<p>c</p>",
+          position: { x: 0, y: 0 },
+          width: Number.POSITIVE_INFINITY,
+        },
+        { id: "nonnumber", kind: "text", html: "<p>d</p>", position: { x: 0, y: 0 }, width: "320" },
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.doc.nodes).toMatchObject([
+      { id: "valid", width: 320 },
+      { id: "small", width: undefined },
+      { id: "nonfinite", width: undefined },
+      { id: "nonnumber", width: undefined },
+    ]);
+  });
 });
 
 describe("canvas schema v1 -> v2 migration", () => {

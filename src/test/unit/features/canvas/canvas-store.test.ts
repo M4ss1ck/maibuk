@@ -189,6 +189,48 @@ describe("useCanvasStore", () => {
     expect(node?.kind === "text" && node.html).toBe("<p>b</p>");
   });
 
+  it("resizes a text node's position and width atomically with one undo", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    useCanvasStore.getState().addNode({
+      id: "t1",
+      kind: "text",
+      html: "<p>a</p>",
+      position: { x: 0, y: 20 },
+    });
+    const beforeRevision = useCanvasStore.getState().revision;
+    useCanvasStore.getState().resizeTextNode("t1", {
+      position: { x: 40, y: 20 },
+      width: 360,
+    });
+    const resized = useCanvasStore.getState().doc.nodes[0];
+    expect(resized).toMatchObject({ position: { x: 40, y: 20 }, width: 360 });
+    expect(useCanvasStore.getState().revision).toBe(beforeRevision + 1);
+    useCanvasStore.getState().undo();
+    const restored = useCanvasStore.getState().doc.nodes[0];
+    expect(restored).toMatchObject({ position: { x: 0, y: 20 } });
+    expect(restored).not.toHaveProperty("width");
+  });
+
+  it("ignores resizeTextNode for non-text nodes and widths below 160", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    useCanvasStore.getState().addNode({
+      id: "ref",
+      kind: "noteRef",
+      noteId: "note",
+      position: { x: 0, y: 0 },
+    });
+    useCanvasStore.getState().addNode({
+      id: "t1",
+      kind: "text",
+      html: "<p>a</p>",
+      position: { x: 0, y: 0 },
+    });
+    const revision = useCanvasStore.getState().revision;
+    useCanvasStore.getState().resizeTextNode("ref", { position: { x: 5, y: 5 }, width: 360 });
+    useCanvasStore.getState().resizeTextNode("t1", { position: { x: 5, y: 5 }, width: 100 });
+    expect(useCanvasStore.getState().revision).toBe(revision);
+  });
+
   it("validates edges, preserves handles, and prevents duplicate connections", () => {
     useCanvasStore.setState({ loadState: "ready" });
     useCanvasStore.getState().addNode(textNode("a"));

@@ -70,6 +70,7 @@ export function toFlowNodes(
     type: node.kind,
     position: node.position,
     selected: node.id === options.selectedNodeId,
+    style: node.kind === "text" && node.width ? { width: node.width } : undefined,
     data: {
       node,
       canvasId: options.canvasId,
