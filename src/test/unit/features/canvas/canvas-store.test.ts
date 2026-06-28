@@ -199,6 +199,57 @@ describe("useCanvasStore", () => {
     expect(node?.kind === "text" && node.html).toBe("<p>b</p>");
   });
 
+  it("erases strokes, nodes, and edges in a single undoable step", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    const store = useCanvasStore.getState();
+    store.addNode(textNode("a"));
+    store.addNode(textNode("b"));
+    store.addEdge({ id: "edge", source: "a", target: "b" });
+    store.addStroke({
+      id: "s1",
+      points: [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
+      color: "#000",
+      width: 2,
+    });
+    store.selectNode("a");
+    const historyBefore = useCanvasStore.getState().past.length;
+    store.eraseElements(["s1"], ["a"], ["edge"]);
+    expect(useCanvasStore.getState().doc.nodes.map((node) => node.id)).toEqual(["b"]);
+    expect(useCanvasStore.getState().doc.edges).toEqual([]);
+    expect(useCanvasStore.getState().doc.strokes).toEqual([]);
+    expect(useCanvasStore.getState().past).toHaveLength(historyBefore + 1);
+    expect(useCanvasStore.getState().selectedNodeId).toBeNull();
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().doc.nodes.map((node) => node.id)).toContain("a");
+    expect(useCanvasStore.getState().doc.edges).toHaveLength(1);
+    expect(useCanvasStore.getState().doc.strokes).toHaveLength(1);
+  });
+
+  it("eraseElements removes edges attached to erased nodes even if not listed", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    const store = useCanvasStore.getState();
+    store.addNode(textNode("a"));
+    store.addNode(textNode("b"));
+    store.addEdge({ id: "edge", source: "a", target: "b" });
+    store.eraseElements([], ["a"], []);
+    expect(useCanvasStore.getState().doc.edges).toEqual([]);
+    expect(useCanvasStore.getState().doc.nodes.map((node) => node.id)).toEqual(["b"]);
+  });
+
+  it("eraseElements is a no-op when editor is read-only", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    const store = useCanvasStore.getState();
+    store.addNode(textNode("a"));
+    const revision = useCanvasStore.getState().revision;
+    useCanvasStore.setState({ editorReadOnly: true });
+    store.eraseElements([], ["a"], []);
+    expect(useCanvasStore.getState().revision).toBe(revision);
+    expect(useCanvasStore.getState().doc.nodes).toHaveLength(1);
+  });
+
   it("resizes a text node's position and width atomically with one undo", () => {
     useCanvasStore.setState({ loadState: "ready" });
     useCanvasStore.getState().addNode({

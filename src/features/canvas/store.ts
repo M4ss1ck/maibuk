@@ -126,6 +126,7 @@ export interface CanvasStoreState {
   interactivityLocked: boolean;
   addStroke: (stroke: CanvasStroke) => void;
   removeStroke: (id: string) => void;
+  eraseElements: (strokeIds: string[], nodeIds: string[], edgeIds: string[]) => void;
   setToolMode: (mode: "select" | "pen" | "eraser") => void;
   setPenWidth: (width: number) => void;
   setPenColor: (color: string) => void;
@@ -571,6 +572,42 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     get().commit({
       ...state.doc,
       strokes: state.doc.strokes.filter((stroke) => stroke.id !== id),
+    });
+  },
+
+  eraseElements: (strokeIds, nodeIds, edgeIds) => {
+    const state = get();
+    if (state.editorReadOnly) return;
+    const strokeIdSet = new Set(strokeIds);
+    const nodeIdSet = new Set(nodeIds);
+    const edgeIdSet = new Set(edgeIds);
+    if (strokeIdSet.size === 0 && nodeIdSet.size === 0 && edgeIdSet.size === 0) return;
+
+    const nextNodes = state.doc.nodes.filter((node) => !nodeIdSet.has(node.id));
+    const keptNodeIds = new Set(nextNodes.map((node) => node.id));
+    const nextEdges = state.doc.edges.filter(
+      (edge) =>
+        !edgeIdSet.has(edge.id) &&
+        keptNodeIds.has(edge.source) &&
+        keptNodeIds.has(edge.target),
+    );
+    const nextStrokes = state.doc.strokes.filter((stroke) => !strokeIdSet.has(stroke.id));
+
+    get().commit({ ...state.doc, nodes: nextNodes, edges: nextEdges, strokes: nextStrokes });
+    set({
+      selectedNodeId:
+        state.selectedNodeId && nodeIdSet.has(state.selectedNodeId) ? null : state.selectedNodeId,
+      selectedEdgeId:
+        state.selectedEdgeId &&
+        (edgeIdSet.has(state.selectedEdgeId) ||
+          !keptNodeIds.has(
+            state.doc.edges.find((edge) => edge.id === state.selectedEdgeId)?.source ?? "",
+          ) ||
+          !keptNodeIds.has(
+            state.doc.edges.find((edge) => edge.id === state.selectedEdgeId)?.target ?? "",
+          ))
+          ? null
+          : state.selectedEdgeId,
     });
   },
 
