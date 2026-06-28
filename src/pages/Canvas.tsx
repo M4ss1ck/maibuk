@@ -4,6 +4,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStore,
   type Connection,
   type Edge,
   type Node,
@@ -23,7 +24,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { MaibukLogo } from "../components/icons";
+import { maibukArt } from "../assets/ascii/maibuk";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
@@ -41,17 +42,83 @@ const AUTOSAVE_DELAY = 800;
 function canPersist(state: ReturnType<typeof useCanvasStore.getState>): boolean {
   return Boolean(
     state.current?.id &&
-      state.dirty &&
-      state.revision > state.savedRevision &&
-      !state.docWriteBlocked &&
-      !state.editorReadOnly &&
-      !state.docLoadError &&
-      !state.corruptDocReplacementAllowed,
+    state.dirty &&
+    state.revision > state.savedRevision &&
+    !state.docWriteBlocked &&
+    !state.editorReadOnly &&
+    !state.docLoadError &&
+    !state.corruptDocReplacementAllowed,
   );
 }
 
 function hasMeaningfulViewport(doc: CanvasDoc): boolean {
   return doc.viewport.x !== 0 || doc.viewport.y !== 0 || doc.viewport.zoom !== 1;
+}
+
+// One faint MAIBUK figlet per "page", tiled in canvas coordinates so it pans
+// and zooms with the surface — giving a sense of scale, like graph paper.
+const FIGLET_LINES = maibukArt
+  .replace(/\r\n/g, "\n")
+  .split("\n")
+  .filter((line) => line.trim().length > 0);
+const FIGLET_COLS = Math.max(...FIGLET_LINES.map((line) => line.length));
+const MONO_ASPECT = 0.6; // monospace glyph advance ÷ font size
+const CANVAS_PAGE_SIZE = 1200;
+const TILE_INSET = 0.1;
+
+function CanvasBackground() {
+  const [translateX, translateY, zoom] = useStore((state) => state.transform);
+  const tileWidth = CANVAS_PAGE_SIZE * zoom;
+  const pad = tileWidth * TILE_INSET;
+  const available = tileWidth - pad * 2;
+  const fontSize = available / (FIGLET_COLS * MONO_ASPECT);
+  const blockHeight = FIGLET_LINES.length * fontSize;
+  // Hug the figlet vertically (even padding all around) so stacked tiles don't
+  // leave a tall empty gap the way a square tile would.
+  const tileHeight = blockHeight + pad * 2;
+  const patternId = "maibuk-canvas-pattern";
+  return (
+    <svg
+      className="react-flow__background text-foreground"
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "transparent",
+        opacity: 0.02,
+      }}
+    >
+      <pattern
+        id={patternId}
+        x={translateX % tileWidth}
+        y={translateY % tileHeight}
+        width={tileWidth}
+        height={tileHeight}
+        patternUnits="userSpaceOnUse"
+      >
+        <text
+          x={pad}
+          y={pad}
+          fill="currentColor"
+          xmlSpace="preserve"
+          dominantBaseline="hanging"
+          style={{
+            fontFamily: "ui-monospace, SFMono-Regular, monospace",
+            fontSize,
+            whiteSpace: "pre",
+          }}
+        >
+          {FIGLET_LINES.map((line, index) => (
+            <tspan key={`figlet-line-${index}`} x={pad} dy={index === 0 ? 0 : fontSize}>
+              {line}
+            </tspan>
+          ))}
+        </text>
+      </pattern>
+      <rect x="0" y="0" width="100%" height="100%" fill={`url(#${patternId})`} />
+    </svg>
+  );
 }
 
 function CanvasEditor() {
@@ -255,7 +322,7 @@ function CanvasEditor() {
           <h1 className="text-xl font-semibold">{t("canvas.corruptDocTitle")}</h1>
           <p className="mt-2 text-sm text-muted-foreground">{t("canvas.corruptDocDescription")}</p>
           <div className="mt-6 flex justify-center gap-3">
-            <Button variant="secondary" onClick={() => navigate("/canvas") }>
+            <Button variant="secondary" onClick={() => navigate("/canvas")}>
               {t("canvas.backToCanvasGallery")}
             </Button>
             <Button variant="destructive" onClick={() => void replaceCorruptDocWithDefault()}>
@@ -362,10 +429,6 @@ function CanvasEditor() {
       )}
 
       <div ref={surfaceRef} className="relative min-h-0 flex-1">
-        <MaibukLogo
-          aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 w-1/2 max-w-md -translate-x-1/2 -translate-y-1/2 text-foreground opacity-[0.035]"
-        />
         <ReactFlow
           colorMode={theme}
           style={{ backgroundColor: "transparent" }}
@@ -383,6 +446,7 @@ function CanvasEditor() {
           defaultViewport={doc.viewport}
           fitView={!hasMeaningfulViewport(doc) && doc.nodes.length > 0}
         >
+          <CanvasBackground />
           <Controls />
         </ReactFlow>
       </div>
