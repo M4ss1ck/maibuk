@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   Controls,
   ReactFlow,
@@ -267,28 +267,52 @@ function CanvasEditor() {
     });
   };
 
-  const handleConnect = (connection: Connection) => {
-    const edge = fromConnection(connection);
-    if (edge) addEdge(edge);
-  };
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      const edge = fromConnection(connection);
+      if (edge) addEdge(edge);
+    },
+    [addEdge],
+  );
 
-  const handleNodeChanges = (changes: NodeChange[]) => {
-    for (const change of changes) {
-      if (change.type === "position" && change.position) {
-        moveNodeLive(change.id, change.position);
+  const handleNodeChanges = useCallback(
+    (changes: NodeChange[]) => {
+      for (const change of changes) {
+        if (change.type === "position" && change.position) {
+          moveNodeLive(change.id, change.position);
+        }
       }
-    }
-  };
+    },
+    [moveNodeLive],
+  );
 
-  const handleSelectionChange = ({ nodes, edges }: OnSelectionChangeParams) => {
-    if (nodes[0]) selectNode(nodes[0].id);
-    else if (edges[0]) selectEdge(edges[0].id);
-    else clearSelection();
-  };
+  const handleEdgeClick = useCallback(
+    (event: ReactMouseEvent<Element>, edge: Edge) => {
+      event.stopPropagation();
+      selectEdge(edge.id);
+    },
+    [selectEdge],
+  );
 
-  const handleMoveEnd = (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
-    setViewport(viewport);
-  };
+  const handlePaneClick = useCallback(() => {
+    clearSelection();
+  }, [clearSelection]);
+
+  const handleSelectionChange = useCallback(
+    ({ nodes }: OnSelectionChangeParams) => {
+      if (nodes[0]) selectNode(nodes[0].id);
+    },
+    [selectNode],
+  );
+
+  const handleMoveEnd = useCallback(
+    (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
+      setViewport(viewport);
+    },
+    [setViewport],
+  );
+
+  const noopEdgesChange = useCallback(() => undefined, []);
 
   useShortcuts(
     [
@@ -436,8 +460,10 @@ function CanvasEditor() {
           edges={flowEdges as Edge[]}
           nodeTypes={nodeTypes}
           onNodesChange={handleNodeChanges}
-          onEdgesChange={() => undefined}
+          onEdgesChange={noopEdgesChange}
           onSelectionChange={handleSelectionChange}
+          onEdgeClick={handleEdgeClick}
+          onPaneClick={handlePaneClick}
           onConnect={handleConnect}
           onNodeDragStart={beginLiveChange}
           onNodeDragStop={endLiveChange}

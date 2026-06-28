@@ -102,7 +102,7 @@ describe("Canvas page", () => {
     readyState();
   });
 
-  it("disables built-in deletion and synchronizes React Flow selection to the store", () => {
+  it("disables built-in deletion and synchronizes React Flow node selection to the store", () => {
     renderCanvas();
     expect(mocks.flowProps.current?.deleteKeyCode).toBeNull();
     act(() => {
@@ -112,6 +112,32 @@ describe("Canvas page", () => {
       onSelectionChange({ nodes: [{ id: "node" }], edges: [] });
     });
     expect(mocks.actions.selectNode).toHaveBeenCalledWith("node");
+    act(() => {
+      const onSelectionChange = mocks.flowProps.current?.onSelectionChange as (
+        value: Record<string, unknown>,
+      ) => void;
+      onSelectionChange({ nodes: [], edges: [{ id: "edge" }] });
+    });
+    expect(mocks.actions.selectEdge).not.toHaveBeenCalled();
+  });
+
+  it("selects an edge on click and clears selection on pane click", () => {
+    renderCanvas();
+    const stopPropagation = vi.fn();
+    act(() => {
+      const onEdgeClick = mocks.flowProps.current?.onEdgeClick as (
+        event: { stopPropagation: () => void },
+        edge: { id: string },
+      ) => void;
+      onEdgeClick({ stopPropagation }, { id: "edge" });
+    });
+    expect(stopPropagation).toHaveBeenCalled();
+    expect(mocks.actions.selectEdge).toHaveBeenCalledWith("edge");
+    act(() => {
+      const onPaneClick = mocks.flowProps.current?.onPaneClick as () => void;
+      onPaneClick();
+    });
+    expect(mocks.actions.clearSelection).toHaveBeenCalled();
   });
 
   it("uses editor-safe delete and undo shortcuts", () => {
