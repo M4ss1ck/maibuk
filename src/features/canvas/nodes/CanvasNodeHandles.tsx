@@ -37,7 +37,7 @@ export function CanvasNodeHandles({
           id={side}
           type="source"
           position={SIDE_POSITION[side]}
-          className="!z-10 !h-2 !w-2 !border !border-border !bg-background opacity-0 transition-opacity group-hover:opacity-100"
+          className="!z-10 !h-2.5 !w-2.5 !border-2 !border-primary !bg-background opacity-0 transition-opacity group-hover:opacity-100"
         />
       ))}
       {variant === "text" &&
