@@ -115,7 +115,7 @@ export function LightweightNode({
 
   return (
     <div
-      className={`group relative min-w-24 ${node.width ? "w-full" : "max-w-72"} px-2 py-1 text-sm text-foreground ${
+      className={`group relative min-w-24 transform-gpu ${node.width ? "w-full" : "max-w-72"} px-2 py-1 text-sm text-foreground ${
         selected ? "ring-1 ring-primary/40" : ""
       }`}
       onDoubleClick={() => !editorReadOnly && setEditing(true)}
