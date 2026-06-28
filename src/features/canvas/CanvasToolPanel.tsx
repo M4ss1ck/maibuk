@@ -129,6 +129,17 @@ export function CanvasToolPanel({
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">{t("canvas.nodeColor")}</span>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={t("canvas.defaultNodeColor")}
+              onClick={() => selectedNodeId && updateTextNode(selectedNodeId, { color: "" })}
+              className="rounded-full"
+            >
+              <span className="flex size-5 overflow-hidden rounded-full border border-border">
+                <span className="h-full w-1/2 bg-black" />
+                <span className="h-full w-1/2 bg-white" />
+              </span>
+            </button>
             {NODE_COLORS.map((color) => (
               <button
                 key={color}

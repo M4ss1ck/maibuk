@@ -242,6 +242,7 @@
     "penWidth": "Grosor del lápiz",
     "penColor": "Color del lápiz",
     "nodeColor": "Color del nodo",
+    "defaultNodeColor": "Color de texto automático",
     "fitView": "Ajustar vista",
     "loading": "Cargando lienzo…",
     "saved": "Guardado",

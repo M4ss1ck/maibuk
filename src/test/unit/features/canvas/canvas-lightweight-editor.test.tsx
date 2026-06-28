@@ -63,7 +63,7 @@ describe("LightweightNode editor lifecycle", () => {
     expect(mocks.useEditor).not.toHaveBeenCalled();
   });
 
-  it("uses the shared content renderer while editing", async () => {
+  it("scopes node color to a content container around the editor while editing", async () => {
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
       getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -77,6 +77,7 @@ describe("LightweightNode editor lifecycle", () => {
               id: "node",
               kind: "text",
               html: "<p>Idea</p>",
+              color: "#ef4444",
               position: { x: 0, y: 0 },
             },
             canvasId: "canvas",
@@ -95,10 +96,17 @@ describe("LightweightNode editor lifecycle", () => {
     fireEvent.doubleClick(screen.getByText("Idea"));
 
     await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
-    expect(mocks.useEditor.mock.calls[0][0]).toMatchObject({
-      editorProps: {
-        attributes: { class: expect.stringContaining("canvas-node-content") },
-      },
+    // The TipTap root must not carry the content scope class (avoids nested scopes).
+    expect(mocks.useEditor.mock.calls[0][0].editorProps.attributes.class).not.toContain(
+      "canvas-node-content",
+    );
+    // The active editor is wrapped in a color-scoped content container.
+    const content = screen.getByTestId("editor-content").closest(".canvas-node-content");
+    expect(content).not.toBeNull();
+    expect(content).toHaveStyle({ color: "#ef4444" });
+    // The outer node group carries no inline color.
+    expect(screen.getByTestId("editor-content").closest(".group")).not.toHaveStyle({
+      color: "#ef4444",
     });
   });
 });

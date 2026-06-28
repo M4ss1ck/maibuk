@@ -42,7 +42,7 @@ function ActiveNodeEditor({
     content: node.html,
     editable: true,
     editorProps: {
-      attributes: { class: "canvas-node-content outline-none" },
+      attributes: { class: "outline-none" },
     },
   });
 
@@ -59,20 +59,25 @@ function ActiveNodeEditor({
 
   return (
     <>
-      <EditorContent
-        editor={editor}
-        className="nodrag nopan max-w-none"
-        onBlur={() => {
-          if (!linkDialogOpen.current) commit();
-        }}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.key === "Escape") {
-            event.preventDefault();
-            onCancel();
-          }
-        }}
-      />
+      <div
+        className="canvas-node-content max-w-none"
+        style={node.color ? { color: node.color } : undefined}
+      >
+        <EditorContent
+          editor={editor}
+          className="nodrag nopan max-w-none"
+          onBlur={() => {
+            if (!linkDialogOpen.current) commit();
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onCancel();
+            }
+          }}
+        />
+      </div>
       <NodeFormatBubble
         editor={editor}
         onLinkDialogOpenChange={(open) => {
@@ -105,7 +110,6 @@ export function LightweightNode({
       className={`group relative min-w-24 ${node.width ? "w-full" : "max-w-72"} px-2 py-1 text-sm text-foreground ${
         selected ? "ring-1 ring-primary/40" : ""
       }`}
-      style={node.color ? { color: node.color } : undefined}
       onDoubleClick={() => !editorReadOnly && setEditing(true)}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" />
@@ -135,6 +139,7 @@ export function LightweightNode({
       ) : (
         <div
           className="canvas-node-content max-w-none"
+          style={node.color ? { color: node.color } : undefined}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
           dangerouslySetInnerHTML={{ __html: safeHtml }}
         />

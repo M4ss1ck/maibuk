@@ -154,7 +154,10 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByText("Idea")).toBeInTheDocument();
     expect(document.querySelector(".bg-card")).toBeNull();
     expect(document.querySelector(".border-r-2")).not.toBeNull();
-    expect(screen.getByText("Idea").closest(".group")).toHaveStyle({ color: "#ef4444" });
+    expect(screen.getByText("Idea").closest(".group")).not.toHaveStyle({ color: "#ef4444" });
+    expect(screen.getByText("Idea").closest(".canvas-node-content")).toHaveStyle({
+      color: "#ef4444",
+    });
     expect(warn).not.toHaveBeenCalledWith(
       expect.stringContaining("Duplicate extension names"),
     );
