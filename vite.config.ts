@@ -117,6 +117,10 @@ export default defineConfig(() => ({
         "src/components/settings/AsciiBanner.tsx",
         "src/components/settings/AsciiFieldBackground.tsx",
         "src/features/settings/AppSettingsProvider.tsx",
+        // Phase 13: Infinite Canvas
+        "src/features/canvas/serialization.ts",
+        "src/features/canvas/reactFlowAdapter.ts",
+        "src/features/canvas/store.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

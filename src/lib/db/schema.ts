@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { DEFAULT_CANVAS_DOC_JSON } from "../canvas/defaultDoc";
 
 // Books table
 export const books = sqliteTable("books", {
@@ -167,6 +168,17 @@ export const notes = sqliteTable("notes", {
   contentUpdatedAt: integer("content_updated_at"),
 });
 
+export const canvases = sqliteTable("canvases", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  doc: text("doc").notNull().default(DEFAULT_CANVAS_DOC_JSON),
+  pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
+  order: integer("order").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  contentUpdatedAt: integer("content_updated_at").notNull(),
+});
+
 // Link index: edges extracted from note/chapter content (powers backlinks).
 export const links = sqliteTable("links", {
   id: text("id").primaryKey(),
@@ -218,6 +230,8 @@ export type Chapter = typeof chapters.$inferSelect;
 export type NewChapter = typeof chapters.$inferInsert;
 export type NoteRow = typeof notes.$inferSelect;
 export type NewNoteRow = typeof notes.$inferInsert;
+export type CanvasRow = typeof canvases.$inferSelect;
+export type NewCanvasRow = typeof canvases.$inferInsert;
 export type SyncTombstoneRow = typeof syncTombstones.$inferSelect;
 export type NewSyncTombstoneRow = typeof syncTombstones.$inferInsert;
 export type CoverTemplate = typeof coverTemplates.$inferSelect;

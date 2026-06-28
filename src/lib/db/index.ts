@@ -1,5 +1,6 @@
 import { createDatabase, IS_TAURI, type DatabaseAdapter } from "../platform";
 import { ensureMetricsSchema } from "../../features/metrics/events-repo";
+import { DEFAULT_CANVAS_DOC_JSON } from "../canvas/defaultDoc";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;
@@ -212,6 +213,20 @@ async function initializeSchema(): Promise<void> {
     .execute(`UPDATE notes SET content_updated_at = updated_at WHERE content_updated_at IS NULL`)
     .catch(() => {});
 
+  const escapedDefaultCanvasDoc = DEFAULT_CANVAS_DOC_JSON.split("'").join("''");
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS canvases (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      doc TEXT NOT NULL DEFAULT '${escapedDefaultCanvasDoc}',
+      pinned INTEGER NOT NULL DEFAULT 0,
+      "order" INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      content_updated_at INTEGER NOT NULL
+    )
+  `);
+
   // Link index: edges extracted from note/chapter content (powers backlinks).
   await db.execute(`
     CREATE TABLE IF NOT EXISTS links (
@@ -346,6 +361,7 @@ export async function resetDatabase(): Promise<void> {
   await database.execute("DELETE FROM books");
   await database.execute("DELETE FROM cover_templates");
   await database.execute("DELETE FROM notes").catch(() => {});
+  await database.execute("DELETE FROM canvases").catch(() => {});
   await database.execute("DELETE FROM links").catch(() => {});
   await database.execute("DELETE FROM sync_tombstones").catch(() => {});
   await database.execute("DELETE FROM settings");

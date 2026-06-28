@@ -5,7 +5,7 @@ import { APP_VERSION, DOWNLOAD_PAGE } from "../constants";
 import { useVersionCheck } from "../features/version";
 import { useTranslation } from "react-i18next";
 import { ProjectsIcon, SettingsIcon, CloseIcon, MaibukLogo } from "./icons";
-import { BarChart3, Menu, NotebookPen } from "lucide-react";
+import { BarChart3, Menu, NotebookPen, Workflow } from "lucide-react";
 import { KeyboardShortcut } from "./ui";
 import { useSettingsStore } from "../features/settings/store";
 
@@ -155,6 +155,20 @@ export function Layout() {
               keys={["g", "n"]}
               className="ml-auto hidden lg:inline-flex"
             />
+          </NavLink>
+
+          <NavLink
+            to="/canvas"
+            onClick={closeMobileMenu}
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
+                ? "bg-primary text-white"
+                : "hover:bg-muted text-foreground"
+              }`
+            }
+          >
+            <Workflow className="w-5 h-5 shrink-0" />
+            <span className="flex-1 truncate">{t("common.canvas")}</span>
           </NavLink>
 
           <NavLink

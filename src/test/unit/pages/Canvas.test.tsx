@@ -1,0 +1,150 @@
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => {
+  const actions = {
+    loadCanvas: vi.fn().mockResolvedValue(undefined),
+    closeCanvas: vi.fn(),
+    persistCanvas: vi.fn().mockResolvedValue(undefined),
+    replaceCorruptDocWithDefault: vi.fn().mockResolvedValue(undefined),
+    addNode: vi.fn(),
+    addEdge: vi.fn(),
+    updateEdge: vi.fn(),
+    moveNodeLive: vi.fn(),
+    beginLiveChange: vi.fn(),
+    endLiveChange: vi.fn(),
+    selectNode: vi.fn(),
+    selectEdge: vi.fn(),
+    clearSelection: vi.fn(),
+    deleteSelection: vi.fn(),
+    setViewport: vi.fn(),
+    undo: vi.fn(),
+    redo: vi.fn(),
+    renameCanvas: vi.fn().mockResolvedValue(undefined),
+  };
+  const state: Record<string, unknown> = {};
+  return { actions, state, flowProps: { current: null as Record<string, unknown> | null } };
+});
+
+vi.mock("../../../features/canvas/store", () => {
+  const useCanvasStore = (selector: (state: Record<string, unknown>) => unknown) =>
+    selector(mocks.state);
+  useCanvasStore.getState = () => mocks.state;
+  return { useCanvasStore };
+});
+
+vi.mock("../../../features/notes", () => ({
+  useNoteStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ notes: [], loadNotes: vi.fn().mockResolvedValue(undefined) }),
+}));
+
+vi.mock("../../../features/canvas/nodes", () => ({ nodeTypes: {} }));
+
+vi.mock("@xyflow/react", () => ({
+  MarkerType: { ArrowClosed: "arrowclosed" },
+  ReactFlowProvider: ({ children }: { children: React.ReactNode }) => children,
+  ReactFlow: (props: Record<string, unknown>) => {
+    mocks.flowProps.current = props;
+    return <div data-testid="react-flow" />;
+  },
+  Background: () => null,
+  Controls: () => null,
+  useReactFlow: () => ({ screenToFlowPosition: (point: { x: number; y: number }) => point }),
+}));
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+const { Canvas } = await import("../../../pages/Canvas");
+
+function readyState() {
+  const doc = {
+    schemaVersion: 1,
+    nodes: [{ id: "node", kind: "text", text: "Idea", position: { x: 0, y: 0 } }],
+    edges: [{ id: "edge", source: "node", target: "node", label: "Old" }],
+    viewport: { x: 0, y: 0, zoom: 1 },
+  };
+  Object.assign(mocks.state, mocks.actions, {
+    current: { id: "canvas-1", title: "Map", doc },
+    doc,
+    loadState: "ready",
+    saveState: "idle",
+    docLoadError: null,
+    docWriteBlocked: false,
+    editorReadOnly: false,
+    corruptDocReplacementAllowed: false,
+    dirty: false,
+    revision: 0,
+    savedRevision: 0,
+    past: [],
+    future: [],
+    selectedNodeId: null,
+    selectedEdgeId: "edge",
+  });
+}
+
+function renderCanvas() {
+  return render(
+    <MemoryRouter initialEntries={["/canvas/canvas-1"]}>
+      <Routes>
+        <Route path="/canvas/:canvasId" element={<Canvas />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe("Canvas page", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.flowProps.current = null;
+    readyState();
+  });
+
+  it("disables built-in deletion and synchronizes React Flow selection to the store", () => {
+    renderCanvas();
+    expect(mocks.flowProps.current?.deleteKeyCode).toBeNull();
+    act(() => {
+      const onSelectionChange = mocks.flowProps.current?.onSelectionChange as (
+        value: Record<string, unknown>,
+      ) => void;
+      onSelectionChange({ nodes: [{ id: "node" }], edges: [] });
+    });
+    expect(mocks.actions.selectNode).toHaveBeenCalledWith("node");
+  });
+
+  it("uses editor-safe delete and undo shortcuts", () => {
+    renderCanvas();
+    fireEvent.keyDown(window, { key: "Backspace" });
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    expect(mocks.actions.deleteSelection).toHaveBeenCalledTimes(1);
+    expect(mocks.actions.undo).toHaveBeenCalledTimes(1);
+
+    const title = screen.getByLabelText("canvas.renameCanvas");
+    fireEvent.keyDown(title, { key: "Backspace" });
+    expect(mocks.actions.deleteSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates the selected edge label and directed flag", () => {
+    renderCanvas();
+    const label = screen.getByLabelText("canvas.edgeLabel");
+    fireEvent.change(label, { target: { value: "New label" } });
+    fireEvent.blur(label);
+    fireEvent.click(screen.getByRole("switch"));
+    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { label: "New label" });
+    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { directed: true });
+  });
+
+  it("renders recovery UI instead of React Flow for a corrupt document", () => {
+    Object.assign(mocks.state, {
+      loadState: "error",
+      docLoadError: { code: "corrupt-json", message: "bad" },
+      docWriteBlocked: true,
+      editorReadOnly: true,
+    });
+    renderCanvas();
+    expect(screen.getByText("canvas.corruptDocTitle")).toBeInTheDocument();
+    expect(screen.queryByTestId("react-flow")).not.toBeInTheDocument();
+  });
+});

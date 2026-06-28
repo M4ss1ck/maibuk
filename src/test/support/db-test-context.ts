@@ -70,6 +70,7 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
       epubStructures,
       chapterEpubMeta,
       notes,
+      canvases,
       syncTombstones,
       coverTemplates,
       settings,
@@ -83,6 +84,7 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
       this.select<Record<string, unknown>[]>("SELECT * FROM epub_structures"),
       this.select<Record<string, unknown>[]>("SELECT * FROM chapter_epub_meta"),
       this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM canvases"),
       this.select<Record<string, unknown>[]>("SELECT * FROM sync_tombstones"),
       this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
       this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
@@ -119,6 +121,9 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
       "",
       "-- Notes",
       generateInsertStatements("notes", notes),
+      "",
+      "-- Canvases",
+      generateInsertStatements("canvases", canvases),
       "",
       "-- Sync Tombstones",
       generateInsertStatements("sync_tombstones", syncTombstones),
@@ -327,6 +332,19 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
       confirmed_at INTEGER,
       pushed_at INTEGER,
       UNIQUE(entity_type, entity_id)
+    )
+  `);
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS canvases (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      doc TEXT NOT NULL,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      "order" INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      content_updated_at INTEGER NOT NULL
     )
   `);
 

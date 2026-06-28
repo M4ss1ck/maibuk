@@ -8,6 +8,8 @@ import { Settings } from "./pages/Settings";
 import { Metrics } from "./pages/Metrics";
 import { Notes } from "./pages/Notes";
 import { NotesGallery } from "./pages/NotesGallery";
+import { Canvas } from "./pages/Canvas";
+import { CanvasGallery } from "./pages/CanvasGallery";
 import { Embed } from "./pages/Embed";
 import { StartupRedirect } from "./components/StartupRedirect";
 import { PathTracker } from "./components/PathTracker";
@@ -48,11 +50,13 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="notes" element={<NotesGallery />} />
+          <Route path="canvas" element={<CanvasGallery />} />
           <Route path="metrics" element={<Metrics />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         {/* Full-page editors without sidebar */}
         <Route path="notes/:noteId" element={<Notes />} />
+        <Route path="canvas/:canvasId" element={<Canvas />} />
         <Route path="book/:bookId" element={<BookEditor />} />
         <Route path="book/:bookId/cover" element={<CoverDesigner />} />
       </Routes>

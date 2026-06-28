@@ -78,6 +78,7 @@
     "@uiw/codemirror-theme-atomone": "^4.25.8",
     "@uiw/codemirror-theme-dracula": "^4.25.8",
     "@uiw/codemirror-theme-github": "^4.25.8",
+    "@xyflow/react": "^12.11.1",
     "codemirror": "^6.0.2",
     "dictionary-en": "^4.0.0",
     "dictionary-es": "^4.0.0",
