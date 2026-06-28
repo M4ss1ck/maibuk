@@ -1,10 +1,11 @@
 import { FileText, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { type Node, type NodeProps } from "@xyflow/react";
 import { Button } from "../../../components/ui/Button";
 import { useNoteStore } from "../../notes";
 import type { CanvasFlowNodeData } from "../reactFlowAdapter";
+import { CanvasNodeHandles } from "./CanvasNodeHandles";
 
 type NoteRefFlowNode = Node<CanvasFlowNodeData, "noteRef">;
 
@@ -22,11 +23,11 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
 
   return (
     <div
-      className={`min-w-48 rounded-lg border bg-card px-4 py-3 text-foreground shadow-sm ${
+      className={`group relative min-w-48 rounded-lg border bg-card px-4 py-3 text-foreground shadow-sm ${
         selected ? "border-primary ring-2 ring-primary/20" : "border-border"
       }`}
     >
-      <Handle type="target" position={Position.Left} />
+      <CanvasNodeHandles connectedSides={data.connectedSides} variant="card" />
       <div className="flex items-center gap-2">
         <FileText className="size-4 shrink-0 text-primary" aria-hidden="true" />
         <span className="max-w-52 truncate text-sm font-medium">{label}</span>
@@ -49,7 +50,6 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
         <ExternalLink className="size-4" aria-hidden="true" />
         {t("canvas.openNote")}
       </Button>
-      <Handle type="source" position={Position.Right} />
     </div>
   );
 }

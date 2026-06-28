@@ -101,5 +101,6 @@ describe("Canvas custom nodes", () => {
     );
     expect(screen.getByText("Cached title")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "canvas.openNote" })).toBeDisabled();
+    expect(screen.getAllByTestId("handle")).toHaveLength(4);
   });
 });
