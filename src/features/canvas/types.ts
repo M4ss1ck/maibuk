@@ -20,7 +20,7 @@ export type BaseCanvasNode = {
 
 export type LightweightCanvasNode = BaseCanvasNode & {
   kind: "text";
-  text: string;
+  html: string;
   color?: string;
 };
 
@@ -42,10 +42,18 @@ export type CanvasEdge = {
   directed?: boolean;
 };
 
+export type CanvasStroke = {
+  id: string;
+  points: CanvasPosition[];
+  color: string;
+  width: number;
+};
+
 export type CanvasDoc = {
   schemaVersion: number;
   nodes: CanvasNode[];
   edges: CanvasEdge[];
+  strokes: CanvasStroke[];
   viewport: CanvasViewport;
 };
 
@@ -60,7 +68,7 @@ export type Canvas = {
   contentUpdatedAt: number;
 };
 
-export type UpdateTextNodePatch = Partial<Pick<LightweightCanvasNode, "text" | "color">>;
+export type UpdateTextNodePatch = Partial<Pick<LightweightCanvasNode, "html" | "color">>;
 
 export type UpdateNoteRefNodePatch = Partial<Pick<NoteRefCanvasNode, "noteId" | "label">>;
 

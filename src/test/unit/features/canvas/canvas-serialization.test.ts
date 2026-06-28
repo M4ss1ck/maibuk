@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CANVAS_DOC_JSON } from "../../../../lib/canvas/defaultDoc";
+import {
+  CURRENT_CANVAS_SCHEMA_VERSION,
+  DEFAULT_CANVAS_DOC_JSON,
+} from "../../../../lib/canvas/defaultDoc";
 import {
   normalizeParsedCanvasDoc,
   parseCanvasDoc,
@@ -11,7 +14,9 @@ describe("canvas document serialization", () => {
   it("round-trips a valid document", () => {
     const doc = {
       ...createDefaultCanvasDoc(),
-      nodes: [{ id: "a", kind: "text" as const, text: "Idea", position: { x: 1, y: 2 } }],
+      nodes: [
+        { id: "a", kind: "text" as const, html: "<p>Idea</p>", position: { x: 1, y: 2 } },
+      ],
       viewport: { x: 10, y: -20, zoom: 1.5 },
     };
     expect(parseCanvasDoc(serializeCanvasDoc(doc))).toEqual({ ok: true, doc, migrated: false });
@@ -97,5 +102,58 @@ describe("canvas document serialization", () => {
 
   it("uses the canonical default JSON", () => {
     expect(serializeCanvasDoc(createDefaultCanvasDoc())).toBe(DEFAULT_CANVAS_DOC_JSON);
+  });
+});
+
+describe("canvas schema v1 -> v2 migration", () => {
+  it("migrates v1 text nodes to html and adds an empty strokes array", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: 1,
+      nodes: [
+        {
+          id: "a",
+          kind: "text",
+          text: "Hello <world>",
+          position: { x: 1, y: 2 },
+        },
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.migrated).toBe(true);
+      expect(result.doc.schemaVersion).toBe(CURRENT_CANVAS_SCHEMA_VERSION);
+      expect(result.doc.nodes[0]).toMatchObject({
+        id: "a",
+        kind: "text",
+        html: "<p>Hello &lt;world&gt;</p>",
+      });
+      expect(result.doc.strokes).toEqual([]);
+    }
+  });
+
+  it("keeps valid v2 strokes and drops malformed ones", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: 2,
+      nodes: [],
+      edges: [],
+      strokes: [
+        {
+          id: "s1",
+          points: [
+            { x: 0, y: 0 },
+            { x: 5, y: 5 },
+          ],
+          color: "#f00",
+          width: 3,
+        },
+        { id: "s2", points: "nope", color: "#f00", width: 3 },
+        { id: "s3", points: [{ x: 0, y: 0 }], color: "#f00", width: 0 },
+      ],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.doc.strokes.map((s) => s.id)).toEqual(["s1"]);
   });
 });

@@ -5,6 +5,7 @@ import {
   type CanvasEdge,
   type CanvasNode,
   type CanvasPosition,
+  type CanvasStroke,
   type CanvasViewport,
 } from "./types";
 
@@ -30,6 +31,14 @@ function normalizedOptionalString(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function isFinitePosition(value: unknown): value is CanvasPosition {
   return (
     isRecord(value) &&
@@ -40,12 +49,35 @@ export function isFinitePosition(value: unknown): value is CanvasPosition {
   );
 }
 
+export function isValidCanvasStroke(value: unknown): value is CanvasStroke {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    Array.isArray(value.points) &&
+    value.points.length >= 1 &&
+    value.points.every(isFinitePosition) &&
+    typeof value.color === "string" &&
+    typeof value.width === "number" &&
+    Number.isFinite(value.width) &&
+    value.width > 0
+  );
+}
+
+export function normalizeStroke(stroke: CanvasStroke): CanvasStroke {
+  return {
+    id: stroke.id,
+    points: stroke.points.map((p) => ({ x: p.x, y: p.y })),
+    color: stroke.color,
+    width: stroke.width,
+  };
+}
+
 export function isValidCanvasNode(value: unknown): value is CanvasNode {
   if (!isRecord(value) || typeof value.id !== "string" || !isFinitePosition(value.position)) {
     return false;
   }
 
-  if (value.kind === "text") return typeof value.text === "string";
+  if (value.kind === "text") return typeof value.html === "string";
   if (value.kind === "noteRef") return typeof value.noteId === "string";
   return false;
 }
@@ -82,7 +114,7 @@ function normalizeNode(node: CanvasNode): CanvasNode {
       id: node.id,
       kind: "text",
       position: { ...node.position },
-      text: node.text,
+      html: node.html,
       color: normalizedOptionalString(node.color),
     };
   }
@@ -94,6 +126,32 @@ function normalizeNode(node: CanvasNode): CanvasNode {
     noteId: node.noteId,
     label: normalizedOptionalString(node.label),
   };
+}
+
+function migrateToCurrent(
+  value: Record<string, unknown>,
+  fromVersion: number,
+): {
+  value: Record<string, unknown>;
+  migrated: boolean;
+} {
+  let migrated = false;
+  let nodes = Array.isArray(value.nodes) ? value.nodes : [];
+  let strokes = Array.isArray(value.strokes) ? value.strokes : [];
+
+  if (fromVersion < 2) {
+    migrated = true;
+    nodes = nodes.map((node) => {
+      if (isRecord(node) && node.kind === "text" && typeof node.text === "string") {
+        const { text, ...rest } = node;
+        return { ...rest, html: `<p>${escapeHtml(text)}</p>` };
+      }
+      return node;
+    });
+    strokes = [];
+  }
+
+  return { value: { ...value, nodes, strokes }, migrated };
 }
 
 function normalizeEdge(edge: CanvasEdge): CanvasEdge {
@@ -137,15 +195,9 @@ export function normalizeParsedCanvasDoc(value: unknown): ParseCanvasDocResult {
     };
   }
 
-  if (schemaVersion !== CURRENT_CANVAS_SCHEMA_VERSION) {
-    return {
-      ok: false,
-      doc: createDefaultCanvasDoc(),
-      error: { code: "invalid-shape", message: `Canvas schema version ${schemaVersion} is invalid` },
-    };
-  }
+  const { value: source, migrated } = migrateToCurrent(value, schemaVersion);
 
-  if (!Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
+  if (!Array.isArray(source.nodes) || !Array.isArray(source.edges)) {
     return {
       ok: false,
       doc: createDefaultCanvasDoc(),
@@ -153,21 +205,25 @@ export function normalizeParsedCanvasDoc(value: unknown): ParseCanvasDocResult {
     };
   }
 
-  const nodes = value.nodes.filter(isValidCanvasNode).map(normalizeNode);
+  const nodes = source.nodes.filter(isValidCanvasNode).map(normalizeNode);
   const nodeIds = new Set(nodes.map((node) => node.id));
-  const edges = value.edges
+  const edges = source.edges
     .filter(isValidCanvasEdge)
     .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
     .map(normalizeEdge);
+  const strokes = (Array.isArray(source.strokes) ? source.strokes : [])
+    .filter(isValidCanvasStroke)
+    .map(normalizeStroke);
 
   return {
     ok: true,
-    migrated: false,
+    migrated,
     doc: {
       schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
       nodes,
       edges,
-      viewport: normalizeViewport(value.viewport),
+      strokes,
+      viewport: normalizeViewport(source.viewport),
     },
   };
 }
