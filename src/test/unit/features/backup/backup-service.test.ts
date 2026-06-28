@@ -451,6 +451,14 @@ describe("BackupService", () => {
         viewport: { x: 10, y: 20, zoom: 2 },
       });
       const statement = `INSERT INTO "canvases" ("id", "title", "doc", "pinned", "order", "created_at", "updated_at", "content_updated_at") VALUES ('canvas-1', 'Map', '${doc}', 0, 0, 1, 1, 1)`;
+      const normalizedDoc = JSON.stringify({
+        schemaVersion: 2,
+        nodes: [],
+        edges: [],
+        strokes: [],
+        viewport: { x: 10, y: 20, zoom: 2 },
+      });
+      const normalizedStatement = `INSERT INTO "canvases" ("id", "title", "doc", "pinned", "order", "created_at", "updated_at", "content_updated_at") VALUES ('canvas-1', 'Map', '${normalizedDoc}', 0, 0, 1, 1, 1)`;
       mockAdapter.readBackup = vi.fn(async () => "restore canvas");
       mockParseSqlStatements.mockImplementation((sql: string) =>
         sql === "restore canvas" ? [statement] : [],
@@ -458,7 +466,7 @@ describe("BackupService", () => {
 
       await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
 
-      expect(mockDb.execute).toHaveBeenCalledWith(statement);
+      expect(mockDb.execute).toHaveBeenCalledWith(normalizedStatement);
       expect(mockLoadCanvases).toHaveBeenCalled();
     });
 

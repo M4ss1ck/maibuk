@@ -7,6 +7,7 @@ export function CanvasDrawingLayer() {
   return (
     <ViewportPortal>
       <svg
+        aria-hidden="true"
         className="pointer-events-none absolute left-0 top-0 overflow-visible"
         style={{ width: 0, height: 0 }}
       >

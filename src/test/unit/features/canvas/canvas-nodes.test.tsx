@@ -49,6 +49,7 @@ describe("Canvas custom nodes", () => {
               id: "node",
               kind: "text",
               html: "<p>Idea</p>",
+              color: "#ef4444",
               position: { x: 0, y: 0 },
             },
             canvasId: "canvas",
@@ -66,10 +67,43 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByText("Idea")).toBeInTheDocument();
     expect(document.querySelector(".bg-card")).toBeNull();
     expect(document.querySelector(".border-r-2")).not.toBeNull();
+    expect(screen.getByText("Idea").closest(".group")).toHaveStyle({ color: "#ef4444" });
     expect(warn).not.toHaveBeenCalledWith(
       expect.stringContaining("Duplicate extension names"),
     );
     warn.mockRestore();
+  });
+
+  it("sanitizes idle html while preserving internal links", () => {
+    render(
+      <LightweightNode
+        {...({
+          selected: false,
+          data: {
+            node: {
+              id: "node",
+              kind: "text",
+              html: '<p>Idea</p><script>alert(1)</script><a href="maibuk://note/n1">Note</a>',
+              position: { x: 0, y: 0 },
+            },
+            canvasId: "canvas",
+            canvasTitle: "Map",
+            connectedSides: {
+              top: { connected: false, incoming: false, outgoing: false },
+              right: { connected: false, incoming: false, outgoing: false },
+              bottom: { connected: false, incoming: false, outgoing: false },
+              left: { connected: false, incoming: false, outgoing: false },
+            },
+          },
+        } as Parameters<typeof LightweightNode>[0])}
+      />,
+    );
+
+    expect(document.querySelector("script")).toBeNull();
+    expect(screen.getByRole("link", { name: "Note" })).toHaveAttribute(
+      "href",
+      "maibuk://note/n1",
+    );
   });
 
   it("shows a cached label and disables opening when the note is missing", () => {

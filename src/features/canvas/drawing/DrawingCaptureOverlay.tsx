@@ -99,7 +99,10 @@ export function DrawingCaptureOverlay({
       onPointerUp={onPointerUp}
     >
       {toolMode === "pen" && points.length > 0 && (
-        <svg className="pointer-events-none absolute inset-0 h-full w-full">
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full"
+        >
           <path
             d={strokeToPath(
               points

@@ -57,7 +57,7 @@ export function CanvasToolPanel({
 
   return (
     <div className="absolute right-4 top-4 z-20 flex w-56 flex-col gap-3 rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur">
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         {tools.map(({ mode, icon: Icon, label }) => (
           <Button
             key={mode}
