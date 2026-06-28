@@ -4,17 +4,41 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   updateTextNode: vi.fn(),
+  resizeTextNode: vi.fn(),
+  editorReadOnly: false,
   notes: [] as Array<{ id: string; title: string }>,
 }));
 
 vi.mock("@xyflow/react", () => ({
-  Handle: () => <span data-testid="handle" />,
+  Handle: ({ className }: { className?: string }) => (
+    <span data-testid="handle" className={className} />
+  ),
   Position: { Top: "top", Right: "right", Bottom: "bottom", Left: "left" },
+  NodeResizeControl: ({
+    position,
+    resizeDirection,
+    className,
+  }: {
+    position?: string;
+    resizeDirection?: string;
+    className?: string;
+  }) => (
+    <span
+      data-testid={`resize-${position}`}
+      data-direction={resizeDirection}
+      className={className}
+    />
+  ),
+  ResizeControlVariant: { Line: "line", Handle: "handle" },
 }));
 
 vi.mock("../../../../features/canvas/store", () => ({
   useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ updateTextNode: mocks.updateTextNode, editorReadOnly: false }),
+    selector({
+      updateTextNode: mocks.updateTextNode,
+      resizeTextNode: mocks.resizeTextNode,
+      editorReadOnly: mocks.editorReadOnly,
+    }),
 }));
 
 vi.mock("../../../../features/notes", () => ({
@@ -36,6 +60,69 @@ describe("Canvas custom nodes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.notes = [];
+    mocks.editorReadOnly = false;
+  });
+
+  const textNodeData = (overrides: Record<string, unknown> = {}) => ({
+    node: {
+      id: "node",
+      kind: "text",
+      html: "<p>Idea</p>",
+      position: { x: 0, y: 0 },
+      ...overrides,
+    },
+    canvasId: "canvas",
+    canvasTitle: "Map",
+    connectedSides: {
+      top: { connected: false, incoming: false, outgoing: false },
+      right: { connected: false, incoming: false, outgoing: false },
+      bottom: { connected: false, incoming: false, outgoing: false },
+      left: { connected: false, incoming: false, outgoing: false },
+    },
+  });
+
+  it("renders horizontal resize controls on both sides of a selected writable node", () => {
+    render(
+      <LightweightNode
+        {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+      />,
+    );
+    expect(screen.getByTestId("resize-left")).toHaveAttribute("data-direction", "horizontal");
+    expect(screen.getByTestId("resize-right")).toHaveAttribute("data-direction", "horizontal");
+  });
+
+  it("hides resize controls when unselected", () => {
+    render(
+      <LightweightNode
+        {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+      />,
+    );
+    expect(screen.queryByTestId("resize-left")).toBeNull();
+    expect(screen.queryByTestId("resize-right")).toBeNull();
+  });
+
+  it("hides resize controls when read-only", () => {
+    mocks.editorReadOnly = true;
+    render(
+      <LightweightNode
+        {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+      />,
+    );
+    expect(screen.queryByTestId("resize-left")).toBeNull();
+    expect(screen.queryByTestId("resize-right")).toBeNull();
+  });
+
+  it("keeps connection handles above resize controls", () => {
+    render(
+      <LightweightNode
+        {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+      />,
+    );
+    const handles = screen.getAllByTestId("handle");
+    expect(handles).toHaveLength(4);
+    expect(handles.every((handle) => handle.className.includes("!z-10"))).toBe(true);
+    expect(screen.getByTestId("resize-left").className).toContain("!z-0");
+    expect(screen.getByTestId("resize-right").className).toContain("!z-0");
   });
 
   it("renders text node html without a card border/background and shows a connected stub", () => {

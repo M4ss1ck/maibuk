@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type Node, type NodeProps } from "@xyflow/react";
+import {
+  NodeResizeControl,
+  ResizeControlVariant,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import DOMPurify from "dompurify";
 import { useCanvasStore } from "../store";
@@ -84,6 +89,7 @@ export function LightweightNode({
 }: NodeProps<LightweightFlowNode>) {
   const node = data.node;
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
+  const resizeTextNode = useCanvasStore((state) => state.resizeTextNode);
   const [editing, setEditing] = useState(false);
   const safeHtml = useMemo(
     () => (node.kind === "text" ? sanitizeNodeHtml(node.html) : ""),
@@ -92,15 +98,34 @@ export function LightweightNode({
 
   if (node.kind !== "text") return null;
 
+  const resizable = selected && !editorReadOnly && !editing;
+
   return (
     <div
-      className={`group relative min-w-24 max-w-72 px-2 py-1 text-sm text-foreground ${
+      className={`group relative min-w-24 ${node.width ? "w-full" : "max-w-72"} px-2 py-1 text-sm text-foreground ${
         selected ? "ring-1 ring-primary/40" : ""
       }`}
       style={node.color ? { color: node.color } : undefined}
       onDoubleClick={() => !editorReadOnly && setEditing(true)}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" />
+      {resizable &&
+        (["left", "right"] as const).map((side) => (
+          <NodeResizeControl
+            key={side}
+            position={side}
+            variant={ResizeControlVariant.Line}
+            resizeDirection="horizontal"
+            minWidth={160}
+            className="nodrag !z-0 !border-primary/50"
+            onResizeEnd={(_event, params) =>
+              resizeTextNode(node.id, {
+                position: { x: params.x, y: params.y },
+                width: params.width,
+              })
+            }
+          />
+        ))}
       {editing ? (
         <ActiveNodeEditor
           node={node}
