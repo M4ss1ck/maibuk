@@ -300,21 +300,25 @@ function CanvasEditor() {
 
   const handleEdgeClick = useCallback(
     (event: ReactMouseEvent<Element>, edge: Edge) => {
+      if (interactivityLocked) return;
       event.stopPropagation();
       selectEdge(edge.id);
     },
-    [selectEdge],
+    [interactivityLocked, selectEdge],
   );
 
   const handlePaneClick = useCallback(() => {
+    if (interactivityLocked) return;
     clearSelection();
-  }, [clearSelection]);
+  }, [interactivityLocked, clearSelection]);
 
   const handleSelectionChange = useCallback(
     ({ nodes }: OnSelectionChangeParams) => {
+      if (interactivityLocked) return;
       if (nodes[0]) selectNode(nodes[0].id);
+      else if (selectedNodeId) selectNode(null);
     },
-    [selectNode],
+    [interactivityLocked, selectedNodeId, selectNode],
   );
 
   const handleMoveEnd = useCallback(
