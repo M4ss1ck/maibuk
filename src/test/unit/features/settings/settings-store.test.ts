@@ -59,6 +59,12 @@ describe("useSettingsStore", () => {
       toolbarExpanded: false,
       editorContentWidth: 720,
       editorShowBorder: false,
+      editorPagePadding: {
+        top: 32,
+        right: 32,
+        bottom: 32,
+        left: 32,
+      },
       chapterListView: "normal",
       notesListView: "list",
       notesTreeGroupMode: "book",
@@ -90,6 +96,12 @@ describe("useSettingsStore", () => {
       expect(state.backupListPage).toBe(1);
       expect(state.backupListPageSize).toBe(10);
       expect(state.chapterListView).toBe("normal");
+      expect(state.editorPagePadding).toEqual({
+        top: 32,
+        right: 32,
+        bottom: 32,
+        left: 32,
+      });
       expect(state.notesListView).toBe("list");
       expect(state.notesTreeGroupMode).toBe("book");
       expect(state.pasteCleanup.preset).toBe("keepAll");
@@ -710,5 +722,59 @@ describe("normalizePasteCleanup()", () => {
       ],
     });
     expect(result.rules).toHaveLength(1);
+  });
+});
+
+describe("editorPagePadding", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useSettingsStore.setState({
+      editorPagePadding: {
+        top: 32,
+        right: 32,
+        bottom: 32,
+        left: 32,
+      },
+    });
+  });
+
+  it("defaults to 32px on all sides", () => {
+    expect(useSettingsStore.getState().editorPagePadding).toEqual({
+      top: 32,
+      right: 32,
+      bottom: 32,
+      left: 32,
+    });
+  });
+
+  it("setEditorPagePadding(number) sets all sides", () => {
+    useSettingsStore.getState().setEditorPagePadding(64);
+    expect(useSettingsStore.getState().editorPagePadding).toEqual({
+      top: 64,
+      right: 64,
+      bottom: 64,
+      left: 64,
+    });
+  });
+
+  it("setEditorPagePadding(object) merges and clamps", () => {
+    useSettingsStore.getState().setEditorPagePadding({ left: 100, top: -4 });
+    expect(useSettingsStore.getState().editorPagePadding).toEqual({
+      top: 0,
+      right: 32,
+      bottom: 32,
+      left: 96,
+    });
+  });
+
+  it("resetEditorPagePadding restores the default", () => {
+    useSettingsStore.getState().setEditorPagePadding(8);
+    useSettingsStore.getState().resetEditorPagePadding();
+    expect(useSettingsStore.getState().editorPagePadding).toEqual({
+      top: 32,
+      right: 32,
+      bottom: 32,
+      left: 32,
+    });
   });
 });

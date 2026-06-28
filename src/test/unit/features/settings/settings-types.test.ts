@@ -21,6 +21,11 @@ import {
   EDITOR_CONTENT_WIDTH_FULL,
   EDITOR_CONTENT_WIDTH_PRESETS,
   clampEditorContentWidth,
+  EDITOR_PAGE_PADDING_MIN,
+  EDITOR_PAGE_PADDING_MAX,
+  EDITOR_PAGE_PADDING_STEP,
+  DEFAULT_EDITOR_PAGE_PADDING,
+  clampEditorPagePadding,
 } from "../../../../features/settings/types";
 
 describe("DEFAULT_PRIMARY_COLOR", () => {
@@ -204,5 +209,38 @@ describe("EDITOR_CONTENT_WIDTH_PRESETS", () => {
       if (preset.value === EDITOR_CONTENT_WIDTH_FULL) continue;
       expect(preset.value % EDITOR_CONTENT_WIDTH_STEP).toBe(0);
     }
+  });
+});
+
+describe("DEFAULT_EDITOR_PAGE_PADDING", () => {
+  it("is a multiple of the step and within bounds", () => {
+    expect(DEFAULT_EDITOR_PAGE_PADDING % EDITOR_PAGE_PADDING_STEP).toBe(0);
+    expect(DEFAULT_EDITOR_PAGE_PADDING).toBeGreaterThanOrEqual(
+      EDITOR_PAGE_PADDING_MIN,
+    );
+    expect(DEFAULT_EDITOR_PAGE_PADDING).toBeLessThanOrEqual(
+      EDITOR_PAGE_PADDING_MAX,
+    );
+  });
+});
+
+describe("clampEditorPagePadding", () => {
+  it("returns the default for non-finite input", () => {
+    expect(clampEditorPagePadding(Number.NaN)).toBe(DEFAULT_EDITOR_PAGE_PADDING);
+  });
+
+  it("clamps below the minimum up to the minimum", () => {
+    expect(clampEditorPagePadding(-8)).toBe(EDITOR_PAGE_PADDING_MIN);
+  });
+
+  it("clamps above the maximum down to the maximum", () => {
+    expect(clampEditorPagePadding(EDITOR_PAGE_PADDING_MAX + 8)).toBe(
+      EDITOR_PAGE_PADDING_MAX,
+    );
+  });
+
+  it("snaps to the step grid", () => {
+    expect(clampEditorPagePadding(33)).toBe(32);
+    expect(clampEditorPagePadding(37)).toBe(40);
   });
 });

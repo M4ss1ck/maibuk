@@ -17,9 +17,12 @@ import {
   EDITOR_ZOOM_STEP,
   clampEditorZoom,
   clampEditorContentWidth,
+  clampEditorPagePadding,
+  DEFAULT_EDITOR_PAGE_PADDING,
   PASTE_CLEANUP_PRESETS,
   PASTE_CLEANUP_PRESET_VALUES,
   type Settings,
+  type EditorPagePadding,
   type PasteCleanupSettings,
   type FontSize,
   type FontFamily,
@@ -88,6 +91,8 @@ interface SettingsStore extends Settings {
   zoomOut: () => void;
   resetZoom: () => void;
   setEditorContentWidth: (px: number) => void;
+  setEditorPagePadding: (value: number | Partial<EditorPagePadding>) => void;
+  resetEditorPagePadding: () => void;
   setEditorShowBorder: (show: boolean) => void;
   setPasteCleanupPreset: (preset: PasteCleanupPreset) => void;
   setPasteCleanupOption: <K extends PasteStructuralOptionKey>(
@@ -157,6 +162,12 @@ const defaultSettings: Settings = {
   htmlPanelHeight: 200,
   editorZoom: DEFAULT_EDITOR_ZOOM,
   editorContentWidth: DEFAULT_EDITOR_CONTENT_WIDTH,
+  editorPagePadding: {
+    top: DEFAULT_EDITOR_PAGE_PADDING,
+    right: DEFAULT_EDITOR_PAGE_PADDING,
+    bottom: DEFAULT_EDITOR_PAGE_PADDING,
+    left: DEFAULT_EDITOR_PAGE_PADDING,
+  },
   editorShowBorder: false,
   pasteCleanup: {
     preset: "keepAll",
@@ -367,6 +378,45 @@ export const useSettingsStore = create<SettingsStore>()(
       resetZoom: () => set({ editorZoom: DEFAULT_EDITOR_ZOOM }),
       setEditorContentWidth: (editorContentWidth) =>
         set({ editorContentWidth: clampEditorContentWidth(editorContentWidth) }),
+      setEditorPagePadding: (value) =>
+        set((state) => {
+          if (typeof value === "number") {
+            const clamped = clampEditorPagePadding(value);
+            return {
+              editorPagePadding: {
+                top: clamped,
+                right: clamped,
+                bottom: clamped,
+                left: clamped,
+              },
+            };
+          }
+          return {
+            editorPagePadding: {
+              top: clampEditorPagePadding(
+                value.top ?? state.editorPagePadding.top,
+              ),
+              right: clampEditorPagePadding(
+                value.right ?? state.editorPagePadding.right,
+              ),
+              bottom: clampEditorPagePadding(
+                value.bottom ?? state.editorPagePadding.bottom,
+              ),
+              left: clampEditorPagePadding(
+                value.left ?? state.editorPagePadding.left,
+              ),
+            },
+          };
+        }),
+      resetEditorPagePadding: () =>
+        set({
+          editorPagePadding: {
+            top: DEFAULT_EDITOR_PAGE_PADDING,
+            right: DEFAULT_EDITOR_PAGE_PADDING,
+            bottom: DEFAULT_EDITOR_PAGE_PADDING,
+            left: DEFAULT_EDITOR_PAGE_PADDING,
+          },
+        }),
       setEditorShowBorder: (editorShowBorder) => set({ editorShowBorder }),
       setPasteCleanupPreset: (preset) =>
         set((state) => ({

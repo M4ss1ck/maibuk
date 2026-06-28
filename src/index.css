@@ -177,6 +177,7 @@ option {
 /* Editor content measure (line length) + optional side "page" borders */
 .editor-content-surface {
   max-width: min(var(--editor-content-width, 720px), 100%);
+  padding: var(--editor-page-padding, 32px);
 }
 
 .editor-content-surface.editor-show-border {

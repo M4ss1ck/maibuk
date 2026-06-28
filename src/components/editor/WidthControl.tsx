@@ -11,11 +11,15 @@ import {
   EDITOR_CONTENT_WIDTH_FULL,
   DEFAULT_EDITOR_CONTENT_WIDTH,
 } from "../../features/settings/types";
+import { PagePaddingControl } from "./PagePaddingControl";
 
 export function WidthControl() {
   const { t } = useTranslation();
   const editorContentWidth = useSettingsStore((s) => s.editorContentWidth);
   const setEditorContentWidth = useSettingsStore((s) => s.setEditorContentWidth);
+  const editorPagePadding = useSettingsStore((s) => s.editorPagePadding);
+  const setEditorPagePadding = useSettingsStore((s) => s.setEditorPagePadding);
+  const resetEditorPagePadding = useSettingsStore((s) => s.resetEditorPagePadding);
   const editorShowBorder = useSettingsStore((s) => s.editorShowBorder);
   const setEditorShowBorder = useSettingsStore((s) => s.setEditorShowBorder);
 
@@ -227,6 +231,10 @@ export function WidthControl() {
                 </button>
               )}
             </div>
+            <PagePaddingControl
+              padding={editorPagePadding}
+              onChange={setEditorPagePadding}
+            />
             <label className="flex items-center gap-2 text-sm text-foreground">
               <input
                 type="checkbox"
@@ -237,10 +245,13 @@ export function WidthControl() {
             </label>
             <button
               type="button"
-              onClick={() => setEditorContentWidth(DEFAULT_EDITOR_CONTENT_WIDTH)}
+              onClick={() => {
+                setEditorContentWidth(DEFAULT_EDITOR_CONTENT_WIDTH);
+                resetEditorPagePadding();
+              }}
               className="px-2 py-1 text-sm rounded hover:bg-muted self-start"
             >
-              {t("editor.resetWidth")}
+              {t("editor.resetLayout")}
             </button>
           </div>,
           document.body,

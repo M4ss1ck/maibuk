@@ -46,6 +46,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     alwaysOnTop,
     editorZoom,
     editorContentWidth,
+    editorPagePadding,
   } = useSettingsStore();
 
   useEffect(() => {
@@ -67,6 +68,13 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
       `${editorContentWidth}px`,
     );
   }, [editorContentWidth]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--editor-page-padding",
+      `${editorPagePadding.top}px ${editorPagePadding.right}px ${editorPagePadding.bottom}px ${editorPagePadding.left}px`,
+    );
+  }, [editorPagePadding]);
 
   useEffect(() => {
     const root = document.documentElement;

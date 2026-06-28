@@ -75,6 +75,29 @@ export function clampEditorContentWidth(px: number): number {
   );
 }
 
+export interface EditorPagePadding {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export const EDITOR_PAGE_PADDING_MIN = 0;
+export const EDITOR_PAGE_PADDING_MAX = 96;
+export const EDITOR_PAGE_PADDING_STEP = 8;
+export const DEFAULT_EDITOR_PAGE_PADDING = 32;
+
+/** Snap a page-padding value to the step grid and clamp to [MIN, MAX]. */
+export function clampEditorPagePadding(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_EDITOR_PAGE_PADDING;
+  const snapped =
+    Math.round(value / EDITOR_PAGE_PADDING_STEP) * EDITOR_PAGE_PADDING_STEP;
+  return Math.max(
+    EDITOR_PAGE_PADDING_MIN,
+    Math.min(EDITOR_PAGE_PADDING_MAX, snapped),
+  );
+}
+
 export function getDefaultBackupRetention(isWeb: boolean): number {
   return isWeb ? DEFAULT_WEB_BACKUP_RETENTION : DEFAULT_TAURI_BACKUP_RETENTION;
 }
@@ -164,6 +187,7 @@ export interface Settings {
   notesSidebarWidth: number;
   toolbarExpanded: boolean;
   editorContentWidth: number;
+  editorPagePadding: EditorPagePadding;
   editorShowBorder: boolean;
   chapterListView: ChapterListView;
   showChapterOutline: boolean;

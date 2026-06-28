@@ -382,7 +382,7 @@ export function Editor({
         onBlur={onBlur}
       >
         <div
-          className={`editor-content-surface mx-auto p-8 editor-zoom-surface${
+          className={`editor-content-surface mx-auto editor-zoom-surface${
             editorShowBorder ? " editor-show-border" : ""
           }`}
         >
