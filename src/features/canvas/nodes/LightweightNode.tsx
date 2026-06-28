@@ -6,6 +6,8 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "../store";
 import { useSettingsStore } from "../../settings/store";
 import type { CanvasFlowNodeData } from "../reactFlowAdapter";
@@ -100,11 +102,13 @@ export function LightweightNode({
   data,
   selected,
 }: NodeProps<LightweightFlowNode>) {
+  const { t } = useTranslation();
   const node = data.node;
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const beginLiveChange = useCanvasStore((state) => state.beginLiveChange);
   const resizeNodeLive = useCanvasStore((state) => state.resizeNodeLive);
   const endLiveChange = useCanvasStore((state) => state.endLiveChange);
+  const removeNode = useCanvasStore((state) => state.removeNode);
   const [editing, setEditing] = useState(false);
   const html = node.kind === "text" ? node.html : null;
   const safeHtml = useMemo(() => (html === null ? "" : prepareStaticCanvasHtml(html)), [html]);
@@ -120,6 +124,20 @@ export function LightweightNode({
       }`}
       onDoubleClick={() => !editorReadOnly && setEditing(true)}
     >
+      {selected && !editorReadOnly && !editing && (
+        <button
+          type="button"
+          aria-label={t("common.delete")}
+          title={t("common.delete")}
+          className="nodrag nopan absolute -right-2 -top-2 z-10 flex size-5 items-center justify-center rounded-full border border-border bg-card text-destructive shadow-sm transition-opacity hover:bg-destructive hover:text-white"
+          onClick={(event) => {
+            event.stopPropagation();
+            removeNode(node.id);
+          }}
+        >
+          <Trash2 className="size-3" aria-hidden="true" />
+        </button>
+      )}
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" />
       {resizable &&
         (["left", "right"] as const).map((side) => (

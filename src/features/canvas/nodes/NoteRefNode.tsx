@@ -1,4 +1,4 @@
-import { BookOpen, ExternalLink } from "lucide-react";
+import { BookOpen, ExternalLink, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { type Node, type NodeProps } from "@xyflow/react";
@@ -8,6 +8,7 @@ import { notePlainText } from "../../../components/notes/notes-list-model";
 import { timeAgo } from "../../../components/notes/timeAgo";
 import { useBookStore } from "../../books/store";
 import { useNoteStore } from "../../notes";
+import { useCanvasStore } from "../store";
 import type { CanvasFlowNodeData } from "../reactFlowAdapter";
 import { CanvasNodeHandles } from "./CanvasNodeHandles";
 
@@ -17,6 +18,8 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const node = data.node;
+  const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
+  const removeNode = useCanvasStore((state) => state.removeNode);
   const note = useNoteStore((state) =>
     node.kind === "noteRef" ? state.notes.find((candidate) => candidate.id === node.noteId) : undefined,
   );
@@ -39,6 +42,20 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
         selected ? "border-primary ring-2 ring-primary/20" : "border-border"
       }`}
     >
+      {selected && !editorReadOnly && (
+        <button
+          type="button"
+          aria-label={t("common.delete")}
+          title={t("common.delete")}
+          className="nodrag nopan absolute -right-2 -top-2 z-10 flex size-5 items-center justify-center rounded-full border border-border bg-card text-destructive shadow-sm transition-opacity hover:bg-destructive hover:text-white"
+          onClick={(event) => {
+            event.stopPropagation();
+            removeNode(node.id);
+          }}
+        >
+          <Trash2 className="size-3" aria-hidden="true" />
+        </button>
+      )}
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="card" />
 
       <h3 className="truncate font-medium text-foreground">{title}</h3>
