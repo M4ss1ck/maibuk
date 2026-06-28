@@ -18,11 +18,18 @@ import {
 import { assignHeadingIds } from "../../links/heading-ids";
 import { useNoteStore } from "../../notes/store";
 
-export function NodeFormatBubble({ editor }: { editor: Editor }) {
+export function NodeFormatBubble({
+  editor,
+  onLinkDialogOpenChange,
+}: {
+  editor: Editor;
+  onLinkDialogOpenChange?: (open: boolean) => void;
+}) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const notes = useNoteStore((state) => state.notes);
   const books = useBookStore((state) => state.books);
+  const loadBooks = useBookStore((state) => state.loadBooks);
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) => ({ hasSelection: !e.state.selection.empty }),
@@ -89,6 +96,10 @@ export function NodeFormatBubble({ editor }: { editor: Editor }) {
   }, []);
 
   useEffect(() => {
+    void loadBooks();
+  }, [loadBooks]);
+
+  useEffect(() => {
     if (!state.hasSelection) {
       setPos(null);
       return;
@@ -108,14 +119,21 @@ export function NodeFormatBubble({ editor }: { editor: Editor }) {
         >
           <FormattingButtons
             editor={editor}
-            onLinkClick={() => setLinkDialogOpen(true)}
+            onLinkClick={() => {
+              onLinkDialogOpenChange?.(true);
+              setLinkDialogOpen(true);
+            }}
           />
         </div>
       )}
       <LinkDialog
         editor={editor}
         isOpen={linkDialogOpen}
-        onClose={() => setLinkDialogOpen(false)}
+        onClose={() => {
+          setLinkDialogOpen(false);
+          onLinkDialogOpenChange?.(false);
+          editor.commands.focus();
+        }}
         internalTargets={internalTargets}
         loadInternalTargetChildren={loadInternalTargetChildren}
       />

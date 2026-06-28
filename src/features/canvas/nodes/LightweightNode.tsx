@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type Node, type NodeProps } from "@xyflow/react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import DOMPurify from "dompurify";
 import { useCanvasStore } from "../store";
 import type { CanvasFlowNodeData } from "../reactFlowAdapter";
+import type { LightweightCanvasNode } from "../types";
 import { nodeEditorExtensions } from "./nodeEditorExtensions";
 import { CanvasNodeHandles } from "./CanvasNodeHandles";
 import { NodeFormatBubble } from "./NodeFormatBubble";
@@ -20,12 +21,66 @@ function sanitizeNodeHtml(html: string): string {
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
 
+function ActiveNodeEditor({
+  node,
+  onDone,
+  onCancel,
+}: {
+  node: LightweightCanvasNode;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const updateTextNode = useCanvasStore((state) => state.updateTextNode);
+  const linkDialogOpen = useRef(false);
+  const editor = useEditor({
+    extensions: nodeEditorExtensions,
+    content: node.html,
+    editable: true,
+    editorProps: { attributes: { class: "outline-none" } },
+  });
+
+  useEffect(() => {
+    editor?.commands.focus("end");
+  }, [editor]);
+
+  if (!editor) return null;
+
+  const commit = () => {
+    updateTextNode(node.id, { html: editor.getHTML() });
+    onDone();
+  };
+
+  return (
+    <>
+      <EditorContent
+        editor={editor}
+        className="nodrag nopan prose prose-sm max-w-none"
+        onBlur={() => {
+          if (!linkDialogOpen.current) commit();
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+          }
+        }}
+      />
+      <NodeFormatBubble
+        editor={editor}
+        onLinkDialogOpenChange={(open) => {
+          linkDialogOpen.current = open;
+        }}
+      />
+    </>
+  );
+}
+
 export function LightweightNode({
   data,
   selected,
 }: NodeProps<LightweightFlowNode>) {
   const node = data.node;
-  const updateTextNode = useCanvasStore((state) => state.updateTextNode);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const [editing, setEditing] = useState(false);
   const safeHtml = useMemo(
@@ -33,26 +88,7 @@ export function LightweightNode({
     [node],
   );
 
-  const editor = useEditor(
-    {
-      extensions: nodeEditorExtensions,
-      content: node.kind === "text" ? node.html : "",
-      editable: editing,
-      editorProps: { attributes: { class: "outline-none" } },
-    },
-    [editing],
-  );
-
-  useEffect(() => {
-    if (editor && !editing && node.kind === "text") editor.commands.setContent(node.html);
-  }, [editor, editing, node]);
-
   if (node.kind !== "text") return null;
-
-  const commit = () => {
-    if (editor) updateTextNode(node.id, { html: editor.getHTML() });
-    setEditing(false);
-  };
 
   return (
     <div
@@ -63,22 +99,12 @@ export function LightweightNode({
       onDoubleClick={() => !editorReadOnly && setEditing(true)}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" />
-      {editing && editor ? (
-        <>
-          <EditorContent
-            editor={editor}
-            className="nodrag nopan prose prose-sm max-w-none"
-            onBlur={commit}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Escape") {
-                e.preventDefault();
-                setEditing(false);
-              }
-            }}
-          />
-          <NodeFormatBubble editor={editor} />
-        </>
+      {editing ? (
+        <ActiveNodeEditor
+          node={node}
+          onDone={() => setEditing(false)}
+          onCancel={() => setEditing(false)}
+        />
       ) : (
         <div
           className="prose prose-sm max-w-none whitespace-pre-wrap"
