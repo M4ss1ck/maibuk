@@ -60,6 +60,36 @@ export function DrawingCaptureOverlay({
   const [points, setPoints] = useState<CanvasPosition[]>([]);
   const [eraserBox, setEraserBox] = useState<{ start: CanvasPosition; current: CanvasPosition } | null>(null);
 
+  const previewPath = useMemo(() => {
+    if (toolMode !== "pen" || points.length === 0) return "";
+    const rect = surfaceRef.current?.getBoundingClientRect();
+    return strokeToPath(
+      points
+        .map((point) => reactFlow.flowToScreenPosition(point))
+        .map((screen) => ({
+          x: screen.x - (rect?.left ?? 0),
+          y: screen.y - (rect?.top ?? 0),
+        })),
+    );
+  }, [points, reactFlow, toolMode]);
+
+  const eraserRect = useMemo(() => {
+    if (toolMode !== "eraser" || !eraserBox) return null;
+    const rect = surfaceRef.current?.getBoundingClientRect();
+    const boxRect = rectangleFromPoints(eraserBox.start, eraserBox.current);
+    const screenOrigin = reactFlow.flowToScreenPosition({ x: boxRect.x, y: boxRect.y });
+    const screenCorner = reactFlow.flowToScreenPosition({
+      x: boxRect.x + boxRect.width,
+      y: boxRect.y + boxRect.height,
+    });
+    return {
+      x: screenOrigin.x - (rect?.left ?? 0),
+      y: screenOrigin.y - (rect?.top ?? 0),
+      width: screenCorner.x - screenOrigin.x,
+      height: screenCorner.y - screenOrigin.y,
+    };
+  }, [eraserBox, reactFlow, toolMode]);
+
   if (toolMode === "select") return null;
 
   const toFlow = (event: ReactPointerEvent) =>
@@ -151,36 +181,6 @@ export function DrawingCaptureOverlay({
     setPoints([]);
     setEraserBox(null);
   };
-
-  const previewPath = useMemo(() => {
-    if (toolMode !== "pen" || points.length === 0) return "";
-    const rect = surfaceRef.current?.getBoundingClientRect();
-    return strokeToPath(
-      points
-        .map((point) => reactFlow.flowToScreenPosition(point))
-        .map((screen) => ({
-          x: screen.x - (rect?.left ?? 0),
-          y: screen.y - (rect?.top ?? 0),
-        })),
-    );
-  }, [points, reactFlow, toolMode]);
-
-  const eraserRect = useMemo(() => {
-    if (toolMode !== "eraser" || !eraserBox) return null;
-    const rect = surfaceRef.current?.getBoundingClientRect();
-    const boxRect = rectangleFromPoints(eraserBox.start, eraserBox.current);
-    const screenOrigin = reactFlow.flowToScreenPosition({ x: boxRect.x, y: boxRect.y });
-    const screenCorner = reactFlow.flowToScreenPosition({
-      x: boxRect.x + boxRect.width,
-      y: boxRect.y + boxRect.height,
-    });
-    return {
-      x: screenOrigin.x - (rect?.left ?? 0),
-      y: screenOrigin.y - (rect?.top ?? 0),
-      width: screenCorner.x - screenOrigin.x,
-      height: screenCorner.y - screenOrigin.y,
-    };
-  }, [eraserBox, reactFlow, toolMode]);
 
   return (
     <div
