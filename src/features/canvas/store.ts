@@ -9,6 +9,7 @@ import {
   type CanvasEdge,
   type CanvasNode,
   type CanvasPosition,
+  type CanvasStroke,
   type CanvasViewport,
   type CreateCanvasInput,
   type ReorderCanvasItem,
@@ -112,6 +113,14 @@ export interface CanvasStoreState {
   past: CanvasDoc[];
   future: CanvasDoc[];
   liveBaseDoc: CanvasDoc | null;
+  toolMode: "select" | "pen" | "eraser";
+  penWidth: number;
+  penColor: string;
+  addStroke: (stroke: CanvasStroke) => void;
+  removeStroke: (id: string) => void;
+  setToolMode: (mode: "select" | "pen" | "eraser") => void;
+  setPenWidth: (width: number) => void;
+  setPenColor: (color: string) => void;
   loadCanvases: () => Promise<void>;
   createCanvas: (input?: CreateCanvasInput) => Promise<Canvas>;
   deleteCanvas: (id: string) => Promise<void>;
@@ -152,6 +161,9 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   galleryLoading: false,
   galleryError: null,
   ...editorResetState(),
+  toolMode: "select",
+  penWidth: 3,
+  penColor: "#ef4444",
 
   loadCanvases: async () => {
     set({ galleryLoading: true, galleryError: null });
@@ -300,7 +312,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     }
   },
 
-  closeCanvas: () => set(editorResetState()),
+  closeCanvas: () => set({ ...editorResetState(), toolMode: "select" }),
   resetEditorState: () => set(editorResetState()),
 
   commit: (next) => {
@@ -404,7 +416,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     if (!node || node.kind !== "text") return;
     const color = patch.color === "" ? undefined : patch.color;
     if (
-      (patch.text === undefined || patch.text === node.text) &&
+      (patch.html === undefined || patch.html === node.html) &&
       (patch.color === undefined || color === node.color)
     ) {
       return;
@@ -479,6 +491,27 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     if (state.doc.edges.some((candidate) => candidate.id === id)) return;
     get().commit({ ...state.doc, edges: [...state.doc.edges, { ...edge, id }] });
   },
+
+  addStroke: (stroke) => {
+    const state = get();
+    if (state.editorReadOnly) return;
+    const id = stroke.id || generateId();
+    if (state.doc.strokes.some((candidate) => candidate.id === id)) return;
+    get().commit({ ...state.doc, strokes: [...state.doc.strokes, { ...stroke, id }] });
+  },
+
+  removeStroke: (id) => {
+    const state = get();
+    if (!state.doc.strokes.some((stroke) => stroke.id === id)) return;
+    get().commit({
+      ...state.doc,
+      strokes: state.doc.strokes.filter((stroke) => stroke.id !== id),
+    });
+  },
+
+  setToolMode: (toolMode) => set({ toolMode }),
+  setPenWidth: (penWidth) => set({ penWidth }),
+  setPenColor: (penColor) => set({ penColor }),
 
   updateEdge: (id, patch) => {
     const state = get();

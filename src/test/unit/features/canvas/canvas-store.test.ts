@@ -24,7 +24,7 @@ async function insertCanvas(
 const textNode = (id: string, x = 0) => ({
   id,
   kind: "text" as const,
-  text: id,
+  html: `<p>${id}</p>`,
   position: { x, y: 0 },
 });
 
@@ -141,9 +141,52 @@ describe("useCanvasStore", () => {
       position: { x: 0, y: 0 },
     });
     const revision = useCanvasStore.getState().revision;
-    useCanvasStore.getState().updateTextNode("ref", { text: "wrong" });
+    useCanvasStore.getState().updateTextNode("ref", { html: "<p>wrong</p>" });
     expect(useCanvasStore.getState().revision).toBe(revision);
-    expect(useCanvasStore.getState().doc.nodes[0]).not.toHaveProperty("text");
+    expect(useCanvasStore.getState().doc.nodes[0]).not.toHaveProperty("html");
+  });
+
+  it("adds and removes strokes through history", () => {
+    const store = useCanvasStore.getState();
+    store.addStroke({
+      id: "s1",
+      points: [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
+      color: "#000",
+      width: 2,
+    });
+    expect(useCanvasStore.getState().doc.strokes.map((s) => s.id)).toEqual(["s1"]);
+    store.removeStroke("s1");
+    expect(useCanvasStore.getState().doc.strokes).toEqual([]);
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().doc.strokes.map((s) => s.id)).toEqual(["s1"]);
+  });
+
+  it("tool mode and pen settings are transient (no doc revision change)", () => {
+    const before = useCanvasStore.getState().revision;
+    useCanvasStore.getState().setToolMode("pen");
+    useCanvasStore.getState().setPenWidth(8);
+    useCanvasStore.getState().setPenColor("#ff0000");
+    const s = useCanvasStore.getState();
+    expect(s.toolMode).toBe("pen");
+    expect(s.penWidth).toBe(8);
+    expect(s.penColor).toBe("#ff0000");
+    expect(s.revision).toBe(before);
+  });
+
+  it("updates a text node's html", () => {
+    const store = useCanvasStore.getState();
+    store.addNode({
+      id: "t1",
+      kind: "text",
+      html: "<p>a</p>",
+      position: { x: 0, y: 0 },
+    });
+    store.updateTextNode("t1", { html: "<p>b</p>" });
+    const node = useCanvasStore.getState().doc.nodes.find((n) => n.id === "t1");
+    expect(node?.kind === "text" && node.html).toBe("<p>b</p>");
   });
 
   it("validates edges, preserves handles, and prevents duplicate connections", () => {
