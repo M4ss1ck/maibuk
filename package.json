@@ -22,7 +22,7 @@
     "build:windows": "tauri build --target x86_64-pc-windows-gnu",
     "build:android": "tauri android build",
     "dev:web": "VITE_BUILD_TARGET=web vite",
-    "build:web": "VITE_BUILD_TARGET=web tsc && vite build",
+    "build:web": "VITE_BUILD_TARGET=web tsc && VITE_BUILD_TARGET=web vite build",
     "preview:web": "VITE_BUILD_TARGET=web vite preview",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
