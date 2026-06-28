@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Background,
   Controls,
   ReactFlow,
   ReactFlowProvider,
@@ -24,6 +23,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
+import { MaibukLogo } from "../components/icons";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
@@ -33,6 +33,7 @@ import { fromConnection, toFlowEdges, toFlowNodes } from "../features/canvas/rea
 import { useCanvasStore } from "../features/canvas/store";
 import type { CanvasDoc } from "../features/canvas/types";
 import { useNoteStore } from "../features/notes";
+import { useThemeStore } from "../features/theme";
 import { useShortcuts } from "../lib/shortcuts";
 
 const AUTOSAVE_DELAY = 800;
@@ -99,6 +100,7 @@ function CanvasEditor() {
   const renameCanvas = useCanvasStore((state) => state.renameCanvas);
   const notes = useNoteStore((state) => state.notes);
   const loadNotes = useNoteStore((state) => state.loadNotes);
+  const theme = useThemeStore((state) => state.theme);
   const [notePickerOpen, setNotePickerOpen] = useState(false);
   const [noteQuery, setNoteQuery] = useState("");
   const [titleDraft, setTitleDraft] = useState("");
@@ -300,6 +302,12 @@ function CanvasEditor() {
             }
           }}
         />
+        <span
+          className="ml-auto min-w-28 text-right text-xs text-muted-foreground"
+          role="status"
+        >
+          {saveLabel}
+        </span>
         <Button size="sm" onClick={handleAddTextNode}>
           <FilePlus2 className="size-4" aria-hidden="true" />
           {t("canvas.addTextNode")}
@@ -323,9 +331,6 @@ function CanvasEditor() {
         >
           <Trash2 className="size-4" aria-hidden="true" />
         </Button>
-        <span className="ml-auto text-xs text-muted-foreground" role="status">
-          {saveLabel}
-        </span>
       </header>
 
       {selectedEdge && (
@@ -356,8 +361,14 @@ function CanvasEditor() {
         </div>
       )}
 
-      <div ref={surfaceRef} className="min-h-0 flex-1">
+      <div ref={surfaceRef} className="relative min-h-0 flex-1">
+        <MaibukLogo
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 w-1/2 max-w-md -translate-x-1/2 -translate-y-1/2 text-foreground opacity-[0.035]"
+        />
         <ReactFlow
+          colorMode={theme}
+          style={{ backgroundColor: "transparent" }}
           nodes={flowNodes as Node[]}
           edges={flowEdges as Edge[]}
           nodeTypes={nodeTypes}
@@ -372,7 +383,6 @@ function CanvasEditor() {
           defaultViewport={doc.viewport}
           fitView={!hasMeaningfulViewport(doc) && doc.nodes.length > 0}
         >
-          <Background />
           <Controls />
         </ReactFlow>
       </div>

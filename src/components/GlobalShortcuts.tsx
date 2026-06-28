@@ -26,6 +26,7 @@ export function GlobalShortcuts() {
     const list: { id: string; label: string; keys: string[] }[] = [
       { id: "global.gotoProjects", label: t("shortcuts.gotoProjects"), keys: ["g", "p"] },
       { id: "global.gotoNotes", label: t("shortcuts.gotoNotes"), keys: ["g", "n"] },
+      { id: "global.gotoCanvas", label: t("shortcuts.gotoCanvas"), keys: ["g", "c"] },
       { id: "global.gotoMetrics", label: t("shortcuts.gotoMetrics"), keys: ["g", "m"] },
       { id: "global.gotoSettings", label: t("shortcuts.gotoSettings"), keys: ["g", "s"] },
       { id: "global.toggleTheme", label: t("shortcuts.toggleTheme"), keys: ["g", "t"] },
@@ -108,6 +109,14 @@ export function GlobalShortcuts() {
       onTrigger: () => {
         if (location.pathname !== "/notes") {
           navigate("/notes");
+        }
+      },
+    },
+    {
+      sequence: ["g", "c"],
+      onTrigger: () => {
+        if (location.pathname !== "/canvas") {
+          navigate("/canvas");
         }
       },
     },

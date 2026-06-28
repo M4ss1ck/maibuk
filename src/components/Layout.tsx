@@ -169,6 +169,10 @@ export function Layout() {
           >
             <Workflow className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.canvas")}</span>
+            <KeyboardShortcut
+              keys={["g", "c"]}
+              className="ml-auto hidden lg:inline-flex"
+            />
           </NavLink>
 
           <NavLink

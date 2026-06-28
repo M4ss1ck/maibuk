@@ -848,6 +848,7 @@
     "gotoSettings": "Ir a Configuración",
     "gotoMetrics": "Ir a Métricas",
     "gotoNotes": "Ir a Notas",
+    "gotoCanvas": "Ir a Lienzos",
     "toggleTheme": "Cambiar tema",
     "toggleShortcutHints": "Alternar atajos visuales",
     "toggleAlwaysOnTop": "Alternar siempre visible",
