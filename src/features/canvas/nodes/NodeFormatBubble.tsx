@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useStore } from "@xyflow/react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import {
@@ -26,7 +28,9 @@ export function NodeFormatBubble({
   onLinkDialogOpenChange?: (open: boolean) => void;
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [toolbarElement, setToolbarElement] = useState<HTMLDivElement | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [translateX, translateY, zoom] = useStore((flowState) => flowState.transform);
   const notes = useNoteStore((state) => state.notes);
   const books = useBookStore((state) => state.books);
   const loadBooks = useBookStore((state) => state.loadBooks);
@@ -99,33 +103,80 @@ export function NodeFormatBubble({
     void loadBooks();
   }, [loadBooks]);
 
-  useEffect(() => {
-    if (!state.hasSelection) {
+  const updatePosition = useCallback(() => {
+    if (editor.state.selection.empty) {
       setPos(null);
       return;
     }
-    const { from } = editor.state.selection;
-    const coords = editor.view.coordsAtPos(from);
-    setPos({ top: coords.top - 44, left: coords.left });
-  }, [editor, state.hasSelection, editor.state.selection]);
+
+    const { from, to } = editor.state.selection;
+    const start = editor.view.coordsAtPos(from);
+    const end = editor.view.coordsAtPos(to);
+    const canvasRect = editor.view.dom.closest(".react-flow")?.getBoundingClientRect();
+    const bounds = canvasRect ?? {
+      top: 0,
+      right: window.innerWidth,
+      bottom: window.innerHeight,
+      left: 0,
+    };
+    const toolbarWidth = toolbarElement?.offsetWidth || 320;
+    const toolbarHeight = toolbarElement?.offsetHeight || 40;
+    const gap = 8;
+    const centerX = (start.left + end.right) / 2;
+    const left = Math.max(
+      bounds.left + gap,
+      Math.min(centerX - toolbarWidth / 2, bounds.right - toolbarWidth - gap),
+    );
+    const above = start.top - toolbarHeight - gap;
+    const top =
+      above >= bounds.top + gap
+        ? above
+        : Math.min(end.bottom + gap, bounds.bottom - toolbarHeight - gap);
+
+    setPos({ top, left });
+  }, [editor, toolbarElement]);
+
+  useEffect(() => {
+    updatePosition();
+  }, [state.hasSelection, translateX, translateY, updatePosition, zoom]);
+
+  useEffect(() => {
+    let animationFrame = 0;
+    const onSelectionUpdate = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(updatePosition);
+    };
+    editor.on("selectionUpdate", onSelectionUpdate);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      editor.off("selectionUpdate", onSelectionUpdate);
+    };
+  }, [editor, updatePosition]);
 
   return (
     <>
-      {state.hasSelection && pos && (
-        <div
-          className="fixed z-50 flex items-center gap-0.5 rounded-lg border border-border bg-card px-1.5 py-1 shadow-lg"
-          style={{ top: pos.top, left: pos.left }}
-          onMouseDown={(event) => event.preventDefault()}
-        >
-          <FormattingButtons
-            editor={editor}
-            onLinkClick={() => {
-              onLinkDialogOpenChange?.(true);
-              setLinkDialogOpen(true);
+      {state.hasSelection &&
+        pos &&
+        createPortal(
+          <div
+            ref={setToolbarElement}
+            className="fixed z-50 flex items-center gap-0.5 rounded-lg border border-border bg-card px-1.5 py-1 shadow-lg"
+            style={{ top: pos.top, left: pos.left }}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
             }}
-          />
-        </div>
-      )}
+          >
+            <FormattingButtons
+              editor={editor}
+              onLinkClick={() => {
+                onLinkDialogOpenChange?.(true);
+                setLinkDialogOpen(true);
+              }}
+            />
+          </div>,
+          document.body,
+        )}
       <LinkDialog
         editor={editor}
         isOpen={linkDialogOpen}
