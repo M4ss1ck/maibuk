@@ -159,6 +159,7 @@ describe("Canvas page", () => {
   it("resets the selected node's color with the automatic swatch", () => {
     Object.assign(mocks.state, { selectedNodeId: "node" });
     renderCanvas();
+    fireEvent.click(screen.getByRole("button", { name: "canvas.nodeColor" }));
     fireEvent.click(screen.getByRole("button", { name: "canvas.defaultNodeColor" }));
     expect(mocks.actions.updateTextNode).toHaveBeenCalledWith("node", { color: "" });
   });
