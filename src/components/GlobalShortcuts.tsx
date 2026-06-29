@@ -69,6 +69,20 @@ export function GlobalShortcuts() {
       );
     }
 
+    if (/^\/canvas\/[^/]+$/.test(location.pathname)) {
+      list.push(
+        { id: "canvas.toolSelect", label: t("canvas.toolSelect"), keys: ["V"] },
+        { id: "canvas.toolPen", label: t("canvas.toolPen"), keys: ["P"] },
+        { id: "canvas.toolEraser", label: t("canvas.toolEraser"), keys: ["E"] },
+        { id: "canvas.addTextNode", label: t("canvas.addTextNode"), keys: ["T"] },
+        { id: "canvas.addNoteRef", label: t("canvas.addNoteRef"), keys: ["N"] },
+        { id: "canvas.zoomIn", label: t("canvas.zoomIn"), keys: ["Ctrl++"] },
+        { id: "canvas.zoomOut", label: t("canvas.zoomOut"), keys: ["Ctrl+-"] },
+        { id: "canvas.fitView", label: t("canvas.fitView"), keys: ["Shift+1"] },
+        { id: "canvas.lock", label: t("canvas.lockInteractivity"), keys: ["L"] }
+      );
+    }
+
     if (/^\/book\/[^/]+\/cover$/.test(location.pathname)) {
       list.push(
         { id: "cover.save", label: t("shortcuts.save"), keys: ["Ctrl+S"] },

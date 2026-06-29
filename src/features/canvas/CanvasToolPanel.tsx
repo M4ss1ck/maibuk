@@ -1,8 +1,6 @@
 import { ButtonHTMLAttributes, forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowUpRight,
-  Circle,
   FilePlus2,
   Link2,
   Lock,
@@ -10,7 +8,6 @@ import {
   MousePointer2,
   Pencil,
   Eraser,
-  Square,
   Unlock,
   ZoomIn,
   ZoomOut,
@@ -67,41 +64,21 @@ export function CanvasToolPanel({
   const toggleInteractivityLocked = useCanvasStore((state) => state.toggleInteractivityLocked);
 
   const tools = [
-    { mode: "select" as const, icon: MousePointer2, label: t("canvas.toolSelect") },
-    { mode: "pen" as const, icon: Pencil, label: t("canvas.toolPen") },
-    { mode: "eraser" as const, icon: Eraser, label: t("canvas.toolEraser") },
-  ];
-  const comingSoon = [
-    { icon: Square, label: t("canvas.toolRectangle") },
-    { icon: ArrowUpRight, label: t("canvas.toolArrow") },
-    { icon: Circle, label: t("canvas.toolEllipse") },
+    { mode: "select" as const, icon: MousePointer2, label: t("canvas.toolSelect"), shortcut: "V" },
+    { mode: "pen" as const, icon: Pencil, label: t("canvas.toolPen"), shortcut: "P" },
+    { mode: "eraser" as const, icon: Eraser, label: t("canvas.toolEraser"), shortcut: "E" },
   ];
 
   return (
     <div className="flex w-9 flex-col gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-lg backdrop-blur">
       <ToolbarGroup>
-        {tools.map(({ mode, icon: Icon, label }) => (
+        {tools.map(({ mode, icon: Icon, label, shortcut }) => (
           <ToolbarButton
             key={mode}
             active={toolMode === mode}
             onClick={() => setToolMode(mode)}
             aria-label={label}
-            title={label}
-          >
-            <Icon className="size-4" aria-hidden="true" />
-          </ToolbarButton>
-        ))}
-      </ToolbarGroup>
-
-      <ToolbarDivider />
-
-      <ToolbarGroup>
-        {comingSoon.map(({ icon: Icon, label }) => (
-          <ToolbarButton
-            key={label}
-            disabled
-            aria-label={label}
-            title={`${label} — ${t("canvas.comingSoon")}`}
+            title={`${label} (${shortcut})`}
           >
             <Icon className="size-4" aria-hidden="true" />
           </ToolbarButton>
@@ -114,14 +91,14 @@ export function CanvasToolPanel({
         <ToolbarButton
           onClick={onAddText}
           aria-label={t("canvas.addTextNode")}
-          title={t("canvas.addTextNode")}
+          title={`${t("canvas.addTextNode")} (T)`}
         >
           <FilePlus2 className="size-4" aria-hidden="true" />
         </ToolbarButton>
         <ToolbarButton
           onClick={onAddNoteRef}
           aria-label={t("canvas.addNoteRef")}
-          title={t("canvas.addNoteRef")}
+          title={`${t("canvas.addNoteRef")} (N)`}
         >
           <Link2 className="size-4" aria-hidden="true" />
         </ToolbarButton>
@@ -133,21 +110,21 @@ export function CanvasToolPanel({
         <ToolbarButton
           onClick={onZoomIn}
           aria-label={t("canvas.zoomIn")}
-          title={t("canvas.zoomIn")}
+          title={`${t("canvas.zoomIn")} (Ctrl +)`}
         >
           <ZoomIn className="size-4" aria-hidden="true" />
         </ToolbarButton>
         <ToolbarButton
           onClick={onZoomOut}
           aria-label={t("canvas.zoomOut")}
-          title={t("canvas.zoomOut")}
+          title={`${t("canvas.zoomOut")} (Ctrl -)`}
         >
           <ZoomOut className="size-4" aria-hidden="true" />
         </ToolbarButton>
         <ToolbarButton
           onClick={onFitView}
           aria-label={t("canvas.fitView")}
-          title={t("canvas.fitView")}
+          title={`${t("canvas.fitView")} (Shift 1)`}
         >
           <Maximize className="size-4" aria-hidden="true" />
         </ToolbarButton>
@@ -162,9 +139,9 @@ export function CanvasToolPanel({
           aria-label={
             interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")
           }
-          title={
+          title={`${
             interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")
-          }
+          } (L)`}
         >
           {interactivityLocked ? (
             <Lock className="size-4" aria-hidden="true" />

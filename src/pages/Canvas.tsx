@@ -152,7 +152,9 @@ function CanvasEditor() {
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
   const selectedEdgeId = useCanvasStore((state) => state.selectedEdgeId);
   const toolMode = useCanvasStore((state) => state.toolMode);
+  const setToolMode = useCanvasStore((state) => state.setToolMode);
   const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
+  const toggleInteractivityLocked = useCanvasStore((state) => state.toggleInteractivityLocked);
   const loadCanvas = useCanvasStore((state) => state.loadCanvas);
   const closeCanvas = useCanvasStore((state) => state.closeCanvas);
   const persistCanvas = useCanvasStore((state) => state.persistCanvas);
@@ -348,6 +350,15 @@ function CanvasEditor() {
       { keys: ["delete", "backspace"], onTrigger: deleteSelection },
       { keys: "escape", onTrigger: clearSelection },
       { keys: "alt+arrowleft", onTrigger: () => navigate("/canvas") },
+      { keys: "v", onTrigger: () => setToolMode("select") },
+      { keys: "p", onTrigger: () => setToolMode("pen") },
+      { keys: "e", onTrigger: () => setToolMode("eraser") },
+      { keys: "t", onTrigger: handleAddTextNode },
+      { keys: "n", onTrigger: () => setNotePickerOpen(true) },
+      { keys: ["ctrl+=", "meta+=", "ctrl++", "meta++"], onTrigger: () => reactFlow.zoomIn() },
+      { keys: ["ctrl+-", "meta+-"], onTrigger: () => reactFlow.zoomOut() },
+      { keys: ["shift+1", "shift+!"], onTrigger: () => reactFlow.fitView() },
+      { keys: "l", onTrigger: toggleInteractivityLocked },
     ],
     { enabled: loadState === "ready" && !editorReadOnly }
   );
