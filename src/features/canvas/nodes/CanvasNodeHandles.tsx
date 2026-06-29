@@ -12,10 +12,10 @@ const SIDE_POSITION: Record<Side, Position> = {
 // Push the connection ports a few px outside the node edge so they no longer
 // overlap the resize grips that sit on the edges themselves.
 const SIDE_OFFSET: Record<Side, string> = {
-  top: "!-mt-2",
-  right: "!-mr-2",
-  bottom: "!-mb-2",
-  left: "!-ml-2",
+  top: "-mt-2!",
+  right: "-mr-2!",
+  bottom: "-mb-2!",
+  left: "-ml-2!",
 };
 
 const STUB_CLASS: Record<Side, string> = {
@@ -59,7 +59,7 @@ export function CanvasNodeHandles({
               id={side}
               type="source"
               position={SIDE_POSITION[side]}
-              className={`!z-10 !h-2.5 !w-2.5 !rounded-full !border-2 !border-primary !bg-background opacity-0 transition-opacity group-hover:opacity-100 ${SIDE_OFFSET[side]}`}
+              className={`z-10! h-2.5! w-2.5! rounded-full! border-2! border-primary! bg-background! opacity-0 transition-opacity group-hover:opacity-100 ${SIDE_OFFSET[side]}`}
             />
           ))}
         </>

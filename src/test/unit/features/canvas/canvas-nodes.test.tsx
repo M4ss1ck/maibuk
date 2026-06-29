@@ -136,9 +136,9 @@ describe("Canvas custom nodes", () => {
     );
     const handles = screen.getAllByTestId("handle");
     expect(handles).toHaveLength(4);
-    expect(handles.every((handle) => handle.className.includes("!z-10"))).toBe(true);
-    expect(screen.getByTestId("resize-left").className).toContain("!z-0");
-    expect(screen.getByTestId("resize-right").className).toContain("!z-0");
+    expect(handles.every((handle) => handle.className.includes("z-10!"))).toBe(true);
+    expect(screen.getByTestId("resize-left").className).toContain("z-0!");
+    expect(screen.getByTestId("resize-right").className).toContain("z-0!");
   });
 
   it("hides connection ports and resize grips when interactivity is locked", () => {
