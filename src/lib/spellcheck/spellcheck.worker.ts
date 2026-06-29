@@ -1,4 +1,4 @@
-import type { WorkerRequest, WorkerResponse } from "./types";
+import type { WorkerRequest, WorkerResponse } from "@/lib/spellcheck/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let nspellInstance: any = null;

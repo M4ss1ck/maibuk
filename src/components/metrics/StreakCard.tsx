@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { StreakAggregate } from "../../features/metrics/aggregates/types";
+import type { StreakAggregate } from "@/features/metrics/aggregates/types";
 
 interface StreakCardProps {
   aggregate: StreakAggregate | null;

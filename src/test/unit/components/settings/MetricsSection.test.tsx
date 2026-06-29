@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_METRICS_SETTINGS } from "../../../../features/settings/types";
+import { DEFAULT_METRICS_SETTINGS } from "@/features/settings/types";
 
 const {
   mockChangeLanguage,
@@ -80,8 +80,8 @@ vi.mock("../../../../lib/metrics/MetricsService", () => ({
   },
 }));
 
-const { useSettingsStore } = await import("../../../../features/settings/store");
-const { MetricsSection } = await import("../../../../components/settings/MetricsSection");
+const { useSettingsStore } = await import("@/features/settings/store");
+const { MetricsSection } = await import("@/components/settings/MetricsSection");
 
 describe("MetricsSection", () => {
   beforeEach(() => {

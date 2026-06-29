@@ -57,7 +57,7 @@ vi.mock("../../../../features/sync/tombstones", () => ({
   confirmTombstones: mockConfirmTombstones,
 }));
 
-const { useSyncStore } = await import("../../../../features/sync/store");
+const { useSyncStore } = await import("@/features/sync/store");
 
 function resetSyncStore() {
   useSyncStore.setState({

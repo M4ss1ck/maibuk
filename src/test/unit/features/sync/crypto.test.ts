@@ -11,7 +11,7 @@ import {
   isSyncCryptoError,
   setPassphrase,
   uint8ArrayToBase64,
-} from "../../../../features/sync/crypto";
+} from "@/features/sync/crypto";
 
 describe("sync crypto", () => {
   it("encrypts and decrypts data with the same passphrase", async () => {

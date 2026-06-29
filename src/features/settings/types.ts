@@ -1,11 +1,11 @@
-import type { MetricsCategory, MetricsSettings } from "../metrics/types";
-import { DEFAULT_METRICS_SETTINGS } from "../metrics/settings";
-import type { SceneBreakDescriptor } from "../../components/editor/extensions/scene-break-utils";
+import type { MetricsCategory, MetricsSettings } from "@/features/metrics/types";
+import { DEFAULT_METRICS_SETTINGS } from "@/features/metrics/settings";
+import type { SceneBreakDescriptor } from "@/components/editor/extensions/scene-break-utils";
 import type {
   NotesListViewMode,
   NotesSortOption,
   NotesTreeGroupMode,
-} from "../../components/notes/notes-list-model";
+} from "@/components/notes/notes-list-model";
 
 export { DEFAULT_METRICS_SETTINGS };
 export type { MetricsCategory, MetricsSettings };

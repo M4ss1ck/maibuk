@@ -1,14 +1,14 @@
 import { create } from "zustand";
-import { getDatabase } from "../../lib/db";
-import { assignHeadingIds } from "../links/heading-ids";
-import { reindexSource } from "../links/link-index";
+import { getDatabase } from "@/lib/db";
+import { assignHeadingIds } from "@/features/links/heading-ids";
+import { reindexSource } from "@/features/links/link-index";
 import type {
   Chapter,
   CreateChapterInput,
   UpdateChapterInput,
   ChapterType,
   ChapterStatus,
-} from "./types";
+} from "@/features/chapters/types";
 
 function generateId(): string {
   return crypto.randomUUID();

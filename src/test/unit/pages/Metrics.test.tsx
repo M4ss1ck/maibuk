@@ -67,7 +67,7 @@ vi.mock("../../../features/settings/store", () => ({
     selector(mockSettingsState),
 }));
 
-const { Metrics } = await import("../../../pages/Metrics");
+const { Metrics } = await import("@/pages/Metrics");
 
 describe("Metrics page", () => {
   beforeEach(() => {

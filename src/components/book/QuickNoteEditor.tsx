@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { useEditor, EditorContent } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { createRichTextExtensions } from "../editor/extensions/createRichTextExtensions";
-import { MarkdownPasteDialog } from "../editor/MarkdownPasteDialog";
-import { useSettingsStore } from "../../features/settings/store";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
+import { useSettingsStore } from "@/features/settings/store";
 import {
   Bold,
   Italic,

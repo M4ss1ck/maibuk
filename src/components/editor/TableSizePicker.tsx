@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Switch } from "../ui";
+import { Switch } from "@/components/ui";
 
 interface TableSizePickerProps {
   onSelect: (rows: number, columns: number, withHeaderRow: boolean) => void;

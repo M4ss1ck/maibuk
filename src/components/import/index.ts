@@ -1,1 +1,1 @@
-export { EpubImportDialog } from "./EpubImportDialog";
+export { EpubImportDialog } from "@/components/import/EpubImportDialog";

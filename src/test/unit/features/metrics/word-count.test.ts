@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countWords } from "../../../../features/metrics/word-count";
+import { countWords } from "@/features/metrics/word-count";
 
 describe("countWords()", () => {
   it("returns zero for empty or whitespace-only text", () => {

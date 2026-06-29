@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignHeadingIds } from "../../../../features/links/heading-ids";
+import { assignHeadingIds } from "@/features/links/heading-ids";
 
 describe("assignHeadingIds", () => {
   it("assigns ids to headings that lack them and lists headings", () => {

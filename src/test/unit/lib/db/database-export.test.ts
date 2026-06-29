@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDatabase } from "../../../support/db-test-context";
+import { createTestDatabase } from "@/test/support/db-test-context";
 
 describe("DatabaseAdapter export/import round-trip", () => {
   it("round-trips book_versions rows", async () => {

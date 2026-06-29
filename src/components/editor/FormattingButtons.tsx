@@ -13,7 +13,7 @@ import {
   Heading2,
   Heading3,
 } from "lucide-react";
-import { ToolbarButton, Divider } from "./ToolbarButton";
+import { ToolbarButton, Divider } from "@/components/editor/ToolbarButton";
 
 export function FormattingButtons({
   editor,

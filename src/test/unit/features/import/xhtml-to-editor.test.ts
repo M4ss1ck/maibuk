@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeXhtmlToEditorHtml } from "../../../../features/import/xhtml-to-editor";
+import { normalizeXhtmlToEditorHtml } from "@/features/import/xhtml-to-editor";
 
 describe("normalizeXhtmlToEditorHtml()", () => {
   it("preserves editor-supported block structure", () => {

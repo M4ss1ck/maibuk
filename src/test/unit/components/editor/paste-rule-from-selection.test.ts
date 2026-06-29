@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { inferPasteRuleFromSelection } from "../../../../components/editor/paste-rule-from-selection";
-import { cleanPastedHtml } from "../../../../components/editor/paste-cleanup";
-import { PASTE_CLEANUP_PRESETS } from "../../../../features/settings/types";
+import { inferPasteRuleFromSelection } from "@/components/editor/paste-rule-from-selection";
+import { cleanPastedHtml } from "@/components/editor/paste-cleanup";
+import { PASTE_CLEANUP_PRESETS } from "@/features/settings/types";
 
 describe("inferPasteRuleFromSelection", () => {
   it("returns null for empty or whitespace-only selections", () => {

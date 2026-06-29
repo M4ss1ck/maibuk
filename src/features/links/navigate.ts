@@ -1,5 +1,5 @@
 // src/features/links/navigate.ts
-import { parseLinkUri } from "./link-uri";
+import { parseLinkUri } from "@/features/links/link-uri";
 
 type NavigateFn = (to: string, options?: { state?: unknown }) => void;
 

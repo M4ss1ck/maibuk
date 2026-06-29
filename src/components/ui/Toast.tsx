@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { CheckIcon, XIcon } from "../icons";
+import { CheckIcon, XIcon } from "@/components/icons";
 
 const DEFAULT_DURATION_MS = 2000;
 const MAX_TOASTS = 3;

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   DEFAULT_METRICS_SETTINGS,
   PASTE_CLEANUP_PRESETS,
-} from "../../../../features/settings/types";
+} from "@/features/settings/types";
 
 // Mock i18n before importing the store
 const { mockChangeLanguage } = vi.hoisted(() => ({
@@ -24,7 +24,7 @@ vi.mock("../../../../lib/platform", () => ({
 }));
 
 const { useSettingsStore, normalizePasteCleanup, normalizeMetrics } = await import(
-  "../../../../features/settings/store"
+  "@/features/settings/store"
 );
 
 describe("useSettingsStore", () => {
@@ -593,7 +593,7 @@ describe("useSettingsStore", () => {
   });
 });
 
-import { clampEditorZoom } from "../../../../features/settings/types";
+import { clampEditorZoom } from "@/features/settings/types";
 
 describe("editorZoom", () => {
   beforeEach(() => {

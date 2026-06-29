@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { isTypingTarget } from "./keyboard";
+import { isTypingTarget } from "@/lib/keyboard";
 
 type Shortcut = {
   keys?: string | string[];

@@ -1,6 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
-import { ImageView } from "../ImageView";
+import { ImageView } from "@/components/editor/ImageView";
 
 export interface ImageFigureOptions {
   HTMLAttributes: Record<string, unknown>;

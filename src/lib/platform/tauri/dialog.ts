@@ -1,5 +1,5 @@
 import { save, open } from "@tauri-apps/plugin-dialog";
-import type { DialogAdapter, SaveDialogOptions, OpenDialogOptions } from "../types";
+import type { DialogAdapter, SaveDialogOptions, OpenDialogOptions } from "@/lib/platform/types";
 
 export const tauriDialog: DialogAdapter = {
   async save(options: SaveDialogOptions): Promise<string | null> {

@@ -1,4 +1,4 @@
-import type { ExtractedLink, LinkTargetType, ParsedLink } from "./types";
+import type { ExtractedLink, LinkTargetType, ParsedLink } from "@/features/links/types";
 
 const PREFIX = "maibuk://";
 

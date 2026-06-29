@@ -6,7 +6,7 @@ vi.mock("../../../../lib/db", () => ({
   exportDatabase: mockExportDatabase,
 }));
 
-const { generateSqlDump } = await import("../../../../features/backup/generate-sql-dump");
+const { generateSqlDump } = await import("@/features/backup/generate-sql-dump");
 
 describe("generateSqlDump", () => {
   it("returns decoded string from exportDatabase", async () => {

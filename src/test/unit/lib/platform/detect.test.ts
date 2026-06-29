@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isMac } from "../../../../lib/platform/detect";
+import { isMac } from "@/lib/platform/detect";
 
 function stubNavigator(platform: string, userAgentDataPlatform?: string) {
   vi.stubGlobal("navigator", {

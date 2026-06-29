@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { importEpubProject } from "../../features/import/epub-import-service";
-import type { CompatibilityIssue, CompatibilityReport, ImportPreview } from "../../features/import";
-import { canImport, requiresAcknowledgement } from "../../features/import";
-import { Button } from "../ui/Button";
-import { Modal } from "../ui/Modal";
-import { Switch } from "../ui/Switch";
+import { importEpubProject } from "@/features/import/epub-import-service";
+import type { CompatibilityIssue, CompatibilityReport, ImportPreview } from "@/features/import";
+import { canImport, requiresAcknowledgement } from "@/features/import";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { Switch } from "@/components/ui/Switch";
 
 interface EpubImportDialogProps {
   isOpen: boolean;

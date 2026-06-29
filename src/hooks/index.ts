@@ -1,1 +1,1 @@
-export { useDebouncedCallback, useAutoSave } from "./useAutoSave";
+export { useDebouncedCallback, useAutoSave } from "@/hooks/useAutoSave";

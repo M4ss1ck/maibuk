@@ -1,4 +1,4 @@
-import { parseLinkUri } from "../links/link-uri";
+import { parseLinkUri } from "@/features/links/link-uri";
 
 export interface ExportLinkContext {
   chapterHref: Map<string, string>; // chapterId -> package-relative href

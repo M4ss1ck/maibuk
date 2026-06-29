@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { VersionPreview } from "../../../../components/versions/VersionPreview";
-import type { BookSnapshot } from "../../../../features/sync/types";
+import { VersionPreview } from "@/components/versions/VersionPreview";
+import type { BookSnapshot } from "@/features/sync/types";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

@@ -4,7 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 import {
   CollapsibleHeading,
   collapsibleHeadingPluginKey,
-} from "../../../../components/editor/extensions/CollapsibleHeading";
+} from "@/components/editor/extensions/CollapsibleHeading";
 
 function createEditor(content: string, collapsedHeadings: string[] = []) {
   const editor = new Editor({

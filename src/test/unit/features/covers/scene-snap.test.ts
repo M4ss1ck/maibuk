@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { snapAxis } from "../../../../features/covers/scene/snap";
+import { snapAxis } from "@/features/covers/scene/snap";
 
 describe("snapAxis", () => {
   it("returns the delta to the nearest target within threshold", () => {

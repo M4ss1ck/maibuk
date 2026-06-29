@@ -1,4 +1,4 @@
-import { CURRENT_CANVAS_SCHEMA_VERSION } from "../../lib/canvas/defaultDoc";
+import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
 import {
   createDefaultCanvasDoc,
   type CanvasDoc,
@@ -7,7 +7,7 @@ import {
   type CanvasPosition,
   type CanvasStroke,
   type CanvasViewport,
-} from "./types";
+} from "@/features/canvas/types";
 
 export type CanvasDocLoadErrorCode = "corrupt-json" | "unsupported-version" | "invalid-shape";
 

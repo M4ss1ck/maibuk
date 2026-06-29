@@ -1,7 +1,7 @@
-import { createBackup as createBackupAdapter } from "../../lib/platform";
-import { waitForDatabaseReady } from "../../lib/db";
-import { useSettingsStore } from "../settings/store";
-import { BackupService } from "./backup-service";
+import { createBackup as createBackupAdapter } from "@/lib/platform";
+import { waitForDatabaseReady } from "@/lib/db";
+import { useSettingsStore } from "@/features/settings/store";
+import { BackupService } from "@/features/backup/backup-service";
 
 let dailyBackupStarted = false;
 

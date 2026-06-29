@@ -1,7 +1,7 @@
 import { Canvas } from "fabric";
-import { applyBackground, buildObject } from "../../components/cover-editor/render/toFabric";
-import { collectFonts, ensureFontsLoaded } from "./scene/fonts";
-import type { CoverScene } from "./scene/schema";
+import { applyBackground, buildObject } from "@/components/cover-editor/render/toFabric";
+import { collectFonts, ensureFontsLoaded } from "@/features/covers/scene/fonts";
+import type { CoverScene } from "@/features/covers/scene/schema";
 
 export type ExportFormat = "png" | "jpeg";
 

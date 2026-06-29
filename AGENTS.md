@@ -158,11 +158,10 @@ Imports follow this order (observed from existing code):
 
 1. React / React DOM
 2. Third-party libraries (`zustand`, `react-router-dom`, `@tiptap/*`, `@headlessui/react`, `lucide-react`)
-3. Internal absolute paths — features, lib, hooks
-4. Relative paths — sibling components, local types
-5. CSS imports (only in `main.tsx`)
+3. Internal imports via `@/` alias (`@/features/books`, `@/lib/db`, `@/hooks/useAutoSave`)
+4. CSS imports (only in `main.tsx`)
 
-There are **no path aliases** configured. All imports use relative paths (`../../lib/db`, `./types`).
+The `@/` path alias maps to `src/` and is configured in both `tsconfig.json` (paths) and `vite.config.ts` (resolve.alias). All internal imports must use `@/` — never relative paths.
 
 ---
 
@@ -558,7 +557,7 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 - **Use React Context for shared state** — use Zustand. Context is only for providers
 - **Skip barrel exports** — every feature module needs an `index.ts` that re-exports its public API
 - **Hardcode strings** shown to users — use i18n translation keys
-- **Add path aliases** — the project uses relative imports consistently
+- **Use relative imports** — always use `@/` prefix for all internal imports
 - **Use `get()` inside Zustand stores** — existing stores only use `set()`
 
 ### Known Footguns

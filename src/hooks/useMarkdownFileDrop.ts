@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, RefObject } from "react";
-import { IS_TAURI, getFileSystem } from "../lib/platform";
+import { IS_TAURI, getFileSystem } from "@/lib/platform";
 
 /**
  * Drag-and-drop support for importing `.md` files onto a list.

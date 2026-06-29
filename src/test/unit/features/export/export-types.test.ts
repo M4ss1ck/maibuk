@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_EXPORT_OPTIONS } from "../../../../features/export/types";
+import { DEFAULT_EXPORT_OPTIONS } from "@/features/export/types";
 
 describe("DEFAULT_EXPORT_OPTIONS", () => {
   it("has includeTableOfContents set to true", () => {

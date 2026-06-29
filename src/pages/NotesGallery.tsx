@@ -10,16 +10,16 @@ import {
   Tags,
   X,
 } from "lucide-react";
-import { useNoteStore } from "../features/notes";
-import { useBookStore } from "../features/books/store";
-import { useSettingsStore } from "../features/settings/store";
-import { NoteCard } from "../components/notes";
-import { NotesSortMenu } from "../components/notes/NotesSortMenu";
-import { filterNotes, sortNotesBy } from "../components/notes/notes-list-model";
-import { Button } from "../components/ui/Button";
-import { MultiSelectCombobox } from "../components/ui/MultiSelectCombobox";
-import { AddIcon, MaibukLogo } from "../components/icons";
-import { useShortcuts } from "../lib/shortcuts";
+import { useNoteStore } from "@/features/notes";
+import { useBookStore } from "@/features/books/store";
+import { useSettingsStore } from "@/features/settings/store";
+import { NoteCard } from "@/components/notes";
+import { NotesSortMenu } from "@/components/notes/NotesSortMenu";
+import { filterNotes, sortNotesBy } from "@/components/notes/notes-list-model";
+import { Button } from "@/components/ui/Button";
+import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
+import { AddIcon, MaibukLogo } from "@/components/icons";
+import { useShortcuts } from "@/lib/shortcuts";
 
 export function NotesGallery() {
   const { t, i18n } = useTranslation();

@@ -1,6 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
-import { FootnoteView } from "../FootnoteView";
+import { FootnoteView } from "@/components/editor/FootnoteView";
 
 export interface FootnoteOptions {
   HTMLAttributes: Record<string, unknown>;

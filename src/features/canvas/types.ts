@@ -1,6 +1,6 @@
-import { createDefaultCanvasDocData } from "../../lib/canvas/defaultDoc";
+import { createDefaultCanvasDocData } from "@/lib/canvas/defaultDoc";
 
-export { CURRENT_CANVAS_SCHEMA_VERSION } from "../../lib/canvas/defaultDoc";
+export { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
 
 export type CanvasViewport = {
   x: number;

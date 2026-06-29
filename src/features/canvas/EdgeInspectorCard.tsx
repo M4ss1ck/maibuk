@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
-import { Switch } from "../../components/ui/Switch";
-import type { CanvasEdge } from "./types";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Switch } from "@/components/ui/Switch";
+import type { CanvasEdge } from "@/features/canvas/types";
 
 export function EdgeInspectorCard({
   edge,

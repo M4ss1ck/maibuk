@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NoteTagsRow } from "../../../../components/notes/NoteTagsRow";
+import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
 
 describe("NoteTagsRow", () => {
   let clientWidthSpy: ReturnType<typeof vi.spyOn>;

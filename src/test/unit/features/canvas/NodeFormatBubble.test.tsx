@@ -67,7 +67,7 @@ vi.mock("../../../../features/canvas/nodes/CanvasRichContentMenu", () => ({
   ),
 }));
 
-const { NodeFormatBubble } = await import("../../../../features/canvas/nodes/NodeFormatBubble");
+const { NodeFormatBubble } = await import("@/features/canvas/nodes/NodeFormatBubble");
 
 function buildEditor({
   empty = false,

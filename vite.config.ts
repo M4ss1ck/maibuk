@@ -3,6 +3,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { resolve } from "path";
 import { version } from "./package.json";
 
 const host = process.env.TAURI_DEV_HOST;
@@ -12,6 +13,11 @@ const isWeb = buildTarget === "web";
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@": resolve(__dirname, "src"),
+    },
+  },
   worker: {
     format: "es" as const,
   },

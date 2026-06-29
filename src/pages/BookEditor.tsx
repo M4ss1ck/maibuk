@@ -1,29 +1,29 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useBookStore } from "../features/books/store";
-import { useChapterStore } from "../features/chapters/store";
-import type { Chapter, ChapterType } from "../features/chapters/types";
-import { Editor, ChapterList, SaveStatus } from "../components/editor";
+import { useBookStore } from "@/features/books/store";
+import { useChapterStore } from "@/features/chapters/store";
+import type { Chapter, ChapterType } from "@/features/chapters/types";
+import { Editor, ChapterList, SaveStatus } from "@/components/editor";
 import type { Editor as TiptapEditor } from "@tiptap/core";
-import { BookSidePanel } from "../components/book/BookSidePanel";
-import { TruncatedText } from "../components/ui/TruncatedText";
-import type { EditorStats } from "../components/editor/Editor";
-import { useDebouncedCallback } from "../hooks/useAutoSave";
-import { ThemeToggle } from "../components/ThemeToggle";
-import { ExportDialog } from "../components/export";
+import { BookSidePanel } from "@/components/book/BookSidePanel";
+import { TruncatedText } from "@/components/ui/TruncatedText";
+import type { EditorStats } from "@/components/editor/Editor";
+import { useDebouncedCallback } from "@/hooks/useAutoSave";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { ExportDialog } from "@/components/export";
 import {
   generateDocumentPdf,
   elementToPngBytes,
   saveBinaryFile,
   exportFilename,
-} from "../features/export";
+} from "@/features/export";
 import {
   editorHtmlToMarkdown,
   markdownFilename,
   markdownToEditorHtml,
   saveMarkdownFile,
   titleFromMarkdown,
-} from "../features/markdown";
+} from "@/features/markdown";
 import { useTranslation } from "react-i18next";
 import {
   BackIcon,
@@ -34,12 +34,12 @@ import {
   SettingsIcon,
   CloseIcon,
   MaibukLogo,
-} from "../components/icons";
-import { BookSettingsDialog } from "../components/book/BookSettingsDialog";
-import { deriveNoteTitle } from "../components/book/deriveNoteTitle";
-import { useNoteStore } from "../features/notes";
-import { useSettingsStore } from "../features/settings/store";
-import { normalizeLanguage, type Language } from "../features/settings/types";
+} from "@/components/icons";
+import { BookSettingsDialog } from "@/components/book/BookSettingsDialog";
+import { deriveNoteTitle } from "@/components/book/deriveNoteTitle";
+import { useNoteStore } from "@/features/notes";
+import { useSettingsStore } from "@/features/settings/store";
+import { normalizeLanguage, type Language } from "@/features/settings/types";
 import {
   History,
   Menu,
@@ -49,20 +49,20 @@ import {
   PanelLeftOpen,
   Pin,
 } from "lucide-react";
-import { SyncStatusButton } from "../components/sync/SyncStatusButton";
-import { HistoryMenuButton } from "../components/versions/HistoryMenuButton";
-import { useShortcuts } from "../lib/shortcuts";
-import { IS_TAURI, isMac } from "../lib/platform";
-import { useAutoCheckpoint } from "../features/versions/useAutoCheckpoint";
-import { useVersionStore } from "../features/versions/store";
-import { Modal } from "../components/ui/Modal";
-import { Input } from "../components/ui/Input";
-import { Button } from "../components/ui/Button";
-import { toast } from "../components/ui/Toast";
-import { metricsService } from "../lib/metrics/MetricsService";
+import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
+import { HistoryMenuButton } from "@/components/versions/HistoryMenuButton";
+import { useShortcuts } from "@/lib/shortcuts";
+import { IS_TAURI, isMac } from "@/lib/platform";
+import { useAutoCheckpoint } from "@/features/versions/useAutoCheckpoint";
+import { useVersionStore } from "@/features/versions/store";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui/Toast";
+import { metricsService } from "@/lib/metrics/MetricsService";
 
 const VersionPanel = lazy(() =>
-  import("../components/versions/VersionPanel").then((module) => ({
+  import("@/components/versions/VersionPanel").then((module) => ({
     default: module.VersionPanel,
   }))
 );

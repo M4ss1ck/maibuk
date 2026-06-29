@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { EditorContextMenu } from "../../../../components/editor/EditorContextMenu";
+import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),

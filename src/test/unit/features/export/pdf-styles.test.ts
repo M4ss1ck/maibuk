@@ -7,9 +7,9 @@ vi.mock("@react-pdf/renderer", () => ({
   },
 }));
 
-import { createPdfStyles, getMargins } from "../../../../features/export/pdf-styles";
-import { DEFAULT_PDF_OPTIONS } from "../../../../features/export/types";
-import type { PdfExportOptions } from "../../../../features/export/types";
+import { createPdfStyles, getMargins } from "@/features/export/pdf-styles";
+import { DEFAULT_PDF_OPTIONS } from "@/features/export/types";
+import type { PdfExportOptions } from "@/features/export/types";
 
 describe("createPdfStyles()", () => {
   it("returns an object with expected style keys", () => {

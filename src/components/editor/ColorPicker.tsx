@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDownIcon } from "../icons";
+import { ChevronDownIcon } from "@/components/icons";
 
 interface ColorPickerProps {
   value: string;

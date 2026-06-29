@@ -4,7 +4,7 @@ import {
   formatLinkUri,
   isInternalLink,
   extractLinks,
-} from "../../../../features/links/link-uri";
+} from "@/features/links/link-uri";
 
 describe("link-uri", () => {
   it("formats each target type", () => {

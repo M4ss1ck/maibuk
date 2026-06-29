@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { useTheme } from "../features/theme";
+import { useTheme } from "@/features/theme";
 import { useTranslation } from "react-i18next";
-import { SunIcon, MoonIcon, MonitorIcon } from "./icons";
+import { SunIcon, MoonIcon, MonitorIcon } from "@/components/icons";
 
 interface ThemeToggleProps {
   variant?: "inline" | "dropdown";

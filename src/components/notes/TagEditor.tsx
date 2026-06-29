@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { MultiSelectCombobox } from "../ui/MultiSelectCombobox";
-import { tagColor } from "./tagColor";
+import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
+import { tagColor } from "@/components/notes/tagColor";
 
 interface TagEditorProps {
   tags: string[];

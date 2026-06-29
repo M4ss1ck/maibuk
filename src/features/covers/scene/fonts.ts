@@ -1,4 +1,4 @@
-import type { CoverScene } from "./schema";
+import type { CoverScene } from "@/features/covers/scene/schema";
 
 /** Unique font families referenced by the scene's text layers. */
 export function collectFonts(scene: CoverScene): string[] {

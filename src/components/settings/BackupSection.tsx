@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { createBackup, getDialog, IS_TAURI } from "../../lib/platform";
-import { BackupService } from "../../features/backup/backup-service";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
-import { Select } from "../ui/Select";
-import { toast } from "../ui/Toast";
-import type { BackupEntry } from "../../lib/platform/types";
-import { useSettingsStore } from "../../features/settings/store";
-import { BACKUP_LIST_PAGE_SIZE_OPTIONS } from "../../features/settings/types";
+import { createBackup, getDialog, IS_TAURI } from "@/lib/platform";
+import { BackupService } from "@/features/backup/backup-service";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { toast } from "@/components/ui/Toast";
+import type { BackupEntry } from "@/lib/platform/types";
+import { useSettingsStore } from "@/features/settings/store";
+import { BACKUP_LIST_PAGE_SIZE_OPTIONS } from "@/features/settings/types";
 
 const SIZE_WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
 

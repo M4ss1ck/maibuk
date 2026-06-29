@@ -1,5 +1,5 @@
 import { type FabricObject, Line, Rect } from "fabric";
-import type { CoverDoc } from "../../../features/covers/scene/schema";
+import type { CoverDoc } from "@/features/covers/scene/schema";
 
 const GUIDE_COLOR = "#e94560";
 const SAFE_COLOR = "rgba(233, 69, 96, 0.5)";

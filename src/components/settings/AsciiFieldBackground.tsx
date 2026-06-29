@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { cellIntensity, randomGlyph, hexToRgb, FALLBACK_RGB } from "./asciiBanner.helpers";
+import { cellIntensity, randomGlyph, hexToRgb, FALLBACK_RGB } from "@/components/settings/asciiBanner.helpers";
 
 interface AsciiFieldBackgroundProps {
   /** Theme color (`#rrggbb`) the glyphs brighten toward. Defaults to brand gold. */

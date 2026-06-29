@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { DashboardAggregate, SnapshotMetrics } from "../../features/metrics/aggregates/types";
+import type { DashboardAggregate, SnapshotMetrics } from "@/features/metrics/aggregates/types";
 
 interface PerWorkListProps {
   snapshot: SnapshotMetrics | null;

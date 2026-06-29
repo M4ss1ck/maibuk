@@ -135,7 +135,7 @@ vi.mock("../../../components/versions/HistoryMenuButton", () => ({
   HistoryMenuButton: mockHistoryMenuButton,
 }));
 
-import { BookEditor } from "../../../pages/BookEditor";
+import { BookEditor } from "@/pages/BookEditor";
 
 describe("BookEditor shortcuts", () => {
   beforeEach(() => {

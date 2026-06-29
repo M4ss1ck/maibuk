@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { useShortcuts } from "../../lib/shortcuts";
-import { useSettingsStore } from "../../features/settings/store";
+import { useShortcuts } from "@/lib/shortcuts";
+import { useSettingsStore } from "@/features/settings/store";
 
 /** Resolve a wheel event into a zoom direction, or null if it should be ignored. */
 export function wheelZoomDirection(event: WheelEvent): "in" | "out" | null {

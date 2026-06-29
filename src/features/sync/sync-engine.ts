@@ -1,12 +1,12 @@
-import { getDatabase } from "../../lib/db";
-import { encrypt, decrypt, computeChecksum, isSyncCryptoError } from "./crypto";
+import { getDatabase } from "@/lib/db";
+import { encrypt, decrypt, computeChecksum, isSyncCryptoError } from "@/features/sync/crypto";
 import {
   serializeBook,
   applyBookSnapshot,
   serializeNote,
   applyNoteSnapshot,
   normalizeNoteSnapshotForSync,
-} from "./serializer";
+} from "@/features/sync/serializer";
 import {
   pushBookBlob,
   pullBookBlob,
@@ -20,7 +20,7 @@ import {
   listRemoteNotes,
   deleteRemoteBook,
   deleteRemoteNote,
-} from "./client";
+} from "@/features/sync/client";
 import type {
   BookSnapshot,
   NoteSnapshot,
@@ -34,16 +34,16 @@ import type {
   SyncEntityType,
   SyncDeletionReviewItem,
   SyncLogEntry,
-} from "./types";
-import type { SyncAction, ConflictResolver } from "./types";
-import { createBackup } from "../../lib/platform";
-import { BackupService } from "../backup/backup-service";
-import { useSettingsStore } from "../settings/store";
-import { useSyncStore } from "./store";
-import { useVersionStore } from "../versions/store";
-import { syncMetricsRows } from "../metrics/metrics-sync";
-import { getTombstone, listPendingTombstones, markTombstonePushed } from "./tombstones";
-import { ensureGenericCollectionMigration } from "./migration-reset";
+} from "@/features/sync/types";
+import type { SyncAction, ConflictResolver } from "@/features/sync/types";
+import { createBackup } from "@/lib/platform";
+import { BackupService } from "@/features/backup/backup-service";
+import { useSettingsStore } from "@/features/settings/store";
+import { useSyncStore } from "@/features/sync/store";
+import { useVersionStore } from "@/features/versions/store";
+import { syncMetricsRows } from "@/features/metrics/metrics-sync";
+import { getTombstone, listPendingTombstones, markTombstonePushed } from "@/features/sync/tombstones";
+import { ensureGenericCollectionMigration } from "@/features/sync/migration-reset";
 
 let isSyncing = false;
 const PRE_SYNC_BACKUP_ERROR =

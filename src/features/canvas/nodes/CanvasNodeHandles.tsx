@@ -1,6 +1,6 @@
 import { Handle, Position } from "@xyflow/react";
-import { useCanvasStore } from "../store";
-import type { Side, SideConnection } from "../reactFlowAdapter";
+import { useCanvasStore } from "@/features/canvas/store";
+import type { Side, SideConnection } from "@/features/canvas/reactFlowAdapter";
 
 const SIDE_POSITION: Record<Side, Position> = {
   top: Position.Top,

@@ -1,5 +1,5 @@
-import { COVER_SCHEMA_VERSION, type CoverScene, type Layer, type TextLayer } from "./schema";
-import { createTextLayer, getPreset } from "./defaults";
+import { COVER_SCHEMA_VERSION, type CoverScene, type Layer, type TextLayer } from "@/features/covers/scene/schema";
+import { createTextLayer, getPreset } from "@/features/covers/scene/defaults";
 
 export interface TemplateArgs {
   title: string;

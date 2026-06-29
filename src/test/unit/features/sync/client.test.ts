@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { setPassphrase, encryptMeta } from "../../../../features/sync/crypto";
-import * as clientModule from "../../../../features/sync/client";
+import { setPassphrase, encryptMeta } from "@/features/sync/crypto";
+import * as clientModule from "@/features/sync/client";
 
 const {
   mockAuthRefresh,
@@ -116,7 +116,7 @@ const {
   pullObjectsSince,
   softDeleteObject,
   isKeyUniqueConstraintError,
-} = await import("../../../../features/sync/client");
+} = await import("@/features/sync/client");
 
 describe("normalizeServerUrl()", () => {
   it("prepends https:// when no protocol is present", () => {

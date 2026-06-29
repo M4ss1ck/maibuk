@@ -1,6 +1,6 @@
 // Tauri platform adapters barrel export
-export { createTauriDatabase } from "./database";
-export { tauriFileSystem } from "./filesystem";
-export { tauriDialog } from "./dialog";
-export { tauriOS } from "./os";
-export { createTauriBackup } from "./backup";
+export { createTauriDatabase } from "@/lib/platform/tauri/database";
+export { tauriFileSystem } from "@/lib/platform/tauri/filesystem";
+export { tauriDialog } from "@/lib/platform/tauri/dialog";
+export { tauriOS } from "@/lib/platform/tauri/os";
+export { createTauriBackup } from "@/lib/platform/tauri/backup";

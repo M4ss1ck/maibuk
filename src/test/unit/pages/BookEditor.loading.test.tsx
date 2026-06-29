@@ -170,7 +170,7 @@ vi.mock("../../../components/versions/HistoryMenuButton", () => ({
   HistoryMenuButton: () => null,
 }));
 
-import { BookEditor } from "../../../pages/BookEditor";
+import { BookEditor } from "@/pages/BookEditor";
 
 describe("BookEditor loading state", () => {
   beforeEach(() => {

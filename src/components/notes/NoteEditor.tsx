@@ -5,41 +5,41 @@ import { Extension } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { dropPoint } from "@tiptap/pm/transform";
-import type { Note, UpdateNoteInput } from "../../features/notes";
-import { useNoteStore } from "../../features/notes/store";
-import { Editor, SaveStatus } from "../editor";
-import type { InternalTarget, InternalTargetChildrenLoader } from "../editor/LinkDialog";
-import { CollapsibleHeading } from "../editor/extensions";
-import { collapsibleHeadingPluginKey } from "../editor/extensions/CollapsibleHeading";
-import { useDebouncedCallback } from "../../hooks/useAutoSave";
-import { useShortcuts } from "../../lib/shortcuts";
-import { BackIcon } from "../icons";
-import { TagEditor } from "./TagEditor";
-import { timeAgo } from "./timeAgo";
-import { NoteTagsRow } from "./NoteTagsRow";
-import { ThemeToggle } from "../ThemeToggle";
-import { SyncStatusButton } from "../sync/SyncStatusButton";
-import { toast } from "../ui/Toast";
-import { editorHtmlToMarkdown, markdownFilename, saveMarkdownFile } from "../../features/markdown";
+import type { Note, UpdateNoteInput } from "@/features/notes";
+import { useNoteStore } from "@/features/notes/store";
+import { Editor, SaveStatus } from "@/components/editor";
+import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
+import { CollapsibleHeading } from "@/components/editor/extensions";
+import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/CollapsibleHeading";
+import { useDebouncedCallback } from "@/hooks/useAutoSave";
+import { useShortcuts } from "@/lib/shortcuts";
+import { BackIcon } from "@/components/icons";
+import { TagEditor } from "@/components/notes/TagEditor";
+import { timeAgo } from "@/components/notes/timeAgo";
+import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
+import { toast } from "@/components/ui/Toast";
+import { editorHtmlToMarkdown, markdownFilename, saveMarkdownFile } from "@/features/markdown";
 import {
   generateDocumentPdf,
   elementToPngBytes,
   saveBinaryFile,
   exportFilename,
-} from "../../features/export";
-import { useSettingsStore } from "../../features/settings/store";
-import { normalizeLanguage, type Language } from "../../features/settings/types";
-import { IS_TAURI } from "../../lib/platform";
+} from "@/features/export";
+import { useSettingsStore } from "@/features/settings/store";
+import { normalizeLanguage, type Language } from "@/features/settings/types";
+import { IS_TAURI } from "@/lib/platform";
 import { useNavigate } from "react-router-dom";
-import { isInternalLink, parseLinkUri } from "../../features/links/link-uri";
-import { navigateToLinkTarget } from "../../features/links/navigate";
-import { Wikilink } from "../editor/extensions";
-import { createWikilinkRenderer } from "../editor/WikilinkSuggestion";
-import { buildWikilinkCandidates } from "../../features/links/wikilink-targets";
-import { useBookStore } from "../../features/books/store";
-import { assignHeadingIds } from "../../features/links/heading-ids";
-import { getChapterForLinking, listChaptersForBookLinking } from "../../features/chapters/store";
-import { NoteBacklinks } from "./NoteBacklinks";
+import { isInternalLink, parseLinkUri } from "@/features/links/link-uri";
+import { navigateToLinkTarget } from "@/features/links/navigate";
+import { Wikilink } from "@/components/editor/extensions";
+import { createWikilinkRenderer } from "@/components/editor/WikilinkSuggestion";
+import { buildWikilinkCandidates } from "@/features/links/wikilink-targets";
+import { useBookStore } from "@/features/books/store";
+import { assignHeadingIds } from "@/features/links/heading-ids";
+import { getChapterForLinking, listChaptersForBookLinking } from "@/features/chapters/store";
+import { NoteBacklinks } from "@/components/notes/NoteBacklinks";
 
 let activeTaskHandleDragSourcePos: number | null = null;
 

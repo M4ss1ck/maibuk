@@ -102,7 +102,7 @@ export interface NoteSyncItemMeta {
   updatedAt: number; // Unix seconds
 }
 
-import type { MetricEvent } from "../metrics/types";
+import type { MetricEvent } from "@/features/metrics/types";
 
 export interface MetricsSyncBlob {
   events: MetricEvent[];

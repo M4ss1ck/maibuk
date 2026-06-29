@@ -93,7 +93,7 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
       let warningCount = 0;
 
       // Import validator for HTML linting
-      const { createHtmlLinter } = await import("./html-schema-validator");
+      const { createHtmlLinter } = await import("@/components/editor/html-schema-validator");
       const htmlLinter = createHtmlLinter(linter);
 
       const updateListener = EditorView.updateListener.of((update) => {

@@ -1,5 +1,5 @@
 import { MarkerType, type Connection, type Edge, type Node } from "@xyflow/react";
-import type { CanvasEdge, CanvasNode } from "./types";
+import type { CanvasEdge, CanvasNode } from "@/features/canvas/types";
 
 export type Side = "top" | "right" | "bottom" | "left";
 export type SideConnection = {

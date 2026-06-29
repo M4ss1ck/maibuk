@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownToEditorHtml } from "../../../../features/markdown/markdown-to-html";
+import { markdownToEditorHtml } from "@/features/markdown/markdown-to-html";
 
 describe("markdownToEditorHtml()", () => {
   it("returns empty string for blank input", () => {

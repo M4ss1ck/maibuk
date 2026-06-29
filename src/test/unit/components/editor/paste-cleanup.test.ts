@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { cleanPastedHtml } from "../../../../components/editor/paste-cleanup";
-import { PASTE_CLEANUP_PRESETS } from "../../../../features/settings/types";
+import { cleanPastedHtml } from "@/components/editor/paste-cleanup";
+import { PASTE_CLEANUP_PRESETS } from "@/features/settings/types";
 import type {
   PasteCleanupOptions,
   PasteCleanupRule,
   PasteCleanupSettings,
   PasteRuleAction,
   PasteRuleTarget,
-} from "../../../../features/settings/types";
+} from "@/features/settings/types";
 
 // --- Helpers ---
 

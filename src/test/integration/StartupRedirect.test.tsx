@@ -15,8 +15,8 @@ vi.mock("../../lib/db", () => ({
   getDatabase: mockGetDatabase,
 }));
 
-import { StartupRedirect } from "../../components/StartupRedirect";
-import { useSettingsStore } from "../../features/settings/store";
+import { StartupRedirect } from "@/components/StartupRedirect";
+import { useSettingsStore } from "@/features/settings/store";
 
 // Helper component to display the current route for assertions
 function LocationDisplay() {

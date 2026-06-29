@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ExportDialog } from "../../../../components/export/ExportDialog";
-import { buildBook, buildChapter } from "../../../support/fixtures";
+import { ExportDialog } from "@/components/export/ExportDialog";
+import { buildBook, buildChapter } from "@/test/support/fixtures";
 
 const { mockGetEpubStructure, mockListBookStyles } = vi.hoisted(() => ({
   mockGetEpubStructure: vi.fn(),

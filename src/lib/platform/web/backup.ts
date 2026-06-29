@@ -1,6 +1,6 @@
-import type { BackupAdapter, BackupEntry, BackupPage, BackupPageOptions } from "../types";
-import { computeChecksum } from "../../checksum";
-import { parseTriggerFromFilename } from "../../../features/backup/utils";
+import type { BackupAdapter, BackupEntry, BackupPage, BackupPageOptions } from "@/lib/platform/types";
+import { computeChecksum } from "@/lib/checksum";
+import { parseTriggerFromFilename } from "@/features/backup/utils";
 
 const DB_NAME = "maibuk-backups";
 const DB_VERSION = 2;

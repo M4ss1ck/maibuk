@@ -1,10 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import i18n, { detectSystemLocale } from "../../i18n";
+import i18n, { detectSystemLocale } from "@/i18n";
 import {
   DEFAULT_SCENE_BREAK,
   type SceneBreakDescriptor,
-} from "../../components/editor/extensions/scene-break-utils";
+} from "@/components/editor/extensions/scene-break-utils";
 import {
   DEFAULT_METRICS_SETTINGS,
   DEFAULT_PRIMARY_COLOR,
@@ -39,10 +39,10 @@ import {
   type PasteStructuralOptionKey,
   type PasteCleanupRule,
   type MetricsCategory,
-} from "./types";
-import { normalizeMetrics } from "../metrics/settings";
-import { DEFAULT_NOTES_SORT } from "../../components/notes/notes-list-model";
-import { setLaunchOnStartup as applyLaunchOnStartup } from "../../lib/platform";
+} from "@/features/settings/types";
+import { normalizeMetrics } from "@/features/metrics/settings";
+import { DEFAULT_NOTES_SORT } from "@/components/notes/notes-list-model";
+import { setLaunchOnStartup as applyLaunchOnStartup } from "@/lib/platform";
 
 const STORAGE_KEY = "maibuk-settings";
 const isWebBuild = import.meta.env.VITE_BUILD_TARGET === "web";

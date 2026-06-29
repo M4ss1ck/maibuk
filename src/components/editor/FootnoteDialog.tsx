@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Editor } from "@tiptap/react";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 import { useTranslation } from "react-i18next";
 
 interface FootnoteDialogProps {

@@ -1,8 +1,8 @@
 // src/components/editor/extensions/Wikilink.ts
 import { mergeAttributes, Node, type Editor } from "@tiptap/core";
 import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
-import type { WikilinkCandidate } from "../../../features/links/wikilink-targets";
-import { formatLinkUri } from "../../../features/links/link-uri";
+import type { WikilinkCandidate } from "@/features/links/wikilink-targets";
+import { formatLinkUri } from "@/features/links/link-uri";
 
 export interface WikilinkAttrs {
   href: string | null; // maibuk:// URI when bound; null when unresolved

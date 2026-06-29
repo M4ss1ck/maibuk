@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Minus, Plus } from "lucide-react";
-import { useSettingsStore } from "../../features/settings/store";
-import { EDITOR_ZOOM_MIN, EDITOR_ZOOM_MAX, EDITOR_ZOOM_STEP } from "../../features/settings/types";
+import { useSettingsStore } from "@/features/settings/store";
+import { EDITOR_ZOOM_MIN, EDITOR_ZOOM_MAX, EDITOR_ZOOM_STEP } from "@/features/settings/types";
 
 export function ZoomControl() {
   const { t } = useTranslation();

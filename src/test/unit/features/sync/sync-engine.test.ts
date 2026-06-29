@@ -128,7 +128,7 @@ vi.mock("../../../../features/sync/migration-reset", () => ({
 }));
 
 const { syncBook, syncAllBooks, syncSingleNote, resetSyncEngineForTests } = await import(
-  "../../../../features/sync/sync-engine"
+  "@/features/sync/sync-engine"
 );
 
 // Note sync runs inside syncAllBooks. These defaults survive vi.clearAllMocks()

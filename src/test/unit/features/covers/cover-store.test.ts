@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { useCoverStore } from "../../../../features/covers/store";
-import { createDefaultScene, createTextLayer } from "../../../../features/covers/scene/defaults";
+import { useCoverStore } from "@/features/covers/store";
+import { createDefaultScene, createTextLayer } from "@/features/covers/scene/defaults";
 
 const freshTitle = () =>
   createTextLayer({ role: "title", text: "T", docWidth: 1800, docHeight: 2700 });

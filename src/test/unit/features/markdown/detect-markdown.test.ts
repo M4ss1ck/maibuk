@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { looksLikeMarkdown } from "../../../../features/markdown/detect-markdown";
+import { looksLikeMarkdown } from "@/features/markdown/detect-markdown";
 
 describe("looksLikeMarkdown()", () => {
   it("returns false for empty or whitespace input", () => {

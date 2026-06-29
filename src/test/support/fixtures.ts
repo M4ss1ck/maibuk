@@ -2,8 +2,8 @@
  * Shared test fixtures for Maibuk tests.
  * Provides factory functions to build common domain objects.
  */
-import type { Book } from "../../features/books/types";
-import type { Chapter } from "../../features/chapters/types";
+import type { Book } from "@/features/books/types";
+import type { Chapter } from "@/features/chapters/types";
 
 let counter = 0;
 

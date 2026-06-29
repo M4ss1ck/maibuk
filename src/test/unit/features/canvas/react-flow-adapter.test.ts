@@ -5,7 +5,7 @@ import {
   fromConnection,
   toFlowEdges,
   toFlowNodes,
-} from "../../../../features/canvas/reactFlowAdapter";
+} from "@/features/canvas/reactFlowAdapter";
 
 describe("Canvas React Flow adapter", () => {
   it("maps store-owned node and edge selection", () => {

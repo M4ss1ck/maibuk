@@ -11,9 +11,9 @@ vi.mock("../../../../lib/platform", () => ({
 }));
 
 const { useEditorZoomControls, wheelZoomDirection } = await import(
-  "../../../../components/editor/useEditorZoomControls"
+  "@/components/editor/useEditorZoomControls"
 );
-const { useSettingsStore } = await import("../../../../features/settings/store");
+const { useSettingsStore } = await import("@/features/settings/store");
 
 describe("wheelZoomDirection", () => {
   it("returns null without ctrl/meta", () => {

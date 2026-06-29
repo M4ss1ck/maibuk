@@ -11,7 +11,7 @@ vi.mock("../../../../features/versions/store", () => ({
   },
 }));
 
-const { useAutoCheckpoint } = await import("../../../../features/versions/useAutoCheckpoint");
+const { useAutoCheckpoint } = await import("@/features/versions/useAutoCheckpoint");
 
 describe("useAutoCheckpoint", () => {
   beforeEach(() => {

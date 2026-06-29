@@ -13,9 +13,9 @@ import {
   Textbox,
   type TFiller,
 } from "fabric";
-import type { ImageLayer } from "../../../features/covers/scene/schema";
-import type { Background, Layer, Paint } from "../../../features/covers/scene/schema";
-import { linearGradientCoords, sortStops } from "../../../features/covers/scene/paint";
+import type { ImageLayer } from "@/features/covers/scene/schema";
+import type { Background, Layer, Paint } from "@/features/covers/scene/schema";
+import { linearGradientCoords, sortStops } from "@/features/covers/scene/paint";
 
 /**
  * Convert a scene Paint into a Fabric fill: a color string for solid paints, or

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_SCENE_BREAK } from "../../../../components/editor/extensions/scene-break-utils";
-import { normalizeSceneBreak, useSettingsStore } from "../../../../features/settings/store";
+import { DEFAULT_SCENE_BREAK } from "@/components/editor/extensions/scene-break-utils";
+import { normalizeSceneBreak, useSettingsStore } from "@/features/settings/store";
 
 describe("scene break settings", () => {
   beforeEach(() => {

@@ -5,7 +5,7 @@ import {
   segmentsIntersect,
   segmentIntersectsRect,
   rectangleFromPoints,
-} from "../../../../../features/canvas/drawing/DrawingCaptureOverlay";
+} from "@/features/canvas/drawing/DrawingCaptureOverlay";
 
 describe("rectangle geometry helpers", () => {
   describe("rectangleFromPoints", () => {

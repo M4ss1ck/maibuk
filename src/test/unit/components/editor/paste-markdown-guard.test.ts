@@ -2,7 +2,7 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { describe, expect, it } from "vitest";
 
-import { shouldPromptMarkdownPaste } from "../../../../components/editor/extensions/paste-markdown-guard";
+import { shouldPromptMarkdownPaste } from "@/components/editor/extensions/paste-markdown-guard";
 
 function makeEditor(content: string) {
   return new Editor({ extensions: [StarterKit], content });

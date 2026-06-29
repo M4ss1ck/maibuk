@@ -4,15 +4,15 @@ import type { Editor } from "@tiptap/react";
 import { Ellipsis, ImageIcon, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { upsertSeparatorAsset } from "../../features/import/project-assets-repo";
-import { useSettingsStore } from "../../features/settings/store";
-import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "../../lib/platform";
-import { Input, Switch } from "../ui";
+import { upsertSeparatorAsset } from "@/features/import/project-assets-repo";
+import { useSettingsStore } from "@/features/settings/store";
+import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "@/lib/platform";
+import { Input, Switch } from "@/components/ui";
 import {
   BUILTIN_SCENE_BREAKS,
   resolveCustomSymbols,
   type SceneBreakDescriptor,
-} from "./extensions/scene-break-utils";
+} from "@/components/editor/extensions/scene-break-utils";
 
 interface SceneBreakMenuProps {
   editor: Editor;

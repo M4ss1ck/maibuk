@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildBook, buildChapter } from "../../../support/fixtures";
-import { buildProjectEpubPackage } from "../../../../features/export/project-epub-generator";
-import type { BookMetadata, BookStyle } from "../../../../features/import/epub-project-repo";
-import type { ProjectAsset } from "../../../../features/import/project-assets-repo";
+import { buildBook, buildChapter } from "@/test/support/fixtures";
+import { buildProjectEpubPackage } from "@/features/export/project-epub-generator";
+import type { BookMetadata, BookStyle } from "@/features/import/epub-project-repo";
+import type { ProjectAsset } from "@/features/import/project-assets-repo";
 
 const now = new Date("2026-06-01T12:00:00.000Z");
 

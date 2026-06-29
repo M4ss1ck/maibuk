@@ -5,8 +5,8 @@
  * All dimensions are in points (1pt ≈ 1/72 inch).
  */
 import { StyleSheet } from "@react-pdf/renderer";
-import type { PdfExportOptions, PdfMarginPreset } from "./types";
-import { PDF_BASE_FONT } from "./types";
+import type { PdfExportOptions, PdfMarginPreset } from "@/features/export/types";
+import { PDF_BASE_FONT } from "@/features/export/types";
 
 const MARGIN_PRESETS: Record<
   PdfMarginPreset,

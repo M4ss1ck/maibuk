@@ -8,8 +8,8 @@ vi.mock("../../i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
-import { PathTracker } from "../../components/PathTracker";
-import { useSettingsStore } from "../../features/settings/store";
+import { PathTracker } from "@/components/PathTracker";
+import { useSettingsStore } from "@/features/settings/store";
 
 describe("PathTracker", () => {
   beforeEach(() => {

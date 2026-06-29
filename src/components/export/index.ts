@@ -1,1 +1,1 @@
-export { ExportDialog } from "./ExportDialog";
+export { ExportDialog } from "@/components/export/ExportDialog";

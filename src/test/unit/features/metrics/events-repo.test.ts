@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 import {
   ensureMetricsSchema,
   compactUnpushedRawMetricEvents,
@@ -16,8 +16,8 @@ import {
   purgeEventsByPrefix,
   upsertCache,
   invalidateCache,
-} from "../../../../features/metrics/events-repo";
-import type { MetricEvent } from "../../../../features/metrics/types";
+} from "@/features/metrics/events-repo";
+import type { MetricEvent } from "@/features/metrics/types";
 
 let testDb: DatabaseAdapter;
 

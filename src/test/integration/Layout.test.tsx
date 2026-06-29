@@ -21,10 +21,10 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-import { Layout } from "../../components/Layout";
-import { APP_VERSION } from "../../constants";
-import { useThemeStore } from "../../features/theme/store";
-import { useSettingsStore } from "../../features/settings/store";
+import { Layout } from "@/components/Layout";
+import { APP_VERSION } from "@/constants";
+import { useThemeStore } from "@/features/theme/store";
+import { useSettingsStore } from "@/features/settings/store";
 
 describe("Layout", () => {
   beforeEach(() => {

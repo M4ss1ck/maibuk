@@ -1,16 +1,16 @@
 import { Fragment, useState, useEffect, useRef } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
-import type { Chapter, ChapterType } from "../../features/chapters/types";
-import { ChapterOutline } from "./ChapterOutline";
-import { Select } from "../ui/Select";
+import type { Chapter, ChapterType } from "@/features/chapters/types";
+import { ChapterOutline } from "@/components/editor/ChapterOutline";
+import { Select } from "@/components/ui/Select";
 import { useTranslation } from "react-i18next";
 import { List, ListTree, Rows3 } from "lucide-react";
-import { ChapterIcon, EditIcon } from "../icons";
-import { DeleteIcon } from "../icons/DeleteIcon";
-import { AddIcon } from "../icons/AddIcon";
-import { useSettingsStore } from "../../features/settings/store";
-import { useMarkdownFileDrop } from "../../hooks/useMarkdownFileDrop";
-import { useDragAutoScroll } from "../../hooks/useDragAutoScroll";
+import { ChapterIcon, EditIcon } from "@/components/icons";
+import { DeleteIcon } from "@/components/icons/DeleteIcon";
+import { AddIcon } from "@/components/icons/AddIcon";
+import { useSettingsStore } from "@/features/settings/store";
+import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
+import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 
 interface ChapterListProps {
   chapters: Chapter[];

@@ -6,7 +6,7 @@ import {
   ComboboxOptions,
   ComboboxOption,
 } from "@headlessui/react";
-import { ChevronDownIcon } from "../icons";
+import { ChevronDownIcon } from "@/components/icons";
 
 interface ComboboxProps {
   value: string;

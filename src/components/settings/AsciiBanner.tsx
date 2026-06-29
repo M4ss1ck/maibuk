@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { maibukArt } from "../../assets/ascii/maibuk";
+import { maibukArt } from "@/assets/ascii/maibuk";
 import {
   parseArt,
   cellIntensity,
@@ -7,7 +7,7 @@ import {
   hexToRgb,
   FALLBACK_RGB,
   type Grid,
-} from "./asciiBanner.helpers";
+} from "@/components/settings/asciiBanner.helpers";
 
 interface AsciiBannerProps {
   art?: string;

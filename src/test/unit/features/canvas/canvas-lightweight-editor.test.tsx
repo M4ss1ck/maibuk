@@ -35,7 +35,7 @@ vi.mock("../../../../components/editor/ImageContextMenu", () => ({
   ImageContextMenu: () => null,
 }));
 
-const { LightweightNode } = await import("../../../../features/canvas/nodes/LightweightNode");
+const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
 
 describe("LightweightNode editor lifecycle", () => {
   beforeEach(() => {

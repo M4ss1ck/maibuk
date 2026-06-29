@@ -88,7 +88,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const { Canvas } = await import("../../../pages/Canvas");
+const { Canvas } = await import("@/pages/Canvas");
 
 function readyState() {
   const doc = {

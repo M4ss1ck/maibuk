@@ -13,11 +13,11 @@
 import { createElement } from "react";
 import { pdf, Font } from "@react-pdf/renderer";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import type { Book } from "../books/types";
-import type { Chapter } from "../chapters/types";
-import type { PdfExportOptions } from "./types";
-import { PdfDocument } from "./pdf-document";
-import { getMargins } from "./pdf-styles";
+import type { Book } from "@/features/books/types";
+import type { Chapter } from "@/features/chapters/types";
+import type { PdfExportOptions } from "@/features/export/types";
+import { PdfDocument } from "@/features/export/pdf-document";
+import { getMargins } from "@/features/export/pdf-styles";
 
 // ---------------------------------------------------------------------------
 // Text sanitisation — prevents pdfkit coordinate overflow on malformed text

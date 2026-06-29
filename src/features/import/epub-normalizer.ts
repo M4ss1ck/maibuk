@@ -1,14 +1,14 @@
 import { strFromU8 } from "fflate";
-import type { CreateBookInput } from "../books/types";
+import type { CreateBookInput } from "@/features/books/types";
 import type {
   BookMetadataInput,
   BookStyleInput,
   ChapterEpubMetaInput,
   EpubStructureInput,
-} from "./epub-project-repo";
-import type { ProjectAssetInput } from "./project-assets-repo";
-import type { ParsedEpub, ParsedEpubNavItem, ParsedEpubResource } from "./types";
-import { normalizeXhtmlToEditorHtml } from "./xhtml-to-editor";
+} from "@/features/import/epub-project-repo";
+import type { ProjectAssetInput } from "@/features/import/project-assets-repo";
+import type { ParsedEpub, ParsedEpubNavItem, ParsedEpubResource } from "@/features/import/types";
+import { normalizeXhtmlToEditorHtml } from "@/features/import/xhtml-to-editor";
 
 export interface NormalizedBookInput extends CreateBookInput {
   language?: string;

@@ -1,6 +1,6 @@
-import { getDatabase } from "../db";
-import type { DatabaseAdapter } from "../platform/types";
-import { getOrCreateDeviceId } from "../../features/metrics/device-id";
+import { getDatabase } from "@/lib/db";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { getOrCreateDeviceId } from "@/features/metrics/device-id";
 import {
   getCacheEntry,
   getDailyWritingHighWatermark,
@@ -10,21 +10,21 @@ import {
   listDailyWritingTotals,
   listEventsForAggregate,
   upsertCache,
-} from "../../features/metrics/events-repo";
-import { isMetricsDevDisabled } from "../../features/metrics/settings";
-import { useMetricsStore } from "../../features/metrics/store";
-import { SessionTracker } from "../../features/metrics/session-tracker";
-import { useSettingsStore } from "../../features/settings/store";
-import type { MetricEvent } from "../../features/metrics/types";
+} from "@/features/metrics/events-repo";
+import { isMetricsDevDisabled } from "@/features/metrics/settings";
+import { useMetricsStore } from "@/features/metrics/store";
+import { SessionTracker } from "@/features/metrics/session-tracker";
+import { useSettingsStore } from "@/features/settings/store";
+import type { MetricEvent } from "@/features/metrics/types";
 import {
   METRICS_AGGREGATE_PAGE_SIZE,
   METRICS_AGGREGATE_VERSION,
   type AggregateKey,
   type AggregateParams,
   type AggregatePayload,
-} from "../../features/metrics/aggregates/types";
-import { mergeAggregatePayloads } from "../../features/metrics/aggregates/compute";
-import type { WorkerRequest, WorkerResponse } from "./types";
+} from "@/features/metrics/aggregates/types";
+import { mergeAggregatePayloads } from "@/features/metrics/aggregates/compute";
+import type { WorkerRequest, WorkerResponse } from "@/lib/metrics/types";
 
 type PendingRequest = {
   resolve: (value: WorkerResponse) => void;

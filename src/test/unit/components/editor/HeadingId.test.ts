@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { HeadingId } from "../../../../components/editor/extensions/HeadingId";
+import { HeadingId } from "@/components/editor/extensions/HeadingId";
 
 function makeEditor(content: string) {
   return new Editor({

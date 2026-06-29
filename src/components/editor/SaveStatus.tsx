@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { CheckIcon, SaveIcon, SpinnerIcon } from "../icons";
+import { CheckIcon, SaveIcon, SpinnerIcon } from "@/components/icons";
 
 interface SaveStatusProps {
   status: "idle" | "saving" | "saved";

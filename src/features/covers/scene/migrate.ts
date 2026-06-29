@@ -4,8 +4,8 @@ import {
   type CoverDoc,
   type CoverScene,
   type Layer,
-} from "./schema";
-import { DEFAULT_BACKGROUND_COLOR } from "./defaults";
+} from "@/features/covers/scene/schema";
+import { DEFAULT_BACKGROUND_COLOR } from "@/features/covers/scene/defaults";
 
 function genId(): string {
   return crypto.randomUUID();

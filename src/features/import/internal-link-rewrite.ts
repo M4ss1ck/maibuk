@@ -1,5 +1,5 @@
-import { formatLinkUri } from "../links/link-uri";
-import { resolveHref } from "./xhtml-to-editor";
+import { formatLinkUri } from "@/features/links/link-uri";
+import { resolveHref } from "@/features/import/xhtml-to-editor";
 
 export interface ImportedChapter {
   chapterId: string;

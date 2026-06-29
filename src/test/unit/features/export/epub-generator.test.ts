@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { buildBook, buildChapter } from "../../../support/fixtures";
+import { buildBook, buildChapter } from "@/test/support/fixtures";
 
 // Mock epub-gen-memory before importing the generator
 const mockEpub = vi.hoisted(() => vi.fn());
@@ -14,8 +14,8 @@ vi.mock("../../../../features/export/html-sanitizer", () => ({
   processChapterHtml: mockProcessChapterHtml,
 }));
 
-import { generateEpub, getEpubFilename } from "../../../../features/export/epub-generator";
-import type { EpubExportOptions } from "../../../../features/export/types";
+import { generateEpub, getEpubFilename } from "@/features/export/epub-generator";
+import type { EpubExportOptions } from "@/features/export/types";
 
 const defaultOptions: EpubExportOptions = {
   includeTableOfContents: true,

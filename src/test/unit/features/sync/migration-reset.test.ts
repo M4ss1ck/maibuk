@@ -6,7 +6,7 @@ vi.mock("../../../../lib/db", () => ({
   getDatabase: () => Promise.resolve({ execute: mockExecute, select: mockSelect }),
 }));
 
-import { ensureGenericCollectionMigration } from "../../../../features/sync/migration-reset";
+import { ensureGenericCollectionMigration } from "@/features/sync/migration-reset";
 
 describe("ensureGenericCollectionMigration", () => {
   beforeEach(() => {

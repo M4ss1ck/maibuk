@@ -1,6 +1,6 @@
-import { getDatabase } from "../../lib/db";
-import { getOrCreateDeviceId } from "./device-id";
-import { invalidateAllAggregateCaches, purgeEventsByPrefix } from "./events-repo";
+import { getDatabase } from "@/lib/db";
+import { getOrCreateDeviceId } from "@/features/metrics/device-id";
+import { invalidateAllAggregateCaches, purgeEventsByPrefix } from "@/features/metrics/events-repo";
 
 export async function purgeMetricCategory(eventTypePrefix: string): Promise<number> {
   const db = await getDatabase();

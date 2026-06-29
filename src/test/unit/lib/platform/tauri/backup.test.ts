@@ -23,7 +23,7 @@ vi.mock("@tauri-apps/api/path", () => ({
   join: mockJoin,
 }));
 
-const { createTauriBackup } = await import("../../../../../lib/platform/tauri/backup");
+const { createTauriBackup } = await import("@/lib/platform/tauri/backup");
 
 describe("TauriBackupAdapter", () => {
   beforeEach(() => {

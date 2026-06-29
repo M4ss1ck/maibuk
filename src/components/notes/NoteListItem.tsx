@@ -2,8 +2,8 @@ import type { DragEvent, KeyboardEvent } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
-import type { Note } from "../../features/notes";
-import { NoteTagsRow } from "./NoteTagsRow";
+import type { Note } from "@/features/notes";
+import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
 
 interface NoteListItemProps {
   note: Note;

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { useSettingsStore } from "../features/settings/store";
+import { useSettingsStore } from "@/features/settings/store";
 
 export function PathTracker() {
   const location = useLocation();

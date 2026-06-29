@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createWebBackup } from "../../../../../lib/platform/web/backup";
-import type { BackupAdapter } from "../../../../../lib/platform/types";
+import { createWebBackup } from "@/lib/platform/web/backup";
+import type { BackupAdapter } from "@/lib/platform/types";
 
 describe("WebBackupAdapter", () => {
   let adapter: BackupAdapter;

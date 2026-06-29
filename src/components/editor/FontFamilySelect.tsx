@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
-import { Combobox } from "../ui";
+import { Combobox } from "@/components/ui";
 
 const FONT_FAMILY_OPTIONS = [
   "Literata, serif",

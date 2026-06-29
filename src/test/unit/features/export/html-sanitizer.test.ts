@@ -4,7 +4,7 @@ import {
   generateEndnotesHtml,
   processChapterHtml,
   sanitizeHtmlForEpub,
-} from "../../../../features/export/html-sanitizer";
+} from "@/features/export/html-sanitizer";
 
 describe("sanitizeHtmlForEpub()", () => {
   it("returns empty output for empty input", () => {

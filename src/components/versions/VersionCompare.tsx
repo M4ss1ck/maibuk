@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import type { BookSnapshot } from "../../features/sync/types";
-import { diffSnapshots, type ChapterDiff, type ChapterDiffStatus } from "../../features/versions";
-import { sanitizeChapterHtml } from "../../features/versions/sanitize";
+import type { BookSnapshot } from "@/features/sync/types";
+import { diffSnapshots, type ChapterDiff, type ChapterDiffStatus } from "@/features/versions";
+import { sanitizeChapterHtml } from "@/features/versions/sanitize";
 
 interface VersionCompareProps {
   current: BookSnapshot;

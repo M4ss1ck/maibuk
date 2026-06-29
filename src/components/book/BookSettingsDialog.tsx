@@ -7,10 +7,10 @@ import {
   DisclosureButton,
   DisclosurePanel,
 } from "@headlessui/react";
-import { Button, Select } from "../ui";
+import { Button, Select } from "@/components/ui";
 import { useTranslation } from "react-i18next";
-import { TrashIcon, ChevronDownIcon } from "../icons";
-import type { Book, UpdateBookInput } from "../../features/books/types";
+import { TrashIcon, ChevronDownIcon } from "@/components/icons";
+import type { Book, UpdateBookInput } from "@/features/books/types";
 
 interface BookSettingsDialogProps {
   isOpen: boolean;

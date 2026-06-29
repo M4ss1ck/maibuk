@@ -1,6 +1,6 @@
 // Web platform adapters barrel export
-export { createWebDatabase } from "./database";
-export { webFileSystem } from "./filesystem";
-export { webDialog } from "./dialog";
-export { webOS } from "./os";
-export { createWebBackup } from "./backup";
+export { createWebDatabase } from "@/lib/platform/web/database";
+export { webFileSystem } from "@/lib/platform/web/filesystem";
+export { webDialog } from "@/lib/platform/web/dialog";
+export { webOS } from "@/lib/platform/web/os";
+export { createWebBackup } from "@/lib/platform/web/backup";

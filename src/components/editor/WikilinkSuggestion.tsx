@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useState, forwardRef } from "react";
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionOptions } from "@tiptap/suggestion";
-import type { WikilinkCandidate } from "../../features/links/wikilink-targets";
+import type { WikilinkCandidate } from "@/features/links/wikilink-targets";
 
 export interface WikilinkListProps {
   items: WikilinkCandidate[];

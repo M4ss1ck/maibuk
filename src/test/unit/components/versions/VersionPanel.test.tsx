@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { BookSnapshot } from "../../../../features/sync/types";
-import type { BookVersion } from "../../../../features/versions/types";
+import type { BookSnapshot } from "@/features/sync/types";
+import type { BookVersion } from "@/features/versions/types";
 
 const {
   mockDeleteVersion,
@@ -175,7 +175,7 @@ vi.mock("../../../../components/versions/VersionCompare", () => ({
   ),
 }));
 
-import { VersionPanel } from "../../../../components/versions/VersionPanel";
+import { VersionPanel } from "@/components/versions/VersionPanel";
 
 function snapshot(title: string): BookSnapshot {
   return {

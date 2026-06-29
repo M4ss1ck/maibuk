@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
-import type { SyncConflict } from "../../features/sync/types";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import type { SyncConflict } from "@/features/sync/types";
 
 interface ConflictDialogProps {
   conflict: SyncConflict;

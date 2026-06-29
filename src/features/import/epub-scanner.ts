@@ -1,4 +1,4 @@
-import { readEpub } from "./epub-reader";
+import { readEpub } from "@/features/import/epub-reader";
 import type {
   CompatibilityIssue,
   CompatibilityReport,
@@ -6,7 +6,7 @@ import type {
   ImportPreview,
   ParsedEpub,
   ParsedEpubResource,
-} from "./types";
+} from "@/features/import/types";
 
 const CONTENT_MEDIA_TYPES = new Set(["application/xhtml+xml", "text/html"]);
 const STYLE_MEDIA_TYPES = new Set(["text/css"]);

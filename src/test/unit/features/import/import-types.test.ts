@@ -4,7 +4,7 @@ import {
   canImport,
   requiresAcknowledgement,
   type CompatibilityReport,
-} from "../../../../features/import";
+} from "@/features/import";
 
 function buildReport(issues: CompatibilityReport["issues"]): CompatibilityReport {
   return {

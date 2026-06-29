@@ -7,7 +7,7 @@ import {
   createDefaultScene,
   createTextLayer,
   createShapeLayer,
-} from "../../../../features/covers/scene/defaults";
+} from "@/features/covers/scene/defaults";
 
 describe("PRESETS", () => {
   it("has unique ids and positive dimensions", () => {

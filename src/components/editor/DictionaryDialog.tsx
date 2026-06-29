@@ -1,9 +1,9 @@
 import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { Language } from "../../features/settings/types";
-import { lookupWord } from "../../lib/dictionary";
-import { openExternal } from "../../lib/platform";
-import { Modal } from "../ui/Modal";
+import type { Language } from "@/features/settings/types";
+import { lookupWord } from "@/lib/dictionary";
+import { openExternal } from "@/lib/platform";
+import { Modal } from "@/components/ui/Modal";
 
 interface DictionaryDialogProps {
   isOpen: boolean;

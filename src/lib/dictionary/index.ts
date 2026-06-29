@@ -1,1 +1,1 @@
-export { lookupWord } from "./wiktionary";
+export { lookupWord } from "@/lib/dictionary/wiktionary";

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useThemeStore, applyTheme, getCycledTheme } from "../../../../features/theme/store";
+import { useThemeStore, applyTheme, getCycledTheme } from "@/features/theme/store";
 
 describe("useThemeStore", () => {
   beforeEach(() => {

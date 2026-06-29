@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { SaveStatus } from "../../../../components/editor/SaveStatus";
+import { SaveStatus } from "@/components/editor/SaveStatus";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),

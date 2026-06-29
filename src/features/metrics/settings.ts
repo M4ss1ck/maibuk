@@ -1,4 +1,4 @@
-import type { MetricsCategory, MetricsSettings } from "./types";
+import type { MetricsCategory, MetricsSettings } from "@/features/metrics/types";
 
 export const METRICS_DEV_DISABLED_KEY = "maibuk.metrics.disabled";
 

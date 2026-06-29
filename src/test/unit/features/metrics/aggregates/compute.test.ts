@@ -3,9 +3,9 @@ import {
   computeAggregate,
   computeStreakFromDayTotals,
   mergeAggregatePayloads,
-} from "../../../../../features/metrics/aggregates/compute";
-import type { DashboardAggregate } from "../../../../../features/metrics/aggregates/types";
-import type { MetricEvent } from "../../../../../features/metrics/types";
+} from "@/features/metrics/aggregates/compute";
+import type { DashboardAggregate } from "@/features/metrics/aggregates/types";
+import type { MetricEvent } from "@/features/metrics/types";
 
 function event(patch: Partial<MetricEvent>): MetricEvent {
   return {

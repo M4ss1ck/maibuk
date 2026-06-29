@@ -2,14 +2,14 @@ import { BookOpen, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { type Node, type NodeProps } from "@xyflow/react";
-import { Button } from "../../../components/ui/Button";
-import { NoteTagsRow } from "../../../components/notes/NoteTagsRow";
-import { notePlainText } from "../../../components/notes/notes-list-model";
-import { timeAgo } from "../../../components/notes/timeAgo";
-import { useBookStore } from "../../books/store";
-import { useNoteStore } from "../../notes";
-import type { CanvasFlowNodeData } from "../reactFlowAdapter";
-import { CanvasNodeHandles } from "./CanvasNodeHandles";
+import { Button } from "@/components/ui/Button";
+import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
+import { notePlainText } from "@/components/notes/notes-list-model";
+import { timeAgo } from "@/components/notes/timeAgo";
+import { useBookStore } from "@/features/books/store";
+import { useNoteStore } from "@/features/notes";
+import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
+import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 
 type NoteRefFlowNode = Node<CanvasFlowNodeData, "noteRef">;
 

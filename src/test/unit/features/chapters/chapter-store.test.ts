@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 
 // --- Mock getDatabase ---
 let testDb: DatabaseAdapter;
@@ -18,7 +18,7 @@ const {
   listAllChaptersForLinking,
   listChaptersForBookLinking,
   getChapterForLinking,
-} = await import("../../../../features/chapters/store");
+} = await import("@/features/chapters/store");
 
 async function seedChapter(
   db: DatabaseAdapter,

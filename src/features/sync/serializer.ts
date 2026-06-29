@@ -1,8 +1,8 @@
-import { getDatabase } from "../../lib/db";
-import { useBookStore } from "../books/store";
-import { useChapterStore } from "../chapters/store";
-import { useNoteStore } from "../notes/store";
-import type { BookSnapshot, NoteSnapshot } from "./types";
+import { getDatabase } from "@/lib/db";
+import { useBookStore } from "@/features/books/store";
+import { useChapterStore } from "@/features/chapters/store";
+import { useNoteStore } from "@/features/notes/store";
+import type { BookSnapshot, NoteSnapshot } from "@/features/sync/types";
 
 interface BookRow {
   id: string;

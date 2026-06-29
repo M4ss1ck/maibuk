@@ -15,20 +15,20 @@ describe("launch-on-startup platform helpers", () => {
   });
 
   it("enables autostart when true", async () => {
-    const { setLaunchOnStartup } = await import("../../../../lib/platform");
+    const { setLaunchOnStartup } = await import("@/lib/platform");
     await setLaunchOnStartup(true);
     expect(enable).toHaveBeenCalledOnce();
     expect(disable).not.toHaveBeenCalled();
   });
 
   it("disables autostart when false", async () => {
-    const { setLaunchOnStartup } = await import("../../../../lib/platform");
+    const { setLaunchOnStartup } = await import("@/lib/platform");
     await setLaunchOnStartup(false);
     expect(disable).toHaveBeenCalledOnce();
   });
 
   it("reads the current OS state", async () => {
-    const { isLaunchOnStartupEnabled } = await import("../../../../lib/platform");
+    const { isLaunchOnStartupEnabled } = await import("@/lib/platform");
     await expect(isLaunchOnStartupEnabled()).resolves.toBe(true);
   });
 });

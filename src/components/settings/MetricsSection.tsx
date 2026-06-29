@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getCategoryMeasuringSince } from "../../features/metrics/events-repo";
-import { purgeMetricCategory } from "../../features/metrics/purge";
-import type { MetricsCategory } from "../../features/metrics/types";
-import { useSettingsStore } from "../../features/settings/store";
-import { useSyncStore } from "../../features/sync/store";
-import { getDatabase } from "../../lib/db";
-import { metricsService } from "../../lib/metrics/MetricsService";
-import { Button, Modal, Switch } from "../ui";
+import { getCategoryMeasuringSince } from "@/features/metrics/events-repo";
+import { purgeMetricCategory } from "@/features/metrics/purge";
+import type { MetricsCategory } from "@/features/metrics/types";
+import { useSettingsStore } from "@/features/settings/store";
+import { useSyncStore } from "@/features/sync/store";
+import { getDatabase } from "@/lib/db";
+import { metricsService } from "@/lib/metrics/MetricsService";
+import { Button, Modal, Switch } from "@/components/ui";
 
 const METRIC_CATEGORIES: MetricsCategory[] = ["writing", "time", "engagement"];
 

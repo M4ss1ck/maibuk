@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { BookSnapshot } from "../../features/sync/types";
-import { sanitizeChapterHtml } from "../../features/versions/sanitize";
+import type { BookSnapshot } from "@/features/sync/types";
+import { sanitizeChapterHtml } from "@/features/versions/sanitize";
 
 interface VersionPreviewProps {
   snapshot: BookSnapshot;

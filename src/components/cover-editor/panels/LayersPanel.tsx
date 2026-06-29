@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Eye, EyeOff, Lock, Unlock } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useCoverStore } from "../../../features/covers/store";
-import type { Layer } from "../../../features/covers/scene/schema";
+import { useCoverStore } from "@/features/covers/store";
+import type { Layer } from "@/features/covers/scene/schema";
 
 function layerLabel(layer: Layer): string {
   if (layer.type === "text") return layer.text || layer.name;

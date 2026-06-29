@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Palette } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useCanvasStore } from "./store";
+import { useCanvasStore } from "@/features/canvas/store";
 
 const NODE_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
 

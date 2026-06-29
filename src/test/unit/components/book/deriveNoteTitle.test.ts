@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveNoteTitle } from "../../../../components/book/deriveNoteTitle";
+import { deriveNoteTitle } from "@/components/book/deriveNoteTitle";
 
 describe("deriveNoteTitle", () => {
   it("uses the first non-empty text line of the HTML", () => {

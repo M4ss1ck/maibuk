@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createRichTextExtensions } from "../../../../components/editor/extensions/createRichTextExtensions";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 
 describe("createRichTextExtensions", () => {
   it("returns the canonical rich-text schema with unique extension names", () => {

@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import { getDatabase } from "../../lib/db";
-import { recordTombstone } from "../sync/tombstones";
-import { reindexSource } from "../links/link-index";
-import type { CreateNoteInput, Note, ReorderNoteItem, UpdateNoteInput } from "./types";
+import { getDatabase } from "@/lib/db";
+import { recordTombstone } from "@/features/sync/tombstones";
+import { reindexSource } from "@/features/links/link-index";
+import type { CreateNoteInput, Note, ReorderNoteItem, UpdateNoteInput } from "@/features/notes/types";
 
 function generateId(): string {
   return crypto.randomUUID();

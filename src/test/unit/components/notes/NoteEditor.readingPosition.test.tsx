@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { NoteEditor } from "../../../../components/notes/NoteEditor";
-import type { Note, UpdateNoteInput } from "../../../../features/notes";
+import { NoteEditor } from "@/components/notes/NoteEditor";
+import type { Note, UpdateNoteInput } from "@/features/notes";
 
 const { editorProps } = vi.hoisted(() => ({
   editorProps: [] as Array<Record<string, unknown>>,

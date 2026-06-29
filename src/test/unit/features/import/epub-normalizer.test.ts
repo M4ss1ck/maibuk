@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { strToU8 } from "fflate";
-import { normalizeEpubProject } from "../../../../features/import/epub-normalizer";
-import type { ParsedEpub } from "../../../../features/import/types";
+import { normalizeEpubProject } from "@/features/import/epub-normalizer";
+import type { ParsedEpub } from "@/features/import/types";
 
 function buildParsedEpub(overrides: Partial<ParsedEpub> = {}): ParsedEpub {
   return {

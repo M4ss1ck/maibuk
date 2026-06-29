@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useShortcuts } from "../lib/shortcuts";
+import { useShortcuts } from "@/lib/shortcuts";
 import { useTranslation } from "react-i18next";
-import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
-import { useThemeStore, getCycledTheme } from "../features/theme";
-import { useSettingsStore } from "../features/settings/store";
-import { useSyncStore } from "../features/sync/store";
-import { useNoteStore } from "../features/notes";
-import { getPassphrase } from "../features/sync/crypto";
-import { IS_TAURI } from "../lib/platform";
+import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
+import { useThemeStore, getCycledTheme } from "@/features/theme";
+import { useSettingsStore } from "@/features/settings/store";
+import { useSyncStore } from "@/features/sync/store";
+import { useNoteStore } from "@/features/notes";
+import { getPassphrase } from "@/features/sync/crypto";
+import { IS_TAURI } from "@/lib/platform";
 
 export function GlobalShortcuts() {
   const { t } = useTranslation();

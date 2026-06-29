@@ -3,8 +3,8 @@ import type { EditorState } from "@tiptap/pm/state";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { Slice } from "@tiptap/pm/model";
 import { DOMSerializer } from "@tiptap/pm/model";
-import i18n from "../../../i18n";
-import { toast } from "../../ui";
+import i18n from "@/i18n";
+import { toast } from "@/components/ui";
 
 const copyHandlerKey = new PluginKey("copyHandler");
 const BLOCK_SEPARATOR = "\n";

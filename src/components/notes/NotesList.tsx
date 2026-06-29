@@ -12,29 +12,29 @@ import {
   Search,
   Tags,
 } from "lucide-react";
-import type { Book } from "../../features/books/types";
-import type { ReorderNoteItem } from "../../features/notes";
-import { AddIcon } from "../icons/AddIcon";
-import { ResponsiveToggleGroup } from "../ui";
-import type { ResponsiveToggleOption } from "../ui";
-import { NoteListItem } from "./NoteListItem";
-import { useMarkdownFileDrop } from "../../hooks/useMarkdownFileDrop";
-import { useDragAutoScroll } from "../../hooks/useDragAutoScroll";
-import { useSettingsStore } from "../../features/settings/store";
-import { tagColor } from "./tagColor";
+import type { Book } from "@/features/books/types";
+import type { ReorderNoteItem } from "@/features/notes";
+import { AddIcon } from "@/components/icons/AddIcon";
+import { ResponsiveToggleGroup } from "@/components/ui";
+import type { ResponsiveToggleOption } from "@/components/ui";
+import { NoteListItem } from "@/components/notes/NoteListItem";
+import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
+import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
+import { useSettingsStore } from "@/features/settings/store";
+import { tagColor } from "@/components/notes/tagColor";
 import {
   buildBookNoteGroups,
   buildDateNoteGroups,
   buildListNoteSections,
   buildTagNoteGroups,
   filterNotes,
-} from "./notes-list-model";
+} from "@/components/notes/notes-list-model";
 import type {
   NoteWithBook,
   NoteSection,
   NotesListViewMode,
   NotesTreeGroupMode,
-} from "./notes-list-model";
+} from "@/components/notes/notes-list-model";
 
 type DropPlacement = "before" | "after";
 

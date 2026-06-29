@@ -1,4 +1,4 @@
-import { Modal, KeyboardShortcut } from "./ui";
+import { Modal, KeyboardShortcut } from "@/components/ui";
 import { useTranslation } from "react-i18next";
 
 interface ShortcutItem {

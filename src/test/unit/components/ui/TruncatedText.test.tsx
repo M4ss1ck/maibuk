@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TruncatedText } from "../../../../components/ui/TruncatedText";
+import { TruncatedText } from "@/components/ui/TruncatedText";
 
 /** Force the next-rendered element to report the given overflow geometry. */
 function stubGeometry(scrollWidth: number, clientWidth: number) {

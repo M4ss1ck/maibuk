@@ -2,9 +2,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PasteCleanupSection } from "../../../../components/settings/PasteCleanupSection";
-import { useSettingsStore } from "../../../../features/settings/store";
-import { PASTE_CLEANUP_PRESETS } from "../../../../features/settings/types";
+import { PasteCleanupSection } from "@/components/settings/PasteCleanupSection";
+import { useSettingsStore } from "@/features/settings/store";
+import { PASTE_CLEANUP_PRESETS } from "@/features/settings/types";
 
 vi.mock("../../../../i18n", () => ({
   default: {

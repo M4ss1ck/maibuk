@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 
 let testDb: DatabaseAdapter;
 
@@ -18,7 +18,7 @@ const {
   listPendingTombstones,
   markTombstonePushed,
   recordTombstone,
-} = await import("../../../../features/sync/tombstones");
+} = await import("@/features/sync/tombstones");
 
 describe("sync tombstones", () => {
   beforeEach(async () => {

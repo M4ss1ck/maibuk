@@ -1,6 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Editor } from "../../../../components/editor/Editor";
+import { Editor } from "@/components/editor/Editor";
 
 const { useReadingPositionMock } = vi.hoisted(() => ({
   useReadingPositionMock: vi.fn(),

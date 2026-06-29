@@ -1,11 +1,11 @@
-import type { MetricEvent } from "../../features/metrics/types";
+import type { MetricEvent } from "@/features/metrics/types";
 import type {
   AggregateKey,
   AggregateParams,
   AggregatePayload,
   StreakAggregate,
-} from "../../features/metrics/aggregates/types";
-import type { DayWordTotal } from "../../features/metrics/events-repo";
+} from "@/features/metrics/aggregates/types";
+import type { DayWordTotal } from "@/features/metrics/events-repo";
 
 export type WorkerRequest =
   | { type: "init"; id: number; deviceId: string }

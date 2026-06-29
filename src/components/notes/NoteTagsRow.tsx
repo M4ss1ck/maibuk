@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
-import { tagColor } from "./tagColor";
+import { tagColor } from "@/components/notes/tagColor";
 
 const GAP = 4;
 

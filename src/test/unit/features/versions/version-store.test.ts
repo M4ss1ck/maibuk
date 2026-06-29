@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
-import { VERSION_AUTO_PRUNE_KEEP } from "../../../../constants";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
+import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
 
 const { mockGetDatabase } = vi.hoisted(() => ({
   mockGetDatabase: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock("../../../../features/sync/serializer", () => ({
   applyBookSnapshot: mockApplyBookSnapshot,
 }));
 
-const { useVersionStore } = await import("../../../../features/versions/store");
+const { useVersionStore } = await import("@/features/versions/store");
 
 async function seedBook(db: DatabaseAdapter, bookId = "book-1") {
   const now = Math.floor(Date.now() / 1000);

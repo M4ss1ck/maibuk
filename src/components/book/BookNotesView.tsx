@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { QuickNoteEditor } from "./QuickNoteEditor";
-import type { Note } from "../../features/notes";
+import { QuickNoteEditor } from "@/components/book/QuickNoteEditor";
+import type { Note } from "@/features/notes";
 
 interface BookNotesViewProps {
   notes: Note[];

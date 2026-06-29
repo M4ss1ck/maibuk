@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
-import { TableSizePicker } from "./TableSizePicker";
+import { TableSizePicker } from "@/components/editor/TableSizePicker";
 import {
   Table,
   Columns2,

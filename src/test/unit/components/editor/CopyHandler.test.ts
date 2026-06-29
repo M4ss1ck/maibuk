@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { clipboardTextSerializer } from "../../../../components/editor/extensions/CopyHandler";
+import { clipboardTextSerializer } from "@/components/editor/extensions/CopyHandler";
 
 function sliceText(html: string): string {
   const editor = new Editor({

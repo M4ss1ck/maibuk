@@ -1,6 +1,6 @@
 // src/test/unit/features/links/navigate.test.ts
 import { describe, expect, it, vi } from "vitest";
-import { navigateToLinkTarget } from "../../../../features/links/navigate";
+import { navigateToLinkTarget } from "@/features/links/navigate";
 
 describe("navigateToLinkTarget", () => {
   it("routes a note URI to the note editor", () => {

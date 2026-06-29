@@ -1,16 +1,16 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseAdapter } from "../../lib/platform/types";
-import { Home } from "../../pages/Home";
-import { useBookStore } from "../../features/books/store";
-import { useChapterStore } from "../../features/chapters/store";
-import { createTestDatabase } from "../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { Home } from "@/pages/Home";
+import { useBookStore } from "@/features/books/store";
+import { useChapterStore } from "@/features/chapters/store";
+import { createTestDatabase } from "@/test/support/db-test-context";
 import {
   buildEncryptedEpubFixture,
   buildEpubFixture,
   buildMinimalEpubFixture,
-} from "../support/epub-fixtures";
+} from "@/test/support/epub-fixtures";
 
 let testDb: DatabaseAdapter;
 

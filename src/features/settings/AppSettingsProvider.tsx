@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { useSettingsStore } from "./store";
-import i18n from "../../i18n";
-import type { FontFamily } from "./types";
-import { setWindowAlwaysOnTop, isLaunchOnStartupEnabled } from "../../lib/platform";
+import { useSettingsStore } from "@/features/settings/store";
+import i18n from "@/i18n";
+import type { FontFamily } from "@/features/settings/types";
+import { setWindowAlwaysOnTop, isLaunchOnStartupEnabled } from "@/lib/platform";
 
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
   serif: "var(--font-serif)",

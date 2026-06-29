@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useTheme } from "../features/theme";
+import { useTheme } from "@/features/theme";
 import {
   useSettings,
   useSettingsStore,
@@ -12,13 +12,13 @@ import {
   type FontFamily,
   type ExportFormat,
   type Language,
-} from "../features/settings";
-import { Select, Switch, Button, Modal, Input } from "../components/ui";
-import { APP_VERSION, DOWNLOAD_PAGE } from "../constants";
-import { useVersionCheck } from "../features/version";
+} from "@/features/settings";
+import { Select, Switch, Button, Modal, Input } from "@/components/ui";
+import { APP_VERSION, DOWNLOAD_PAGE } from "@/constants";
+import { useVersionCheck } from "@/features/version";
 import { useTranslation } from "react-i18next";
-import { ChevronDownIcon } from "../components/icons";
-import { exportDatabase, importDatabase, resetDatabase } from "../lib/db";
+import { ChevronDownIcon } from "@/components/icons";
+import { exportDatabase, importDatabase, resetDatabase } from "@/lib/db";
 import {
   getFileSystem,
   IS_TAURI,
@@ -26,20 +26,20 @@ import {
   getDialog,
   getWebDialog,
   createBackup,
-} from "../lib/platform";
-import { BackupService } from "../features/backup/backup-service";
-import { useSyncStore } from "../features/sync/store";
-import { normalizeServerUrl } from "../features/sync/client";
-import { useSyncFlow } from "../features/sync/useSyncFlow";
-import { AuthDialog } from "../components/sync/AuthDialog";
-import { PassphraseDialog } from "../components/sync/PassphraseDialog";
-import { ConflictDialog } from "../components/sync/ConflictDialog";
-import { SyncControls } from "../components/sync/SyncControls";
-import { BackupSection } from "../components/settings/BackupSection";
-import { MetricsSection } from "../components/settings/MetricsSection";
-import { PasteCleanupSection } from "../components/settings/PasteCleanupSection";
-import { AsciiBanner } from "../components/settings/AsciiBanner";
-import { AsciiFieldBackground } from "../components/settings/AsciiFieldBackground";
+} from "@/lib/platform";
+import { BackupService } from "@/features/backup/backup-service";
+import { useSyncStore } from "@/features/sync/store";
+import { normalizeServerUrl } from "@/features/sync/client";
+import { useSyncFlow } from "@/features/sync/useSyncFlow";
+import { AuthDialog } from "@/components/sync/AuthDialog";
+import { PassphraseDialog } from "@/components/sync/PassphraseDialog";
+import { ConflictDialog } from "@/components/sync/ConflictDialog";
+import { SyncControls } from "@/components/sync/SyncControls";
+import { BackupSection } from "@/components/settings/BackupSection";
+import { MetricsSection } from "@/components/settings/MetricsSection";
+import { PasteCleanupSection } from "@/components/settings/PasteCleanupSection";
+import { AsciiBanner } from "@/components/settings/AsciiBanner";
+import { AsciiFieldBackground } from "@/components/settings/AsciiFieldBackground";
 
 export function Settings() {
   const { t } = useTranslation();

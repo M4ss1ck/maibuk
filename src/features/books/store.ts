@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import { getDatabase } from "../../lib/db";
-import { recordTombstone } from "../sync/tombstones";
-import type { Book, CreateBookInput, UpdateBookInput } from "./types";
+import { getDatabase } from "@/lib/db";
+import { recordTombstone } from "@/features/sync/tombstones";
+import type { Book, CreateBookInput, UpdateBookInput } from "@/features/books/types";
 
 function generateId(): string {
   return crypto.randomUUID();

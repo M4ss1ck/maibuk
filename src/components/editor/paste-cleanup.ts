@@ -4,7 +4,7 @@ import type {
   PasteCleanupSettings,
   PasteRuleAction,
   PasteRuleTarget,
-} from "../../features/settings/types";
+} from "@/features/settings/types";
 
 /**
  * Pure paste-cleanup engine. Given raw pasted HTML and the author's cleanup

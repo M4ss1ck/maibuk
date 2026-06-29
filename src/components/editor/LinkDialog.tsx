@@ -1,11 +1,11 @@
 import { useState, useEffect, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useTranslation } from "react-i18next";
-import { formatLinkUri, isInternalLink } from "../../features/links/link-uri";
+import { formatLinkUri, isInternalLink } from "@/features/links/link-uri";
 
 type LinkTextMark = {
   type: string;

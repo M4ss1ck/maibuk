@@ -1,5 +1,5 @@
 import { writeFile, readFile } from "@tauri-apps/plugin-fs";
-import type { FileSystemAdapter } from "../types";
+import type { FileSystemAdapter } from "@/lib/platform/types";
 
 export const tauriFileSystem: FileSystemAdapter = {
   async writeFile(path: string, data: Uint8Array): Promise<void> {

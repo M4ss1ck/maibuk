@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { rewriteInternalLinksForExport } from "../../../../features/export/internal-link-export";
-import { rewriteImportedInternalLinks } from "../../../../features/import/internal-link-rewrite";
+import { rewriteInternalLinksForExport } from "@/features/export/internal-link-export";
+import { rewriteImportedInternalLinks } from "@/features/import/internal-link-rewrite";
 
 describe("internal link round-trip", () => {
   it("export then import preserves a heading link target", () => {

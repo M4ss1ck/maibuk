@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { plainTextToEditorHtml } from "../../../../components/editor/plain-text-html";
+import { plainTextToEditorHtml } from "@/components/editor/plain-text-html";
 
 describe("plainTextToEditorHtml", () => {
   it("splits blank lines into paragraphs and single newlines into hard breaks", () => {

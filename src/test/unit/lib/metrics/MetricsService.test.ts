@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 import {
   ensureMetricsSchema,
   insertEvents,
   listEvents,
   upsertCache,
-} from "../../../../features/metrics/events-repo";
-import type { MetricEvent } from "../../../../features/metrics/types";
+} from "@/features/metrics/events-repo";
+import type { MetricEvent } from "@/features/metrics/types";
 import {
   computeAggregate,
   computeStreakFromDayTotals,
-} from "../../../../features/metrics/aggregates/compute";
-import { createMetricsService } from "../../../../lib/metrics/MetricsService";
-import { useSettingsStore } from "../../../../features/settings/store";
-import type { WorkerRequest, WorkerResponse } from "../../../../lib/metrics/types";
+} from "@/features/metrics/aggregates/compute";
+import { createMetricsService } from "@/lib/metrics/MetricsService";
+import { useSettingsStore } from "@/features/settings/store";
+import type { WorkerRequest, WorkerResponse } from "@/lib/metrics/types";
 class MockWorker {
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null;
   posted: WorkerRequest[] = [];

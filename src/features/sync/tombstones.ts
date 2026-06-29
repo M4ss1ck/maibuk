@@ -1,5 +1,5 @@
-import { getDatabase } from "../../lib/db";
-import type { SyncEntityType, SyncTombstone } from "./types";
+import { getDatabase } from "@/lib/db";
+import type { SyncEntityType, SyncTombstone } from "@/features/sync/types";
 
 interface TombstoneRow {
   id: string;

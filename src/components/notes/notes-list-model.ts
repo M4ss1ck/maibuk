@@ -1,5 +1,5 @@
-import type { Book } from "../../features/books/types";
-import type { Note } from "../../features/notes";
+import type { Book } from "@/features/books/types";
+import type { Note } from "@/features/notes";
 
 export type NotesListViewMode = "list" | "tree";
 export type NotesTreeGroupMode = "book" | "tag" | "date";

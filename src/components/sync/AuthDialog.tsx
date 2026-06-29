@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Modal } from "../ui/Modal";
-import { Input } from "../ui/Input";
-import { Button } from "../ui/Button";
-import { useSyncStore } from "../../features/sync/store";
-import { openExternal } from "../../lib/platform";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { useSyncStore } from "@/features/sync/store";
+import { openExternal } from "@/lib/platform";
 
 interface AuthDialogProps {
   isOpen: boolean;

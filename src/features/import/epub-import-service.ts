@@ -1,19 +1,19 @@
-import { getDatabase } from "../../lib/db";
-import { useBookStore } from "../books/store";
-import { useChapterStore } from "../chapters/store";
+import { getDatabase } from "@/lib/db";
+import { useBookStore } from "@/features/books/store";
+import { useChapterStore } from "@/features/chapters/store";
 import {
   insertBookMetadata,
   insertBookStyles,
   insertChapterEpubMeta,
   insertEpubStructure,
-} from "./epub-project-repo";
-import { readEpub } from "./epub-reader";
-import { scanEpub, buildImportPreview } from "./epub-scanner";
-import { normalizeEpubProject } from "./epub-normalizer";
-import { insertProjectAssets } from "./project-assets-repo";
-import { rewriteImportedInternalLinks } from "./internal-link-rewrite";
-import type { CompatibilityReport, ImportPreview } from "./types";
-import { canImport, requiresAcknowledgement } from "./types";
+} from "@/features/import/epub-project-repo";
+import { readEpub } from "@/features/import/epub-reader";
+import { scanEpub, buildImportPreview } from "@/features/import/epub-scanner";
+import { normalizeEpubProject } from "@/features/import/epub-normalizer";
+import { insertProjectAssets } from "@/features/import/project-assets-repo";
+import { rewriteImportedInternalLinks } from "@/features/import/internal-link-rewrite";
+import type { CompatibilityReport, ImportPreview } from "@/features/import/types";
+import { canImport, requiresAcknowledgement } from "@/features/import/types";
 
 export async function scanEpubForImport(
   bytes: Uint8Array

@@ -1,11 +1,11 @@
-import type { DatabaseAdapter } from "../../lib/platform/types";
-import type { AggregateKey, SnapshotMetrics } from "./aggregates/types";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import type { AggregateKey, SnapshotMetrics } from "@/features/metrics/aggregates/types";
 import type {
   DailyAggregateMetricPayload,
   MetricEvent,
   MetricsCacheEntry,
   MetricsCategory,
-} from "./types";
+} from "@/features/metrics/types";
 
 interface MetricEventRow {
   id: string;

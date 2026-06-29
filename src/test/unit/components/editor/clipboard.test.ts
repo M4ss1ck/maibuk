@@ -4,7 +4,7 @@ import {
   plainTextToHtml,
   readClipboardSnapshot,
   snapshotToPlainText,
-} from "../../../../components/editor/clipboard";
+} from "@/components/editor/clipboard";
 
 describe("clipboard pure helpers", () => {
   it("detects rich formatting tags", () => {
@@ -81,7 +81,7 @@ describe("readClipboardSnapshot - Tauri fallback", () => {
       readText: vi.fn().mockResolvedValue("from tauri"),
       readImage: vi.fn().mockRejectedValue(new Error("no image")),
     }));
-    const { readClipboardSnapshot: read } = await import("../../../../components/editor/clipboard");
+    const { readClipboardSnapshot: read } = await import("@/components/editor/clipboard");
     const snap = await read();
     expect(snap.text).toBe("from tauri");
     expect(snap.html).toBeNull();

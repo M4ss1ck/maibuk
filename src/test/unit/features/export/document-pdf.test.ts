@@ -18,7 +18,7 @@ vi.mock("@react-pdf/renderer", () => ({
   StyleSheet: { create: (styles: Record<string, unknown>) => styles },
 }));
 
-import { generateDocumentPdf } from "../../../../features/export/document-pdf";
+import { generateDocumentPdf } from "@/features/export/document-pdf";
 
 describe("generateDocumentPdf()", () => {
   beforeEach(() => {

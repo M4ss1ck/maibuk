@@ -64,7 +64,7 @@ vi.mock("../../../../features/chapters/store", () => ({
 vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
 
 const { importEpubProject, scanEpubForImport } = await import(
-  "../../../../features/import/epub-import-service"
+  "@/features/import/epub-import-service"
 );
 
 const cleanReport = {

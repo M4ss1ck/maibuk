@@ -36,7 +36,7 @@ describe("src/lib/db/index.ts", () => {
 
   describe("getDatabase()", () => {
     it("creates and returns a database on first call", async () => {
-      const { getDatabase } = await import("../../../../lib/db");
+      const { getDatabase } = await import("@/lib/db");
       const db = await getDatabase();
 
       expect(mockCreateDatabase).toHaveBeenCalledWith("maibuk.db");
@@ -44,7 +44,7 @@ describe("src/lib/db/index.ts", () => {
     });
 
     it("returns cached database on subsequent calls without recreating", async () => {
-      const { getDatabase } = await import("../../../../lib/db");
+      const { getDatabase } = await import("@/lib/db");
       await getDatabase();
       mockCreateDatabase.mockClear();
 
@@ -63,13 +63,13 @@ describe("src/lib/db/index.ts", () => {
         }
         return Promise.resolve({ rowsAffected: 0 });
       });
-      const { getDatabase } = await import("../../../../lib/db");
+      const { getDatabase } = await import("@/lib/db");
 
       await expect(getDatabase()).resolves.toBe(mockDb);
     });
 
     it("creates EPUB project tables and indexes during initialization", async () => {
-      const { getDatabase } = await import("../../../../lib/db");
+      const { getDatabase } = await import("@/lib/db");
 
       await getDatabase();
 
@@ -92,7 +92,7 @@ describe("src/lib/db/index.ts", () => {
     });
 
     it("backfills note spellcheck language from linked books during initialization", async () => {
-      const { getDatabase } = await import("../../../../lib/db");
+      const { getDatabase } = await import("@/lib/db");
 
       await getDatabase();
 
@@ -111,7 +111,7 @@ describe("src/lib/db/index.ts", () => {
 
   describe("waitForDatabaseReady()", () => {
     it("resolves when database is ready", async () => {
-      const { waitForDatabaseReady } = await import("../../../../lib/db");
+      const { waitForDatabaseReady } = await import("@/lib/db");
 
       await expect(waitForDatabaseReady()).resolves.toBeUndefined();
       expect(mockCreateDatabase).toHaveBeenCalled();
@@ -120,7 +120,7 @@ describe("src/lib/db/index.ts", () => {
 
   describe("closeDatabase()", () => {
     it("closes the database and resets the singleton", async () => {
-      const { getDatabase, closeDatabase } = await import("../../../../lib/db");
+      const { getDatabase, closeDatabase } = await import("@/lib/db");
       await getDatabase();
 
       await closeDatabase();
@@ -133,7 +133,7 @@ describe("src/lib/db/index.ts", () => {
     });
 
     it("does not throw when database is not initialized", async () => {
-      const { closeDatabase } = await import("../../../../lib/db");
+      const { closeDatabase } = await import("@/lib/db");
 
       await expect(closeDatabase()).resolves.toBeUndefined();
       expect(mockDb.close).not.toHaveBeenCalled();
@@ -142,7 +142,7 @@ describe("src/lib/db/index.ts", () => {
 
   describe("exportDatabase()", () => {
     it("returns exported data from the database", async () => {
-      const { exportDatabase } = await import("../../../../lib/db");
+      const { exportDatabase } = await import("@/lib/db");
       mockDb.exportData.mockResolvedValue(new Uint8Array([1, 2, 3]));
 
       const data = await exportDatabase();
@@ -154,7 +154,7 @@ describe("src/lib/db/index.ts", () => {
 
   describe("resetDatabase()", () => {
     it("deletes all data from tables in the correct order", async () => {
-      const { resetDatabase } = await import("../../../../lib/db");
+      const { resetDatabase } = await import("@/lib/db");
 
       await resetDatabase();
 
@@ -169,7 +169,7 @@ describe("src/lib/db/index.ts", () => {
     });
 
     it("does not throw when metrics tables do not exist", async () => {
-      const { resetDatabase } = await import("../../../../lib/db");
+      const { resetDatabase } = await import("@/lib/db");
       mockDb.execute.mockImplementation((sql: string) => {
         if (sql.includes("metrics_")) {
           return Promise.reject(new Error("no such table"));
@@ -181,7 +181,7 @@ describe("src/lib/db/index.ts", () => {
     });
 
     it("does not throw when optional tables are missing", async () => {
-      const { resetDatabase } = await import("../../../../lib/db");
+      const { resetDatabase } = await import("@/lib/db");
       // Every DELETE guarded by .catch() is for a table that may not exist yet.
       const optional = [
         "chapter_epub_meta",
@@ -209,7 +209,7 @@ describe("src/lib/db/index.ts", () => {
 
   describe("importDatabase()", () => {
     it("imports sql content after converting INSERT to INSERT OR REPLACE", async () => {
-      const { importDatabase } = await import("../../../../lib/db");
+      const { importDatabase } = await import("@/lib/db");
       const sql = `INSERT INTO books (id) VALUES ('1');\nINSERT OR IGNORE INTO chapters (id) VALUES ('2');`;
 
       await importDatabase(sql);
