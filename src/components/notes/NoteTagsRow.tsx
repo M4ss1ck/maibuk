@@ -17,8 +17,8 @@ function TagChip({ tag, className = "" }: { tag: string; className?: string }) {
 
   return (
     <span
-      className={`rounded-full px-1.5 py-0.5 text-[10px] text-foreground ${className}`}
-      style={{ backgroundColor: `${color}22` }}
+      className={`rounded-full px-1.5 py-0.5 text-[10px] border font-medium ${className}`}
+      style={{ color, backgroundColor: `${color}26`, borderColor: `${color}80` }}
       title={tag}
     >
       {tag}
@@ -95,9 +95,8 @@ export function NoteTagsRow({
 
   const dateEl = (
     <span
-      className={`shrink-0 text-xs text-muted-foreground ${
-        datePosition === "right" ? "ml-auto" : ""
-      }`}
+      className={`shrink-0 text-xs text-muted-foreground ${datePosition === "right" ? "ml-auto" : ""
+        }`}
     >
       {dateLabel}
     </span>
@@ -153,7 +152,7 @@ export function NoteTagsRow({
 
       <div
         ref={measureRef}
-        className="invisible absolute -left-[9999px] top-0 flex gap-1"
+        className="invisible absolute -left-2499 top-0 flex gap-1"
         aria-hidden="true"
       >
         <span className="text-xs">{dateLabel}</span>
