@@ -20,6 +20,8 @@ import { FontFamilySelect } from "@/components/editor/FontFamilySelect";
 import { ZoomControl } from "@/components/editor/ZoomControl";
 import { WidthControl } from "@/components/editor/WidthControl";
 import { DictionaryDialog } from "@/components/editor/DictionaryDialog";
+import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
+import { useActiveShortcuts } from "@/hooks";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
 import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
@@ -109,6 +111,8 @@ export function EditorToolbar({
   const [showHtmlPanel, setShowHtmlPanel] = useState(false);
   const [showDictionaryDialog, setShowDictionaryDialog] = useState(false);
   const [dictionaryWord, setDictionaryWord] = useState("");
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const shortcuts = useActiveShortcuts();
   const [isToolbarExpanded, setIsToolbarExpanded] = [
     useSettingsStore((state) => state.toolbarExpanded),
     useSettingsStore((state) => state.setToolbarExpanded),
@@ -723,6 +727,15 @@ export function EditorToolbar({
               <ImageDown className="w-4 h-4" />
             </ToolbarButton>
           )}
+
+          <Divider />
+
+          <ToolbarButton
+            onClick={() => setShowShortcutsHelp(true)}
+            title={t("shortcuts.title")}
+          >
+            <span className="w-4 h-4 flex items-center justify-center font-bold">?</span>
+          </ToolbarButton>
         </div>
       )}
 
@@ -776,6 +789,12 @@ export function EditorToolbar({
         language={spellCheckLanguage}
         onClose={() => setShowDictionaryDialog(false)}
       />
+      <ShortcutsHelpDialog
+        isOpen={showShortcutsHelp}
+        onClose={() => setShowShortcutsHelp(false)}
+        title={t("shortcuts.title")}
+        shortcuts={shortcuts}
+      />
     </div>
   );
 }
@@ -821,9 +840,8 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
         onClick={toggle}
         title={label}
         aria-label={label}
-        className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${
-          open ? "bg-primary text-white" : "hover:bg-muted"
-        }`}
+        className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${open ? "bg-primary text-white" : "hover:bg-muted"
+          }`}
       >
         <span className="uppercase">{selected.value}</span>
         <ChevronDown className="h-2.5 w-2.5" />
@@ -842,9 +860,8 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
                   onChange(option.value);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
-                  option.value === value ? "text-primary" : "text-foreground"
-                }`}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted ${option.value === value ? "text-primary" : "text-foreground"
+                  }`}
               >
                 <span>{option.label}</span>
                 <span className="text-xs uppercase text-muted-foreground">{option.value}</span>
