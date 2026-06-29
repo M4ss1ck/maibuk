@@ -99,9 +99,7 @@ describe("useReadingPosition", () => {
   });
 
   it("restores the caret (no scroll) and viewport from a saved position", () => {
-    useReadingPositionStore
-      .getState()
-      .savePosition("chapter:a", { caret: 30, top: 20 });
+    useReadingPositionStore.getState().savePosition("chapter:a", { caret: 30, top: 20 });
     const editor = makeEditor(100);
     const scrollEl = makeScrollEl();
 
@@ -110,7 +108,7 @@ describe("useReadingPosition", () => {
         editor: editor as never,
         scrollEl,
         storageKey: "chapter:a",
-      }),
+      })
     );
 
     expect(editor.state.tr.setSelection).toHaveBeenCalledWith({
@@ -122,9 +120,7 @@ describe("useReadingPosition", () => {
   });
 
   it("clamps a stale caret/top beyond the document size", () => {
-    useReadingPositionStore
-      .getState()
-      .savePosition("chapter:a", { caret: 999, top: 999 });
+    useReadingPositionStore.getState().savePosition("chapter:a", { caret: 999, top: 999 });
     const editor = makeEditor(50);
     const scrollEl = makeScrollEl();
 
@@ -133,16 +129,14 @@ describe("useReadingPosition", () => {
         editor: editor as never,
         scrollEl,
         storageKey: "chapter:a",
-      }),
+      })
     );
 
     expect(editor.view.coordsAtPos).toHaveBeenCalledWith(49);
   });
 
   it("does not restore when suppressRestore is true", () => {
-    useReadingPositionStore
-      .getState()
-      .savePosition("chapter:a", { caret: 30, top: 20 });
+    useReadingPositionStore.getState().savePosition("chapter:a", { caret: 30, top: 20 });
     const editor = makeEditor(100);
     const scrollEl = makeScrollEl();
 
@@ -152,7 +146,7 @@ describe("useReadingPosition", () => {
         scrollEl,
         storageKey: "chapter:a",
         suppressRestore: true,
-      }),
+      })
     );
 
     expect(editor.view.dispatch).not.toHaveBeenCalled();
@@ -170,7 +164,7 @@ describe("useReadingPosition", () => {
         editor: editor as never,
         scrollEl,
         storageKey: "chapter:a",
-      }),
+      })
     );
 
     scrollEl.__emit("scroll");
@@ -193,7 +187,7 @@ describe("useReadingPosition", () => {
         editor: editor as never,
         scrollEl,
         storageKey: "chapter:a",
-      }),
+      })
     );
 
     scrollEl.__emit("scroll");
@@ -215,7 +209,7 @@ describe("useReadingPosition", () => {
         editor: editor as never,
         scrollEl,
         storageKey: "chapter:a",
-      }),
+      })
     );
 
     scrollEl.__emit("scroll");

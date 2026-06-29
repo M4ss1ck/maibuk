@@ -6,10 +6,7 @@ import { HeadingId } from "../../../../components/editor/extensions/HeadingId";
 
 function makeEditor(content: string) {
   return new Editor({
-    extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      HeadingId,
-    ],
+    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } }), HeadingId],
     content,
   });
 }

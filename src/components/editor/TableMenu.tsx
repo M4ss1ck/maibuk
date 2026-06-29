@@ -44,10 +44,7 @@ export function TableMenu({ editor }: TableMenuProps) {
       if (
         buttonRef.current &&
         !buttonRef.current.contains(e.target as Node) &&
-        !(
-          e.target instanceof HTMLElement &&
-          e.target.closest(".tiptap-table-menu-portal")
-        )
+        !(e.target instanceof HTMLElement && e.target.closest(".tiptap-table-menu-portal"))
       ) {
         setShowMenu(false);
       }
@@ -100,7 +97,7 @@ export function TableMenu({ editor }: TableMenuProps) {
           >
             <TableSizePicker onSelect={insertTable} />
           </div>,
-          document.body,
+          document.body
         )}
       </>
     );

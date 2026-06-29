@@ -89,10 +89,7 @@ export async function confirmTombstones(ids: string[], confirmedAt = nowSeconds(
 
   const db = await getDatabase();
   for (const id of ids) {
-    await db.execute("UPDATE sync_tombstones SET confirmed_at = ? WHERE id = ?", [
-      confirmedAt,
-      id,
-    ]);
+    await db.execute("UPDATE sync_tombstones SET confirmed_at = ? WHERE id = ?", [confirmedAt, id]);
   }
 }
 
@@ -108,10 +105,7 @@ export async function markTombstonePushed(
   );
 }
 
-export async function hasTombstone(
-  entityType: SyncEntityType,
-  entityId: string
-): Promise<boolean> {
+export async function hasTombstone(entityType: SyncEntityType, entityId: string): Promise<boolean> {
   const db = await getDatabase();
   const rows = await db.select<{ id: string }[]>(
     "SELECT id FROM sync_tombstones WHERE entity_type = ? AND entity_id = ? LIMIT 1",

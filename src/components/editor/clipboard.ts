@@ -7,15 +7,11 @@ export interface ClipboardSnapshot {
 }
 
 export function hasRichFormatting(html: string): boolean {
-  return /<(h[1-6]|ul|ol|li|strong|b|em|i|blockquote|a|img|table|pre)\b/i.test(
-    html,
-  );
+  return /<(h[1-6]|ul|ol|li|strong|b|em|i|blockquote|a|img|table|pre)\b/i.test(html);
 }
 
 function isTauriRuntime(): boolean {
-  return (
-    IS_TAURI && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
-  );
+  return IS_TAURI && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
 async function readTextViaNavigator(): Promise<string> {
@@ -70,9 +66,7 @@ async function readViaTauri(): Promise<ClipboardSnapshot> {
   let hasImage = false;
 
   try {
-    const { readText, readImage } = await import(
-      "@tauri-apps/plugin-clipboard-manager"
-    );
+    const { readText, readImage } = await import("@tauri-apps/plugin-clipboard-manager");
     try {
       text = await readText();
     } catch {
@@ -133,11 +127,7 @@ export async function readClipboardImageDataUrl(): Promise<string | null> {
       canvas.height = height;
       const context = canvas.getContext("2d");
       if (!context) return null;
-      context.putImageData(
-        new ImageData(new Uint8ClampedArray(rgba), width, height),
-        0,
-        0,
-      );
+      context.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
       return canvas.toDataURL("image/png");
     } catch {
       return null;
@@ -160,8 +150,6 @@ export function plainTextToHtml(text: string): string {
 
   return text
     .split(/\n{2,}/)
-    .map(
-      (paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`,
-    )
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
     .join("");
 }

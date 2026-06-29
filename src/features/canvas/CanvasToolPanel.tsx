@@ -35,7 +35,7 @@ const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     >
       {children}
     </button>
-  ),
+  )
 );
 ToolbarButton.displayName = "ToolbarButton";
 
@@ -111,10 +111,18 @@ export function CanvasToolPanel({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={onAddText} aria-label={t("canvas.addTextNode")} title={t("canvas.addTextNode")}>
+        <ToolbarButton
+          onClick={onAddText}
+          aria-label={t("canvas.addTextNode")}
+          title={t("canvas.addTextNode")}
+        >
           <FilePlus2 className="size-4" aria-hidden="true" />
         </ToolbarButton>
-        <ToolbarButton onClick={onAddNoteRef} aria-label={t("canvas.addNoteRef")} title={t("canvas.addNoteRef")}>
+        <ToolbarButton
+          onClick={onAddNoteRef}
+          aria-label={t("canvas.addNoteRef")}
+          title={t("canvas.addNoteRef")}
+        >
           <Link2 className="size-4" aria-hidden="true" />
         </ToolbarButton>
       </ToolbarGroup>
@@ -122,13 +130,25 @@ export function CanvasToolPanel({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={onZoomIn} aria-label={t("canvas.zoomIn")} title={t("canvas.zoomIn")}>
+        <ToolbarButton
+          onClick={onZoomIn}
+          aria-label={t("canvas.zoomIn")}
+          title={t("canvas.zoomIn")}
+        >
           <ZoomIn className="size-4" aria-hidden="true" />
         </ToolbarButton>
-        <ToolbarButton onClick={onZoomOut} aria-label={t("canvas.zoomOut")} title={t("canvas.zoomOut")}>
+        <ToolbarButton
+          onClick={onZoomOut}
+          aria-label={t("canvas.zoomOut")}
+          title={t("canvas.zoomOut")}
+        >
           <ZoomOut className="size-4" aria-hidden="true" />
         </ToolbarButton>
-        <ToolbarButton onClick={onFitView} aria-label={t("canvas.fitView")} title={t("canvas.fitView")}>
+        <ToolbarButton
+          onClick={onFitView}
+          aria-label={t("canvas.fitView")}
+          title={t("canvas.fitView")}
+        >
           <Maximize className="size-4" aria-hidden="true" />
         </ToolbarButton>
       </ToolbarGroup>
@@ -139,8 +159,12 @@ export function CanvasToolPanel({
         <ToolbarButton
           active={interactivityLocked}
           onClick={toggleInteractivityLocked}
-          aria-label={interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")}
-          title={interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")}
+          aria-label={
+            interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")
+          }
+          title={
+            interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")
+          }
         >
           {interactivityLocked ? (
             <Lock className="size-4" aria-hidden="true" />

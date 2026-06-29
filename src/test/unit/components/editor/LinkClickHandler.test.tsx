@@ -36,12 +36,7 @@ describe("LinkClickHandler", () => {
       }),
     } as unknown as import("@tiptap/react").Editor;
 
-    render(
-      <LinkClickHandler
-        editor={editor}
-        resolveBookIdForChapter={resolveBookIdForChapter}
-      />,
-    );
+    render(<LinkClickHandler editor={editor} resolveBookIdForChapter={resolveBookIdForChapter} />);
 
     const link = document.createElement("a");
     link.className = "editor-link";
@@ -50,9 +45,7 @@ describe("LinkClickHandler", () => {
 
     fireEvent.click(link);
 
-    await waitFor(() =>
-      expect(resolveBookIdForChapter).toHaveBeenCalledWith("chapter-1"),
-    );
+    await waitFor(() => expect(resolveBookIdForChapter).toHaveBeenCalledWith("chapter-1"));
     expect(mockNavigate).toHaveBeenCalledWith("/book/book-1", {
       state: {
         openChapterId: "chapter-1",

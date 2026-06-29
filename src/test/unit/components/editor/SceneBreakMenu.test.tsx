@@ -5,12 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SceneBreakMenu } from "../../../../components/editor/SceneBreakMenu";
 
-const { mockGetWebDialog, mockOpenWithData, mockUpsertSeparatorAsset } =
-  vi.hoisted(() => ({
-    mockGetWebDialog: vi.fn(),
-    mockOpenWithData: vi.fn(),
-    mockUpsertSeparatorAsset: vi.fn(),
-  }));
+const { mockGetWebDialog, mockOpenWithData, mockUpsertSeparatorAsset } = vi.hoisted(() => ({
+  mockGetWebDialog: vi.fn(),
+  mockOpenWithData: vi.fn(),
+  mockUpsertSeparatorAsset: vi.fn(),
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

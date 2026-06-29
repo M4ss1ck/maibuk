@@ -25,7 +25,7 @@ function asSide(handle: string | undefined, fallback: Side): Side {
 
 export function computeConnectedSides(
   nodeId: string,
-  edges: CanvasEdge[],
+  edges: CanvasEdge[]
 ): Record<Side, SideConnection> {
   const sides = emptySides();
   for (const edge of edges) {
@@ -63,7 +63,7 @@ export type ToFlowEdgesOptions = {
 
 export function toFlowNodes(
   nodes: CanvasNode[],
-  options: ToFlowNodesOptions,
+  options: ToFlowNodesOptions
 ): Node<CanvasFlowNodeData>[] {
   return nodes.map((node) => ({
     id: node.id,

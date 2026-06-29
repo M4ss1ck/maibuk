@@ -1,6 +1,11 @@
 import { strFromU8 } from "fflate";
 import type { CreateBookInput } from "../books/types";
-import type { BookMetadataInput, BookStyleInput, ChapterEpubMetaInput, EpubStructureInput } from "./epub-project-repo";
+import type {
+  BookMetadataInput,
+  BookStyleInput,
+  ChapterEpubMetaInput,
+  EpubStructureInput,
+} from "./epub-project-repo";
 import type { ProjectAssetInput } from "./project-assets-repo";
 import type { ParsedEpub, ParsedEpubNavItem, ParsedEpubResource } from "./types";
 import { normalizeXhtmlToEditorHtml } from "./xhtml-to-editor";

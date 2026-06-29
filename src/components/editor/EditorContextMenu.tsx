@@ -14,11 +14,7 @@ import { spellCheckService } from "../../lib/spellcheck";
 import { looksLikeMarkdown, markdownToEditorHtml } from "../../features/markdown";
 import { Divider } from "./ToolbarButton";
 import { adjustPosition, clampPosition, getWordAtPosition } from "./editor-context-menu-utils";
-import {
-  fallbackPaste,
-  pasteWithoutFormatting,
-  useClipboardProbe,
-} from "./useClipboardProbe";
+import { fallbackPaste, pasteWithoutFormatting, useClipboardProbe } from "./useClipboardProbe";
 
 interface EditorContextMenuProps {
   editor: Editor;
@@ -152,9 +148,7 @@ export function EditorContextMenu({
       const mdText = editor.state.doc
         .textBetween(mdFrom, mdTo, "\n", "\n")
         .replace(/^\n+|\n+$/g, "");
-      const markdown = looksLikeMarkdown(mdText)
-        ? { from: mdFrom, to: mdTo, text: mdText }
-        : null;
+      const markdown = looksLikeMarkdown(mdText) ? { from: mdFrom, to: mdTo, text: mdText } : null;
 
       const menuPosition = clampPosition(event.clientX, event.clientY);
 
@@ -391,11 +385,7 @@ export function EditorContextMenu({
           onClick={() => {
             const { from, to, text } = menu.markdown!;
             const html = markdownToEditorHtml(text);
-            editor
-              .chain()
-              .focus()
-              .insertContentAt({ from, to }, html)
-              .run();
+            editor.chain().focus().insertContentAt({ from, to }, html).run();
             close();
           }}
         >

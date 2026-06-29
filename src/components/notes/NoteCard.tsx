@@ -24,9 +24,7 @@ export function NoteCard({ note, bookTitle, onClick }: NoteCardProps) {
     >
       <h3 className="truncate font-medium text-foreground">{title}</h3>
 
-      <p className="mt-1 line-clamp-2 min-h-8 text-sm text-muted-foreground">
-        {preview}
-      </p>
+      <p className="mt-1 line-clamp-2 min-h-8 text-sm text-muted-foreground">{preview}</p>
 
       {bookTitle && (
         <span className="mt-2 inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">

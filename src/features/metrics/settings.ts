@@ -10,12 +10,10 @@ export const DEFAULT_METRICS_SETTINGS: MetricsSettings = {
 };
 
 export function normalizeMetrics(value: unknown): MetricsSettings {
-  const candidate = (value && typeof value === "object" ? value : {}) as Partial<
-    MetricsSettings
-  >;
-  const enabled = (candidate.enabled && typeof candidate.enabled === "object"
-    ? candidate.enabled
-    : {}) as Partial<Record<MetricsCategory, unknown>>;
+  const candidate = (value && typeof value === "object" ? value : {}) as Partial<MetricsSettings>;
+  const enabled = (
+    candidate.enabled && typeof candidate.enabled === "object" ? candidate.enabled : {}
+  ) as Partial<Record<MetricsCategory, unknown>>;
 
   return {
     enabled: {
@@ -24,9 +22,7 @@ export function normalizeMetrics(value: unknown): MetricsSettings {
           ? enabled.writing
           : DEFAULT_METRICS_SETTINGS.enabled.writing,
       time:
-        typeof enabled.time === "boolean"
-          ? enabled.time
-          : DEFAULT_METRICS_SETTINGS.enabled.time,
+        typeof enabled.time === "boolean" ? enabled.time : DEFAULT_METRICS_SETTINGS.enabled.time,
       engagement:
         typeof enabled.engagement === "boolean"
           ? enabled.engagement
@@ -35,11 +31,11 @@ export function normalizeMetrics(value: unknown): MetricsSettings {
     syncMetrics: candidate.syncMetrics === true,
     streakDailyWordThreshold: coercePositiveInt(
       candidate.streakDailyWordThreshold,
-      DEFAULT_METRICS_SETTINGS.streakDailyWordThreshold,
+      DEFAULT_METRICS_SETTINGS.streakDailyWordThreshold
     ),
     idleThresholdSec: coercePositiveInt(
       candidate.idleThresholdSec,
-      DEFAULT_METRICS_SETTINGS.idleThresholdSec,
+      DEFAULT_METRICS_SETTINGS.idleThresholdSec
     ),
   };
 }

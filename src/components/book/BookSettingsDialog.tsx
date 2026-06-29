@@ -47,11 +47,9 @@ export function BookSettingsDialog({
   const [genre, setGenre] = useState(book.genre || "");
   const [language, setLanguage] = useState(book.language);
   const [targetWordCount, setTargetWordCount] = useState<string>(
-    book.targetWordCount?.toString() || "",
+    book.targetWordCount?.toString() || ""
   );
-  const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(
-    book.status,
-  );
+  const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(book.status);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const hasChanges =
@@ -65,9 +63,7 @@ export function BookSettingsDialog({
     status !== book.status;
 
   const handleSave = useCallback(() => {
-    const parsedTargetWordCount = targetWordCount
-      ? parseInt(targetWordCount, 10)
-      : undefined;
+    const parsedTargetWordCount = targetWordCount ? parseInt(targetWordCount, 10) : undefined;
 
     onUpdateBookInfo({
       title,
@@ -119,12 +115,7 @@ export function BookSettingsDialog({
     "w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-accent";
 
   return (
-    <Dialog
-      open={isOpen}
-      onClose={handleClose}
-      className="relative z-50"
-      transition
-    >
+    <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0"
@@ -266,10 +257,7 @@ export function BookSettingsDialog({
 
           {/* Status selector */}
           <div className="mb-6">
-            <label
-              htmlFor="book-status"
-              className="block text-sm font-medium text-foreground mb-2"
-            >
+            <label htmlFor="book-status" className="block text-sm font-medium text-foreground mb-2">
               {t("bookSettings.status")}
             </label>
             <div className="flex gap-2" id="book-status">
@@ -316,11 +304,7 @@ export function BookSettingsDialog({
                         {t("bookSettings.deleteConfirmMessage")}
                       </p>
                       <div className="flex gap-2">
-                        <Button
-                          variant="destructive"
-                          onClick={handleDelete}
-                          className="flex-1"
-                        >
+                        <Button variant="destructive" onClick={handleDelete} className="flex-1">
                           {t("bookSettings.confirmDelete")}
                         </Button>
                         <Button

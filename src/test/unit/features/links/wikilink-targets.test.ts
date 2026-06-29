@@ -11,12 +11,7 @@ const data = {
 describe("buildWikilinkCandidates", () => {
   it("orders notes, books, chapters, headings and filters by query", () => {
     const result = buildWikilinkCandidates("alpha", data);
-    expect(result.map((c) => c.kind)).toEqual([
-      "note",
-      "book",
-      "heading",
-      "createNote",
-    ]);
+    expect(result.map((c) => c.kind)).toEqual(["note", "book", "heading", "createNote"]);
     expect(result[0]).toMatchObject({
       kind: "note",
       id: "n1",

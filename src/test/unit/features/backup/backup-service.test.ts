@@ -325,10 +325,7 @@ describe("BackupService", () => {
       expect(mockDb.execute).toHaveBeenNthCalledWith(4, "DELETE FROM notes");
       expect(mockDb.execute).toHaveBeenNthCalledWith(5, "DELETE FROM canvases");
       expect(mockDb.execute).toHaveBeenNthCalledWith(6, "DELETE FROM sync_tombstones");
-      expect(mockDb.execute).toHaveBeenNthCalledWith(
-        7,
-        'INSERT INTO "books" VALUES ("book-1")'
-      );
+      expect(mockDb.execute).toHaveBeenNthCalledWith(7, 'INSERT INTO "books" VALUES ("book-1")');
       expect(mockDb.execute).toHaveBeenNthCalledWith(
         8,
         'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")'
@@ -461,7 +458,7 @@ describe("BackupService", () => {
       const normalizedStatement = `INSERT INTO "canvases" ("id", "title", "doc", "pinned", "order", "created_at", "updated_at", "content_updated_at") VALUES ('canvas-1', 'Map', '${normalizedDoc}', 0, 0, 1, 1, 1)`;
       mockAdapter.readBackup = vi.fn(async () => "restore canvas");
       mockParseSqlStatements.mockImplementation((sql: string) =>
-        sql === "restore canvas" ? [statement] : [],
+        sql === "restore canvas" ? [statement] : []
       );
 
       await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
@@ -474,11 +471,11 @@ describe("BackupService", () => {
       const statement = `INSERT INTO "canvases" ("id", "title", "doc", "pinned", "order", "created_at", "updated_at", "content_updated_at") VALUES ('canvas-1', 'Map', '{', 0, 0, 1, 1, 1)`;
       mockAdapter.readBackup = vi.fn(async () => "restore corrupt canvas");
       mockParseSqlStatements.mockImplementation((sql: string) =>
-        sql === "restore corrupt canvas" ? [statement] : [],
+        sql === "restore corrupt canvas" ? [statement] : []
       );
 
       await expect(
-        service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql"),
+        service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
       ).rejects.toThrow("RESTORE_INVALID");
 
       expect(mockDb.execute).not.toHaveBeenCalled();

@@ -7,7 +7,7 @@ describe("strokeToPath", () => {
       strokeToPath([
         { x: 0, y: 0 },
         { x: 10, y: 5 },
-      ]),
+      ])
     ).toBe("M 0 0 L 10 5");
   });
 

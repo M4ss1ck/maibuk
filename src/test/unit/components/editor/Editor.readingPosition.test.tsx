@@ -31,7 +31,7 @@ vi.mock("../../../../features/settings/store", () => ({
         language: "en",
         metrics: { enabled: { writing: false } },
       }),
-    },
+    }
   ),
 }));
 
@@ -64,9 +64,7 @@ vi.mock("../../../../components/editor/FootnoteList", () => ({
 }));
 
 vi.mock("../../../../components/editor/extensions/SpellCheck", async () => {
-  const { Extension } = await vi.importActual<typeof import("@tiptap/core")>(
-    "@tiptap/core",
-  );
+  const { Extension } = await vi.importActual<typeof import("@tiptap/core")>("@tiptap/core");
   return {
     SpellCheck: Extension.create({ name: "mockSpellCheck" }),
   };
@@ -84,7 +82,7 @@ describe("Editor reading-position wiring", () => {
         onUpdate={() => {}}
         restoreKey="chapter:abc"
         suppressRestore={false}
-      />,
+      />
     );
 
     await waitFor(() => {

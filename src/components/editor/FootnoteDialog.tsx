@@ -10,11 +10,7 @@ interface FootnoteDialogProps {
   onClose: () => void;
 }
 
-export function FootnoteDialog({
-  editor,
-  isOpen,
-  onClose,
-}: FootnoteDialogProps) {
+export function FootnoteDialog({ editor, isOpen, onClose }: FootnoteDialogProps) {
   const { t } = useTranslation();
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
@@ -52,15 +48,10 @@ export function FootnoteDialog({
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          {t("editor.footnoteDescription")}
-        </p>
+        <p className="text-sm text-muted-foreground">{t("editor.footnoteDescription")}</p>
 
         <div>
-          <label
-            htmlFor="footnote-content"
-            className="block text-sm font-medium mb-1"
-          >
+          <label htmlFor="footnote-content" className="block text-sm font-medium mb-1">
             {t("editor.footnoteContent")}
           </label>
           <textarea

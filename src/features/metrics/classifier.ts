@@ -20,14 +20,13 @@ interface Totals {
 
 export function classifyTransaction(
   transaction: Transaction,
-  context: ClassificationContext,
+  context: ClassificationContext
 ): MetricEvent[] {
   if (!transaction.docChanged) return [];
   if (transaction.getMeta("metrics:programmatic") === true) return [];
 
   const isPaste =
-    transaction.getMeta("metrics:source") === "paste" ||
-    transaction.getMeta("paste") === true;
+    transaction.getMeta("metrics:source") === "paste" || transaction.getMeta("paste") === true;
   const isHistory = transaction.getMeta("history$") !== undefined;
 
   const totals = transaction.steps.reduce<Totals>(
@@ -37,12 +36,7 @@ export function classifyTransaction(
       const docBefore = transaction.docs[index];
       const docAfter = transaction.docs[index + 1] ?? transaction.doc;
       const removed = docBefore.textBetween(step.from, step.to, " ", " ");
-      const inserted = step.slice.content.textBetween(
-        0,
-        step.slice.content.size,
-        " ",
-        " ",
-      );
+      const inserted = step.slice.content.textBetween(0, step.slice.content.size, " ", " ");
       const removedChars = removed.length;
       const addedChars = inserted.length;
 
@@ -62,7 +56,7 @@ export function classifyTransaction(
       acc.addedChars += addedChars;
       return acc;
     },
-    { removedWords: 0, removedChars: 0, addedWords: 0, addedChars: 0 },
+    { removedWords: 0, removedChars: 0, addedWords: 0, addedChars: 0 }
   );
 
   if (totals.removedWords === 0 && totals.addedWords === 0) return [];
@@ -117,7 +111,7 @@ function eventIfWords(
   eventType: EventType,
   words: number,
   chars: number,
-  context: ClassificationContext,
+  context: ClassificationContext
 ): MetricEvent[] {
   if (words <= 0) return [];
   return [buildEvent(eventType, { words, chars, chapterId: context.chapterId }, context)];
@@ -126,7 +120,7 @@ function eventIfWords(
 function buildEvent(
   eventType: EventType,
   payload: WritingMetricPayload,
-  context: ClassificationContext,
+  context: ClassificationContext
 ): MetricEvent {
   const now = context.now ?? new Date();
   return {

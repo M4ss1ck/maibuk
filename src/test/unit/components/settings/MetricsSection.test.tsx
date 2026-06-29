@@ -26,16 +26,13 @@ vi.mock("react-i18next", () => ({
         "settings.metrics.title": "Metrics",
         "settings.metrics.description": "Control local writing metrics.",
         "settings.metrics.writing.label": "Writing volume",
-        "settings.metrics.writing.description":
-          "Typed, pasted, and deleted word events.",
+        "settings.metrics.writing.description": "Typed, pasted, and deleted word events.",
         "settings.metrics.time.label": "Time tracking",
         "settings.metrics.time.description": "Session timing events.",
         "settings.metrics.engagement.label": "Engagement",
-        "settings.metrics.engagement.description":
-          "Edit ratio and deepest session views.",
+        "settings.metrics.engagement.description": "Edit ratio and deepest session views.",
         "settings.metrics.sync.label": "Sync metrics",
-        "settings.metrics.sync.description":
-          "Share metrics across signed-in devices.",
+        "settings.metrics.sync.description": "Share metrics across signed-in devices.",
         "settings.metrics.syncRequiresAuth": "Sign in to sync to enable metrics sharing",
         "settings.metrics.measuringSince": `Measuring since ${params?.date}`,
         "settings.metrics.notMeasuredYet": "Not measured yet",
@@ -84,18 +81,15 @@ vi.mock("../../../../lib/metrics/MetricsService", () => ({
 }));
 
 const { useSettingsStore } = await import("../../../../features/settings/store");
-const { MetricsSection } = await import(
-  "../../../../components/settings/MetricsSection"
-);
+const { MetricsSection } = await import("../../../../components/settings/MetricsSection");
 
 describe("MetricsSection", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
     mockGetDatabase.mockResolvedValue({});
-    mockGetCategoryMeasuringSince.mockImplementation(
-      (_db: unknown, category: string) =>
-        category === "writing" ? Promise.resolve("2026-05-23T12:00:00.000Z") : Promise.resolve(null),
+    mockGetCategoryMeasuringSince.mockImplementation((_db: unknown, category: string) =>
+      category === "writing" ? Promise.resolve("2026-05-23T12:00:00.000Z") : Promise.resolve(null)
     );
     mockPurgeMetricCategory.mockResolvedValue(1);
     mockUseSyncStoreSelector.mockReturnValue("logged-out");
@@ -113,12 +107,8 @@ describe("MetricsSection", () => {
 
     await user.click(screen.getByRole("switch", { name: "Writing volume" }));
 
-    expect(screen.getByRole("dialog")).toHaveTextContent(
-      "Typed, pasted, and deleted word events.",
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Delete Writing volume" }),
-    );
+    expect(screen.getByRole("dialog")).toHaveTextContent("Typed, pasted, and deleted word events.");
+    await user.click(screen.getByRole("button", { name: "Delete Writing volume" }));
 
     await waitFor(() => {
       expect(mockPurgeMetricCategory).toHaveBeenCalledWith("writing.");
@@ -148,9 +138,7 @@ describe("MetricsSection", () => {
 
     render(<MetricsSection />);
     await user.click(screen.getByRole("switch", { name: "Time tracking" }));
-    await user.click(
-      screen.getByRole("button", { name: "Delete Time tracking" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Delete Time tracking" }));
 
     await waitFor(() => {
       expect(mockPurgeMetricCategory).toHaveBeenCalledWith("session.");

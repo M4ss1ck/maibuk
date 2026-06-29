@@ -98,9 +98,7 @@ describe("NotesGallery", () => {
   });
 
   it("focuses search with Ctrl+F and opens filters when search is already focused", async () => {
-    noteState.notes = [
-      { id: "n1", title: "First", bookId: "book-1", tags: ["Work"], content: "" },
-    ];
+    noteState.notes = [{ id: "n1", title: "First", bookId: "book-1", tags: ["Work"], content: "" }];
     render(<NotesGallery />);
 
     const searchInput = screen.getByPlaceholderText("notes.search");

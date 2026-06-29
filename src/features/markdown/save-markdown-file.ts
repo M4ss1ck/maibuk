@@ -5,10 +5,7 @@ import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
  * desktop it opens a native save dialog. Returns true if a file was written,
  * false if the user cancelled the desktop dialog.
  */
-export async function saveMarkdownFile(
-  filename: string,
-  markdown: string,
-): Promise<boolean> {
+export async function saveMarkdownFile(filename: string, markdown: string): Promise<boolean> {
   const bytes = new TextEncoder().encode(markdown);
 
   if (IS_WEB) {

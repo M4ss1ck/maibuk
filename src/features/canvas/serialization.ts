@@ -135,7 +135,7 @@ function normalizeNode(node: CanvasNode): CanvasNode {
 
 function migrateToCurrent(
   value: Record<string, unknown>,
-  fromVersion: number,
+  fromVersion: number
 ): {
   value: Record<string, unknown>;
   migrated: boolean;

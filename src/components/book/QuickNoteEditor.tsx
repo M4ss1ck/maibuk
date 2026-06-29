@@ -51,7 +51,7 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
     label: string,
     Icon: typeof Bold,
     isActive: boolean,
-    action: () => void,
+    action: () => void
   ) => (
     <button
       type="button"
@@ -73,46 +73,37 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
         {showToolbar && editor ? (
           <div className="flex items-center gap-0.5">
             {toolbarButton(t("editor.bold"), Bold, editor.isActive("bold"), () =>
-              editor.chain().focus().toggleBold().run(),
+              editor.chain().focus().toggleBold().run()
             )}
             {toolbarButton(t("editor.italic"), Italic, editor.isActive("italic"), () =>
-              editor.chain().focus().toggleItalic().run(),
+              editor.chain().focus().toggleItalic().run()
             )}
-            {toolbarButton(
-              t("editor.underline"),
-              UnderlineIcon,
-              editor.isActive("underline"),
-              () => editor.chain().focus().toggleUnderline().run(),
+            {toolbarButton(t("editor.underline"), UnderlineIcon, editor.isActive("underline"), () =>
+              editor.chain().focus().toggleUnderline().run()
             )}
             {toolbarButton(
               t("editor.heading1"),
               Heading1,
               editor.isActive("heading", { level: 1 }),
-              () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+              () => editor.chain().focus().toggleHeading({ level: 1 }).run()
             )}
             {toolbarButton(
               t("editor.heading2"),
               Heading2,
               editor.isActive("heading", { level: 2 }),
-              () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+              () => editor.chain().focus().toggleHeading({ level: 2 }).run()
             )}
             {toolbarButton(
               t("editor.heading3"),
               Heading3,
               editor.isActive("heading", { level: 3 }),
-              () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+              () => editor.chain().focus().toggleHeading({ level: 3 }).run()
             )}
-            {toolbarButton(
-              t("editor.bulletList"),
-              List,
-              editor.isActive("bulletList"),
-              () => editor.chain().focus().toggleBulletList().run(),
+            {toolbarButton(t("editor.bulletList"), List, editor.isActive("bulletList"), () =>
+              editor.chain().focus().toggleBulletList().run()
             )}
-            {toolbarButton(
-              t("editor.taskList"),
-              ListChecks,
-              editor.isActive("taskList"),
-              () => editor.chain().focus().toggleTaskList().run(),
+            {toolbarButton(t("editor.taskList"), ListChecks, editor.isActive("taskList"), () =>
+              editor.chain().focus().toggleTaskList().run()
             )}
           </div>
         ) : (

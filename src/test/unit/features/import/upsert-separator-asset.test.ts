@@ -19,7 +19,7 @@ describe("upsertSeparatorAsset", () => {
     await testDb.execute(
       `INSERT INTO books (id, title, author_name, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?)`,
-      ["book-1", "Imported Book", "Author", 1, 1],
+      ["book-1", "Imported Book", "Author", 1, 1]
     );
   });
 

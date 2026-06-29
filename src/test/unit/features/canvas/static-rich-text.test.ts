@@ -8,13 +8,13 @@ describe("prepareStaticCanvasHtml", () => {
       ' two<sup data-footnote="" data-footnote-content="Second note" data-footnote-id="b">*</sup></p>';
     const doc = new DOMParser().parseFromString(prepareStaticCanvasHtml(html), "text/html");
 
-    expect(Array.from(doc.querySelectorAll("sup[data-footnote]")).map((r) => r.textContent)).toEqual(
-      ["1", "2"],
-    );
+    expect(
+      Array.from(doc.querySelectorAll("sup[data-footnote]")).map((r) => r.textContent)
+    ).toEqual(["1", "2"]);
     expect(
       Array.from(doc.querySelectorAll(".footnote-section .footnote-content")).map(
-        (item) => item.textContent,
-      ),
+        (item) => item.textContent
+      )
     ).toEqual(["First note", "Second note"]);
   });
 
@@ -29,7 +29,7 @@ describe("prepareStaticCanvasHtml", () => {
 
   it("removes script tags and unsafe link URLs", () => {
     const result = prepareStaticCanvasHtml(
-      '<p>hi</p><script>alert(1)</script><a href="javascript:alert(1)">x</a>',
+      '<p>hi</p><script>alert(1)</script><a href="javascript:alert(1)">x</a>'
     );
     expect(result).not.toContain("<script");
     expect(result).not.toContain("javascript:");
@@ -38,7 +38,7 @@ describe("prepareStaticCanvasHtml", () => {
   it("restores a line break inside empty paragraphs", () => {
     const doc = new DOMParser().parseFromString(
       prepareStaticCanvasHtml("<p>a</p><p></p>"),
-      "text/html",
+      "text/html"
     );
     const paragraphs = doc.querySelectorAll("p");
     expect(paragraphs[1]?.querySelector("br")).not.toBeNull();

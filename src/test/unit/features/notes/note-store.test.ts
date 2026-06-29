@@ -243,8 +243,9 @@ describe("useNoteStore", () => {
 
         vi.setSystemTime(new Date("2026-06-08T01:00:00Z"));
         await useNoteStore.getState().updateNote({ id: note.id, content: "<p>edit</p>" });
-        const expected = useNoteStore.getState().notes.find((n) => n.id === note.id)
-          ?.contentUpdatedAt;
+        const expected = useNoteStore
+          .getState()
+          .notes.find((n) => n.id === note.id)?.contentUpdatedAt;
 
         await useNoteStore.getState().loadNote(note.id);
         expect(useNoteStore.getState().currentNote?.contentUpdatedAt).toBe(expected);
@@ -262,7 +263,7 @@ describe("useNoteStore", () => {
 
       const tombstones = await testDb.select<Record<string, unknown>[]>(
         "SELECT entity_type, entity_id, title, confirmed_at, pushed_at FROM sync_tombstones WHERE entity_id = ?",
-        [note.id],
+        [note.id]
       );
       expect(tombstones).toEqual([
         {

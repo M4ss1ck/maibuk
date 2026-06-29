@@ -30,10 +30,7 @@ export function Layout() {
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         if (!isResizing.current) return;
-        const newWidth = Math.max(
-          200,
-          Math.min(480, startWidth + moveEvent.clientX - startX),
-        );
+        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
         setMainSidebarWidth(newWidth);
       };
 
@@ -50,7 +47,7 @@ export function Layout() {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [mainSidebarWidth, setMainSidebarWidth],
+    [mainSidebarWidth, setMainSidebarWidth]
   );
 
   useEffect(() => {
@@ -125,90 +122,70 @@ export function Layout() {
             to="/"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                isActive ? "bg-primary text-white" : "hover:bg-muted text-foreground"
               }`
             }
           >
             <ProjectsIcon className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.projects")}</span>
-            <KeyboardShortcut
-              keys={["g", "p"]}
-              className="ml-auto hidden lg:inline-flex"
-            />
+            <KeyboardShortcut keys={["g", "p"]} className="ml-auto hidden lg:inline-flex" />
           </NavLink>
 
           <NavLink
             to="/notes"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${
+                isActive ? "bg-primary text-white" : "hover:bg-muted text-foreground"
               }`
             }
           >
             <NotebookPen className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.notes")}</span>
-            <KeyboardShortcut
-              keys={["g", "n"]}
-              className="ml-auto hidden lg:inline-flex"
-            />
+            <KeyboardShortcut keys={["g", "n"]} className="ml-auto hidden lg:inline-flex" />
           </NavLink>
 
           <NavLink
             to="/canvas"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${
+                isActive ? "bg-primary text-white" : "hover:bg-muted text-foreground"
               }`
             }
           >
             <Workflow className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.canvas")}</span>
-            <KeyboardShortcut
-              keys={["g", "c"]}
-              className="ml-auto hidden lg:inline-flex"
-            />
+            <KeyboardShortcut keys={["g", "c"]} className="ml-auto hidden lg:inline-flex" />
           </NavLink>
 
           <NavLink
             to="/metrics"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${
+                isActive ? "bg-primary text-white" : "hover:bg-muted text-foreground"
               }`
             }
           >
             <BarChart3 className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.metrics")}</span>
-            <KeyboardShortcut
-              keys={["g", "m"]}
-              className="ml-auto hidden lg:inline-flex"
-            />
+            <KeyboardShortcut keys={["g", "m"]} className="ml-auto hidden lg:inline-flex" />
           </NavLink>
 
           <NavLink
             to="/settings"
             onClick={closeMobileMenu}
             className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${isActive
-                ? "bg-primary text-white"
-                : "hover:bg-muted text-foreground"
+              `flex items-center gap-2 px-3 py-2 my-2 rounded-lg transition-colors ${
+                isActive ? "bg-primary text-white" : "hover:bg-muted text-foreground"
               }`
             }
           >
             <SettingsIcon className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.settings")}</span>
-            <KeyboardShortcut
-              keys={["g", "s"]}
-              className="ml-auto hidden lg:inline-flex"
-            />
+            <KeyboardShortcut keys={["g", "s"]} className="ml-auto hidden lg:inline-flex" />
           </NavLink>
         </nav>
 

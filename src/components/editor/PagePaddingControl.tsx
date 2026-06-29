@@ -17,10 +17,7 @@ interface PagePaddingControlProps {
   onChange: (value: number | Partial<EditorPagePadding>) => void;
 }
 
-export function PagePaddingControl({
-  padding,
-  onChange,
-}: PagePaddingControlProps) {
+export function PagePaddingControl({ padding, onChange }: PagePaddingControlProps) {
   const { t } = useTranslation();
   const [isCustom, setIsCustom] = useState(false);
 
@@ -32,20 +29,11 @@ export function PagePaddingControl({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="text-sm font-medium text-foreground">
-        {t("editor.pagePadding")}
-      </div>
+      <div className="text-sm font-medium text-foreground">{t("editor.pagePadding")}</div>
 
-      {!isCustom && (
-        <SimplePaddingControl
-          value={commonValue}
-          onChange={onChange}
-        />
-      )}
+      {!isCustom && <SimplePaddingControl value={commonValue} onChange={onChange} />}
 
-      {isCustom && (
-        <CustomPaddingControl padding={padding} onChange={onChange} />
-      )}
+      {isCustom && <CustomPaddingControl padding={padding} onChange={onChange} />}
 
       <button
         type="button"
@@ -149,10 +137,7 @@ interface CustomPaddingControlProps {
   onChange: (value: Partial<EditorPagePadding>) => void;
 }
 
-function CustomPaddingControl({
-  padding,
-  onChange,
-}: CustomPaddingControlProps) {
+function CustomPaddingControl({ padding, onChange }: CustomPaddingControlProps) {
   const sides: Array<keyof EditorPagePadding> = ["top", "right", "bottom", "left"];
 
   return (
@@ -209,9 +194,7 @@ function PaddingSideControl({ side, value, onChange }: PaddingSideControlProps) 
 
   return (
     <div className="flex items-center gap-2">
-      <span className="w-14 shrink-0 text-sm text-muted-foreground">
-        {label}
-      </span>
+      <span className="w-14 shrink-0 text-sm text-muted-foreground">{label}</span>
       <input
         type="range"
         min={EDITOR_PAGE_PADDING_MIN}

@@ -18,7 +18,9 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
   const navigate = useNavigate();
   const node = data.node;
   const note = useNoteStore((state) =>
-    node.kind === "noteRef" ? state.notes.find((candidate) => candidate.id === node.noteId) : undefined,
+    node.kind === "noteRef"
+      ? state.notes.find((candidate) => candidate.id === node.noteId)
+      : undefined
   );
   const books = useBookStore((state) => state.books);
 
@@ -26,12 +28,8 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
 
   const title = note?.title || node.label || t("canvas.missingNote");
   const preview = note ? notePlainText(note.content) : "";
-  const bookTitle = note?.bookId
-    ? books.find((book) => book.id === note.bookId)?.title
-    : null;
-  const dateLabel = note
-    ? timeAgo(note.contentUpdatedAt, i18n?.language ?? "en", t)
-    : "";
+  const bookTitle = note?.bookId ? books.find((book) => book.id === note.bookId)?.title : null;
+  const dateLabel = note ? timeAgo(note.contentUpdatedAt, i18n?.language ?? "en", t) : "";
 
   return (
     <div
@@ -44,9 +42,7 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
       <h3 className="truncate font-medium text-foreground">{title}</h3>
 
       {preview && (
-        <p className="mt-1 line-clamp-2 min-h-8 text-sm text-muted-foreground">
-          {preview}
-        </p>
+        <p className="mt-1 line-clamp-2 min-h-8 text-sm text-muted-foreground">{preview}</p>
       )}
 
       {bookTitle && (
@@ -57,11 +53,7 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
       )}
 
       <div className="mt-auto pt-2">
-        <NoteTagsRow
-          tags={note?.tags ?? []}
-          dateLabel={dateLabel}
-          interactiveOverflow={false}
-        />
+        <NoteTagsRow tags={note?.tags ?? []} dateLabel={dateLabel} interactiveOverflow={false} />
         <Button
           type="button"
           variant="ghost"

@@ -73,8 +73,7 @@ export function BookEditor() {
   const navigate = useNavigate();
   const location = useLocation();
   const hasPendingHeadingScroll = Boolean(
-    (location.state as { scrollToHeadingId?: string } | null)
-      ?.scrollToHeadingId,
+    (location.state as { scrollToHeadingId?: string } | null)?.scrollToHeadingId
   );
 
   // Stores
@@ -105,9 +104,7 @@ export function BookEditor() {
   const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">(
-    "idle",
-  );
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
   const [showMobileChapters, setShowMobileChapters] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [tocEditor, setTocEditor] = useState<TiptapEditor | null>(null);
@@ -136,7 +133,7 @@ export function BookEditor() {
   const createNote = useNoteStore((s) => s.createNote);
   const bookNotes = useMemo(
     () => allNotes.filter((note) => note.bookId === bookId),
-    [allNotes, bookId],
+    [allNotes, bookId]
   );
 
   useEffect(() => {
@@ -153,7 +150,7 @@ export function BookEditor() {
         language: normalizeLanguage(currentBook?.language),
       });
     },
-    [bookId, createNote, currentBook?.language],
+    [bookId, createNote, currentBook?.language]
   );
 
   const handleOpenBookNote = useCallback(
@@ -165,7 +162,7 @@ export function BookEditor() {
         },
       });
     },
-    [navigate, bookId, currentBook?.title],
+    [navigate, bookId, currentBook?.title]
   );
 
   // Ref to store the latest editor content
@@ -182,12 +179,7 @@ export function BookEditor() {
   // Auto-select chapter: restore last edited or default to last chapter
   useEffect(() => {
     // Wait for both book and chapters to be loaded for the correct book
-    if (
-      chapters.length > 0 &&
-      !currentChapter &&
-      currentBook &&
-      currentBook.id === bookId
-    ) {
+    if (chapters.length > 0 && !currentChapter && currentBook && currentBook.id === bookId) {
       const lastEditedChapter = currentBook.lastChapterId
         ? chapters.find((c) => c.id === currentBook.lastChapterId)
         : null;
@@ -282,10 +274,7 @@ export function BookEditor() {
     const html = editorContentRef.current || currentChapter.content || "";
     try {
       const markdown = editorHtmlToMarkdown(html);
-      const saved = await saveMarkdownFile(
-        markdownFilename(currentChapter.title),
-        markdown,
-      );
+      const saved = await saveMarkdownFile(markdownFilename(currentChapter.title), markdown);
       if (saved) toast.success(t("editor.exportMarkdownSuccess"));
     } catch (error) {
       console.error("Markdown export failed:", error);
@@ -304,7 +293,7 @@ export function BookEditor() {
         exportFilename(currentChapter.title, "pdf"),
         bytes,
         "application/pdf",
-        { name: "PDF", extensions: ["pdf"] },
+        { name: "PDF", extensions: ["pdf"] }
       );
       if (saved) toast.success(t("editor.exportPdfSuccess"));
     } catch (error) {
@@ -322,7 +311,7 @@ export function BookEditor() {
         exportFilename(currentChapter.title, "png"),
         bytes,
         "image/png",
-        { name: "PNG Image", extensions: ["png"] },
+        { name: "PNG Image", extensions: ["png"] }
       );
       if (saved) toast.success(t("editor.exportImageSuccess"));
     } catch (error) {
@@ -346,21 +335,18 @@ export function BookEditor() {
   }, [flushEditorContent]);
 
   // Debounced auto-save
-  const debouncedSave = useDebouncedCallback(
-    async (chapterId: string, content: string) => {
-      setSaveStatus("saving");
-      try {
-        await updateChapter(chapterId, { content });
-        setSaveStatus("saved");
-        // Reset to idle after 2 seconds
-        setTimeout(() => setSaveStatus("idle"), 2000);
-      } catch (error) {
-        console.error("Failed to save:", error);
-        setSaveStatus("idle");
-      }
-    },
-    1000,
-  );
+  const debouncedSave = useDebouncedCallback(async (chapterId: string, content: string) => {
+    setSaveStatus("saving");
+    try {
+      await updateChapter(chapterId, { content });
+      setSaveStatus("saved");
+      // Reset to idle after 2 seconds
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch (error) {
+      console.error("Failed to save:", error);
+      setSaveStatus("idle");
+    }
+  }, 1000);
 
   // Handle content changes
   const handleContentUpdate = useCallback(
@@ -371,7 +357,7 @@ export function BookEditor() {
         debouncedSave(currentChapter.id, content);
       }
     },
-    [currentChapter, debouncedSave],
+    [currentChapter, debouncedSave]
   );
 
   // Handle word count changes
@@ -400,7 +386,7 @@ export function BookEditor() {
         updateBook(bookId, { lastChapterId: chapter.id });
       }
     },
-    [bookId, setCurrentChapter, updateBook],
+    [bookId, setCurrentChapter, updateBook]
   );
 
   const handleCreateChapter = useCallback(
@@ -418,7 +404,7 @@ export function BookEditor() {
         updateBook(bookId, { lastChapterId: newChapter.id });
       }
     },
-    [bookId, createChapter, setCurrentChapter, updateBook],
+    [bookId, createChapter, setCurrentChapter, updateBook]
   );
 
   const handleImportMarkdown = useCallback(
@@ -436,7 +422,7 @@ export function BookEditor() {
         toast.error(t("editor.importMarkdownFailed"));
       }
     },
-    [bookId, createChapter, updateChapter, setCurrentChapter, updateBook, t],
+    [bookId, createChapter, updateChapter, setCurrentChapter, updateBook, t]
   );
 
   const handleDeleteChapter = useCallback(
@@ -450,7 +436,7 @@ export function BookEditor() {
         setCurrentChapter(remaining.length > 0 ? remaining[0] : null);
       }
     },
-    [deleteChapter, currentChapter, chapters, setCurrentChapter],
+    [deleteChapter, currentChapter, chapters, setCurrentChapter]
   );
 
   const handleReorderChapters = useCallback(
@@ -459,14 +445,14 @@ export function BookEditor() {
         await reorderChapters(bookId, chapterIds);
       }
     },
-    [bookId, reorderChapters],
+    [bookId, reorderChapters]
   );
 
   const handleUpdateChapter = useCallback(
     async (id: string, title: string, chapterType: ChapterType) => {
       await updateChapter(id, { title, chapterType });
     },
-    [updateChapter],
+    [updateChapter]
   );
 
   // Toggle focus mode
@@ -484,10 +470,7 @@ export function BookEditor() {
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         if (!isResizing.current) return;
-        const newWidth = Math.max(
-          200,
-          Math.min(480, startWidth + moveEvent.clientX - startX),
-        );
+        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
         setSidebarWidth(newWidth);
       };
 
@@ -504,7 +487,7 @@ export function BookEditor() {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [sidebarWidth],
+    [sidebarWidth]
   );
 
   // Notes/footnotes side panel drag-resize handler. The panel sits on the right,
@@ -518,10 +501,7 @@ export function BookEditor() {
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         if (!isResizing.current) return;
-        const newWidth = Math.max(
-          200,
-          Math.min(480, startWidth - (moveEvent.clientX - startX)),
-        );
+        const newWidth = Math.max(200, Math.min(480, startWidth - (moveEvent.clientX - startX)));
         setNotesSidebarWidth(newWidth);
       };
 
@@ -538,7 +518,7 @@ export function BookEditor() {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [notesSidebarWidth, setNotesSidebarWidth],
+    [notesSidebarWidth, setNotesSidebarWidth]
   );
 
   // Handle book info update
@@ -548,14 +528,14 @@ export function BookEditor() {
         await updateBook(bookId, input);
       }
     },
-    [bookId, updateBook],
+    [bookId, updateBook]
   );
 
   const handleSpellCheckLanguageChange = useCallback(
     (language: Language) => {
       if (bookId) void updateBook(bookId, { language });
     },
-    [bookId, updateBook],
+    [bookId, updateBook]
   );
 
   // Handle book deletion
@@ -576,13 +556,11 @@ export function BookEditor() {
 
   const handleConfirmSaveVersion = useCallback(async () => {
     if (!bookId) return;
-    const created = await useVersionStore
-      .getState()
-      .createVersion({
-        bookId,
-        name: saveVersionName.trim() || undefined,
-        triggerType: "manual",
-      });
+    const created = await useVersionStore.getState().createVersion({
+      bookId,
+      name: saveVersionName.trim() || undefined,
+      triggerType: "manual",
+    });
     setShowSaveVersionDialog(false);
     if (created) {
       toast.success(t("versions.saveVersion"));
@@ -605,9 +583,7 @@ export function BookEditor() {
       void (async () => {
         await metricsService.flushNow();
         await flushEditorContentRef.current();
-        await useVersionStore
-          .getState()
-          .createVersion({ bookId, triggerType: "close" });
+        await useVersionStore.getState().createVersion({ bookId, triggerType: "close" });
       })();
     };
   }, [bookId]);
@@ -661,12 +637,9 @@ export function BookEditor() {
     },
   ]);
 
-  const isBookPreparing =
-    isBookLoading || !currentBook || currentBook.id !== bookId;
+  const isBookPreparing = isBookLoading || !currentBook || currentBook.id !== bookId;
   const isChapterPreparing =
-    areChaptersLoading ||
-    currentBookId !== bookId ||
-    (chapters.length > 0 && !currentChapter);
+    areChaptersLoading || currentBookId !== bookId || (chapters.length > 0 && !currentChapter);
 
   if (isBookPreparing) {
     return (
@@ -680,9 +653,7 @@ export function BookEditor() {
   }
 
   return (
-    <div
-      className={`flex h-dvh overflow-hidden ${focusMode ? "focus-mode" : ""}`}
-    >
+    <div className={`flex h-dvh overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
       {/* Mobile chapter drawer overlay */}
       {showMobileChapters && !focusMode && (
         <div
@@ -790,11 +761,7 @@ export function BookEditor() {
                 })
               }
               className="hidden md:block p-2 hover:bg-muted rounded transition-colors"
-              title={
-                showSidebar
-                  ? t("chapters.hideSidebar")
-                  : t("chapters.showSidebar")
-              }
+              title={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
             >
               {showSidebar ? (
                 <PanelLeftClose className="w-5 h-5" />
@@ -904,10 +871,9 @@ export function BookEditor() {
                 <button
                   type="button"
                   onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-                  className={`p-2 rounded transition-colors ${alwaysOnTop
-                      ? "bg-muted text-primary"
-                      : "hover:bg-muted text-foreground"
-                    }`}
+                  className={`p-2 rounded transition-colors ${
+                    alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
+                  }`}
                   title={t("settings.alwaysOnTop")}
                 >
                   <Pin className="w-5 h-5" />
@@ -1093,10 +1059,8 @@ export function BookEditor() {
         {/* Focus mode exit hint */}
         {focusMode && !hideKeyboardHints && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm opacity-0 hover:opacity-100 transition-opacity">
-            {t("editor.press")}{" "}
-            <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">Esc</kbd>{" "}
-            {t("editor.or")}{" "}
-            <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">F11</kbd>{" "}
+            {t("editor.press")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">Esc</kbd>{" "}
+            {t("editor.or")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">F11</kbd>{" "}
             {t("editor.exitFocus")}
           </div>
         )}
@@ -1154,16 +1118,10 @@ export function BookEditor() {
         title={t("versions.namePrompt")}
         footer={
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => setShowSaveVersionDialog(false)}
-            >
+            <Button variant="ghost" onClick={() => setShowSaveVersionDialog(false)}>
               {t("common.cancel")}
             </Button>
-            <Button
-              variant="primary"
-              onClick={() => void handleConfirmSaveVersion()}
-            >
+            <Button variant="primary" onClick={() => void handleConfirmSaveVersion()}>
               {t("versions.saveVersion")}
             </Button>
           </div>

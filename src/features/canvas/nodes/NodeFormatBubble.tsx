@@ -3,20 +3,13 @@ import { createPortal } from "react-dom";
 import { useStore } from "@xyflow/react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import {
-  FormattingButtons,
-  LinkClickHandler,
-  LinkDialog,
-} from "../../../components/editor";
+import { FormattingButtons, LinkClickHandler, LinkDialog } from "../../../components/editor";
 import type {
   InternalTarget,
   InternalTargetChildrenLoader,
 } from "../../../components/editor/LinkDialog";
 import { useBookStore } from "../../books/store";
-import {
-  getChapterForLinking,
-  listChaptersForBookLinking,
-} from "../../chapters/store";
+import { getChapterForLinking, listChaptersForBookLinking } from "../../chapters/store";
 import { assignHeadingIds } from "../../links/heading-ids";
 import { useNoteStore } from "../../notes/store";
 import { CanvasRichContentMenu } from "./CanvasRichContentMenu";
@@ -55,7 +48,7 @@ export function NodeFormatBubble({
         title: book.title,
       })),
     ],
-    [books, notes],
+    [books, notes]
   );
 
   const loadInternalTargetChildren = useCallback<InternalTargetChildrenLoader>(
@@ -94,7 +87,7 @@ export function NodeFormatBubble({
 
       return [];
     },
-    [notes],
+    [notes]
   );
 
   const resolveBookIdForChapter = useCallback(async (chapterId: string) => {
@@ -139,7 +132,7 @@ export function NodeFormatBubble({
     const centerX = (start.left + end.right) / 2;
     const left = Math.max(
       bounds.left + gap,
-      Math.min(centerX - toolbarWidth / 2, bounds.right - toolbarWidth - gap),
+      Math.min(centerX - toolbarWidth / 2, bounds.right - toolbarWidth - gap)
     );
     const above = start.top - toolbarHeight - gap;
     const top =
@@ -193,13 +186,10 @@ export function NodeFormatBubble({
               event.stopPropagation();
             }}
           >
-            <FormattingButtons
-              editor={editor}
-              onLinkClick={() => setLinkDialogOpen(true)}
-            />
+            <FormattingButtons editor={editor} onLinkClick={() => setLinkDialogOpen(true)} />
             <CanvasRichContentMenu editor={editor} onOverlayOpenChange={setMenuOverlayOpen} />
           </div>,
-          document.body,
+          document.body
         )}
       <LinkDialog
         editor={editor}
@@ -211,10 +201,7 @@ export function NodeFormatBubble({
         internalTargets={internalTargets}
         loadInternalTargetChildren={loadInternalTargetChildren}
       />
-      <LinkClickHandler
-        editor={editor}
-        resolveBookIdForChapter={resolveBookIdForChapter}
-      />
+      <LinkClickHandler editor={editor} resolveBookIdForChapter={resolveBookIdForChapter} />
     </>
   );
 }

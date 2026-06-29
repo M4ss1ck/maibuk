@@ -55,28 +55,17 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
-export function FootnotesView({
-  chapters,
-  currentChapterId,
-  onSelectChapter,
-}: FootnotesViewProps) {
+export function FootnotesView({ chapters, currentChapterId, onSelectChapter }: FootnotesViewProps) {
   const { t } = useTranslation();
 
   const footnotes = useMemo(() => extractFootnotes(chapters), [chapters]);
 
   if (footnotes.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground px-4 py-3">
-        {t("editor.noFootnotes")}
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground px-4 py-3">{t("editor.noFootnotes")}</p>;
   }
 
   // Group by chapter
-  const grouped = new Map<
-    string,
-    { title: string; chapter: Chapter; items: FootnoteEntry[] }
-  >();
+  const grouped = new Map<string, { title: string; chapter: Chapter; items: FootnoteEntry[] }>();
   for (const fn of footnotes) {
     if (!grouped.has(fn.chapterId)) {
       const chapter = chapters.find((c) => c.id === fn.chapterId)!;

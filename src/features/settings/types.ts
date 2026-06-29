@@ -67,12 +67,8 @@ export const EDITOR_CONTENT_WIDTH_PRESETS: EditorContentWidthPreset[] = [
 export function clampEditorContentWidth(px: number): number {
   if (!Number.isFinite(px)) return DEFAULT_EDITOR_CONTENT_WIDTH;
   if (px >= EDITOR_CONTENT_WIDTH_FULL) return EDITOR_CONTENT_WIDTH_FULL;
-  const snapped =
-    Math.round(px / EDITOR_CONTENT_WIDTH_STEP) * EDITOR_CONTENT_WIDTH_STEP;
-  return Math.max(
-    EDITOR_CONTENT_WIDTH_MIN,
-    Math.min(EDITOR_CONTENT_WIDTH_MAX, snapped),
-  );
+  const snapped = Math.round(px / EDITOR_CONTENT_WIDTH_STEP) * EDITOR_CONTENT_WIDTH_STEP;
+  return Math.max(EDITOR_CONTENT_WIDTH_MIN, Math.min(EDITOR_CONTENT_WIDTH_MAX, snapped));
 }
 
 export interface EditorPagePadding {
@@ -90,12 +86,8 @@ export const DEFAULT_EDITOR_PAGE_PADDING = 32;
 /** Snap a page-padding value to the step grid and clamp to [MIN, MAX]. */
 export function clampEditorPagePadding(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_EDITOR_PAGE_PADDING;
-  const snapped =
-    Math.round(value / EDITOR_PAGE_PADDING_STEP) * EDITOR_PAGE_PADDING_STEP;
-  return Math.max(
-    EDITOR_PAGE_PADDING_MIN,
-    Math.min(EDITOR_PAGE_PADDING_MAX, snapped),
-  );
+  const snapped = Math.round(value / EDITOR_PAGE_PADDING_STEP) * EDITOR_PAGE_PADDING_STEP;
+  return Math.max(EDITOR_PAGE_PADDING_MIN, Math.min(EDITOR_PAGE_PADDING_MAX, snapped));
 }
 
 export function getDefaultBackupRetention(isWeb: boolean): number {
@@ -236,23 +228,18 @@ export const PASTE_RULE_TARGET_VALUES: PasteRuleTarget[] = [
   "cssSelector",
 ];
 
-export const PASTE_RULE_ACTION_VALUES: PasteRuleAction[] = [
-  "removeStyle",
-  "unwrap",
-  "delete",
-];
+export const PASTE_RULE_ACTION_VALUES: PasteRuleAction[] = ["removeStyle", "unwrap", "delete"];
 
 /** A worked example for each rule target, shown as the value-input placeholder. */
-export const PASTE_RULE_TARGET_META: Record<PasteRuleTarget, { example: string }> =
-  {
-    fontFamily: { example: "-webkit-standard" },
-    textColor: { example: "rgb(51, 51, 51)" },
-    backgroundColor: { example: "yellow" },
-    styleDeclaration: { example: "span { font-size: medium; color: rgb(0, 0, 0); }" },
-    cssClass: { example: "MsoNormal" },
-    tag: { example: "span" },
-    cssSelector: { example: 'span[style*="font-size"]' },
-  };
+export const PASTE_RULE_TARGET_META: Record<PasteRuleTarget, { example: string }> = {
+  fontFamily: { example: "-webkit-standard" },
+  textColor: { example: "rgb(51, 51, 51)" },
+  backgroundColor: { example: "yellow" },
+  styleDeclaration: { example: "span { font-size: medium; color: rgb(0, 0, 0); }" },
+  cssClass: { example: "MsoNormal" },
+  tag: { example: "span" },
+  cssSelector: { example: 'span[style*="font-size"]' },
+};
 
 /** CSS properties the matchBook preset strips from pasted content. */
 export const BOOK_STRIP_PROPERTIES: string[] = [
@@ -309,12 +296,7 @@ export const PASTE_CLEANUP_PRESETS: Record<
   },
   plainText: {
     ...buildStructuralOptions(true),
-    strippedProperties: [
-      ...BOOK_STRIP_PROPERTIES,
-      "font-weight",
-      "font-style",
-      "text-decoration",
-    ],
+    strippedProperties: [...BOOK_STRIP_PROPERTIES, "font-weight", "font-style", "text-decoration"],
   },
 };
 

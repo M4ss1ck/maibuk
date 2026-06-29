@@ -40,7 +40,7 @@ const baseProps = {
 describe("BookSidePanel", () => {
   it("renders nothing when closed", () => {
     const { container } = render(
-      <BookSidePanel {...baseProps} isOpen={false} activeTab="footnotes" />,
+      <BookSidePanel {...baseProps} isOpen={false} activeTab="footnotes" />
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -52,7 +52,7 @@ describe("BookSidePanel", () => {
     expect(screen.queryByTestId("book-notes-view")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Footnotes" })).toHaveAttribute(
       "aria-pressed",
-      "true",
+      "true"
     );
   });
 
@@ -73,7 +73,7 @@ describe("BookSidePanel", () => {
         activeTab="footnotes"
         onTabChange={onTabChange}
         onClose={onClose}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Notes" }));
@@ -92,7 +92,7 @@ describe("BookSidePanel", () => {
         activeTab="footnotes"
         width={360}
         onResizeStart={onResizeStart}
-      />,
+      />
     );
 
     const panel = screen.getByRole("complementary");

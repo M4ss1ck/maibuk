@@ -13,9 +13,7 @@ import { useChapterStore } from "../../features/chapters/store";
 
 interface LinkClickDialogProps {
   editor: Editor;
-  resolveBookIdForChapter?: (
-    chapterId: string,
-  ) => string | undefined | Promise<string | undefined>;
+  resolveBookIdForChapter?: (chapterId: string) => string | undefined | Promise<string | undefined>;
 }
 
 interface LinkInfo {
@@ -23,10 +21,7 @@ interface LinkInfo {
   position: { x: number; y: number };
 }
 
-export function LinkClickHandler({
-  editor,
-  resolveBookIdForChapter,
-}: LinkClickDialogProps) {
+export function LinkClickHandler({ editor, resolveBookIdForChapter }: LinkClickDialogProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const chapters = useChapterStore((s) => s.chapters);

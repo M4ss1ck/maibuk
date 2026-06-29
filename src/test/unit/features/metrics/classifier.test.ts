@@ -72,10 +72,7 @@ describe("classifyTransaction()", () => {
 
     const events = classify(tr);
 
-    expect(events.map((event) => event.eventType)).toEqual([
-      "writing.deleted",
-      "writing.typed",
-    ]);
+    expect(events.map((event) => event.eventType)).toEqual(["writing.deleted", "writing.typed"]);
     expect(events.map((event) => (event.payload as WritingMetricPayload).words)).toEqual([1, 2]);
   });
 
@@ -85,10 +82,7 @@ describe("classifyTransaction()", () => {
 
     const events = classify(tr);
 
-    expect(events.map((event) => event.eventType)).toEqual([
-      "writing.deleted",
-      "writing.typed",
-    ]);
+    expect(events.map((event) => event.eventType)).toEqual(["writing.deleted", "writing.typed"]);
     expect(events.map((event) => (event.payload as WritingMetricPayload).words)).toEqual([1, 2]);
   });
 
@@ -106,22 +100,16 @@ describe("classifyTransaction()", () => {
   });
 
   it("classifies paste before history metadata and undo of paste as deletion", () => {
-    const paste = stateFromText("").tr
-      .insertText("alpha beta", 1)
+    const paste = stateFromText("")
+      .tr.insertText("alpha beta", 1)
       .setMeta("metrics:source", "paste");
 
-    expect(classify(paste).map((event) => event.eventType)).toEqual([
-      "writing.pasted",
-    ]);
+    expect(classify(paste).map((event) => event.eventType)).toEqual(["writing.pasted"]);
 
-    const undoPaste = stateFromText("alpha beta").tr
-      .delete(1, 11)
-      .setMeta("history$", {});
+    const undoPaste = stateFromText("alpha beta").tr.delete(1, 11).setMeta("history$", {});
 
     const undoEvents = classify(undoPaste);
-    expect(undoEvents.map((event) => event.eventType)).toEqual([
-      "writing.deleted",
-    ]);
+    expect(undoEvents.map((event) => event.eventType)).toEqual(["writing.deleted"]);
     expect((undoEvents[0].payload as WritingMetricPayload).words).toBe(2);
   });
 });

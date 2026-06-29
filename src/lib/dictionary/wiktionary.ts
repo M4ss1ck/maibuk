@@ -7,10 +7,7 @@ import type { Language } from "../../features/settings/types";
  * stripped (the app controls presentation) and every link is rewritten to
  * point at the external Wiktionary page.
  */
-export async function lookupWord(
-  word: string,
-  language: Language
-): Promise<string | null> {
+export async function lookupWord(word: string, language: Language): Promise<string | null> {
   const normalized = word.trim();
   if (!normalized) return null;
 
@@ -33,10 +30,7 @@ export async function lookupWord(
   return sanitized.trim() ? sanitized : null;
 }
 
-async function fetchParsedHtml(
-  word: string,
-  language: Language
-): Promise<string | null> {
+async function fetchParsedHtml(word: string, language: Language): Promise<string | null> {
   const url = new URL(`https://${language}.wiktionary.org/w/api.php`);
   url.searchParams.set("action", "parse");
   url.searchParams.set("page", word);

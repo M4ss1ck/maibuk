@@ -12,9 +12,7 @@ vi.mock("../../../../lib/platform", () => ({
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { AppSettingsProvider } = await import(
-  "../../../../features/settings/AppSettingsProvider"
-);
+const { AppSettingsProvider } = await import("../../../../features/settings/AppSettingsProvider");
 const { useSettingsStore } = await import("../../../../features/settings/store");
 
 describe("AppSettingsProvider editorContentWidth", () => {
@@ -26,8 +24,6 @@ describe("AppSettingsProvider editorContentWidth", () => {
   it("sets --editor-content-width to the width in px", () => {
     useSettingsStore.setState({ editorContentWidth: 960 });
     render(<AppSettingsProvider>child</AppSettingsProvider>);
-    expect(
-      document.documentElement.style.getPropertyValue("--editor-content-width"),
-    ).toBe("960px");
+    expect(document.documentElement.style.getPropertyValue("--editor-content-width")).toBe("960px");
   });
 });

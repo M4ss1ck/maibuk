@@ -69,9 +69,7 @@ export type Canvas = {
   contentUpdatedAt: number;
 };
 
-export type UpdateTextNodePatch = Partial<
-  Pick<LightweightCanvasNode, "html" | "color" | "width">
->;
+export type UpdateTextNodePatch = Partial<Pick<LightweightCanvasNode, "html" | "color" | "width">>;
 
 export type ResizeTextNodeInput = {
   position: CanvasPosition;

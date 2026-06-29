@@ -22,9 +22,7 @@ describe("QuickNoteEditor", () => {
       expect(container.querySelector(".editor-content")).not.toBeNull();
     });
 
-    expect(
-      screen.queryByRole("button", { name: "editor.bold" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "editor.bold" })).not.toBeInTheDocument();
   });
 
   it("reveals the formatting toolbar when the advanced button is toggled", async () => {
@@ -34,13 +32,9 @@ describe("QuickNoteEditor", () => {
       expect(container.querySelector(".editor-content")).not.toBeNull();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "bookNotes.formatting" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "bookNotes.formatting" }));
 
-    expect(
-      screen.getByRole("button", { name: "editor.bold" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "editor.bold" })).toBeInTheDocument();
   });
 
   it("offers H1, H3 and task list controls in the advanced toolbar", async () => {
@@ -50,18 +44,10 @@ describe("QuickNoteEditor", () => {
       expect(container.querySelector(".editor-content")).not.toBeNull();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "bookNotes.formatting" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "bookNotes.formatting" }));
 
-    expect(
-      screen.getByRole("button", { name: "editor.heading1" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "editor.heading3" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "editor.taskList" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "editor.heading1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "editor.heading3" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "editor.taskList" })).toBeInTheDocument();
   });
 });

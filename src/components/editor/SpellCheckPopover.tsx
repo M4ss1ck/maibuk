@@ -27,10 +27,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
     if (!isOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(event.target as Node)
-      ) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
         setPopover(null);
       }
     };
@@ -56,10 +53,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
     const rect = popoverRef.current.getBoundingClientRect();
     const adjusted = adjustPopoverPosition(popover.position, rect);
 
-    if (
-      adjusted.left !== popover.position.left ||
-      adjusted.top !== popover.position.top
-    ) {
+    if (adjusted.left !== popover.position.left || adjusted.top !== popover.position.top) {
       setPopover((prev) => (prev ? { ...prev, position: adjusted } : prev));
     }
   }, [isOpen, popover]);
@@ -94,11 +88,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
 
       void spellCheckService.suggest(misspelling.word).then((suggestions) => {
         setPopover((prev) => {
-          if (
-            !prev ||
-            prev.word !== misspelling.word ||
-            prev.from !== misspelling.from
-          ) {
+          if (!prev || prev.word !== misspelling.word || prev.from !== misspelling.from) {
             return prev;
           }
           return {
@@ -134,9 +124,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
 
       <div className="py-1 overflow-auto">
         {popover.isLoading ? (
-          <div className="px-3 py-2 text-sm text-muted-foreground">
-            {t("common.loading")}
-          </div>
+          <div className="px-3 py-2 text-sm text-muted-foreground">{t("common.loading")}</div>
         ) : topSuggestions.length > 0 ? (
           topSuggestions.map((suggestion) => (
             <button
@@ -146,10 +134,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
                 editor
                   .chain()
                   .focus()
-                  .insertContentAt(
-                    { from: popover.from, to: popover.to },
-                    suggestion,
-                  )
+                  .insertContentAt({ from: popover.from, to: popover.to }, suggestion)
                   .run();
                 setPopover(null);
               }}
@@ -159,9 +144,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
             </button>
           ))
         ) : (
-          <div className="px-3 py-2 text-sm text-muted-foreground">
-            {t("editor.noSuggestions")}
-          </div>
+          <div className="px-3 py-2 text-sm text-muted-foreground">{t("editor.noSuggestions")}</div>
         )}
       </div>
 
@@ -178,7 +161,7 @@ export function SpellCheckPopover({ editor }: SpellCheckPopoverProps) {
         </button>
       </div>
     </div>,
-    document.body,
+    document.body
   );
 }
 
@@ -194,18 +177,12 @@ function clampPopoverPosition(clientX: number, clientY: number) {
   };
 }
 
-function adjustPopoverPosition(
-  position: { top: number; left: number },
-  rect: DOMRect,
-) {
+function adjustPopoverPosition(position: { top: number; left: number }, rect: DOMRect) {
   const padding = 8;
   const maxLeft = window.innerWidth - rect.width - padding;
   const maxTop = window.innerHeight - rect.height - padding;
   return {
-    left: Math.min(
-      Math.max(position.left, padding),
-      Math.max(maxLeft, padding),
-    ),
+    left: Math.min(Math.max(position.left, padding), Math.max(maxLeft, padding)),
     top: Math.min(Math.max(position.top, padding), Math.max(maxTop, padding)),
   };
 }

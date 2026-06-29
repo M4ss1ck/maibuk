@@ -25,7 +25,7 @@ describe("CanvasCard", () => {
         onRename={vi.fn()}
         onDelete={vi.fn()}
         onTogglePinned={vi.fn()}
-      />,
+      />
     );
     fireEvent.click(screen.getByRole("button", { name: "canvas.renameCanvas" }));
     expect(screen.getByDisplayValue("Map").closest("button")).toBeNull();

@@ -35,9 +35,13 @@ describe("NoteCard", () => {
     const onClick = vi.fn();
     render(
       <NoteCard
-        note={buildNote({ title: "Research", content: "<p>Some <b>body</b> text</p>", tags: ["idea"] })}
+        note={buildNote({
+          title: "Research",
+          content: "<p>Some <b>body</b> text</p>",
+          tags: ["idea"],
+        })}
         onClick={onClick}
-      />,
+      />
     );
 
     expect(screen.getByText("Research")).toBeInTheDocument();
@@ -55,7 +59,7 @@ describe("NoteCard", () => {
 
   it("renders the linked book title only when provided", () => {
     const { rerender } = render(
-      <NoteCard note={buildNote({})} bookTitle="My Book" onClick={vi.fn()} />,
+      <NoteCard note={buildNote({})} bookTitle="My Book" onClick={vi.fn()} />
     );
     expect(screen.getByText("My Book")).toBeInTheDocument();
 

@@ -129,6 +129,6 @@ export function createHtmlLinter(linter: typeof linterFn) {
     (view: EditorView): Diagnostic[] => {
       return validateHtml(view.state.doc.toString());
     },
-    { delay: 300 },
+    { delay: 300 }
   );
 }

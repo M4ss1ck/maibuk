@@ -72,9 +72,9 @@ export function NotesGallery() {
           dateFrom,
           dateTo,
         }),
-        sort,
+        sort
       ),
-    [notes, search, tagFilters, dateFrom, dateTo, sort],
+    [notes, search, tagFilters, dateFrom, dateTo, sort]
   );
 
   const hasFilters = Boolean(search.trim() || tagFilters.length > 0 || dateFrom || dateTo);
@@ -130,7 +130,7 @@ export function NotesGallery() {
         onTrigger: openAdvancedFilters,
       },
     ],
-    { enabled: notes.length > 0 },
+    { enabled: notes.length > 0 }
   );
 
   return (
@@ -138,9 +138,7 @@ export function NotesGallery() {
       <div className="mb-6 flex flex-col gap-4 sm:mb-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
-              {t("notes.title")}
-            </h2>
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("notes.title")}</h2>
             {notes.length > 0 && (
               <p className="mt-1 text-sm text-muted-foreground">
                 {hasFilters
@@ -423,7 +421,7 @@ function DateFilter({
                 </button>
               ) : (
                 <div key={`empty-${index}`} />
-              ),
+              )
             )}
           </div>
 

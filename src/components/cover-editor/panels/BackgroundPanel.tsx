@@ -36,9 +36,7 @@ export function BackgroundPanel() {
   };
 
   const asPaint: Paint =
-    background.type === "image"
-      ? { type: "solid", color: "#1a1a2e" }
-      : (background as Paint);
+    background.type === "image" ? { type: "solid", color: "#1a1a2e" } : (background as Paint);
 
   return (
     <div className="p-3 space-y-3">

@@ -18,12 +18,47 @@ export interface CoverPreset {
 }
 
 export const PRESETS: CoverPreset[] = [
-  { id: "6x9", name: '6" x 9"', width: 1800, height: 2700, dpi: 300, description: "Standard paperback" },
-  { id: "5x8", name: '5" x 8"', width: 1500, height: 2400, dpi: 300, description: "Mass market paperback" },
-  { id: "5.5x8.5", name: '5.5" x 8.5"', width: 1650, height: 2550, dpi: 300, description: "Digest size" },
-  { id: "8.5x11", name: '8.5" x 11"', width: 2550, height: 3300, dpi: 300, description: "Letter size" },
+  {
+    id: "6x9",
+    name: '6" x 9"',
+    width: 1800,
+    height: 2700,
+    dpi: 300,
+    description: "Standard paperback",
+  },
+  {
+    id: "5x8",
+    name: '5" x 8"',
+    width: 1500,
+    height: 2400,
+    dpi: 300,
+    description: "Mass market paperback",
+  },
+  {
+    id: "5.5x8.5",
+    name: '5.5" x 8.5"',
+    width: 1650,
+    height: 2550,
+    dpi: 300,
+    description: "Digest size",
+  },
+  {
+    id: "8.5x11",
+    name: '8.5" x 11"',
+    width: 2550,
+    height: 3300,
+    dpi: 300,
+    description: "Letter size",
+  },
   { id: "a5", name: "A5", width: 1748, height: 2480, dpi: 300, description: "International A5" },
-  { id: "kindle", name: "Kindle", width: 1600, height: 2560, dpi: 300, description: "Amazon Kindle" },
+  {
+    id: "kindle",
+    name: "Kindle",
+    width: 1600,
+    height: 2560,
+    dpi: 300,
+    description: "Amazon Kindle",
+  },
 ];
 
 export const FONT_FAMILIES = [
@@ -87,7 +122,10 @@ export function createDefaultScene(presetId: string): CoverScene {
 
 type TextRole = TextLayer["role"];
 
-const ROLE_DEFAULTS: Record<TextRole, { size: number; weight: "normal" | "bold"; style: "normal" | "italic"; family: string }> = {
+const ROLE_DEFAULTS: Record<
+  TextRole,
+  { size: number; weight: "normal" | "bold"; style: "normal" | "italic"; family: string }
+> = {
   title: { size: 72, weight: "bold", style: "normal", family: "Georgia" },
   subtitle: { size: 32, weight: "normal", style: "italic", family: "Georgia" },
   author: { size: 36, weight: "normal", style: "normal", family: "Arial" },

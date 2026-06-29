@@ -14,8 +14,7 @@ export function ConflictDialog({ conflict, onResolve }: ConflictDialogProps) {
   const localDate = new Date(conflict.localUpdatedAt * 1000).toLocaleString();
   const remoteDate = new Date(conflict.remoteUpdatedAt * 1000).toLocaleString();
   const title = conflict.entityTitle ?? conflict.bookTitle;
-  const entityLabel =
-    conflict.entityType === "note" ? t("sync.entityNote") : t("sync.entityBook");
+  const entityLabel = conflict.entityType === "note" ? t("sync.entityNote") : t("sync.entityBook");
 
   return (
     <Modal

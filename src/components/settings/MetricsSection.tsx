@@ -20,9 +20,7 @@ export function MetricsSection() {
   const { t } = useTranslation();
   const { metrics, setMetricsCategoryEnabled, setMetricsSyncEnabled } = useSettingsStore();
   const authStatus = useSyncStore((state) => state.authStatus);
-  const [pendingDisable, setPendingDisable] = useState<MetricsCategory | null>(
-    null,
-  );
+  const [pendingDisable, setPendingDisable] = useState<MetricsCategory | null>(null);
   const [isPurging, setIsPurging] = useState(false);
   const [measuringSince, setMeasuringSince] = useState<
     Partial<Record<MetricsCategory, string | null>>
@@ -34,10 +32,9 @@ export function MetricsSection() {
     async function loadMeasuringSince() {
       const db = await getDatabase();
       const entries = await Promise.all(
-        METRIC_CATEGORIES.map(async (category) => [
-          category,
-          await getCategoryMeasuringSince(db, category),
-        ] as const),
+        METRIC_CATEGORIES.map(
+          async (category) => [category, await getCategoryMeasuringSince(db, category)] as const
+        )
       );
       if (!cancelled) {
         setMeasuringSince(Object.fromEntries(entries));
@@ -50,10 +47,7 @@ export function MetricsSection() {
     };
   }, [metrics.enabled.writing, metrics.enabled.time, metrics.enabled.engagement]);
 
-  const handleCategoryChange = (
-    category: MetricsCategory,
-    enabled: boolean,
-  ) => {
+  const handleCategoryChange = (category: MetricsCategory, enabled: boolean) => {
     if (enabled) {
       setMetricsCategoryEnabled(category, true);
       return;
@@ -85,9 +79,7 @@ export function MetricsSection() {
     }
   };
 
-  const pendingLabel = pendingDisable
-    ? t(`settings.metrics.${pendingDisable}.label`)
-    : "";
+  const pendingLabel = pendingDisable ? t(`settings.metrics.${pendingDisable}.label`) : "";
   const pendingDeletedData = pendingDisable
     ? t(`settings.metrics.${pendingDisable}.description`)
     : "";
@@ -96,9 +88,7 @@ export function MetricsSection() {
     <div className="space-y-4">
       <div>
         <p className="font-medium">{t("settings.metrics.title")}</p>
-        <p className="text-sm text-muted-foreground">
-          {t("settings.metrics.description")}
-        </p>
+        <p className="text-sm text-muted-foreground">{t("settings.metrics.description")}</p>
       </div>
 
       <div className="divide-y divide-border">
@@ -110,9 +100,7 @@ export function MetricsSection() {
               className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
             >
               <div>
-                <p className="font-medium">
-                  {t(`settings.metrics.${category}.label`)}
-                </p>
+                <p className="font-medium">{t(`settings.metrics.${category}.label`)}</p>
                 <p className="text-sm text-muted-foreground">
                   {t(`settings.metrics.${category}.description`)}
                 </p>
@@ -162,18 +150,10 @@ export function MetricsSection() {
         title={t("settings.metrics.disableTitle", { label: pendingLabel })}
         footer={
           <>
-            <Button
-              variant="ghost"
-              onClick={() => setPendingDisable(null)}
-              disabled={isPurging}
-            >
+            <Button variant="ghost" onClick={() => setPendingDisable(null)} disabled={isPurging}>
               {t("common.cancel")}
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmDisable}
-              disabled={isPurging}
-            >
+            <Button variant="destructive" onClick={handleConfirmDisable} disabled={isPurging}>
               {t("settings.metrics.confirmDisable", { label: pendingLabel })}
             </Button>
           </>
@@ -188,10 +168,7 @@ export function MetricsSection() {
     </div>
   );
 
-  function shutdownIfNoCategoriesRemain(
-    category: MetricsCategory,
-    enabled: boolean,
-  ) {
+  function shutdownIfNoCategoriesRemain(category: MetricsCategory, enabled: boolean) {
     const next = { ...metrics.enabled, [category]: enabled };
     if (!Object.values(next).some(Boolean)) {
       metricsService.shutdown();

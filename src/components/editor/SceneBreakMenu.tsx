@@ -6,12 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { upsertSeparatorAsset } from "../../features/import/project-assets-repo";
 import { useSettingsStore } from "../../features/settings/store";
-import {
-  getDialog,
-  getFileSystem,
-  getWebDialog,
-  IS_WEB,
-} from "../../lib/platform";
+import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "../../lib/platform";
 import { Input, Switch } from "../ui";
 import {
   BUILTIN_SCENE_BREAKS,
@@ -42,15 +37,9 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
 
   const lastSceneBreak = useSettingsStore((state) => state.lastSceneBreak);
   const presets = useSettingsStore((state) => state.sceneBreakPresets);
-  const setLastSceneBreak = useSettingsStore(
-    (state) => state.setLastSceneBreak,
-  );
-  const addSceneBreakPreset = useSettingsStore(
-    (state) => state.addSceneBreakPreset,
-  );
-  const removeSceneBreakPreset = useSettingsStore(
-    (state) => state.removeSceneBreakPreset,
-  );
+  const setLastSceneBreak = useSettingsStore((state) => state.setLastSceneBreak);
+  const addSceneBreakPreset = useSettingsStore((state) => state.addSceneBreakPreset);
+  const removeSceneBreakPreset = useSettingsStore((state) => state.removeSceneBreakPreset);
 
   const insert = (descriptor: SceneBreakDescriptor) => {
     editor.chain().focus().setSceneBreak(descriptor).run();
@@ -72,8 +61,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
     const handleMouseDown = (event: MouseEvent) => {
       const target = event.target as Node;
       const isMenuTarget =
-        target instanceof HTMLElement &&
-        target.closest(".scene-break-menu-portal");
+        target instanceof HTMLElement && target.closest(".scene-break-menu-portal");
 
       if (btnRef.current?.contains(target) || isMenuTarget) return;
       setOpen(false);
@@ -92,9 +80,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
   };
 
   const handleUpload = async () => {
-    const filters = [
-      { name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"] },
-    ];
+    const filters = [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"] }];
 
     try {
       let dataUrl: string | null = null;
@@ -170,9 +156,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
             className="scene-break-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 w-64"
             style={{ top: pos.top, left: pos.left }}
           >
-            <p className="text-xs text-muted-foreground mb-1">
-              {t("editor.sceneBreakBuiltIns")}
-            </p>
+            <p className="text-xs text-muted-foreground mb-1">{t("editor.sceneBreakBuiltIns")}</p>
             <div className="flex flex-col gap-1 mb-3">
               {BUILTIN_SCENE_BREAKS.map((descriptor) => (
                 <button
@@ -217,9 +201,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
               </>
             )}
 
-            <p className="text-xs text-muted-foreground mb-1">
-              {t("editor.sceneBreakCustom")}
-            </p>
+            <p className="text-xs text-muted-foreground mb-1">{t("editor.sceneBreakCustom")}</p>
             <div className="flex items-center gap-2 mb-2">
               <div className="flex-1 min-w-0">
                 <Input
@@ -241,9 +223,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
               </div>
             </div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">
-                {t("editor.sceneBreakSpaced")}
-              </span>
+              <span className="text-sm text-muted-foreground">{t("editor.sceneBreakSpaced")}</span>
               <Switch checked={spaced} onChange={setSpaced} />
             </div>
             <p className="text-center py-1 mb-2 tracking-[0.3em] text-muted-foreground">
@@ -275,7 +255,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
               {t("editor.sceneBreakUploadImage")}
             </button>
           </div>,
-          document.body,
+          document.body
         )}
     </div>
   );

@@ -1,10 +1,5 @@
 import { useEffect, useRef } from "react";
-import {
-  cellIntensity,
-  randomGlyph,
-  hexToRgb,
-  FALLBACK_RGB,
-} from "./asciiBanner.helpers";
+import { cellIntensity, randomGlyph, hexToRgb, FALLBACK_RGB } from "./asciiBanner.helpers";
 
 interface AsciiFieldBackgroundProps {
   /** Theme color (`#rrggbb`) the glyphs brighten toward. Defaults to brand gold. */
@@ -45,9 +40,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
     if (!ctx) return;
 
     const base = color ? hexToRgb(color) : FALLBACK_RGB;
-    const reduceMotion = matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const pointerFine = matchMedia("(pointer:fine)").matches;
 
     const cellWidth = FONT_SIZE * MONO_ASPECT;
@@ -83,11 +76,9 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
       cols = Math.ceil(cssWidth / cellWidth);
       rows = Math.ceil(cssHeight / rowHeight);
       glyphs = Array.from({ length: rows }, () =>
-        Array.from({ length: cols }, () => randomGlyph()),
+        Array.from({ length: cols }, () => randomGlyph())
       );
-      mutGlyph = Array.from({ length: rows }, () =>
-        Array.from({ length: cols }, () => ""),
-      );
+      mutGlyph = Array.from({ length: rows }, () => Array.from({ length: cols }, () => ""));
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(cssWidth * dpr);
@@ -114,10 +105,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
       ctx.clearRect(0, 0, cssWidth, cssHeight);
 
       const sinceMove = now - lastMove;
-      const influence =
-        sinceMove <= HOLD_MS
-          ? 1
-          : Math.max(0, 1 - (sinceMove - HOLD_MS) / FADE_MS);
+      const influence = sinceMove <= HOLD_MS ? 1 : Math.max(0, 1 - (sinceMove - HOLD_MS) / FADE_MS);
       const active = influence > 0;
       const doMutate = now - lastMutate >= MUTATE_INTERVAL_MS;
 
@@ -140,10 +128,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
 
             if (intensity > 0) {
               if (doMutate) {
-                mutGlyph[r][c] =
-                  Math.random() < intensity * MUTATE_RATE
-                    ? randomGlyph()
-                    : "";
+                mutGlyph[r][c] = Math.random() < intensity * MUTATE_RATE ? randomGlyph() : "";
               }
               if (mutGlyph[r][c]) glyph = mutGlyph[r][c];
 

@@ -45,11 +45,7 @@ export function WidthControl() {
     if (!showMenu) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node | null;
-      if (
-        target &&
-        !buttonRef.current?.contains(target) &&
-        !menuRef.current?.contains(target)
-      ) {
+      if (target && !buttonRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setShowMenu(false);
       }
     };
@@ -65,7 +61,7 @@ export function WidthControl() {
     : Math.min(editorContentWidth, EDITOR_CONTENT_WIDTH_MAX);
   // Measured presets (ascending), excluding the Full sentinel.
   const measuredPresetValues = EDITOR_CONTENT_WIDTH_PRESETS.filter(
-    (preset) => preset.value !== EDITOR_CONTENT_WIDTH_FULL,
+    (preset) => preset.value !== EDITOR_CONTENT_WIDTH_FULL
   ).map((preset) => preset.value);
 
   // How strongly a preset is "active" for the current width, in [0, 1].
@@ -93,11 +89,8 @@ export function WidthControl() {
 
   const formatPresetValue = (value: number) =>
     value === EDITOR_CONTENT_WIDTH_FULL ? "100%" : `${value}px`;
-  const displayedWidthValue = isFullWidth
-    ? t("editor.widthFull")
-    : `${editorContentWidth}px`;
-  const valueControlBaseClass =
-    "h-8 w-20 shrink-0 rounded px-2 text-right text-sm text-foreground";
+  const displayedWidthValue = isFullWidth ? t("editor.widthFull") : `${editorContentWidth}px`;
+  const valueControlBaseClass = "h-8 w-20 shrink-0 rounded px-2 text-right text-sm text-foreground";
 
   useEffect(() => {
     setWidthInputDraft(isFullWidth ? "" : String(editorContentWidth));
@@ -181,9 +174,7 @@ export function WidthControl() {
                 onChange={(e) => {
                   const nextValue = Number(e.target.value);
                   setEditorContentWidth(
-                    nextValue >= sliderFullValue
-                      ? EDITOR_CONTENT_WIDTH_FULL
-                      : nextValue,
+                    nextValue >= sliderFullValue ? EDITOR_CONTENT_WIDTH_FULL : nextValue
                   );
                 }}
                 aria-label={t("editor.contentWidth")}
@@ -197,9 +188,7 @@ export function WidthControl() {
                   pattern="[0-9]*"
                   value={widthInputDraft}
                   placeholder={isFullWidth ? t("editor.widthFull") : undefined}
-                  onChange={(e) =>
-                    setWidthInputDraft(e.target.value.replace(/\D/g, ""))
-                  }
+                  onChange={(e) => setWidthInputDraft(e.target.value.replace(/\D/g, ""))}
                   onBlur={() => {
                     commitWidthInput();
                     setIsEditingWidth(false);
@@ -210,9 +199,7 @@ export function WidthControl() {
                       e.currentTarget.blur();
                     }
                     if (e.key === "Escape") {
-                      setWidthInputDraft(
-                        isFullWidth ? "" : String(editorContentWidth),
-                      );
+                      setWidthInputDraft(isFullWidth ? "" : String(editorContentWidth));
                       setIsEditingWidth(false);
                     }
                   }}
@@ -231,10 +218,7 @@ export function WidthControl() {
                 </button>
               )}
             </div>
-            <PagePaddingControl
-              padding={editorPagePadding}
-              onChange={setEditorPagePadding}
-            />
+            <PagePaddingControl padding={editorPagePadding} onChange={setEditorPagePadding} />
             <label className="flex items-center gap-2 text-sm text-foreground">
               <input
                 type="checkbox"
@@ -254,7 +238,7 @@ export function WidthControl() {
               {t("editor.resetLayout")}
             </button>
           </div>,
-          document.body,
+          document.body
         )}
     </>
   );

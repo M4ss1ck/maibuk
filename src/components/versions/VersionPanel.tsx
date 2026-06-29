@@ -52,12 +52,7 @@ function formatRelativeTime(date: Date, locale: string): string {
 
 type ConfirmAction = { type: "restore" | "delete"; versionId: string } | null;
 
-export function VersionPanel({
-  isOpen,
-  onClose,
-  bookId,
-  flushBeforeCompare,
-}: VersionPanelProps) {
+export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: VersionPanelProps) {
   const { t, i18n } = useTranslation();
   const visibleVersions = useVersionStore((state) => state.versions);
   const totalCount = useVersionStore((state) => state.totalCount);
@@ -266,9 +261,7 @@ export function VersionPanel({
       contentClassName={compare ? "overflow-hidden" : undefined}
     >
       {isInitialLoading ? (
-        <div className="text-center py-8 text-muted-foreground">
-          {t("common.loading")}
-        </div>
+        <div className="text-center py-8 text-muted-foreground">{t("common.loading")}</div>
       ) : compare ? (
         <div
           data-testid="version-compare-layout"
@@ -283,18 +276,11 @@ export function VersionPanel({
             <ArrowLeft className="w-4 h-4 mr-1" />
             {t("common.back")}
           </Button>
-          <p className="shrink-0 text-sm text-muted-foreground">
-            {t("versions.compareToCurrent")}
-          </p>
-          <div
-            data-testid="version-compare-body"
-            className="min-h-0 flex-1 overflow-hidden"
-          >
+          <p className="shrink-0 text-sm text-muted-foreground">{t("versions.compareToCurrent")}</p>
+          <div data-testid="version-compare-body" className="min-h-0 flex-1 overflow-hidden">
             <Suspense
               fallback={
-                <div className="text-center py-8 text-muted-foreground">
-                  {t("common.loading")}
-                </div>
+                <div className="text-center py-8 text-muted-foreground">{t("common.loading")}</div>
               }
             >
               <VersionCompare current={compare.current} target={compare.target} />
@@ -302,21 +288,16 @@ export function VersionPanel({
           </div>
         </div>
       ) : totalCount === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          {t("versions.empty")}
-        </div>
+        <div className="text-center py-8 text-muted-foreground">{t("versions.empty")}</div>
       ) : (
         <div className="flex flex-col gap-3">
           <ul
-            className={`flex flex-col gap-1 transition-opacity ${
-              isLoading ? "opacity-60" : ""
-            }`}
+            className={`flex flex-col gap-1 transition-opacity ${isLoading ? "opacity-60" : ""}`}
             aria-busy={isLoading}
           >
             {visibleVersions.map((version, index) => {
               const isFocused = focusedIndex === index;
-              const isConfirming =
-                confirmAction?.versionId === version.id;
+              const isConfirming = confirmAction?.versionId === version.id;
               const isRenaming = renamingId === version.id;
 
               return (
@@ -324,9 +305,7 @@ export function VersionPanel({
                   key={version.id}
                   id={`version-row-${index}`}
                   className={`flex items-center gap-2 px-2 py-2 rounded-lg transition-colors ${
-                    isFocused
-                      ? "bg-muted ring-1 ring-primary/30"
-                      : "hover:bg-muted/50"
+                    isFocused ? "bg-muted ring-1 ring-primary/30" : "hover:bg-muted/50"
                   }`}
                   onMouseEnter={() => setFocusedIndex(index)}
                 >
@@ -355,11 +334,7 @@ export function VersionPanel({
                       >
                         <Check className="w-4 h-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRenamingId(null)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setRenamingId(null)}>
                         <X className="w-4 h-4" />
                       </Button>
                     </div>
@@ -370,19 +345,11 @@ export function VersionPanel({
                           ? t("versions.restoreConfirm")
                           : t("versions.deleteConfirm")}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConfirmAction(null)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setConfirmAction(null)}>
                         <X className="w-4 h-4" />
                       </Button>
                       <Button
-                        variant={
-                          confirmAction?.type === "restore"
-                            ? "primary"
-                            : "destructive"
-                        }
+                        variant={confirmAction?.type === "restore" ? "primary" : "destructive"}
                         size="sm"
                         onClick={() => {
                           if (confirmAction?.type === "restore") {
@@ -423,48 +390,48 @@ export function VersionPanel({
                           <GitCompareArrows className="w-4 h-4" />
                         </Button>
                         <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setConfirmAction({
-                            type: "restore",
-                            versionId: version.id,
-                          })
-                        }
-                        title={t("versions.restore")}
-                        className="px-1.5"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => startRename(version)}
-                        title={t("versions.rename")}
-                        className="px-1.5"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setConfirmAction({
-                            type: "delete",
-                            versionId: version.id,
-                          })
-                        }
-                        title={t("versions.delete")}
-                        className="px-1.5"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </li>
-            );
-          })}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setConfirmAction({
+                              type: "restore",
+                              versionId: version.id,
+                            })
+                          }
+                          title={t("versions.restore")}
+                          className="px-1.5"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startRename(version)}
+                          title={t("versions.rename")}
+                          className="px-1.5"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setConfirmAction({
+                              type: "delete",
+                              versionId: version.id,
+                            })
+                          }
+                          title={t("versions.delete")}
+                          className="px-1.5"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {totalPages > 1 && (
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">

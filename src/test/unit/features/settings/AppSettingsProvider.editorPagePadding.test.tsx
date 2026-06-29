@@ -12,9 +12,7 @@ vi.mock("../../../../lib/platform", () => ({
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { AppSettingsProvider } = await import(
-  "../../../../features/settings/AppSettingsProvider"
-);
+const { AppSettingsProvider } = await import("../../../../features/settings/AppSettingsProvider");
 const { useSettingsStore } = await import("../../../../features/settings/store");
 
 describe("AppSettingsProvider editorPagePadding", () => {
@@ -28,8 +26,8 @@ describe("AppSettingsProvider editorPagePadding", () => {
       editorPagePadding: { top: 16, right: 24, bottom: 32, left: 40 },
     });
     render(<AppSettingsProvider>child</AppSettingsProvider>);
-    expect(
-      document.documentElement.style.getPropertyValue("--editor-page-padding"),
-    ).toBe("16px 24px 32px 40px");
+    expect(document.documentElement.style.getPropertyValue("--editor-page-padding")).toBe(
+      "16px 24px 32px 40px"
+    );
   });
 });

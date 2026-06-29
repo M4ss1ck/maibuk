@@ -17,7 +17,7 @@ import { IS_TAURI, getFileSystem } from "../lib/platform";
  */
 export function useMarkdownFileDrop(
   containerRef: RefObject<HTMLElement | null>,
-  onImport: (markdown: string, filenameStem: string) => void,
+  onImport: (markdown: string, filenameStem: string) => void
 ) {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const onImportRef = useRef(onImport);
@@ -35,7 +35,7 @@ export function useMarkdownFileDrop(
         clientY <= rect.bottom
       );
     },
-    [containerRef],
+    [containerRef]
   );
 
   // --- Tauri: native webview drag-drop events with position hit-testing ----
@@ -63,9 +63,7 @@ export function useMarkdownFileDrop(
             const { x, y } = payload.position;
             if (!isInsideContainer(x / dpr, y / dpr)) return;
 
-            const mdPaths = payload.paths.filter((p) =>
-              p.toLowerCase().endsWith(".md"),
-            );
+            const mdPaths = payload.paths.filter((p) => p.toLowerCase().endsWith(".md"));
             void importPaths(mdPaths, onImportRef.current);
             return;
           }
@@ -107,7 +105,7 @@ export function useMarkdownFileDrop(
   const onDrop = useCallback((event: DragEvent) => {
     if (IS_TAURI) return;
     const file = Array.from(event.dataTransfer.files).find((f) =>
-      f.name.toLowerCase().endsWith(".md"),
+      f.name.toLowerCase().endsWith(".md")
     );
     if (!file) return;
 
@@ -129,7 +127,7 @@ export function useMarkdownFileDrop(
 /** Reads each `.md` path from disk and forwards its text to the importer. */
 async function importPaths(
   paths: string[],
-  onImport: (markdown: string, filenameStem: string) => void,
+  onImport: (markdown: string, filenameStem: string) => void
 ) {
   if (paths.length === 0) return;
   const fs = await getFileSystem();

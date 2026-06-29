@@ -36,7 +36,12 @@ const mocks = vi.hoisted(() => {
     zoomOut: vi.fn(),
   };
   const state: Record<string, unknown> = {};
-  return { actions, flowActions, state, flowProps: { current: null as Record<string, unknown> | null } };
+  return {
+    actions,
+    flowActions,
+    state,
+    flowProps: { current: null as Record<string, unknown> | null },
+  };
 });
 
 vi.mock("../../../features/canvas/store", () => {
@@ -81,9 +86,7 @@ const { Canvas } = await import("../../../pages/Canvas");
 function readyState() {
   const doc = {
     schemaVersion: 2,
-    nodes: [
-      { id: "node", kind: "text", html: "<p>Idea</p>", position: { x: 0, y: 0 } },
-    ],
+    nodes: [{ id: "node", kind: "text", html: "<p>Idea</p>", position: { x: 0, y: 0 } }],
     edges: [{ id: "edge", source: "node", target: "node", label: "Old" }],
     strokes: [],
     viewport: { x: 0, y: 0, zoom: 1 },
@@ -117,7 +120,7 @@ function renderCanvas() {
       <Routes>
         <Route path="/canvas/:canvasId" element={<Canvas />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 
@@ -134,14 +137,14 @@ describe("Canvas page", () => {
     expect(mocks.flowProps.current?.connectionMode).toBe("loose");
     act(() => {
       const onSelectionChange = mocks.flowProps.current?.onSelectionChange as (
-        value: Record<string, unknown>,
+        value: Record<string, unknown>
       ) => void;
       onSelectionChange({ nodes: [{ id: "node" }], edges: [] });
     });
     expect(mocks.actions.selectNode).toHaveBeenCalledWith("node");
     act(() => {
       const onSelectionChange = mocks.flowProps.current?.onSelectionChange as (
-        value: Record<string, unknown>,
+        value: Record<string, unknown>
       ) => void;
       onSelectionChange({ nodes: [], edges: [{ id: "edge" }] });
     });
@@ -152,7 +155,7 @@ describe("Canvas page", () => {
     renderCanvas();
     fireEvent.click(screen.getByRole("button", { name: "canvas.addTextNode" }));
     expect(mocks.actions.addNode).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "text", html: "<p>canvas.newTextNode</p>" }),
+      expect.objectContaining({ kind: "text", html: "<p>canvas.newTextNode</p>" })
     );
   });
 
@@ -169,7 +172,7 @@ describe("Canvas page", () => {
     act(() => {
       const onNodeClick = mocks.flowProps.current?.onNodeClick as (
         event: Record<string, unknown>,
-        node: { id: string },
+        node: { id: string }
       ) => void;
       onNodeClick({}, { id: "node" });
     });
@@ -182,7 +185,7 @@ describe("Canvas page", () => {
     act(() => {
       const onEdgeClick = mocks.flowProps.current?.onEdgeClick as (
         event: { stopPropagation: () => void },
-        edge: { id: string },
+        edge: { id: string }
       ) => void;
       onEdgeClick({ stopPropagation }, { id: "edge" });
     });

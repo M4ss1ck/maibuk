@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  NodeResizeControl,
-  ResizeControlVariant,
-  type Node,
-  type NodeProps,
-} from "@xyflow/react";
+import { NodeResizeControl, ResizeControlVariant, type Node, type NodeProps } from "@xyflow/react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useCanvasStore } from "../store";
 import { useSettingsStore } from "../../settings/store";
@@ -96,10 +91,7 @@ function ActiveNodeEditor({
   );
 }
 
-export function LightweightNode({
-  data,
-  selected,
-}: NodeProps<LightweightFlowNode>) {
+export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNode>) {
   const node = data.node;
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const beginLiveChange = useCanvasStore((state) => state.beginLiveChange);

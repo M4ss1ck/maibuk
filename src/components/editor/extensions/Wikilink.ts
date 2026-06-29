@@ -19,10 +19,7 @@ export interface WikilinkSuggestionConfig {
 // wikilink-specific ones (onCreateNote, typed items/render). items/render come
 // solely from WikilinkSuggestionConfig to avoid intersecting conflicting
 // function signatures with SuggestionOptions.
-type WikilinkSuggestionOptions = Omit<
-  Partial<SuggestionOptions>,
-  "items" | "render"
-> &
+type WikilinkSuggestionOptions = Omit<Partial<SuggestionOptions>, "items" | "render"> &
   Partial<WikilinkSuggestionConfig>;
 
 /**
@@ -61,8 +58,7 @@ export const Wikilink = Node.create({
           const element = el as HTMLElement;
           return {
             href: element.getAttribute("href"),
-            label:
-              element.getAttribute("data-label") ?? element.textContent ?? "",
+            label: element.getAttribute("data-label") ?? element.textContent ?? "",
           };
         },
       },
@@ -73,11 +69,7 @@ export const Wikilink = Node.create({
     const href = node.attrs.href as string | null;
     const label = (node.attrs.label as string) ?? "";
     if (href) {
-      return [
-        "a",
-        mergeAttributes({ class: "wikilink", href, "data-type": "wikilink" }),
-        label,
-      ];
+      return ["a", mergeAttributes({ class: "wikilink", href, "data-type": "wikilink" }), label];
     }
     return [
       "a",
@@ -103,11 +95,7 @@ export const Wikilink = Node.create({
         command: ({ editor, range, props }) => {
           const candidate = props as WikilinkCandidate;
           editor.chain().focus().deleteRange(range).run();
-          insertWikilink(
-            editor,
-            candidate,
-            this.options.suggestion as WikilinkSuggestionConfig,
-          );
+          insertWikilink(editor, candidate, this.options.suggestion as WikilinkSuggestionConfig);
           return true;
         },
       }),
@@ -118,7 +106,7 @@ export const Wikilink = Node.create({
 async function insertWikilink(
   editor: Editor,
   candidate: WikilinkCandidate,
-  config: WikilinkSuggestionConfig,
+  config: WikilinkSuggestionConfig
 ): Promise<void> {
   let href: string | null = null;
   let label = candidate.label;
@@ -148,9 +136,5 @@ async function insertWikilink(
     }
   }
 
-  editor
-    .chain()
-    .focus()
-    .insertContent({ type: "wikilink", attrs: { href, label } })
-    .run();
+  editor.chain().focus().insertContent({ type: "wikilink", attrs: { href, label } }).run();
 }

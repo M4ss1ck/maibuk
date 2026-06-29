@@ -5,9 +5,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const { PagePaddingControl } = await import(
-  "../../../../components/editor/PagePaddingControl"
-);
+const { PagePaddingControl } = await import("../../../../components/editor/PagePaddingControl");
 
 describe("PagePaddingControl", () => {
   it("renders the simple slider and value", () => {
@@ -15,7 +13,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={vi.fn()}
-      />,
+      />
     );
     expect(screen.getByRole("slider")).toHaveAttribute("max", "96");
     expect(screen.getByText("32px")).toBeInTheDocument();
@@ -27,7 +25,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.change(screen.getByRole("slider"), { target: { value: "64" } });
     expect(onChange).toHaveBeenCalledWith(64);
@@ -38,7 +36,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 48, bottom: 32, left: 32 }}
         onChange={vi.fn()}
-      />,
+      />
     );
     expect(screen.getByText("editor.paddingCustom")).toBeInTheDocument();
   });
@@ -49,7 +47,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("editor.customizePadding"));
     const sliders = screen.getAllByRole("slider");
@@ -64,7 +62,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("32px"));
     const input = screen.getByLabelText("editor.pagePadding px");
@@ -79,7 +77,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("32px"));
     const input = screen.getByLabelText("editor.pagePadding px");
@@ -95,7 +93,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("32px"));
     const input = screen.getByLabelText("editor.pagePadding px");
@@ -111,7 +109,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 48, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("editor.paddingCustom"));
     const input = screen.getByPlaceholderText("editor.paddingCustom");
@@ -127,7 +125,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("32px"));
     const input = screen.getByLabelText("editor.pagePadding px");
@@ -142,7 +140,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("32px"));
     const input = screen.getByLabelText("editor.pagePadding px");
@@ -157,7 +155,7 @@ describe("PagePaddingControl", () => {
       <PagePaddingControl
         padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
         onChange={onChange}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("editor.customizePadding"));
     fireEvent.click(screen.getByLabelText("editor.pagePaddingTop px"));

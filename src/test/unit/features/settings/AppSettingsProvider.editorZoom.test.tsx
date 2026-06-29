@@ -12,9 +12,7 @@ vi.mock("../../../../lib/platform", () => ({
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { AppSettingsProvider } = await import(
-  "../../../../features/settings/AppSettingsProvider"
-);
+const { AppSettingsProvider } = await import("../../../../features/settings/AppSettingsProvider");
 const { useSettingsStore } = await import("../../../../features/settings/store");
 
 describe("AppSettingsProvider editorZoom", () => {
@@ -26,8 +24,6 @@ describe("AppSettingsProvider editorZoom", () => {
   it("sets --editor-zoom to the zoom factor", () => {
     useSettingsStore.setState({ editorZoom: 150 });
     render(<AppSettingsProvider>child</AppSettingsProvider>);
-    expect(
-      document.documentElement.style.getPropertyValue("--editor-zoom")
-    ).toBe("1.5");
+    expect(document.documentElement.style.getPropertyValue("--editor-zoom")).toBe("1.5");
   });
 });

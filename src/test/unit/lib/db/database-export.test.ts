@@ -22,7 +22,7 @@ describe("DatabaseAdapter export/import round-trip", () => {
 
     // Verify export contains book_versions
     expect(sqlDump).toContain('INSERT OR REPLACE INTO "book_versions"');
-    expect(sqlDump).toContain('ver-1');
+    expect(sqlDump).toContain("ver-1");
 
     // Create fresh DB and import
     const freshDb = await createTestDatabase();
@@ -78,7 +78,7 @@ describe("DatabaseAdapter export/import round-trip", () => {
     });
     await db.execute(
       'INSERT INTO canvases (id, title, doc, pinned, "order", created_at, updated_at, content_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ["canvas-1", "Map", doc, 1, 2, 1000, 2000, 2000],
+      ["canvas-1", "Map", doc, 1, 2, 1000, 2000, 2000]
     );
 
     const sqlDump = new TextDecoder().decode(await db.exportData());
@@ -88,7 +88,7 @@ describe("DatabaseAdapter export/import round-trip", () => {
     await freshDb.importData(sqlDump);
     const rows = await freshDb.select<Record<string, unknown>[]>(
       "SELECT * FROM canvases WHERE id = ?",
-      ["canvas-1"],
+      ["canvas-1"]
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ title: "Map", doc, pinned: 1, order: 2 });

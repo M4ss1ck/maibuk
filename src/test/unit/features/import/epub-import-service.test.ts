@@ -138,7 +138,11 @@ describe("EPUB import service", () => {
     mockNormalizeEpubProject.mockReturnValue(normalized);
     mockCreateBook.mockResolvedValue({ id: "book-1", title: "Imported Book" });
     mockUpdateBook.mockResolvedValue(undefined);
-    mockCreateChapter.mockResolvedValue({ id: "chapter-1", bookId: "book-1", title: "Chapter One" });
+    mockCreateChapter.mockResolvedValue({
+      id: "chapter-1",
+      bookId: "book-1",
+      title: "Chapter One",
+    });
     mockUpdateChapter.mockResolvedValue(undefined);
     mockInsertProjectAssets.mockResolvedValue([]);
     mockInsertBookMetadata.mockResolvedValue(undefined);
@@ -169,9 +173,9 @@ describe("EPUB import service", () => {
   it("prevents import when the compatibility report has blocking issues", async () => {
     mockScanEpub.mockReturnValue(blockingReport);
 
-    await expect(importEpubProject({ bytes: new Uint8Array([1]), acknowledged: true })).rejects.toThrow(
-      "EPUB cannot be imported because it has blocking compatibility issues."
-    );
+    await expect(
+      importEpubProject({ bytes: new Uint8Array([1]), acknowledged: true })
+    ).rejects.toThrow("EPUB cannot be imported because it has blocking compatibility issues.");
 
     expect(mockCreateBook).not.toHaveBeenCalled();
   });
@@ -179,9 +183,9 @@ describe("EPUB import service", () => {
   it("requires acknowledgement for lossy compatibility reports", async () => {
     mockScanEpub.mockReturnValue(lossyReport);
 
-    await expect(importEpubProject({ bytes: new Uint8Array([1]), acknowledged: false })).rejects.toThrow(
-      "EPUB import requires acknowledgement of compatibility warnings."
-    );
+    await expect(
+      importEpubProject({ bytes: new Uint8Array([1]), acknowledged: false })
+    ).rejects.toThrow("EPUB import requires acknowledgement of compatibility warnings.");
 
     expect(mockCreateBook).not.toHaveBeenCalled();
   });
@@ -224,14 +228,17 @@ describe("EPUB import service", () => {
   it("cleans up partially created rows when persistence fails after book creation", async () => {
     mockInsertBookStyles.mockRejectedValue(new Error("style write failed"));
 
-    await expect(importEpubProject({ bytes: new Uint8Array([1]), acknowledged: true })).rejects.toThrow(
-      "style write failed"
-    );
+    await expect(
+      importEpubProject({ bytes: new Uint8Array([1]), acknowledged: true })
+    ).rejects.toThrow("style write failed");
 
-    expect(mockDeleteExecute).toHaveBeenCalledWith("DELETE FROM chapter_epub_meta WHERE book_id = ?", [
+    expect(mockDeleteExecute).toHaveBeenCalledWith(
+      "DELETE FROM chapter_epub_meta WHERE book_id = ?",
+      ["book-1"]
+    );
+    expect(mockDeleteExecute).toHaveBeenCalledWith("DELETE FROM chapters WHERE book_id = ?", [
       "book-1",
     ]);
-    expect(mockDeleteExecute).toHaveBeenCalledWith("DELETE FROM chapters WHERE book_id = ?", ["book-1"]);
     expect(mockDeleteExecute).toHaveBeenCalledWith("DELETE FROM books WHERE id = ?", ["book-1"]);
   });
 });

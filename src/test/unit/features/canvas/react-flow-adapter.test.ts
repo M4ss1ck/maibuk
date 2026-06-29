@@ -11,11 +11,11 @@ describe("Canvas React Flow adapter", () => {
   it("maps store-owned node and edge selection", () => {
     const nodes = toFlowNodes(
       [{ id: "node", kind: "text", html: "<p>Idea</p>", position: { x: 0, y: 0 } }],
-      { selectedNodeId: "node", canvasId: "canvas", canvasTitle: "Map", edges: [] },
+      { selectedNodeId: "node", canvasId: "canvas", canvasTitle: "Map", edges: [] }
     );
     const edges = toFlowEdges(
       [{ id: "edge", source: "node", target: "node", directed: true, label: "Loop" }],
-      { selectedEdgeId: "edge" },
+      { selectedEdgeId: "edge" }
     );
     expect(nodes[0].selected).toBe(true);
     expect(edges[0]).toMatchObject({
@@ -31,7 +31,7 @@ describe("Canvas React Flow adapter", () => {
         { id: "sized", kind: "text", html: "<p>a</p>", position: { x: 0, y: 0 }, width: 360 },
         { id: "auto", kind: "text", html: "<p>b</p>", position: { x: 0, y: 0 } },
       ],
-      { selectedNodeId: null, canvasId: "canvas", canvasTitle: "Map", edges: [] },
+      { selectedNodeId: null, canvasId: "canvas", canvasTitle: "Map", edges: [] }
     );
     expect(nodes[0].style).toEqual({ width: 360 });
     expect(nodes[1].style).toBeUndefined();
@@ -39,7 +39,7 @@ describe("Canvas React Flow adapter", () => {
 
   it("preserves handle IDs when creating a domain edge", () => {
     expect(
-      fromConnection({ source: "a", target: "b", sourceHandle: "out", targetHandle: "in" }),
+      fromConnection({ source: "a", target: "b", sourceHandle: "out", targetHandle: "in" })
     ).toMatchObject({
       source: "a",
       target: "b",

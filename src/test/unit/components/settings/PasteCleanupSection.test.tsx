@@ -59,12 +59,10 @@ describe("PasteCleanupSection — open from HTML view", () => {
         ]}
       >
         <PasteCleanupSection />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
-    const valueInput = await waitFor(() =>
-      screen.getByDisplayValue("MsoNormal"),
-    );
+    const valueInput = await waitFor(() => screen.getByDisplayValue("MsoNormal"));
     expect(valueInput).toBeInTheDocument();
     expect(valueInput.tagName).toBe("TEXTAREA");
     expect(document.activeElement).toBe(valueInput);
@@ -82,7 +80,7 @@ describe("PasteCleanupSection — open from HTML view", () => {
         ]}
       >
         <PasteCleanupSection />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     await waitFor(() => screen.getByDisplayValue("MsoNormal"));
@@ -113,7 +111,7 @@ describe("PasteCleanupSection — open from HTML view", () => {
           <Route path="/settings" element={<PasteCleanupSection />} />
           <Route path="/book/:bookId" element={<p>Book editor</p>} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     await waitFor(() => screen.getByDisplayValue("MsoNormal"));
@@ -126,7 +124,7 @@ describe("PasteCleanupSection — open from HTML view", () => {
     render(
       <MemoryRouter initialEntries={["/settings"]}>
         <PasteCleanupSection />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(screen.queryByDisplayValue("MsoNormal")).not.toBeInTheDocument();

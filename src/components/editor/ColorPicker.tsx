@@ -167,9 +167,7 @@ export function ColorPicker({
                 className="w-8 h-8 cursor-pointer rounded border border-border"
                 title={t("editor.customColor")}
               />
-              <span className="text-xs text-muted-foreground flex-1">
-                {t("cover.custom")}
-              </span>
+              <span className="text-xs text-muted-foreground flex-1">{t("cover.custom")}</span>
               {onClear && (
                 <button
                   type="button"
@@ -184,7 +182,7 @@ export function ColorPicker({
               )}
             </div>
           </div>,
-          document.body,
+          document.body
         )}
     </>
   );

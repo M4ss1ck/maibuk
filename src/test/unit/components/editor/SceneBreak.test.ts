@@ -11,7 +11,7 @@ function makeEditor(content: string) {
 describe("SceneBreak node", () => {
   it("renders a text variant with its symbols", () => {
     const editor = makeEditor(
-      '<div data-scene-break data-kind="text" class="scene-break"><span class="scene-break-symbols">❧</span></div>',
+      '<div data-scene-break data-kind="text" class="scene-break"><span class="scene-break-symbols">❧</span></div>'
     );
 
     const html = editor.getHTML();
@@ -38,7 +38,7 @@ describe("SceneBreak node", () => {
 
   it("renders an image variant", () => {
     const editor = makeEditor(
-      '<div data-scene-break data-kind="image" class="scene-break"><img src="data:image/png;base64,AA" alt="orn"></div>',
+      '<div data-scene-break data-kind="image" class="scene-break"><img src="data:image/png;base64,AA" alt="orn"></div>'
     );
 
     const html = editor.getHTML();
@@ -50,9 +50,7 @@ describe("SceneBreak node", () => {
   });
 
   it("deletes the scene break with Backspace from the next paragraph", () => {
-    const editor = makeEditor(
-      "<p>before</p><div data-scene-break></div><p>after</p>",
-    );
+    const editor = makeEditor("<p>before</p><div data-scene-break></div><p>after</p>");
     let afterStart = 0;
 
     editor.state.doc.descendants((node, pos) => {

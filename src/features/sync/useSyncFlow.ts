@@ -42,16 +42,19 @@ export function useSyncFlow() {
     setShowPassphraseDialog(true);
   }, []);
 
-  const syncAllWithSessionPassphrase = useCallback(async (options?: Partial<SyncOptions>) => {
-    const passphrase = getPassphrase();
-    if (!passphrase) {
-      requestPassphraseForSync(options);
-      return false;
-    }
+  const syncAllWithSessionPassphrase = useCallback(
+    async (options?: Partial<SyncOptions>) => {
+      const passphrase = getPassphrase();
+      if (!passphrase) {
+        requestPassphraseForSync(options);
+        return false;
+      }
 
-    await syncAll(passphrase, onConflict, options);
-    return true;
-  }, [requestPassphraseForSync, syncAll, onConflict]);
+      await syncAll(passphrase, onConflict, options);
+      return true;
+    },
+    [requestPassphraseForSync, syncAll, onConflict]
+  );
 
   const completePassphraseFlow = useCallback(async () => {
     setShowPassphraseDialog(false);

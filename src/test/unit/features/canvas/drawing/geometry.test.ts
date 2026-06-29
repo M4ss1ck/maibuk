@@ -33,10 +33,7 @@ describe("rectangle geometry helpers", () => {
   describe("rectsIntersect", () => {
     it("returns true for overlapping rectangles", () => {
       expect(
-        rectsIntersect(
-          { x: 0, y: 0, width: 10, height: 10 },
-          { x: 5, y: 5, width: 10, height: 10 },
-        ),
+        rectsIntersect({ x: 0, y: 0, width: 10, height: 10 }, { x: 5, y: 5, width: 10, height: 10 })
       ).toBe(true);
     });
 
@@ -44,8 +41,8 @@ describe("rectangle geometry helpers", () => {
       expect(
         rectsIntersect(
           { x: 0, y: 0, width: 10, height: 10 },
-          { x: 20, y: 20, width: 10, height: 10 },
-        ),
+          { x: 20, y: 20, width: 10, height: 10 }
+        )
       ).toBe(false);
     });
   });
@@ -53,23 +50,13 @@ describe("rectangle geometry helpers", () => {
   describe("segmentsIntersect", () => {
     it("returns true for crossing segments", () => {
       expect(
-        segmentsIntersect(
-          { x: 0, y: 0 },
-          { x: 10, y: 10 },
-          { x: 0, y: 10 },
-          { x: 10, y: 0 },
-        ),
+        segmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 10, y: 0 })
       ).toBe(true);
     });
 
     it("returns false for parallel segments", () => {
       expect(
-        segmentsIntersect(
-          { x: 0, y: 0 },
-          { x: 10, y: 0 },
-          { x: 0, y: 10 },
-          { x: 10, y: 10 },
-        ),
+        segmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10 }, { x: 10, y: 10 })
       ).toBe(false);
     });
   });
@@ -77,19 +64,37 @@ describe("rectangle geometry helpers", () => {
   describe("segmentIntersectsRect", () => {
     it("returns true when the segment crosses the rectangle", () => {
       expect(
-        segmentIntersectsRect([{ x: -5, y: 5 }, { x: 15, y: 5 }], { x: 0, y: 0, width: 10, height: 10 }),
+        segmentIntersectsRect(
+          [
+            { x: -5, y: 5 },
+            { x: 15, y: 5 },
+          ],
+          { x: 0, y: 0, width: 10, height: 10 }
+        )
       ).toBe(true);
     });
 
     it("returns true when an endpoint is inside the rectangle", () => {
       expect(
-        segmentIntersectsRect([{ x: 5, y: 5 }, { x: 15, y: 15 }], { x: 0, y: 0, width: 10, height: 10 }),
+        segmentIntersectsRect(
+          [
+            { x: 5, y: 5 },
+            { x: 15, y: 15 },
+          ],
+          { x: 0, y: 0, width: 10, height: 10 }
+        )
       ).toBe(true);
     });
 
     it("returns false when the segment is completely outside the rectangle", () => {
       expect(
-        segmentIntersectsRect([{ x: -10, y: -10 }, { x: -5, y: -5 }], { x: 0, y: 0, width: 10, height: 10 }),
+        segmentIntersectsRect(
+          [
+            { x: -10, y: -10 },
+            { x: -5, y: -5 },
+          ],
+          { x: 0, y: 0, width: 10, height: 10 }
+        )
       ).toBe(false);
     });
   });

@@ -76,8 +76,7 @@ vi.mock("../../../features/chapters/store", () => ({
 }));
 
 vi.mock("../../../features/notes", () => {
-  const useNoteStore = (selector: (s: typeof mockNoteState) => unknown) =>
-    selector(mockNoteState);
+  const useNoteStore = (selector: (s: typeof mockNoteState) => unknown) => selector(mockNoteState);
   return { useNoteStore };
 });
 
@@ -151,7 +150,7 @@ describe("BookEditor book notes panel", () => {
         isOpen: true,
         activeTab: "notes",
         notes: [{ id: "n1", title: "Filed A", bookId: "book-1" }],
-      }),
+      })
     );
   });
 
@@ -170,9 +169,7 @@ describe("BookEditor book notes panel", () => {
     mockSettings.showNotesChapter = true;
     render(<BookEditor />);
 
-    expect(
-      screen.getByRole("button", { name: "nav.bookNotes" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "nav.bookNotes" })).toBeDisabled();
   });
 
   it("navigates to the note in the notes view with a return target", () => {

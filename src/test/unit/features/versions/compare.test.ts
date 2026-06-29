@@ -5,7 +5,7 @@ function chapter(
   id: string,
   title: string,
   content: string | null,
-  order: number,
+  order: number
 ): BookSnapshot["chapters"][number] {
   return {
     id,

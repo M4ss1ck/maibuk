@@ -34,9 +34,7 @@ export function editorHtmlToMarkdown(html: string): string {
   let markdown = turndown.turndown(body.innerHTML).trim();
 
   if (footnotes.length > 0) {
-    const defs = footnotes
-      .map((fn) => `[^${fn.number}]: ${fn.content}`)
-      .join("\n");
+    const defs = footnotes.map((fn) => `[^${fn.number}]: ${fn.content}`).join("\n");
     markdown = `${markdown}\n\n${defs}`;
   }
 
@@ -57,9 +55,7 @@ interface ExtractedFootnote {
 
 function extractFootnotes(body: HTMLElement): ExtractedFootnote[] {
   const footnotes: ExtractedFootnote[] = [];
-  const sups = Array.from(
-    body.querySelectorAll<HTMLElement>("sup[data-footnote]"),
-  );
+  const sups = Array.from(body.querySelectorAll<HTMLElement>("sup[data-footnote]"));
   sups.forEach((sup, index) => {
     const number = index + 1;
     const content = sup.getAttribute("data-footnote-content") ?? "";

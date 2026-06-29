@@ -380,7 +380,9 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_book_metadata_book_id ON book_metadata(book_id)`
   );
-  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_book_styles_book_id ON book_styles(book_id)`);
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_book_styles_book_id ON book_styles(book_id)`
+  );
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_epub_structures_book_id ON epub_structures(book_id)`
   );
@@ -392,7 +394,9 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
       ON sync_tombstones(entity_type, pushed_at, confirmed_at)`
   );
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id)`);
-  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)`);
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)`
+  );
 
   return adapter;
 }

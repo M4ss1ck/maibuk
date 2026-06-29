@@ -39,10 +39,11 @@ function ToggleButton<T extends string>({
       onClick={onClick}
       aria-label={option.label}
       tabIndex={measureOnly ? -1 : undefined}
-      className={`${toggleButtonBaseClass} ${isActive
-        ? "bg-primary text-white"
-        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-        }`}
+      className={`${toggleButtonBaseClass} ${
+        isActive
+          ? "bg-primary text-white"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
     >
       {option.icon}
       <span

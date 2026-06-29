@@ -42,22 +42,18 @@ export function PasteCleanupSection() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [newProperty, setNewProperty] = useState("");
   const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
-  const [returnToEditorPath, setReturnToEditorPath] = useState<string | null>(
-    null,
-  );
+  const [returnToEditorPath, setReturnToEditorPath] = useState<string | null>(null);
 
   // Opened via "Add cleanup rule" from the HTML source view: jump straight to
   // the rules editor with the new rule revealed and focused.
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
-    const state = location.state as
-      | {
-        openPasteCleanupRules?: boolean;
-        focusPasteRuleId?: string;
-        returnToEditorPath?: string;
-      }
-      | null;
+    const state = location.state as {
+      openPasteCleanupRules?: boolean;
+      focusPasteRuleId?: string;
+      returnToEditorPath?: string;
+    } | null;
     if (!state?.openPasteCleanupRules) return;
     setAdvancedOpen(true);
     setRulesOpen(true);
@@ -83,12 +79,8 @@ export function PasteCleanupSection() {
     setFocusRuleId(null);
   }, [rulesOpen, focusRuleId]);
 
-  const promptMarkdownOnPaste = useSettingsStore(
-    (state) => state.promptMarkdownOnPaste,
-  );
-  const setPromptMarkdownOnPaste = useSettingsStore(
-    (state) => state.setPromptMarkdownOnPaste,
-  );
+  const promptMarkdownOnPaste = useSettingsStore((state) => state.promptMarkdownOnPaste);
+  const setPromptMarkdownOnPaste = useSettingsStore((state) => state.setPromptMarkdownOnPaste);
 
   const { preset, options, rules } = pasteCleanup;
   const { strippedProperties } = options;
@@ -108,7 +100,7 @@ export function PasteCleanupSection() {
 
   const commonProperties: readonly string[] = PASTE_STRIP_COMMON_PROPERTIES;
   const customProperties = strippedProperties.filter(
-    (property) => !commonProperties.includes(property),
+    (property) => !commonProperties.includes(property)
   );
 
   const handleAddProperty = () => {
@@ -127,9 +119,7 @@ export function PasteCleanupSection() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
         <div>
-          <p className="font-medium">
-            {t("settings.pasteCleanup.preset.label")}
-          </p>
+          <p className="font-medium">{t("settings.pasteCleanup.preset.label")}</p>
           <p className="text-sm text-muted-foreground">
             {t("settings.pasteCleanup.preset.description")}
           </p>
@@ -143,17 +133,12 @@ export function PasteCleanupSection() {
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
         <div>
-          <p className="font-medium">
-            {t("settings.pasteCleanup.promptMarkdownLabel")}
-          </p>
+          <p className="font-medium">{t("settings.pasteCleanup.promptMarkdownLabel")}</p>
           <p className="text-sm text-muted-foreground">
             {t("settings.pasteCleanup.promptMarkdownDescription")}
           </p>
         </div>
-        <Switch
-          checked={promptMarkdownOnPaste}
-          onChange={setPromptMarkdownOnPaste}
-        />
+        <Switch checked={promptMarkdownOnPaste} onChange={setPromptMarkdownOnPaste} />
       </div>
 
       <div>
@@ -172,13 +157,8 @@ export function PasteCleanupSection() {
           <div className="mt-3 space-y-5 border-l-2 border-border pl-4">
             <div className="space-y-3">
               {PASTE_STRUCTURAL_OPTION_KEYS.map((key) => (
-                <div
-                  key={key}
-                  className="flex items-center justify-between gap-4"
-                >
-                  <p className="text-sm">
-                    {t(`settings.pasteCleanup.option.${key}`)}
-                  </p>
+                <div key={key} className="flex items-center justify-between gap-4">
+                  <p className="text-sm">{t(`settings.pasteCleanup.option.${key}`)}</p>
                   <Switch
                     checked={options[key]}
                     onChange={(value) => setPasteCleanupOption(key, value)}
@@ -190,9 +170,7 @@ export function PasteCleanupSection() {
 
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-medium">
-                  {t("settings.pasteCleanup.strip.title")}
-                </p>
+                <p className="text-sm font-medium">{t("settings.pasteCleanup.strip.title")}</p>
                 <p className="text-xs text-muted-foreground">
                   {t("settings.pasteCleanup.strip.description")}
                 </p>
@@ -200,19 +178,12 @@ export function PasteCleanupSection() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
                 {PASTE_STRIP_COMMON_PROPERTIES.map((property) => (
-                  <div
-                    key={property}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <p className="text-sm">
-                      {t(`settings.pasteCleanup.property.${property}`)}
-                    </p>
+                  <div key={property} className="flex items-center justify-between gap-3">
+                    <p className="text-sm">{t(`settings.pasteCleanup.property.${property}`)}</p>
                     <Switch
                       checked={strippedProperties.includes(property)}
                       onChange={(on) =>
-                        on
-                          ? addStrippedProperty(property)
-                          : removeStrippedProperty(property)
+                        on ? addStrippedProperty(property) : removeStrippedProperty(property)
                       }
                       label={t(`settings.pasteCleanup.property.${property}`)}
                     />
@@ -251,16 +222,10 @@ export function PasteCleanupSection() {
                       handleAddProperty();
                     }
                   }}
-                  placeholder={t(
-                    "settings.pasteCleanup.strip.addPropertyPlaceholder",
-                  )}
+                  placeholder={t("settings.pasteCleanup.strip.addPropertyPlaceholder")}
                   className="flex-1"
                 />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleAddProperty}
-                >
+                <Button variant="secondary" size="sm" onClick={handleAddProperty}>
                   {t("settings.pasteCleanup.strip.addProperty")}
                 </Button>
               </div>
@@ -268,20 +233,14 @@ export function PasteCleanupSection() {
 
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium">
-                  {t("settings.pasteCleanup.rules.title")}
-                </p>
+                <p className="text-sm font-medium">{t("settings.pasteCleanup.rules.title")}</p>
                 <p className="text-xs text-muted-foreground">
                   {t("settings.pasteCleanup.rules.count", {
                     count: rules.length,
                   })}
                 </p>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setRulesOpen(true)}
-              >
+              <Button variant="secondary" size="sm" onClick={() => setRulesOpen(true)}>
                 {t("settings.pasteCleanup.rules.manage")}
               </Button>
             </div>
@@ -319,10 +278,7 @@ export function PasteCleanupSection() {
           ) : (
             <div className="space-y-3">
               {rules.map((rule, index) => (
-                <div
-                  key={rule.id}
-                  className="rounded-lg border border-border p-3 space-y-3"
-                >
+                <div key={rule.id} className="rounded-lg border border-border p-3 space-y-3">
                   <div className="flex items-center gap-2">
                     <Input
                       value={rule.label}
@@ -331,26 +287,20 @@ export function PasteCleanupSection() {
                           label: e.target.value,
                         })
                       }
-                      placeholder={t(
-                        "settings.pasteCleanup.rules.labelPlaceholder",
-                      )}
+                      placeholder={t("settings.pasteCleanup.rules.labelPlaceholder")}
                       aria-label={t("settings.pasteCleanup.rules.label")}
                       className="flex-1"
                     />
                     <Switch
                       checked={rule.enabled}
-                      onChange={(value) =>
-                        updatePasteCleanupRule(rule.id, { enabled: value })
-                      }
+                      onChange={(value) => updatePasteCleanupRule(rule.id, { enabled: value })}
                       label={t("settings.pasteCleanup.rules.enabled")}
                     />
                   </div>
                   <div className="flex flex-col flex-wrap justify-center gap-2">
                     <Select<PasteRuleTarget>
                       value={rule.target}
-                      onChange={(value) =>
-                        updatePasteCleanupRule(rule.id, { target: value })
-                      }
+                      onChange={(value) => updatePasteCleanupRule(rule.id, { target: value })}
                       options={targetOptions}
                     />
                     <AutoGrowTextarea
@@ -366,9 +316,7 @@ export function PasteCleanupSection() {
                     />
                     <Select<PasteRuleAction>
                       value={rule.action}
-                      onChange={(value) =>
-                        updatePasteCleanupRule(rule.id, { action: value })
-                      }
+                      onChange={(value) => updatePasteCleanupRule(rule.id, { action: value })}
                       options={actionOptions}
                     />
                   </div>
@@ -405,11 +353,7 @@ export function PasteCleanupSection() {
             </div>
           )}
 
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => addPasteCleanupRule()}
-          >
+          <Button variant="primary" size="sm" onClick={() => addPasteCleanupRule()}>
             {t("settings.pasteCleanup.rules.add")}
           </Button>
         </div>

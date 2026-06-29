@@ -154,19 +154,19 @@ export function GlobalShortcuts() {
         // While editing, push only the current content instead of a full sync.
         const bookMatch = location.pathname.match(/^\/book\/([^/]+)$/);
         if (bookMatch) {
-          store.syncSingleBook(bookMatch[1], passphrase, skipConflicts).catch(() => { });
+          store.syncSingleBook(bookMatch[1], passphrase, skipConflicts).catch(() => {});
           return;
         }
 
         if (location.pathname.startsWith("/notes/")) {
           const { currentNote } = useNoteStore.getState();
           if (currentNote) {
-            store.syncSingleNote(currentNote.id, passphrase, skipConflicts).catch(() => { });
+            store.syncSingleNote(currentNote.id, passphrase, skipConflicts).catch(() => {});
             return;
           }
         }
 
-        store.syncAll(passphrase, skipConflicts).catch(() => { });
+        store.syncAll(passphrase, skipConflicts).catch(() => {});
       },
     },
     {

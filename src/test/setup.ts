@@ -10,7 +10,7 @@ if (typeof Element.prototype.getClientRects !== "function") {
       length: 0,
       item: () => null,
       [Symbol.iterator]: function* () {},
-    } as unknown as DOMRectList);
+    }) as unknown as DOMRectList;
 }
 
 // Polyfill ResizeObserver for Headless UI components in jsdom

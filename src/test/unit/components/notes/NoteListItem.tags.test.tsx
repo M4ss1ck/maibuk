@@ -41,7 +41,7 @@ describe("NoteListItem tags", () => {
           isSelected={false}
           onSelect={vi.fn()}
         />
-      </ul>,
+      </ul>
     );
 
     expect(screen.getByRole("button", { name: "+4" })).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe("NoteListItem tags", () => {
     render(
       <ul>
         <NoteListItem note={buildNote({ tags: [] })} isSelected={false} onSelect={vi.fn()} />
-      </ul>,
+      </ul>
     );
 
     expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
@@ -60,8 +60,12 @@ describe("NoteListItem tags", () => {
   it("places the drag handle at the end of the description line", () => {
     render(
       <ul>
-        <NoteListItem note={buildNote({ content: "<p>Preview text</p>" })} isSelected={false} onSelect={vi.fn()} />
-      </ul>,
+        <NoteListItem
+          note={buildNote({ content: "<p>Preview text</p>" })}
+          isSelected={false}
+          onSelect={vi.fn()}
+        />
+      </ul>
     );
 
     const handle = screen.getByTestId("note-drag-handle");
@@ -74,8 +78,13 @@ describe("NoteListItem tags", () => {
   it("uses a drag cursor for draggable rows", () => {
     render(
       <ul>
-        <NoteListItem note={buildNote({ title: "Draggable" })} isSelected={false} onSelect={vi.fn()} draggable />
-      </ul>,
+        <NoteListItem
+          note={buildNote({ title: "Draggable" })}
+          isSelected={false}
+          onSelect={vi.fn()}
+          draggable
+        />
+      </ul>
     );
 
     const row = screen.getByText("Draggable").closest("li");

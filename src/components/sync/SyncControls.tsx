@@ -13,13 +13,8 @@ interface SyncControlsProps {
 
 export function SyncControls({ onSync, layout = "popover" }: SyncControlsProps) {
   const { t } = useTranslation();
-  const {
-    syncStatus,
-    pendingDeletions,
-    syncLog,
-    confirmPendingDeletions,
-    clearSyncLog,
-  } = useSyncStore();
+  const { syncStatus, pendingDeletions, syncLog, confirmPendingDeletions, clearSyncLog } =
+    useSyncStore();
   const [scope, setScope] = useState<SyncScope>("all");
   const [direction, setDirection] = useState<SyncDirection>("bidirectional");
   const [isLogOpen, setIsLogOpen] = useState(true);

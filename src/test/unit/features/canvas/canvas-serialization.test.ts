@@ -14,9 +14,7 @@ describe("canvas document serialization", () => {
   it("round-trips a valid document", () => {
     const doc = {
       ...createDefaultCanvasDoc(),
-      nodes: [
-        { id: "a", kind: "text" as const, html: "<p>Idea</p>", position: { x: 1, y: 2 } },
-      ],
+      nodes: [{ id: "a", kind: "text" as const, html: "<p>Idea</p>", position: { x: 1, y: 2 } }],
       viewport: { x: 10, y: -20, zoom: 1.5 },
     };
     expect(parseCanvasDoc(serializeCanvasDoc(doc))).toEqual({ ok: true, doc, migrated: false });

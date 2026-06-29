@@ -14,8 +14,13 @@ vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
 }));
 
-const { applyBookSnapshot, applyNoteSnapshot, normalizeNoteSnapshotForSync, serializeBook, serializeNote } =
-  await import("../../../../features/sync/serializer");
+const {
+  applyBookSnapshot,
+  applyNoteSnapshot,
+  normalizeNoteSnapshotForSync,
+  serializeBook,
+  serializeNote,
+} = await import("../../../../features/sync/serializer");
 
 async function insertBook(db: DatabaseAdapter, id: string): Promise<void> {
   await db.execute(
@@ -24,17 +29,36 @@ async function insertBook(db: DatabaseAdapter, id: string): Promise<void> {
       cover_image_path, cover_data, word_count, target_word_count, status,
       created_at, updated_at, last_opened_at, last_chapter_id
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, "Title", null, "Author", null, null, "en", null, null, 5, null, "draft", 1, 2, null, null],
+    [id, "Title", null, "Author", null, null, "en", null, null, 5, null, "draft", 1, 2, null, null]
   );
 }
 
-async function insertChapter(db: DatabaseAdapter, id: string, bookId: string, order: number): Promise<void> {
+async function insertChapter(
+  db: DatabaseAdapter,
+  id: string,
+  bookId: string,
+  order: number
+): Promise<void> {
   await db.execute(
     `INSERT INTO chapters (
       id, book_id, title, content, synopsis, "order", parent_id,
       chapter_type, word_count, status, is_included_in_export, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, bookId, `Chapter ${order}`, "<p>Body</p>", null, order, null, "chapter", 1, "draft", 1, 1, 2],
+    [
+      id,
+      bookId,
+      `Chapter ${order}`,
+      "<p>Body</p>",
+      null,
+      order,
+      null,
+      "chapter",
+      1,
+      "draft",
+      1,
+      1,
+      2,
+    ]
   );
 }
 
@@ -48,18 +72,7 @@ describe("note snapshot serializer", () => {
     await testDb.execute(
       `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        "note-1",
-        "Local title",
-        "<p>Local</p>",
-        "[]",
-        0,
-        0,
-        1,
-        '["local-heading"]',
-        10,
-        20,
-      ],
+      ["note-1", "Local title", "<p>Local</p>", "[]", 0, 0, 1, '["local-heading"]', 10, 20]
     );
 
     const snapshot: NoteSnapshot = {
@@ -81,7 +94,7 @@ describe("note snapshot serializer", () => {
 
     const rows = await testDb.select<{ collapsed_headings: string; title: string }[]>(
       "SELECT title, collapsed_headings FROM notes WHERE id = ?",
-      ["note-1"],
+      ["note-1"]
     );
     expect(rows[0]).toEqual({
       title: "Remote title",
@@ -93,7 +106,7 @@ describe("note snapshot serializer", () => {
     await testDb.execute(
       `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ["note-1", "Title", "<p>Body</p>", "[]", 0, 0, 1, "[]", 10, 40, 25],
+      ["note-1", "Title", "<p>Body</p>", "[]", 0, 0, 1, "[]", 10, 40, 25]
     );
 
     const snapshot = JSON.parse(await serializeNote("note-1")) as NoteSnapshot;
@@ -104,7 +117,7 @@ describe("note snapshot serializer", () => {
 
     const rows = await testDb.select<{ content_updated_at: number }[]>(
       "SELECT content_updated_at FROM notes WHERE id = ?",
-      ["note-1"],
+      ["note-1"]
     );
     expect(rows[0].content_updated_at).toBe(25);
   });
@@ -113,7 +126,7 @@ describe("note snapshot serializer", () => {
     await testDb.execute(
       `INSERT INTO notes (id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ["note-1", "Title", "<p>Body</p>", "es", "[]", 0, 0, 1, "[]", 10, 40],
+      ["note-1", "Title", "<p>Body</p>", "es", "[]", 0, 0, 1, "[]", 10, 40]
     );
 
     const snapshot = JSON.parse(await serializeNote("note-1")) as NoteSnapshot;
@@ -124,7 +137,7 @@ describe("note snapshot serializer", () => {
 
     const rows = await testDb.select<{ language: string }[]>(
       "SELECT language FROM notes WHERE id = ?",
-      ["note-1"],
+      ["note-1"]
     );
     expect(rows[0].language).toBe("es");
   });
@@ -149,7 +162,7 @@ describe("note snapshot serializer", () => {
 
     const rows = await testDb.select<{ content_updated_at: number }[]>(
       "SELECT content_updated_at FROM notes WHERE id = ?",
-      ["legacy"],
+      ["legacy"]
     );
     expect(rows[0].content_updated_at).toBe(30);
   });
@@ -174,7 +187,7 @@ describe("note snapshot serializer", () => {
 
     const rows = await testDb.select<{ language: string }[]>(
       "SELECT language FROM notes WHERE id = ?",
-      ["legacy"],
+      ["legacy"]
     );
     expect(rows[0].language).toBe("en");
   });
@@ -218,7 +231,7 @@ describe("note snapshot serializer", () => {
 
     const english = normalizeNoteSnapshotForSync(JSON.stringify({ note: fields }));
     const spanish = normalizeNoteSnapshotForSync(
-      JSON.stringify({ note: { ...fields, language: "es" } }),
+      JSON.stringify({ note: { ...fields, language: "es" } })
     );
 
     expect(spanish).not.toBe(english);
@@ -319,7 +332,7 @@ describe("book snapshot serializer", () => {
     ]);
     const chapters = await testDb.select<{ id: string; is_included_in_export: number }[]>(
       "SELECT id, is_included_in_export FROM chapters WHERE book_id = ?",
-      ["book-1"],
+      ["book-1"]
     );
     expect(book[0].title).toBe("Updated");
     expect(chapters).toEqual([{ id: "fresh", is_included_in_export: 0 }]);
@@ -430,7 +443,7 @@ describe("book snapshot serializer", () => {
     };
 
     await expect(applyBookSnapshot(snapshot)).rejects.toThrow(
-      'Sync apply failed on chapter 2/2 ("Second")',
+      'Sync apply failed on chapter 2/2 ("Second")'
     );
   });
 });
@@ -445,7 +458,7 @@ describe("serializeNote", () => {
     await testDb.execute(
       `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ["note-1", "Title", "<p>Body</p>", "[]", 1, 0, 1, '["h"]', 10, 20],
+      ["note-1", "Title", "<p>Body</p>", "[]", 1, 0, 1, '["h"]', 10, 20]
     );
 
     const snapshot = JSON.parse(await serializeNote("note-1")) as NoteSnapshot;

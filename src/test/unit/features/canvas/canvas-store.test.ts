@@ -13,11 +13,11 @@ const { useCanvasStore } = await import("../../../../features/canvas/store");
 async function insertCanvas(
   id: string,
   doc: string,
-  options: { title?: string; pinned?: boolean; order?: number } = {},
+  options: { title?: string; pinned?: boolean; order?: number } = {}
 ) {
   await testDb.execute(
     'INSERT INTO canvases (id, title, doc, pinned, "order", created_at, updated_at, content_updated_at) VALUES (?, ?, ?, ?, ?, 1, 1, 1)',
-    [id, options.title ?? id, doc, options.pinned ? 1 : 0, options.order ?? 0],
+    [id, options.title ?? id, doc, options.pinned ? 1 : 0, options.order ?? 0]
   );
 }
 
@@ -47,7 +47,7 @@ describe("useCanvasStore", () => {
     expect(canvas.doc).toEqual(createDefaultCanvasDoc());
     const rows = await testDb.select<Record<string, unknown>[]>(
       "SELECT title, doc FROM canvases WHERE id = ?",
-      [canvas.id],
+      [canvas.id]
     );
     expect(rows).toEqual([{ title: "Map", doc: JSON.stringify(createDefaultCanvasDoc()) }]);
   });
@@ -106,7 +106,9 @@ describe("useCanvasStore", () => {
     await insertCanvas("bad", "{");
     await useCanvasStore.getState().loadCanvas("bad");
     await useCanvasStore.getState().persistCurrent();
-    const rows = await testDb.select<{ doc: string }[]>("SELECT doc FROM canvases WHERE id = 'bad'");
+    const rows = await testDb.select<{ doc: string }[]>(
+      "SELECT doc FROM canvases WHERE id = 'bad'"
+    );
     expect(rows[0].doc).toBe("{");
   });
 
@@ -118,7 +120,9 @@ describe("useCanvasStore", () => {
     expect(state.docLoadError).toBeNull();
     expect(state.docWriteBlocked).toBe(false);
     expect(state.dirty).toBe(false);
-    const rows = await testDb.select<{ doc: string }[]>("SELECT doc FROM canvases WHERE id = 'bad'");
+    const rows = await testDb.select<{ doc: string }[]>(
+      "SELECT doc FROM canvases WHERE id = 'bad'"
+    );
     expect(rows[0].doc).toBe(JSON.stringify(createDefaultCanvasDoc()));
   });
 
@@ -442,7 +446,7 @@ describe("useCanvasStore", () => {
     const snapshot = { ...createDefaultCanvasDoc(), nodes: [textNode("from-a")] };
     await useCanvasStore.getState().persistCanvas(a.id, snapshot, 1);
     const rows = await testDb.select<{ id: string; doc: string }[]>(
-      "SELECT id, doc FROM canvases ORDER BY title",
+      "SELECT id, doc FROM canvases ORDER BY title"
     );
     expect(rows.map((row) => JSON.parse(row.doc).nodes)).toEqual([[], []]);
   });

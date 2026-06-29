@@ -53,7 +53,14 @@ function gradientToCanvasFill(bg: Background, w: number, h: number): string | TF
     return new Gradient({
       type: "radial",
       gradientUnits: "pixels",
-      coords: { x1: bg.cx * w, y1: bg.cy * h, r1: 0, x2: bg.cx * w, y2: bg.cy * h, r2: bg.r * Math.max(w, h) },
+      coords: {
+        x1: bg.cx * w,
+        y1: bg.cy * h,
+        r1: 0,
+        x2: bg.cx * w,
+        y2: bg.cy * h,
+        r2: bg.r * Math.max(w, h),
+      },
       colorStops,
     });
   }
@@ -89,7 +96,15 @@ export async function applyBackground(canvas: Canvas, bg: Background): Promise<v
       scaleX = s;
       scaleY = s;
     }
-    img.set({ originX: "left", originY: "top", left: 0, top: 0, scaleX, scaleY, opacity: bg.opacity });
+    img.set({
+      originX: "left",
+      originY: "top",
+      left: 0,
+      top: 0,
+      scaleX,
+      scaleY,
+      opacity: bg.opacity,
+    });
     canvas.backgroundImage = img;
     return;
   }
@@ -199,12 +214,22 @@ export async function buildObject(layer: Layer): Promise<FabricObject | null> {
     const stroke = layer.stroke;
     let obj: FabricObject;
     if (layer.shape === "rect") {
-      obj = new Rect({ width: layer.width, height: layer.height, fill, rx: layer.radius, ry: layer.radius });
+      obj = new Rect({
+        width: layer.width,
+        height: layer.height,
+        fill,
+        rx: layer.radius,
+        ry: layer.radius,
+      });
     } else if (layer.shape === "ellipse") {
       obj = new Ellipse({ rx: layer.width / 2, ry: layer.height / 2, fill });
     } else {
-      const lineColor = stroke?.color ?? (layer.fill.type === "solid" ? layer.fill.color : "#888888");
-      obj = new Line([0, 0, layer.width, 0], { stroke: lineColor, strokeWidth: stroke?.width ?? 2 });
+      const lineColor =
+        stroke?.color ?? (layer.fill.type === "solid" ? layer.fill.color : "#888888");
+      obj = new Line([0, 0, layer.width, 0], {
+        stroke: lineColor,
+        strokeWidth: stroke?.width ?? 2,
+      });
     }
     if (stroke && stroke.width > 0 && layer.shape !== "line") {
       obj.set({ stroke: stroke.color, strokeWidth: stroke.width });

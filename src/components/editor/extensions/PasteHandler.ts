@@ -47,9 +47,7 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
             if (!clipboardData) return false;
 
             const items = Array.from(clipboardData.items);
-            const imageItem = items.find((item) =>
-              item.type.startsWith("image/"),
-            );
+            const imageItem = items.find((item) => item.type.startsWith("image/"));
 
             if (imageItem) {
               const file = imageItem.getAsFile();
@@ -64,14 +62,12 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
             if (options.onMarkdownPaste) {
               const text = clipboardData.getData("text/plain");
               const htmlPayload = clipboardData.getData("text/html");
-              const isPlainSource =
-                !htmlPayload || !hasRichFormatting(htmlPayload);
+              const isPlainSource = !htmlPayload || !hasRichFormatting(htmlPayload);
               // `view.input.shiftKey` reflects a paste-without-formatting
               // (Ctrl/Cmd+Shift+V); never prompt for conversion there or inside
               // code blocks.
               const plainPaste = Boolean(
-                (view as unknown as { input?: { shiftKey?: boolean } }).input
-                  ?.shiftKey,
+                (view as unknown as { input?: { shiftKey?: boolean } }).input?.shiftKey
               );
               if (
                 text &&
@@ -100,7 +96,7 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
             if (!event.dataTransfer?.files?.length) return false;
 
             const imageFile = Array.from(event.dataTransfer.files).find((f) =>
-              f.type.startsWith("image/"),
+              f.type.startsWith("image/")
             );
             if (!imageFile) return false;
 
@@ -173,8 +169,7 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
               // Check for indent-related attributes
               const hasIndentAttrs =
                 (firstNode.attrs.indent && firstNode.attrs.indent > 0) ||
-                (firstNode.attrs.firstLineIndent &&
-                  firstNode.attrs.firstLineIndent !== null);
+                (firstNode.attrs.firstLineIndent && firstNode.attrs.firstLineIndent !== null);
 
               if (hasIndentAttrs) {
                 // Set openStart to 0 to prevent merging with existing paragraph
@@ -195,11 +190,7 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
  * Read an image file as a data URL and insert it into the editor.
  * Used by both paste and drop handlers to avoid blob: URLs that don't persist.
  */
-function readImageAsDataUrl(
-  file: File,
-  view: EditorView,
-  dropEvent?: DragEvent,
-): void {
+function readImageAsDataUrl(file: File, view: EditorView, dropEvent?: DragEvent): void {
   const reader = new FileReader();
   reader.onload = () => {
     const src = typeof reader.result === "string" ? reader.result : null;
@@ -216,17 +207,13 @@ function readImageAsDataUrl(
         top: dropEvent.clientY,
       });
       if (coordinates) {
-        const tr = view.state.tr
-          .insert(coordinates.pos, node)
-          .setMeta("metrics:source", "paste");
+        const tr = view.state.tr.insert(coordinates.pos, node).setMeta("metrics:source", "paste");
         view.dispatch(tr.scrollIntoView());
         return;
       }
     }
 
-    const tr = view.state.tr
-      .replaceSelectionWith(node)
-      .setMeta("metrics:source", "paste");
+    const tr = view.state.tr.replaceSelectionWith(node).setMeta("metrics:source", "paste");
     view.dispatch(tr.scrollIntoView());
   };
   reader.readAsDataURL(file);
@@ -237,14 +224,9 @@ function readImageAsDataUrl(
  * the resulting image nodes.  Blob URLs are ephemeral — they don't survive
  * a page reload, so we must materialise the data before saving.
  */
-async function convertBlobImagesInHtml(
-  html: string,
-  view: EditorView,
-): Promise<void> {
+async function convertBlobImagesInHtml(html: string, view: EditorView): Promise<void> {
   const doc = new DOMParser().parseFromString(html, "text/html");
-  const blobImages = Array.from(
-    doc.querySelectorAll<HTMLImageElement>('img[src^="blob:"]'),
-  );
+  const blobImages = Array.from(doc.querySelectorAll<HTMLImageElement>('img[src^="blob:"]'));
 
   if (blobImages.length === 0) return;
 
@@ -262,7 +244,7 @@ async function convertBlobImagesInHtml(
       } catch {
         return "";
       }
-    }),
+    })
   );
 
   const imageType = view.state.schema.nodes.image;

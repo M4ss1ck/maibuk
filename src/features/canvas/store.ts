@@ -183,7 +183,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     try {
       const db = await getDatabase();
       const rows = await db.select<Record<string, unknown>[]>(
-        'SELECT * FROM canvases ORDER BY pinned DESC, "order" ASC, updated_at DESC',
+        'SELECT * FROM canvases ORDER BY pinned DESC, "order" ASC, updated_at DESC'
       );
       const canvases = rows.map((row) => toModel(row, parseCanvasDoc(row.doc as string).doc));
       set({ canvases: sortCanvases(canvases), galleryLoaded: true, galleryLoading: false });
@@ -198,7 +198,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const now = nowSeconds();
     const doc = createDefaultCanvasDoc();
     const rows = await db.select<{ max_order: number | null }[]>(
-      'SELECT MAX("order") AS max_order FROM canvases',
+      'SELECT MAX("order") AS max_order FROM canvases'
     );
     const canvas: Canvas = {
       id,
@@ -212,16 +212,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     };
     await db.execute(
       'INSERT INTO canvases (id, title, doc, pinned, "order", created_at, updated_at, content_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        canvas.id,
-        canvas.title,
-        serializeCanvasDoc(canvas.doc),
-        0,
-        canvas.order,
-        now,
-        now,
-        now,
-      ],
+      [canvas.id, canvas.title, serializeCanvasDoc(canvas.doc), 0, canvas.order, now, now, now]
     );
     set((state) => ({ canvases: sortCanvases([...state.canvases, canvas]) }));
     return canvas;
@@ -229,7 +220,9 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   deleteCanvas: async (id) => {
     const db = await getDatabase();
-    const rows = await db.select<{ title: string }[]>("SELECT title FROM canvases WHERE id = ?", [id]);
+    const rows = await db.select<{ title: string }[]>("SELECT title FROM canvases WHERE id = ?", [
+      id,
+    ]);
     if (rows[0]) {
       await recordTombstone({ entityType: "canvas", entityId: id, title: rows[0].title });
     }
@@ -244,7 +237,9 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   updateCanvas: async (id, input) => {
     const db = await getDatabase();
-    const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM canvases WHERE id = ?", [id]);
+    const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM canvases WHERE id = ?", [
+      id,
+    ]);
     if (!rows[0]) return;
     const parsed = parseCanvasDoc(rows[0].doc as string);
     const existing = toModel(rows[0], parsed.doc);
@@ -254,7 +249,9 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       ...input,
       updatedAt: now,
       contentUpdatedAt:
-        input.title !== undefined && input.title !== existing.title ? now : existing.contentUpdatedAt,
+        input.title !== undefined && input.title !== existing.title
+          ? now
+          : existing.contentUpdatedAt,
     };
     await db.execute(
       'UPDATE canvases SET title = ?, pinned = ?, "order" = ?, updated_at = ?, content_updated_at = ? WHERE id = ?',
@@ -265,11 +262,12 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
         updated.updatedAt,
         updated.contentUpdatedAt,
         id,
-      ],
+      ]
     );
     set((state) => ({
       canvases: sortCanvases(state.canvases.map((canvas) => (canvas.id === id ? updated : canvas))),
-      current: state.current?.id === id ? { ...state.current, ...updated, doc: state.doc } : state.current,
+      current:
+        state.current?.id === id ? { ...state.current, ...updated, doc: state.doc } : state.current,
     }));
   },
 
@@ -289,7 +287,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
         state.canvases.map((canvas) => {
           const order = orderById.get(canvas.id);
           return order === undefined ? canvas : { ...canvas, order, updatedAt: now };
-        }),
+        })
       ),
     }));
   },
@@ -301,7 +299,10 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     });
     try {
       const db = await getDatabase();
-      const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM canvases WHERE id = ?", [id]);
+      const rows = await db.select<Record<string, unknown>[]>(
+        "SELECT * FROM canvases WHERE id = ?",
+        [id]
+      );
       if (!rows[0]) {
         set({ loadState: "missing" });
         return;
@@ -389,7 +390,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       doc: {
         ...state.doc,
         nodes: state.doc.nodes.map((candidate) =>
-          candidate.id === id ? { ...candidate, position: { ...position } } : candidate,
+          candidate.id === id ? { ...candidate, position: { ...position } } : candidate
         ),
       },
       dirty: true,
@@ -419,7 +420,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
         nodes: state.doc.nodes.map((candidate) =>
           candidate.id === id
             ? { ...candidate, position: { ...input.position }, width: input.width }
-            : candidate,
+            : candidate
         ),
       },
       dirty: true,
@@ -443,9 +444,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     });
     set({
       liveBaseDoc: null,
-      ...(changed
-        ? { past: capHistory([...state.past, state.liveBaseDoc]), future: [] }
-        : {}),
+      ...(changed ? { past: capHistory([...state.past, state.liveBaseDoc]), future: [] } : {}),
     });
   },
 
@@ -471,7 +470,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     get().commit({
       ...state.doc,
       nodes: state.doc.nodes.map((candidate) =>
-        candidate.id === id ? { ...node, ...patch, color } : candidate,
+        candidate.id === id ? { ...node, ...patch, color } : candidate
       ),
     });
   },
@@ -490,7 +489,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       nodes: state.doc.nodes.map((candidate) =>
         candidate.id === id
           ? { ...node, position: { ...input.position }, width: input.width }
-          : candidate,
+          : candidate
       ),
     });
   },
@@ -509,7 +508,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     get().commit({
       ...state.doc,
       nodes: state.doc.nodes.map((candidate) =>
-        candidate.id === id ? { ...node, ...patch, label } : candidate,
+        candidate.id === id ? { ...node, ...patch, label } : candidate
       ),
     });
   },
@@ -520,7 +519,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const removedEdgeIds = new Set(
       state.doc.edges
         .filter((edge) => edge.source === id || edge.target === id)
-        .map((edge) => edge.id),
+        .map((edge) => edge.id)
     );
     get().commit({
       ...state.doc,
@@ -550,7 +549,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
         candidate.source === edge.source &&
         candidate.target === edge.target &&
         (candidate.sourceHandle ?? null) === (edge.sourceHandle ?? null) &&
-        (candidate.targetHandle ?? null) === (edge.targetHandle ?? null),
+        (candidate.targetHandle ?? null) === (edge.targetHandle ?? null)
     );
     if (duplicate) return;
     const id = edge.id || generateId();
@@ -587,9 +586,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const keptNodeIds = new Set(nextNodes.map((node) => node.id));
     const nextEdges = state.doc.edges.filter(
       (edge) =>
-        !edgeIdSet.has(edge.id) &&
-        keptNodeIds.has(edge.source) &&
-        keptNodeIds.has(edge.target),
+        !edgeIdSet.has(edge.id) && keptNodeIds.has(edge.source) && keptNodeIds.has(edge.target)
     );
     const nextStrokes = state.doc.strokes.filter((stroke) => !strokeIdSet.has(stroke.id));
 
@@ -601,10 +598,10 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
         state.selectedEdgeId &&
         (edgeIdSet.has(state.selectedEdgeId) ||
           !keptNodeIds.has(
-            state.doc.edges.find((edge) => edge.id === state.selectedEdgeId)?.source ?? "",
+            state.doc.edges.find((edge) => edge.id === state.selectedEdgeId)?.source ?? ""
           ) ||
           !keptNodeIds.has(
-            state.doc.edges.find((edge) => edge.id === state.selectedEdgeId)?.target ?? "",
+            state.doc.edges.find((edge) => edge.id === state.selectedEdgeId)?.target ?? ""
           ))
           ? null
           : state.selectedEdgeId,
@@ -634,7 +631,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     get().commit({
       ...state.doc,
       edges: state.doc.edges.map((candidate) =>
-        candidate.id === id ? { ...candidate, ...normalized } : candidate,
+        candidate.id === id ? { ...candidate, ...normalized } : candidate
       ),
     });
   },
@@ -721,7 +718,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const now = nowSeconds();
     await db.execute(
       "UPDATE canvases SET doc = ?, updated_at = ?, content_updated_at = ? WHERE id = ?",
-      [serializeCanvasDoc(doc), now, now, canvasId],
+      [serializeCanvasDoc(doc), now, now, canvasId]
     );
   },
 
@@ -742,14 +739,14 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       const now = nowSeconds();
       await db.execute(
         "UPDATE canvases SET doc = ?, updated_at = ?, content_updated_at = ? WHERE id = ?",
-        [serializeCanvasDoc(doc), now, now, canvasId],
+        [serializeCanvasDoc(doc), now, now, canvasId]
       );
       if (get().current?.id !== canvasId) return;
       set((currentState) => ({
         canvases: currentState.canvases.map((canvas) =>
           canvas.id === canvasId
             ? { ...canvas, doc, updatedAt: now, contentUpdatedAt: now }
-            : canvas,
+            : canvas
         ),
         current:
           currentState.current?.id === canvasId

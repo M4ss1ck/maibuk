@@ -29,12 +29,7 @@ describe("NoteTagsRow", () => {
     const user = userEvent.setup();
     clientWidthSpy.mockReturnValue(140);
 
-    render(
-      <NoteTagsRow
-        tags={["draft", "ideas", "research"]}
-        dateLabel="Edited today"
-      />,
-    );
+    render(<NoteTagsRow tags={["draft", "ideas", "research"]} dateLabel="Edited today" />);
 
     expect(screen.getAllByText("ideas")).toHaveLength(1);
 
@@ -47,12 +42,7 @@ describe("NoteTagsRow", () => {
   it("does not force a visible tag when only the date and overflow count fit", async () => {
     clientWidthSpy.mockReturnValue(75);
 
-    render(
-      <NoteTagsRow
-        tags={["draft", "ideas", "research"]}
-        dateLabel="Edited today"
-      />,
-    );
+    render(<NoteTagsRow tags={["draft", "ideas", "research"]} dateLabel="Edited today" />);
 
     expect(await screen.findByRole("button", { name: "+3" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "+2" })).not.toBeInTheDocument();
@@ -67,7 +57,7 @@ describe("NoteTagsRow", () => {
         dateLabel="Edited today"
         datePosition="left"
         action={<button type="button">Add tag</button>}
-      />,
+      />
     );
 
     const row = screen.getAllByText("Edited today")[0].parentElement;

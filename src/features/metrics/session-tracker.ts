@@ -38,7 +38,7 @@ export class SessionTracker {
       ? Math.min(
           durationSec,
           Math.max(0, Math.floor((this.lastActiveAt.getTime() - this.startedAt.getTime()) / 1000)) +
-            this.options.idleThresholdSec,
+            this.options.idleThresholdSec
         )
       : 0;
 
@@ -46,7 +46,7 @@ export class SessionTracker {
       this.buildEvent(
         "session.ended",
         { sessionId: this.sessionId, durationSec, activeSec, deepestStreakSec: activeSec },
-        now,
+        now
       ),
       this.buildEvent("session.active", { sessionId: this.sessionId, activeSec }, now),
     ]);
@@ -58,7 +58,7 @@ export class SessionTracker {
   private buildEvent(
     eventType: "session.started" | "session.ended" | "session.active",
     payload: Record<string, string | number>,
-    now: Date,
+    now: Date
   ): MetricEvent {
     return {
       id: crypto.randomUUID(),

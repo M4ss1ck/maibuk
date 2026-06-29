@@ -100,7 +100,7 @@ export function CanvasRichContentMenu({ editor, onOverlayOpenChange }: CanvasRic
               </button>
             </div>
           </div>,
-          document.body,
+          document.body
         )}
 
       <ImageInsertDialog

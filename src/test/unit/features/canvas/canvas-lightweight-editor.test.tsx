@@ -35,9 +35,7 @@ vi.mock("../../../../components/editor/ImageContextMenu", () => ({
   ImageContextMenu: () => null,
 }));
 
-const { LightweightNode } = await import(
-  "../../../../features/canvas/nodes/LightweightNode"
-);
+const { LightweightNode } = await import("../../../../features/canvas/nodes/LightweightNode");
 
 describe("LightweightNode editor lifecycle", () => {
   beforeEach(() => {
@@ -66,7 +64,7 @@ describe("LightweightNode editor lifecycle", () => {
             },
           },
         } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
 
     expect(screen.getByText("Idea")).toBeInTheDocument();
@@ -100,7 +98,7 @@ describe("LightweightNode editor lifecycle", () => {
             },
           },
         } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
 
     fireEvent.doubleClick(screen.getByText("Idea"));
@@ -108,7 +106,7 @@ describe("LightweightNode editor lifecycle", () => {
     await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
     // The TipTap root must not carry the content scope class (avoids nested scopes).
     expect(mocks.useEditor.mock.calls[0][0].editorProps.attributes.class).not.toContain(
-      "canvas-node-content",
+      "canvas-node-content"
     );
     // The active editor is wrapped in a color-scoped content container.
     const content = screen.getByTestId("editor-content").closest(".canvas-node-content");
@@ -146,7 +144,7 @@ describe("LightweightNode editor lifecycle", () => {
             },
           },
         } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
 
     fireEvent.doubleClick(screen.getByText("Idea"));

@@ -63,10 +63,7 @@ export function buildProjectEpubPackage(input: BuildProjectEpubPackageInput): Pr
     return {
       title: chapter.title,
       href,
-      content: rewriteAssetReferences(
-        processChapterHtml(rawContent),
-        assetPathById
-      ),
+      content: rewriteAssetReferences(processChapterHtml(rawContent), assetPathById),
     };
   });
   const cssParts = [];
@@ -84,7 +81,10 @@ export function buildProjectEpubPackage(input: BuildProjectEpubPackageInput): Pr
     metadata: input.metadata,
     css: cssParts.join("\n\n"),
     chapters,
-    assets: referencedAssets(input.assets, assetPathById, [...chapters.map((chapter) => chapter.content), ...cssParts]),
+    assets: referencedAssets(input.assets, assetPathById, [
+      ...chapters.map((chapter) => chapter.content),
+      ...cssParts,
+    ]),
     toc: input.options.generateMaibukToc
       ? chapters.map((chapter) => ({ title: chapter.title, href: chapter.href }))
       : [],

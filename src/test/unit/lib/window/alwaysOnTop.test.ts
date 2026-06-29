@@ -32,9 +32,7 @@ describe("installAlwaysOnTopReapply", () => {
   });
 
   async function installFresh(): Promise<void> {
-    const { installAlwaysOnTopReapply } = await import(
-      "../../../../lib/window/alwaysOnTop"
-    );
+    const { installAlwaysOnTopReapply } = await import("../../../../lib/window/alwaysOnTop");
     await installAlwaysOnTopReapply();
     await new Promise((r) => setTimeout(r, 0));
   }

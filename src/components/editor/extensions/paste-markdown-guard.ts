@@ -18,7 +18,7 @@ function isInCodeBlock(state: EditorState): boolean {
  */
 export function shouldPromptMarkdownPaste(
   state: EditorState,
-  options: { plainPaste: boolean },
+  options: { plainPaste: boolean }
 ): boolean {
   if (options.plainPaste) return false;
   return !isInCodeBlock(state);

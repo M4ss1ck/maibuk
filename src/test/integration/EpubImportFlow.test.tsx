@@ -122,7 +122,9 @@ describe("EPUB import flow", () => {
     expect(screen.getByRole("button", { name: "Import EPUB" })).toBeDisabled();
 
     await user.click(screen.getByRole("switch", { name: "Acknowledge compatibility warnings" }));
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Import EPUB" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Import EPUB" })
+    );
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/book\/.+/));
@@ -131,13 +133,18 @@ describe("EPUB import flow", () => {
 
   it("does not import blocking EPUBs", async () => {
     const user = userEvent.setup();
-    mockOpenWithData.mockResolvedValue({ name: "encrypted.epub", data: buildEncryptedEpubFixture() });
+    mockOpenWithData.mockResolvedValue({
+      name: "encrypted.epub",
+      data: buildEncryptedEpubFixture(),
+    });
 
     render(<Home />);
 
     await user.click(await screen.findByRole("button", { name: /Import EPUB/i }));
 
-    expect(await screen.findByText(/Encrypted or DRM-protected EPUB files cannot be imported/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Encrypted or DRM-protected EPUB files cannot be imported/)
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import EPUB" })).toBeDisabled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
@@ -151,7 +158,9 @@ describe("EPUB import flow", () => {
     await user.click(await screen.findByRole("button", { name: /Import EPUB/i }));
     await screen.findByText("Fixture Book");
     await user.click(screen.getByRole("switch", { name: "Acknowledge compatibility warnings" }));
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Import EPUB" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Import EPUB" })
+    );
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/^\/book\/.+/));
     });

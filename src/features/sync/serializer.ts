@@ -242,10 +242,12 @@ export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
   const { note } = snapshot;
   const existing = await db.select<{ collapsed_headings: string | null }[]>(
     "SELECT collapsed_headings FROM notes WHERE id = ?",
-    [note.id],
+    [note.id]
   );
   const collapsedHeadings =
-    existing.length > 0 ? existing[0].collapsed_headings ?? "[]" : note.collapsedHeadings ?? "[]";
+    existing.length > 0
+      ? (existing[0].collapsed_headings ?? "[]")
+      : (note.collapsedHeadings ?? "[]");
 
   await db.execute(
     `INSERT OR REPLACE INTO notes (

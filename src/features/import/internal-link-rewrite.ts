@@ -11,9 +11,7 @@ function isExternal(href: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(href);
 }
 
-export function rewriteImportedInternalLinks(
-  chapters: ImportedChapter[],
-): ImportedChapter[] {
+export function rewriteImportedInternalLinks(chapters: ImportedChapter[]): ImportedChapter[] {
   // Map package-relative document path (no fragment) -> chapterId.
   const byPath = new Map<string, string>();
   for (const c of chapters) {
@@ -25,9 +23,7 @@ export function rewriteImportedInternalLinks(
     const doc = new DOMParser().parseFromString(chapter.content, "text/html");
     let changed = false;
 
-    for (const anchor of Array.from(
-      doc.querySelectorAll<HTMLAnchorElement>("a[href]"),
-    )) {
+    for (const anchor of Array.from(doc.querySelectorAll<HTMLAnchorElement>("a[href]"))) {
       const original = anchor.getAttribute("href");
       if (!original || isExternal(original)) continue;
 
@@ -39,7 +35,7 @@ export function rewriteImportedInternalLinks(
             targetType: "heading",
             targetId: chapter.chapterId,
             headingId: original.slice(1),
-          }),
+          })
         );
         changed = true;
         continue;
@@ -58,7 +54,7 @@ export function rewriteImportedInternalLinks(
         "href",
         frag
           ? formatLinkUri({ targetType: "heading", targetId, headingId: frag })
-          : formatLinkUri({ targetType: "chapter", targetId }),
+          : formatLinkUri({ targetType: "chapter", targetId })
       );
       changed = true;
     }

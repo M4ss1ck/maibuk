@@ -1,10 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { AsciiBanner } from "../../../../components/settings/AsciiBanner";
-import {
-  type AsciiCanvasEnv,
-  setupAsciiCanvas,
-} from "../../../support/ascii-canvas";
+import { type AsciiCanvasEnv, setupAsciiCanvas } from "../../../support/ascii-canvas";
 
 let env: AsciiCanvasEnv;
 afterEach(() => env?.cleanup());

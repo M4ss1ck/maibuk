@@ -39,9 +39,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     const end = editor.view.coordsAtPos(to);
 
     // Position above the selection, centered
-    const containerRect = editor.view.dom
-      .closest(".overflow-auto")
-      ?.getBoundingClientRect();
+    const containerRect = editor.view.dom.closest(".overflow-auto")?.getBoundingClientRect();
     if (!containerRect) {
       setPosition(null);
       return;

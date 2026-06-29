@@ -52,11 +52,11 @@ export async function generateDocumentPdf(html: string, title: string): Promise<
         ? createElement(
             View,
             { style: styles.chapterHeader },
-            createElement(Text, { style: styles.chapterTitle }, safeTitle),
+            createElement(Text, { style: styles.chapterTitle }, safeTitle)
           )
         : null,
-      ...content,
-    ),
+      ...content
+    )
   );
 
   return pdf(element).toBlob();

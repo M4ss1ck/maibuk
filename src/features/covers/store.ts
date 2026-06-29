@@ -63,7 +63,8 @@ export const useCoverStore = create<CoverStore>((set, get) => {
   /** Push current scene onto history, set the next scene, mark dirty. */
   function commit(next: CoverScene): void {
     const { scene, past } = get();
-    const trimmed = past.length >= HISTORY_LIMIT ? past.slice(past.length - HISTORY_LIMIT + 1) : past;
+    const trimmed =
+      past.length >= HISTORY_LIMIT ? past.slice(past.length - HISTORY_LIMIT + 1) : past;
     set({ scene: next, past: [...trimmed, scene], future: [], dirty: true });
   }
 
@@ -97,7 +98,9 @@ export const useCoverStore = create<CoverStore>((set, get) => {
       else if (edge === "top") patch.y = 0;
       else if (edge === "vcenter") patch.y = Math.round((dh - layer.height) / 2);
       else if (edge === "bottom") patch.y = dh - layer.height;
-      patchLayers((layers) => layers.map((l) => (l.id === selectedId ? ({ ...l, ...patch } as Layer) : l)));
+      patchLayers((layers) =>
+        layers.map((l) => (l.id === selectedId ? ({ ...l, ...patch } as Layer) : l))
+      );
     },
 
     setScene: (scene) => set({ scene, selectedId: null, dirty: false, past: [], future: [] }),
@@ -111,9 +114,7 @@ export const useCoverStore = create<CoverStore>((set, get) => {
     },
 
     updateLayer: (id, patch) =>
-      patchLayers((layers) =>
-        layers.map((l) => (l.id === id ? ({ ...l, ...patch } as Layer) : l))
-      ),
+      patchLayers((layers) => layers.map((l) => (l.id === id ? ({ ...l, ...patch } as Layer) : l))),
 
     removeLayer: (id) => {
       patchLayers((layers) => layers.filter((l) => l.id !== id));

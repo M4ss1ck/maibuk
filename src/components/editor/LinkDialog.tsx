@@ -48,9 +48,7 @@ export type InternalTarget =
       headingId: string;
     };
 
-export type InternalTargetChildrenLoader = (
-  target: InternalTarget,
-) => Promise<InternalTarget[]>;
+export type InternalTargetChildrenLoader = (target: InternalTarget) => Promise<InternalTarget[]>;
 
 interface LinkDialogProps {
   editor: Editor;
@@ -85,7 +83,7 @@ function getSelectedMarks(editor: Editor): LinkTextMark[] {
 function createLinkedTextContent(
   editor: Editor,
   href: string,
-  displayText: string,
+  displayText: string
 ): LinkedTextContent | string {
   const marks = getSelectedMarks(editor);
   if (marks.length === 0) {
@@ -159,7 +157,7 @@ function getTargetTypeLabelKey(target: InternalTarget): TargetTypeLabelKey {
 
 function canTargetHaveChildren(
   target: InternalTarget,
-  loadInternalTargetChildren?: InternalTargetChildrenLoader,
+  loadInternalTargetChildren?: InternalTargetChildrenLoader
 ): boolean {
   if (!loadInternalTargetChildren) return false;
   return target.type === "note" || target.type === "book" || target.type === "chapter";
@@ -179,15 +177,9 @@ export function LinkDialog({
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"url" | "internal">("url");
   const [query, setQuery] = useState("");
-  const [expandedTargetKeys, setExpandedTargetKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [childTargetsByKey, setChildTargetsByKey] = useState<
-    Record<string, InternalTarget[]>
-  >({});
-  const [loadingTargetKeys, setLoadingTargetKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [expandedTargetKeys, setExpandedTargetKeys] = useState<Set<string>>(() => new Set());
+  const [childTargetsByKey, setChildTargetsByKey] = useState<Record<string, InternalTarget[]>>({});
+  const [loadingTargetKeys, setLoadingTargetKeys] = useState<Set<string>>(() => new Set());
 
   // Get current link and selection when dialog opens
   useEffect(() => {
@@ -277,9 +269,7 @@ export function LinkDialog({
       editor
         .chain()
         .focus()
-        .insertContent(
-          `<a href="${href}">${displayText || target.title}</a>`,
-        )
+        .insertContent(`<a href="${href}">${displayText || target.title}</a>`)
         .run();
     } else if (displayText && displayText !== selectedText) {
       // Selection exists and display text was customized — replace with new text
@@ -360,8 +350,7 @@ export function LinkDialog({
 
   const normalizedQuery = query.trim().toLowerCase();
   const targetMatchesQuery = (target: InternalTarget) =>
-    normalizedQuery.length === 0 ||
-    target.title.toLowerCase().includes(normalizedQuery);
+    normalizedQuery.length === 0 || target.title.toLowerCase().includes(normalizedQuery);
 
   const renderTarget = (target: InternalTarget, depth = 0): ReactNode => {
     const key = getTargetKey(target);
@@ -387,9 +376,7 @@ export function LinkDialog({
             <button
               type="button"
               aria-label={`${
-                isExpanded
-                  ? t("editor.collapseLinkTarget")
-                  : t("editor.expandLinkTarget")
+                isExpanded ? t("editor.collapseLinkTarget") : t("editor.expandLinkTarget")
               } ${target.title}`}
               aria-expanded={isExpanded}
               onClick={() => void toggleTarget(target)}
@@ -422,9 +409,7 @@ export function LinkDialog({
             </span>
           </button>
         </div>
-        {isExpanded && renderedChildren.length > 0 && (
-          <ul>{renderedChildren}</ul>
-        )}
+        {isExpanded && renderedChildren.length > 0 && <ul>{renderedChildren}</ul>}
       </li>
     );
   };
@@ -502,9 +487,7 @@ export function LinkDialog({
         <div>
           <label htmlFor="link-text" className="block text-sm font-medium mb-1">
             {t("editor.displayText")}{" "}
-            <span className="text-muted-foreground">
-              {t("editor.optional")}
-            </span>
+            <span className="text-muted-foreground">{t("editor.optional")}</span>
           </label>
           <Input
             id="link-text"
@@ -512,9 +495,7 @@ export function LinkDialog({
             onChange={(e) => setText(e.target.value)}
             placeholder={t("editor.linkText")}
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            {t("editor.leaveEmpty")}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{t("editor.leaveEmpty")}</p>
         </div>
 
         {mode === "internal" && (

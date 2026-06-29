@@ -5,15 +5,12 @@ export interface ExportLinkContext {
   firstChapterHref: string;
 }
 
-export function rewriteInternalLinksForExport(
-  html: string,
-  ctx: ExportLinkContext,
-): string {
+export function rewriteInternalLinksForExport(html: string, ctx: ExportLinkContext): string {
   if (!html) return html;
   const doc = new DOMParser().parseFromString(html, "text/html");
 
   for (const anchor of Array.from(
-    doc.querySelectorAll<HTMLAnchorElement>('a[href^="maibuk://"]'),
+    doc.querySelectorAll<HTMLAnchorElement>('a[href^="maibuk://"]')
   )) {
     const parsed = parseLinkUri(anchor.getAttribute("href"));
     if (!parsed) continue;

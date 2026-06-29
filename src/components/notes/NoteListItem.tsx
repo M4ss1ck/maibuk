@@ -87,9 +87,7 @@ export function NoteListItem({
       className={`group relative border-l-2 py-3 pl-2 pr-3 transition-colors ${
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
       } ${
-        isSelected
-          ? "border-primary bg-primary/10"
-          : "border-transparent hover:bg-muted/50"
+        isSelected ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted/50"
       } ${isDragging ? "opacity-50" : ""}`}
       onClick={() => {
         if (!isEditing) onSelect(note);
@@ -115,9 +113,7 @@ export function NoteListItem({
           />
         ) : (
           <>
-            <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-              {title}
-            </h3>
+            <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{title}</h3>
             <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
               {onRename && (
                 <button
@@ -169,9 +165,7 @@ export function NoteListItem({
 
       {/* Line 2: description + drag handle */}
       <div className="mt-1 flex min-h-4 min-w-0 items-center gap-1">
-        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {preview}
-        </p>
+        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{preview}</p>
         <GripVertical
           data-testid="note-drag-handle"
           className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"

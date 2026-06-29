@@ -10,18 +10,12 @@ import { useCanvasStore } from "../store";
 import type { CanvasPosition } from "../types";
 import { strokeToPath } from "./strokePath";
 
-function distanceToSegment(
-  p: CanvasPosition,
-  a: CanvasPosition,
-  b: CanvasPosition,
-): number {
+function distanceToSegment(p: CanvasPosition, a: CanvasPosition, b: CanvasPosition): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const lenSq = dx * dx + dy * dy;
   const t =
-    lenSq === 0
-      ? 0
-      : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+    lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
   const cx = a.x + t * dx;
   const cy = a.y + t * dy;
   return Math.hypot(p.x - cx, p.y - cy);
@@ -49,27 +43,19 @@ type Rect = { x: number; y: number; width: number; height: number };
 
 export function isPointInRect(p: CanvasPosition, rect: Rect): boolean {
   return (
-    p.x >= rect.x &&
-    p.x <= rect.x + rect.width &&
-    p.y >= rect.y &&
-    p.y <= rect.y + rect.height
+    p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height
   );
 }
 
 export function rectsIntersect(a: Rect, b: Rect): boolean {
-  return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
-  );
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
 export function segmentsIntersect(
   a: CanvasPosition,
   b: CanvasPosition,
   c: CanvasPosition,
-  d: CanvasPosition,
+  d: CanvasPosition
 ): boolean {
   const ccw = (p1: CanvasPosition, p2: CanvasPosition, p3: CanvasPosition) =>
     (p3.y - p1.y) * (p2.x - p1.x) - (p2.y - p1.y) * (p3.x - p1.x);
@@ -80,7 +66,10 @@ export function segmentsIntersect(
   return ((A > 0 && B < 0) || (A < 0 && B > 0)) && ((C > 0 && D < 0) || (C < 0 && D > 0));
 }
 
-export function segmentIntersectsRect(segment: [CanvasPosition, CanvasPosition], rect: Rect): boolean {
+export function segmentIntersectsRect(
+  segment: [CanvasPosition, CanvasPosition],
+  rect: Rect
+): boolean {
   const [a, b] = segment;
   if (isPointInRect(a, rect) || isPointInRect(b, rect)) return true;
   if (rect.width === 0 || rect.height === 0) return false;
@@ -89,10 +78,22 @@ export function segmentIntersectsRect(segment: [CanvasPosition, CanvasPosition],
   const minY = rect.y;
   const maxY = rect.y + rect.height;
   const edges: [CanvasPosition, CanvasPosition][] = [
-    [{ x: minX, y: minY }, { x: maxX, y: minY }],
-    [{ x: maxX, y: minY }, { x: maxX, y: maxY }],
-    [{ x: maxX, y: maxY }, { x: minX, y: maxY }],
-    [{ x: minX, y: maxY }, { x: minX, y: minY }],
+    [
+      { x: minX, y: minY },
+      { x: maxX, y: minY },
+    ],
+    [
+      { x: maxX, y: minY },
+      { x: maxX, y: maxY },
+    ],
+    [
+      { x: maxX, y: maxY },
+      { x: minX, y: maxY },
+    ],
+    [
+      { x: minX, y: maxY },
+      { x: minX, y: minY },
+    ],
   ];
   return edges.some((edge) => segmentsIntersect(a, b, edge[0], edge[1]));
 }
@@ -110,7 +111,10 @@ export function DrawingCaptureOverlay({
   const eraseElements = useCanvasStore((state) => state.eraseElements);
   const drawing = useRef(false);
   const [points, setPoints] = useState<CanvasPosition[]>([]);
-  const [eraserBox, setEraserBox] = useState<{ start: CanvasPosition; current: CanvasPosition } | null>(null);
+  const [eraserBox, setEraserBox] = useState<{
+    start: CanvasPosition;
+    current: CanvasPosition;
+  } | null>(null);
 
   const previewPath = useMemo(() => {
     if (toolMode !== "pen" || points.length === 0) return "";
@@ -121,7 +125,7 @@ export function DrawingCaptureOverlay({
         .map((screen) => ({
           x: screen.x - (rect?.left ?? 0),
           y: screen.y - (rect?.top ?? 0),
-        })),
+        }))
     );
   }, [points, reactFlow, toolMode]);
 
@@ -255,7 +259,9 @@ export function DrawingCaptureOverlay({
     if (!drawing.current) return;
     const flow = toFlow(event);
     if (toolMode === "eraser") {
-      setEraserBox((previous) => (previous ? { ...previous, current: flow } : { start: flow, current: flow }));
+      setEraserBox((previous) =>
+        previous ? { ...previous, current: flow } : { start: flow, current: flow }
+      );
     } else {
       setPoints((previous) => [...previous, flow]);
     }
@@ -293,10 +299,7 @@ export function DrawingCaptureOverlay({
       onPointerUp={onPointerUp}
     >
       {(toolMode === "pen" && points.length > 0) || eraserRect ? (
-        <svg
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 h-full w-full"
-        >
+        <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full">
           {toolMode === "pen" && previewPath && (
             <path
               d={previewPath}

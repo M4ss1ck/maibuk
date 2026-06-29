@@ -193,9 +193,7 @@ export const useBookStore = create<BookStore>((set) => ({
 
   deleteBook: async (id: string) => {
     const db = await getDatabase();
-    const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [
-      id,
-    ]);
+    const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [id]);
     if (rows.length > 0) {
       await recordTombstone({
         entityType: "book",

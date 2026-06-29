@@ -9,35 +9,31 @@ describe("rewriteImportedInternalLinks", () => {
 
   it("rewrites cross-chapter links with fragments to maibuk heading URIs", () => {
     const input = chapters.map((c) =>
-      c.chapterId === "c1"
-        ? { ...c, content: '<a href="chap2.xhtml#sec3">go</a>' }
-        : c,
+      c.chapterId === "c1" ? { ...c, content: '<a href="chap2.xhtml#sec3">go</a>' } : c
     );
     const result = rewriteImportedInternalLinks(input);
     expect(result.find((c) => c.chapterId === "c1")?.content).toContain(
-      'href="maibuk://heading/c2/sec3"',
+      'href="maibuk://heading/c2/sec3"'
     );
   });
 
   it("rewrites whole-document links to chapter URIs", () => {
     const input = chapters.map((c) =>
-      c.chapterId === "c1"
-        ? { ...c, content: '<a href="chap2.xhtml">go</a>' }
-        : c,
+      c.chapterId === "c1" ? { ...c, content: '<a href="chap2.xhtml">go</a>' } : c
     );
     const result = rewriteImportedInternalLinks(input);
     expect(result.find((c) => c.chapterId === "c1")?.content).toContain(
-      'href="maibuk://chapter/c2"',
+      'href="maibuk://chapter/c2"'
     );
   });
 
   it("rewrites same-document fragment links to the current chapter", () => {
     const input = chapters.map((c) =>
-      c.chapterId === "c1" ? { ...c, content: '<a href="#local">x</a>' } : c,
+      c.chapterId === "c1" ? { ...c, content: '<a href="#local">x</a>' } : c
     );
     const result = rewriteImportedInternalLinks(input);
     expect(result.find((c) => c.chapterId === "c1")?.content).toContain(
-      'href="maibuk://heading/c1/local"',
+      'href="maibuk://heading/c1/local"'
     );
   });
 
@@ -48,7 +44,7 @@ describe("rewriteImportedInternalLinks", () => {
             ...c,
             content: '<a href="https://x.com">e</a><a href="ghost.xhtml">g</a>',
           }
-        : c,
+        : c
     );
     const result = rewriteImportedInternalLinks(input);
     const html = result.find((c) => c.chapterId === "c1")?.content ?? "";

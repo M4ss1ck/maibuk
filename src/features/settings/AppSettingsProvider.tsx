@@ -56,23 +56,17 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   }, [appFontSize, appFont]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--editor-zoom",
-      `${editorZoom / 100}`
-    );
+    document.documentElement.style.setProperty("--editor-zoom", `${editorZoom / 100}`);
   }, [editorZoom]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--editor-content-width",
-      `${editorContentWidth}px`,
-    );
+    document.documentElement.style.setProperty("--editor-content-width", `${editorContentWidth}px`);
   }, [editorContentWidth]);
 
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--editor-page-padding",
-      `${editorPagePadding.top}px ${editorPagePadding.right}px ${editorPagePadding.bottom}px ${editorPagePadding.left}px`,
+      `${editorPagePadding.top}px ${editorPagePadding.right}px ${editorPagePadding.bottom}px ${editorPagePadding.left}px`
     );
   }, [editorPagePadding]);
 

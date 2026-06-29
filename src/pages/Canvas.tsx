@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   ConnectionMode,
   ReactFlow,
@@ -13,13 +20,7 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import {
-  ArrowLeft,
-  Network,
-  Redo2,
-  Trash2,
-  Undo2,
-} from "lucide-react";
+import { ArrowLeft, Network, Redo2, Trash2, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { maibukArt } from "../assets/ascii/maibuk";
@@ -45,12 +46,12 @@ const AUTOSAVE_DELAY = 800;
 function canPersist(state: ReturnType<typeof useCanvasStore.getState>): boolean {
   return Boolean(
     state.current?.id &&
-    state.dirty &&
-    state.revision > state.savedRevision &&
-    !state.docWriteBlocked &&
-    !state.editorReadOnly &&
-    !state.docLoadError &&
-    !state.corruptDocReplacementAllowed,
+      state.dirty &&
+      state.revision > state.savedRevision &&
+      !state.docWriteBlocked &&
+      !state.editorReadOnly &&
+      !state.docLoadError &&
+      !state.corruptDocReplacementAllowed
   );
 }
 
@@ -140,7 +141,7 @@ function CanvasEditor() {
   const docWriteBlocked = useCanvasStore((state) => state.docWriteBlocked);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const corruptDocReplacementAllowed = useCanvasStore(
-    (state) => state.corruptDocReplacementAllowed,
+    (state) => state.corruptDocReplacementAllowed
   );
   const dirty = useCanvasStore((state) => state.dirty);
   const revision = useCanvasStore((state) => state.revision);
@@ -155,7 +156,7 @@ function CanvasEditor() {
   const closeCanvas = useCanvasStore((state) => state.closeCanvas);
   const persistCanvas = useCanvasStore((state) => state.persistCanvas);
   const replaceCorruptDocWithDefault = useCanvasStore(
-    (state) => state.replaceCorruptDocWithDefault,
+    (state) => state.replaceCorruptDocWithDefault
   );
   const addNode = useCanvasStore((state) => state.addNode);
   const addEdge = useCanvasStore((state) => state.addEdge);
@@ -251,11 +252,11 @@ function CanvasEditor() {
         canvasTitle: current?.title ?? "",
         edges: doc.edges,
       }),
-    [canvasId, current?.title, doc.nodes, doc.edges, selectedNodeId],
+    [canvasId, current?.title, doc.nodes, doc.edges, selectedNodeId]
   );
   const flowEdges = useMemo(
     () => toFlowEdges(doc.edges, { selectedEdgeId }),
-    [doc.edges, selectedEdgeId],
+    [doc.edges, selectedEdgeId]
   );
 
   const viewportCenter = useCallback(() => {
@@ -281,7 +282,7 @@ function CanvasEditor() {
       const edge = fromConnection(connection);
       if (edge) addEdge(edge);
     },
-    [addEdge],
+    [addEdge]
   );
 
   const handleConnectStart = useCallback(() => setConnecting(true), []);
@@ -295,7 +296,7 @@ function CanvasEditor() {
         }
       }
     },
-    [moveNodeLive],
+    [moveNodeLive]
   );
 
   const handleNodeClick = useCallback(
@@ -303,7 +304,7 @@ function CanvasEditor() {
       if (interactivityLocked) return;
       selectNode(node.id);
     },
-    [interactivityLocked, selectNode],
+    [interactivityLocked, selectNode]
   );
 
   const handleEdgeClick = useCallback(
@@ -312,7 +313,7 @@ function CanvasEditor() {
       event.stopPropagation();
       selectEdge(edge.id);
     },
-    [interactivityLocked, selectEdge],
+    [interactivityLocked, selectEdge]
   );
 
   const handlePaneClick = useCallback(() => {
@@ -325,14 +326,14 @@ function CanvasEditor() {
       if (interactivityLocked) return;
       if (nodes[0]) selectNode(nodes[0].id);
     },
-    [interactivityLocked, selectNode],
+    [interactivityLocked, selectNode]
   );
 
   const handleMoveEnd = useCallback(
     (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
       setViewport(viewport);
     },
-    [setViewport],
+    [setViewport]
   );
 
   const noopEdgesChange = useCallback(() => undefined, []);
@@ -345,7 +346,7 @@ function CanvasEditor() {
       { keys: "escape", onTrigger: clearSelection },
       { keys: "alt+arrowleft", onTrigger: () => navigate("/canvas") },
     ],
-    { enabled: loadState === "ready" && !editorReadOnly },
+    { enabled: loadState === "ready" && !editorReadOnly }
   );
 
   if (loadState === "loading" || loadState === "idle") {
@@ -407,7 +408,9 @@ function CanvasEditor() {
           value={titleDraft}
           placeholder={t("canvas.untitled")}
           onChange={(event) => setTitleDraft(event.target.value)}
-          onBlur={() => current && titleDraft !== current.title && void renameCanvas(current.id, titleDraft)}
+          onBlur={() =>
+            current && titleDraft !== current.title && void renameCanvas(current.id, titleDraft)
+          }
           onKeyDown={(event) => {
             if (event.key === "Enter") event.currentTarget.blur();
             if (event.key === "Escape") {
@@ -416,16 +419,25 @@ function CanvasEditor() {
             }
           }}
         />
-        <span
-          className="ml-auto min-w-28 text-right text-xs text-muted-foreground"
-          role="status"
-        >
+        <span className="ml-auto min-w-28 text-right text-xs text-muted-foreground" role="status">
           {saveLabel}
         </span>
-        <Button variant="ghost" size="sm" disabled={past.length === 0} onClick={undo} aria-label={t("canvas.undo")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={past.length === 0}
+          onClick={undo}
+          aria-label={t("canvas.undo")}
+        >
           <Undo2 className="size-4" aria-hidden="true" />
         </Button>
-        <Button variant="ghost" size="sm" disabled={future.length === 0} onClick={redo} aria-label={t("canvas.redo")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={future.length === 0}
+          onClick={redo}
+          aria-label={t("canvas.redo")}
+        >
           <Redo2 className="size-4" aria-hidden="true" />
         </Button>
         <Button

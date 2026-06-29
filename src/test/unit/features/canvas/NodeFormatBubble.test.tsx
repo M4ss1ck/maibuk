@@ -52,8 +52,7 @@ vi.mock("../../../../features/links/heading-ids", () => ({
 }));
 
 vi.mock("../../../../features/notes/store", () => ({
-  useNoteStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ notes: [] }),
+  useNoteStore: (selector: (state: Record<string, unknown>) => unknown) => selector({ notes: [] }),
 }));
 
 vi.mock("../../../../features/canvas/nodes/CanvasRichContentMenu", () => ({
@@ -68,14 +67,15 @@ vi.mock("../../../../features/canvas/nodes/CanvasRichContentMenu", () => ({
   ),
 }));
 
-const { NodeFormatBubble } = await import(
-  "../../../../features/canvas/nodes/NodeFormatBubble"
-);
+const { NodeFormatBubble } = await import("../../../../features/canvas/nodes/NodeFormatBubble");
 
 function buildEditor({
   empty = false,
   isFocused = true,
-}: { empty?: boolean; isFocused?: boolean } = {}) {
+}: {
+  empty?: boolean;
+  isFocused?: boolean;
+} = {}) {
   const listeners = new Map<string, () => void>();
   const dom = document.createElement("div");
   Object.defineProperty(dom, "getBoundingClientRect", {
@@ -131,7 +131,7 @@ describe("NodeFormatBubble", () => {
     render(
       <div data-testid="canvas-node" style={{ transform: "translate(40px, 30px)" }}>
         <NodeFormatBubble editor={editor as never} />
-      </div>,
+      </div>
     );
 
     const button = await screen.findByRole("button", { name: "Format selection" });
@@ -146,8 +146,7 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor({ empty: true, isFocused: true });
     render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" }))
-      .parentElement;
+    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
     expect(bubble).toHaveStyle({ top: "102px" });
   });
 
@@ -155,16 +154,12 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor({ empty: true, isFocused: true });
     render(<NodeFormatBubble editor={editor as never} />);
 
-    expect(
-      await screen.findByRole("button", { name: "Format selection" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
     expect(editor.on).toHaveBeenCalledWith("blur", expect.any(Function));
     editor.emit("blur");
 
     await waitFor(() => {
-      expect(
-        screen.queryByRole("button", { name: "Format selection" }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Format selection" })).not.toBeInTheDocument();
     });
   });
 
@@ -175,17 +170,13 @@ describe("NodeFormatBubble", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Insert link" }));
 
     expect(screen.getByRole("dialog", { name: "" })).toHaveTextContent("Link dialog");
-    expect(
-      screen.queryByRole("button", { name: "Format selection" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Format selection" })).not.toBeInTheDocument();
   });
 
   it("notifies the parent when the link dialog opens", async () => {
     const editor = buildEditor();
     const onOverlayOpenChange = vi.fn();
-    render(
-      <NodeFormatBubble editor={editor as never} onOverlayOpenChange={onOverlayOpenChange} />,
-    );
+    render(<NodeFormatBubble editor={editor as never} onOverlayOpenChange={onOverlayOpenChange} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Insert link" }));
     expect(onOverlayOpenChange).toHaveBeenCalledWith(true);
@@ -194,9 +185,7 @@ describe("NodeFormatBubble", () => {
   it("notifies the parent when the rich-content menu reports an overlay", async () => {
     const editor = buildEditor();
     const onOverlayOpenChange = vi.fn();
-    render(
-      <NodeFormatBubble editor={editor as never} onOverlayOpenChange={onOverlayOpenChange} />,
-    );
+    render(<NodeFormatBubble editor={editor as never} onOverlayOpenChange={onOverlayOpenChange} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "More tools" }));
     expect(onOverlayOpenChange).toHaveBeenCalledWith(true);
@@ -206,15 +195,14 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor();
     render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" }))
-      .parentElement;
+    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
     expect(bubble).not.toBeNull();
     const initialTop = bubble?.style.top;
 
     expect(editor.on).toHaveBeenCalledWith("selectionUpdate", expect.any(Function));
-    const listener = editor.on.mock.calls.find(
-      ([event]) => event === "selectionUpdate",
-    )?.[1] as (() => void) | undefined;
+    const listener = editor.on.mock.calls.find(([event]) => event === "selectionUpdate")?.[1] as
+      | (() => void)
+      | undefined;
     mocks.coordsTop = 240;
     listener?.();
 
@@ -225,8 +213,7 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor();
     const { rerender } = render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" }))
-      .parentElement;
+    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
     await waitFor(() => expect(bubble?.style.top).toBeTruthy());
     const initialTop = bubble?.style.top;
 

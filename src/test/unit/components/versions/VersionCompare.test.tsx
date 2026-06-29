@@ -105,7 +105,9 @@ describe("VersionCompare", () => {
       ],
     });
 
-    expect(screen.getByText("This chapter is not in the version being compared")).toBeInTheDocument();
+    expect(
+      screen.getByText("This chapter is not in the version being compared")
+    ).toBeInTheDocument();
     expect(screen.getByText("Removed chapter")).toBeInTheDocument();
   });
 

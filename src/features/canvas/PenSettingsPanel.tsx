@@ -1,14 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "./store";
 
-const PEN_COLORS = [
-  "#ef4444",
-  "#f59e0b",
-  "#10b981",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-];
+const PEN_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
 
 export function PenSettingsPanel() {
   const { t } = useTranslation();

@@ -41,11 +41,20 @@ describe("computeAggregate()", () => {
     const payload = computeAggregate(
       "streak:current",
       [
-        event({ localDate: "2026-05-20", payload: { words: 50, chars: 250, chapterId: "chapter-1" } }),
-        event({ localDate: "2026-05-21", payload: { words: 25, chars: 125, chapterId: "chapter-1" } }),
-        event({ localDate: "2026-05-22", payload: { words: 80, chars: 400, chapterId: "chapter-1" } }),
+        event({
+          localDate: "2026-05-20",
+          payload: { words: 50, chars: 250, chapterId: "chapter-1" },
+        }),
+        event({
+          localDate: "2026-05-21",
+          payload: { words: 25, chars: 125, chapterId: "chapter-1" },
+        }),
+        event({
+          localDate: "2026-05-22",
+          payload: { words: 80, chars: 400, chapterId: "chapter-1" },
+        }),
       ],
-      { today: "2026-05-23", dailyWordThreshold: 50 },
+      { today: "2026-05-23", dailyWordThreshold: 50 }
     );
 
     expect(payload).toMatchObject({
@@ -146,7 +155,7 @@ describe("computeAggregate()", () => {
       mergeAggregatePayloads("heatmap:2026", [
         { days: [{ date: "2026-05-23", words: 10, events: 1 }] },
         { days: [{ date: "2026-05-23", words: 5, events: 2 }] },
-      ]),
+      ])
     ).toEqual({
       days: [{ date: "2026-05-23", words: 15, events: 3 }],
     });
@@ -210,7 +219,7 @@ describe("computeAggregate()", () => {
         { date: "2026-05-22", words: 110 },
         { date: "2026-05-23", words: 120 },
       ],
-      { today: "2026-05-23", dailyWordThreshold: 50 },
+      { today: "2026-05-23", dailyWordThreshold: 50 }
     );
 
     expect(payload).toMatchObject({

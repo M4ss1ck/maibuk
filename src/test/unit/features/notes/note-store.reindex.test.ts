@@ -26,7 +26,7 @@ describe("note store reindex on save", () => {
     });
     const rows = await testDb.select<{ target_id: string }[]>(
       "SELECT target_id FROM links WHERE source_id = ?",
-      [note.id],
+      [note.id]
     );
     expect(rows).toEqual([{ target_id: "n2" }]);
   });

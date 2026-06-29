@@ -20,11 +20,7 @@ import { NoteTagsRow } from "./NoteTagsRow";
 import { ThemeToggle } from "../ThemeToggle";
 import { SyncStatusButton } from "../sync/SyncStatusButton";
 import { toast } from "../ui/Toast";
-import {
-  editorHtmlToMarkdown,
-  markdownFilename,
-  saveMarkdownFile,
-} from "../../features/markdown";
+import { editorHtmlToMarkdown, markdownFilename, saveMarkdownFile } from "../../features/markdown";
 import {
   generateDocumentPdf,
   elementToPngBytes,
@@ -42,10 +38,7 @@ import { createWikilinkRenderer } from "../editor/WikilinkSuggestion";
 import { buildWikilinkCandidates } from "../../features/links/wikilink-targets";
 import { useBookStore } from "../../features/books/store";
 import { assignHeadingIds } from "../../features/links/heading-ids";
-import {
-  getChapterForLinking,
-  listChaptersForBookLinking,
-} from "../../features/chapters/store";
+import { getChapterForLinking, listChaptersForBookLinking } from "../../features/chapters/store";
 import { NoteBacklinks } from "./NoteBacklinks";
 
 let activeTaskHandleDragSourcePos: number | null = null;
@@ -274,7 +267,7 @@ export function NoteEditor({
           render: createWikilinkRenderer(),
         },
       }),
-    [notes, books],
+    [notes, books]
   );
 
   const internalTargets = useMemo<InternalTarget[]>(
@@ -282,7 +275,7 @@ export function NoteEditor({
       ...notes.map((n) => ({ type: "note" as const, noteId: n.id, title: n.title })),
       ...books.map((b) => ({ type: "book" as const, bookId: b.id, title: b.title })),
     ],
-    [notes, books],
+    [notes, books]
   );
 
   const loadInternalTargetChildren = useCallback<InternalTargetChildrenLoader>(
@@ -324,7 +317,7 @@ export function NoteEditor({
 
       return [];
     },
-    [note, notes],
+    [note, notes]
   );
 
   const resolveBookIdForChapter = useCallback(async (chapterId: string) => {
@@ -382,10 +375,7 @@ export function NoteEditor({
   const handleExportMarkdown = useCallback(async () => {
     try {
       const markdown = editorHtmlToMarkdown(contentRef.current || "");
-      const saved = await saveMarkdownFile(
-        markdownFilename(title || note.title),
-        markdown,
-      );
+      const saved = await saveMarkdownFile(markdownFilename(title || note.title), markdown);
       if (saved) toast.success(t("editor.exportMarkdownSuccess"));
     } catch (error) {
       console.error("Markdown export failed:", error);
@@ -402,7 +392,7 @@ export function NoteEditor({
         exportFilename(noteTitle, "pdf"),
         bytes,
         "application/pdf",
-        { name: "PDF", extensions: ["pdf"] },
+        { name: "PDF", extensions: ["pdf"] }
       );
       if (saved) toast.success(t("editor.exportPdfSuccess"));
     } catch (error) {
@@ -420,7 +410,7 @@ export function NoteEditor({
         exportFilename(title || note.title, "png"),
         bytes,
         "image/png",
-        { name: "PNG Image", extensions: ["png"] },
+        { name: "PNG Image", extensions: ["png"] }
       );
       if (saved) toast.success(t("editor.exportImageSuccess"));
     } catch (error) {
@@ -467,7 +457,11 @@ export function NoteEditor({
       };
       dom.addEventListener("click", onClick);
 
-      const onTransaction = ({ transaction }: { transaction: import("@tiptap/pm/state").Transaction }) => {
+      const onTransaction = ({
+        transaction,
+      }: {
+        transaction: import("@tiptap/pm/state").Transaction;
+      }) => {
         const meta = transaction.getMeta(collapsibleHeadingPluginKey);
         if (meta && typeof meta.toggle === "string") {
           const pluginState = collapsibleHeadingPluginKey.getState(editor.state);
@@ -479,14 +473,14 @@ export function NoteEditor({
 
       editor.on("transaction", onTransaction);
     },
-    [navigate, note.id],
+    [navigate, note.id]
   );
 
   const handleSpellCheckLanguageChange = useCallback(
     (language: Language) => {
       void saveNow({ language });
     },
-    [saveNow],
+    [saveNow]
   );
 
   const collapsedHeadingsKey = note.collapsedHeadings.join(",");
@@ -506,7 +500,7 @@ export function NoteEditor({
     const current = pluginState.collapsed;
     if (current.size === desired.size && [...desired].every((id) => current.has(id))) return;
     editor.view.dispatch(
-      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { replace: note.collapsedHeadings }),
+      editor.state.tr.setMeta(collapsibleHeadingPluginKey, { replace: note.collapsedHeadings })
     );
   }, [collapsedHeadingsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -523,12 +517,12 @@ export function NoteEditor({
         collapsedHeadings: note.collapsedHeadings,
       }),
     ],
-    [t, collapsedHeadingsKey],
+    [t, collapsedHeadingsKey]
   );
 
   const allNotesExtensions = useMemo(
     () => [...notesExtensions, wikilinkExtension],
-    [notesExtensions, wikilinkExtension],
+    [notesExtensions, wikilinkExtension]
   );
 
   const allTags = useMemo(() => {
@@ -571,9 +565,11 @@ export function NoteEditor({
           className="inline-flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ArrowLeft className="w-5 h-5" />
-          {onReturnToBook && returnLabel ? <span className="max-w-40 truncate">
-            {t("notes.backToBook", { title: returnLabel ?? "" })}
-          </span> : null}
+          {onReturnToBook && returnLabel ? (
+            <span className="max-w-40 truncate">
+              {t("notes.backToBook", { title: returnLabel ?? "" })}
+            </span>
+          ) : null}
         </button>
 
         <div className="min-w-0 flex-1">
@@ -629,8 +625,9 @@ export function NoteEditor({
           <button
             type="button"
             onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-            className={`p-1 rounded transition-colors ${alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
-              }`}
+            className={`p-1 rounded transition-colors ${
+              alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
+            }`}
             title={t("settings.alwaysOnTop")}
           >
             <Pin className="w-4 h-4" />

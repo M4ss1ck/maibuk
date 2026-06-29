@@ -34,7 +34,7 @@ export function TableSizePicker({ onSelect }: TableSizePickerProps) {
                 title={`${t("editor.table", { dimensions: `${row}x${col}` })}`}
               />
             );
-          }),
+          })
         )}
       </div>
       <div className="flex items-center justify-center mt-2">

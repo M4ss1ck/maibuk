@@ -43,7 +43,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         const max = input.max === "" ? Infinity : Number(input.max);
         const nextValue = direction === "up" ? currentValue + 1 : currentValue - 1;
         const boundedValue = Math.min(Math.max(nextValue, min), max);
-        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        const valueSetter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value"
+        )?.set;
 
         valueSetter?.call(input, String(boundedValue));
       }

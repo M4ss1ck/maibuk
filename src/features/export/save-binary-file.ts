@@ -19,7 +19,7 @@ export async function saveBinaryFile(
   filename: string,
   bytes: Uint8Array,
   mimeType: string,
-  filter: { name: string; extensions: string[] },
+  filter: { name: string; extensions: string[] }
 ): Promise<boolean> {
   if (IS_WEB) {
     const fs = await getFileSystem();

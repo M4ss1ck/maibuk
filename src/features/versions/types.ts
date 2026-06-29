@@ -1,9 +1,4 @@
-export type VersionTrigger =
-  | "manual"
-  | "auto-idle"
-  | "close"
-  | "pre-sync"
-  | "pre-restore";
+export type VersionTrigger = "manual" | "auto-idle" | "close" | "pre-sync" | "pre-restore";
 
 // List-item shape — deliberately excludes the heavy `snapshot` field.
 export interface BookVersion {

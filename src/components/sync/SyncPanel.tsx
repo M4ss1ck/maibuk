@@ -30,10 +30,7 @@ export function SyncPanel({ triggerRef, onClose, onSync }: SyncPanelProps) {
       if (triggerRef.current && target instanceof Node && triggerRef.current.contains(target)) {
         return;
       }
-      if (
-        target instanceof Element &&
-        target.closest('[role="listbox"], [role="option"]')
-      ) {
+      if (target instanceof Element && target.closest('[role="listbox"], [role="option"]')) {
         return;
       }
 
@@ -64,7 +61,9 @@ export function SyncPanel({ triggerRef, onClose, onSync }: SyncPanelProps) {
     >
       <div className="px-4 py-3 border-b border-border">
         <p className="text-sm font-medium truncate">{userEmail}</p>
-        <p className="text-xs text-muted-foreground mt-0.5" title={formatLastSynced(true)}>{formatLastSynced()}</p>
+        <p className="text-xs text-muted-foreground mt-0.5" title={formatLastSynced(true)}>
+          {formatLastSynced()}
+        </p>
       </div>
 
       {syncError && (
@@ -74,12 +73,7 @@ export function SyncPanel({ triggerRef, onClose, onSync }: SyncPanelProps) {
       <div className="p-3 space-y-3">
         <SyncControls onSync={onSync} />
 
-        <Button
-          variant="destructive"
-          size="sm"
-          className="w-full"
-          onClick={handleLogout}
-        >
+        <Button variant="destructive" size="sm" className="w-full" onClick={handleLogout}>
           <LogOut className="w-4 h-4" />
           {t("sync.logout")}
         </Button>

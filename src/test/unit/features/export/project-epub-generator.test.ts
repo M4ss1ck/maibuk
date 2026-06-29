@@ -66,7 +66,8 @@ describe("buildProjectEpubPackage()", () => {
       chapters: [
         buildChapter({
           bookId: "book-1",
-          content: '<p>Cover</p><figure data-image=""><img src="maibuk-asset:asset-cover"></figure>',
+          content:
+            '<p>Cover</p><figure data-image=""><img src="maibuk-asset:asset-cover"></figure>',
         }),
       ],
       metadata: [],
@@ -103,7 +104,11 @@ describe("buildProjectEpubPackage()", () => {
 
     expect(pkg.metadata).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: "creator", value: "Second Author", attributes: { id: "creator-2" } }),
+        expect.objectContaining({
+          key: "creator",
+          value: "Second Author",
+          attributes: { id: "creator-2" },
+        }),
       ])
     );
   });

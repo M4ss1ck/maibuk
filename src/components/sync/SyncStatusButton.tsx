@@ -1,12 +1,5 @@
 import { useState, useRef } from "react";
-import {
-  Cloud,
-  CloudOff,
-  CloudUpload,
-  Loader2,
-  CloudAlert,
-  AlertTriangle,
-} from "lucide-react";
+import { Cloud, CloudOff, CloudUpload, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
 import { useSyncStore } from "../../features/sync/store";
 import { useBookStore } from "../../features/books/store";
 import { useSyncFlow } from "../../features/sync/useSyncFlow";
@@ -115,10 +108,7 @@ export function SyncStatusButton() {
         />
       )}
 
-      <AuthDialog
-        isOpen={showAuthDialog}
-        onClose={() => setShowAuthDialog(false)}
-      />
+      <AuthDialog isOpen={showAuthDialog} onClose={() => setShowAuthDialog(false)} />
 
       <PassphraseDialog
         isOpen={showPassphraseDialog}
@@ -135,9 +125,7 @@ export function SyncStatusButton() {
         }}
       />
 
-      {activeConflict && (
-        <ConflictDialog conflict={activeConflict} onResolve={resolveConflict} />
-      )}
+      {activeConflict && <ConflictDialog conflict={activeConflict} onResolve={resolveConflict} />}
     </div>
   );
 }

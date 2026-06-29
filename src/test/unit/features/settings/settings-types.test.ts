@@ -118,9 +118,7 @@ describe("PASTE_CLEANUP_PRESETS", () => {
   });
 
   it("matchBook strips the book property set with no structural ops", () => {
-    expect(PASTE_CLEANUP_PRESETS.matchBook.strippedProperties).toEqual(
-      BOOK_STRIP_PROPERTIES,
-    );
+    expect(PASTE_CLEANUP_PRESETS.matchBook.strippedProperties).toEqual(BOOK_STRIP_PROPERTIES);
     for (const key of PASTE_STRUCTURAL_OPTION_KEYS) {
       expect(PASTE_CLEANUP_PRESETS.matchBook[key]).toBe(false);
     }
@@ -133,9 +131,7 @@ describe("PASTE_CLEANUP_PRESETS", () => {
     for (const prop of BOOK_STRIP_PROPERTIES) {
       expect(PASTE_CLEANUP_PRESETS.plainText.strippedProperties).toContain(prop);
     }
-    expect(PASTE_CLEANUP_PRESETS.plainText.strippedProperties).toContain(
-      "font-weight",
-    );
+    expect(PASTE_CLEANUP_PRESETS.plainText.strippedProperties).toContain("font-weight");
   });
 });
 
@@ -174,9 +170,7 @@ describe("clampEditorContentWidth", () => {
   });
 
   it("clamps above the maximum down to the maximum", () => {
-    expect(clampEditorContentWidth(EDITOR_CONTENT_WIDTH_MAX + 500)).toBe(
-      EDITOR_CONTENT_WIDTH_MAX,
-    );
+    expect(clampEditorContentWidth(EDITOR_CONTENT_WIDTH_MAX + 500)).toBe(EDITOR_CONTENT_WIDTH_MAX);
   });
 
   it("snaps to the step grid", () => {
@@ -184,23 +178,20 @@ describe("clampEditorContentWidth", () => {
   });
 
   it("passes the Full sentinel through unchanged", () => {
-    expect(clampEditorContentWidth(EDITOR_CONTENT_WIDTH_FULL)).toBe(
-      EDITOR_CONTENT_WIDTH_FULL,
-    );
+    expect(clampEditorContentWidth(EDITOR_CONTENT_WIDTH_FULL)).toBe(EDITOR_CONTENT_WIDTH_FULL);
   });
 });
 
 describe("EDITOR_CONTENT_WIDTH_PRESETS", () => {
   it("default value matches the Comfortable preset", () => {
     const comfortable = EDITOR_CONTENT_WIDTH_PRESETS.find(
-      (p) => p.value === DEFAULT_EDITOR_CONTENT_WIDTH,
+      (p) => p.value === DEFAULT_EDITOR_CONTENT_WIDTH
     );
     expect(comfortable).toBeDefined();
   });
 
   it("ends with the Full preset", () => {
-    const last =
-      EDITOR_CONTENT_WIDTH_PRESETS[EDITOR_CONTENT_WIDTH_PRESETS.length - 1];
+    const last = EDITOR_CONTENT_WIDTH_PRESETS[EDITOR_CONTENT_WIDTH_PRESETS.length - 1];
     expect(last.value).toBe(EDITOR_CONTENT_WIDTH_FULL);
   });
 
@@ -215,12 +206,8 @@ describe("EDITOR_CONTENT_WIDTH_PRESETS", () => {
 describe("DEFAULT_EDITOR_PAGE_PADDING", () => {
   it("is a multiple of the step and within bounds", () => {
     expect(DEFAULT_EDITOR_PAGE_PADDING % EDITOR_PAGE_PADDING_STEP).toBe(0);
-    expect(DEFAULT_EDITOR_PAGE_PADDING).toBeGreaterThanOrEqual(
-      EDITOR_PAGE_PADDING_MIN,
-    );
-    expect(DEFAULT_EDITOR_PAGE_PADDING).toBeLessThanOrEqual(
-      EDITOR_PAGE_PADDING_MAX,
-    );
+    expect(DEFAULT_EDITOR_PAGE_PADDING).toBeGreaterThanOrEqual(EDITOR_PAGE_PADDING_MIN);
+    expect(DEFAULT_EDITOR_PAGE_PADDING).toBeLessThanOrEqual(EDITOR_PAGE_PADDING_MAX);
   });
 });
 
@@ -234,9 +221,7 @@ describe("clampEditorPagePadding", () => {
   });
 
   it("clamps above the maximum down to the maximum", () => {
-    expect(clampEditorPagePadding(EDITOR_PAGE_PADDING_MAX + 8)).toBe(
-      EDITOR_PAGE_PADDING_MAX,
-    );
+    expect(clampEditorPagePadding(EDITOR_PAGE_PADDING_MAX + 8)).toBe(EDITOR_PAGE_PADDING_MAX);
   });
 
   it("snaps to the step grid", () => {

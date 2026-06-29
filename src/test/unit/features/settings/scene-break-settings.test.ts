@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DEFAULT_SCENE_BREAK } from "../../../../components/editor/extensions/scene-break-utils";
-import {
-  normalizeSceneBreak,
-  useSettingsStore,
-} from "../../../../features/settings/store";
+import { normalizeSceneBreak, useSettingsStore } from "../../../../features/settings/store";
 
 describe("scene break settings", () => {
   beforeEach(() => {
@@ -15,15 +12,11 @@ describe("scene break settings", () => {
   });
 
   it("defaults last-used to '* * *'", () => {
-    expect(useSettingsStore.getState().lastSceneBreak).toEqual(
-      DEFAULT_SCENE_BREAK,
-    );
+    expect(useSettingsStore.getState().lastSceneBreak).toEqual(DEFAULT_SCENE_BREAK);
   });
 
   it("sets last-used", () => {
-    useSettingsStore
-      .getState()
-      .setLastSceneBreak({ kind: "text", symbols: "❧" });
+    useSettingsStore.getState().setLastSceneBreak({ kind: "text", symbols: "❧" });
 
     expect(useSettingsStore.getState().lastSceneBreak).toEqual({
       kind: "text",

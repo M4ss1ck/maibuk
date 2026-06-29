@@ -24,9 +24,7 @@ export const WikilinkList = forwardRef<WikilinkListHandle, WikilinkListProps>(
           return true;
         }
         if (event.key === "ArrowUp") {
-          setSelected(
-            (s) => (s - 1 + items.length) % Math.max(items.length, 1),
-          );
+          setSelected((s) => (s - 1 + items.length) % Math.max(items.length, 1));
           return true;
         }
         if (event.key === "Enter") {
@@ -40,9 +38,7 @@ export const WikilinkList = forwardRef<WikilinkListHandle, WikilinkListProps>(
     return (
       <div className="z-50 max-h-64 w-72 overflow-auto rounded-lg border border-border bg-background shadow-lg">
         {items.length === 0 && (
-          <div className="px-3 py-2 text-sm text-muted-foreground">
-            No matches
-          </div>
+          <div className="px-3 py-2 text-sm text-muted-foreground">No matches</div>
         )}
         {items.map((item, idx) => (
           <button
@@ -53,29 +49,22 @@ export const WikilinkList = forwardRef<WikilinkListHandle, WikilinkListProps>(
               idx === selected ? "bg-muted" : ""
             }`}
           >
-            <span>
-              {item.kind === "createNote"
-                ? `Create note "${item.label}"`
-                : item.label}
-            </span>
+            <span>{item.kind === "createNote" ? `Create note "${item.label}"` : item.label}</span>
             <span className="text-xs text-muted-foreground">{item.kind}</span>
           </button>
         ))}
       </div>
     );
-  },
+  }
 );
 WikilinkList.displayName = "WikilinkList";
 
 export function createWikilinkRenderer(): SuggestionOptions["render"] {
   return () => {
-    let component: ReactRenderer<WikilinkListHandle, WikilinkListProps> | null =
-      null;
+    let component: ReactRenderer<WikilinkListHandle, WikilinkListProps> | null = null;
     let container: HTMLDivElement | null = null;
 
-    const position = (
-      clientRect: (() => DOMRect | null) | null | undefined,
-    ) => {
+    const position = (clientRect: (() => DOMRect | null) | null | undefined) => {
       if (!container || !clientRect) return;
       const rect = clientRect();
       if (!rect) return;

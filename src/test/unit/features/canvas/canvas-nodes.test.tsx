@@ -51,9 +51,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const { LightweightNode } = await import(
-  "../../../../features/canvas/nodes/LightweightNode"
-);
+const { LightweightNode } = await import("../../../../features/canvas/nodes/LightweightNode");
 const { NoteRefNode } = await import("../../../../features/canvas/nodes/NoteRefNode");
 
 describe("Canvas custom nodes", () => {
@@ -85,7 +83,7 @@ describe("Canvas custom nodes", () => {
     render(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
     expect(screen.getByTestId("resize-left")).toHaveAttribute("data-direction", "horizontal");
     expect(screen.getByTestId("resize-right")).toHaveAttribute("data-direction", "horizontal");
@@ -95,7 +93,7 @@ describe("Canvas custom nodes", () => {
     render(
       <LightweightNode
         {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
     const control = screen.getByTestId("resize-left");
     expect(control.className).toContain("opacity-0");
@@ -107,7 +105,7 @@ describe("Canvas custom nodes", () => {
     render(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
     expect(screen.queryByTestId("resize-left")).toBeNull();
     expect(screen.queryByTestId("resize-right")).toBeNull();
@@ -117,7 +115,7 @@ describe("Canvas custom nodes", () => {
     render(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
     const handles = screen.getAllByTestId("handle");
     expect(handles).toHaveLength(4);
@@ -150,7 +148,7 @@ describe("Canvas custom nodes", () => {
             },
           },
         } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
     expect(screen.getByText("Idea")).toBeInTheDocument();
     expect(document.querySelector(".bg-card")).toBeNull();
@@ -159,9 +157,7 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByText("Idea").closest(".canvas-node-content")).toHaveStyle({
       color: "#ef4444",
     });
-    expect(warn).not.toHaveBeenCalledWith(
-      expect.stringContaining("Duplicate extension names"),
-    );
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("Duplicate extension names"));
     warn.mockRestore();
   });
 
@@ -187,14 +183,11 @@ describe("Canvas custom nodes", () => {
             },
           },
         } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
 
     expect(document.querySelector("script")).toBeNull();
-    expect(screen.getByRole("link", { name: "Note" })).toHaveAttribute(
-      "href",
-      "maibuk://note/n1",
-    );
+    expect(screen.getByRole("link", { name: "Note" })).toHaveAttribute("href", "maibuk://note/n1");
   });
 
   it("preserves empty paragraphs with the shared idle content renderer", () => {
@@ -219,7 +212,7 @@ describe("Canvas custom nodes", () => {
             },
           },
         } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
 
     const content = screen.getByText("First").closest(".canvas-node-content");
@@ -241,14 +234,14 @@ describe("Canvas custom nodes", () => {
               '<p>Ref<sup data-footnote="" data-footnote-content="A note" data-footnote-id="a">*</sup></p>',
           }),
         } as Parameters<typeof LightweightNode>[0])}
-      />,
+      />
     );
 
     expect(document.querySelector(".canvas-node-content .editor-table")).not.toBeNull();
     expect(document.querySelector(".canvas-node-content .editor-image-figure img")).not.toBeNull();
     expect(document.querySelector("sup[data-footnote]")?.textContent).toBe("1");
     expect(document.querySelector(".footnote-section .footnote-content")?.textContent).toBe(
-      "A note",
+      "A note"
     );
   });
 
@@ -277,7 +270,7 @@ describe("Canvas custom nodes", () => {
             },
           } as Parameters<typeof NoteRefNode>[0])}
         />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     expect(screen.getByText("Cached title")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "canvas.openNote" })).toBeDisabled();

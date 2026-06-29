@@ -187,12 +187,8 @@ async function initializeSchema(): Promise<void> {
   await db
     .execute(`ALTER TABLE notes ADD COLUMN collapsed_headings TEXT DEFAULT '[]'`)
     .catch(() => {});
-  await db
-    .execute(`ALTER TABLE notes ADD COLUMN book_id TEXT`)
-    .catch(() => {});
-  await db
-    .execute(`ALTER TABLE notes ADD COLUMN language TEXT`)
-    .catch(() => {});
+  await db.execute(`ALTER TABLE notes ADD COLUMN book_id TEXT`).catch(() => {});
+  await db.execute(`ALTER TABLE notes ADD COLUMN language TEXT`).catch(() => {});
   await db
     .execute(`
       UPDATE notes
@@ -206,9 +202,7 @@ async function initializeSchema(): Promise<void> {
   // Migration: Add content_updated_at (user-facing "modified" time, bumped only
   // by title/content edits — not by tagging, pinning, or reordering). Backfill
   // existing rows from updated_at so their displayed date is preserved.
-  await db
-    .execute(`ALTER TABLE notes ADD COLUMN content_updated_at INTEGER`)
-    .catch(() => {});
+  await db.execute(`ALTER TABLE notes ADD COLUMN content_updated_at INTEGER`).catch(() => {});
   await db
     .execute(`UPDATE notes SET content_updated_at = updated_at WHERE content_updated_at IS NULL`)
     .catch(() => {});

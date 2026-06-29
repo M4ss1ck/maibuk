@@ -85,9 +85,7 @@ export function Modal({
         </div>
 
         {/* Content */}
-        <div className={`px-4 sm:px-6 py-4 flex-1 min-h-0 ${contentClassName}`}>
-          {children}
-        </div>
+        <div className={`px-4 sm:px-6 py-4 flex-1 min-h-0 ${contentClassName}`}>{children}</div>
 
         {/* Footer */}
         {footer && (
@@ -97,6 +95,6 @@ export function Modal({
         )}
       </div>
     </div>,
-    document.body,
+    document.body
   );
 }

@@ -27,7 +27,10 @@ class MockWorker {
     }
     if (message.type === "flushNow") {
       const recorded = this.posted
-        .filter((posted): posted is Extract<WorkerRequest, { type: "recordEvents" }> => posted.type === "recordEvents")
+        .filter(
+          (posted): posted is Extract<WorkerRequest, { type: "recordEvents" }> =>
+            posted.type === "recordEvents"
+        )
         .flatMap((posted) => posted.events);
       this.emit({ type: "flushReady", id: message.id, events: recorded });
     }
@@ -168,10 +171,10 @@ describe("MetricsService", () => {
     const payload = await service.getAggregate("heatmap:2026");
     const computeMessages = worker.posted.filter(
       (message): message is Extract<WorkerRequest, { type: "computeAggregate" }> =>
-        message.type === "computeAggregate",
+        message.type === "computeAggregate"
     );
     const cacheRows = await testDb.select<{ cache_key: string }[]>(
-      "SELECT cache_key FROM metrics_cache",
+      "SELECT cache_key FROM metrics_cache"
     );
 
     expect(payload).toEqual({
@@ -260,15 +263,12 @@ describe("MetricsService", () => {
 
     expect(payload.currentStreak).toBe(3);
     expect(payload.longestStreak).toBe(3);
-    expect(
-      worker.posted.some((message) => message.type === "computeStreakFromDays"),
-    ).toBe(true);
+    expect(worker.posted.some((message) => message.type === "computeStreakFromDays")).toBe(true);
     // No raw-event computeAggregate path used for streak any more.
     expect(
       worker.posted.some(
-        (message) =>
-          message.type === "computeAggregate" && message.key === "streak:current",
-      ),
+        (message) => message.type === "computeAggregate" && message.key === "streak:current"
+      )
     ).toBe(false);
   });
 
@@ -297,9 +297,7 @@ describe("MetricsService", () => {
     expect(payload).toEqual({
       days: [{ date: "2026-05-23", words: 2, events: 1 }],
     });
-    expect(
-      worker.posted.some((message) => message.type === "computeAggregate"),
-    ).toBe(true);
+    expect(worker.posted.some((message) => message.type === "computeAggregate")).toBe(true);
   });
 
   it("records session start/active/end events through session tracking", async () => {

@@ -139,12 +139,11 @@ const SEPARATOR_ROLE = "scene-break-separator";
 
 export async function upsertSeparatorAsset(
   bookId: string,
-  input: SeparatorAssetInput,
+  input: SeparatorAssetInput
 ): Promise<ProjectAsset> {
   const existing = await listProjectAssets(bookId);
   const match = existing.find(
-    (asset) =>
-      asset.role === SEPARATOR_ROLE && asset.dataBase64 === input.dataBase64,
+    (asset) => asset.role === SEPARATOR_ROLE && asset.dataBase64 === input.dataBase64
   );
   if (match) return match;
 

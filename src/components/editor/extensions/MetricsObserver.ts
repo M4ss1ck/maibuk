@@ -17,10 +17,7 @@ interface MetricsObserverStorage {
   transactionHandler: TransactionHandler | null;
 }
 
-export const MetricsObserver = Extension.create<
-  MetricsObserverOptions,
-  MetricsObserverStorage
->({
+export const MetricsObserver = Extension.create<MetricsObserverOptions, MetricsObserverStorage>({
   name: "metricsObserver",
 
   addOptions() {

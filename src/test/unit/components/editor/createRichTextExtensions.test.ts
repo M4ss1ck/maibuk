@@ -22,7 +22,7 @@ describe("createRichTextExtensions", () => {
         "copyHandler",
         "footnote",
         "spellCheck",
-      ]),
+      ])
     );
     expect(new Set(names).size).toBe(names.length);
   });

@@ -11,7 +11,7 @@ export interface NavigateOptions {
 export function navigateToLinkTarget(
   href: string,
   navigate: NavigateFn,
-  options: NavigateOptions = {},
+  options: NavigateOptions = {}
 ): void {
   const parsed = parseLinkUri(href);
   if (!parsed) return;

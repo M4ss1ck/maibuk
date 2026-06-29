@@ -101,13 +101,8 @@ interface SettingsStore extends Settings {
   ) => void;
   addStrippedProperty: (property: string) => void;
   removeStrippedProperty: (property: string) => void;
-  addPasteCleanupRule: (
-    init?: Partial<Omit<PasteCleanupRule, "id">>
-  ) => string;
-  updatePasteCleanupRule: (
-    id: string,
-    patch: Partial<Omit<PasteCleanupRule, "id">>
-  ) => void;
+  addPasteCleanupRule: (init?: Partial<Omit<PasteCleanupRule, "id">>) => string;
+  updatePasteCleanupRule: (id: string, patch: Partial<Omit<PasteCleanupRule, "id">>) => void;
   removePasteCleanupRule: (id: string) => void;
   movePasteCleanupRule: (id: string, direction: "up" | "down") => void;
   setPromptMarkdownOnPaste: (enabled: boolean) => void;
@@ -205,9 +200,7 @@ export function normalizePasteCleanup(value: unknown): PasteCleanupSettings {
     Record<keyof PasteCleanupSettings, unknown>
   >;
 
-  const preset = PASTE_CLEANUP_PRESET_VALUES.includes(
-    candidate.preset as PasteCleanupPreset
-  )
+  const preset = PASTE_CLEANUP_PRESET_VALUES.includes(candidate.preset as PasteCleanupPreset)
     ? (candidate.preset as PasteCleanupPreset)
     : "keepAll";
 
@@ -224,9 +217,9 @@ export function normalizePasteCleanup(value: unknown): PasteCleanupSettings {
     return { preset, options: { ...PASTE_CLEANUP_PRESETS[preset] }, rules };
   }
 
-  const raw = (candidate.options && typeof candidate.options === "object"
-    ? candidate.options
-    : {}) as Record<string, unknown>;
+  const raw = (
+    candidate.options && typeof candidate.options === "object" ? candidate.options : {}
+  ) as Record<string, unknown>;
   return {
     preset,
     options: {
@@ -236,9 +229,7 @@ export function normalizePasteCleanup(value: unknown): PasteCleanupSettings {
       removeImages: raw.removeImages === true,
       unwrapFormattingTags: raw.unwrapFormattingTags === true,
       strippedProperties: Array.isArray(raw.strippedProperties)
-        ? raw.strippedProperties.filter(
-            (item): item is string => typeof item === "string"
-          )
+        ? raw.strippedProperties.filter((item): item is string => typeof item === "string")
         : [],
     },
     rules,
@@ -249,35 +240,22 @@ export function normalizeSceneBreak(value: unknown): SceneBreakDescriptor {
   if (value && typeof value === "object") {
     const candidate = value as Record<string, unknown>;
 
-    if (
-      candidate.kind === "image" &&
-      typeof candidate.src === "string" &&
-      candidate.src
-    ) {
+    if (candidate.kind === "image" && typeof candidate.src === "string" && candidate.src) {
       return {
         kind: "image",
         src: candidate.src,
         alt: typeof candidate.alt === "string" ? candidate.alt : undefined,
-        assetId:
-          typeof candidate.assetId === "string" ? candidate.assetId : undefined,
+        assetId: typeof candidate.assetId === "string" ? candidate.assetId : undefined,
       };
     }
 
-    if (
-      candidate.kind === "text" &&
-      typeof candidate.symbols === "string" &&
-      candidate.symbols
-    ) {
+    if (candidate.kind === "text" && typeof candidate.symbols === "string" && candidate.symbols) {
       return {
         kind: "text",
         symbols: candidate.symbols,
         unit: typeof candidate.unit === "string" ? candidate.unit : undefined,
-        count:
-          typeof candidate.count === "number" ? candidate.count : undefined,
-        spaced:
-          typeof candidate.spaced === "boolean"
-            ? candidate.spaced
-            : undefined,
+        count: typeof candidate.count === "number" ? candidate.count : undefined,
+        spaced: typeof candidate.spaced === "boolean" ? candidate.spaced : undefined,
       };
     }
   }
@@ -330,8 +308,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setSpellCheckEnabled: (spellCheckEnabled) => set({ spellCheckEnabled }),
       setDictionaryOpenInBrowser: (dictionaryOpenInBrowser) => set({ dictionaryOpenInBrowser }),
       setShowInlineFootnotes: (showInlineFootnotes) => set({ showInlineFootnotes }),
-      setPromptMarkdownOnPaste: (promptMarkdownOnPaste) =>
-        set({ promptMarkdownOnPaste }),
+      setPromptMarkdownOnPaste: (promptMarkdownOnPaste) => set({ promptMarkdownOnPaste }),
       setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
       setBookSidePanelTab: (bookSidePanelTab) => set({ bookSidePanelTab }),
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
@@ -365,8 +342,7 @@ export const useSettingsStore = create<SettingsStore>()(
         set({
           htmlPanelHeight: Math.max(100, Math.min(window.innerHeight * 0.6, htmlPanelHeight)),
         }),
-      setEditorZoom: (editorZoom) =>
-        set({ editorZoom: clampEditorZoom(editorZoom) }),
+      setEditorZoom: (editorZoom) => set({ editorZoom: clampEditorZoom(editorZoom) }),
       zoomIn: () =>
         set((state) => ({
           editorZoom: clampEditorZoom(state.editorZoom + EDITOR_ZOOM_STEP),
@@ -393,18 +369,10 @@ export const useSettingsStore = create<SettingsStore>()(
           }
           return {
             editorPagePadding: {
-              top: clampEditorPagePadding(
-                value.top ?? state.editorPagePadding.top,
-              ),
-              right: clampEditorPagePadding(
-                value.right ?? state.editorPagePadding.right,
-              ),
-              bottom: clampEditorPagePadding(
-                value.bottom ?? state.editorPagePadding.bottom,
-              ),
-              left: clampEditorPagePadding(
-                value.left ?? state.editorPagePadding.left,
-              ),
+              top: clampEditorPagePadding(value.top ?? state.editorPagePadding.top),
+              right: clampEditorPagePadding(value.right ?? state.editorPagePadding.right),
+              bottom: clampEditorPagePadding(value.bottom ?? state.editorPagePadding.bottom),
+              left: clampEditorPagePadding(value.left ?? state.editorPagePadding.left),
             },
           };
         }),
@@ -531,21 +499,14 @@ export const useSettingsStore = create<SettingsStore>()(
         set((state) => ({
           metrics: {
             ...state.metrics,
-            streakDailyWordThreshold: Math.max(
-              1,
-              Math.floor(streakDailyWordThreshold),
-            ),
+            streakDailyWordThreshold: Math.max(1, Math.floor(streakDailyWordThreshold)),
           },
         })),
       setLastSceneBreak: (lastSceneBreak) => set({ lastSceneBreak }),
       addSceneBreakPreset: (descriptor) =>
         set((state) => {
           const key = JSON.stringify(descriptor);
-          if (
-            state.sceneBreakPresets.some(
-              (preset) => JSON.stringify(preset) === key,
-            )
-          ) {
+          if (state.sceneBreakPresets.some((preset) => JSON.stringify(preset) === key)) {
             return state;
           }
           return {
@@ -555,7 +516,7 @@ export const useSettingsStore = create<SettingsStore>()(
       removeSceneBreakPreset: (index) =>
         set((state) => ({
           sceneBreakPresets: state.sceneBreakPresets.filter(
-            (_preset, presetIndex) => presetIndex !== index,
+            (_preset, presetIndex) => presetIndex !== index
           ),
         })),
       addCustomWord: (word) => {

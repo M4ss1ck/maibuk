@@ -1,22 +1,19 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  mockGetSnapshotMetrics,
-  mockGetAggregate,
-  mockGetDatabase,
-  mockSettingsState,
-} = vi.hoisted(() => ({
-  mockGetSnapshotMetrics: vi.fn(),
-  mockGetAggregate: vi.fn(),
-  mockGetDatabase: vi.fn(),
-  mockSettingsState: {
-    metrics: {
-      enabled: { writing: true, time: true, engagement: true },
-      streakDailyWordThreshold: 50,
+const { mockGetSnapshotMetrics, mockGetAggregate, mockGetDatabase, mockSettingsState } = vi.hoisted(
+  () => ({
+    mockGetSnapshotMetrics: vi.fn(),
+    mockGetAggregate: vi.fn(),
+    mockGetDatabase: vi.fn(),
+    mockSettingsState: {
+      metrics: {
+        enabled: { writing: true, time: true, engagement: true },
+        streakDailyWordThreshold: 50,
+      },
     },
-  },
-}));
+  })
+);
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -161,9 +158,7 @@ describe("Metrics page", () => {
     render(<Metrics />);
 
     expect(
-      screen.getByText(
-        "Engagement tracking is disabled — turn it on in Settings → Metrics.",
-      ),
+      screen.getByText("Engagement tracking is disabled — turn it on in Settings → Metrics.")
     ).toBeInTheDocument();
     expect(screen.queryByText("Edit ratio")).not.toBeInTheDocument();
     expect(mockGetAggregate).toHaveBeenCalled();

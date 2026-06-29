@@ -42,20 +42,13 @@ export function BookCard({
       className={`book-card-enter relative flex flex-col bg-card border rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200 text-left w-full ${isFocused ? "border-primary ring-1 ring-primary/30" : "border-border"}`}
     >
       {indexHint ? (
-        <KeyboardShortcut
-          keys={[String(indexHint)]}
-          className="absolute left-2 top-2 z-10"
-        />
+        <KeyboardShortcut keys={[String(indexHint)]} className="absolute left-2 top-2 z-10" />
       ) : null}
 
       {/* Cover */}
       <div className="aspect-2/3 bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center">
         {book.coverImagePath ? (
-          <img
-            src={book.coverImagePath}
-            alt={book.title}
-            className="w-full h-full object-cover"
-          />
+          <img src={book.coverImagePath} alt={book.title} className="w-full h-full object-cover" />
         ) : (
           <MaibukLogo className="w-16 h-16 text-primary opacity-85" />
         )}
@@ -63,12 +56,8 @@ export function BookCard({
 
       {/* Info */}
       <div className="p-4">
-        <h3 className="font-semibold text-lg truncate text-foreground">
-          {book.title}
-        </h3>
-        <p className="text-sm text-muted-foreground truncate">
-          {book.authorName}
-        </p>
+        <h3 className="font-semibold text-lg truncate text-foreground">{book.title}</h3>
+        <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
 
         <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
           <span

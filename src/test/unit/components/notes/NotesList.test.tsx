@@ -86,19 +86,17 @@ function buildBook(overrides: Partial<Book>): Book {
 
 function setRowRect(row: Element, rect: Pick<DOMRect, "top" | "bottom" | "height">) {
   void row;
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(
-    {
-      top: rect.top,
-      bottom: rect.bottom,
-      left: 0,
-      right: 100,
-      width: 100,
-      height: rect.height,
-      x: 0,
-      y: rect.top,
-      toJSON: () => ({}),
-    } as DOMRect,
-  );
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    top: rect.top,
+    bottom: rect.bottom,
+    left: 0,
+    right: 100,
+    width: 100,
+    height: rect.height,
+    x: 0,
+    y: rect.top,
+    toJSON: () => ({}),
+  } as DOMRect);
 }
 
 function dragOverAt(target: Element, dataTransfer: DataTransfer, clientY: number) {
@@ -118,13 +116,15 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={onCreateNote}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByRole("button", { name: "List" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tree" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New note" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tree" }).querySelector(".lucide-folder-tree")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Tree" }).querySelector(".lucide-folder-tree")
+    ).not.toBeNull();
     expect(screen.getByTestId("notes-view-label-list")).not.toHaveClass("sr-only");
     expect(screen.getByTestId("notes-view-label-tree")).not.toHaveClass("sr-only");
 
@@ -146,7 +146,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText("Pinned")).toBeInTheDocument();
@@ -167,7 +167,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.queryByRole("button", { name: "Pin" })).not.toBeInTheDocument();
@@ -194,24 +194,34 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={onCreateNote}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
 
     expect(screen.getByText("Group")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Book" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("notes-group-label-book")).not.toHaveClass("@max-[340px]/notes-sidebar:sr-only");
-    expect(screen.getByTestId("notes-group-label-tag")).not.toHaveClass("@max-[340px]/notes-sidebar:sr-only");
-    expect(screen.getByTestId("notes-group-label-date")).not.toHaveClass("@max-[340px]/notes-sidebar:sr-only");
+    expect(screen.getByTestId("notes-group-label-book")).not.toHaveClass(
+      "@max-[340px]/notes-sidebar:sr-only"
+    );
+    expect(screen.getByTestId("notes-group-label-tag")).not.toHaveClass(
+      "@max-[340px]/notes-sidebar:sr-only"
+    );
+    expect(screen.getByTestId("notes-group-label-date")).not.toHaveClass(
+      "@max-[340px]/notes-sidebar:sr-only"
+    );
     expect(screen.getByText("Novel")).toBeInTheDocument();
     expect(screen.getByText("Novel note")).toBeInTheDocument();
     expect(screen.getByText("Empty Book")).toBeInTheDocument();
     expect(screen.getByText("Unfiled")).toBeInTheDocument();
     expect(screen.getByText("Loose note")).toBeInTheDocument();
-    expect(screen.getByText("Unfiled").closest("div")?.querySelector(".lucide-feather")).not.toBeNull();
+    expect(
+      screen.getByText("Unfiled").closest("div")?.querySelector(".lucide-feather")
+    ).not.toBeNull();
     expect(screen.getByTestId("book-title-action-book-a")).toHaveTextContent("Novel");
-    expect(screen.getByTestId("book-title-action-book-a").querySelector('button[aria-label="Add note"]')).not.toBeNull();
+    expect(
+      screen.getByTestId("book-title-action-book-a").querySelector('button[aria-label="Add note"]')
+    ).not.toBeNull();
     expect(screen.getByTestId("book-count-book-a")).toHaveTextContent("1");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Add note" })[0]);
@@ -233,7 +243,7 @@ describe("NotesList", () => {
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
         onRenameNote={onRenameNote}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
@@ -247,7 +257,9 @@ describe("NotesList", () => {
   });
 
   it("collapses toggle labels independently when each group's measured labels do not fit", async () => {
-    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (
+      this: HTMLElement
+    ) {
       const testId = this.getAttribute("data-testid");
 
       if (testId === "notes-view-toggle-group") return 190;
@@ -255,7 +267,9 @@ describe("NotesList", () => {
 
       return 0;
     });
-    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (
+      this: HTMLElement
+    ) {
       const testId = this.getAttribute("data-testid");
 
       if (testId === "notes-view-toggle-measure") return 140;
@@ -271,17 +285,23 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("notes-view-toggle-group")).toHaveAttribute("data-label-mode", "full");
+      expect(screen.getByTestId("notes-view-toggle-group")).toHaveAttribute(
+        "data-label-mode",
+        "full"
+      );
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("notes-group-toggle-group")).toHaveAttribute("data-label-mode", "icon");
+      expect(screen.getByTestId("notes-group-toggle-group")).toHaveAttribute(
+        "data-label-mode",
+        "icon"
+      );
     });
 
     expect(screen.getByTestId("notes-view-label-list")).not.toHaveClass("sr-only");
@@ -300,7 +320,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
@@ -321,7 +341,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
@@ -385,9 +405,7 @@ describe("NotesList", () => {
   });
 
   it("remembers a collapsed date group across remounts", () => {
-    const notes = [
-      buildNote({ id: "n1", title: "Fresh note", updatedAt: Date.now() / 1000 }),
-    ];
+    const notes = [buildNote({ id: "n1", title: "Fresh note", updatedAt: Date.now() / 1000 })];
     const props = {
       notes,
       currentNoteId: null,
@@ -423,7 +441,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
@@ -449,7 +467,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={onReorderNotes}
-      />,
+      />
     );
 
     const source = screen.getByText("Charlie").closest("li");
@@ -499,7 +517,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={onReorderNotes}
-      />,
+      />
     );
 
     const source = screen.getByText("Bravo").closest("li");
@@ -549,7 +567,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={onReorderNotes}
-      />,
+      />
     );
 
     const source = screen.getByText("Alpha").closest("li");
@@ -594,7 +612,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={onReorderNotes}
-      />,
+      />
     );
 
     const source = screen.getByText("Regular").closest("li");
@@ -630,7 +648,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     const source = screen.getByText("Regular").closest("li");
@@ -647,10 +665,7 @@ describe("NotesList", () => {
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.dragOver(screen.getByTestId("notes-section-pinned"), { dataTransfer });
 
-    expect(screen.getByTestId("notes-section-pinned")).toHaveAttribute(
-      "data-drop-active",
-      "true",
-    );
+    expect(screen.getByTestId("notes-section-pinned")).toHaveAttribute("data-drop-active", "true");
     expect(screen.getByTestId("notes-section-pinned")).toHaveClass("bg-primary/10");
     expect(screen.getByTestId("notes-section-pinned")).toHaveClass("ring-primary/40");
   });
@@ -668,7 +683,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     const source = screen.getByText("Regular").closest("li");
@@ -701,7 +716,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     const source = screen.getByText("Bravo").closest("li");
@@ -740,7 +755,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
-      />,
+      />
     );
 
     const source = screen.getByText("Bravo").closest("li");
@@ -780,7 +795,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={onReorderNotes}
-      />,
+      />
     );
 
     const source = screen.getByText("Already pinned").closest("li");
@@ -822,7 +837,7 @@ describe("NotesList", () => {
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
         onReassignNoteBook={onReassignNoteBook}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
@@ -863,7 +878,7 @@ describe("NotesList", () => {
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
         onReassignNoteBook={onReassignNoteBook}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
@@ -903,7 +918,7 @@ describe("NotesList", () => {
         onSelectNote={vi.fn()}
         onCreateNote={vi.fn()}
         onReorderNotes={onReorderNotes}
-      />,
+      />
     );
 
     fireEvent.change(screen.getByPlaceholderText("Search notes..."), {

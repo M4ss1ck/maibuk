@@ -9,8 +9,7 @@ const hrefByChapter = new Map([
 describe("rewriteInternalLinksForExport", () => {
   it("rewrites chapter and heading links to relative href + fragment", () => {
     const html =
-      '<a href="maibuk://chapter/c2">go</a>' +
-      '<a href="maibuk://heading/c2/h-5">sec</a>';
+      '<a href="maibuk://chapter/c2">go</a>' + '<a href="maibuk://heading/c2/h-5">sec</a>';
     const result = rewriteInternalLinksForExport(html, {
       chapterHref: hrefByChapter,
       firstChapterHref: "text/chapter1.xhtml",
@@ -29,8 +28,7 @@ describe("rewriteInternalLinksForExport", () => {
   });
 
   it("leaves unknown targets and external links untouched", () => {
-    const html =
-      '<a href="maibuk://chapter/missing">x</a><a href="https://e.com">e</a>';
+    const html = '<a href="maibuk://chapter/missing">x</a><a href="https://e.com">e</a>';
     const result = rewriteInternalLinksForExport(html, {
       chapterHref: hrefByChapter,
       firstChapterHref: "text/chapter1.xhtml",
