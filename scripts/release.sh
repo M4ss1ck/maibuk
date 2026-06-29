@@ -237,7 +237,7 @@ generate_changelog() {
 }
 
 # --- Determine commit range ------------------------------------------------
-LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+LAST_TAG="$(git tag --list 'v*' --sort=-version:refname | head -n1)"
 if [ -n "$LAST_TAG" ]; then
     RANGE="$LAST_TAG..HEAD"
     print_status "Generating changelog for commits in $RANGE"
