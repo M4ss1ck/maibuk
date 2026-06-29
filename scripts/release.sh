@@ -314,7 +314,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 if [ -f CHANGELOG.md ]; then
     # Insert the new entry right after the header, before the first existing entry.
     TMP_CHANGELOG="$(mktemp)"
-    EXISTING_BODY="$(awk 'found{print} /^## \[/{found=1; print}' CHANGELOG.md)"
+    EXISTING_BODY="$(awk 'found || /^## \[/{found=1; print}' CHANGELOG.md)"
     {
         printf '%s\n' "$CHANGELOG_HEADER"
         printf '%s\n\n' "$NEW_ENTRY"

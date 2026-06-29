@@ -29,7 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Paste cleanup rule values are edited in an auto-growing textarea, and the target preview tooltip was removed to prevent overflow
 
 ## [0.4.12] - 2026-06-22
-## [0.4.12] - 2026-06-22
 
 ### Added
 - Syntax highlighting for code blocks in the editor using lowlight
