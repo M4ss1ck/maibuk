@@ -6,13 +6,13 @@ import type {
   OSAdapter,
   WebDialogAdapter,
   BackupAdapter,
-} from "./types";
+} from "@/lib/platform/types";
 
 // Build-time constant - Vite replaces this during build
 export const IS_WEB = import.meta.env.VITE_BUILD_TARGET === "web";
 export const IS_TAURI = !IS_WEB;
 
-export { isMac } from "./detect";
+export { isMac } from "@/lib/platform/detect";
 
 // Re-export types
 export type {
@@ -26,15 +26,15 @@ export type {
   FileWithData,
   BackupAdapter,
   BackupEntry,
-} from "./types";
+} from "@/lib/platform/types";
 
 // Database factory
 export async function createDatabase(path: string): Promise<DatabaseAdapter> {
   if (IS_WEB) {
-    const { createWebDatabase } = await import("./web/database");
+    const { createWebDatabase } = await import("@/lib/platform/web/database");
     return createWebDatabase(path);
   } else {
-    const { createTauriDatabase } = await import("./tauri/database");
+    const { createTauriDatabase } = await import("@/lib/platform/tauri/database");
     return createTauriDatabase(path);
   }
 }
@@ -42,10 +42,10 @@ export async function createDatabase(path: string): Promise<DatabaseAdapter> {
 // File system factory
 export async function getFileSystem(): Promise<FileSystemAdapter> {
   if (IS_WEB) {
-    const { webFileSystem } = await import("./web/filesystem");
+    const { webFileSystem } = await import("@/lib/platform/web/filesystem");
     return webFileSystem;
   } else {
-    const { tauriFileSystem } = await import("./tauri/filesystem");
+    const { tauriFileSystem } = await import("@/lib/platform/tauri/filesystem");
     return tauriFileSystem;
   }
 }
@@ -53,17 +53,17 @@ export async function getFileSystem(): Promise<FileSystemAdapter> {
 // Dialog factory
 export async function getDialog(): Promise<DialogAdapter> {
   if (IS_WEB) {
-    const { webDialog } = await import("./web/dialog");
+    const { webDialog } = await import("@/lib/platform/web/dialog");
     return webDialog;
   } else {
-    const { tauriDialog } = await import("./tauri/dialog");
+    const { tauriDialog } = await import("@/lib/platform/tauri/dialog");
     return tauriDialog;
   }
 }
 
 // Web-specific dialog with file data (for web only)
 export async function getWebDialog(): Promise<WebDialogAdapter> {
-  const { webDialog } = await import("./web/dialog");
+  const { webDialog } = await import("@/lib/platform/web/dialog");
   return webDialog;
 }
 
@@ -111,10 +111,10 @@ export async function isLaunchOnStartupEnabled(): Promise<boolean> {
 // OS factory
 export async function getOS(): Promise<OSAdapter> {
   if (IS_WEB) {
-    const { webOS } = await import("./web/os");
+    const { webOS } = await import("@/lib/platform/web/os");
     return webOS;
   } else {
-    const { tauriOS } = await import("./tauri/os");
+    const { tauriOS } = await import("@/lib/platform/tauri/os");
     return tauriOS;
   }
 }
@@ -122,9 +122,9 @@ export async function getOS(): Promise<OSAdapter> {
 // Backup factory
 export async function createBackup(customDir?: string | null): Promise<BackupAdapter> {
   if (IS_WEB) {
-    const { createWebBackup } = await import("./web/backup");
+    const { createWebBackup } = await import("@/lib/platform/web/backup");
     return createWebBackup();
   }
-  const { createTauriBackup } = await import("./tauri/backup");
+  const { createTauriBackup } = await import("@/lib/platform/tauri/backup");
   return createTauriBackup(customDir ?? undefined);
 }

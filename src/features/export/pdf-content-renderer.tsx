@@ -10,8 +10,8 @@
  */
 import { createElement, type ReactNode } from "react";
 import { Text, View, Image, Link } from "@react-pdf/renderer";
-import type { PdfStyles } from "./pdf-styles";
-import { parseLinkUri } from "../links/link-uri";
+import type { PdfStyles } from "@/features/export/pdf-styles";
+import { parseLinkUri } from "@/features/links/link-uri";
 
 // ---------------------------------------------------------------------------
 // CSS → react-pdf style helpers

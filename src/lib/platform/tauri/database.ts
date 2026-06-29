@@ -1,6 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
-import type { DatabaseAdapter } from "../types";
-import { parseSqlStatements } from "../../db/sql-parser";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { parseSqlStatements } from "@/lib/db/sql-parser";
 
 function escapeSQL(value: unknown): string {
   if (value === null || value === undefined) return "NULL";

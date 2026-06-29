@@ -26,7 +26,7 @@ import {
   EDITOR_PAGE_PADDING_STEP,
   DEFAULT_EDITOR_PAGE_PADDING,
   clampEditorPagePadding,
-} from "../../../../features/settings/types";
+} from "@/features/settings/types";
 
 describe("DEFAULT_PRIMARY_COLOR", () => {
   it("is a valid hex color", () => {

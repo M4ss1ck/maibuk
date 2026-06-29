@@ -9,7 +9,7 @@ import type {
   SyncOptions,
   SyncLogEntry,
   SyncDeletionReviewItem,
-} from "./types";
+} from "@/features/sync/types";
 import {
   initClient,
   normalizeServerUrl,
@@ -19,10 +19,10 @@ import {
   register as pbRegister,
   loginWithOAuth as pbLoginWithOAuth,
   logout as pbLogout,
-} from "./client";
-import { clearPassphrase, setPassphrase as cryptoSetPassphrase } from "./crypto";
-import { syncAllBooks, syncBook, syncSingleNote as engineSyncSingleNote } from "./sync-engine";
-import { confirmTombstones } from "./tombstones";
+} from "@/features/sync/client";
+import { clearPassphrase, setPassphrase as cryptoSetPassphrase } from "@/features/sync/crypto";
+import { syncAllBooks, syncBook, syncSingleNote as engineSyncSingleNote } from "@/features/sync/sync-engine";
+import { confirmTombstones } from "@/features/sync/tombstones";
 
 const STORAGE_KEY = "maibuk-sync";
 const MAX_SYNC_LOG_ENTRIES = 100;

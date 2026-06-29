@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { useVersionCheck } from "../../../../features/version/useVersionCheck";
+import { useVersionCheck } from "@/features/version/useVersionCheck";
 
 describe("useVersionCheck()", () => {
   const GITHUB_API_URL = "https://api.github.com/repos/M4ss1ck/maibuk/tags";

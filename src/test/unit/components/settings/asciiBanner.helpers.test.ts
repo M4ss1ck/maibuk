@@ -6,7 +6,7 @@ import {
   hexToRgb,
   parseArt,
   randomGlyph,
-} from "../../../../components/settings/asciiBanner.helpers";
+} from "@/components/settings/asciiBanner.helpers";
 
 describe("hexToRgb()", () => {
   it("parses a standard 6-digit hex", () => {

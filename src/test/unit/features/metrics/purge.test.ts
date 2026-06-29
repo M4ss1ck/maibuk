@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 import {
   ensureMetricsSchema,
   insertEvents,
   listEvents,
   upsertCache,
-} from "../../../../features/metrics/events-repo";
-import type { MetricEvent } from "../../../../features/metrics/types";
+} from "@/features/metrics/events-repo";
+import type { MetricEvent } from "@/features/metrics/types";
 
 const { mockGetDatabase, mockGetOrCreateDeviceId } = vi.hoisted(() => ({
   mockGetDatabase: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("../../../../features/metrics/device-id", () => ({
   getOrCreateDeviceId: mockGetOrCreateDeviceId,
 }));
 
-const { purgeMetricCategory } = await import("../../../../features/metrics/purge");
+const { purgeMetricCategory } = await import("@/features/metrics/purge");
 
 let testDb: DatabaseAdapter;
 

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { TagEditor } from "../../../../components/notes/TagEditor";
+import { TagEditor } from "@/components/notes/TagEditor";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

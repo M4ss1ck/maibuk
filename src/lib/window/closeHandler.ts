@@ -1,6 +1,6 @@
-import { IS_TAURI } from "../platform";
-import { useSettingsStore } from "../../features/settings/store";
-import { metricsService } from "../metrics/MetricsService";
+import { IS_TAURI } from "@/lib/platform";
+import { useSettingsStore } from "@/features/settings/store";
+import { metricsService } from "@/lib/metrics/MetricsService";
 
 let unlisten: (() => void) | null = null;
 

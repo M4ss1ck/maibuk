@@ -1,6 +1,6 @@
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
-import type { DatabaseAdapter } from "../types";
-import { parseSqlStatements } from "../../db/sql-parser";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { parseSqlStatements } from "@/lib/db/sql-parser";
 
 const DB_STORAGE_KEY = "maibuk-database";
 

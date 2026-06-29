@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
-import { createRichTextExtensions } from "../../../../components/editor/extensions/createRichTextExtensions";
-import { CanvasRichContentMenu } from "../../../../features/canvas/nodes/CanvasRichContentMenu";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { CanvasRichContentMenu } from "@/features/canvas/nodes/CanvasRichContentMenu";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),

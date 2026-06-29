@@ -1,4 +1,4 @@
-import type { GradientStop } from "./schema";
+import type { GradientStop } from "@/features/covers/scene/schema";
 
 /** Return a new array of stops sorted by offset ascending (input untouched). */
 export function sortStops(stops: GradientStop[]): GradientStop[] {

@@ -7,11 +7,11 @@
  */
 import { createElement } from "react";
 import { pdf, Font, Document, Page, Text, View } from "@react-pdf/renderer";
-import { createPdfStyles } from "./pdf-styles";
-import { processChapterHtml } from "./html-sanitizer";
-import { renderHtmlContent } from "./pdf-content-renderer";
-import { sanitizePdfText } from "./pdf-generator";
-import { DEFAULT_PDF_OPTIONS } from "./types";
+import { createPdfStyles } from "@/features/export/pdf-styles";
+import { processChapterHtml } from "@/features/export/html-sanitizer";
+import { renderHtmlContent } from "@/features/export/pdf-content-renderer";
+import { sanitizePdfText } from "@/features/export/pdf-generator";
+import { DEFAULT_PDF_OPTIONS } from "@/features/export/types";
 
 const MAX_WORD_LEN = 28;
 const CHUNK_SIZE = 16;

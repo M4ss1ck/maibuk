@@ -1,4 +1,4 @@
-import { getDatabase } from "../../lib/db";
+import { getDatabase } from "@/lib/db";
 
 const DONE_FLAG = "maibuk.sync.genericMigrationDone";
 const DONE_SETTING_KEY = "sync.genericMigrationDone";

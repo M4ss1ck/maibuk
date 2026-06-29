@@ -6,7 +6,7 @@ import {
   attrsToDescriptor,
   descriptorToAttrs,
   resolveCustomSymbols,
-} from "../../../../components/editor/extensions/scene-break-utils";
+} from "@/components/editor/extensions/scene-break-utils";
 
 describe("resolveCustomSymbols", () => {
   it("repeats a multi-char unit with spacing", () => {

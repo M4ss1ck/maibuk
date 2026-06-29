@@ -1,4 +1,4 @@
-export { computeChecksum } from "../../lib/checksum";
+export { computeChecksum } from "@/lib/checksum";
 
 const PBKDF2_ITERATIONS = 600_000;
 const SALT_LENGTH = 16;

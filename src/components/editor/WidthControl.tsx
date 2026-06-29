@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { MoveHorizontal } from "lucide-react";
-import { useSettingsStore } from "../../features/settings/store";
+import { useSettingsStore } from "@/features/settings/store";
 import {
   EDITOR_CONTENT_WIDTH_MIN,
   EDITOR_CONTENT_WIDTH_MAX,
@@ -10,8 +10,8 @@ import {
   EDITOR_CONTENT_WIDTH_PRESETS,
   EDITOR_CONTENT_WIDTH_FULL,
   DEFAULT_EDITOR_CONTENT_WIDTH,
-} from "../../features/settings/types";
-import { PagePaddingControl } from "./PagePaddingControl";
+} from "@/features/settings/types";
+import { PagePaddingControl } from "@/components/editor/PagePaddingControl";
 
 export function WidthControl() {
   const { t } = useTranslation();

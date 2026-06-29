@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NodeResizeControl, ResizeControlVariant, type Node, type NodeProps } from "@xyflow/react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { useCanvasStore } from "../store";
-import { useSettingsStore } from "../../settings/store";
-import type { CanvasFlowNodeData } from "../reactFlowAdapter";
-import type { LightweightCanvasNode } from "../types";
-import { createRichTextExtensions } from "../../../components/editor/extensions/createRichTextExtensions";
-import { MarkdownPasteDialog } from "../../../components/editor/MarkdownPasteDialog";
-import { FootnoteList } from "../../../components/editor/FootnoteList";
-import { ImageContextMenu } from "../../../components/editor/ImageContextMenu";
-import { CanvasNodeHandles } from "./CanvasNodeHandles";
-import { NodeFormatBubble } from "./NodeFormatBubble";
-import { prepareStaticCanvasHtml } from "./staticRichText";
+import { useCanvasStore } from "@/features/canvas/store";
+import { useSettingsStore } from "@/features/settings/store";
+import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
+import type { LightweightCanvasNode } from "@/features/canvas/types";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
+import { FootnoteList } from "@/components/editor/FootnoteList";
+import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
+import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
+import { NodeFormatBubble } from "@/features/canvas/nodes/NodeFormatBubble";
+import { prepareStaticCanvasHtml } from "@/features/canvas/nodes/staticRichText";
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
 

@@ -1,4 +1,4 @@
-import { getDatabase } from "../../lib/db";
+import { getDatabase } from "@/lib/db";
 
 export interface ProjectAssetInput {
   id?: string;

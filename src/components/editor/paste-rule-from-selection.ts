@@ -1,4 +1,4 @@
-import type { PasteRuleTarget } from "../../features/settings/types";
+import type { PasteRuleTarget } from "@/features/settings/types";
 
 /** Common HTML tag names that, when selected alone, should map to a `tag` rule. */
 const KNOWN_TAGS = new Set([

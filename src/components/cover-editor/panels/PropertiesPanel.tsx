@@ -1,10 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { useCoverStore } from "../../../features/covers/store";
-import { DEFAULT_FILTERS, FONT_FAMILIES } from "../../../features/covers/scene/defaults";
-import type { ImageLayer, ShapeLayer, TextLayer } from "../../../features/covers/scene/schema";
-import { Select } from "../../ui/Select";
-import { BackgroundPanel } from "./BackgroundPanel";
-import { PaintControl } from "./PaintControl";
+import { useCoverStore } from "@/features/covers/store";
+import { DEFAULT_FILTERS, FONT_FAMILIES } from "@/features/covers/scene/defaults";
+import type { ImageLayer, ShapeLayer, TextLayer } from "@/features/covers/scene/schema";
+import { Select } from "@/components/ui/Select";
+import { BackgroundPanel } from "@/components/cover-editor/panels/BackgroundPanel";
+import { PaintControl } from "@/components/cover-editor/panels/PaintControl";
 
 function NumberField({
   label,

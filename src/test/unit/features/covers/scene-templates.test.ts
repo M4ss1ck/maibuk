@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TEMPLATES, buildTemplateScene } from "../../../../features/covers/scene/templates";
+import { TEMPLATES, buildTemplateScene } from "@/features/covers/scene/templates";
 
 const args = { title: "The Great Book", author: "Jane Doe", presetId: "6x9" };
 

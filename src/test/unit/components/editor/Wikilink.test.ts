@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { Wikilink } from "../../../../components/editor/extensions/Wikilink";
+import { Wikilink } from "@/components/editor/extensions/Wikilink";
 
 function makeEditor(content = "<p></p>") {
   return new Editor({ extensions: [StarterKit, Wikilink], content });

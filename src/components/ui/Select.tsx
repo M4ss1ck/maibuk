@@ -1,6 +1,6 @@
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import type { ReactNode } from "react";
-import { ChevronIcon } from "../icons";
+import { ChevronIcon } from "@/components/icons";
 
 interface SelectOption<T> {
   value: T;

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { BookSnapshot } from "../../../../features/sync/types";
+import type { BookSnapshot } from "@/features/sync/types";
 
 function chapter(
   id: string,
@@ -50,7 +50,7 @@ function snapshot(chapters: BookSnapshot["chapters"]): BookSnapshot {
 
 describe("diffSnapshots()", () => {
   it("marks every chapter unchanged when contents match", async () => {
-    const { diffSnapshots } = await import("../../../../features/versions/compare");
+    const { diffSnapshots } = await import("@/features/versions/compare");
     const current = snapshot([
       chapter("chapter-1", "One", "<p>Same</p>", 0),
       chapter("chapter-2", "Two", "<p>Also same</p>", 1),
@@ -69,7 +69,7 @@ describe("diffSnapshots()", () => {
   });
 
   it("marks a reworded paragraph modified with insertion and deletion markup", async () => {
-    const { diffSnapshots } = await import("../../../../features/versions/compare");
+    const { diffSnapshots } = await import("@/features/versions/compare");
     const current = snapshot([chapter("chapter-1", "One", "<p>The dark night</p>", 0)]);
     const target = snapshot([chapter("chapter-1", "One", "<p>The stormy night</p>", 0)]);
 
@@ -83,7 +83,7 @@ describe("diffSnapshots()", () => {
   });
 
   it("preserves inline formatting around unchanged text", async () => {
-    const { diffSnapshots } = await import("../../../../features/versions/compare");
+    const { diffSnapshots } = await import("@/features/versions/compare");
     const current = snapshot([
       chapter("chapter-1", "One", "<p><strong>Bold</strong> and <em>quiet</em></p>", 0),
     ]);
@@ -98,7 +98,7 @@ describe("diffSnapshots()", () => {
   });
 
   it("marks a target-only chapter added with sanitized target HTML", async () => {
-    const { diffSnapshots } = await import("../../../../features/versions/compare");
+    const { diffSnapshots } = await import("@/features/versions/compare");
     const current = snapshot([]);
     const target = snapshot([
       chapter("chapter-1", "New", '<p>New chapter</p><img src="x" onerror="alert(1)">', 0),
@@ -115,7 +115,7 @@ describe("diffSnapshots()", () => {
   });
 
   it("appends removed chapters after target-side chapters", async () => {
-    const { diffSnapshots } = await import("../../../../features/versions/compare");
+    const { diffSnapshots } = await import("@/features/versions/compare");
     const current = snapshot([
       chapter("chapter-1", "Removed", "<p>Gone</p>", 0),
       chapter("chapter-2", "Kept", "<p>Kept old</p>", 1),
@@ -134,7 +134,7 @@ describe("diffSnapshots()", () => {
   });
 
   it("strips unsafe HTML while preserving diff tags", async () => {
-    const { diffSnapshots } = await import("../../../../features/versions/compare");
+    const { diffSnapshots } = await import("@/features/versions/compare");
     const current = snapshot([chapter("chapter-1", "One", "<p>Old text</p>", 0)]);
     const target = snapshot([
       chapter("chapter-1", "One", '<p>New text</p><script>alert("x")</script>', 0),
@@ -154,7 +154,7 @@ describe("diffSnapshots()", () => {
         throw new Error("diff failed");
       },
     }));
-    const { diffSnapshots } = await import("../../../../features/versions/compare");
+    const { diffSnapshots } = await import("@/features/versions/compare");
     const current = snapshot([chapter("chapter-1", "One", "<p>Old</p>", 0)]);
     const target = snapshot([
       chapter("chapter-1", "One", '<p>New</p><script>alert("x")</script>', 0),

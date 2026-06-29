@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { CaseSensitive, CaseUpper, CaseLower, ChevronDown } from "lucide-react";
-import { ToolbarButton } from "./ToolbarButton";
+import { ToolbarButton } from "@/components/editor/ToolbarButton";
 
 interface TextCaseMenuProps {
   editor: Editor;

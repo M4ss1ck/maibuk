@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { useLayoutEffect } from "react";
-import { useReadingPositionStore } from "./store";
+import { useReadingPositionStore } from "@/features/reading-position/store";
 
 const CAPTURE_DEBOUNCE_MS = 400;
 /** Horizontal inset used when probing the block under the viewport's top edge. */

@@ -1,12 +1,12 @@
 import { create } from "zustand";
-import { getDatabase } from "../../lib/db";
-import { recordTombstone } from "../sync/tombstones";
+import { getDatabase } from "@/lib/db";
+import { recordTombstone } from "@/features/sync/tombstones";
 import {
   isFinitePosition,
   parseCanvasDoc,
   serializeCanvasDoc,
   type CanvasDocLoadError,
-} from "./serialization";
+} from "@/features/canvas/serialization";
 import {
   createDefaultCanvasDoc,
   type Canvas,
@@ -23,7 +23,7 @@ import {
   type ResizeTextNodeInput,
   type UpdateNoteRefNodePatch,
   type UpdateTextNodePatch,
-} from "./types";
+} from "@/features/canvas/types";
 
 const HISTORY_LIMIT = 100;
 

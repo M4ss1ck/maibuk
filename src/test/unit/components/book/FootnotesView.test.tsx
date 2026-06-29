@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { FootnotesView } from "../../../../components/editor/FootnotesView";
-import type { Chapter } from "../../../../features/chapters/types";
+import { FootnotesView } from "@/components/editor/FootnotesView";
+import type { Chapter } from "@/features/chapters/types";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),

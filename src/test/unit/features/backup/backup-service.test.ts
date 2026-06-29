@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { BackupAdapter, BackupEntry } from "../../../../lib/platform/types";
-import { parseTriggerFromFilename } from "../../../../features/backup/utils";
+import type { BackupAdapter, BackupEntry } from "@/lib/platform/types";
+import { parseTriggerFromFilename } from "@/features/backup/utils";
 
 const mockGenerateSqlDump = vi.hoisted(() => vi.fn());
 const mockCreateBackup = vi.hoisted(() => vi.fn());
@@ -60,7 +60,7 @@ vi.mock("../../../../features/canvas/store", () => ({
   useCanvasStore: { getState: () => ({ loadCanvases: mockLoadCanvases }) },
 }));
 
-const { BackupService } = await import("../../../../features/backup/backup-service");
+const { BackupService } = await import("@/features/backup/backup-service");
 
 function createMockAdapter(): BackupAdapter {
   const store = new Map<string, { sql: string; entry: BackupEntry }>();

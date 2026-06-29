@@ -1,13 +1,13 @@
 // src/test/unit/features/chapters/chapter-store.reindex.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 
 let testDb: DatabaseAdapter;
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
 
-const { useChapterStore } = await import("../../../../features/chapters/store");
+const { useChapterStore } = await import("@/features/chapters/store");
 
 describe("chapter store reindex on save", () => {
   beforeEach(async () => {

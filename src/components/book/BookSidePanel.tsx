@@ -1,9 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
-import type { Chapter } from "../../features/chapters/types";
-import type { Note } from "../../features/notes";
-import { FootnotesView } from "../editor/FootnotesView";
-import { BookNotesView } from "./BookNotesView";
+import type { Chapter } from "@/features/chapters/types";
+import type { Note } from "@/features/notes";
+import { FootnotesView } from "@/components/editor/FootnotesView";
+import { BookNotesView } from "@/components/book/BookNotesView";
 
 export type BookSidePanelTab = "footnotes" | "notes";
 

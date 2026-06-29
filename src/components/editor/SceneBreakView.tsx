@@ -1,6 +1,6 @@
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 
-import type { SceneBreakAttrs } from "./extensions/scene-break-utils";
+import type { SceneBreakAttrs } from "@/components/editor/extensions/scene-break-utils";
 
 export function SceneBreakView({ node, selected }: NodeViewProps) {
   const attrs = node.attrs as SceneBreakAttrs;

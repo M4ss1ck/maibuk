@@ -1,9 +1,9 @@
-import type { WorkerRequest, WorkerResponse } from "./types";
-import type { MetricEvent } from "../../features/metrics/types";
+import type { WorkerRequest, WorkerResponse } from "@/lib/metrics/types";
+import type { MetricEvent } from "@/features/metrics/types";
 import {
   computeAggregate,
   computeStreakFromDayTotals,
-} from "../../features/metrics/aggregates/compute";
+} from "@/features/metrics/aggregates/compute";
 
 let buffer: MetricEvent[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;

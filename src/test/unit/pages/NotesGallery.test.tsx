@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NotesGallery } from "../../../pages/NotesGallery";
+import { NotesGallery } from "@/pages/NotesGallery";
 
 const { mockNavigate, noteState, bookState, settingsState } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),

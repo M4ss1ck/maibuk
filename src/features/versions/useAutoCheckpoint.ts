@@ -1,10 +1,10 @@
 import { useRef, useEffect } from "react";
-import { useVersionStore } from "./store";
+import { useVersionStore } from "@/features/versions/store";
 import {
   VERSION_CHECKPOINT_WORD_THRESHOLD,
   VERSION_CHECKPOINT_IDLE_MS,
   VERSION_CHECKPOINT_MIN_INTERVAL_MS,
-} from "../../constants";
+} from "@/constants";
 
 export function useAutoCheckpoint(params: {
   bookId: string | undefined;

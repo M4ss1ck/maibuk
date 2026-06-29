@@ -1,6 +1,6 @@
 // src/features/links/link-resolver.ts
-import type { LinkTargetType } from "./types";
-import { parseLinkUri } from "./link-uri";
+import type { LinkTargetType } from "@/features/links/types";
+import { parseLinkUri } from "@/features/links/link-uri";
 
 export interface ResolverData {
   notes: { id: string; title: string }[];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { linearGradientCoords, sortStops } from "../../../../features/covers/scene/paint";
+import { linearGradientCoords, sortStops } from "@/features/covers/scene/paint";
 
 describe("sortStops", () => {
   it("orders stops by offset ascending", () => {

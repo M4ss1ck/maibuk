@@ -2,7 +2,7 @@ import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headless
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUpDown, Check, ChevronDown } from "lucide-react";
-import type { NotesSortOption } from "./notes-list-model";
+import type { NotesSortOption } from "@/components/notes/notes-list-model";
 
 interface NotesSortMenuProps {
   value: NotesSortOption;

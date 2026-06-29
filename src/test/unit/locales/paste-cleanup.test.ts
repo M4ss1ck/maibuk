@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import en from "../../../locales/en.json";
-import es from "../../../locales/es.json";
-import { PASTE_STRIP_COMMON_PROPERTIES } from "../../../features/settings/types";
+import en from "@/locales/en.json";
+import es from "@/locales/es.json";
+import { PASTE_STRIP_COMMON_PROPERTIES } from "@/features/settings/types";
 
 function keyPaths(value: unknown, prefix = ""): string[] {
   if (value === null || typeof value !== "object") return [prefix];

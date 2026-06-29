@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
-import type { BookSnapshot, NoteSnapshot } from "../../../../features/sync/types";
-import { useChapterStore } from "../../../../features/chapters/store";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
+import type { BookSnapshot, NoteSnapshot } from "@/features/sync/types";
+import { useChapterStore } from "@/features/chapters/store";
 
 let testDb: DatabaseAdapter;
 
@@ -20,7 +20,7 @@ const {
   normalizeNoteSnapshotForSync,
   serializeBook,
   serializeNote,
-} = await import("../../../../features/sync/serializer");
+} = await import("@/features/sync/serializer");
 
 async function insertBook(db: DatabaseAdapter, id: string): Promise<void> {
   await db.execute(

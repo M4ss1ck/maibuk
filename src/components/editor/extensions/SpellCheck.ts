@@ -2,9 +2,9 @@ import { Extension } from "@tiptap/core";
 import { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import type { Language } from "../../../features/settings/types";
-import { useSettingsStore } from "../../../features/settings/store";
-import { spellCheckService } from "../../../lib/spellcheck";
+import type { Language } from "@/features/settings/types";
+import { useSettingsStore } from "@/features/settings/store";
+import { spellCheckService } from "@/lib/spellcheck";
 
 const WORD_REGEX = /\p{L}+(?:['\u2019]\p{L}+)*/gu;
 const FILE_LIKE_REGEX =

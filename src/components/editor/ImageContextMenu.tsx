@@ -3,11 +3,11 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
 import { Type, Copy, Download, AlignLeft, AlignCenter, AlignRight, Trash2 } from "lucide-react";
-import { Modal } from "../ui/Modal";
-import { Input } from "../ui/Input";
-import { Button } from "../ui/Button";
-import { toast } from "../ui";
-import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui";
+import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 
 interface ImageContextMenuProps {
   editor: Editor;

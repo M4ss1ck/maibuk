@@ -1,4 +1,4 @@
-import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
+import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 
 /**
  * Saves Markdown text to disk. On the web build it triggers a download; on

@@ -5,7 +5,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const { PagePaddingControl } = await import("../../../../components/editor/PagePaddingControl");
+const { PagePaddingControl } = await import("@/components/editor/PagePaddingControl");
 
 describe("PagePaddingControl", () => {
   it("renders the simple slider and value", () => {

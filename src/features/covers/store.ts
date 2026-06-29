@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Background, CoverDoc, CoverScene, Layer } from "./scene/schema";
+import type { Background, CoverDoc, CoverScene, Layer } from "@/features/covers/scene/schema";
 
 const HISTORY_LIMIT = 100;
 

@@ -6,7 +6,7 @@ import type {
   ParsedEpubNavItem,
   ParsedEpubResource,
   ParsedEpubSpineItem,
-} from "./types";
+} from "@/features/import/types";
 
 const EMPTY_PARSED_EPUB: ParsedEpub = {
   packagePath: "",

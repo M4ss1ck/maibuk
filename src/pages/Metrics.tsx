@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Heatmap, PerWorkList, StreakCard, TimeOfDay, WpmChart } from "../components/metrics";
-import { getSnapshotMetrics } from "../features/metrics/events-repo";
-import { useSettingsStore } from "../features/settings/store";
-import { getDatabase } from "../lib/db";
-import { metricsService } from "../lib/metrics/MetricsService";
+import { Heatmap, PerWorkList, StreakCard, TimeOfDay, WpmChart } from "@/components/metrics";
+import { getSnapshotMetrics } from "@/features/metrics/events-repo";
+import { useSettingsStore } from "@/features/settings/store";
+import { getDatabase } from "@/lib/db";
+import { metricsService } from "@/lib/metrics/MetricsService";
 import type {
   DashboardAggregate,
   HeatmapAggregate,
   SnapshotMetrics,
   StreakAggregate,
-} from "../features/metrics/aggregates/types";
+} from "@/features/metrics/aggregates/types";
 
 export function Metrics() {
   const { t } = useTranslation();

@@ -149,7 +149,7 @@ vi.mock("../../../components/versions/HistoryMenuButton", () => ({
   HistoryMenuButton: () => <button type="button">history</button>,
 }));
 
-import { BookEditor } from "../../../pages/BookEditor";
+import { BookEditor } from "@/pages/BookEditor";
 
 describe("BookEditor reading-position wiring", () => {
   beforeEach(() => {

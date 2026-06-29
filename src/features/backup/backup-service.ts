@@ -4,15 +4,15 @@ import type {
   BackupPage,
   BackupPageOptions,
   DatabaseAdapter,
-} from "../../lib/platform/types";
-import { getDatabase } from "../../lib/db";
-import { parseSqlStatements } from "../../lib/db/sql-parser";
-import { useBookStore } from "../books/store";
-import { useChapterStore } from "../chapters/store";
-import { useNoteStore } from "../notes/store";
-import { useCanvasStore } from "../canvas/store";
-import { parseCanvasDoc, serializeCanvasDoc } from "../canvas/serialization";
-import { generateSqlDump } from "./generate-sql-dump";
+} from "@/lib/platform/types";
+import { getDatabase } from "@/lib/db";
+import { parseSqlStatements } from "@/lib/db/sql-parser";
+import { useBookStore } from "@/features/books/store";
+import { useChapterStore } from "@/features/chapters/store";
+import { useNoteStore } from "@/features/notes/store";
+import { useCanvasStore } from "@/features/canvas/store";
+import { parseCanvasDoc, serializeCanvasDoc } from "@/features/canvas/serialization";
+import { generateSqlDump } from "@/features/backup/generate-sql-dump";
 
 function buildFilename(trigger: BackupEntry["trigger"]): string {
   const now = new Date();

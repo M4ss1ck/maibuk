@@ -1,6 +1,6 @@
-export { NotesList } from "./NotesList";
-export { NoteListItem } from "./NoteListItem";
-export { NoteCard } from "./NoteCard";
-export { NoteEditor } from "./NoteEditor";
-export { EmptyNotes } from "./EmptyNotes";
-export { TagEditor } from "./TagEditor";
+export { NotesList } from "@/components/notes/NotesList";
+export { NoteListItem } from "@/components/notes/NoteListItem";
+export { NoteCard } from "@/components/notes/NoteCard";
+export { NoteEditor } from "@/components/notes/NoteEditor";
+export { EmptyNotes } from "@/components/notes/EmptyNotes";
+export { TagEditor } from "@/components/notes/TagEditor";

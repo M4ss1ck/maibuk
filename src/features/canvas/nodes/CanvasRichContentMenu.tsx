@@ -3,9 +3,9 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
 import { MoreHorizontal, ImagePlus, Asterisk } from "lucide-react";
-import { TableSizePicker } from "../../../components/editor/TableSizePicker";
-import { ImageInsertDialog } from "../../../components/editor/ImageInsertDialog";
-import { FootnoteDialog } from "../../../components/editor/FootnoteDialog";
+import { TableSizePicker } from "@/components/editor/TableSizePicker";
+import { ImageInsertDialog } from "@/components/editor/ImageInsertDialog";
+import { FootnoteDialog } from "@/components/editor/FootnoteDialog";
 
 interface CanvasRichContentMenuProps {
   editor: Editor;

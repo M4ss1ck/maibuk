@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
-import { Button, Switch, Select } from "../ui";
+import { Button, Switch, Select } from "@/components/ui";
 import {
   generateEpub,
   getEpubFilename,
@@ -14,13 +14,13 @@ import {
   type PdfMarginPreset,
   type ExportProgress,
   type ProjectEpubExportOptions,
-} from "../../features/export";
-import { getEpubStructure, listBookStyles } from "../../features/import/epub-project-repo";
-import type { Book } from "../../features/books/types";
-import type { Chapter } from "../../features/chapters/types";
-import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
+} from "@/features/export";
+import { getEpubStructure, listBookStyles } from "@/features/import/epub-project-repo";
+import type { Book } from "@/features/books/types";
+import type { Chapter } from "@/features/chapters/types";
+import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 import { useTranslation } from "react-i18next";
-import { SpinnerIcon, CheckIcon, XIcon } from "../icons";
+import { SpinnerIcon, CheckIcon, XIcon } from "@/components/icons";
 
 interface ExportDialogProps {
   isOpen: boolean;

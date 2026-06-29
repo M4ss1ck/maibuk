@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CloseIcon } from "../icons";
-import { useModalStore } from "./modal-store";
+import { CloseIcon } from "@/components/icons";
+import { useModalStore } from "@/components/ui/modal-store";
 
 interface ModalProps {
   isOpen: boolean;

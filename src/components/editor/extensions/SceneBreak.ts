@@ -1,13 +1,13 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 
-import { SceneBreakView } from "../SceneBreakView";
+import { SceneBreakView } from "@/components/editor/SceneBreakView";
 import {
   DEFAULT_SCENE_BREAK,
   descriptorToAttrs,
   type SceneBreakAttrs,
   type SceneBreakDescriptor,
-} from "./scene-break-utils";
+} from "@/components/editor/extensions/scene-break-utils";
 
 export interface SceneBreakOptions {
   HTMLAttributes: Record<string, unknown>;

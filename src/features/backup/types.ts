@@ -3,4 +3,4 @@ export type {
   BackupEntry,
   BackupPage,
   BackupPageOptions,
-} from "../../lib/platform/types";
+} from "@/lib/platform/types";

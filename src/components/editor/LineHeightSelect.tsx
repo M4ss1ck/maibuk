@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
-import { Combobox } from "../ui";
+import { Combobox } from "@/components/ui";
 
 const LINE_HEIGHT_OPTIONS = ["1", "1.15", "1.5", "2", "2.5", "3"];
 

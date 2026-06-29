@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-import { DEFAULT_CANVAS_DOC_JSON } from "../canvas/defaultDoc";
+import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 
 // Books table
 export const books = sqliteTable("books", {

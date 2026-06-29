@@ -1,7 +1,7 @@
 // src/test/unit/components/editor/LinkDialog.internal.test.tsx
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { LinkDialog } from "../../../../components/editor/LinkDialog";
+import { LinkDialog } from "@/components/editor/LinkDialog";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),

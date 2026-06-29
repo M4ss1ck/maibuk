@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rewriteInternalLinksForExport } from "../../../../features/export/internal-link-export";
+import { rewriteInternalLinksForExport } from "@/features/export/internal-link-export";
 
 const hrefByChapter = new Map([
   ["c1", "text/chapter1.xhtml"],

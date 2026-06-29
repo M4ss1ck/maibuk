@@ -1,4 +1,4 @@
-import type { CompatibilityIssue } from "./types";
+import type { CompatibilityIssue } from "@/features/import/types";
 
 export interface XhtmlReference {
   kind: "asset" | "link";

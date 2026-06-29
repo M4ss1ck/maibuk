@@ -1,8 +1,8 @@
 import { useState, type KeyboardEvent } from "react";
 import { Network, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { Canvas } from "../../features/canvas/types";
-import { Button } from "../ui/Button";
+import type { Canvas } from "@/features/canvas/types";
+import { Button } from "@/components/ui/Button";
 
 interface CanvasCardProps {
   canvas: Canvas;

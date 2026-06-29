@@ -12,7 +12,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useCanvasStore } from "./store";
+import { useCanvasStore } from "@/features/canvas/store";
 
 interface ToolbarButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;

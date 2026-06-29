@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SyncControls } from "../../../../components/sync/SyncControls";
-import { useSyncStore } from "../../../../features/sync/store";
+import { SyncControls } from "@/components/sync/SyncControls";
+import { useSyncStore } from "@/features/sync/store";
 
 vi.mock("react-i18next", () => ({
   initReactI18next: {

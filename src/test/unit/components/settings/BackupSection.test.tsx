@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BackupSection } from "../../../../components/settings/BackupSection";
-import { useSettingsStore } from "../../../../features/settings/store";
-import type { BackupAdapter } from "../../../../lib/platform/types";
+import { BackupSection } from "@/components/settings/BackupSection";
+import { useSettingsStore } from "@/features/settings/store";
+import type { BackupAdapter } from "@/lib/platform/types";
 
 const { mockAdapter, mockTranslate } = vi.hoisted(() => ({
   mockAdapter: {

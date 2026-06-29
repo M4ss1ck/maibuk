@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Editor } from "@tiptap/react";
-import { looksLikeMarkdown } from "../../features/markdown";
-import { useSettingsStore } from "../../features/settings/store";
+import { looksLikeMarkdown } from "@/features/markdown";
+import { useSettingsStore } from "@/features/settings/store";
 import {
   hasRichFormatting,
   plainTextToHtml,
   readClipboardImageDataUrl,
   readClipboardSnapshot,
   snapshotToPlainText,
-} from "./clipboard";
-import { cleanPastedHtml } from "./paste-cleanup";
+} from "@/components/editor/clipboard";
+import { cleanPastedHtml } from "@/components/editor/paste-cleanup";
 
 export interface ClipboardProbe {
   canPaste: boolean;

@@ -5,12 +5,12 @@
  */
 import epub from "epub-gen-memory/bundle";
 import type { Options, Chapter as EpubChapter } from "epub-gen-memory";
-import type { Book } from "../books/types";
-import type { Chapter } from "../chapters/types";
-import type { EpubExportOptions } from "./types";
-import { processChapterHtml } from "./html-sanitizer";
-import { EPUB_STYLES } from "./epub-styles";
-import { rewriteInternalLinksForExport } from "./internal-link-export";
+import type { Book } from "@/features/books/types";
+import type { Chapter } from "@/features/chapters/types";
+import type { EpubExportOptions } from "@/features/export/types";
+import { processChapterHtml } from "@/features/export/html-sanitizer";
+import { EPUB_STYLES } from "@/features/export/epub-styles";
+import { rewriteInternalLinksForExport } from "@/features/export/internal-link-export";
 
 /**
  * Generates an EPUB file from book data.

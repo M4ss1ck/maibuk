@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
-import { markdownToEditorHtml } from "../../features/markdown";
-import { Modal, Button } from "../ui";
-import { plainTextToEditorHtml } from "./plain-text-html";
+import { markdownToEditorHtml } from "@/features/markdown";
+import { Modal, Button } from "@/components/ui";
+import { plainTextToEditorHtml } from "@/components/editor/plain-text-html";
 
 interface MarkdownPasteDialogProps {
   editor: Editor;

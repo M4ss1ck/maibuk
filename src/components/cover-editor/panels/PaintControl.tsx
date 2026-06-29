@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { GradientStop, Paint } from "../../../features/covers/scene/schema";
+import type { GradientStop, Paint } from "@/features/covers/scene/schema";
 
 type PaintType = Paint["type"];
 

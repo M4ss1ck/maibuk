@@ -1,2 +1,2 @@
-export { spellCheckService } from "./SpellCheckService";
-export type { WorkerRequest, WorkerResponse } from "./types";
+export { spellCheckService } from "@/lib/spellcheck/SpellCheckService";
+export type { WorkerRequest, WorkerResponse } from "@/lib/spellcheck/types";

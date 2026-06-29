@@ -4,9 +4,9 @@ import {
   buildEpubFixture,
   buildEpubWithoutOpfFixture,
   buildMinimalEpubFixture,
-} from "../../../support/epub-fixtures";
-import { buildImportPreview, scanEpub } from "../../../../features/import/epub-scanner";
-import { readEpub } from "../../../../features/import/epub-reader";
+} from "@/test/support/epub-fixtures";
+import { buildImportPreview, scanEpub } from "@/features/import/epub-scanner";
+import { readEpub } from "@/features/import/epub-reader";
 
 describe("scanEpub()", () => {
   it("reports encrypted EPUBs as blocking", () => {

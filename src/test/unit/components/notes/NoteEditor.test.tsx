@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, act } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { NoteEditor } from "../../../../components/notes/NoteEditor";
-import type { Note, UpdateNoteInput } from "../../../../features/notes";
+import { NoteEditor } from "@/components/notes/NoteEditor";
+import type { Note, UpdateNoteInput } from "@/features/notes";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

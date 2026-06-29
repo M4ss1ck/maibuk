@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useNoteStore } from "../features/notes";
-import type { Note, UpdateNoteInput } from "../features/notes";
-import { useBookStore } from "../features/books/store";
-import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
-import { useSettingsStore } from "../features/settings/store";
-import { normalizeLanguage } from "../features/settings/types";
-import { useShortcuts } from "../lib/shortcuts";
-import { markdownToEditorHtml, titleFromMarkdown } from "../features/markdown";
+import { useNoteStore } from "@/features/notes";
+import type { Note, UpdateNoteInput } from "@/features/notes";
+import { useBookStore } from "@/features/books/store";
+import { NotesList, NoteEditor, EmptyNotes } from "@/components/notes";
+import { useSettingsStore } from "@/features/settings/store";
+import { normalizeLanguage } from "@/features/settings/types";
+import { useShortcuts } from "@/lib/shortcuts";
+import { markdownToEditorHtml, titleFromMarkdown } from "@/features/markdown";
 
 export function Notes() {
   const notes = useNoteStore((s) => s.notes);

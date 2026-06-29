@@ -1,6 +1,6 @@
 // src/test/unit/features/links/link-resolver.test.ts
 import { describe, expect, it } from "vitest";
-import { resolveLink, type ResolverData } from "../../../../features/links/link-resolver";
+import { resolveLink, type ResolverData } from "@/features/links/link-resolver";
 
 const data: ResolverData = {
   notes: [{ id: "n1", title: "My Note" }],

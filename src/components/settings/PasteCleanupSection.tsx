@@ -10,7 +10,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, ChevronUp, ChevronDown, X } from "lucide-react";
-import { useSettingsStore } from "../../features/settings/store";
+import { useSettingsStore } from "@/features/settings/store";
 import {
   PASTE_CLEANUP_PRESET_VALUES,
   PASTE_STRUCTURAL_OPTION_KEYS,
@@ -21,9 +21,9 @@ import {
   type PasteCleanupPreset,
   type PasteRuleTarget,
   type PasteRuleAction,
-} from "../../features/settings/types";
-import { Select, Switch, Button, Modal, Input } from "../ui";
-import { ChevronDownIcon } from "../icons";
+} from "@/features/settings/types";
+import { Select, Switch, Button, Modal, Input } from "@/components/ui";
+import { ChevronDownIcon } from "@/components/icons";
 
 export function PasteCleanupSection() {
   const { t } = useTranslation();

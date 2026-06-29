@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EPUB_STYLES } from "../../../../features/export/epub-styles";
+import { EPUB_STYLES } from "@/features/export/epub-styles";
 
 describe("EPUB_STYLES", () => {
   it("is a non-empty string", () => {

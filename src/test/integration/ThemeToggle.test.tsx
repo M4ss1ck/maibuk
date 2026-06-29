@@ -15,8 +15,8 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-import { ThemeToggle } from "../../components/ThemeToggle";
-import { useThemeStore } from "../../features/theme/store";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { useThemeStore } from "@/features/theme/store";
 
 describe("ThemeToggle", () => {
   beforeEach(() => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Editor } from "../components/editor/Editor";
+import { Editor } from "@/components/editor/Editor";
 
 type EmbedTheme = "light" | "dark" | "system";
 

@@ -1,13 +1,13 @@
 import { useState, useRef } from "react";
 import { Cloud, CloudOff, CloudUpload, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
-import { useSyncStore } from "../../features/sync/store";
-import { useBookStore } from "../../features/books/store";
-import { useSyncFlow } from "../../features/sync/useSyncFlow";
-import { AuthDialog } from "./AuthDialog";
-import { SyncPanel } from "./SyncPanel";
-import { PassphraseDialog } from "./PassphraseDialog";
-import { ConflictDialog } from "./ConflictDialog";
-import type { SyncOptions } from "../../features/sync/types";
+import { useSyncStore } from "@/features/sync/store";
+import { useBookStore } from "@/features/books/store";
+import { useSyncFlow } from "@/features/sync/useSyncFlow";
+import { AuthDialog } from "@/components/sync/AuthDialog";
+import { SyncPanel } from "@/components/sync/SyncPanel";
+import { PassphraseDialog } from "@/components/sync/PassphraseDialog";
+import { ConflictDialog } from "@/components/sync/ConflictDialog";
+import type { SyncOptions } from "@/features/sync/types";
 
 export function SyncStatusButton() {
   const { authStatus, syncStatus, lastSyncedAt } = useSyncStore();

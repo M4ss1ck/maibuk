@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
-import { MaibukLogo } from "../icons";
+import { MaibukLogo } from "@/components/icons";
 
 interface EmptyNotesProps {
   onCreateNote: () => void;

@@ -1,9 +1,9 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useCoverStore } from "../../../features/covers/store";
-import { PRESET_COLORS } from "../../../features/covers/scene/defaults";
-import type { Background, Paint } from "../../../features/covers/scene/schema";
-import { PaintControl } from "./PaintControl";
+import { useCoverStore } from "@/features/covers/store";
+import { PRESET_COLORS } from "@/features/covers/scene/defaults";
+import type { Background, Paint } from "@/features/covers/scene/schema";
+import { PaintControl } from "@/components/cover-editor/panels/PaintControl";
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

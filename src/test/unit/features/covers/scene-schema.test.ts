@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COVER_SCHEMA_VERSION } from "../../../../features/covers/scene/schema";
+import { COVER_SCHEMA_VERSION } from "@/features/covers/scene/schema";
 
 describe("schema", () => {
   it("exposes a positive integer schema version", () => {

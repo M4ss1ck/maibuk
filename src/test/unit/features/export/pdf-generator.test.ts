@@ -1,5 +1,5 @@
 import { vi, describe, expect, it, beforeEach } from "vitest";
-import { buildBook, buildChapter } from "../../../support/fixtures";
+import { buildBook, buildChapter } from "@/test/support/fixtures";
 
 // vi.hoisted ensures mocks are available when vi.mock factories run
 const { mockToBlob, mockPdf, mockPdfLibLoad, mockEmbedFont } = vi.hoisted(() => {
@@ -48,8 +48,8 @@ import {
   generatePdf,
   getPdfFilename,
   sanitizePdfText,
-} from "../../../../features/export/pdf-generator";
-import { DEFAULT_PDF_OPTIONS } from "../../../../features/export/types";
+} from "@/features/export/pdf-generator";
+import { DEFAULT_PDF_OPTIONS } from "@/features/export/types";
 
 describe("sanitizePdfText()", () => {
   it("returns normal text unchanged", () => {

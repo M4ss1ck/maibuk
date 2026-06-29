@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { Editor } from "../../../../components/editor/Editor";
-import { CollapsibleHeading } from "../../../../components/editor/extensions";
+import { Editor } from "@/components/editor/Editor";
+import { CollapsibleHeading } from "@/components/editor/extensions";
 
 const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),

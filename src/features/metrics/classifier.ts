@@ -1,8 +1,8 @@
 import type { Transaction } from "@tiptap/pm/state";
 import { ReplaceStep } from "@tiptap/pm/transform";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { countWords } from "./word-count";
-import type { EventType, MetricEvent, WritingMetricPayload } from "./types";
+import { countWords } from "@/features/metrics/word-count";
+import type { EventType, MetricEvent, WritingMetricPayload } from "@/features/metrics/types";
 
 interface ClassificationContext {
   workId: string | null;

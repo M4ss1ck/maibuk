@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Combobox } from "../../../../components/ui/Combobox";
+import { Combobox } from "@/components/ui/Combobox";
 
 const options = ["Arial", "Georgia", "Helvetica", "Times New Roman"];
 

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { DashboardAggregate } from "../../features/metrics/aggregates/types";
+import type { DashboardAggregate } from "@/features/metrics/aggregates/types";
 
 interface TimeOfDayProps {
   aggregate: DashboardAggregate | null;

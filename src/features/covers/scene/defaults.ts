@@ -4,7 +4,7 @@ import {
   type ImageLayer,
   type ShapeLayer,
   type TextLayer,
-} from "./schema";
+} from "@/features/covers/scene/schema";
 
 export const DEFAULT_FILTERS = { brightness: 0, contrast: 0, saturation: 0, blur: 0 };
 

@@ -1,10 +1,10 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import { getOS } from "./lib/platform";
+import { getOS } from "@/lib/platform";
 
 // Static imports - Vite bundles these
-import en from "./locales/en.json";
-import es from "./locales/es.json";
+import en from "@/locales/en.json";
+import es from "@/locales/es.json";
 
 // Define supported languages
 const supportedLanguages = ["en", "es"] as const;

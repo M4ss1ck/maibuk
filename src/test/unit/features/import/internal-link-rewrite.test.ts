@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rewriteImportedInternalLinks } from "../../../../features/import/internal-link-rewrite";
+import { rewriteImportedInternalLinks } from "@/features/import/internal-link-rewrite";
 
 describe("rewriteImportedInternalLinks", () => {
   const chapters = [

@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseAdapter } from "../../lib/platform/types";
-import { createTestDatabase } from "../support/db-test-context";
-import { buildMinimalEpubFixture } from "../support/epub-fixtures";
-import { readEpub } from "../../features/import/epub-reader";
-import { normalizeEpubProject } from "../../features/import/epub-normalizer";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
+import { buildMinimalEpubFixture } from "@/test/support/epub-fixtures";
+import { readEpub } from "@/features/import/epub-reader";
+import { normalizeEpubProject } from "@/features/import/epub-normalizer";
 import {
   insertBookMetadata,
   insertBookStyles,
   listBookMetadata,
   listBookStyles,
-} from "../../features/import/epub-project-repo";
-import { insertProjectAssets, listProjectAssets } from "../../features/import/project-assets-repo";
-import { buildProjectEpubPackage } from "../../features/export/project-epub-generator";
-import { buildBook, buildChapter } from "../support/fixtures";
+} from "@/features/import/epub-project-repo";
+import { insertProjectAssets, listProjectAssets } from "@/features/import/project-assets-repo";
+import { buildProjectEpubPackage } from "@/features/export/project-epub-generator";
+import { buildBook, buildChapter } from "@/test/support/fixtures";
 
 let testDb: DatabaseAdapter;
 

@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import { Canvas, type FabricObject, IText } from "fabric";
-import { useCoverStore } from "../../features/covers/store";
-import { applyBackground, buildObject } from "./render/toFabric";
-import { buildGuideLine, buildOverlays } from "./render/overlays";
-import { snapAxis } from "../../features/covers/scene/snap";
-import { collectFonts, ensureFontsLoaded } from "../../features/covers/scene/fonts";
+import { useCoverStore } from "@/features/covers/store";
+import { applyBackground, buildObject } from "@/components/cover-editor/render/toFabric";
+import { buildGuideLine, buildOverlays } from "@/components/cover-editor/render/overlays";
+import { snapAxis } from "@/features/covers/scene/snap";
+import { collectFonts, ensureFontsLoaded } from "@/features/covers/scene/fonts";
 
 interface CanvasStageProps {
   className?: string;

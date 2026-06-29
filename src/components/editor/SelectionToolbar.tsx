@@ -2,8 +2,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
-import { useModalStore } from "../ui/modal-store";
-import { FormattingButtons } from "./FormattingButtons";
+import { useModalStore } from "@/components/ui/modal-store";
+import { FormattingButtons } from "@/components/editor/FormattingButtons";
 
 interface SelectionToolbarProps {
   editor: Editor;

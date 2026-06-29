@@ -6,8 +6,8 @@
  * Adapted from the kaont project's service-test-context pattern.
  */
 import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
-import type { DatabaseAdapter } from "../../lib/platform/types";
-import { parseSqlStatements } from "../../lib/db/sql-parser";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { parseSqlStatements } from "@/lib/db/sql-parser";
 
 function escapeSQL(value: unknown): string {
   if (value === null || value === undefined) return "NULL";

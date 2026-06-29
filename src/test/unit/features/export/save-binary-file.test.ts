@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exportFilename } from "../../../../features/export/save-binary-file";
+import { exportFilename } from "@/features/export/save-binary-file";
 
 describe("exportFilename()", () => {
   it("slugifies a title with the given extension", () => {

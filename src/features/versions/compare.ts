@@ -1,6 +1,6 @@
 import htmldiff from "node-htmldiff";
-import type { BookSnapshot } from "../sync/types";
-import { sanitizeChapterHtml } from "./sanitize";
+import type { BookSnapshot } from "@/features/sync/types";
+import { sanitizeChapterHtml } from "@/features/versions/sanitize";
 
 export type ChapterDiffStatus = "added" | "removed" | "modified" | "unchanged";
 

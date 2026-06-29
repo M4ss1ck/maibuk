@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
-import { Combobox } from "../ui";
+import { Combobox } from "@/components/ui";
 
 const FONT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "28", "32", "36", "48", "72"];
 

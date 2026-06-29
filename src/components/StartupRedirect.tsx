@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useSettingsStore } from "../features/settings/store";
-import { getDatabase } from "../lib/db";
-import { LoadingScreen } from "./LoadingScreen";
+import { useSettingsStore } from "@/features/settings/store";
+import { getDatabase } from "@/lib/db";
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 interface StartupRedirectProps {
   children: ReactNode;

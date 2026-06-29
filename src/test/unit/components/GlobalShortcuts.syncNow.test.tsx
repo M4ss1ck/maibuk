@@ -70,7 +70,7 @@ vi.mock("../../components/ShortcutsHelpDialog", () => ({
   ShortcutsHelpDialog: () => null,
 }));
 
-const { GlobalShortcuts } = await import("../../../components/GlobalShortcuts");
+const { GlobalShortcuts } = await import("@/components/GlobalShortcuts");
 
 function triggerSyncNow() {
   const calls = mockUseShortcuts.mock.calls;

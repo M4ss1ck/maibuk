@@ -1,4 +1,4 @@
-import { IS_TAURI } from "../../lib/platform";
+import { IS_TAURI } from "@/lib/platform";
 
 export interface ClipboardSnapshot {
   text: string;

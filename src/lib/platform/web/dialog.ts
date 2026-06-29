@@ -3,7 +3,7 @@ import type {
   SaveDialogOptions,
   OpenDialogOptions,
   FileWithData,
-} from "../types";
+} from "@/lib/platform/types";
 
 function getAcceptString(filters?: { name: string; extensions: string[] }[]): string {
   if (!filters) return "*";

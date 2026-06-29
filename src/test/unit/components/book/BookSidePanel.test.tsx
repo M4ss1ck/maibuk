@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { BookSidePanel } from "../../../../components/book/BookSidePanel";
+import { BookSidePanel } from "@/components/book/BookSidePanel";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

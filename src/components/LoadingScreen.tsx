@@ -1,4 +1,4 @@
-import { MaibukLogo } from "./icons";
+import { MaibukLogo } from "@/components/icons";
 
 export function LoadingScreen() {
   return (

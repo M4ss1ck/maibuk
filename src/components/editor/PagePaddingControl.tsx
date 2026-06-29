@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { EditorPagePadding } from "../../features/settings/types";
+import type { EditorPagePadding } from "@/features/settings/types";
 import {
   EDITOR_PAGE_PADDING_MIN,
   EDITOR_PAGE_PADDING_MAX,
   EDITOR_PAGE_PADDING_STEP,
   clampEditorPagePadding,
-} from "../../features/settings/types";
+} from "@/features/settings/types";
 
 function sanitizeNumericInput(value: string): string {
   return value.replace(/[^0-9-]/g, "").replace(/(?!^)-/g, "");

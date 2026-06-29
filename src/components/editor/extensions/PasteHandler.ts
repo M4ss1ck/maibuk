@@ -2,11 +2,11 @@ import { Slice, Fragment, Node } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Extension } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
-import { useSettingsStore } from "../../../features/settings/store";
-import { cleanPastedHtml } from "../paste-cleanup";
-import { looksLikeMarkdown } from "../../../features/markdown";
-import { shouldPromptMarkdownPaste } from "./paste-markdown-guard";
-import { hasRichFormatting } from "../clipboard";
+import { useSettingsStore } from "@/features/settings/store";
+import { cleanPastedHtml } from "@/components/editor/paste-cleanup";
+import { looksLikeMarkdown } from "@/features/markdown";
+import { shouldPromptMarkdownPaste } from "@/components/editor/extensions/paste-markdown-guard";
+import { hasRichFormatting } from "@/components/editor/clipboard";
 
 export interface PasteHandlerOptions {
   /**

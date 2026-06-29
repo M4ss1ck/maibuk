@@ -2,7 +2,7 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { describe, expect, it } from "vitest";
 
-import { SmartItalic } from "../../../../components/editor/extensions/SmartItalic";
+import { SmartItalic } from "@/components/editor/extensions/SmartItalic";
 
 function makeEditor(content: string) {
   return new Editor({

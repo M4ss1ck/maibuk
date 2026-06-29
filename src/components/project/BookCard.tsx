@@ -1,7 +1,7 @@
-import type { Book } from "../../features/books/types";
+import type { Book } from "@/features/books/types";
 import { useTranslation } from "react-i18next";
-import { KeyboardShortcut } from "../ui";
-import { MaibukLogo } from "../icons";
+import { KeyboardShortcut } from "@/components/ui";
+import { MaibukLogo } from "@/components/icons";
 
 interface BookCardProps {
   book: Book;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prepareStaticCanvasHtml } from "../../../../features/canvas/nodes/staticRichText";
+import { prepareStaticCanvasHtml } from "@/features/canvas/nodes/staticRichText";
 
 describe("prepareStaticCanvasHtml", () => {
   it("numbers footnote references from one and appends a definition section", () => {

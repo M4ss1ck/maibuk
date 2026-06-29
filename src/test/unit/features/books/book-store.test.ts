@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 
 // --- Mock getDatabase to return our in-memory DB ---
 let testDb: DatabaseAdapter;
@@ -14,7 +14,7 @@ vi.mock("../../../../lib/db", () => ({
 }));
 
 // Import store AFTER mock is set up (vi.mock is hoisted automatically)
-const { useBookStore } = await import("../../../../features/books/store");
+const { useBookStore } = await import("@/features/books/store");
 
 describe("useBookStore", () => {
   beforeEach(async () => {

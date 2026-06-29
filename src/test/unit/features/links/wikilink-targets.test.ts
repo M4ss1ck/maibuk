@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWikilinkCandidates } from "../../../../features/links/wikilink-targets";
+import { buildWikilinkCandidates } from "@/features/links/wikilink-targets";
 
 const data = {
   notes: [{ id: "n1", title: "Alpha Note" }],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tagColor } from "../../../../components/notes/tagColor";
+import { tagColor } from "@/components/notes/tagColor";
 
 describe("tagColor", () => {
   it("returns deterministic color values from the fixed palette", () => {

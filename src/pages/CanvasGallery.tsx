@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Network, Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { CanvasCard } from "../components/canvas/CanvasCard";
-import { Button } from "../components/ui/Button";
-import { useCanvasStore } from "../features/canvas/store";
+import { CanvasCard } from "@/components/canvas/CanvasCard";
+import { Button } from "@/components/ui/Button";
+import { useCanvasStore } from "@/features/canvas/store";
 
 export function CanvasGallery() {
   const { t } = useTranslation();

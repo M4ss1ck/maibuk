@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useReadingPositionStore } from "../../../../features/reading-position/store";
-import { useReadingPosition } from "../../../../features/reading-position/useReadingPosition";
+import { useReadingPositionStore } from "@/features/reading-position/store";
+import { useReadingPosition } from "@/features/reading-position/useReadingPosition";
 
 vi.mock("@tiptap/pm/state", () => ({
   TextSelection: { create: vi.fn(() => ({ __selection: true })) },

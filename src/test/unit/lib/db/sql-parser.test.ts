@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSqlStatements } from "../../../../lib/db/sql-parser";
+import { parseSqlStatements } from "@/lib/db/sql-parser";
 
 describe("parseSqlStatements", () => {
   it("keeps semicolons inside quoted strings", () => {

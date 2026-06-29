@@ -12,8 +12,8 @@ vi.mock("../../../../lib/platform", () => ({
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { AppSettingsProvider } = await import("../../../../features/settings/AppSettingsProvider");
-const { useSettingsStore } = await import("../../../../features/settings/store");
+const { AppSettingsProvider } = await import("@/features/settings/AppSettingsProvider");
+const { useSettingsStore } = await import("@/features/settings/store");
 
 describe("AppSettingsProvider editorPagePadding", () => {
   beforeEach(() => {

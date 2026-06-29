@@ -1,4 +1,4 @@
-import type { CanvasPosition } from "../types";
+import type { CanvasPosition } from "@/features/canvas/types";
 
 export function strokeToPath(points: CanvasPosition[]): string {
   if (points.length === 0) return "";

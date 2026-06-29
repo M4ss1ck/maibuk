@@ -10,25 +10,25 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { EditorToolbar } from "./EditorToolbar";
-import { SelectionToolbar } from "./SelectionToolbar";
-import { LinkClickHandler } from "./LinkClickHandler";
-import { LinkDialog } from "./LinkDialog";
-import { ImageContextMenu } from "./ImageContextMenu";
-import { FootnoteList } from "./FootnoteList";
-import { SearchReplace } from "./extensions/SearchReplace";
-import { MetricsObserver } from "./extensions/MetricsObserver";
-import { createRichTextExtensions } from "./extensions/createRichTextExtensions";
+import { EditorToolbar } from "@/components/editor/EditorToolbar";
+import { SelectionToolbar } from "@/components/editor/SelectionToolbar";
+import { LinkClickHandler } from "@/components/editor/LinkClickHandler";
+import { LinkDialog } from "@/components/editor/LinkDialog";
+import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
+import { FootnoteList } from "@/components/editor/FootnoteList";
+import { SearchReplace } from "@/components/editor/extensions/SearchReplace";
+import { MetricsObserver } from "@/components/editor/extensions/MetricsObserver";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useTranslation } from "react-i18next";
-import { useSettingsStore } from "../../features/settings/store";
-import type { Language } from "../../features/settings/types";
-import { useChapterStore } from "../../features/chapters/store";
-import { useReadingPosition } from "../../features/reading-position/useReadingPosition";
-import { useEditorZoomControls } from "./useEditorZoomControls";
-import { assignHeadingIds } from "../../features/links/heading-ids";
-import type { InternalTarget, InternalTargetChildrenLoader } from "./LinkDialog";
-import { setContentSilently } from "../../features/metrics/programmatic";
-import { MarkdownPasteDialog } from "./MarkdownPasteDialog";
+import { useSettingsStore } from "@/features/settings/store";
+import type { Language } from "@/features/settings/types";
+import { useChapterStore } from "@/features/chapters/store";
+import { useReadingPosition } from "@/features/reading-position/useReadingPosition";
+import { useEditorZoomControls } from "@/components/editor/useEditorZoomControls";
+import { assignHeadingIds } from "@/features/links/heading-ids";
+import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
+import { setContentSilently } from "@/features/metrics/programmatic";
+import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 
 export interface EditorStats {
   words: number;

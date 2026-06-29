@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSearchRegExp,
   findMatches,
-} from "../../../../components/editor/extensions/SearchReplace";
+} from "@/components/editor/extensions/SearchReplace";
 
 function makeEditor(content: string) {
   return new Editor({ extensions: [StarterKit], content });

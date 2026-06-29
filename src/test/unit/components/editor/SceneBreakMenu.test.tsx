@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SceneBreakMenu } from "../../../../components/editor/SceneBreakMenu";
+import { SceneBreakMenu } from "@/components/editor/SceneBreakMenu";
 
 const { mockGetWebDialog, mockOpenWithData, mockUpsertSeparatorAsset } = vi.hoisted(() => ({
   mockGetWebDialog: vi.fn(),

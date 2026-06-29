@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import en from "../../../locales/en.json";
-import es from "../../../locales/es.json";
+import en from "@/locales/en.json";
+import es from "@/locales/es.json";
 
 describe("shortcut locale labels", () => {
   it("clarifies that version history opens outside the editor", () => {

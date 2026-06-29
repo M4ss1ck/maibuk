@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { describe, expect, it, vi } from "vitest";
-import { setContentSilently } from "../../../../features/metrics/programmatic";
+import { setContentSilently } from "@/features/metrics/programmatic";
 
 describe("setContentSilently()", () => {
   it("marks replacement transactions as programmatic without emitting editor updates", () => {

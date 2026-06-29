@@ -1,11 +1,11 @@
 import { useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { LogOut } from "lucide-react";
-import { Button } from "../ui/Button";
-import { useSyncStore } from "../../features/sync/store";
-import type { SyncOptions } from "../../features/sync/types";
-import { SyncControls } from "./SyncControls";
-import { timeAgo } from "../../components/notes/timeAgo";
+import { Button } from "@/components/ui/Button";
+import { useSyncStore } from "@/features/sync/store";
+import type { SyncOptions } from "@/features/sync/types";
+import { SyncControls } from "@/components/sync/SyncControls";
+import { timeAgo } from "@/components/notes/timeAgo";
 
 interface SyncPanelProps {
   triggerRef: React.RefObject<HTMLButtonElement | null>;

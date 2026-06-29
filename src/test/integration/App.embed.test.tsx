@@ -52,7 +52,7 @@ vi.mock("../../features/backup/lifecycle", () => ({
   runDailyBackupOnce: mockRunDailyBackupOnce,
 }));
 
-import App from "../../App";
+import App from "@/App";
 
 describe("App embed route behavior", () => {
   beforeEach(() => {

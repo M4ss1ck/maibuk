@@ -1,5 +1,5 @@
-import { getDatabase } from "../../lib/db";
-import type { CompatibilityReport, ParsedEpubNavItem } from "./types";
+import { getDatabase } from "@/lib/db";
+import type { CompatibilityReport, ParsedEpubNavItem } from "@/features/import/types";
 
 export interface BookMetadataInput {
   id?: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { strokeToPath } from "../../../../features/canvas/drawing/strokePath";
+import { strokeToPath } from "@/features/canvas/drawing/strokePath";
 
 describe("strokeToPath", () => {
   it("builds a move + line path from points", () => {

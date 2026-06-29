@@ -1,4 +1,4 @@
-import type { FileSystemAdapter } from "../types";
+import type { FileSystemAdapter } from "@/lib/platform/types";
 
 export const webFileSystem: FileSystemAdapter = {
   async writeFile(_path: string, _data: Uint8Array): Promise<void> {

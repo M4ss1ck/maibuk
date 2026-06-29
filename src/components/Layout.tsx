@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, NavLink } from "react-router-dom";
-import { ThemeToggle } from "./ThemeToggle";
-import { APP_VERSION, DOWNLOAD_PAGE } from "../constants";
-import { useVersionCheck } from "../features/version";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { APP_VERSION, DOWNLOAD_PAGE } from "@/constants";
+import { useVersionCheck } from "@/features/version";
 import { useTranslation } from "react-i18next";
-import { ProjectsIcon, SettingsIcon, CloseIcon, MaibukLogo } from "./icons";
+import { ProjectsIcon, SettingsIcon, CloseIcon, MaibukLogo } from "@/components/icons";
 import { BarChart3, Menu, NotebookPen, Workflow } from "lucide-react";
-import { KeyboardShortcut } from "./ui";
-import { useSettingsStore } from "../features/settings/store";
+import { KeyboardShortcut } from "@/components/ui";
+import { useSettingsStore } from "@/features/settings/store";
 
 export function Layout() {
   const { t } = useTranslation();

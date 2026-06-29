@@ -11,17 +11,17 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
-import { toast } from "../ui/Toast";
-import { useVersionStore, DEFAULT_VERSIONS_PAGE_SIZE } from "../../features/versions/store";
-import type { BookVersion } from "../../features/versions/types";
-import type { BookSnapshot } from "../../features/sync/types";
-import { serializeBook } from "../../features/sync/serializer";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { toast } from "@/components/ui/Toast";
+import { useVersionStore, DEFAULT_VERSIONS_PAGE_SIZE } from "@/features/versions/store";
+import type { BookVersion } from "@/features/versions/types";
+import type { BookSnapshot } from "@/features/sync/types";
+import { serializeBook } from "@/features/sync/serializer";
 
 const VersionCompare = lazy(() =>
-  import("./VersionCompare").then((module) => ({ default: module.VersionCompare }))
+  import("@/components/versions/VersionCompare").then((module) => ({ default: module.VersionCompare }))
 );
 
 interface VersionPanelProps {

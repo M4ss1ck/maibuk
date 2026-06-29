@@ -1,6 +1,6 @@
 // src/features/links/link-index.ts
-import { getDatabase } from "../../lib/db";
-import { extractLinks } from "./link-uri";
+import { getDatabase } from "@/lib/db";
+import { extractLinks } from "@/features/links/link-uri";
 
 export interface ReindexSourceArgs {
   sourceType: "note" | "chapter";

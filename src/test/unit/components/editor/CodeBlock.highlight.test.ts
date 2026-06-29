@@ -3,7 +3,7 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { describe, expect, it } from "vitest";
 
-import { lowlight } from "../../../../components/editor/extensions/CodeBlock";
+import { lowlight } from "@/components/editor/extensions/CodeBlock";
 
 function makeEditor(content: string) {
   return new Editor({

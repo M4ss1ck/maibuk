@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 import {
   ensureMetricsSchema,
   insertEvents,
   upsertCache,
-} from "../../../../features/metrics/events-repo";
+} from "@/features/metrics/events-repo";
 import {
   serializeMetricsBatch,
   applyMetricsBatch,
   syncMetricsRows,
   applyLegacyBlobAndMarkPushed,
-} from "../../../../features/metrics/metrics-sync";
-import type { MetricEvent } from "../../../../features/metrics/types";
+} from "@/features/metrics/metrics-sync";
+import type { MetricEvent } from "@/features/metrics/types";
 
 const {
   mockGetDatabase,

@@ -1,6 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Editor } from "../../../../components/editor/Editor";
+import { Editor } from "@/components/editor/Editor";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 
 vi.mock("react-i18next", () => ({

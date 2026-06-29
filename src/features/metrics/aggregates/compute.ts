@@ -1,5 +1,5 @@
-import type { DailyAggregateMetricPayload, MetricEvent, WritingMetricPayload } from "../types";
-import type { DayWordTotal } from "../events-repo";
+import type { DailyAggregateMetricPayload, MetricEvent, WritingMetricPayload } from "@/features/metrics/types";
+import type { DayWordTotal } from "@/features/metrics/events-repo";
 import type {
   AggregateKey,
   AggregateParams,
@@ -9,7 +9,7 @@ import type {
   StreakAggregate,
   TimeOfDayBucket,
   WorkTimeBucket,
-} from "./types";
+} from "@/features/metrics/aggregates/types";
 
 export function computeAggregate(
   key: AggregateKey,

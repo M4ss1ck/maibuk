@@ -6,8 +6,8 @@ import {
   buildEpubWithoutContainerFixture,
   buildEpubWithoutOpfFixture,
   buildMinimalEpubFixture,
-} from "../../../support/epub-fixtures";
-import { readEpub } from "../../../../features/import/epub-reader";
+} from "@/test/support/epub-fixtures";
+import { readEpub } from "@/features/import/epub-reader";
 
 describe("readEpub()", () => {
   it("parses the package path from META-INF/container.xml", () => {

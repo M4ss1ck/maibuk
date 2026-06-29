@@ -1,5 +1,5 @@
-export { useSyncStore } from "./store";
-export { useSyncFlow } from "./useSyncFlow";
+export { useSyncStore } from "@/features/sync/store";
+export { useSyncFlow } from "@/features/sync/useSyncFlow";
 export {
   encrypt,
   decrypt,
@@ -9,16 +9,16 @@ export {
   clearPassphrase,
   SyncCryptoError,
   isSyncCryptoError,
-} from "./crypto";
-export { serializeBook, applyBookSnapshot } from "./serializer";
-export { syncBook, syncAllBooks } from "./sync-engine";
+} from "@/features/sync/crypto";
+export { serializeBook, applyBookSnapshot } from "@/features/sync/serializer";
+export { syncBook, syncAllBooks } from "@/features/sync/sync-engine";
 export {
   recordTombstone,
   listPendingTombstones,
   confirmTombstones,
   markTombstonePushed,
   hasTombstone,
-} from "./tombstones";
+} from "@/features/sync/tombstones";
 export type {
   AuthStatus,
   SyncStatus,
@@ -31,4 +31,4 @@ export type {
   SyncLogEntry,
   SyncDeletionReviewItem,
   SyncTombstone,
-} from "./types";
+} from "@/features/sync/types";

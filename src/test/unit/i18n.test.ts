@@ -8,7 +8,7 @@ vi.mock("../../lib/platform", () => ({
   getOS: getOSMock,
 }));
 
-import { detectSystemLocale } from "../../i18n";
+import { detectSystemLocale } from "@/i18n";
 
 describe("detectSystemLocale()", () => {
   beforeEach(() => {

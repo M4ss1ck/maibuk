@@ -1,6 +1,6 @@
-import { createDatabase, IS_TAURI, type DatabaseAdapter } from "../platform";
-import { ensureMetricsSchema } from "../../features/metrics/events-repo";
-import { DEFAULT_CANVAS_DOC_JSON } from "../canvas/defaultDoc";
+import { createDatabase, IS_TAURI, type DatabaseAdapter } from "@/lib/platform";
+import { ensureMetricsSchema } from "@/features/metrics/events-repo";
+import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;

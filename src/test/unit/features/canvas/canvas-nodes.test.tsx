@@ -66,8 +66,8 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const { LightweightNode } = await import("../../../../features/canvas/nodes/LightweightNode");
-const { NoteRefNode } = await import("../../../../features/canvas/nodes/NoteRefNode");
+const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
+const { NoteRefNode } = await import("@/features/canvas/nodes/NoteRefNode");
 
 describe("Canvas custom nodes", () => {
   beforeEach(() => {

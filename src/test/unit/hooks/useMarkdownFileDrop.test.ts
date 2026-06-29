@@ -7,7 +7,7 @@ vi.mock("../../../lib/platform", () => ({
   getFileSystem: vi.fn(),
 }));
 
-import { useMarkdownFileDrop } from "../../../hooks/useMarkdownFileDrop";
+import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
 
 function dropEvent(files: File[]): DragEvent {
   return {

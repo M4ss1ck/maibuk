@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import { NoteBacklinks } from "../../../../components/notes/NoteBacklinks";
+import { NoteBacklinks } from "@/components/notes/NoteBacklinks";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -19,7 +19,7 @@ describe("NoteBacklinks", () => {
   });
 
   it("renders nothing when there are no backlinks", async () => {
-    const mod = await import("../../../../features/links/link-index");
+    const mod = await import("@/features/links/link-index");
     (mod.getBacklinksForNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
     const { container } = render(<NoteBacklinks noteId="lonely" onOpen={() => {}} />);
     await waitFor(() => expect(container).toBeEmptyDOMElement());

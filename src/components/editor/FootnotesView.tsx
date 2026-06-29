@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Chapter } from "../../features/chapters/types";
+import type { Chapter } from "@/features/chapters/types";
 import { useTranslation } from "react-i18next";
 
 interface FootnoteEntry {

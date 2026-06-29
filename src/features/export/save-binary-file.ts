@@ -1,4 +1,4 @@
-import { IS_WEB, getDialog, getFileSystem } from "../../lib/platform";
+import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 
 /** Slugifies a title into a safe filename with the given extension. */
 export function exportFilename(title: string, extension: string): string {

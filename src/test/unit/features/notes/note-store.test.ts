@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 
 // --- Mock getDatabase ---
 let testDb: DatabaseAdapter;
@@ -13,7 +13,7 @@ vi.mock("../../../../lib/db", () => ({
   getDatabase: mockGetDatabase,
 }));
 
-const { useNoteStore } = await import("../../../../features/notes/store");
+const { useNoteStore } = await import("@/features/notes/store");
 
 describe("useNoteStore", () => {
   beforeEach(async () => {

@@ -1,8 +1,8 @@
 import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NoteEditor } from "../../../../components/notes/NoteEditor";
-import type { Note } from "../../../../features/notes";
-import type { Book } from "../../../../features/books/types";
+import { NoteEditor } from "@/components/notes/NoteEditor";
+import type { Note } from "@/features/notes";
+import type { Book } from "@/features/books/types";
 
 const { mockEditor, mockNotes, mockBooks, mockListAllChaptersForLinking } = vi.hoisted(() => ({
   mockEditor: vi.fn((_: unknown) => <div />),

@@ -131,7 +131,7 @@ vi.mock("../../../components/book/BookSidePanel", () => ({
   },
 }));
 
-import { BookEditor } from "../../../pages/BookEditor";
+import { BookEditor } from "@/pages/BookEditor";
 
 describe("BookEditor book notes panel", () => {
   beforeEach(() => {

@@ -9,10 +9,10 @@ vi.mock("@react-pdf/renderer", () => ({
   StyleSheet: { create: (s: Record<string, unknown>) => s },
 }));
 
-import { renderHtmlContent } from "../../../../features/export/pdf-content-renderer";
-import { mapCssFontToPdf } from "../../../../features/export/pdf-content-renderer";
-import { createPdfStyles } from "../../../../features/export/pdf-styles";
-import { DEFAULT_PDF_OPTIONS } from "../../../../features/export/types";
+import { renderHtmlContent } from "@/features/export/pdf-content-renderer";
+import { mapCssFontToPdf } from "@/features/export/pdf-content-renderer";
+import { createPdfStyles } from "@/features/export/pdf-styles";
+import { DEFAULT_PDF_OPTIONS } from "@/features/export/types";
 
 /**
  * Extract all `key` values from a flat ReactNode array (one level deep).

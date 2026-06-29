@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Book } from "../../../../features/books/types";
-import type { Note } from "../../../../features/notes";
+import type { Book } from "@/features/books/types";
+import type { Note } from "@/features/notes";
 import {
   buildBookNoteGroups,
   buildDateNoteGroups,
@@ -9,7 +9,7 @@ import {
   filterNotes,
   notePlainText,
   sortNotesBy,
-} from "../../../../components/notes/notes-list-model";
+} from "@/components/notes/notes-list-model";
 
 type NoteInput = Partial<Note> & { id: string; title: string; bookId?: string | null };
 

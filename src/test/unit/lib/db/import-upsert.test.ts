@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normaliseToUpsert } from "../../../../lib/db";
+import { normaliseToUpsert } from "@/lib/db";
 
 describe("normaliseToUpsert()", () => {
   it("converts INSERT INTO to INSERT OR REPLACE INTO", () => {

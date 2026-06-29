@@ -1,10 +1,10 @@
 import { Extension } from "@tiptap/core";
 import type { Transaction } from "@tiptap/pm/state";
-import { classifyTransaction } from "../../../features/metrics/classifier";
-import { getOrCreateDeviceId } from "../../../features/metrics/device-id";
-import { isMetricsDevDisabled } from "../../../features/metrics/settings";
-import { useSettingsStore } from "../../../features/settings/store";
-import { metricsService } from "../../../lib/metrics/MetricsService";
+import { classifyTransaction } from "@/features/metrics/classifier";
+import { getOrCreateDeviceId } from "@/features/metrics/device-id";
+import { isMetricsDevDisabled } from "@/features/metrics/settings";
+import { useSettingsStore } from "@/features/settings/store";
+import { metricsService } from "@/lib/metrics/MetricsService";
 
 interface MetricsObserverOptions {
   workId: string | null;

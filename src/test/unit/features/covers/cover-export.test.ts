@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exportMultiplier, dataUrlToBytes } from "../../../../features/covers/export";
+import { exportMultiplier, dataUrlToBytes } from "@/features/covers/export";
 
 describe("exportMultiplier", () => {
   it("is 1 when target equals design dpi", () => {
@@ -24,7 +24,7 @@ describe("dataUrlToBytes", () => {
 
 describe("pxToPoints", () => {
   it("converts pixels to PDF points at the given dpi", async () => {
-    const { pxToPoints } = await import("../../../../features/covers/export");
+    const { pxToPoints } = await import("@/features/covers/export");
     // 300px at 300dpi = 1 inch = 72 points
     expect(pxToPoints(300, 300)).toBe(72);
     expect(pxToPoints(1800, 300)).toBe(432);

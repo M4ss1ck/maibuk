@@ -1,16 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { VersionCompare } from "../../../../components/versions/VersionCompare";
-import type { BookSnapshot } from "../../../../features/sync/types";
-import type { BookDiff } from "../../../../features/versions/compare";
+import { VersionCompare } from "@/components/versions/VersionCompare";
+import type { BookSnapshot } from "@/features/sync/types";
+import type { BookDiff } from "@/features/versions/compare";
 
 const { mockDiffSnapshots } = vi.hoisted(() => ({
   mockDiffSnapshots: vi.fn(),
 }));
 
 vi.mock("../../../../features/versions/compare", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../../features/versions/compare")>();
+  const actual = await importOriginal<typeof import("@/features/versions/compare")>();
   return {
     ...actual,
     diffSnapshots: mockDiffSnapshots,

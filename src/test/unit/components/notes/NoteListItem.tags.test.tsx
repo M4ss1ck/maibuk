@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { NoteListItem } from "../../../../components/notes/NoteListItem";
-import type { Note } from "../../../../features/notes";
+import { NoteListItem } from "@/components/notes/NoteListItem";
+import type { Note } from "@/features/notes";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

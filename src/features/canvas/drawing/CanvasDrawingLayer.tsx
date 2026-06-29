@@ -1,6 +1,6 @@
 import { ViewportPortal } from "@xyflow/react";
-import { useCanvasStore } from "../store";
-import { strokeToPath } from "./strokePath";
+import { useCanvasStore } from "@/features/canvas/store";
+import { strokeToPath } from "@/features/canvas/drawing/strokePath";
 
 export function CanvasDrawingLayer() {
   const strokes = useCanvasStore((state) => state.doc.strokes);

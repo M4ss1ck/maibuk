@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   CURRENT_CANVAS_SCHEMA_VERSION,
   DEFAULT_CANVAS_DOC_JSON,
-} from "../../../../lib/canvas/defaultDoc";
+} from "@/lib/canvas/defaultDoc";
 import {
   normalizeParsedCanvasDoc,
   parseCanvasDoc,
   serializeCanvasDoc,
-} from "../../../../features/canvas/serialization";
-import { createDefaultCanvasDoc } from "../../../../features/canvas/types";
+} from "@/features/canvas/serialization";
+import { createDefaultCanvasDoc } from "@/features/canvas/types";
 
 describe("canvas document serialization", () => {
   it("round-trips a valid document", () => {

@@ -1,4 +1,4 @@
-import type { Language } from "../../features/settings/types";
+import type { Language } from "@/features/settings/types";
 
 // Main thread -> Worker
 export type WorkerRequest =

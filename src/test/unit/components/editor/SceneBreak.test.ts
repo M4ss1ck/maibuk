@@ -2,7 +2,7 @@ import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { describe, expect, it } from "vitest";
 
-import { SceneBreak } from "../../../../components/editor/extensions/SceneBreak";
+import { SceneBreak } from "@/components/editor/extensions/SceneBreak";
 
 function makeEditor(content: string) {
   return new Editor({ extensions: [StarterKit, SceneBreak], content });

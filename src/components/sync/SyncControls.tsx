@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ListChecks, RefreshCw, Trash2 } from "lucide-react";
-import { Button } from "../ui/Button";
-import { Select } from "../ui/Select";
-import { useSyncStore } from "../../features/sync/store";
-import type { SyncDirection, SyncOptions, SyncScope } from "../../features/sync/types";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { useSyncStore } from "@/features/sync/store";
+import type { SyncDirection, SyncOptions, SyncScope } from "@/features/sync/types";
 
 interface SyncControlsProps {
   onSync: (options?: Partial<SyncOptions>) => Promise<void>;

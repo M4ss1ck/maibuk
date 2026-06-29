@@ -1,5 +1,5 @@
-import type { Language } from "../../features/settings/types";
-import type { WorkerRequest, WorkerResponse } from "./types";
+import type { Language } from "@/features/settings/types";
+import type { WorkerRequest, WorkerResponse } from "@/lib/spellcheck/types";
 
 // Vite recognizes `new URL(..., import.meta.url)` and emits these as assets
 const DICTIONARY_URLS: Record<Language, { aff: string; dic: string }> = {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 
 let testDb: DatabaseAdapter;
 
@@ -16,7 +16,7 @@ const {
   listBookStyles,
   listChapterEpubMeta,
   getEpubStructure,
-} = await import("../../../../features/import/epub-project-repo");
+} = await import("@/features/import/epub-project-repo");
 
 describe("EPUB project repository", () => {
   beforeEach(async () => {

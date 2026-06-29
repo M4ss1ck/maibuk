@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
-import { Button } from "../../../../components/ui/Button";
+import { Button } from "@/components/ui/Button";
 
 describe("Button", () => {
   describe("rendering", () => {

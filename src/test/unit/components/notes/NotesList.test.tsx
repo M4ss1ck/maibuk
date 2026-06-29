@@ -1,9 +1,9 @@
 import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NotesList } from "../../../../components/notes/NotesList";
-import { useSettingsStore } from "../../../../features/settings/store";
-import type { Book } from "../../../../features/books/types";
-import type { Note } from "../../../../features/notes";
+import { NotesList } from "@/components/notes/NotesList";
+import { useSettingsStore } from "@/features/settings/store";
+import type { Book } from "@/features/books/types";
+import type { Note } from "@/features/notes";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

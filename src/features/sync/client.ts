@@ -4,8 +4,8 @@
 // metric immutability, soft-delete-only) are enforced HERE, not by the server.
 // See the maibuk-sync repo's docs/object-contract.md before changing this file.
 import PocketBase from "pocketbase";
-import type { SyncItemMeta, NoteSyncItemMeta } from "./types";
-import { encryptMeta, decryptMeta } from "./crypto";
+import type { SyncItemMeta, NoteSyncItemMeta } from "@/features/sync/types";
+import { encryptMeta, decryptMeta } from "@/features/sync/crypto";
 
 export type ObjectKind = "book" | "note" | "version" | "metric";
 export const APP_NAME = "maibuk";

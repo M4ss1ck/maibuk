@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef } from "react";
-import { getPassphrase } from "./crypto";
-import { useSyncStore } from "./store";
-import type { SyncConflict, ConflictResolver, SyncOptions } from "./types";
+import { getPassphrase } from "@/features/sync/crypto";
+import { useSyncStore } from "@/features/sync/store";
+import type { SyncConflict, ConflictResolver, SyncOptions } from "@/features/sync/types";
 
 export function useSyncFlow() {
   const { syncAll } = useSyncStore();

@@ -1,5 +1,5 @@
-import { getDatabase } from "../../lib/db";
-import { decrypt, encrypt } from "../sync/crypto";
+import { getDatabase } from "@/lib/db";
+import { decrypt, encrypt } from "@/features/sync/crypto";
 import {
   applyRemoteEvent,
   applyRemoteTombstone,
@@ -12,15 +12,15 @@ import {
   markEventPushed,
   markTombstonePushed,
   type TombstoneRow,
-} from "./events-repo";
+} from "@/features/metrics/events-repo";
 import {
   pullMetricsEventRowsSince,
   pullMetricsTombstoneRowsSince,
   pushMetricsEventRow,
   pushMetricsTombstoneRow,
   type RemoteMetricsEventRow,
-} from "../sync/client";
-import type { MetricEvent, EventType, MetricPayload } from "./types";
+} from "@/features/sync/client";
+import type { MetricEvent, EventType, MetricPayload } from "@/features/metrics/types";
 
 interface MetricsEventRow {
   id: string;

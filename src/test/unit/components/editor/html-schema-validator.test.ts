@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import {
   validateHtml,
   createHtmlLinter,
-} from "../../../../components/editor/html-schema-validator";
-import { findBlockOffsetInHtml } from "../../../../components/editor/HtmlInspectMenu";
+} from "@/components/editor/html-schema-validator";
+import { findBlockOffsetInHtml } from "@/components/editor/HtmlInspectMenu";
 
 describe("validateHtml", () => {
   it("returns no diagnostics for valid HTML", () => {

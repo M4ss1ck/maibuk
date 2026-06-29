@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DOWNLOAD_PAGE } from "../../constants";
+import { DOWNLOAD_PAGE } from "@/constants";
 
 describe("constants", () => {
   it("DOWNLOAD_PAGE points to GitHub releases", () => {

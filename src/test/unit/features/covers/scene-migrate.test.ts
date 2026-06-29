@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { loadScene } from "../../../../features/covers/scene/migrate";
-import { createDefaultScene } from "../../../../features/covers/scene/defaults";
+import { loadScene } from "@/features/covers/scene/migrate";
+import { createDefaultScene } from "@/features/covers/scene/defaults";
 
 const fallback = createDefaultScene("6x9").doc;
 

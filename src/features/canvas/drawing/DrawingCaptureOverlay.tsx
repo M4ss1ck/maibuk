@@ -6,9 +6,9 @@ import {
   type RefObject,
 } from "react";
 import { useReactFlow, type Node } from "@xyflow/react";
-import { useCanvasStore } from "../store";
-import type { CanvasPosition } from "../types";
-import { strokeToPath } from "./strokePath";
+import { useCanvasStore } from "@/features/canvas/store";
+import type { CanvasPosition } from "@/features/canvas/types";
+import { strokeToPath } from "@/features/canvas/drawing/strokePath";
 
 function distanceToSegment(p: CanvasPosition, a: CanvasPosition, b: CanvasPosition): number {
   const dx = b.x - a.x;

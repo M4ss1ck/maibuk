@@ -6,7 +6,7 @@ vi.mock("../../components/editor/Editor", () => ({
   Editor: () => <div data-testid="editor" />,
 }));
 
-import { Embed } from "../../pages/Embed";
+import { Embed } from "@/pages/Embed";
 
 function renderAt(path: string) {
   return render(

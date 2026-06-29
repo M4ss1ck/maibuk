@@ -5,12 +5,12 @@
  */
 import { createElement, cloneElement, type ReactNode } from "react";
 import { Document, Page, View, Text, Image, Link } from "@react-pdf/renderer";
-import type { Book } from "../books/types";
-import type { Chapter } from "../chapters/types";
-import type { PdfExportOptions } from "./types";
-import { createPdfStyles } from "./pdf-styles";
-import { processChapterHtml } from "./html-sanitizer";
-import { renderHtmlContent } from "./pdf-content-renderer";
+import type { Book } from "@/features/books/types";
+import type { Chapter } from "@/features/chapters/types";
+import type { PdfExportOptions } from "@/features/export/types";
+import { createPdfStyles } from "@/features/export/pdf-styles";
+import { processChapterHtml } from "@/features/export/html-sanitizer";
+import { renderHtmlContent } from "@/features/export/pdf-content-renderer";
 
 export interface PdfDocumentProps {
   book: Book;

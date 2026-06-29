@@ -4,7 +4,7 @@ import {
   DEFAULT_TEXT_STYLES,
   FONT_FAMILIES,
   PRESET_COLORS,
-} from "../../../../features/covers/types";
+} from "@/features/covers/types";
 
 describe("COVER_DIMENSIONS", () => {
   it("contains at least 4 entries", () => {

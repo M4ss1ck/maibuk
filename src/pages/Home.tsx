@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useBookStore } from "../features/books/store";
-import { BookCard } from "../components/project/BookCard";
-import { NewBookDialog } from "../components/project/NewBookDialog";
-import { EpubImportDialog } from "../components/import";
-import { Button } from "../components/ui/Button";
+import { useBookStore } from "@/features/books/store";
+import { BookCard } from "@/components/project/BookCard";
+import { NewBookDialog } from "@/components/project/NewBookDialog";
+import { EpubImportDialog } from "@/components/import";
+import { Button } from "@/components/ui/Button";
 import { useTranslation } from "react-i18next";
-import { AddIcon, MaibukLogo } from "../components/icons";
+import { AddIcon, MaibukLogo } from "@/components/icons";
 import { Download, FileUp } from "lucide-react";
-import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "../lib/platform";
-import { DOWNLOAD_PAGE } from "../constants";
-import { KeyboardShortcut } from "../components/ui";
-import { isModKey, isTypingTarget } from "../lib/keyboard";
-import { useShortcuts } from "../lib/shortcuts";
-import { scanEpubForImport } from "../features/import/epub-import-service";
-import type { CompatibilityReport, ImportPreview } from "../features/import";
+import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "@/lib/platform";
+import { DOWNLOAD_PAGE } from "@/constants";
+import { KeyboardShortcut } from "@/components/ui";
+import { isModKey, isTypingTarget } from "@/lib/keyboard";
+import { useShortcuts } from "@/lib/shortcuts";
+import { scanEpubForImport } from "@/features/import/epub-import-service";
+import type { CompatibilityReport, ImportPreview } from "@/features/import";
 
 interface EpubImportState {
   bytes: Uint8Array;

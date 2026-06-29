@@ -1,4 +1,4 @@
-import type { BackupEntry } from "../../lib/platform/types";
+import type { BackupEntry } from "@/lib/platform/types";
 
 export function parseTriggerFromFilename(filename: string): BackupEntry["trigger"] {
   const match = filename.match(/^maibuk-backup-(daily|pre-sync|pre-restore|manual)-/);

@@ -1,4 +1,4 @@
-import type { MetricEvent } from "./types";
+import type { MetricEvent } from "@/features/metrics/types";
 
 type RecordEvents = (events: MetricEvent[]) => void;
 

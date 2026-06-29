@@ -1,8 +1,8 @@
 import { Schema } from "@tiptap/pm/model";
 import { EditorState, type Transaction } from "@tiptap/pm/state";
 import { describe, expect, it } from "vitest";
-import { classifyTransaction } from "../../../../features/metrics/classifier";
-import type { WritingMetricPayload } from "../../../../features/metrics/types";
+import { classifyTransaction } from "@/features/metrics/classifier";
+import type { WritingMetricPayload } from "@/features/metrics/types";
 
 const schema = new Schema({
   nodes: {

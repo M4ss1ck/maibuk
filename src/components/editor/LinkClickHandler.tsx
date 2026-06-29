@@ -3,13 +3,13 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import type { Editor } from "@tiptap/react";
-import { Modal } from "../ui/Modal";
-import { Button } from "../ui/Button";
-import { toast } from "../ui";
-import { openExternal } from "../../lib/platform";
-import { isInternalLink, parseLinkUri } from "../../features/links/link-uri";
-import { navigateToLinkTarget } from "../../features/links/navigate";
-import { useChapterStore } from "../../features/chapters/store";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui";
+import { openExternal } from "@/lib/platform";
+import { isInternalLink, parseLinkUri } from "@/features/links/link-uri";
+import { navigateToLinkTarget } from "@/features/links/navigate";
+import { useChapterStore } from "@/features/chapters/store";
 
 interface LinkClickDialogProps {
   editor: Editor;

@@ -1,14 +1,14 @@
 // src/test/unit/features/links/link-index.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseAdapter } from "../../../../lib/platform/types";
-import { createTestDatabase } from "../../../support/db-test-context";
+import type { DatabaseAdapter } from "@/lib/platform/types";
+import { createTestDatabase } from "@/test/support/db-test-context";
 
 let testDb: DatabaseAdapter;
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
 
 const { reindexSource, getBacklinksForNote } = await import(
-  "../../../../features/links/link-index"
+  "@/features/links/link-index"
 );
 
 describe("link-index", () => {

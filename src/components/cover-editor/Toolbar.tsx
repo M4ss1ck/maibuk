@@ -18,17 +18,17 @@ import {
   Square,
   Undo2,
 } from "lucide-react";
-import type { AlignEdge } from "../../features/covers/store";
-import { useCoverStore } from "../../features/covers/store";
+import type { AlignEdge } from "@/features/covers/store";
+import { useCoverStore } from "@/features/covers/store";
 import {
   PRESETS,
   createImageLayer,
   createShapeLayer,
   createTextLayer,
   getPreset,
-} from "../../features/covers/scene/defaults";
-import { TEMPLATES, buildTemplateScene } from "../../features/covers/scene/templates";
-import { Button } from "../ui/Button";
+} from "@/features/covers/scene/defaults";
+import { TEMPLATES, buildTemplateScene } from "@/features/covers/scene/templates";
+import { Button } from "@/components/ui/Button";
 import {
   ChevronDownIcon,
   DimensionIcon,
@@ -36,7 +36,7 @@ import {
   ImageIcon,
   TextIcon,
   TrashIcon,
-} from "../icons";
+} from "@/components/icons";
 
 export type ExportChoice = "png" | "jpeg" | "pdf";
 

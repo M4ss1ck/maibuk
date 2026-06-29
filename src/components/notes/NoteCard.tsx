@@ -1,9 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { BookOpen } from "lucide-react";
-import type { Note } from "../../features/notes";
-import { notePlainText } from "./notes-list-model";
-import { NoteTagsRow } from "./NoteTagsRow";
-import { timeAgo } from "./timeAgo";
+import type { Note } from "@/features/notes";
+import { notePlainText } from "@/components/notes/notes-list-model";
+import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
+import { timeAgo } from "@/components/notes/timeAgo";
 
 interface NoteCardProps {
   note: Note;

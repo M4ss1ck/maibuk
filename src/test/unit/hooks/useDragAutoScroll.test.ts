@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useDragAutoScroll } from "../../../hooks/useDragAutoScroll";
+import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 
 function makeContainer(rect: { top: number; bottom: number }) {
   const el = document.createElement("div");

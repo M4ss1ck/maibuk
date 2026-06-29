@@ -1,17 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Editor } from "@tiptap/react";
-import { Button } from "../ui/Button";
-import { Select } from "../ui/Select";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { useTranslation } from "react-i18next";
-import { SpinnerIcon, XIcon } from "../icons";
-import { useCodeMirror, type CodeMirrorHandle } from "./useCodeMirror";
-import { inferPasteRuleFromSelection } from "./paste-rule-from-selection";
+import { SpinnerIcon, XIcon } from "@/components/icons";
+import { useCodeMirror, type CodeMirrorHandle } from "@/components/editor/useCodeMirror";
+import { inferPasteRuleFromSelection } from "@/components/editor/paste-rule-from-selection";
 import type { Extension } from "@codemirror/state";
-import { useDebouncedCallback } from "../../hooks/useAutoSave";
-import { useSettingsStore } from "../../features/settings/store";
-import { useThemeStore } from "../../features/theme/store";
-import type { HtmlEditorTheme } from "../../features/settings/types";
+import { useDebouncedCallback } from "@/hooks/useAutoSave";
+import { useSettingsStore } from "@/features/settings/store";
+import { useThemeStore } from "@/features/theme/store";
+import type { HtmlEditorTheme } from "@/features/settings/types";
 import { WrapText, Sparkles, ListPlus } from "lucide-react";
 
 interface HtmlViewPanelProps {

@@ -3,16 +3,16 @@ import { createPortal } from "react-dom";
 import { useStore } from "@xyflow/react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import { FormattingButtons, LinkClickHandler, LinkDialog } from "../../../components/editor";
+import { FormattingButtons, LinkClickHandler, LinkDialog } from "@/components/editor";
 import type {
   InternalTarget,
   InternalTargetChildrenLoader,
-} from "../../../components/editor/LinkDialog";
-import { useBookStore } from "../../books/store";
-import { getChapterForLinking, listChaptersForBookLinking } from "../../chapters/store";
-import { assignHeadingIds } from "../../links/heading-ids";
-import { useNoteStore } from "../../notes/store";
-import { CanvasRichContentMenu } from "./CanvasRichContentMenu";
+} from "@/components/editor/LinkDialog";
+import { useBookStore } from "@/features/books/store";
+import { getChapterForLinking, listChaptersForBookLinking } from "@/features/chapters/store";
+import { assignHeadingIds } from "@/features/links/heading-ids";
+import { useNoteStore } from "@/features/notes/store";
+import { CanvasRichContentMenu } from "@/features/canvas/nodes/CanvasRichContentMenu";
 
 export function NodeFormatBubble({
   editor,

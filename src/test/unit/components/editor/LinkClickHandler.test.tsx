@@ -1,6 +1,6 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { LinkClickHandler } from "../../../../components/editor/LinkClickHandler";
+import { LinkClickHandler } from "@/components/editor/LinkClickHandler";
 
 const { mockNavigate } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),

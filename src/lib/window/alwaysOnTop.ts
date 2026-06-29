@@ -1,5 +1,5 @@
-import { IS_TAURI, setWindowAlwaysOnTop } from "../platform";
-import { useSettingsStore } from "../../features/settings/store";
+import { IS_TAURI, setWindowAlwaysOnTop } from "@/lib/platform";
+import { useSettingsStore } from "@/features/settings/store";
 
 let unlisten: (() => void) | null = null;
 

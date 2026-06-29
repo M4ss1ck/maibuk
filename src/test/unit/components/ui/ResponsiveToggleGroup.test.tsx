@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ResponsiveToggleGroup } from "../../../../components/ui/ResponsiveToggleGroup";
-import type { ResponsiveToggleOption } from "../../../../components/ui/ResponsiveToggleGroup";
+import { ResponsiveToggleGroup } from "@/components/ui/ResponsiveToggleGroup";
+import type { ResponsiveToggleOption } from "@/components/ui/ResponsiveToggleGroup";
 
 const options: ResponsiveToggleOption<"list" | "tree">[] = [
   {

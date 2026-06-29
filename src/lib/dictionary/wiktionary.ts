@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import type { Language } from "../../features/settings/types";
+import type { Language } from "@/features/settings/types";
 
 /**
  * Fetches the full Wiktionary article body for a word and returns sanitized

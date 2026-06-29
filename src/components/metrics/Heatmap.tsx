@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { HeatmapAggregate } from "../../features/metrics/aggregates/types";
+import type { HeatmapAggregate } from "@/features/metrics/aggregates/types";
 
 interface HeatmapProps {
   aggregate: HeatmapAggregate | null;
