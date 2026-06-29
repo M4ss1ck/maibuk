@@ -33,16 +33,16 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
 
   return (
     <div
-      className={`group relative flex h-44 w-56 flex-col rounded-xl border bg-card p-4 text-left text-foreground shadow-sm ${
+      className={`group relative flex min-h-44 w-56 flex-col rounded-xl border bg-card p-4 text-left text-foreground shadow-sm ${
         selected ? "border-primary ring-2 ring-primary/20" : "border-border"
       }`}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="card" />
 
-      <h3 className="truncate font-medium text-foreground">{title}</h3>
+      <h3 className="line-clamp-2 font-medium text-foreground">{title}</h3>
 
       {preview && (
-        <p className="mt-1 line-clamp-2 min-h-8 text-sm text-muted-foreground">{preview}</p>
+        <p className="mt-1 line-clamp-3 min-h-8 text-sm text-muted-foreground">{preview}</p>
       )}
 
       {bookTitle && (

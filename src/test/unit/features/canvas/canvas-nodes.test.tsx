@@ -6,7 +6,15 @@ const mocks = vi.hoisted(() => ({
   updateTextNode: vi.fn(),
   resizeTextNode: vi.fn(),
   editorReadOnly: false,
-  notes: [] as Array<{ id: string; title: string }>,
+  notes: [] as Array<{
+    id: string;
+    bookId?: string | null;
+    title: string;
+    content: string;
+    tags: string[];
+    contentUpdatedAt: number;
+  }>,
+  books: [] as Array<{ id: string; title: string }>,
 }));
 
 vi.mock("@xyflow/react", () => ({
@@ -46,6 +54,11 @@ vi.mock("../../../../features/notes", () => ({
     selector({ notes: mocks.notes }),
 }));
 
+vi.mock("../../../../features/books/store", () => ({
+  useBookStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ books: mocks.books }),
+}));
+
 vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
   useTranslation: () => ({ t: (key: string) => key }),
@@ -58,6 +71,7 @@ describe("Canvas custom nodes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.notes = [];
+    mocks.books = [];
     mocks.editorReadOnly = false;
   });
 
@@ -275,5 +289,79 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByText("Cached title")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "canvas.openNote" })).toBeDisabled();
     expect(screen.getAllByTestId("handle")).toHaveLength(4);
+  });
+
+  it("renders the preview for a note without a linked book", () => {
+    mocks.notes = [
+      {
+        id: "note-1",
+        title: "Loose note",
+        content: "A long standalone note preview",
+        tags: [],
+        contentUpdatedAt: 1,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <NoteRefNode
+          {...({
+            selected: false,
+            data: {
+              node: {
+                id: "ref",
+                kind: "noteRef",
+                noteId: "note-1",
+                position: { x: 0, y: 0 },
+              },
+              canvasId: "canvas",
+              canvasTitle: "Map",
+              connectedSides: {},
+            },
+          } as Parameters<typeof NoteRefNode>[0])}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("A long standalone note preview")).toHaveClass("line-clamp-3");
+  });
+
+  it("shows the book title and previews a linked note the same as a loose one", () => {
+    mocks.notes = [
+      {
+        id: "note-1",
+        bookId: "book-1",
+        title: "Filed note",
+        content: "A long linked note preview",
+        tags: [],
+        contentUpdatedAt: 1,
+      },
+    ];
+    mocks.books = [{ id: "book-1", title: "The Novel" }];
+
+    render(
+      <MemoryRouter>
+        <NoteRefNode
+          {...({
+            selected: false,
+            data: {
+              node: {
+                id: "ref",
+                kind: "noteRef",
+                noteId: "note-1",
+                position: { x: 0, y: 0 },
+              },
+              canvasId: "canvas",
+              canvasTitle: "Map",
+              connectedSides: {},
+            },
+          } as Parameters<typeof NoteRefNode>[0])}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("Filed note")).toBeInTheDocument();
+    expect(screen.getByText("The Novel")).toBeInTheDocument();
+    expect(screen.getByText("A long linked note preview")).toHaveClass("line-clamp-3");
   });
 });

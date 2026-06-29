@@ -27,6 +27,7 @@ import { maibukArt } from "../assets/ascii/maibuk";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Modal } from "../components/ui/Modal";
+import { useBookStore } from "../features/books/store";
 import { CanvasToolPanel } from "../features/canvas/CanvasToolPanel";
 import { EdgeInspectorCard } from "../features/canvas/EdgeInspectorCard";
 import { NodeColorPanel } from "../features/canvas/NodeColorPanel";
@@ -174,6 +175,7 @@ function CanvasEditor() {
   const renameCanvas = useCanvasStore((state) => state.renameCanvas);
   const notes = useNoteStore((state) => state.notes);
   const loadNotes = useNoteStore((state) => state.loadNotes);
+  const loadBooks = useBookStore((state) => state.loadBooks);
   const theme = useThemeStore((state) => state.theme);
   const [notePickerOpen, setNotePickerOpen] = useState(false);
   const [noteQuery, setNoteQuery] = useState("");
@@ -184,6 +186,7 @@ function CanvasEditor() {
   useEffect(() => {
     void loadCanvas(canvasId);
     void loadNotes();
+    void loadBooks();
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
       const state = useCanvasStore.getState();
@@ -198,7 +201,7 @@ function CanvasEditor() {
         closeCanvas();
       }
     };
-  }, [canvasId, closeCanvas, loadCanvas, loadNotes]);
+  }, [canvasId, closeCanvas, loadBooks, loadCanvas, loadNotes]);
 
   useEffect(() => {
     setTitleDraft(current?.title ?? "");

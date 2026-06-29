@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => {
     toggleInteractivityLocked: vi.fn(),
     addStroke: vi.fn(),
     removeStroke: vi.fn(),
+    loadBooks: vi.fn().mockResolvedValue(undefined),
+    loadNotes: vi.fn().mockResolvedValue(undefined),
   };
   const flowActions = {
     fitView: vi.fn(),
@@ -53,7 +55,12 @@ vi.mock("../../../features/canvas/store", () => {
 
 vi.mock("../../../features/notes", () => ({
   useNoteStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ notes: [], loadNotes: vi.fn().mockResolvedValue(undefined) }),
+    selector({ notes: [], loadNotes: mocks.actions.loadNotes }),
+}));
+
+vi.mock("../../../features/books/store", () => ({
+  useBookStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ loadBooks: mocks.actions.loadBooks }),
 }));
 
 vi.mock("../../../features/canvas/nodes", () => ({ nodeTypes: {} }));
@@ -129,6 +136,12 @@ describe("Canvas page", () => {
     vi.clearAllMocks();
     mocks.flowProps.current = null;
     readyState();
+  });
+
+  it("loads books with notes so linked note references can resolve book titles", () => {
+    renderCanvas();
+    expect(mocks.actions.loadNotes).toHaveBeenCalledTimes(1);
+    expect(mocks.actions.loadBooks).toHaveBeenCalledTimes(1);
   });
 
   it("disables built-in deletion and synchronizes React Flow node selection to the store", () => {
