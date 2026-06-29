@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   updateTextNode: vi.fn(),
   resizeTextNode: vi.fn(),
   editorReadOnly: false,
+  interactivityLocked: false,
   notes: [] as Array<{
     id: string;
     bookId?: string | null;
@@ -46,6 +47,7 @@ vi.mock("../../../../features/canvas/store", () => ({
       updateTextNode: mocks.updateTextNode,
       resizeTextNode: mocks.resizeTextNode,
       editorReadOnly: mocks.editorReadOnly,
+      interactivityLocked: mocks.interactivityLocked,
     }),
 }));
 
@@ -73,6 +75,7 @@ describe("Canvas custom nodes", () => {
     mocks.notes = [];
     mocks.books = [];
     mocks.editorReadOnly = false;
+    mocks.interactivityLocked = false;
   });
 
   const textNodeData = (overrides: Record<string, unknown> = {}) => ({
@@ -136,6 +139,18 @@ describe("Canvas custom nodes", () => {
     expect(handles.every((handle) => handle.className.includes("!z-10"))).toBe(true);
     expect(screen.getByTestId("resize-left").className).toContain("!z-0");
     expect(screen.getByTestId("resize-right").className).toContain("!z-0");
+  });
+
+  it("hides connection ports and resize grips when interactivity is locked", () => {
+    mocks.interactivityLocked = true;
+    render(
+      <LightweightNode
+        {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+      />
+    );
+    expect(screen.queryAllByTestId("handle")).toHaveLength(0);
+    expect(screen.queryByTestId("resize-left")).toBeNull();
+    expect(screen.queryByTestId("resize-right")).toBeNull();
   });
 
   it("renders text node html without a card border/background and shows a connected stub", () => {

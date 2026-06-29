@@ -94,6 +94,7 @@ function ActiveNodeEditor({
 export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNode>) {
   const node = data.node;
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
+  const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
   const beginLiveChange = useCanvasStore((state) => state.beginLiveChange);
   const resizeNodeLive = useCanvasStore((state) => state.resizeNodeLive);
   const endLiveChange = useCanvasStore((state) => state.endLiveChange);
@@ -103,7 +104,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
 
   if (node.kind !== "text") return null;
 
-  const resizable = !editorReadOnly && !editing;
+  const resizable = !editorReadOnly && !interactivityLocked && !editing;
 
   return (
     <div
@@ -121,7 +122,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
             variant={ResizeControlVariant.Line}
             resizeDirection="horizontal"
             minWidth={160}
-            className={`nodrag !z-0 !border-primary transition-opacity ${
+            className={`nodrag !z-0 !w-1 !rounded-full !border-0 !bg-primary transition-opacity ${
               selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
             onResizeStart={beginLiveChange}
@@ -132,7 +133,13 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
               })
             }
             onResizeEnd={endLiveChange}
-          />
+          >
+            {/* Grip glyph (‖) marking the bar as a draggable resize handle. */}
+            <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-6 -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 rounded-full bg-primary px-0.75">
+              <span className="h-3 w-px bg-background" />
+              <span className="h-3 w-px bg-background" />
+            </span>
+          </NodeResizeControl>
         ))}
       {editing ? (
         <ActiveNodeEditor
