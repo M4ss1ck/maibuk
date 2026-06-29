@@ -13,15 +13,9 @@ export function SceneBreakView({ node, selected }: NodeViewProps) {
       }`}
     >
       {attrs.kind === "image" && attrs.src ? (
-        <img
-          src={attrs.src}
-          alt={attrs.alt ?? ""}
-          className="max-h-16 object-contain"
-        />
+        <img src={attrs.src} alt={attrs.alt ?? ""} className="max-h-16 object-contain" />
       ) : (
-        <span className="scene-break-symbols tracking-[0.3em]">
-          {attrs.symbols}
-        </span>
+        <span className="scene-break-symbols tracking-[0.3em]">{attrs.symbols}</span>
       )}
     </NodeViewWrapper>
   );

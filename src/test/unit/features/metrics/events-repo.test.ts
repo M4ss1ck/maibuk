@@ -44,7 +44,11 @@ describe("metrics events repository", () => {
   it("inserts and lists events without prose in the payload", async () => {
     await insertEvents(testDb, [
       buildEvent({ id: "event-1", payload: { words: 2, chars: 10, chapterId: "chapter-1" } }),
-      buildEvent({ id: "event-2", eventType: "writing.deleted", payload: { words: 1, chars: 5, chapterId: null } }),
+      buildEvent({
+        id: "event-2",
+        eventType: "writing.deleted",
+        payload: { words: 1, chars: 5, chapterId: null },
+      }),
     ]);
 
     const rows = await listEvents(testDb);
@@ -60,7 +64,7 @@ describe("metrics events repository", () => {
     await testDb.execute(
       `INSERT INTO metrics_event_tombstones (id, deleted_at, device_id, reason)
        VALUES (?, ?, ?, ?)`,
-      [event.id, "2026-05-23T12:30:00.000Z", "device-1", "category-opt-out"],
+      [event.id, "2026-05-23T12:30:00.000Z", "device-1", "category-opt-out"]
     );
 
     const inserted = await insertIfNotTombstoned(testDb, event);
@@ -87,16 +91,16 @@ describe("metrics events repository", () => {
       testDb,
       "writing.",
       "device-1",
-      "2026-05-23T12:30:00.000Z",
+      "2026-05-23T12:30:00.000Z"
     );
     await invalidateCache(testDb, ["writing:"]);
 
     const events = await listEvents(testDb);
     const tombstones = await testDb.select<{ id: string }[]>(
-      "SELECT id FROM metrics_event_tombstones",
+      "SELECT id FROM metrics_event_tombstones"
     );
     const cacheRows = await testDb.select<{ cache_key: string }[]>(
-      "SELECT cache_key FROM metrics_cache",
+      "SELECT cache_key FROM metrics_cache"
     );
 
     expect(purged).toBe(1);
@@ -107,8 +111,16 @@ describe("metrics events repository", () => {
 
   it("compacts a day's raw events into a single aggregate when under the segment cap", async () => {
     await insertEvents(testDb, [
-      buildEvent({ id: "e-1", eventType: "writing.typed", payload: { words: 2, chars: 5, chapterId: "c" } }),
-      buildEvent({ id: "e-2", eventType: "writing.typed", payload: { words: 3, chars: 9, chapterId: "c" } }),
+      buildEvent({
+        id: "e-1",
+        eventType: "writing.typed",
+        payload: { words: 2, chars: 5, chapterId: "c" },
+      }),
+      buildEvent({
+        id: "e-2",
+        eventType: "writing.typed",
+        payload: { words: 3, chars: 9, chapterId: "c" },
+      }),
     ]);
 
     await compactUnpushedRawMetricEvents(testDb);
@@ -128,14 +140,14 @@ describe("metrics events repository", () => {
         timestamp: `2026-05-23T12:00:${String(i % 60).padStart(2, "0")}.000Z`,
         eventType: "writing.typed",
         payload: { words: 1, chars: 1, chapterId: "c" },
-      }),
+      })
     );
     await insertEvents(testDb, events);
 
     await compactUnpushedRawMetricEvents(testDb);
 
     const aggregates = (await listEvents(testDb)).filter(
-      (row) => row.eventType === "aggregate.daily",
+      (row) => row.eventType === "aggregate.daily"
     );
     expect(aggregates).toHaveLength(Math.ceil(total / MAX_SOURCE_EVENTS_PER_SEGMENT));
 
@@ -147,7 +159,7 @@ describe("metrics events repository", () => {
 
     // Segments partition the day's events: every raw id appears exactly once.
     const allIds = aggregates.flatMap(
-      (aggregate) => (aggregate.payload as { sourceEventIds: string[] }).sourceEventIds,
+      (aggregate) => (aggregate.payload as { sourceEventIds: string[] }).sourceEventIds
     );
     expect(allIds).toHaveLength(total);
     expect(new Set(allIds).size).toBe(total);
@@ -155,7 +167,7 @@ describe("metrics events repository", () => {
     // Word totals are preserved across the split.
     const typedWords = aggregates.reduce(
       (sum, aggregate) => sum + (aggregate.payload as { typedWords: number }).typedWords,
-      0,
+      0
     );
     expect(typedWords).toBe(total);
   });
@@ -165,13 +177,13 @@ describe("metrics events repository", () => {
       `INSERT INTO books
         (id, title, author_name, word_count, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      ["book-1", "Novel One", "Author", 8000, 1, 2],
+      ["book-1", "Novel One", "Author", 8000, 1, 2]
     );
     await testDb.execute(
       `INSERT INTO books
         (id, title, author_name, word_count, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      ["book-2", "Draft Two", "Author", 4345, 1, 3],
+      ["book-2", "Draft Two", "Author", 4345, 1, 3]
     );
 
     const snapshot = await getSnapshotMetrics(testDb);
@@ -220,14 +232,10 @@ describe("metrics events repository", () => {
       offset: 2,
     });
 
-    expect(firstPage.map((event) => event.id)).toEqual([
-      "aggregate:daily:v1:device-1:2026-05-22",
-    ]);
+    expect(firstPage.map((event) => event.id)).toEqual(["aggregate:daily:v1:device-1:2026-05-22"]);
     expect(secondPage.map((event) => event.id)).toEqual(["event-1"]);
     expect(thirdPage.map((event) => event.id)).toEqual(["event-2"]);
-    expect(await getSourceHighWatermark(testDb, "heatmap:2026")).toBe(
-      "2026-05-23T12:01:00.000Z",
-    );
+    expect(await getSourceHighWatermark(testDb, "heatmap:2026")).toBe("2026-05-23T12:01:00.000Z");
   });
 
   it("includes compact daily aggregate rows in daily writing totals", async () => {
@@ -259,9 +267,7 @@ describe("metrics events repository", () => {
       }),
     ]);
 
-    expect(await listDailyWritingTotals(testDb)).toEqual([
-      { date: "2026-01-01", words: 105 },
-    ]);
+    expect(await listDailyWritingTotals(testDb)).toEqual([{ date: "2026-01-01", words: 105 }]);
   });
 
   it("reports measuring-since dates by metrics category", async () => {
@@ -278,14 +284,8 @@ describe("metrics events repository", () => {
       }),
     ]);
 
-    expect(await getCategoryMeasuringSince(testDb, "writing")).toBe(
-      "2026-05-23T12:00:00.000Z",
-    );
-    expect(await getCategoryMeasuringSince(testDb, "time")).toBe(
-      "2026-05-24T12:00:00.000Z",
-    );
-    expect(await getCategoryMeasuringSince(testDb, "engagement")).toBe(
-      "2026-05-23T12:00:00.000Z",
-    );
+    expect(await getCategoryMeasuringSince(testDb, "writing")).toBe("2026-05-23T12:00:00.000Z");
+    expect(await getCategoryMeasuringSince(testDb, "time")).toBe("2026-05-24T12:00:00.000Z");
+    expect(await getCategoryMeasuringSince(testDb, "engagement")).toBe("2026-05-23T12:00:00.000Z");
   });
 });

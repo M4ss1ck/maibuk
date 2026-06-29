@@ -59,9 +59,7 @@ describe("BookNotesView", () => {
       buildNote({ id: "n2", title: "Character ideas" }),
     ];
 
-    render(
-      <BookNotesView notes={notes} onCreateNote={vi.fn()} onOpenNote={onOpenNote} />,
-    );
+    render(<BookNotesView notes={notes} onCreateNote={vi.fn()} onOpenNote={onOpenNote} />);
 
     expect(screen.getByText("Outline")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Character ideas"));
@@ -77,9 +75,7 @@ describe("BookNotesView", () => {
   it("creates a note from the quick-note input", () => {
     const onCreateNote = vi.fn();
 
-    render(
-      <BookNotesView notes={[]} onCreateNote={onCreateNote} onOpenNote={vi.fn()} />,
-    );
+    render(<BookNotesView notes={[]} onCreateNote={onCreateNote} onOpenNote={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText("quick-note-editor"), {
       target: { value: "<p>A fresh idea</p>" },
@@ -92,9 +88,7 @@ describe("BookNotesView", () => {
   it("ignores a quick note with no text content", () => {
     const onCreateNote = vi.fn();
 
-    render(
-      <BookNotesView notes={[]} onCreateNote={onCreateNote} onOpenNote={vi.fn()} />,
-    );
+    render(<BookNotesView notes={[]} onCreateNote={onCreateNote} onOpenNote={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText("quick-note-editor"), {
       target: { value: "<p></p>" },

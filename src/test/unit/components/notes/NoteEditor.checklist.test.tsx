@@ -14,7 +14,7 @@ const { mockEditor, mockNotes, mockBooks, mockListAllChaptersForLinking } = vi.h
         title: "Opening Chapter",
         content: '<h2 id="h-opening">Opening Scene</h2><p>Body</p>',
       },
-    ]),
+    ])
   ),
   mockNotes: [
     {
@@ -102,7 +102,7 @@ vi.mock("../../../../lib/platform", () => ({
       close: vi.fn(() => Promise.resolve()),
       exportData: vi.fn(() => Promise.resolve(new Uint8Array())),
       importData: vi.fn(() => Promise.resolve()),
-    }),
+    })
   ),
 }));
 
@@ -140,7 +140,7 @@ vi.mock("../../../../features/chapters/store", () => ({
         bookId: "book-1",
         title: "Opening Chapter",
       },
-    ]),
+    ])
   ),
   getChapterForLinking: vi.fn(() =>
     Promise.resolve({
@@ -148,7 +148,7 @@ vi.mock("../../../../features/chapters/store", () => ({
       bookId: "book-1",
       title: "Opening Chapter",
       content: '<h2 id="h-opening">Opening Scene</h2><p>Body</p>',
-    }),
+    })
   ),
 }));
 
@@ -181,7 +181,7 @@ describe("NoteEditor extensions", () => {
         note={buildNote({})}
         onSave={vi.fn().mockResolvedValue(undefined)}
         onBack={vi.fn()}
-      />,
+      />
     );
 
     const props = mockEditor.mock.calls[0]?.[0] as {
@@ -231,7 +231,7 @@ describe("NoteEditor extensions", () => {
         note={buildNote({ id: "note-1" })}
         onSave={vi.fn().mockResolvedValue(undefined)}
         onBack={vi.fn()}
-      />,
+      />
     );
 
     const props = mockEditor.mock.calls[0]?.[0] as {
@@ -251,7 +251,7 @@ describe("NoteEditor extensions", () => {
         note={buildNote({ id: "note-1" })}
         onSave={vi.fn().mockResolvedValue(undefined)}
         onBack={vi.fn()}
-      />,
+      />
     );
 
     await Promise.resolve();
@@ -265,7 +265,7 @@ describe("NoteEditor extensions", () => {
         note={buildNote({ id: "note-1" })}
         onSave={vi.fn().mockResolvedValue(undefined)}
         onBack={vi.fn()}
-      />,
+      />
     );
 
     const props = mockEditor.mock.calls[0]?.[0] as {
@@ -285,7 +285,7 @@ describe("NoteEditor extensions", () => {
         type: "book",
         bookId: "book-1",
         title: "Novel Draft",
-      }),
+      })
     ).resolves.toEqual([
       {
         type: "chapter",
@@ -300,7 +300,7 @@ describe("NoteEditor extensions", () => {
         type: "chapter",
         chapterId: "chapter-1",
         title: "Opening Chapter",
-      }),
+      })
     ).resolves.toEqual([
       {
         type: "heading",
@@ -315,7 +315,7 @@ describe("NoteEditor extensions", () => {
         type: "note",
         noteId: "note-2",
         title: "Research Note",
-      }),
+      })
     ).resolves.toEqual([
       {
         type: "noteHeading",

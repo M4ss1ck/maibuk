@@ -22,9 +22,7 @@ vi.mock("../../../../features/metrics/device-id", () => ({
   getOrCreateDeviceId: mockGetOrCreateDeviceId,
 }));
 
-const { purgeMetricCategory } = await import(
-  "../../../../features/metrics/purge"
-);
+const { purgeMetricCategory } = await import("../../../../features/metrics/purge");
 
 let testDb: DatabaseAdapter;
 
@@ -94,10 +92,10 @@ describe("purgeMetricCategory()", () => {
 
     const events = await listEvents(testDb);
     const tombstones = await testDb.select<{ id: string; device_id: string }[]>(
-      "SELECT id, device_id FROM metrics_event_tombstones ORDER BY id ASC",
+      "SELECT id, device_id FROM metrics_event_tombstones ORDER BY id ASC"
     );
     const cacheRows = await testDb.select<{ cache_key: string }[]>(
-      "SELECT cache_key FROM metrics_cache ORDER BY cache_key ASC",
+      "SELECT cache_key FROM metrics_cache ORDER BY cache_key ASC"
     );
 
     expect(purged).toBe(2);

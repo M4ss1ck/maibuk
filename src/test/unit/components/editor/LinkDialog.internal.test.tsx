@@ -45,7 +45,7 @@ describe("LinkDialog internal target picker", () => {
             headingId: "h-1",
           },
         ]}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
@@ -77,15 +77,13 @@ describe("LinkDialog internal target picker", () => {
             headingId: null,
           },
         ]}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
     fireEvent.click(screen.getByText("Chapter One"));
 
-    expect(insertContent).toHaveBeenCalledWith(
-      '<a href="maibuk://chapter/c1">Chapter One</a>',
-    );
+    expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Chapter One</a>');
   });
 
   it("inserts a maibuk heading link when a heading is chosen", () => {
@@ -103,7 +101,7 @@ describe("LinkDialog internal target picker", () => {
             headingId: "h-1",
           },
         ]}
-      />,
+      />
     );
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
     fireEvent.click(screen.getByText("A Section"));
@@ -123,7 +121,7 @@ describe("LinkDialog internal target picker", () => {
             title: "Research Note",
           },
         ]}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
@@ -153,7 +151,7 @@ describe("LinkDialog internal target picker", () => {
             title: "Shared Title",
           },
         ]}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
@@ -185,7 +183,7 @@ describe("LinkDialog internal target picker", () => {
           },
         ]}
         loadInternalTargetChildren={loadInternalTargetChildren}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
@@ -199,7 +197,7 @@ describe("LinkDialog internal target picker", () => {
         type: "book",
         bookId: "book-1",
         title: "Novel Draft",
-      }),
+      })
     );
     expect(await screen.findByText("Opening Chapter")).toBeInTheDocument();
 
@@ -231,7 +229,7 @@ describe("LinkDialog internal target picker", () => {
           },
         ]}
         loadInternalTargetChildren={loadInternalTargetChildren}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
@@ -272,15 +270,13 @@ describe("LinkDialog internal target picker", () => {
             headingId: null,
           },
         ]}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
     fireEvent.click(screen.getByText("Chapter One"));
 
-    expect(insertContent).toHaveBeenCalledWith(
-      '<a href="maibuk://chapter/c1">Chapter One</a>',
-    );
+    expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Chapter One</a>');
   });
 
   it("uses custom display text when provided in internal mode", () => {
@@ -298,7 +294,7 @@ describe("LinkDialog internal target picker", () => {
             headingId: null,
           },
         ]}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
@@ -308,9 +304,7 @@ describe("LinkDialog internal target picker", () => {
 
     fireEvent.click(screen.getByText("Chapter One"));
 
-    expect(insertContent).toHaveBeenCalledWith(
-      '<a href="maibuk://chapter/c1">Custom Label</a>',
-    );
+    expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Custom Label</a>');
   });
 
   it("preserves an existing internal href when editing display text", () => {
@@ -333,7 +327,7 @@ describe("LinkDialog internal target picker", () => {
             headingId: null,
           },
         ]}
-      />,
+      />
     );
 
     const textInput = screen.getByPlaceholderText("editor.linkText");
@@ -341,9 +335,7 @@ describe("LinkDialog internal target picker", () => {
 
     fireEvent.click(screen.getByText("common.update"));
 
-    expect(insertContent).toHaveBeenCalledWith(
-      '<a href="maibuk://chapter/c1">Custom Label</a>',
-    );
+    expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Custom Label</a>');
   });
 
   it("preserves existing marks when editing internal link display text", () => {
@@ -362,7 +354,7 @@ describe("LinkDialog internal target picker", () => {
                 type: { name: string };
                 attrs: Record<string, unknown>;
               }[];
-            }) => void,
+            }) => void
           ) =>
             callback({
               isText: true,
@@ -397,7 +389,7 @@ describe("LinkDialog internal target picker", () => {
             headingId: null,
           },
         ]}
-      />,
+      />
     );
 
     const textInput = screen.getByPlaceholderText("editor.linkText");
@@ -417,13 +409,7 @@ describe("LinkDialog internal target picker", () => {
   });
 
   it("uses custom display text when provided in url mode with a selection", () => {
-    render(
-      <LinkDialog
-        editor={editor}
-        isOpen
-        onClose={() => {}}
-      />,
-    );
+    render(<LinkDialog editor={editor} isOpen onClose={() => {}} />);
 
     const urlInput = screen.getByPlaceholderText("https://example.com");
     fireEvent.change(urlInput, { target: { value: "https://example.com" } });
@@ -433,8 +419,6 @@ describe("LinkDialog internal target picker", () => {
 
     fireEvent.click(screen.getByText("common.insert"));
 
-    expect(insertContent).toHaveBeenCalledWith(
-      '<a href="https://example.com">Custom Label</a>',
-    );
+    expect(insertContent).toHaveBeenCalledWith('<a href="https://example.com">Custom Label</a>');
   });
 });

@@ -170,7 +170,7 @@ describe("renderSceneBreak (PDF)", () => {
   it("renders an image scene break as an Image", () => {
     const tree = renderHtmlContent(
       '<figure class="scene-break"><img src="data:image/png;base64,AA" /></figure>',
-      styles,
+      styles
     );
     const sceneBreak = tree[0] as { props?: { style?: unknown } };
 

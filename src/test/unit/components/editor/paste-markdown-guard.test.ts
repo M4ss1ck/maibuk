@@ -23,9 +23,7 @@ describe("shouldPromptMarkdownPaste", () => {
     const editor = makeEditor("<p>hello</p>");
     selectInside(editor, "hello");
 
-    expect(
-      shouldPromptMarkdownPaste(editor.state, { plainPaste: false }),
-    ).toBe(true);
+    expect(shouldPromptMarkdownPaste(editor.state, { plainPaste: false })).toBe(true);
     editor.destroy();
   });
 
@@ -33,9 +31,7 @@ describe("shouldPromptMarkdownPaste", () => {
     const editor = makeEditor("<pre><code>const x = 1</code></pre>");
     selectInside(editor, "const x = 1");
 
-    expect(
-      shouldPromptMarkdownPaste(editor.state, { plainPaste: false }),
-    ).toBe(false);
+    expect(shouldPromptMarkdownPaste(editor.state, { plainPaste: false })).toBe(false);
     editor.destroy();
   });
 
@@ -43,9 +39,7 @@ describe("shouldPromptMarkdownPaste", () => {
     const editor = makeEditor("<p>hello</p>");
     selectInside(editor, "hello");
 
-    expect(
-      shouldPromptMarkdownPaste(editor.state, { plainPaste: true }),
-    ).toBe(false);
+    expect(shouldPromptMarkdownPaste(editor.state, { plainPaste: true })).toBe(false);
     editor.destroy();
   });
 });

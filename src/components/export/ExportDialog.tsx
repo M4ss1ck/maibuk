@@ -29,19 +29,11 @@ interface ExportDialogProps {
   chapters: Chapter[];
 }
 
-export function ExportDialog({
-  isOpen,
-  onClose,
-  book,
-  chapters,
-}: ExportDialogProps) {
+export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogProps) {
   const { t } = useTranslation();
   const [format, setFormat] = useState<"epub" | "pdf">("epub");
-  const [epubOptions, setEpubOptions] = useState<EpubExportOptions>(
-    DEFAULT_EXPORT_OPTIONS,
-  );
-  const [pdfOptions, setPdfOptions] =
-    useState<PdfExportOptions>(DEFAULT_PDF_OPTIONS);
+  const [epubOptions, setEpubOptions] = useState<EpubExportOptions>(DEFAULT_EXPORT_OPTIONS);
+  const [pdfOptions, setPdfOptions] = useState<PdfExportOptions>(DEFAULT_PDF_OPTIONS);
   const [projectEpubOptions, setProjectEpubOptions] = useState<ProjectEpubExportOptions>({
     includeImportedStyles: true,
     useMaibukStyles: true,
@@ -94,14 +86,9 @@ export function ExportDialog({
       let filterExtension: string;
 
       if (format === "pdf") {
-        blob = await generatePdf(
-          book,
-          chapters,
-          pdfOptions,
-          (message: string) => {
-            setProgress((prev) => ({ ...prev, message }));
-          },
-        );
+        blob = await generatePdf(book, chapters, pdfOptions, (message: string) => {
+          setProgress((prev) => ({ ...prev, message }));
+        });
         suggestedFilename = getPdfFilename(book);
         mimeType = "application/pdf";
         filterName = "PDF";
@@ -153,8 +140,7 @@ export function ExportDialog({
       console.error("Export failed:", error);
       setProgress({
         status: "error",
-        message:
-          error instanceof Error ? error.message : t("export.exportFailed"),
+        message: error instanceof Error ? error.message : t("export.exportFailed"),
       });
     }
   }, [book, chapters, epubOptions, pdfOptions, format, onClose, t]);
@@ -186,12 +172,7 @@ export function ExportDialog({
   ];
 
   return (
-    <Dialog
-      open={isOpen}
-      onClose={handleClose}
-      className="relative z-50"
-      transition
-    >
+    <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0"
@@ -258,10 +239,7 @@ export function ExportDialog({
             {format === "epub" ? (
               <>
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="include-toc"
-                    className="text-sm text-foreground"
-                  >
+                  <label htmlFor="include-toc" className="text-sm text-foreground">
                     {t("export.includeTOC")}
                   </label>
                   <Switch
@@ -277,10 +255,7 @@ export function ExportDialog({
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="number-chapters"
-                    className="text-sm text-foreground"
-                  >
+                  <label htmlFor="number-chapters" className="text-sm text-foreground">
                     {t("export.numberedTOC")}
                   </label>
                   <Switch
@@ -296,10 +271,7 @@ export function ExportDialog({
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="prepend-chapter-titles"
-                    className="text-sm text-foreground"
-                  >
+                  <label htmlFor="prepend-chapter-titles" className="text-sm text-foreground">
                     {t("export.prependChapterTitles")}
                   </label>
                   <Switch
@@ -380,10 +352,7 @@ export function ExportDialog({
               // PDF Options
               <>
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="include-toc"
-                    className="text-sm text-foreground"
-                  >
+                  <label htmlFor="include-toc" className="text-sm text-foreground">
                     {t("export.includeTOC")}
                   </label>
                   <Switch
@@ -399,10 +368,7 @@ export function ExportDialog({
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="number-chapters"
-                    className="text-sm text-foreground"
-                  >
+                  <label htmlFor="number-chapters" className="text-sm text-foreground">
                     {t("export.numberChapters")}
                   </label>
                   <Switch
@@ -418,10 +384,7 @@ export function ExportDialog({
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="include-page-numbers"
-                    className="text-sm text-foreground"
-                  >
+                  <label htmlFor="include-page-numbers" className="text-sm text-foreground">
                     {t("export.includePageNumbers")}
                   </label>
                   <Switch
@@ -437,10 +400,7 @@ export function ExportDialog({
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="page-size"
-                    className="text-sm text-foreground"
-                  >
+                  <label htmlFor="page-size" className="text-sm text-foreground">
                     {t("export.pageSize")}
                   </label>
                   <Select
@@ -457,10 +417,7 @@ export function ExportDialog({
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="margin-presets"
-                    className="text-sm text-foreground"
-                  >
+                  <label htmlFor="margin-presets" className="text-sm text-foreground">
                     {t("export.marginPreset")}
                   </label>
                   <Select
@@ -493,12 +450,8 @@ export function ExportDialog({
               <div className="flex items-center gap-2">
                 {(progress.status === "preparing" ||
                   progress.status === "generating" ||
-                  progress.status === "saving") && (
-                  <SpinnerIcon className="h-4 w-4" />
-                )}
-                {progress.status === "complete" && (
-                  <CheckIcon className="h-4 w-4" />
-                )}
+                  progress.status === "saving") && <SpinnerIcon className="h-4 w-4" />}
+                {progress.status === "complete" && <CheckIcon className="h-4 w-4" />}
                 {progress.status === "error" && <XIcon className="h-4 w-4" />}
                 <span>{progress.message}</span>
               </div>
@@ -507,11 +460,7 @@ export function ExportDialog({
 
           {/* Actions */}
           <div className="flex justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={handleClose}
-              disabled={isExporting}
-            >
+            <Button variant="ghost" onClick={handleClose} disabled={isExporting}>
               {t("common.cancel")}
             </Button>
             <Button

@@ -38,7 +38,7 @@ describe("Editor tasklist DOM", () => {
           TaskList,
           TaskItem.configure({ nested: true, HTMLAttributes: { draggable: "true" } }),
         ]}
-      />,
+      />
     );
 
     await waitFor(() => {

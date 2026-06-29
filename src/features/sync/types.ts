@@ -13,7 +13,7 @@ export type SyncAction = "pushed" | "pulled" | "skipped" | "cancelled";
 export type SyncOutcome = "success" | "cancelled" | "partial";
 export type SyncScope = "all" | "books" | "notes" | "metrics";
 export type SyncDirection = "bidirectional" | "pull" | "push";
-export type SyncEntityType = "book" | "note";
+export type SyncEntityType = "book" | "note" | "canvas";
 
 export interface SyncOptions {
   scope: SyncScope;

@@ -39,13 +39,8 @@ describe("NoteListItem title editing", () => {
 
     render(
       <ul>
-        <NoteListItem
-          note={note}
-          isSelected={false}
-          onSelect={vi.fn()}
-          onRename={onRename}
-        />
-      </ul>,
+        <NoteListItem note={note} isSelected={false} onSelect={vi.fn()} onRename={onRename} />
+      </ul>
     );
 
     await user.click(screen.getByRole("button", { name: "common.edit" }));

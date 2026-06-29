@@ -48,7 +48,8 @@ export function buildImportPreview(parsed: ParsedEpub): ImportPreview {
     language: getMetadataValue(parsed, "language"),
     chapterCount: parsed.spine.filter((item) => CONTENT_MEDIA_TYPES.has(item.mediaType)).length,
     assetCount: parsed.resources.filter(isSupportedAssetResource).length,
-    styleCount: parsed.resources.filter((resource) => STYLE_MEDIA_TYPES.has(resource.mediaType)).length,
+    styleCount: parsed.resources.filter((resource) => STYLE_MEDIA_TYPES.has(resource.mediaType))
+      .length,
     metadataCount: parsed.metadata.length,
   };
 }

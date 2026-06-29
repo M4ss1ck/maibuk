@@ -7,8 +7,9 @@ let testDb: DatabaseAdapter;
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
 
-const { reindexSource, getBacklinksForNote } =
-  await import("../../../../features/links/link-index");
+const { reindexSource, getBacklinksForNote } = await import(
+  "../../../../features/links/link-index"
+);
 
 describe("link-index", () => {
   beforeEach(async () => {
@@ -32,11 +33,10 @@ describe("link-index", () => {
     await reindexSource({
       sourceType: "note",
       sourceId: "src",
-      contentHtml:
-        '<a href="maibuk://note/n2">A</a><a href="maibuk://book/b1">B</a>',
+      contentHtml: '<a href="maibuk://note/n2">A</a><a href="maibuk://book/b1">B</a>',
     });
     let rows = await testDb.select<{ c: number }[]>(
-      "SELECT COUNT(*) as c FROM links WHERE source_id = 'src'",
+      "SELECT COUNT(*) as c FROM links WHERE source_id = 'src'"
     );
     expect(rows[0].c).toBe(2);
 
@@ -47,7 +47,7 @@ describe("link-index", () => {
       contentHtml: '<a href="maibuk://note/n2">A</a>',
     });
     rows = await testDb.select<{ c: number }[]>(
-      "SELECT COUNT(*) as c FROM links WHERE source_id = 'src'",
+      "SELECT COUNT(*) as c FROM links WHERE source_id = 'src'"
     );
     expect(rows[0].c).toBe(1);
   });
@@ -56,7 +56,7 @@ describe("link-index", () => {
     const now = Math.floor(Date.now() / 1000);
     await testDb.execute(
       `INSERT INTO notes (id, title, content, "order", created_at, updated_at) VALUES ('a','Note A','', 0, ?, ?)`,
-      [now, now],
+      [now, now]
     );
     await reindexSource({
       sourceType: "note",

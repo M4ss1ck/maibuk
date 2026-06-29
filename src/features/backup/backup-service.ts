@@ -10,6 +10,8 @@ import { parseSqlStatements } from "../../lib/db/sql-parser";
 import { useBookStore } from "../books/store";
 import { useChapterStore } from "../chapters/store";
 import { useNoteStore } from "../notes/store";
+import { useCanvasStore } from "../canvas/store";
+import { parseCanvasDoc, serializeCanvasDoc } from "../canvas/serialization";
 import { generateSqlDump } from "./generate-sql-dump";
 
 function buildFilename(trigger: BackupEntry["trigger"]): string {
@@ -25,19 +27,88 @@ const PROTECTED_TRIGGERS = new Set<BackupEntry["trigger"]>(["pre-sync", "pre-res
 const MIN_PROTECTED = 2;
 /**
  * Filter to only allow restore INSERT statements targeting books, chapters,
- * book versions and notes.
+ * book versions, notes and canvases.
  * Multi-statement injection is blocked by `parseSqlStatements()` splitting on
  * unquoted semicolons, and this regex requires a concrete VALUES clause.
  */
 const RESTORE_TABLE_PATTERN =
-  /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters|book_versions|notes|sync_tombstones)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
+  /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters|book_versions|notes|canvases|sync_tombstones)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
 
 function isRestoreStatement(statement: string): boolean {
   return RESTORE_TABLE_PATTERN.test(statement.trim());
 }
 
 function extractRestoreStatements(sql: string): string[] {
-  return parseSqlStatements(sql).filter(isRestoreStatement);
+  return parseSqlStatements(sql).filter(isRestoreStatement).map(normalizeCanvasRestoreStatement);
+}
+
+const CANVAS_INSERT_PATTERN =
+  /^(INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+"?canvases"?\s*)(\([^)]*\)\s*)?VALUES\s*\((.*)\)$/is;
+
+const CANVAS_COLUMNS = [
+  "id",
+  "title",
+  "doc",
+  "pinned",
+  "order",
+  "created_at",
+  "updated_at",
+  "content_updated_at",
+];
+
+function splitSqlValues(raw: string): string[] {
+  const values: string[] = [];
+  let current = "";
+  let inQuote = false;
+
+  for (let index = 0; index < raw.length; index++) {
+    const char = raw[index];
+    current += char;
+    if (char === "'") {
+      if (inQuote && raw[index + 1] === "'") {
+        current += raw[index + 1];
+        index++;
+      } else {
+        inQuote = !inQuote;
+      }
+    } else if (char === "," && !inQuote) {
+      values.push(current.slice(0, -1).trim());
+      current = "";
+    }
+  }
+
+  if (inQuote) throw new Error("RESTORE_INVALID");
+  values.push(current.trim());
+  return values;
+}
+
+function parseSqlString(value: string): string | null {
+  if (value.toUpperCase() === "NULL") return null;
+  if (!value.startsWith("'") || !value.endsWith("'")) throw new Error("RESTORE_INVALID");
+  return value.slice(1, -1).split("''").join("'");
+}
+
+function toSqlString(value: string): string {
+  return `'${value.split("'").join("''")}'`;
+}
+
+function normalizeCanvasRestoreStatement(statement: string): string {
+  const match = statement.trim().match(CANVAS_INSERT_PATTERN);
+  if (!match) return statement;
+  const [, prefix, rawColumns, rawValues] = match;
+  const columns = rawColumns
+    ? rawColumns
+        .slice(1, rawColumns.lastIndexOf(")"))
+        .split(",")
+        .map((column) => column.trim().split('"').join("").toLowerCase())
+    : CANVAS_COLUMNS;
+  const values = splitSqlValues(rawValues);
+  const docIndex = columns.indexOf("doc");
+  if (docIndex < 0 || docIndex >= values.length) throw new Error("RESTORE_INVALID");
+  const parsed = parseCanvasDoc(parseSqlString(values[docIndex]));
+  if (!parsed.ok) throw new Error("RESTORE_INVALID");
+  values[docIndex] = toSqlString(serializeCanvasDoc(parsed.doc));
+  return `${prefix}${rawColumns ?? ""}VALUES (${values.join(", ")})`;
 }
 
 const INSERT_PATTERN = /^INSERT\s/i;
@@ -54,6 +125,7 @@ async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Pr
   await db.execute("DELETE FROM book_versions");
   await db.execute("DELETE FROM books");
   await db.execute("DELETE FROM notes");
+  await db.execute("DELETE FROM canvases");
   await db.execute("DELETE FROM sync_tombstones");
 
   for (let i = 0; i < statements.length; i++) {
@@ -141,6 +213,7 @@ export class BackupService {
 
     await useBookStore.getState().loadBooks();
     await useNoteStore.getState().loadNotes();
+    await useCanvasStore.getState().loadCanvases();
     const previousBookId = useChapterStore.getState().currentBookId;
     const restoredBooks = useBookStore.getState().books;
     const currentBookStillExists = previousBookId

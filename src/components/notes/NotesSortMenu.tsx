@@ -1,9 +1,4 @@
-import {
-  Listbox,
-  ListboxButton,
-  ListboxOption,
-  ListboxOptions,
-} from "@headlessui/react";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUpDown, Check, ChevronDown } from "lucide-react";
@@ -24,11 +19,10 @@ export function NotesSortMenu({ value, onChange }: NotesSortMenuProps) {
       { value: "title-asc" as const, label: t("notes.sortTitleAsc") },
       { value: "title-desc" as const, label: t("notes.sortTitleDesc") },
     ],
-    [t],
+    [t]
   );
 
-  const activeLabel =
-    options.find((option) => option.value === value)?.label ?? options[0].label;
+  const activeLabel = options.find((option) => option.value === value)?.label ?? options[0].label;
 
   return (
     <Listbox value={value} onChange={onChange}>

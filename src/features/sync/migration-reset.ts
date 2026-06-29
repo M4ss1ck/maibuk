@@ -9,11 +9,12 @@ interface SettingRow {
   value: string;
 }
 
-async function isMarkedDoneInDatabase(db: Awaited<ReturnType<typeof getDatabase>>): Promise<boolean> {
-  const rows = await db.select<SettingRow[]>(
-    "SELECT value FROM settings WHERE key = ? LIMIT 1",
-    [DONE_SETTING_KEY],
-  );
+async function isMarkedDoneInDatabase(
+  db: Awaited<ReturnType<typeof getDatabase>>
+): Promise<boolean> {
+  const rows = await db.select<SettingRow[]>("SELECT value FROM settings WHERE key = ? LIMIT 1", [
+    DONE_SETTING_KEY,
+  ]);
   return rows[0]?.value === "1";
 }
 
@@ -21,7 +22,7 @@ async function markDoneInDatabase(db: Awaited<ReturnType<typeof getDatabase>>): 
   await db.execute(
     `INSERT OR REPLACE INTO settings (key, value, updated_at)
      VALUES (?, ?, ?)`,
-    [DONE_SETTING_KEY, "1", Math.floor(Date.now() / 1000)],
+    [DONE_SETTING_KEY, "1", Math.floor(Date.now() / 1000)]
   );
 }
 

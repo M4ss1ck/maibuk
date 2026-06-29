@@ -25,10 +25,7 @@ function restore(editor: Editor, scrollEl: HTMLElement, key: string): void {
   const docSize = editor.state.doc.content.size;
 
   try {
-    const selection = TextSelection.create(
-      editor.state.doc,
-      clamp(saved.caret, docSize),
-    );
+    const selection = TextSelection.create(editor.state.doc, clamp(saved.caret, docSize));
     editor.view.dispatch(editor.state.tr.setSelection(selection));
   } catch {
     // Stale positions can become invalid after edits; restore is best-effort.

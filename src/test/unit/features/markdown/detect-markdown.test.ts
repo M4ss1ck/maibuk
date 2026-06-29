@@ -9,16 +9,12 @@ describe("looksLikeMarkdown()", () => {
 
   it("returns false for plain prose", () => {
     expect(
-      looksLikeMarkdown(
-        "The quick brown fox jumps over the lazy dog. It was a fine day.",
-      ),
+      looksLikeMarkdown("The quick brown fox jumps over the lazy dog. It was a fine day.")
     ).toBe(false);
   });
 
   it("does not fire on prose with a stray dash or number", () => {
-    expect(
-      looksLikeMarkdown("She paused - then continued walking down 5th street."),
-    ).toBe(false);
+    expect(looksLikeMarkdown("She paused - then continued walking down 5th street.")).toBe(false);
     expect(looksLikeMarkdown("1. is the number she wrote")).toBe(false);
   });
 
@@ -27,9 +23,7 @@ describe("looksLikeMarkdown()", () => {
   });
 
   it("detects a GFM table on its own (strong signal)", () => {
-    expect(
-      looksLikeMarkdown("| a | b |\n| - | - |\n| 1 | 2 |"),
-    ).toBe(true);
+    expect(looksLikeMarkdown("| a | b |\n| - | - |\n| 1 | 2 |")).toBe(true);
   });
 
   it("detects a document with heading + list (two weak signals)", () => {
@@ -37,9 +31,7 @@ describe("looksLikeMarkdown()", () => {
   });
 
   it("detects heading + bold", () => {
-    expect(looksLikeMarkdown("## Chapter\n\nThis is **important** text.")).toBe(
-      true,
-    );
+    expect(looksLikeMarkdown("## Chapter\n\nThis is **important** text.")).toBe(true);
   });
 
   it("requires two distinct signal types, not one repeated", () => {

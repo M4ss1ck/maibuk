@@ -10,7 +10,10 @@ export interface TemplateArgs {
 export interface CoverTemplate {
   id: string;
   name: string;
-  build: (args: TemplateArgs, dim: { width: number; height: number }) => Pick<CoverScene, "background" | "layers">;
+  build: (
+    args: TemplateArgs,
+    dim: { width: number; height: number }
+  ) => Pick<CoverScene, "background" | "layers">;
 }
 
 function genId(): string {

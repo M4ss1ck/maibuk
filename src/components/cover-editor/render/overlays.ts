@@ -39,7 +39,13 @@ export function buildGuideLine(orientation: "v" | "h", pos: number, doc: CoverDo
   const coords: [number, number, number, number] =
     orientation === "v" ? [pos, 0, pos, doc.height] : [0, pos, doc.width, pos];
   return markHelper(
-    new Line(coords, { stroke: GUIDE_COLOR, strokeWidth: 1, strokeUniform: true, selectable: false, evented: false })
+    new Line(coords, {
+      stroke: GUIDE_COLOR,
+      strokeWidth: 1,
+      strokeUniform: true,
+      selectable: false,
+      evented: false,
+    })
   );
 }
 

@@ -40,8 +40,7 @@ function convertSceneBreaks(html: string): string {
       return;
     }
 
-    const symbols =
-      div.querySelector(".scene-break-symbols")?.textContent?.trim() || "* * *";
+    const symbols = div.querySelector(".scene-break-symbols")?.textContent?.trim() || "* * *";
     const paragraph = doc.createElement("p");
     paragraph.className = "scene-break";
     paragraph.textContent = symbols;

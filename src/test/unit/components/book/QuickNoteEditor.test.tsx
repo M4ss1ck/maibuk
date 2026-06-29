@@ -7,6 +7,13 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
+// The shared rich-text factory includes the worker-backed spell-check extension,
+// which jsdom cannot instantiate. Replace it with a no-op for these DOM tests.
+vi.mock("../../../../components/editor/extensions/SpellCheck", async () => {
+  const { Extension } = await vi.importActual<typeof import("@tiptap/core")>("@tiptap/core");
+  return { SpellCheck: Extension.create({ name: "mockSpellCheck" }) };
+});
+
 describe("QuickNoteEditor", () => {
   it("renders a writing canvas with the formatting toolbar hidden by default", async () => {
     const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);
@@ -15,9 +22,7 @@ describe("QuickNoteEditor", () => {
       expect(container.querySelector(".editor-content")).not.toBeNull();
     });
 
-    expect(
-      screen.queryByRole("button", { name: "editor.bold" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "editor.bold" })).not.toBeInTheDocument();
   });
 
   it("reveals the formatting toolbar when the advanced button is toggled", async () => {
@@ -27,13 +32,9 @@ describe("QuickNoteEditor", () => {
       expect(container.querySelector(".editor-content")).not.toBeNull();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "bookNotes.formatting" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "bookNotes.formatting" }));
 
-    expect(
-      screen.getByRole("button", { name: "editor.bold" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "editor.bold" })).toBeInTheDocument();
   });
 
   it("offers H1, H3 and task list controls in the advanced toolbar", async () => {
@@ -43,18 +44,10 @@ describe("QuickNoteEditor", () => {
       expect(container.querySelector(".editor-content")).not.toBeNull();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "bookNotes.formatting" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "bookNotes.formatting" }));
 
-    expect(
-      screen.getByRole("button", { name: "editor.heading1" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "editor.heading3" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "editor.taskList" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "editor.heading1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "editor.heading3" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "editor.taskList" })).toBeInTheDocument();
   });
 });

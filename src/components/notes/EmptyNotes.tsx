@@ -27,9 +27,7 @@ export function EmptyNotes({ onCreateNote, onBack }: EmptyNotesProps) {
       <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
         <MaibukLogo className="w-16 text-primary opacity-60 mb-4" />
         <h2 className="text-xl font-serif font-medium">{t("notes.emptyEditorTitle")}</h2>
-        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          {t("notes.emptyEditorBody")}
-        </p>
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t("notes.emptyEditorBody")}</p>
         <button
           type="button"
           onClick={onCreateNote}

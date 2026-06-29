@@ -58,10 +58,7 @@ export function BookSidePanel({
   );
 
   return (
-    <aside
-      className="notes-panel relative"
-      style={{ width: `${width}px`, minWidth: `${width}px` }}
-    >
+    <aside className="notes-panel relative" style={{ width: `${width}px`, minWidth: `${width}px` }}>
       <div
         onMouseDown={onResizeStart}
         title={t("bookSidePanel.resize")}
@@ -92,11 +89,7 @@ export function BookSidePanel({
           />
         </div>
       ) : (
-        <BookNotesView
-          notes={notes}
-          onCreateNote={onCreateNote}
-          onOpenNote={onOpenNote}
-        />
+        <BookNotesView notes={notes} onCreateNote={onCreateNote} onOpenNote={onOpenNote} />
       )}
     </aside>
   );

@@ -38,9 +38,7 @@ describe("useMarkdownFileDrop()", () => {
       result.current.dropHandlers.onDrop(dropEvent([file]));
     });
 
-    await waitFor(() =>
-      expect(onImport).toHaveBeenCalledWith("# Hello\n\nbody", "my-note"),
-    );
+    await waitFor(() => expect(onImport).toHaveBeenCalledWith("# Hello\n\nbody", "my-note"));
   });
 
   it("ignores drops without a .md file", () => {
@@ -60,9 +58,7 @@ describe("useMarkdownFileDrop()", () => {
     const { result } = renderHook(() => useMarkdownFileDrop(containerRef(), vi.fn()));
 
     act(() => {
-      result.current.dropHandlers.onDragOver(
-        dropEvent([new File(["x"], "a.md")]),
-      );
+      result.current.dropHandlers.onDragOver(dropEvent([new File(["x"], "a.md")]));
     });
     expect(result.current.isDraggingFile).toBe(true);
   });

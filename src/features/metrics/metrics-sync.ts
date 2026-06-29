@@ -53,13 +53,13 @@ export async function serializeMetricsBatch(): Promise<string> {
   const eventRows = await db.select<MetricsEventRow[]>(
     `SELECT id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version
     FROM metrics_events
-    ORDER BY timestamp ASC, id ASC`,
+    ORDER BY timestamp ASC, id ASC`
   );
 
   const tombstoneRows = await db.select<BlobTombstoneRow[]>(
     `SELECT id, deleted_at, device_id, reason
     FROM metrics_event_tombstones
-    ORDER BY deleted_at ASC, id ASC`,
+    ORDER BY deleted_at ASC, id ASC`
   );
 
   const events: MetricEvent[] = eventRows.map((row) => ({
@@ -76,25 +76,19 @@ export async function serializeMetricsBatch(): Promise<string> {
 
   const maxTimestamp =
     eventRows.length > 0
-      ? Math.max(
-        ...eventRows.map((row) => new Date(row.timestamp).getTime()),
-      )
+      ? Math.max(...eventRows.map((row) => new Date(row.timestamp).getTime()))
       : 0;
 
   const blob: MetricsSyncBlob = {
     events,
     tombstones: tombstoneRows,
-    updatedAt: Math.floor(
-      Math.max(maxTimestamp, Date.now()) / 1000,
-    ),
+    updatedAt: Math.floor(Math.max(maxTimestamp, Date.now()) / 1000),
   };
 
   return JSON.stringify(blob);
 }
 
-export async function applyMetricsBatch(
-  snapshot: MetricsSyncBlob,
-): Promise<void> {
+export async function applyMetricsBatch(snapshot: MetricsSyncBlob): Promise<void> {
   const db = await getDatabase();
 
   for (const tombstone of snapshot.tombstones) {
@@ -102,7 +96,7 @@ export async function applyMetricsBatch(
       `INSERT OR IGNORE INTO metrics_event_tombstones
        (id, deleted_at, device_id, reason)
        VALUES (?, ?, ?, ?)`,
-      [tombstone.id, tombstone.deleted_at, tombstone.device_id, tombstone.reason],
+      [tombstone.id, tombstone.deleted_at, tombstone.device_id, tombstone.reason]
     );
 
     await db.execute("DELETE FROM metrics_events WHERE id = ?", [tombstone.id]);
@@ -136,7 +130,7 @@ const TOMBSTONE_WATERMARK_KEY = "maibuk.metrics.lastTombstonePullAt";
 async function pushInChunks<T>(
   items: T[],
   push: (item: T) => Promise<void>,
-  mark: (item: T) => Promise<void>,
+  mark: (item: T) => Promise<void>
 ): Promise<void> {
   for (let i = 0; i < items.length; i += PUSH_CONCURRENCY) {
     const chunk = items.slice(i, i + PUSH_CONCURRENCY);
@@ -176,7 +170,7 @@ export interface MetricsPushProgress {
 
 export async function syncMetricsRows(
   passphrase: string,
-  onProgress?: (progress: MetricsPushProgress) => void,
+  onProgress?: (progress: MetricsPushProgress) => void
 ): Promise<void> {
   const db = await getDatabase();
 
@@ -197,10 +191,7 @@ export async function syncMetricsRows(
   }
   if (remoteTombstones.length > 0) {
     touchedAggregateCache = true;
-    writeWatermark(
-      TOMBSTONE_WATERMARK_KEY,
-      maxIso(remoteTombstones.map((row) => row.updated)),
-    );
+    writeWatermark(TOMBSTONE_WATERMARK_KEY, maxIso(remoteTombstones.map((row) => row.updated)));
   }
 
   // 2. PULL events. Decrypt each payload before applying.
@@ -215,10 +206,7 @@ export async function syncMetricsRows(
     processedEventUpdates.push(remote.updated);
   }
   if (processedEventUpdates.length > 0) {
-    writeWatermark(
-      EVENT_WATERMARK_KEY,
-      maxIso(processedEventUpdates),
-    );
+    writeWatermark(EVENT_WATERMARK_KEY, maxIso(processedEventUpdates));
   }
 
   // 3. PUSH local-only tombstones.
@@ -234,7 +222,7 @@ export async function syncMetricsRows(
           deleted_at: tombstone.deletedAt,
           reason: tombstone.reason,
         }),
-      (tombstone) => markTombstonePushed(db, tombstone.id, new Date().toISOString()),
+      (tombstone) => markTombstonePushed(db, tombstone.id, new Date().toISOString())
     );
   }
 
@@ -264,7 +252,7 @@ export async function syncMetricsRows(
           encrypted_payload: encryptedPayload,
         });
       },
-      (event) => markEventPushed(db, event.id, new Date().toISOString()),
+      (event) => markEventPushed(db, event.id, new Date().toISOString())
     );
     pushedEvents += batch.length;
     onProgress?.({ pushed: pushedEvents, total: totalEvents });
@@ -277,14 +265,11 @@ export async function syncMetricsRows(
 
 async function decodeRemoteEvent(
   remote: RemoteMetricsEventRow,
-  passphrase: string,
+  passphrase: string
 ): Promise<MetricEvent | null> {
   let payload: MetricPayload;
   try {
-    const decrypted = await decrypt(
-      base64ToUint8Array(remote.encrypted_payload),
-      passphrase,
-    );
+    const decrypted = await decrypt(base64ToUint8Array(remote.encrypted_payload), passphrase);
     payload = JSON.parse(decrypted) as MetricPayload;
   } catch {
     // Skip rows we can't decrypt — wrong passphrase or corrupted ciphertext.
@@ -305,10 +290,7 @@ async function decodeRemoteEvent(
   };
 }
 
-async function encryptPayload(
-  payload: MetricPayload,
-  passphrase: string,
-): Promise<string> {
+async function encryptPayload(payload: MetricPayload, passphrase: string): Promise<string> {
   const ciphertext = await encrypt(JSON.stringify(payload), passphrase);
   return uint8ArrayToBase64(ciphertext);
 }
@@ -334,9 +316,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
 // `metrics_sync` blob, applies it locally (with cache invalidation), and
 // marks the local events / tombstones as already-pushed so we don't double-
 // upload them under the new schema.
-export async function applyLegacyBlobAndMarkPushed(
-  snapshot: MetricsSyncBlob,
-): Promise<void> {
+export async function applyLegacyBlobAndMarkPushed(snapshot: MetricsSyncBlob): Promise<void> {
   const db = await getDatabase();
   const pushedAt = new Date().toISOString();
 
@@ -349,7 +329,7 @@ export async function applyLegacyBlobAndMarkPushed(
         deviceId: tombstone.device_id,
         reason: tombstone.reason,
       },
-      pushedAt,
+      pushedAt
     );
     await markTombstonePushed(db, tombstone.id, pushedAt);
   }

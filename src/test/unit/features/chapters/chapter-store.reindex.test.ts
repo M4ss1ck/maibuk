@@ -29,7 +29,7 @@ describe("chapter store reindex on save", () => {
     const now = Math.floor(Date.now() / 1000);
     await testDb.execute(
       `INSERT INTO chapters (id, book_id, title, "order", created_at, updated_at) VALUES ('c1','b1','Ch', 0, ?, ?)`,
-      [now, now],
+      [now, now]
     );
     useChapterStore.setState({
       chapters: [],
@@ -42,18 +42,16 @@ describe("chapter store reindex on save", () => {
     await useChapterStore.getState().updateChapter("c1", {
       content: '<p><a href="maibuk://chapter/c2">go</a></p>',
     });
-    const rows = await testDb.select<
-      { target_id: string; source_book_id: string }[]
-    >("SELECT target_id, source_book_id FROM links WHERE source_id = 'c1'");
+    const rows = await testDb.select<{ target_id: string; source_book_id: string }[]>(
+      "SELECT target_id, source_book_id FROM links WHERE source_id = 'c1'"
+    );
     expect(rows).toEqual([{ target_id: "c2", source_book_id: "b1" }]);
   });
 
   it("adds ids to headings on save", async () => {
-    await useChapterStore
-      .getState()
-      .updateChapter("c1", { content: "<h2>Title</h2>" });
+    await useChapterStore.getState().updateChapter("c1", { content: "<h2>Title</h2>" });
     const rows = await testDb.select<{ content: string }[]>(
-      "SELECT content FROM chapters WHERE id = 'c1'",
+      "SELECT content FROM chapters WHERE id = 'c1'"
     );
     expect(rows[0].content).toMatch(/<h2 id="h-[a-z0-9]+">Title<\/h2>/);
   });

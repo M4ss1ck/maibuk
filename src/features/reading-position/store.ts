@@ -35,13 +35,8 @@ export const useReadingPositionStore = create<ReadingPositionStore>()(
           };
           const keys = Object.keys(next);
           if (keys.length > MAX_READING_POSITIONS) {
-            const oldestFirst = keys.sort(
-              (a, b) => next[a].updatedAt - next[b].updatedAt,
-            );
-            for (const staleKey of oldestFirst.slice(
-              0,
-              keys.length - MAX_READING_POSITIONS,
-            )) {
+            const oldestFirst = keys.sort((a, b) => next[a].updatedAt - next[b].updatedAt);
+            for (const staleKey of oldestFirst.slice(0, keys.length - MAX_READING_POSITIONS)) {
               delete next[staleKey];
             }
           }
@@ -49,6 +44,6 @@ export const useReadingPositionStore = create<ReadingPositionStore>()(
         });
       },
     }),
-    { name: "maibuk-reading-position" },
-  ),
+    { name: "maibuk-reading-position" }
+  )
 );

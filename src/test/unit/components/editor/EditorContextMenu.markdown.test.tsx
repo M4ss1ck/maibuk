@@ -59,52 +59,28 @@ describe("EditorContextMenu — Format as Markdown", () => {
   it("shows the item when the block text looks like Markdown", async () => {
     const setup = buildEditor("## Heading\n\n- a list item");
 
-    render(
-      <EditorContextMenu
-        editor={setup.editor}
-        onInspect={vi.fn()}
-        onLookup={vi.fn()}
-      />,
-    );
+    render(<EditorContextMenu editor={setup.editor} onInspect={vi.fn()} onLookup={vi.fn()} />);
 
     fireEvent.contextMenu(setup.paragraph, { clientX: 10, clientY: 10 });
 
-    await waitFor(() =>
-      expect(screen.getByText("editor.formatAsMarkdown")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("editor.formatAsMarkdown")).toBeInTheDocument());
   });
 
   it("hides the item for plain prose", async () => {
     const setup = buildEditor("Just an ordinary sentence with no markup.");
 
-    render(
-      <EditorContextMenu
-        editor={setup.editor}
-        onInspect={vi.fn()}
-        onLookup={vi.fn()}
-      />,
-    );
+    render(<EditorContextMenu editor={setup.editor} onInspect={vi.fn()} onLookup={vi.fn()} />);
 
     fireEvent.contextMenu(setup.paragraph, { clientX: 10, clientY: 10 });
 
-    await waitFor(() =>
-      expect(screen.getByText("editor.inspectInHtml")).toBeInTheDocument(),
-    );
-    expect(
-      screen.queryByText("editor.formatAsMarkdown"),
-    ).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("editor.inspectInHtml")).toBeInTheDocument());
+    expect(screen.queryByText("editor.formatAsMarkdown")).not.toBeInTheDocument();
   });
 
   it("converts the block on click", async () => {
     const setup = buildEditor("## Heading\n\n- a list item");
 
-    render(
-      <EditorContextMenu
-        editor={setup.editor}
-        onInspect={vi.fn()}
-        onLookup={vi.fn()}
-      />,
-    );
+    render(<EditorContextMenu editor={setup.editor} onInspect={vi.fn()} onLookup={vi.fn()} />);
 
     fireEvent.contextMenu(setup.paragraph, { clientX: 10, clientY: 10 });
     const item = await screen.findByText("editor.formatAsMarkdown");
@@ -112,7 +88,7 @@ describe("EditorContextMenu — Format as Markdown", () => {
 
     expect(setup.insertContentAt).toHaveBeenCalledWith(
       { from: 0, to: 20 },
-      expect.stringContaining("<h2>Heading</h2>"),
+      expect.stringContaining("<h2>Heading</h2>")
     );
   });
 });

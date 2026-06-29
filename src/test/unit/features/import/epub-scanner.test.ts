@@ -23,7 +23,9 @@ describe("scanEpub()", () => {
     const report = scanEpub(buildEpubWithoutOpfFixture());
 
     expect(report.issues).toEqual(
-      expect.arrayContaining([expect.objectContaining({ severity: "blocking", code: "missing-opf" })])
+      expect.arrayContaining([
+        expect.objectContaining({ severity: "blocking", code: "missing-opf" }),
+      ])
     );
   });
 
@@ -32,7 +34,11 @@ describe("scanEpub()", () => {
 
     expect(report.issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ severity: "info", code: "css-resource", href: "EPUB/styles/book.css" }),
+        expect.objectContaining({
+          severity: "info",
+          code: "css-resource",
+          href: "EPUB/styles/book.css",
+        }),
       ])
     );
   });
@@ -60,8 +66,16 @@ describe("scanEpub()", () => {
 
     expect(report.issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ severity: "info", code: "asset-resource", href: "EPUB/images/cover.png" }),
-        expect.objectContaining({ severity: "info", code: "asset-resource", href: "EPUB/fonts/book.woff2" }),
+        expect.objectContaining({
+          severity: "info",
+          code: "asset-resource",
+          href: "EPUB/images/cover.png",
+        }),
+        expect.objectContaining({
+          severity: "info",
+          code: "asset-resource",
+          href: "EPUB/fonts/book.woff2",
+        }),
       ])
     );
   });
@@ -87,7 +101,11 @@ describe("scanEpub()", () => {
 
     expect(report.issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ severity: "lossy", code: "unsupported-media-type", href: "EPUB/audio/theme.mp3" }),
+        expect.objectContaining({
+          severity: "lossy",
+          code: "unsupported-media-type",
+          href: "EPUB/audio/theme.mp3",
+        }),
       ])
     );
   });
@@ -114,7 +132,9 @@ describe("scanEpub()", () => {
     expect(report.issues).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "epub2-ncx" })])
     );
-    expect(report.issues.find((issue) => issue.code === "epub2-ncx")?.severity).not.toBe("blocking");
+    expect(report.issues.find((issue) => issue.code === "epub2-ncx")?.severity).not.toBe(
+      "blocking"
+    );
   });
 });
 

@@ -15,10 +15,7 @@ import type {
  *   3. Custom rules — applied in array order, each guarded so a bad rule is skipped
  *   4. Bare-tag cleanup — unwrap attributeless <span>/<font> left behind
  */
-export function cleanPastedHtml(
-  html: string,
-  settings: PasteCleanupSettings,
-): string {
+export function cleanPastedHtml(html: string, settings: PasteCleanupSettings): string {
   if (!html) return "";
 
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -48,20 +45,14 @@ function applyHygiene(body: HTMLElement): void {
 }
 
 function unwrapGoogleDocsWrapper(body: HTMLElement): void {
-  for (const selector of [
-    'b[id*="docs-internal-guid"]',
-    'span[id*="docs-internal-guid"]',
-  ]) {
+  for (const selector of ['b[id*="docs-internal-guid"]', 'span[id*="docs-internal-guid"]']) {
     const wrapper = body.querySelector(selector);
     if (wrapper) unwrapElement(wrapper);
   }
 }
 
 function removeComments(body: HTMLElement): void {
-  const iterator = body.ownerDocument.createNodeIterator(
-    body,
-    NodeFilter.SHOW_COMMENT,
-  );
+  const iterator = body.ownerDocument.createNodeIterator(body, NodeFilter.SHOW_COMMENT);
   const comments: Node[] = [];
   for (let node = iterator.nextNode(); node; node = iterator.nextNode()) {
     comments.push(node);
@@ -97,10 +88,7 @@ function stripMsoArtifacts(body: HTMLElement): void {
 function cleanupSourceAttributes(body: HTMLElement): void {
   for (const el of Array.from(body.querySelectorAll("*"))) {
     const className = el.getAttribute("class");
-    if (
-      className &&
-      (className.includes("docs-") || className.includes("kix-"))
-    ) {
+    if (className && (className.includes("docs-") || className.includes("kix-"))) {
       el.removeAttribute("class");
     }
     const id = el.getAttribute("id");
@@ -108,10 +96,7 @@ function cleanupSourceAttributes(body: HTMLElement): void {
       el.removeAttribute("id");
     }
     for (const attr of Array.from(el.attributes)) {
-      if (
-        attr.name.startsWith("data-docs-") ||
-        attr.name.startsWith("data-kix-")
-      ) {
+      if (attr.name.startsWith("data-docs-") || attr.name.startsWith("data-kix-")) {
         el.removeAttribute(attr.name);
       }
     }
@@ -159,13 +144,9 @@ function normalizeIndentation(body: HTMLElement): void {
 
 // --- Stage 2: category cleanup --------------------------------------------
 
-const FORMATTING_TAGS =
-  "strong, b, em, i, u, s, strike, del, mark, sub, sup, code";
+const FORMATTING_TAGS = "strong, b, em, i, u, s, strike, del, mark, sub, sup, code";
 
-function applyCategoryCleanup(
-  body: HTMLElement,
-  options: PasteCleanupOptions,
-): void {
+function applyCategoryCleanup(body: HTMLElement, options: PasteCleanupOptions): void {
   for (const property of options.strippedProperties) {
     removeStyleProperty(body, property);
   }
@@ -184,7 +165,7 @@ function demoteHeadings(body: HTMLElement): void {
 
 function flattenLists(body: HTMLElement): void {
   const topLists = Array.from(body.querySelectorAll("ul, ol")).filter(
-    (list) => !list.parentElement?.closest("ul, ol"),
+    (list) => !list.parentElement?.closest("ul, ol")
   );
   for (const list of topLists) {
     const doc = list.ownerDocument;
@@ -225,20 +206,14 @@ function applyCustomRules(body: HTMLElement, rules: PasteCleanupRule[]): void {
   }
 }
 
-function matchRuleElements(
-  body: HTMLElement,
-  target: PasteRuleTarget,
-  value: string,
-): Element[] {
+function matchRuleElements(body: HTMLElement, target: PasteRuleTarget, value: string): Element[] {
   switch (target) {
     case "tag":
       return Array.from(body.querySelectorAll(value.toLowerCase()));
     case "cssSelector":
       return Array.from(body.querySelectorAll(value));
     case "cssClass":
-      return Array.from(body.querySelectorAll("*")).filter((el) =>
-        el.classList.contains(value),
-      );
+      return Array.from(body.querySelectorAll("*")).filter((el) => el.classList.contains(value));
     case "fontFamily":
       return matchByStyle(body, "fontFamily", value);
     case "textColor":
@@ -265,14 +240,14 @@ interface StyleDeclaration {
 function applyStyleDeclarationRule(
   body: HTMLElement,
   value: string,
-  action: PasteRuleAction,
+  action: PasteRuleAction
 ): void {
   const blocks = parseStyleDeclarationRule(value);
   for (const block of blocks) {
     const selector = block.tag ? `${block.tag}[style]` : "[style]";
     for (const el of Array.from(body.querySelectorAll<HTMLElement>(selector))) {
       const matchingDeclarations = block.declarations.filter((declaration) =>
-        styleDeclarationMatches(el, declaration),
+        styleDeclarationMatches(el, declaration)
       );
       if (matchingDeclarations.length === 0) continue;
 
@@ -330,13 +305,8 @@ function parseStyleDeclarations(value: string): StyleDeclaration[] {
   return declarations;
 }
 
-function styleDeclarationMatches(
-  el: HTMLElement,
-  declaration: StyleDeclaration,
-): boolean {
-  const actual = normalizeStyleValue(
-    el.style.getPropertyValue(declaration.property),
-  );
+function styleDeclarationMatches(el: HTMLElement, declaration: StyleDeclaration): boolean {
+  const actual = normalizeStyleValue(el.style.getPropertyValue(declaration.property));
   const expected = normalizeStyleValue(declaration.value);
   return actual !== "" && expected !== "" && actual.includes(expected);
 }
@@ -344,15 +314,13 @@ function styleDeclarationMatches(
 function matchByStyle(
   body: HTMLElement,
   prop: "fontFamily" | "color" | "backgroundColor",
-  value: string,
+  value: string
 ): Element[] {
   const needle = normalizeStyleValue(value);
-  return Array.from(body.querySelectorAll<HTMLElement>("[style]")).filter(
-    (el) => {
-      const actual = normalizeStyleValue(el.style[prop]);
-      return actual !== "" && actual.includes(needle);
-    },
-  );
+  return Array.from(body.querySelectorAll<HTMLElement>("[style]")).filter((el) => {
+    const actual = normalizeStyleValue(el.style[prop]);
+    return actual !== "" && actual.includes(needle);
+  });
 }
 
 const STYLE_TARGET_PROP: Partial<Record<PasteRuleTarget, string>> = {
@@ -361,11 +329,7 @@ const STYLE_TARGET_PROP: Partial<Record<PasteRuleTarget, string>> = {
   backgroundColor: "background-color",
 };
 
-function applyRuleAction(
-  el: Element,
-  target: PasteRuleTarget,
-  action: PasteRuleAction,
-): void {
+function applyRuleAction(el: Element, target: PasteRuleTarget, action: PasteRuleAction): void {
   if (action === "delete") {
     el.remove();
     return;

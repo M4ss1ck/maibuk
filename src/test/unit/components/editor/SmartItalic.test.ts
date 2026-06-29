@@ -15,7 +15,7 @@ function makeEditor(content: string) {
 function type(editor: Editor, text: string) {
   const { from, to } = editor.state.selection;
   editor.view.someProp("handleTextInput", (handler) =>
-    handler(editor.view, from, to, text, () => editor.state.tr),
+    handler(editor.view, from, to, text, () => editor.state.tr)
   );
 }
 

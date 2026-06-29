@@ -30,12 +30,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
     const { from, to } = editor.state.selection;
     const text = getSelectedText();
     if (text) {
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from, to })
-        .insertContent(transformer(text))
-        .run();
+      editor.chain().focus().deleteRange({ from, to }).insertContent(transformer(text)).run();
     }
   };
 
@@ -45,21 +40,15 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
     transformSelectedText((text) =>
       text
         .split("")
-        .map((char, i) =>
-          i % 2 === 0 ? char.toLowerCase() : char.toUpperCase(),
-        )
-        .join(""),
+        .map((char, i) => (i % 2 === 0 ? char.toLowerCase() : char.toUpperCase()))
+        .join("")
     );
   const toSentenceCase = () =>
     transformSelectedText((text) =>
-      text
-        .toLowerCase()
-        .replace(/(^\s*\w|[.!?]\s+\w)/g, (c) => c.toUpperCase()),
+      text.toLowerCase().replace(/(^\s*\w|[.!?]\s+\w)/g, (c) => c.toUpperCase())
     );
   const toTitleCase = () =>
-    transformSelectedText((text) =>
-      text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()),
-    );
+    transformSelectedText((text) => text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()));
 
   const handleShowMenu = () => {
     if (buttonRef.current) {
@@ -78,10 +67,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
       if (
         buttonRef.current &&
         !buttonRef.current.contains(e.target as Node) &&
-        !(
-          e.target instanceof HTMLElement &&
-          e.target.closest(".text-case-menu-portal")
-        )
+        !(e.target instanceof HTMLElement && e.target.closest(".text-case-menu-portal"))
       ) {
         setShowMenu(false);
       }
@@ -148,7 +134,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
               {t("editor.titleCase")}
             </button>
           </div>,
-          document.body,
+          document.body
         )}
     </>
   );

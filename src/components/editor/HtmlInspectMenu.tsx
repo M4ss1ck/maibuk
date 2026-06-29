@@ -64,7 +64,7 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
       event.preventDefault();
       setMenuPos({ x: event.clientX, y: event.clientY });
     },
-    [editor],
+    [editor]
   );
 
   useEffect(() => {
@@ -116,7 +116,7 @@ export function HtmlInspectMenu({ editor, onInspect }: HtmlInspectMenuProps) {
  */
 export function findBlockOffsetInHtml(
   html: string,
-  blockIndex: number,
+  blockIndex: number
 ): { from: number; to: number } | null {
   const blockTags = new Set([
     "p",
@@ -167,10 +167,7 @@ export function findBlockOffsetInHtml(
         // Find the end of this block (closing tag or next block)
         const closeTag = `</${tagName}>`;
         const closeIdx = html.indexOf(closeTag, match.index);
-        const to =
-          closeIdx !== -1
-            ? closeIdx + closeTag.length
-            : match.index + match[0].length;
+        const to = closeIdx !== -1 ? closeIdx + closeTag.length : match.index + match[0].length;
         return { from: match.index, to };
       }
     }

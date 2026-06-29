@@ -147,11 +147,7 @@ function toRemoteObject(record: Record<string, unknown>): RemoteObject {
   };
 }
 
-function buildObjectFormData(
-  input: PushObjectInput,
-  userId: string,
-  deleted: boolean,
-): FormData {
+function buildObjectFormData(input: PushObjectInput, userId: string, deleted: boolean): FormData {
   const formData = new FormData();
   formData.append("user", userId);
   formData.append("app_name", APP_NAME);
@@ -218,7 +214,7 @@ export async function listObjects(kind: ObjectKind, group?: string): Promise<Rem
 
 export async function pullObjectsSince(
   kind: ObjectKind,
-  sinceIso: string,
+  sinceIso: string
 ): Promise<RemoteObject[]> {
   const client = getClient();
 
@@ -239,7 +235,7 @@ export async function pullObjectsSince(
 export async function softDeleteObject(
   kind: ObjectKind,
   key: string,
-  meta?: string,
+  meta?: string
 ): Promise<void> {
   const client = getClient();
   const userId = client.authStore.record?.id;
@@ -278,9 +274,11 @@ export function isKeyUniqueConstraintError(error: unknown): boolean {
   const status = (error as { status?: number }).status;
   if (status !== 400 && status !== 409) return false;
 
-  const fieldErrors = (error as {
-    data?: { data?: Record<string, { code?: string; message?: string }> };
-  }).data?.data;
+  const fieldErrors = (
+    error as {
+      data?: { data?: Record<string, { code?: string; message?: string }> };
+    }
+  ).data?.data;
   if (!fieldErrors) return false;
 
   return Object.values(fieldErrors).some((fieldError) => {
@@ -327,14 +325,14 @@ export async function pushNoteBlob(
   noteId: string,
   encryptedData: Blob,
   checksum: string,
-  remoteId?: string,
+  remoteId?: string
 ): Promise<void> {
   await pushObject({ kind: "note", key: noteId, checksum, content: encryptedData, remoteId });
 }
 
 export async function pullNoteBlob(
   noteId: string,
-  remoteId?: string,
+  remoteId?: string
 ): Promise<{ data: Uint8Array; checksum: string } | null> {
   // Callers that already hold the remote object pass its remoteId so we skip the
   // full-list lookup (otherwise pulling N notes would re-list every note N times).
@@ -358,7 +356,10 @@ export async function deleteRemoteNote(noteId: string): Promise<void> {
 export async function listRemoteNotes(): Promise<NoteSyncItemMeta[]> {
   const rows = await listObjects("note");
   return rows.map((r) => ({
-    remoteId: r.remoteId, noteId: r.key, checksum: r.checksum, updatedAt: r.updatedAt,
+    remoteId: r.remoteId,
+    noteId: r.key,
+    checksum: r.checksum,
+    updatedAt: r.updatedAt,
   }));
 }
 
@@ -409,9 +410,14 @@ export async function pushMetricsEventRow(row: MetricsEventRowPayload): Promise<
   if (await objectExists("metric", row.client_id)) return;
 
   const meta = await encryptMeta({
-    device_id: row.device_id, timestamp: row.timestamp, local_date: row.local_date,
-    tz_offset_min: row.tz_offset_min, event_type: row.event_type, work_id: row.work_id,
-    schema_version: row.schema_version, encrypted_payload: row.encrypted_payload,
+    device_id: row.device_id,
+    timestamp: row.timestamp,
+    local_date: row.local_date,
+    tz_offset_min: row.tz_offset_min,
+    event_type: row.event_type,
+    work_id: row.work_id,
+    schema_version: row.schema_version,
+    encrypted_payload: row.encrypted_payload,
   });
   try {
     await pushObject({ kind: "metric", key: row.client_id, meta });
@@ -423,12 +429,16 @@ export async function pushMetricsEventRow(row: MetricsEventRowPayload): Promise<
 
 export async function pushMetricsTombstoneRow(row: MetricsTombstoneRowPayload): Promise<void> {
   const meta = await encryptMeta({
-    device_id: row.device_id, deleted_at: row.deleted_at, reason: row.reason,
+    device_id: row.device_id,
+    deleted_at: row.deleted_at,
+    reason: row.reason,
   });
   await softDeleteObject("metric", row.client_id, meta);
 }
 
-export async function pullMetricsEventRowsSince(sinceIso: string): Promise<RemoteMetricsEventRow[]> {
+export async function pullMetricsEventRowsSince(
+  sinceIso: string
+): Promise<RemoteMetricsEventRow[]> {
   const rows = await pullObjectsSince("metric", sinceIso);
   const out: RemoteMetricsEventRow[] = [];
   for (const r of rows) {
@@ -450,7 +460,9 @@ export async function pullMetricsEventRowsSince(sinceIso: string): Promise<Remot
   return out;
 }
 
-export async function pullMetricsTombstoneRowsSince(sinceIso: string): Promise<RemoteMetricsTombstoneRow[]> {
+export async function pullMetricsTombstoneRowsSince(
+  sinceIso: string
+): Promise<RemoteMetricsTombstoneRow[]> {
   const rows = await pullObjectsSince("metric", sinceIso);
   const out: RemoteMetricsTombstoneRow[] = [];
   for (const r of rows) {
@@ -510,18 +522,29 @@ export async function listRemoteVersions(bookId?: string): Promise<RemoteVersion
 
 export async function pushVersionBlob(
   meta: {
-    versionId: string; bookId: string; checksum: string;
-    name: string | null; triggerType: string; createdAt: number; wordCount: number;
+    versionId: string;
+    bookId: string;
+    checksum: string;
+    name: string | null;
+    triggerType: string;
+    createdAt: number;
+    wordCount: number;
   },
-  encryptedData: Blob,
+  encryptedData: Blob
 ): Promise<void> {
   const encryptedMeta = await encryptMeta({
-    name: meta.name, triggerType: meta.triggerType,
-    createdAt: meta.createdAt, wordCount: meta.wordCount,
+    name: meta.name,
+    triggerType: meta.triggerType,
+    createdAt: meta.createdAt,
+    wordCount: meta.wordCount,
   });
   await pushObject({
-    kind: "version", key: meta.versionId, group: meta.bookId,
-    checksum: meta.checksum, meta: encryptedMeta, content: encryptedData,
+    kind: "version",
+    key: meta.versionId,
+    group: meta.bookId,
+    checksum: meta.checksum,
+    meta: encryptedMeta,
+    content: encryptedData,
   });
 }
 

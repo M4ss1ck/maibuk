@@ -39,9 +39,7 @@ export const SceneBreak = Node.create<SceneBreakOptions>({
       symbols: {
         default: "* * *",
         parseHTML: (el: HTMLElement) => {
-          const symbols = el
-            .querySelector(".scene-break-symbols")
-            ?.textContent?.trim();
+          const symbols = el.querySelector(".scene-break-symbols")?.textContent?.trim();
           return symbols && symbols.length > 0 ? symbols : "* * *";
         },
         renderHTML: () => ({}),
@@ -51,8 +49,7 @@ export const SceneBreak = Node.create<SceneBreakOptions>({
       spaced: { default: true },
       src: {
         default: null,
-        parseHTML: (el: HTMLElement) =>
-          el.querySelector("img")?.getAttribute("src") ?? null,
+        parseHTML: (el: HTMLElement) => el.querySelector("img")?.getAttribute("src") ?? null,
         renderHTML: () => ({}),
       },
       assetId: {
@@ -63,8 +60,7 @@ export const SceneBreak = Node.create<SceneBreakOptions>({
       },
       alt: {
         default: null,
-        parseHTML: (el: HTMLElement) =>
-          el.querySelector("img")?.getAttribute("alt") ?? null,
+        parseHTML: (el: HTMLElement) => el.querySelector("img")?.getAttribute("alt") ?? null,
         renderHTML: () => ({}),
       },
     };
@@ -81,19 +77,15 @@ export const SceneBreak = Node.create<SceneBreakOptions>({
   renderHTML({ node, HTMLAttributes }) {
     const attrs = node.attrs as SceneBreakAttrs;
     const wrapper = mergeAttributes(HTMLAttributes, {
-        "data-scene-break": "",
-        class: "scene-break",
-      });
+      "data-scene-break": "",
+      class: "scene-break",
+    });
 
     if (attrs.kind === "image" && attrs.src) {
       return ["div", wrapper, ["img", { src: attrs.src, alt: attrs.alt ?? "" }]];
     }
 
-    return [
-      "div",
-      wrapper,
-      ["span", { class: "scene-break-symbols" }, attrs.symbols],
-    ];
+    return ["div", wrapper, ["span", { class: "scene-break-symbols" }, attrs.symbols]];
   },
 
   addNodeView() {

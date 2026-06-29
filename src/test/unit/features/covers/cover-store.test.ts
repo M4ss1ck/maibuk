@@ -121,7 +121,14 @@ describe("useCoverStore", () => {
 
   it("setDoc changes document size, marks dirty and is undoable", () => {
     const st = useCoverStore.getState();
-    st.setDoc({ width: 1600, height: 2560, dpi: 300, bleed: 0, safeMargin: 80, presetId: "kindle" });
+    st.setDoc({
+      width: 1600,
+      height: 2560,
+      dpi: 300,
+      bleed: 0,
+      safeMargin: 80,
+      presetId: "kindle",
+    });
     expect(useCoverStore.getState().scene.doc.width).toBe(1600);
     expect(useCoverStore.getState().dirty).toBe(true);
     st.undo();

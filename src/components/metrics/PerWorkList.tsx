@@ -1,8 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type {
-  DashboardAggregate,
-  SnapshotMetrics,
-} from "../../features/metrics/aggregates/types";
+import type { DashboardAggregate, SnapshotMetrics } from "../../features/metrics/aggregates/types";
 
 interface PerWorkListProps {
   snapshot: SnapshotMetrics | null;
@@ -13,7 +10,7 @@ interface PerWorkListProps {
 export function PerWorkList({ snapshot, dashboard, isLoading = false }: PerWorkListProps) {
   const { t } = useTranslation();
   const activeByWork = new Map(
-    (dashboard?.timeByWork ?? []).map((item) => [item.workId, item.activeSec]),
+    (dashboard?.timeByWork ?? []).map((item) => [item.workId, item.activeSec])
   );
 
   return (
@@ -21,14 +18,15 @@ export function PerWorkList({ snapshot, dashboard, isLoading = false }: PerWorkL
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-lg font-semibold">{t("metrics.perWork")}</h2>
         {isLoading && (
-          <span className="text-sm text-muted-foreground">
-            {t("metrics.loadingEvents")}
-          </span>
+          <span className="text-sm text-muted-foreground">{t("metrics.loadingEvents")}</span>
         )}
       </div>
       <div className="mt-4 divide-y divide-border">
         {(snapshot?.perWork ?? []).map((work) => (
-          <div key={work.workId} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+          <div
+            key={work.workId}
+            className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+          >
             <div className="min-w-0">
               <p className="truncate font-medium">{work.title}</p>
               <p className="text-sm text-muted-foreground">

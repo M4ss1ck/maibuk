@@ -55,7 +55,7 @@ export function useDragAutoScroll(containerRef: RefObject<HTMLElement | null>) {
         frameRef.current = requestAnimationFrame(tick);
       }
     },
-    [containerRef, tick],
+    [containerRef, tick]
   );
 
   useEffect(() => stop, [stop]);

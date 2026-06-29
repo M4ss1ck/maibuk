@@ -4,9 +4,7 @@ import { isMac } from "../../../../lib/platform/detect";
 function stubNavigator(platform: string, userAgentDataPlatform?: string) {
   vi.stubGlobal("navigator", {
     platform,
-    userAgentData: userAgentDataPlatform
-      ? { platform: userAgentDataPlatform }
-      : undefined,
+    userAgentData: userAgentDataPlatform ? { platform: userAgentDataPlatform } : undefined,
   });
 }
 

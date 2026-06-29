@@ -41,14 +41,8 @@ import { BackupService } from "../backup/backup-service";
 import { useSettingsStore } from "../settings/store";
 import { useSyncStore } from "./store";
 import { useVersionStore } from "../versions/store";
-import {
-  syncMetricsRows,
-} from "../metrics/metrics-sync";
-import {
-  getTombstone,
-  listPendingTombstones,
-  markTombstonePushed,
-} from "./tombstones";
+import { syncMetricsRows } from "../metrics/metrics-sync";
+import { getTombstone, listPendingTombstones, markTombstonePushed } from "./tombstones";
 import { ensureGenericCollectionMigration } from "./migration-reset";
 
 let isSyncing = false;
@@ -99,8 +93,12 @@ function resolveSyncOptions(options?: Partial<SyncOptions>): SyncOptions {
 }
 
 function includesScope(scope: SyncScope, entity: SyncEntityType | "metrics"): boolean {
-  return scope === "all" || scope === entity || (entity === "book" && scope === "books") ||
-    (entity === "note" && scope === "notes");
+  return (
+    scope === "all" ||
+    scope === entity ||
+    (entity === "book" && scope === "books") ||
+    (entity === "note" && scope === "notes")
+  );
 }
 
 function canPull(direction: SyncDirection): boolean {
@@ -127,10 +125,7 @@ function toDeletionReviewItem(tombstone: {
   };
 }
 
-function emitLog(
-  options: SyncOptions,
-  entry: Omit<SyncLogEntry, "id" | "timestamp">
-): void {
+function emitLog(options: SyncOptions, entry: Omit<SyncLogEntry, "id" | "timestamp">): void {
   options.onLog?.({
     id: crypto.randomUUID(),
     timestamp: Math.floor(Date.now() / 1000),
@@ -578,7 +573,15 @@ async function syncVersions(
   const db = await getDatabase();
 
   const localRows = await db.select<
-    { id: string; checksum: string; name: string | null; trigger_type: string; created_at: number; word_count: number; snapshot: string }[]
+    {
+      id: string;
+      checksum: string;
+      name: string | null;
+      trigger_type: string;
+      created_at: number;
+      word_count: number;
+      snapshot: string;
+    }[]
   >(
     `SELECT id, checksum, name, trigger_type, created_at, word_count, snapshot
      FROM book_versions WHERE book_id = ?`,
@@ -613,10 +616,7 @@ async function syncVersions(
         );
 
         const now = Math.floor(Date.now() / 1000);
-        await db.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [
-          now,
-          local.id,
-        ]);
+        await db.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [now, local.id]);
       } catch (error) {
         console.warn(`Version sync: skipping push of version ${local.id}`, error);
       }
@@ -685,9 +685,7 @@ async function syncAllNotes(
   assertOnline();
 
   const db = await getDatabase();
-  const localNotes = await db.select<NoteTimestampRow[]>(
-    "SELECT id, updated_at FROM notes"
-  );
+  const localNotes = await db.select<NoteTimestampRow[]>("SELECT id, updated_at FROM notes");
   const localNoteIds = new Set(localNotes.map((n) => n.id));
 
   const remoteNotes = await listRemoteNotes();
@@ -806,10 +804,9 @@ export async function syncBook(
 
 async function getNoteUpdatedAt(noteId: string): Promise<number> {
   const db = await getDatabase();
-  const rows = await db.select<EffectiveTimestamp[]>(
-    "SELECT updated_at FROM notes WHERE id = ?",
-    [noteId]
-  );
+  const rows = await db.select<EffectiveTimestamp[]>("SELECT updated_at FROM notes WHERE id = ?", [
+    noteId,
+  ]);
   return rows[0]?.updated_at ?? 0;
 }
 

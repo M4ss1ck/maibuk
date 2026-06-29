@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  markdownFilename,
-  titleFromMarkdown,
-} from "../../../../features/markdown/markdown-file";
+import { markdownFilename, titleFromMarkdown } from "../../../../features/markdown/markdown-file";
 
 describe("markdownFilename()", () => {
   it("slugifies a title", () => {

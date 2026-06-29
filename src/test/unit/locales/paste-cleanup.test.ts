@@ -6,7 +6,7 @@ import { PASTE_STRIP_COMMON_PROPERTIES } from "../../../features/settings/types"
 function keyPaths(value: unknown, prefix = ""): string[] {
   if (value === null || typeof value !== "object") return [prefix];
   return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) =>
-    keyPaths(child, prefix ? `${prefix}.${key}` : key),
+    keyPaths(child, prefix ? `${prefix}.${key}` : key)
   );
 }
 
@@ -53,25 +53,17 @@ describe("paste cleanup i18n", () => {
       "tag",
       "cssSelector",
     ]) {
-      expect(
-        (pc.rules.targetOption as Record<string, string>)[target],
-      ).toBeTruthy();
+      expect((pc.rules.targetOption as Record<string, string>)[target]).toBeTruthy();
     }
     for (const action of ["removeStyle", "unwrap", "delete"]) {
-      expect(
-        (pc.rules.actionOption as Record<string, string>)[action],
-      ).toBeTruthy();
+      expect((pc.rules.actionOption as Record<string, string>)[action]).toBeTruthy();
     }
   });
 
   it("labels every curated strip property in both locales", () => {
     for (const prop of PASTE_STRIP_COMMON_PROPERTIES) {
-      expect(
-        (en.settings.pasteCleanup.property as Record<string, string>)[prop],
-      ).toBeTruthy();
-      expect(
-        (es.settings.pasteCleanup.property as Record<string, string>)[prop],
-      ).toBeTruthy();
+      expect((en.settings.pasteCleanup.property as Record<string, string>)[prop]).toBeTruthy();
+      expect((es.settings.pasteCleanup.property as Record<string, string>)[prop]).toBeTruthy();
     }
   });
 });

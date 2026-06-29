@@ -69,8 +69,5 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
 };
 
 function getHighWatermark(rows: MetricEvent[]): string {
-  return rows.reduce(
-    (max, row) => (row.timestamp > max ? row.timestamp : max),
-    "",
-  );
+  return rows.reduce((max, row) => (row.timestamp > max ? row.timestamp : max), "");
 }

@@ -17,8 +17,7 @@ export const HeadingId = Extension.create({
           id: {
             default: null,
             parseHTML: (element) => element.getAttribute("id"),
-            renderHTML: (attributes) =>
-              attributes.id ? { id: attributes.id } : {},
+            renderHTML: (attributes) => (attributes.id ? { id: attributes.id } : {}),
           },
         },
       },

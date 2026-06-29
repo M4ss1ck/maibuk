@@ -25,12 +25,12 @@ async function seedChapter(
   id: string,
   bookId: string,
   order: number,
-  content: string | null = "<p>Body</p>",
+  content: string | null = "<p>Body</p>"
 ) {
   await db.execute(
     `INSERT INTO chapters (id, book_id, title, content, "order", created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, bookId, `Chapter ${order}`, content, order, 1, 2],
+    [id, bookId, `Chapter ${order}`, content, order, 1, 2]
   );
 }
 
@@ -426,7 +426,7 @@ describe("useChapterStore", () => {
         expect.arrayContaining([
           { id: "ch-a", bookId: "book-1", title: "Chapter 0", content: "<p>Body</p>" },
           { id: "ch-b", bookId: "book-2", title: "Chapter 0", content: null },
-        ]),
+        ])
       );
       expect(rows).toHaveLength(2);
     });

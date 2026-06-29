@@ -24,26 +24,20 @@ export const DEFAULT_SCENE_BREAK: SceneBreakDescriptor = {
   symbols: "* * *",
 };
 
-export const BUILTIN_SCENE_BREAKS: Array<
-  Extract<SceneBreakDescriptor, { kind: "text" }>
-> = [
+export const BUILTIN_SCENE_BREAKS: Array<Extract<SceneBreakDescriptor, { kind: "text" }>> = [
   { kind: "text", symbols: "* * *" },
   { kind: "text", symbols: "♠ ♥ ♦ ♣" },
 ];
 
-export function resolveCustomSymbols(
-  unit: string,
-  count: number,
-  spaced: boolean,
-): string {
+export function resolveCustomSymbols(unit: string, count: number, spaced: boolean): string {
   if (!unit) return "";
   const n = Math.max(1, Math.floor(count) || 1);
-  return Array(n).fill(unit).join(spaced ? " " : "");
+  return Array(n)
+    .fill(unit)
+    .join(spaced ? " " : "");
 }
 
-export function descriptorToAttrs(
-  descriptor: SceneBreakDescriptor,
-): SceneBreakAttrs {
+export function descriptorToAttrs(descriptor: SceneBreakDescriptor): SceneBreakAttrs {
   if (descriptor.kind === "image") {
     return {
       kind: "image",
@@ -69,9 +63,7 @@ export function descriptorToAttrs(
   };
 }
 
-export function attrsToDescriptor(
-  attrs: SceneBreakAttrs,
-): SceneBreakDescriptor {
+export function attrsToDescriptor(attrs: SceneBreakAttrs): SceneBreakDescriptor {
   if (attrs.kind === "image") {
     return {
       kind: "image",

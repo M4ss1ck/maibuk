@@ -80,7 +80,7 @@ describe("metrics sync", () => {
       await testDb.execute(
         `INSERT INTO metrics_event_tombstones (id, deleted_at, device_id, reason)
          VALUES (?, ?, ?, ?)`,
-        ["tomb-1", "2026-05-23T12:30:00.000Z", "device-a", "category-opt-out"],
+        ["tomb-1", "2026-05-23T12:30:00.000Z", "device-a", "category-opt-out"]
       );
 
       const json = await serializeMetricsBatch();
@@ -116,24 +116,20 @@ describe("metrics sync", () => {
       await applyMetricsBatch({ events, tombstones: [], updatedAt: 1000 });
 
       const rows = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events ORDER BY id",
+        "SELECT id FROM metrics_events ORDER BY id"
       );
       expect(rows).toEqual([{ id: "remote-1" }, { id: "remote-2" }]);
     });
 
     it("merges both sides: remote events + local events coexist", async () => {
-      await insertEvents(testDb, [
-        buildEvent({ id: "local-1", deviceId: "device-a" }),
-      ]);
+      await insertEvents(testDb, [buildEvent({ id: "local-1", deviceId: "device-a" })]);
 
-      const remoteEvents = [
-        buildEvent({ id: "remote-1", deviceId: "device-b" }),
-      ];
+      const remoteEvents = [buildEvent({ id: "remote-1", deviceId: "device-b" })];
 
       await applyMetricsBatch({ events: remoteEvents, tombstones: [], updatedAt: 1000 });
 
       const rows = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events ORDER BY id",
+        "SELECT id FROM metrics_events ORDER BY id"
       );
       expect(rows.map((r) => r.id).sort()).toEqual(["local-1", "remote-1"]);
     });
@@ -142,7 +138,7 @@ describe("metrics sync", () => {
       await testDb.execute(
         `INSERT INTO metrics_event_tombstones (id, deleted_at, device_id, reason)
          VALUES (?, ?, ?, ?)`,
-        ["killed-1", "2026-05-23T12:30:00.000Z", "device-a", "category-opt-out"],
+        ["killed-1", "2026-05-23T12:30:00.000Z", "device-a", "category-opt-out"]
       );
 
       const remoteEvents = [
@@ -153,7 +149,7 @@ describe("metrics sync", () => {
       await applyMetricsBatch({ events: remoteEvents, tombstones: [], updatedAt: 1000 });
 
       const rows = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events ORDER BY id",
+        "SELECT id FROM metrics_events ORDER BY id"
       );
       expect(rows).toEqual([{ id: "alive-1" }]);
     });
@@ -165,7 +161,12 @@ describe("metrics sync", () => {
       ]);
 
       const remoteTombstones = [
-        { id: "doomed-1", deleted_at: "2026-05-23T13:00:00.000Z", device_id: "device-b", reason: "category-opt-out" },
+        {
+          id: "doomed-1",
+          deleted_at: "2026-05-23T13:00:00.000Z",
+          device_id: "device-b",
+          reason: "category-opt-out",
+        },
       ];
 
       await applyMetricsBatch({
@@ -175,10 +176,10 @@ describe("metrics sync", () => {
       });
 
       const events = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events ORDER BY id",
+        "SELECT id FROM metrics_events ORDER BY id"
       );
       const tombstones = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_event_tombstones",
+        "SELECT id FROM metrics_event_tombstones"
       );
 
       expect(events).toEqual([{ id: "survivor-1" }]);
@@ -186,9 +187,7 @@ describe("metrics sync", () => {
     });
 
     it("does not insert duplicate events (INSERT OR IGNORE via insertIfNotTombstoned -> insertEvents)", async () => {
-      await insertEvents(testDb, [
-        buildEvent({ id: "dup-1", deviceId: "device-a" }),
-      ]);
+      await insertEvents(testDb, [buildEvent({ id: "dup-1", deviceId: "device-a" })]);
 
       await applyMetricsBatch({
         events: [buildEvent({ id: "dup-1", deviceId: "device-b" })],
@@ -196,16 +195,21 @@ describe("metrics sync", () => {
         updatedAt: 1000,
       });
 
-      const rows = await testDb.select<{ id: string, device_id: string }[]>(
+      const rows = await testDb.select<{ id: string; device_id: string }[]>(
         "SELECT id, device_id FROM metrics_events WHERE id = ?",
-        ["dup-1"],
+        ["dup-1"]
       );
       expect(rows).toHaveLength(1);
       expect(rows[0].device_id).toBe("device-a");
     });
 
     it("handles tombstone + event arriving in either order (batch = tombstone already handled before event)", async () => {
-      const tombstone = { id: "late-kill-1", deleted_at: "2026-05-23T14:00:00.000Z", device_id: "device-b", reason: "category-opt-out" };
+      const tombstone = {
+        id: "late-kill-1",
+        deleted_at: "2026-05-23T14:00:00.000Z",
+        device_id: "device-b",
+        reason: "category-opt-out",
+      };
       const event = buildEvent({ id: "late-kill-1", deviceId: "device-b" });
 
       // Simulate: tombstone arrives first, then event in same batch
@@ -218,11 +222,11 @@ describe("metrics sync", () => {
 
       const events = await testDb.select<{ id: string }[]>(
         "SELECT id FROM metrics_events WHERE id = ?",
-        ["late-kill-1"],
+        ["late-kill-1"]
       );
       const tombstones = await testDb.select<{ id: string }[]>(
         "SELECT id FROM metrics_event_tombstones WHERE id = ?",
-        ["late-kill-1"],
+        ["late-kill-1"]
       );
 
       expect(events).toEqual([]);
@@ -246,7 +250,7 @@ describe("metrics sync", () => {
       });
 
       const cacheRows = await testDb.select<{ cache_key: string }[]>(
-        "SELECT cache_key FROM metrics_cache",
+        "SELECT cache_key FROM metrics_cache"
       );
       expect(cacheRows).toEqual([]);
     });
@@ -264,7 +268,7 @@ describe("metrics sync", () => {
       await applyMetricsBatch({ events: [], tombstones: [], updatedAt: 1000 });
 
       const cacheRows = await testDb.select<{ cache_key: string }[]>(
-        "SELECT cache_key FROM metrics_cache",
+        "SELECT cache_key FROM metrics_cache"
       );
       expect(cacheRows).toEqual([{ cache_key: "heatmap:2026" }]);
     });
@@ -273,20 +277,30 @@ describe("metrics sync", () => {
       await testDb.execute(
         `INSERT INTO metrics_event_tombstones (id, deleted_at, device_id, reason)
          VALUES (?, ?, ?, ?)`,
-        ["existing-tomb", "2026-05-23T12:00:00.000Z", "device-a", "category-opt-out"],
+        ["existing-tomb", "2026-05-23T12:00:00.000Z", "device-a", "category-opt-out"]
       );
 
       await applyMetricsBatch({
         events: [],
         tombstones: [
-          { id: "existing-tomb", deleted_at: "2026-05-23T13:00:00.000Z", device_id: "device-b", reason: "category-opt-out" },
-          { id: "new-tomb", deleted_at: "2026-05-23T14:00:00.000Z", device_id: "device-b", reason: "category-opt-out" },
+          {
+            id: "existing-tomb",
+            deleted_at: "2026-05-23T13:00:00.000Z",
+            device_id: "device-b",
+            reason: "category-opt-out",
+          },
+          {
+            id: "new-tomb",
+            deleted_at: "2026-05-23T14:00:00.000Z",
+            device_id: "device-b",
+            reason: "category-opt-out",
+          },
         ],
         updatedAt: 2000,
       });
 
       const rows = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_event_tombstones ORDER BY id",
+        "SELECT id FROM metrics_event_tombstones ORDER BY id"
       );
       expect(rows).toEqual([{ id: "existing-tomb" }, { id: "new-tomb" }]);
     });
@@ -305,18 +319,13 @@ describe("metrics sync", () => {
       mockPushTombstone.mockResolvedValue(undefined);
       // Fake crypto: encrypt produces JSON bytes, decrypt returns JSON string.
       mockEncrypt.mockImplementation(async (plaintext: string) =>
-        new TextEncoder().encode(plaintext),
+        new TextEncoder().encode(plaintext)
       );
-      mockDecrypt.mockImplementation(async (data: Uint8Array) =>
-        new TextDecoder().decode(data),
-      );
+      mockDecrypt.mockImplementation(async (data: Uint8Array) => new TextDecoder().decode(data));
     });
 
     it("pushes locally-only events as a compact aggregate segment and marks it pushed", async () => {
-      await insertEvents(testDb, [
-        buildEvent({ id: "local-1" }),
-        buildEvent({ id: "local-2" }),
-      ]);
+      await insertEvents(testDb, [buildEvent({ id: "local-1" }), buildEvent({ id: "local-2" })]);
 
       await syncMetricsRows("pass");
 
@@ -324,21 +333,23 @@ describe("metrics sync", () => {
       // Push payload uses `client_id`, not `id` — PB auto-generates its own
       // system id and dedups via the (user, client_id) unique index.
       expect(mockPushEvent.mock.calls[0][0].client_id).toMatch(
-        /^aggregate:daily:v1:device-a:2026-05-23:/,
+        /^aggregate:daily:v1:device-a:2026-05-23:/
       );
       // Verify they're no longer in the unpushed queue.
       const stillUnpushed = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
+        "SELECT id FROM metrics_events WHERE pushed_at IS NULL"
       );
       expect(stillUnpushed).toEqual([]);
     });
 
     it("pushes a backlog of events with bounded concurrency, not one-at-a-time", async () => {
-      const events = Array.from({ length: 25 }, (_, i) => buildEvent({
-        id: `local-${i}`,
-        timestamp: `2026-05-${String(i + 1).padStart(2, "0")}T12:00:00.000Z`,
-        localDate: `2026-05-${String(i + 1).padStart(2, "0")}`,
-      }));
+      const events = Array.from({ length: 25 }, (_, i) =>
+        buildEvent({
+          id: `local-${i}`,
+          timestamp: `2026-05-${String(i + 1).padStart(2, "0")}T12:00:00.000Z`,
+          localDate: `2026-05-${String(i + 1).padStart(2, "0")}`,
+        })
+      );
       await insertEvents(testDb, events);
       // This suite doesn't clear mock call history between tests; reset so the
       // count below reflects only this test's pushes.
@@ -361,7 +372,7 @@ describe("metrics sync", () => {
       expect(maxInFlight).toBeLessThanOrEqual(10);
 
       const stillUnpushed = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
+        "SELECT id FROM metrics_events WHERE pushed_at IS NULL"
       );
       expect(stillUnpushed).toEqual([]);
     });
@@ -420,7 +431,7 @@ describe("metrics sync", () => {
         expect(pushedIds[0]).toMatch(/^aggregate:daily:v1:device-a:2026-01-01:/);
         expect(pushedIds[1]).toMatch(/^aggregate:daily:v1:device-a:2026-06-16:/);
         const aggregatePayload = JSON.parse(
-          new TextDecoder().decode(base64ToUint8(mockPushEvent.mock.calls[0][0].encrypted_payload)),
+          new TextDecoder().decode(base64ToUint8(mockPushEvent.mock.calls[0][0].encrypted_payload))
         );
         expect(aggregatePayload).toMatchObject({
           bucket: "daily-v1",
@@ -431,7 +442,7 @@ describe("metrics sync", () => {
         });
 
         const rows = await testDb.select<{ id: string; event_type: string }[]>(
-          "SELECT id, event_type FROM metrics_events ORDER BY id",
+          "SELECT id, event_type FROM metrics_events ORDER BY id"
         );
         expect(rows).toHaveLength(2);
         expect(rows.every((row) => row.event_type === "aggregate.daily")).toBe(true);
@@ -444,7 +455,7 @@ describe("metrics sync", () => {
     it("pulls remote events, decrypts them, and stores them as pushed", async () => {
       const encrypted = await mockEncrypt(
         JSON.stringify({ words: 7, chars: 35, chapterId: "c-1" }),
-        "pass",
+        "pass"
       );
       mockPullEvents.mockResolvedValue([
         {
@@ -464,18 +475,16 @@ describe("metrics sync", () => {
       await syncMetricsRows("pass");
 
       const rows = await testDb.select<{ id: string; pushed_at: string | null }[]>(
-        "SELECT id, pushed_at FROM metrics_events",
+        "SELECT id, pushed_at FROM metrics_events"
       );
       expect(rows).toEqual([{ id: "remote-1", pushed_at: "2026-05-23T13:00:00.123Z" }]);
-      expect(localStorage.getItem(EVENT_WATERMARK_KEY)).toBe(
-        "2026-05-23T13:00:00.123Z",
-      );
+      expect(localStorage.getItem(EVENT_WATERMARK_KEY)).toBe("2026-05-23T13:00:00.123Z");
     });
 
     it("pulls compact segments and suppresses matching raw source events", async () => {
       const rawPayload = await mockEncrypt(
         JSON.stringify({ words: 7, chars: 35, chapterId: "c-1" }),
-        "pass",
+        "pass"
       );
       const aggregatePayload = await mockEncrypt(
         JSON.stringify({
@@ -491,7 +500,7 @@ describe("metrics sync", () => {
           timeOfDay: [{ hour: 13, words: 7 }],
           timeByWork: [],
         }),
-        "pass",
+        "pass"
       );
       mockPullEvents.mockResolvedValue([
         {
@@ -535,11 +544,11 @@ describe("metrics sync", () => {
       await syncMetricsRows("pass");
 
       const events = await testDb.select<{ id: string; event_type: string }[]>(
-        "SELECT id, event_type FROM metrics_events ORDER BY id",
+        "SELECT id, event_type FROM metrics_events ORDER BY id"
       );
       const tombstones = await testDb.select<{ id: string; pushed_at: string | null }[]>(
         "SELECT id, pushed_at FROM metrics_event_tombstones WHERE id = ?",
-        ["raw-remote-1"],
+        ["raw-remote-1"]
       );
       expect(events).toEqual([
         {
@@ -547,15 +556,13 @@ describe("metrics sync", () => {
           event_type: "aggregate.daily",
         },
       ]);
-      expect(tombstones).toEqual([
-        { id: "raw-remote-1", pushed_at: "2026-05-23T13:00:00.200Z" },
-      ]);
+      expect(tombstones).toEqual([{ id: "raw-remote-1", pushed_at: "2026-05-23T13:00:00.200Z" }]);
     });
 
     it("applies a remote tombstone before pulled events so the event is dropped", async () => {
       const encrypted = await mockEncrypt(
         JSON.stringify({ words: 1, chars: 5, chapterId: null }),
-        "pass",
+        "pass"
       );
       mockPullTombstones.mockResolvedValue([
         {
@@ -583,11 +590,9 @@ describe("metrics sync", () => {
 
       await syncMetricsRows("pass");
 
-      const events = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events",
-      );
+      const events = await testDb.select<{ id: string }[]>("SELECT id FROM metrics_events");
       const tombstones = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_event_tombstones",
+        "SELECT id FROM metrics_event_tombstones"
       );
       expect(events).toEqual([]);
       expect(tombstones).toEqual([{ id: "doomed-1" }]);
@@ -615,7 +620,7 @@ describe("metrics sync", () => {
       await syncMetricsRows("pass");
 
       const cacheRows = await testDb.select<{ cache_key: string }[]>(
-        "SELECT cache_key FROM metrics_cache",
+        "SELECT cache_key FROM metrics_cache"
       );
       expect(cacheRows).toEqual([]);
     });
@@ -639,9 +644,7 @@ describe("metrics sync", () => {
 
       await syncMetricsRows("wrong-passphrase");
 
-      const rows = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events",
-      );
+      const rows = await testDb.select<{ id: string }[]>("SELECT id FROM metrics_events");
       expect(rows).toEqual([]);
       expect(localStorage.getItem(EVENT_WATERMARK_KEY)).toBeNull();
     });
@@ -665,16 +668,16 @@ describe("metrics sync", () => {
       });
 
       const unpushedEvents = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events WHERE pushed_at IS NULL",
+        "SELECT id FROM metrics_events WHERE pushed_at IS NULL"
       );
       const unpushedTombstones = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_event_tombstones WHERE pushed_at IS NULL",
+        "SELECT id FROM metrics_event_tombstones WHERE pushed_at IS NULL"
       );
       expect(unpushedEvents).toEqual([{ id: "local-1" }]);
       expect(unpushedTombstones).toEqual([]);
 
       const eventIds = await testDb.select<{ id: string }[]>(
-        "SELECT id FROM metrics_events ORDER BY id",
+        "SELECT id FROM metrics_events ORDER BY id"
       );
       expect(eventIds.map((row) => row.id)).toEqual(["blob-1", "local-1"]);
     });

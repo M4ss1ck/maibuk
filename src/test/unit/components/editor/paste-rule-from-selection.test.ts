@@ -51,32 +51,30 @@ describe("inferPasteRuleFromSelection", () => {
   it("turns a full style attribute into a stable property selector", () => {
     expect(
       inferPasteRuleFromSelection(
-        'style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"',
-      ),
+        'style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"'
+      )
     ).toEqual({
       target: "styleDeclaration",
-      value:
-        "font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);",
+      value: "font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);",
     });
   });
 
   it("turns a partial HTML tag with style into a tag-scoped property selector", () => {
     expect(
       inferPasteRuleFromSelection(
-        'span style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"',
-      ),
+        'span style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"'
+      )
     ).toEqual({
       target: "styleDeclaration",
-      value:
-        "span { font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0); }",
+      value: "span { font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0); }",
     });
   });
 
   it("turns nested styled HTML into comma-separated tag-scoped selectors", () => {
     expect(
       inferPasteRuleFromSelection(
-        '<p><span style="font-family: -webkit-standard; color: rgb(0, 0, 0);">Hi</span><em style="background-color: yellow;">there</em></p>',
-      ),
+        '<p><span style="font-family: -webkit-standard; color: rgb(0, 0, 0);">Hi</span><em style="background-color: yellow;">there</em></p>'
+      )
     ).toEqual({
       target: "styleDeclaration",
       value:
@@ -93,7 +91,7 @@ describe("inferPasteRuleFromSelection", () => {
 
   it("turns a bare multi-declaration block into a property selector", () => {
     expect(
-      inferPasteRuleFromSelection("font-family: -webkit-standard; color: rgb(0, 0, 0)"),
+      inferPasteRuleFromSelection("font-family: -webkit-standard; color: rgb(0, 0, 0)")
     ).toEqual({
       target: "styleDeclaration",
       value: "font-family: -webkit-standard; color: rgb(0, 0, 0);",
@@ -101,10 +99,7 @@ describe("inferPasteRuleFromSelection", () => {
   });
 
   it("normalizes selected font-size and red color declarations with or without a trailing semicolon", () => {
-    for (const selection of [
-      "font-size: medium; color: red;",
-      "font-size: medium; color: red",
-    ]) {
+    for (const selection of ["font-size: medium; color: red;", "font-size: medium; color: red"]) {
       expect(inferPasteRuleFromSelection(selection)).toEqual({
         target: "styleDeclaration",
         value: "font-size: medium; color: red;",
@@ -113,9 +108,7 @@ describe("inferPasteRuleFromSelection", () => {
   });
 
   it("uses the style property name when the value contains quotes", () => {
-    expect(
-      inferPasteRuleFromSelection('style="font-family: \'Times New Roman\';"'),
-    ).toEqual({
+    expect(inferPasteRuleFromSelection("style=\"font-family: 'Times New Roman';\"")).toEqual({
       target: "styleDeclaration",
       value: "font-family: 'Times New Roman';",
     });
@@ -125,7 +118,7 @@ describe("inferPasteRuleFromSelection", () => {
   // inline style must actually strip that style when the paste engine runs.
   it("produces a rule that removes the selected inline style on paste", () => {
     const inferred = inferPasteRuleFromSelection(
-      'style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"',
+      'style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"'
     );
     if (!inferred) throw new Error("expected a rule");
     const cleaned = cleanPastedHtml(
@@ -142,7 +135,7 @@ describe("inferPasteRuleFromSelection", () => {
             ...inferred,
           },
         ],
-      },
+      }
     );
     expect(cleaned).not.toContain("style=");
     expect(cleaned).toBe("<p>Hi</p>");
@@ -150,7 +143,7 @@ describe("inferPasteRuleFromSelection", () => {
 
   it("removes the selected inline style even when pasted style declarations are serialized differently", () => {
     const inferred = inferPasteRuleFromSelection(
-      'style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"',
+      'style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"'
     );
     if (!inferred) throw new Error("expected a rule");
     const cleaned = cleanPastedHtml(
@@ -167,7 +160,7 @@ describe("inferPasteRuleFromSelection", () => {
             ...inferred,
           },
         ],
-      },
+      }
     );
     expect(cleaned).not.toContain("style=");
     expect(cleaned).toBe("<p>Hi</p>");
@@ -175,7 +168,7 @@ describe("inferPasteRuleFromSelection", () => {
 
   it("produces a rule that removes a style selected as partial HTML tag text", () => {
     const inferred = inferPasteRuleFromSelection(
-      'span style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"',
+      'span style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"'
     );
     if (!inferred) throw new Error("expected a rule");
     const cleaned = cleanPastedHtml(
@@ -192,16 +185,16 @@ describe("inferPasteRuleFromSelection", () => {
             ...inferred,
           },
         ],
-      },
+      }
     );
     expect(cleaned).toBe(
-      '<p style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);">Keep</p>Strip',
+      '<p style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);">Keep</p>Strip'
     );
   });
 
   it("removes a partial HTML tag style when only some selected properties remain on paste", () => {
     const inferred = inferPasteRuleFromSelection(
-      'span style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"',
+      'span style="font-family: -webkit-standard; font-size: medium; color: rgb(0, 0, 0);"'
     );
     if (!inferred) throw new Error("expected a rule");
     const cleaned = cleanPastedHtml(
@@ -218,14 +211,14 @@ describe("inferPasteRuleFromSelection", () => {
             ...inferred,
           },
         ],
-      },
+      }
     );
     expect(cleaned).toBe("Strip");
   });
 
   it("produces a rule that removes styles selected from nested HTML", () => {
     const inferred = inferPasteRuleFromSelection(
-      '<p><span style="font-family: -webkit-standard; color: rgb(0, 0, 0);">Hi</span><em style="background-color: yellow;">there</em></p>',
+      '<p><span style="font-family: -webkit-standard; color: rgb(0, 0, 0);">Hi</span><em style="background-color: yellow;">there</em></p>'
     );
     if (!inferred) throw new Error("expected a rule");
     const cleaned = cleanPastedHtml(
@@ -242,10 +235,10 @@ describe("inferPasteRuleFromSelection", () => {
             ...inferred,
           },
         ],
-      },
+      }
     );
     expect(cleaned).toBe(
-      '<p>Hi<em>there</em><strong style="background-color: yellow;">again</strong></p>',
+      '<p>Hi<em>there</em><strong style="background-color: yellow;">again</strong></p>'
     );
   });
 

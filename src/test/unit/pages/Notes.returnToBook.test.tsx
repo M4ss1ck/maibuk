@@ -57,14 +57,16 @@ vi.mock("react-router-dom", () => ({
 }));
 
 vi.mock("../../../features/notes", () => {
-  const useNoteStore = (selector: (state: typeof noteState) => unknown) =>
-    selector(noteState);
+  const useNoteStore = (selector: (state: typeof noteState) => unknown) => selector(noteState);
   useNoteStore.getState = () => noteState;
   return { useNoteStore };
 });
 
 vi.mock("../../../features/books/store", () => {
-  const state = { books: [{ id: "book-1", title: "My Book" }], loadBooks: vi.fn(() => Promise.resolve()) };
+  const state = {
+    books: [{ id: "book-1", title: "My Book" }],
+    loadBooks: vi.fn(() => Promise.resolve()),
+  };
   const useBookStore = (selector: (s: typeof state) => unknown) => selector(state);
   return { useBookStore };
 });

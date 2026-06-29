@@ -35,6 +35,8 @@
 | --------------------- | --------------- | ------------------------- |
 | `/`                   | `Home`          | Sidebar layout (`Layout`) |
 | `/settings`           | `Settings`      | Sidebar layout (`Layout`) |
+| `/canvas`             | `CanvasGallery` | Sidebar layout (`Layout`) |
+| `/canvas/:canvasId`   | `Canvas`        | Full-page (no sidebar)    |
 | `/book/:bookId`       | `BookEditor`    | Full-page (no sidebar)    |
 | `/book/:bookId/cover` | `CoverDesigner` | Full-page (no sidebar)    |
 
@@ -94,11 +96,13 @@ src/
 │   ├── settings/        # BackupSection, PasteCleanupSection
 │   ├── project/         # Book card, new book dialog
 │   ├── book/            # Book settings dialog
+│   ├── canvas/          # Canvas gallery cards
 │   └── icons/           # Custom SVG icon components
 ├── features/            # Feature modules (business logic + state)
 │   ├── backup/          # backup-service.ts, generate-sql-dump.ts, lifecycle.ts, types.ts
 │   ├── books/           # store.ts, types.ts
 │   ├── chapters/        # store.ts, types.ts
+│   ├── canvas/          # versioned docs, store, React Flow adapter, custom nodes
 │   ├── covers/          # types.ts
 │   ├── export/          # generators, sanitizers, styles, types
 │   ├── metrics/         # writing metrics types, classifier, repo, settings, session tracking
@@ -240,6 +244,10 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useAutoCheckpoint`                                                | `src/features/versions/useAutoCheckpoint.ts` |
 | `sanitizeChapterHtml()`                                            | `src/features/versions/sanitize.ts`        |
 | `diffSnapshots()`                                                  | `src/features/versions/compare.ts`         |
+| `useCanvasStore` / `parseCanvasDoc()` / `toFlowNodes()` (text nodes carry an optional persisted `width`) | `src/features/canvas/`                     |
+| `createRichTextExtensions()` (canonical rich-text schema shared by the main editor, Quick Note, and canvas) | `src/components/editor/extensions/createRichTextExtensions.ts` |
+| `MarkdownPasteDialog` / `plainTextToEditorHtml()` (shared markdown-paste prompt + plain-text conversion) | `src/components/editor/MarkdownPasteDialog.tsx` / `plain-text-html.ts` |
+| `TableSizePicker` (reusable 5×5 table-dimension picker)            | `src/components/editor/TableSizePicker.tsx` |
 | `useReadingPositionStore` / `useReadingPosition()`                 | `src/features/reading-position/`           |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
 | `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |

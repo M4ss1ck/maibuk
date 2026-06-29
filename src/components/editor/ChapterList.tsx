@@ -54,7 +54,7 @@ export function ChapterList({
   const selectedItemRef = useRef<HTMLLIElement>(null);
   const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
     listContainerRef,
-    onImportMarkdown ?? (() => {}),
+    onImportMarkdown ?? (() => {})
   );
   const autoScroll = useDragAutoScroll(listContainerRef);
 
@@ -250,10 +250,11 @@ export function ChapterList({
                     title={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
                     aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
                     aria-pressed={showChapterOutline}
-                    className={`shrink-0 p-1 rounded transition-colors ${showChapterOutline
-                      ? "text-primary bg-primary/10 hover:bg-primary/20"
-                      : "text-muted-foreground hover:bg-muted"
-                      }`}
+                    className={`shrink-0 p-1 rounded transition-colors ${
+                      showChapterOutline
+                        ? "text-primary bg-primary/10 hover:bg-primary/20"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
                   >
                     <ListTree className="w-3.5 h-3.5" />
                   </button>
@@ -268,9 +269,11 @@ export function ChapterList({
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, chapter.id)}
                     onDragEnd={handleDragEnd}
-                    className={`group relative select-none rounded transition-colors cursor-pointer ${draggedId === chapter.id ? "opacity-50" : ""
-                      } ${isActive ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
-                      }${isActive && showChapterOutline ? " sticky top-0 backdrop-blur-sm" : ""}`}
+                    className={`group relative select-none rounded transition-colors cursor-pointer ${
+                      draggedId === chapter.id ? "opacity-50" : ""
+                    } ${
+                      isActive ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
+                    }${isActive && showChapterOutline ? " sticky top-0 backdrop-blur-sm" : ""}`}
                   >
                     {/* Edit form overlay */}
                     {editingId === chapter.id ? (
@@ -327,12 +330,14 @@ export function ChapterList({
                           {/* Title line: icon, title, inline edit/delete actions */}
                           <div className="flex min-w-0 items-center gap-2">
                             <ChapterIcon
-                              className={`shrink-0 text-muted-foreground ${isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
-                                }`}
+                              className={`shrink-0 text-muted-foreground ${
+                                isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
+                              }`}
                             />
                             <span
-                              className={`flex-1 min-w-0 truncate font-medium ${isCompactView ? "text-xs" : "text-sm"
-                                }`}
+                              className={`flex-1 min-w-0 truncate font-medium ${
+                                isCompactView ? "text-xs" : "text-sm"
+                              }`}
                             >
                               {chapter.title}
                             </span>

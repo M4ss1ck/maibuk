@@ -104,8 +104,7 @@ export class MetricsService {
 
     const workChanged = this.sessionWorkId !== workId;
     const idledOut =
-      this.lastActiveAt !== null &&
-      nowMs - this.lastActiveAt > idleThresholdSec * 1000;
+      this.lastActiveAt !== null && nowMs - this.lastActiveAt > idleThresholdSec * 1000;
 
     if (workChanged || idledOut) {
       this.endSessionInternal(new Date(this.lastActiveAt ?? nowMs));
@@ -164,10 +163,7 @@ export class MetricsService {
     });
   }
 
-  async getAggregate(
-    key: AggregateKey,
-    params: AggregateParams = {},
-  ): Promise<AggregatePayload> {
+  async getAggregate(key: AggregateKey, params: AggregateParams = {}): Promise<AggregatePayload> {
     if (this.isDisabled()) {
       return mergeAggregatePayloads(key, [], params);
     }
@@ -216,7 +212,7 @@ export class MetricsService {
 
   private async computeStreakAggregate(
     db: DatabaseAdapter,
-    params: AggregateParams,
+    params: AggregateParams
   ): Promise<AggregatePayload> {
     const sourceHighWatermark = await getDailyWritingHighWatermark(db);
     const today = params.today ?? formatLocalDateUTC(new Date());
@@ -310,7 +306,7 @@ export class MetricsService {
   private async computeAggregateChunk(
     key: AggregateKey,
     rows: MetricEvent[],
-    params: AggregateParams,
+    params: AggregateParams
   ): Promise<AggregatePayload> {
     if (!this.worker) await this.init();
     await this.readyPromise;
@@ -359,9 +355,7 @@ function formatLocalDateUTC(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function createMetricsService(
-  options: MetricsServiceOptions = {},
-): MetricsService {
+export function createMetricsService(options: MetricsServiceOptions = {}): MetricsService {
   return new MetricsService({
     createWorker:
       options.createWorker ??

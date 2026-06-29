@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  getBacklinksForNote,
-  type BacklinkEntry,
-} from "../../features/links/link-index";
+import { getBacklinksForNote, type BacklinkEntry } from "../../features/links/link-index";
 
 interface NoteBacklinksProps {
   noteId: string;

@@ -140,7 +140,7 @@ describe("notes list model", () => {
         query: "moon",
         tag: "craft",
         dateFrom: "2026-06-01",
-      }),
+      })
     ).toEqual([notes[0]]);
   });
 

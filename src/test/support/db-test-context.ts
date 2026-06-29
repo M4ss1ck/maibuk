@@ -70,6 +70,7 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
       epubStructures,
       chapterEpubMeta,
       notes,
+      canvases,
       syncTombstones,
       coverTemplates,
       settings,
@@ -83,6 +84,7 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
       this.select<Record<string, unknown>[]>("SELECT * FROM epub_structures"),
       this.select<Record<string, unknown>[]>("SELECT * FROM chapter_epub_meta"),
       this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
+      this.select<Record<string, unknown>[]>("SELECT * FROM canvases"),
       this.select<Record<string, unknown>[]>("SELECT * FROM sync_tombstones"),
       this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
       this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
@@ -119,6 +121,9 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
       "",
       "-- Notes",
       generateInsertStatements("notes", notes),
+      "",
+      "-- Canvases",
+      generateInsertStatements("canvases", canvases),
       "",
       "-- Sync Tombstones",
       generateInsertStatements("sync_tombstones", syncTombstones),
@@ -331,6 +336,19 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   `);
 
   await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS canvases (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      doc TEXT NOT NULL,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      "order" INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      content_updated_at INTEGER NOT NULL
+    )
+  `);
+
+  await adapter.execute(`
     CREATE TABLE IF NOT EXISTS links (
       id TEXT PRIMARY KEY,
       source_type TEXT NOT NULL,
@@ -362,7 +380,9 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_book_metadata_book_id ON book_metadata(book_id)`
   );
-  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_book_styles_book_id ON book_styles(book_id)`);
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_book_styles_book_id ON book_styles(book_id)`
+  );
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_epub_structures_book_id ON epub_structures(book_id)`
   );
@@ -374,7 +394,9 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
       ON sync_tombstones(entity_type, pushed_at, confirmed_at)`
   );
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id)`);
-  await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)`);
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)`
+  );
 
   return adapter;
 }

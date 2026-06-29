@@ -1,9 +1,6 @@
 // src/test/unit/features/links/link-resolver.test.ts
 import { describe, expect, it } from "vitest";
-import {
-  resolveLink,
-  type ResolverData,
-} from "../../../../features/links/link-resolver";
+import { resolveLink, type ResolverData } from "../../../../features/links/link-resolver";
 
 const data: ResolverData = {
   notes: [{ id: "n1", title: "My Note" }],
@@ -20,9 +17,7 @@ describe("resolveLink", () => {
       title: "My Note",
       exists: true,
     });
-    expect(
-      resolveLink("maibuk://heading/c1/h-1", undefined, data),
-    ).toMatchObject({
+    expect(resolveLink("maibuk://heading/c1/h-1", undefined, data)).toMatchObject({
       type: "heading",
       id: "c1",
       headingId: "h-1",

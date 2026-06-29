@@ -374,8 +374,6 @@ describe("VersionPanel", () => {
 
     testStore.setState({ isLoading: true });
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeDisabled());
   });
 });

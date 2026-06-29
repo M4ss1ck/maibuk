@@ -8,8 +8,9 @@ export function FootnoteView({ node, editor, getPos }: NodeViewProps) {
     selector: ({ editor: e }): number => {
       const startIndex: number =
         (
-          e.extensionManager.extensions.find((ext) => ext.name === "footnote")
-            ?.options as { startIndex?: number } | undefined
+          e.extensionManager.extensions.find((ext) => ext.name === "footnote")?.options as
+            | { startIndex?: number }
+            | undefined
         )?.startIndex ?? 1;
 
       let count = 0;

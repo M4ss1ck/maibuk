@@ -185,10 +185,18 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
   };
 
   return (
-    <div ref={rootRef} className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2">
+    <div
+      ref={rootRef}
+      className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2"
+    >
       {/* Preset selector */}
       <div className="relative">
-        <Button variant="ghost" size="sm" onClick={() => toggleMenu("presets")} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => toggleMenu("presets")}
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
+        >
           <DimensionIcon className="w-4 h-4" />
           <span className="hidden sm:inline">{currentPreset.name}</span>
           <ChevronDownIcon className="w-3 h-3" />
@@ -212,14 +220,24 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
       {/* Templates */}
       <div className="relative">
-        <Button variant="ghost" size="sm" onClick={() => toggleMenu("templates")} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => toggleMenu("templates")}
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
+        >
           <LayoutTemplate className="w-4 h-4" />
           <span className="hidden sm:inline">{t("cover.templates")}</span>
         </Button>
         {openMenu === "templates" && (
           <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
             {TEMPLATES.map((tpl) => (
-              <button key={tpl.id} type="button" onClick={() => applyTemplate(tpl.id)} className="w-full px-4 py-2 text-left hover:bg-muted">
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => applyTemplate(tpl.id)}
+                className="w-full px-4 py-2 text-left hover:bg-muted"
+              >
                 {tpl.name}
               </button>
             ))}
@@ -231,19 +249,36 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
       {/* Add text */}
       <div className="relative">
-        <Button variant="ghost" size="sm" onClick={() => toggleMenu("text")} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => toggleMenu("text")}
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
+        >
           <TextIcon className="w-4 h-4" />
           <span className="hidden sm:inline">{t("cover.addText")}</span>
         </Button>
         {openMenu === "text" && (
           <div className="absolute top-full left-0 mt-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
-            <button type="button" onClick={() => addText("title")} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button
+              type="button"
+              onClick={() => addText("title")}
+              className="w-full px-4 py-2 text-left hover:bg-muted"
+            >
               {t("cover.toolbar.title")}
             </button>
-            <button type="button" onClick={() => addText("subtitle")} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button
+              type="button"
+              onClick={() => addText("subtitle")}
+              className="w-full px-4 py-2 text-left hover:bg-muted"
+            >
               {t("cover.toolbar.subtitle")}
             </button>
-            <button type="button" onClick={() => addText("author")} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button
+              type="button"
+              onClick={() => addText("author")}
+              className="w-full px-4 py-2 text-left hover:bg-muted"
+            >
               {t("cover.toolbar.author")}
             </button>
           </div>
@@ -251,27 +286,57 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
       </div>
 
       {/* Add image */}
-      <Button variant="ghost" size="sm" onClick={() => imageInputRef.current?.click()} className="gap-1 sm:gap-2 text-xs sm:text-sm" title={t("cover.addImage")}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => imageInputRef.current?.click()}
+        className="gap-1 sm:gap-2 text-xs sm:text-sm"
+        title={t("cover.addImage")}
+      >
         <ImageIcon className="w-4 h-4" />
         <span className="hidden sm:inline">{t("cover.addImage")}</span>
       </Button>
-      <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImage}
+        className="hidden"
+      />
 
       {/* Add shape */}
       <div className="relative">
-        <Button variant="ghost" size="sm" onClick={() => toggleMenu("shape")} className="gap-1 sm:gap-2 text-xs sm:text-sm" title={t("cover.addShape")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => toggleMenu("shape")}
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
+          title={t("cover.addShape")}
+        >
           <Shapes className="w-4 h-4" />
           <span className="hidden sm:inline">{t("cover.addShape")}</span>
         </Button>
         {openMenu === "shape" && (
           <div className="absolute top-full left-0 mt-1 w-44 bg-card border border-border rounded-lg shadow-lg z-50">
-            <button type="button" onClick={() => addShape("rect")} className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => addShape("rect")}
+              className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+            >
               <Square className="w-4 h-4" /> {t("cover.shape.rect")}
             </button>
-            <button type="button" onClick={() => addShape("ellipse")} className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => addShape("ellipse")}
+              className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+            >
               <Circle className="w-4 h-4" /> {t("cover.shape.ellipse")}
             </button>
-            <button type="button" onClick={() => addShape("line")} className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => addShape("line")}
+              className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+            >
               <Minus className="w-4 h-4" /> {t("cover.shape.line")}
             </button>
           </div>
@@ -291,7 +356,13 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
       <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
       {/* Selection actions */}
-      <Button variant="ghost" size="sm" onClick={() => duplicateSelected()} disabled={!selectedId} title={t("cover.duplicate")}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => duplicateSelected()}
+        disabled={!selectedId}
+        title={t("cover.duplicate")}
+      >
         <Copy className="w-4 h-4" />
       </Button>
       <Button
@@ -309,7 +380,15 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
       {/* Align selected to canvas */}
       {alignButtons.map(({ edge, Icon, label }) => (
-        <Button key={edge} variant="ghost" size="sm" onClick={() => alignSelected(edge)} disabled={!selectedId} title={label} className="hidden md:inline-flex">
+        <Button
+          key={edge}
+          variant="ghost"
+          size="sm"
+          onClick={() => alignSelected(edge)}
+          disabled={!selectedId}
+          title={label}
+          className="hidden md:inline-flex"
+        >
           <Icon className="w-4 h-4" />
         </Button>
       ))}
@@ -317,10 +396,20 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
       <div className="w-px h-6 bg-border mx-1 sm:mx-2 hidden md:block" />
 
       {/* Layout aid toggles */}
-      <Button variant={overlays ? "secondary" : "ghost"} size="sm" onClick={() => setOverlays(!overlays)} title={t("cover.toggleOverlays")}>
+      <Button
+        variant={overlays ? "secondary" : "ghost"}
+        size="sm"
+        onClick={() => setOverlays(!overlays)}
+        title={t("cover.toggleOverlays")}
+      >
         <Ruler className="w-4 h-4" />
       </Button>
-      <Button variant={snapping ? "secondary" : "ghost"} size="sm" onClick={() => setSnapping(!snapping)} title={t("cover.toggleSnapping")}>
+      <Button
+        variant={snapping ? "secondary" : "ghost"}
+        size="sm"
+        onClick={() => setSnapping(!snapping)}
+        title={t("cover.toggleSnapping")}
+      >
         <Magnet className="w-4 h-4" />
       </Button>
 
@@ -328,19 +417,45 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
       {/* Export */}
       <div className="relative">
-        <Button variant="primary" size="sm" onClick={() => toggleMenu("export")} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => toggleMenu("export")}
+          className="gap-1 sm:gap-2 text-xs sm:text-sm"
+        >
           <ExportIcon className="w-4 h-4" />
           <span className="hidden sm:inline">{t("cover.export")}</span>
         </Button>
         {openMenu === "export" && (
           <div className="absolute top-full right-0 mt-1 w-40 bg-card border border-border rounded-lg shadow-lg z-50">
-            <button type="button" onClick={() => { onExport("png"); closeMenu(); }} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button
+              type="button"
+              onClick={() => {
+                onExport("png");
+                closeMenu();
+              }}
+              className="w-full px-4 py-2 text-left hover:bg-muted"
+            >
               {t("cover.pngExport")}
             </button>
-            <button type="button" onClick={() => { onExport("jpeg"); closeMenu(); }} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button
+              type="button"
+              onClick={() => {
+                onExport("jpeg");
+                closeMenu();
+              }}
+              className="w-full px-4 py-2 text-left hover:bg-muted"
+            >
               {t("cover.jpgExport")}
             </button>
-            <button type="button" onClick={() => { onExport("pdf"); closeMenu(); }} className="w-full px-4 py-2 text-left hover:bg-muted">
+            <button
+              type="button"
+              onClick={() => {
+                onExport("pdf");
+                closeMenu();
+              }}
+              className="w-full px-4 py-2 text-left hover:bg-muted"
+            >
               {t("cover.pdfExport")}
             </button>
           </div>

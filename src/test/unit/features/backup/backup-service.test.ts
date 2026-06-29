@@ -8,6 +8,8 @@ const mockGetDatabase = vi.hoisted(() => vi.fn());
 const mockParseSqlStatements = vi.hoisted(() => vi.fn());
 const mockLoadBooks = vi.hoisted(() => vi.fn());
 const mockLoadChapters = vi.hoisted(() => vi.fn());
+const mockLoadNotes = vi.hoisted(() => vi.fn());
+const mockLoadCanvases = vi.hoisted(() => vi.fn());
 const mockSetChapterState = vi.hoisted(() => vi.fn());
 const mockBookState = vi.hoisted(() => ({
   books: [{ id: "book-1" }],
@@ -48,6 +50,14 @@ vi.mock("../../../../features/chapters/store", () => ({
     getState: () => mockChapterState,
     setState: mockSetChapterState,
   },
+}));
+
+vi.mock("../../../../features/notes/store", () => ({
+  useNoteStore: { getState: () => ({ loadNotes: mockLoadNotes }) },
+}));
+
+vi.mock("../../../../features/canvas/store", () => ({
+  useCanvasStore: { getState: () => ({ loadCanvases: mockLoadCanvases }) },
 }));
 
 const { BackupService } = await import("../../../../features/backup/backup-service");
@@ -122,6 +132,8 @@ describe("BackupService", () => {
     mockChapterState.currentBookId = "book-1";
     mockLoadBooks.mockResolvedValue(undefined);
     mockLoadChapters.mockResolvedValue(undefined);
+    mockLoadNotes.mockResolvedValue(undefined);
+    mockLoadCanvases.mockResolvedValue(undefined);
     service = new BackupService(mockAdapter);
   });
 
@@ -311,21 +323,21 @@ describe("BackupService", () => {
       expect(mockDb.execute).toHaveBeenNthCalledWith(2, "DELETE FROM book_versions");
       expect(mockDb.execute).toHaveBeenNthCalledWith(3, "DELETE FROM books");
       expect(mockDb.execute).toHaveBeenNthCalledWith(4, "DELETE FROM notes");
-      expect(mockDb.execute).toHaveBeenNthCalledWith(5, "DELETE FROM sync_tombstones");
+      expect(mockDb.execute).toHaveBeenNthCalledWith(5, "DELETE FROM canvases");
+      expect(mockDb.execute).toHaveBeenNthCalledWith(6, "DELETE FROM sync_tombstones");
+      expect(mockDb.execute).toHaveBeenNthCalledWith(7, 'INSERT INTO "books" VALUES ("book-1")');
       expect(mockDb.execute).toHaveBeenNthCalledWith(
-        6,
-        'INSERT INTO "books" VALUES ("book-1")'
-      );
-      expect(mockDb.execute).toHaveBeenNthCalledWith(
-        7,
+        8,
         'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")'
       );
       expect(mockDb.execute).toHaveBeenNthCalledWith(
-        8,
+        9,
         'INSERT INTO "chapters" VALUES ("chapter-1")'
       );
-      expect(mockDb.execute).toHaveBeenCalledTimes(8);
+      expect(mockDb.execute).toHaveBeenCalledTimes(9);
       expect(mockLoadBooks).toHaveBeenCalled();
+      expect(mockLoadNotes).toHaveBeenCalled();
+      expect(mockLoadCanvases).toHaveBeenCalled();
       expect(mockLoadChapters).toHaveBeenCalledWith("book-1");
     });
 
@@ -414,6 +426,7 @@ describe("BackupService", () => {
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM book_versions
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM books
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM notes
+        .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM canvases
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM sync_tombstones
         .mockRejectedValueOnce(new Error("UNIQUE constraint failed")); // INSERT fails
 
@@ -423,8 +436,49 @@ describe("BackupService", () => {
         "RESTORE_FAILED: Restore failed on statement 1/1: UNIQUE constraint failed"
       );
 
-      expect(mockDb.execute).toHaveBeenCalledTimes(6);
+      expect(mockDb.execute).toHaveBeenCalledTimes(7);
       expect(mockLoadBooks).not.toHaveBeenCalled();
+    });
+
+    it("normalizes and restores valid canvas documents", async () => {
+      const doc = JSON.stringify({
+        schemaVersion: 1,
+        nodes: [],
+        edges: [],
+        viewport: { x: 10, y: 20, zoom: 2 },
+      });
+      const statement = `INSERT INTO "canvases" ("id", "title", "doc", "pinned", "order", "created_at", "updated_at", "content_updated_at") VALUES ('canvas-1', 'Map', '${doc}', 0, 0, 1, 1, 1)`;
+      const normalizedDoc = JSON.stringify({
+        schemaVersion: 2,
+        nodes: [],
+        edges: [],
+        strokes: [],
+        viewport: { x: 10, y: 20, zoom: 2 },
+      });
+      const normalizedStatement = `INSERT INTO "canvases" ("id", "title", "doc", "pinned", "order", "created_at", "updated_at", "content_updated_at") VALUES ('canvas-1', 'Map', '${normalizedDoc}', 0, 0, 1, 1, 1)`;
+      mockAdapter.readBackup = vi.fn(async () => "restore canvas");
+      mockParseSqlStatements.mockImplementation((sql: string) =>
+        sql === "restore canvas" ? [statement] : []
+      );
+
+      await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+
+      expect(mockDb.execute).toHaveBeenCalledWith(normalizedStatement);
+      expect(mockLoadCanvases).toHaveBeenCalled();
+    });
+
+    it("rejects corrupt canvas documents before deleting existing data", async () => {
+      const statement = `INSERT INTO "canvases" ("id", "title", "doc", "pinned", "order", "created_at", "updated_at", "content_updated_at") VALUES ('canvas-1', 'Map', '{', 0, 0, 1, 1, 1)`;
+      mockAdapter.readBackup = vi.fn(async () => "restore corrupt canvas");
+      mockParseSqlStatements.mockImplementation((sql: string) =>
+        sql === "restore corrupt canvas" ? [statement] : []
+      );
+
+      await expect(
+        service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
+      ).rejects.toThrow("RESTORE_INVALID");
+
+      expect(mockDb.execute).not.toHaveBeenCalled();
     });
 
     it("skips pre-restore snapshot when current database is empty but still restores", async () => {

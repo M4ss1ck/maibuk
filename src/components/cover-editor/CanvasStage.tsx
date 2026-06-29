@@ -117,8 +117,16 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
       const top = obj.top ?? 0;
       const m = doc.safeMargin;
       const threshold = 8 / canvas.getZoom();
-      const sx = snapAxis([left, left + w / 2, left + w], [0, doc.width / 2, doc.width, m, doc.width - m], threshold);
-      const sy = snapAxis([top, top + h / 2, top + h], [0, doc.height / 2, doc.height, m, doc.height - m], threshold);
+      const sx = snapAxis(
+        [left, left + w / 2, left + w],
+        [0, doc.width / 2, doc.width, m, doc.width - m],
+        threshold
+      );
+      const sy = snapAxis(
+        [top, top + h / 2, top + h],
+        [0, doc.height / 2, doc.height, m, doc.height - m],
+        threshold
+      );
       if (sx) {
         obj.set({ left: left + sx.delta });
         const g = buildGuideLine("v", sx.line, doc);

@@ -9,10 +9,8 @@ vi.mock("react-i18next", () => ({
 const pasteWithoutFormatting = vi.fn();
 vi.mock("../../../../components/editor/useClipboardProbe", () => ({
   fallbackPaste: vi.fn(),
-  pasteWithoutFormatting: (...args: unknown[]) =>
-    pasteWithoutFormatting(...args),
-  useClipboardProbe: () =>
-    vi.fn().mockResolvedValue({ canPaste: true, hasFormatting: true }),
+  pasteWithoutFormatting: (...args: unknown[]) => pasteWithoutFormatting(...args),
+  useClipboardProbe: () => vi.fn().mockResolvedValue({ canPaste: true, hasFormatting: true }),
 }));
 
 vi.mock("../../../../lib/spellcheck", () => ({
@@ -57,13 +55,7 @@ function buildEditor() {
 describe("EditorContextMenu - Paste without formatting", () => {
   it("shows the item when the clipboard is formatted and pastes plain text on click", async () => {
     const setup = buildEditor();
-    render(
-      <EditorContextMenu
-        editor={setup.editor}
-        onInspect={vi.fn()}
-        onLookup={vi.fn()}
-      />,
-    );
+    render(<EditorContextMenu editor={setup.editor} onInspect={vi.fn()} onLookup={vi.fn()} />);
     fireEvent.contextMenu(setup.paragraph, { clientX: 10, clientY: 10 });
     const item = await screen.findByText("editor.pasteWithoutFormatting");
     fireEvent.click(item);

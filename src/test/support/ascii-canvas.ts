@@ -52,28 +52,20 @@ export function setupAsciiCanvas({
     .spyOn(HTMLCanvasElement.prototype, "getContext")
     .mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
 
-  const getRect = vi
-    .spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect")
-    .mockReturnValue({
-      x: 0,
-      y: 0,
-      top: 0,
-      left: 0,
-      right: width,
-      bottom: height,
-      width,
-      height,
-      toJSON: () => ({}),
-    });
+  const getRect = vi.spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: width,
+    bottom: height,
+    width,
+    height,
+    toJSON: () => ({}),
+  });
 
-  const widthDesc = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
-  const heightDesc = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
+  const widthDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  const heightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
   Object.defineProperty(HTMLElement.prototype, "clientWidth", {
     configurable: true,
     get: () => width,
@@ -102,7 +94,7 @@ export function setupAsciiCanvas({
     observe(target: Element) {
       this.cb(
         [{ isIntersecting: true, target } as IntersectionObserverEntry],
-        this as unknown as IntersectionObserver,
+        this as unknown as IntersectionObserver
       );
     }
     unobserve() {}
@@ -118,10 +110,8 @@ export function setupAsciiCanvas({
   // tests assert that animation was kicked off and can step frames by hand.
   const frameQueue: FrameRequestCallback[] = [];
   const raf = vi.fn((cb: FrameRequestCallback) => frameQueue.push(cb));
-  globalThis.requestAnimationFrame =
-    raf as unknown as typeof requestAnimationFrame;
-  globalThis.cancelAnimationFrame =
-    vi.fn() as unknown as typeof cancelAnimationFrame;
+  globalThis.requestAnimationFrame = raf as unknown as typeof requestAnimationFrame;
+  globalThis.cancelAnimationFrame = vi.fn() as unknown as typeof cancelAnimationFrame;
 
   const prevMatchMedia = window.matchMedia;
   window.matchMedia = ((query: string) => ({

@@ -98,7 +98,10 @@ export function HistoryMenuButton({
   };
 
   return (
-    <div ref={rootRef} className="relative inline-flex items-center rounded-lg border border-border bg-card">
+    <div
+      ref={rootRef}
+      className="relative inline-flex items-center rounded-lg border border-border bg-card"
+    >
       <button
         type="button"
         onClick={onOpenPanel}

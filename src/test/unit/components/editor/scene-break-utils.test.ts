@@ -49,9 +49,7 @@ describe("descriptor <-> attrs", () => {
       spaced: true,
     } as const;
 
-    expect(attrsToDescriptor(descriptorToAttrs(descriptor))).toMatchObject(
-      descriptor,
-    );
+    expect(attrsToDescriptor(descriptorToAttrs(descriptor))).toMatchObject(descriptor);
   });
 
   it("round-trips an image descriptor", () => {
@@ -62,8 +60,6 @@ describe("descriptor <-> attrs", () => {
       assetId: "id1",
     } as const;
 
-    expect(attrsToDescriptor(descriptorToAttrs(descriptor))).toMatchObject(
-      descriptor,
-    );
+    expect(attrsToDescriptor(descriptorToAttrs(descriptor))).toMatchObject(descriptor);
   });
 });

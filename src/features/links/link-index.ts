@@ -35,14 +35,12 @@ export async function reindexSource(args: ReindexSourceArgs): Promise<void> {
         link.headingId ?? null,
         link.label,
         now,
-      ],
+      ]
     );
   }
 }
 
-export async function getBacklinksForNote(
-  noteId: string,
-): Promise<BacklinkEntry[]> {
+export async function getBacklinksForNote(noteId: string): Promise<BacklinkEntry[]> {
   const db = await getDatabase();
   const rows = await db.select<{ source_id: string; title: string }[]>(
     `SELECT DISTINCT l.source_id AS source_id, n.title AS title
@@ -50,7 +48,7 @@ export async function getBacklinksForNote(
        JOIN notes n ON n.id = l.source_id
       WHERE l.source_type = 'note' AND l.target_type = 'note' AND l.target_id = ?
       ORDER BY n.title ASC`,
-    [noteId],
+    [noteId]
   );
   return rows.map((r) => ({ sourceId: r.source_id, title: r.title }));
 }

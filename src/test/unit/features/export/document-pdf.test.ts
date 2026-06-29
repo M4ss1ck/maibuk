@@ -1,9 +1,7 @@
 import { vi, describe, expect, it, beforeEach } from "vitest";
 
 const { mockToBlob, mockPdf } = vi.hoisted(() => {
-  const mockToBlob = vi
-    .fn()
-    .mockResolvedValue(new Blob(["fake-pdf"], { type: "application/pdf" }));
+  const mockToBlob = vi.fn().mockResolvedValue(new Blob(["fake-pdf"], { type: "application/pdf" }));
   const mockPdf = vi.fn().mockReturnValue({ toBlob: mockToBlob });
   return { mockToBlob, mockPdf };
 });

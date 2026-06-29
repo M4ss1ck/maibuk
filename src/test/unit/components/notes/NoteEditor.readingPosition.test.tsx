@@ -25,15 +25,13 @@ vi.mock("../../../../features/notes/store", () => {
     notes: [],
     loadNote: vi.fn(),
   };
-  const useNoteStore = (selector: (s: typeof state) => unknown) =>
-    selector(state);
+  const useNoteStore = (selector: (s: typeof state) => unknown) => selector(state);
   useNoteStore.getState = () => state;
   return { useNoteStore };
 });
 
 vi.mock("../../../../features/books/store", () => ({
-  useBookStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ books: [] }),
+  useBookStore: (selector: (state: Record<string, unknown>) => unknown) => selector({ books: [] }),
 }));
 
 vi.mock("../../../../features/chapters/store", () => ({
@@ -100,7 +98,7 @@ describe("NoteEditor reading-position wiring", () => {
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>()}
         onBack={vi.fn()}
         suppressRestore={true}
-      />,
+      />
     );
 
     const last = editorProps[editorProps.length - 1];

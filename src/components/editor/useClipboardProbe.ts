@@ -25,8 +25,7 @@ async function probeClipboard(): Promise<ClipboardProbe> {
   const snap = await readClipboardSnapshot();
   const canPaste = Boolean(snap.text) || Boolean(snap.html) || snap.hasImage;
   const hasFormatting =
-    (snap.html !== null && hasRichFormatting(snap.html)) ||
-    looksLikeMarkdown(snap.text);
+    (snap.html !== null && hasRichFormatting(snap.html)) || looksLikeMarkdown(snap.text);
   return { canPaste, hasFormatting };
 }
 
@@ -78,9 +77,7 @@ export async function pasteWithoutFormatting(editor: Editor): Promise<void> {
  * Returns a `consumeProbe` function: call it once per menu open to get the
  * latest probe promise (or a resolved-empty probe if none is pending).
  */
-export function useClipboardProbe(
-  editor: Editor,
-): () => Promise<ClipboardProbe> {
+export function useClipboardProbe(editor: Editor): () => Promise<ClipboardProbe> {
   const probeRef = useRef<Promise<ClipboardProbe> | null>(null);
 
   useEffect(() => {
@@ -96,9 +93,7 @@ export function useClipboardProbe(
   }, [editor]);
 
   return useCallback(() => {
-    const promise =
-      probeRef.current ??
-      Promise.resolve({ canPaste: false, hasFormatting: false });
+    const promise = probeRef.current ?? Promise.resolve({ canPaste: false, hasFormatting: false });
     probeRef.current = null;
     return promise;
   }, []);

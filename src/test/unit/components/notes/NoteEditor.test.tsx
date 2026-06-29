@@ -42,7 +42,7 @@ vi.mock("../../../../lib/platform", () => ({
       close: vi.fn(() => Promise.resolve()),
       exportData: vi.fn(() => Promise.resolve(new Uint8Array())),
       importData: vi.fn(() => Promise.resolve()),
-    }),
+    })
   ),
 }));
 
@@ -102,13 +102,7 @@ describe("NoteEditor", () => {
     vi.useFakeTimers();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(
-      <NoteEditor
-        note={buildNote({ pinned: false })}
-        onSave={onSave}
-        onBack={vi.fn()}
-      />,
-    );
+    render(<NoteEditor note={buildNote({ pinned: false })} onSave={onSave} onBack={vi.fn()} />);
 
     expect(screen.queryByPlaceholderText("Note title")).not.toBeInTheDocument();
     expect(screen.getByText("Initial")).toBeInTheDocument();
@@ -133,40 +127,28 @@ describe("NoteEditor", () => {
   it("saves immediately when the manual save button is clicked", async () => {
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(
-      <NoteEditor
-        note={buildNote({ title: "Initial" })}
-        onSave={onSave}
-        onBack={vi.fn()}
-      />,
-    );
+    render(<NoteEditor note={buildNote({ title: "Initial" })} onSave={onSave} onBack={vi.fn()} />);
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Save status/ }));
     });
 
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "note-1", title: "Initial" }),
+      expect.objectContaining({ id: "note-1", title: "Initial" })
     );
   });
 
   it("saves immediately when Ctrl+S is pressed", async () => {
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(
-      <NoteEditor
-        note={buildNote({ title: "Initial" })}
-        onSave={onSave}
-        onBack={vi.fn()}
-      />,
-    );
+    render(<NoteEditor note={buildNote({ title: "Initial" })} onSave={onSave} onBack={vi.fn()} />);
 
     await act(async () => {
       fireEvent.keyDown(window, { key: "s", ctrlKey: true });
     });
 
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "note-1", title: "Initial" }),
+      expect.objectContaining({ id: "note-1", title: "Initial" })
     );
   });
 
@@ -180,7 +162,7 @@ describe("NoteEditor", () => {
         onBack={vi.fn()}
         onReturnToBook={onReturnToBook}
         returnLabel="My Book"
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Back to My Book" }));
@@ -193,7 +175,7 @@ describe("NoteEditor", () => {
         note={buildNote({})}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
         onBack={vi.fn()}
-      />,
+      />
     );
 
     // No book label is rendered for the gallery-back case…

@@ -26,6 +26,7 @@ export function GlobalShortcuts() {
     const list: { id: string; label: string; keys: string[] }[] = [
       { id: "global.gotoProjects", label: t("shortcuts.gotoProjects"), keys: ["g", "p"] },
       { id: "global.gotoNotes", label: t("shortcuts.gotoNotes"), keys: ["g", "n"] },
+      { id: "global.gotoCanvas", label: t("shortcuts.gotoCanvas"), keys: ["g", "c"] },
       { id: "global.gotoMetrics", label: t("shortcuts.gotoMetrics"), keys: ["g", "m"] },
       { id: "global.gotoSettings", label: t("shortcuts.gotoSettings"), keys: ["g", "s"] },
       { id: "global.toggleTheme", label: t("shortcuts.toggleTheme"), keys: ["g", "t"] },
@@ -65,6 +66,20 @@ export function GlobalShortcuts() {
         { id: "editor.zoomIn", label: t("shortcuts.zoomIn"), keys: ["Ctrl++"] },
         { id: "editor.zoomOut", label: t("shortcuts.zoomOut"), keys: ["Ctrl+-"] },
         { id: "editor.zoomReset", label: t("shortcuts.zoomReset"), keys: ["Ctrl+0"] }
+      );
+    }
+
+    if (/^\/canvas\/[^/]+$/.test(location.pathname)) {
+      list.push(
+        { id: "canvas.toolSelect", label: t("canvas.toolSelect"), keys: ["V"] },
+        { id: "canvas.toolPen", label: t("canvas.toolPen"), keys: ["P"] },
+        { id: "canvas.toolEraser", label: t("canvas.toolEraser"), keys: ["E"] },
+        { id: "canvas.addTextNode", label: t("canvas.addTextNode"), keys: ["T"] },
+        { id: "canvas.addNoteRef", label: t("canvas.addNoteRef"), keys: ["N"] },
+        { id: "canvas.zoomIn", label: t("canvas.zoomIn"), keys: ["Ctrl++"] },
+        { id: "canvas.zoomOut", label: t("canvas.zoomOut"), keys: ["Ctrl+-"] },
+        { id: "canvas.fitView", label: t("canvas.fitView"), keys: ["Shift+1"] },
+        { id: "canvas.lock", label: t("canvas.lockInteractivity"), keys: ["L"] }
       );
     }
 
@@ -112,6 +127,14 @@ export function GlobalShortcuts() {
       },
     },
     {
+      sequence: ["g", "c"],
+      onTrigger: () => {
+        if (location.pathname !== "/canvas") {
+          navigate("/canvas");
+        }
+      },
+    },
+    {
       sequence: ["g", "t"],
       onTrigger: () => {
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -145,19 +168,19 @@ export function GlobalShortcuts() {
         // While editing, push only the current content instead of a full sync.
         const bookMatch = location.pathname.match(/^\/book\/([^/]+)$/);
         if (bookMatch) {
-          store.syncSingleBook(bookMatch[1], passphrase, skipConflicts).catch(() => { });
+          store.syncSingleBook(bookMatch[1], passphrase, skipConflicts).catch(() => {});
           return;
         }
 
         if (location.pathname.startsWith("/notes/")) {
           const { currentNote } = useNoteStore.getState();
           if (currentNote) {
-            store.syncSingleNote(currentNote.id, passphrase, skipConflicts).catch(() => { });
+            store.syncSingleNote(currentNote.id, passphrase, skipConflicts).catch(() => {});
             return;
           }
         }
 
-        store.syncAll(passphrase, skipConflicts).catch(() => { });
+        store.syncAll(passphrase, skipConflicts).catch(() => {});
       },
     },
     {

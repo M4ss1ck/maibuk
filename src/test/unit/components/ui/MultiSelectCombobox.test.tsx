@@ -11,12 +11,7 @@ describe("MultiSelectCombobox", () => {
     const user = userEvent.setup();
 
     render(
-      <MultiSelectCombobox
-        value={[]}
-        onChange={() => {}}
-        options={options}
-        placeholder="Any tag"
-      />,
+      <MultiSelectCombobox value={[]} onChange={() => {}} options={options} placeholder="Any tag" />
     );
 
     await user.click(screen.getByRole("combobox"));
@@ -56,7 +51,7 @@ describe("MultiSelectCombobox", () => {
     const onChange = vi.fn();
 
     render(
-      <MultiSelectCombobox value={["draft"]} onChange={onChange} options={options} allowCustom />,
+      <MultiSelectCombobox value={["draft"]} onChange={onChange} options={options} allowCustom />
     );
 
     await user.click(screen.getByRole("combobox"));
@@ -76,7 +71,7 @@ describe("MultiSelectCombobox", () => {
         onChange={onChange}
         options={options}
         removeLabel={(tag) => `Remove ${tag}`}
-      />,
+      />
     );
 
     await user.click(screen.getByRole("button", { name: "Remove draft" }));
@@ -87,14 +82,7 @@ describe("MultiSelectCombobox", () => {
   it("exposes the text input through its ref", () => {
     const inputRef = createRef<HTMLInputElement>();
 
-    render(
-      <MultiSelectCombobox
-        ref={inputRef}
-        value={[]}
-        onChange={() => {}}
-        options={options}
-      />,
-    );
+    render(<MultiSelectCombobox ref={inputRef} value={[]} onChange={() => {}} options={options} />);
 
     inputRef.current?.focus();
 

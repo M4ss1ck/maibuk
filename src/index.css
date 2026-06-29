@@ -196,6 +196,117 @@ option {
   word-break: break-word;
 }
 
+/* Canvas text nodes use this in both editable and idle modes. */
+.canvas-node-content {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.canvas-node-content p {
+  margin: 0;
+}
+
+.canvas-node-content h1,
+.canvas-node-content h2,
+.canvas-node-content h3 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.canvas-node-content h1 {
+  font-size: 1.5em;
+}
+
+.canvas-node-content h2 {
+  font-size: 1.25em;
+}
+
+.canvas-node-content h3 {
+  font-size: 1.125em;
+}
+
+.canvas-node-content ul,
+.canvas-node-content ol {
+  margin: 0;
+  padding-left: 1.25em;
+}
+
+.canvas-node-content ul {
+  list-style-type: disc;
+}
+
+.canvas-node-content ol {
+  list-style-type: decimal;
+}
+
+.canvas-node-content blockquote {
+  margin: 0;
+  border-left: 2px solid var(--color-border);
+  padding-left: 0.75em;
+  color: var(--color-muted-foreground);
+}
+
+.canvas-node-content code {
+  border-radius: 0.25em;
+  background-color: var(--color-muted);
+  padding: 0.125em 0.25em;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.canvas-node-content pre {
+  margin: 0;
+  overflow-x: auto;
+  border-radius: 0.5em;
+  background-color: var(--color-muted);
+  padding: 0.75em;
+}
+
+.canvas-node-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.canvas-node-content mark {
+  background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.canvas-node-content a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+/*
+ * Rich-content parity for idle and active canvas nodes. Tables, images,
+ * footnotes, and scene breaks share most styling with the main editor through
+ * global rules; the table cell borders/headers below are otherwise scoped to
+ * `.editor-content`, so they are mirrored here. These selectors deliberately
+ * never touch resize controls, connection handles, portals, or dialogs.
+ */
+/*
+ * While dragging a connection, reveal every node's handles so the available
+ * connection targets are visible. Handles are otherwise hover-only, and text
+ * nodes have no border to hint at where they can be connected.
+ */
+.canvas-connecting .react-flow__handle {
+  opacity: 1;
+}
+
+.canvas-node-content table th,
+.canvas-node-content table td {
+  border: 1px solid var(--color-table-border);
+  padding: 0 0.5em;
+  vertical-align: top;
+  text-align: left;
+}
+
+.canvas-node-content table th {
+  background-color: var(--color-table-header);
+  font-weight: 600;
+}
+
 /* Tiptap editor styles */
 .editor-content p {
   margin: 1em 0;
@@ -295,7 +406,11 @@ option {
   border-color: var(--color-primary);
 }
 
-.editor-content ul[data-type="taskList"] li[data-checked] > label input[type="checkbox"]:checked::after {
+.editor-content
+  ul[data-type="taskList"]
+  li[data-checked]
+  > label
+  input[type="checkbox"]:checked::after {
   transform: rotate(45deg) scale(1);
 }
 
@@ -742,6 +857,10 @@ option {
   table-layout: fixed;
 }
 
+.canvas-node-content .editor-table {
+  margin: 0.75em 0;
+}
+
 .editor-content table th,
 .editor-content table td {
   border: 1px solid var(--color-table-border);
@@ -785,8 +904,7 @@ option {
 
 .editor-content table th:hover,
 .editor-content table td:hover {
-  box-shadow: inset -2px 0 0
-    color-mix(in srgb, var(--color-primary) 60%, transparent);
+  box-shadow: inset -2px 0 0 color-mix(in srgb, var(--color-primary) 60%, transparent);
 }
 
 /* Selected cell */
@@ -799,6 +917,10 @@ option {
   margin: 0.5em 0;
   position: relative;
   transition: width 0.15s ease;
+}
+
+.canvas-node-content .editor-image-figure {
+  margin: 0.5em 0;
 }
 
 .editor-image-figure.align-left {
@@ -854,7 +976,7 @@ option {
  * The "add a caption" affordance appears on hover, focus, or selection.
  */
 .editor-image-figure:not(:hover):not(.ProseMirror-selectednode)
-  .image-caption[data-empty="true"]:not(:focus-within) {
+.image-caption[data-empty="true"]:not(:focus-within) {
   height: 0;
   padding: 0;
   opacity: 0;
@@ -1027,6 +1149,10 @@ option {
 .footnote-section {
   margin-top: 3rem;
   padding-top: 1rem;
+}
+
+.canvas-node-content .footnote-section {
+  margin-top: 1.5rem;
 }
 
 .footnote-divider {

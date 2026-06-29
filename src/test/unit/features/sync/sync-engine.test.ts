@@ -766,7 +766,15 @@ describe("syncVersions — pure union", () => {
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("book_versions")) {
         return [
-          { id: "ver-local", checksum: "chk-local", name: "Local", trigger_type: "manual", created_at: 1000, word_count: 500, snapshot: "{}" },
+          {
+            id: "ver-local",
+            checksum: "chk-local",
+            name: "Local",
+            trigger_type: "manual",
+            created_at: 1000,
+            word_count: 500,
+            snapshot: "{}",
+          },
         ];
       }
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
@@ -821,7 +829,15 @@ describe("syncVersions — pure union", () => {
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("book_versions")) {
         return [
-          { id: "ver-shared", checksum: "chk-shared", name: "Shared", trigger_type: "manual", created_at: 1000, word_count: 500, snapshot: "{}" },
+          {
+            id: "ver-shared",
+            checksum: "chk-shared",
+            name: "Shared",
+            trigger_type: "manual",
+            created_at: 1000,
+            word_count: 500,
+            snapshot: "{}",
+          },
         ];
       }
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
@@ -875,9 +891,7 @@ describe("syncVersions — pure union", () => {
       data: new Uint8Array([1, 2, 3]),
     });
     mockDecrypt.mockResolvedValue('{"book":{"title":"Remote"}}');
-    mockComputeChecksum
-      .mockResolvedValueOnce("local-checksum")
-      .mockResolvedValueOnce("chk-remote");
+    mockComputeChecksum.mockResolvedValueOnce("local-checksum").mockResolvedValueOnce("chk-remote");
 
     mockListRemoteBooks.mockResolvedValue([
       { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
@@ -896,14 +910,7 @@ describe("syncVersions — pure union", () => {
     );
     expect(insertCall).toBeDefined();
     expect(insertCall![1]).toEqual(
-      expect.arrayContaining([
-        "ver-remote",
-        "book-1",
-        "Remote Draft",
-        "manual",
-        2000,
-        600,
-      ])
+      expect.arrayContaining(["ver-remote", "book-1", "Remote Draft", "manual", 2000, 600])
     );
   });
 
@@ -951,9 +958,7 @@ describe("syncVersions — pure union", () => {
       (call[0] as string).includes("INSERT OR IGNORE INTO book_versions")
     );
     expect(insertCall).toBeDefined();
-    expect(insertCall![1]).toEqual(
-      expect.arrayContaining(["ver-remote", "chk-remote"])
-    );
+    expect(insertCall![1]).toEqual(expect.arrayContaining(["ver-remote", "chk-remote"]));
   });
 
   it("skips a version that fails to decrypt and continues syncing", async () => {
@@ -1015,9 +1020,7 @@ describe("syncVersions — pure union", () => {
       },
     ]);
     mockPullVersionBlob.mockResolvedValue({ data: new Uint8Array([1, 2, 3]) });
-    mockDecrypt.mockRejectedValue(
-      new FakeSyncCryptoError("INVALID_PASSPHRASE", "bad passphrase")
-    );
+    mockDecrypt.mockRejectedValue(new FakeSyncCryptoError("INVALID_PASSPHRASE", "bad passphrase"));
 
     // Local book is newer → it pushes, so the failing decrypt is the version's.
     mockListRemoteBooks.mockResolvedValue([
@@ -1025,9 +1028,7 @@ describe("syncVersions — pure union", () => {
     ]);
     const onConflict = vi.fn();
 
-    await expect(syncBook("book-1", "pass", onConflict)).rejects.toThrow(
-      "bad passphrase"
-    );
+    await expect(syncBook("book-1", "pass", onConflict)).rejects.toThrow("bad passphrase");
   });
 
   it("creates pre-sync version before applyBookSnapshot on a conflict-resolved pull", async () => {
@@ -1060,7 +1061,15 @@ describe("syncVersions — pure union", () => {
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("book_versions")) {
         return [
-          { id: "ver-local", checksum: "chk-local", name: null, trigger_type: "manual", created_at: 1000, word_count: 500, snapshot: "{}" },
+          {
+            id: "ver-local",
+            checksum: "chk-local",
+            name: null,
+            trigger_type: "manual",
+            created_at: 1000,
+            word_count: 500,
+            snapshot: "{}",
+          },
         ];
       }
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
@@ -1274,7 +1283,10 @@ describe("syncAllNotes — note sync parity with books", () => {
       { remoteId: "r1", noteId: "note-1", checksum: "remote-checksum", updatedAt: 5000 },
     ]);
     const onConflict = vi.fn().mockResolvedValue("pull");
-    mockPullNoteBlob.mockResolvedValue({ data: new Uint8Array([1, 2, 3]), checksum: "remote-checksum" });
+    mockPullNoteBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
     mockDecrypt.mockResolvedValue('{"note":{"id":"note-1"}}');
 
     const result = await syncAllBooks("pass", onConflict);
@@ -1295,7 +1307,10 @@ describe("syncAllNotes — note sync parity with books", () => {
     mockListRemoteNotes.mockResolvedValue([
       { remoteId: "r1", noteId: "note-remote", checksum: "remote-checksum", updatedAt: 5000 },
     ]);
-    mockPullNoteBlob.mockResolvedValue({ data: new Uint8Array([1, 2, 3]), checksum: "remote-checksum" });
+    mockPullNoteBlob.mockResolvedValue({
+      data: new Uint8Array([1, 2, 3]),
+      checksum: "remote-checksum",
+    });
     mockDecrypt.mockResolvedValue('{"note":{"id":"note-remote"}}');
 
     const result = await syncAllBooks("pass", vi.fn());

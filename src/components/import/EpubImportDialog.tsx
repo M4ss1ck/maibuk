@@ -161,7 +161,9 @@ function PreviewStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function groupIssues(issues: CompatibilityIssue[]): Record<CompatibilityIssue["severity"], CompatibilityIssue[]> {
+function groupIssues(
+  issues: CompatibilityIssue[]
+): Record<CompatibilityIssue["severity"], CompatibilityIssue[]> {
   return issues.reduce<Record<CompatibilityIssue["severity"], CompatibilityIssue[]>>(
     (groups, issue) => {
       groups[issue.severity].push(issue);

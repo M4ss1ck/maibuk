@@ -7,11 +7,7 @@ import { SceneBreakMenu } from "./SceneBreakMenu";
 import { FindReplace } from "./FindReplace";
 import { ImageInsertDialog } from "./ImageInsertDialog";
 import { FootnoteDialog } from "./FootnoteDialog";
-import {
-  LinkDialog,
-  type InternalTarget,
-  type InternalTargetChildrenLoader,
-} from "./LinkDialog";
+import { LinkDialog, type InternalTarget, type InternalTargetChildrenLoader } from "./LinkDialog";
 import { HtmlViewPanel } from "./HtmlViewPanel";
 import { EditorContextMenu } from "./EditorContextMenu";
 import { findBlockOffsetInHtml } from "./HtmlInspectMenu";
@@ -117,23 +113,13 @@ export function EditorToolbar({
     useSettingsStore((state) => state.toolbarExpanded),
     useSettingsStore((state) => state.setToolbarExpanded),
   ];
-  const spellCheckEnabled = useSettingsStore(
-    (state) => state.spellCheckEnabled,
-  );
-  const setSpellCheckEnabled = useSettingsStore(
-    (state) => state.setSpellCheckEnabled,
-  );
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
+  const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
   const showNotesChapter = useSettingsStore((state) => state.showNotesChapter);
-  const setShowNotesChapter = useSettingsStore(
-    (state) => state.setShowNotesChapter,
-  );
+  const setShowNotesChapter = useSettingsStore((state) => state.setShowNotesChapter);
   const bookSidePanelTab = useSettingsStore((state) => state.bookSidePanelTab);
-  const setBookSidePanelTab = useSettingsStore(
-    (state) => state.setBookSidePanelTab,
-  );
-  const dictionaryOpenInBrowser = useSettingsStore(
-    (state) => state.dictionaryOpenInBrowser,
-  );
+  const setBookSidePanelTab = useSettingsStore((state) => state.setBookSidePanelTab);
+  const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
 
   // Track editor focus with a delayed blur so toolbar clicks still read it as focused
   const editorWasFocusedRef = useRef(false);
@@ -160,7 +146,7 @@ export function EditorToolbar({
         pendingInspectRef.current = blockIndex;
       }
     },
-    [editor],
+    [editor]
   );
 
   const openFindReplace = useCallback(() => {
@@ -180,7 +166,7 @@ export function EditorToolbar({
         pendingInspectRef.current = null;
       }
     },
-    [editor],
+    [editor]
   );
   useEffect(() => {
     const dom = editor.view.dom;
@@ -207,9 +193,7 @@ export function EditorToolbar({
       const highlightAttrs = e.getAttributes("highlight");
 
       return {
-        fontSize: attrs.fontSize
-          ? attrs.fontSize.replace("px", "")
-          : DEFAULT_FONT_SIZE,
+        fontSize: attrs.fontSize ? attrs.fontSize.replace("px", "") : DEFAULT_FONT_SIZE,
         lineHeight: attrs.lineHeight || "1.5",
         fontFamily: attrs.fontFamily || "Literata, serif",
         color: attrs.color || "",
@@ -292,7 +276,7 @@ export function EditorToolbar({
       setDictionaryWord(word);
       setShowDictionaryDialog(true);
     },
-    [dictionaryOpenInBrowser, spellCheckLanguage],
+    [dictionaryOpenInBrowser, spellCheckLanguage]
   );
 
   const handleSpellCheckLanguageChange = useCallback(
@@ -300,7 +284,7 @@ export function EditorToolbar({
       editor.commands.setSpellCheckLanguage(nextLanguage);
       onSpellCheckLanguageChange?.(nextLanguage);
     },
-    [editor, onSpellCheckLanguageChange],
+    [editor, onSpellCheckLanguageChange]
   );
 
   useEffect(() => {
@@ -455,11 +439,7 @@ export function EditorToolbar({
             type="button"
             onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
             className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
-            title={
-              isToolbarExpanded
-                ? t("editor.hideToolbar")
-                : t("editor.showToolbar")
-            }
+            title={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
           >
             {isToolbarExpanded ? (
               <ChevronUp className="w-4 h-4" />
@@ -479,9 +459,7 @@ export function EditorToolbar({
 
           <ColorPicker
             value={editorState.highlightColor}
-            onChange={(color) =>
-              editor.chain().focus().setHighlight({ color }).run()
-            }
+            onChange={(color) => editor.chain().focus().setHighlight({ color }).run()}
             onClear={() => editor.chain().focus().unsetHighlight().run()}
             onToggle={() =>
               editor
@@ -561,33 +539,31 @@ export function EditorToolbar({
             <List className="w-4 h-4" />
           </ToolbarButton>
 
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          isActive={editorState.isOrderedList}
-          title={t("editor.numberedList")}
-        >
-          <ListOrdered className="w-4 h-4" />
-        </ToolbarButton>
-
-        {editor.schema.nodes.taskList !== undefined && (
           <ToolbarButton
-            onClick={() =>
-              (editor.commands as any).toggleTaskList()
-            }
-            isActive={editorState.isTaskList}
-            title={t("editor.taskList")}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            isActive={editorState.isOrderedList}
+            title={t("editor.numberedList")}
           >
-            <ListChecks className="w-4 h-4" />
+            <ListOrdered className="w-4 h-4" />
           </ToolbarButton>
-        )}
 
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          isActive={editorState.isBlockquote}
-          title={t("editor.quote")}
-        >
-          <Quote className="w-4 h-4" />
-        </ToolbarButton>
+          {editor.schema.nodes.taskList !== undefined && (
+            <ToolbarButton
+              onClick={() => (editor.commands as any).toggleTaskList()}
+              isActive={editorState.isTaskList}
+              title={t("editor.taskList")}
+            >
+              <ListChecks className="w-4 h-4" />
+            </ToolbarButton>
+          )}
+
+          <ToolbarButton
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            isActive={editorState.isBlockquote}
+            title={t("editor.quote")}
+          >
+            <Quote className="w-4 h-4" />
+          </ToolbarButton>
 
           <Divider />
 
@@ -614,18 +590,14 @@ export function EditorToolbar({
           </ToolbarButton>
 
           <ToolbarButton
-            onClick={() =>
-              editor.chain().focus().increaseFirstLineIndent().run()
-            }
+            onClick={() => editor.chain().focus().increaseFirstLineIndent().run()}
             title={t("editor.increaseFirstLineIndent")}
           >
             <WrapText className="w-4 h-4" />
           </ToolbarButton>
 
           <ToolbarButton
-            onClick={() =>
-              editor.chain().focus().decreaseFirstLineIndent().run()
-            }
+            onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()}
             title={t("editor.decreaseFirstLineIndent")}
           >
             <WrapText className="w-4 h-4 scale-x-[-1]" />
@@ -660,9 +632,7 @@ export function EditorToolbar({
           <Divider />
 
           <ToolbarButton
-            onClick={() =>
-              editor.chain().focus().unsetAllMarks().clearNodes().run()
-            }
+            onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
             title={t("editor.removeFormatting")}
           >
             <RemoveFormatting className="w-4 h-4" />
@@ -676,10 +646,7 @@ export function EditorToolbar({
 
           <TableMenu editor={editor} />
 
-          <ToolbarButton
-            onClick={() => setShowImageDialog(true)}
-            title={t("editor.insertImage")}
-          >
+          <ToolbarButton onClick={() => setShowImageDialog(true)} title={t("editor.insertImage")}>
             <Image className="w-4 h-4" />
           </ToolbarButton>
 
@@ -742,10 +709,7 @@ export function EditorToolbar({
 
           {(onExportMarkdown || onExportPdf || onExportImage) && <Divider />}
           {onExportMarkdown && (
-            <ToolbarButton
-              onClick={onExportMarkdown}
-              title={t("editor.exportMarkdown")}
-            >
+            <ToolbarButton onClick={onExportMarkdown} title={t("editor.exportMarkdown")}>
               <FileDown className="w-4 h-4" />
             </ToolbarButton>
           )}
@@ -755,10 +719,7 @@ export function EditorToolbar({
             </ToolbarButton>
           )}
           {onExportImage && (
-            <ToolbarButton
-              onClick={onExportImage}
-              title={t("editor.exportImage")}
-            >
+            <ToolbarButton onClick={onExportImage} title={t("editor.exportImage")}>
               <ImageDown className="w-4 h-4" />
             </ToolbarButton>
           )}
@@ -825,11 +786,7 @@ interface SpellCheckLanguageMenuProps {
   label: string;
 }
 
-function SpellCheckLanguageMenu({
-  value,
-  onChange,
-  label,
-}: SpellCheckLanguageMenuProps) {
+function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMenuProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -894,7 +851,7 @@ function SpellCheckLanguageMenu({
               </button>
             ))}
           </div>,
-          document.body,
+          document.body
         )}
     </>
   );

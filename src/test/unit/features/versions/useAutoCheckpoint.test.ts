@@ -25,9 +25,7 @@ describe("useAutoCheckpoint", () => {
 
   it("does not checkpoint before the word-change threshold is crossed", () => {
     mockCreateVersion.mockResolvedValue(null);
-    renderHook(() =>
-      useAutoCheckpoint({ bookId: "book-1", wordCount: 100, enabled: true })
-    );
+    renderHook(() => useAutoCheckpoint({ bookId: "book-1", wordCount: 100, enabled: true }));
 
     vi.advanceTimersByTime(2 * 60 * 1000);
 
@@ -78,8 +76,7 @@ describe("useAutoCheckpoint", () => {
   it("resets the baseline when bookId changes so a book switch does not trigger a checkpoint", async () => {
     mockCreateVersion.mockResolvedValue({ id: "ver-1" });
     const { rerender } = renderHook(
-      ({ bookId, wordCount }) =>
-        useAutoCheckpoint({ bookId, wordCount, enabled: true }),
+      ({ bookId, wordCount }) => useAutoCheckpoint({ bookId, wordCount, enabled: true }),
       { initialProps: { bookId: "book-1", wordCount: 1000 } }
     );
 

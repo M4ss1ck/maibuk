@@ -13,15 +13,11 @@ export function VersionPreview({ snapshot }: VersionPreviewProps) {
     snapshot.chapters[0]?.id ?? null
   );
 
-  const selectedChapter = snapshot.chapters.find(
-    (c) => c.id === selectedChapterId
-  );
+  const selectedChapter = snapshot.chapters.find((c) => c.id === selectedChapterId);
 
   return (
     <div className="flex flex-col gap-3 h-full min-h-0">
-      <h3 className="text-sm font-semibold text-foreground shrink-0">
-        {snapshot.book.title}
-      </h3>
+      <h3 className="text-sm font-semibold text-foreground shrink-0">{snapshot.book.title}</h3>
 
       {/* Chapter list */}
       <div className="flex flex-col gap-0.5 max-h-36 overflow-auto shrink-0">
@@ -31,9 +27,7 @@ export function VersionPreview({ snapshot }: VersionPreviewProps) {
             type="button"
             onClick={() => setSelectedChapterId(chapter.id)}
             className={`text-left px-2 py-1.5 rounded text-sm transition-colors w-full ${
-              selectedChapterId === chapter.id
-                ? "bg-primary/10 text-primary"
-                : "hover:bg-muted"
+              selectedChapterId === chapter.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
             }`}
           >
             <span className="truncate block font-medium">{chapter.title}</span>

@@ -11,9 +11,7 @@ import type {
 
 // --- Helpers ---
 
-function settings(
-  overrides: Partial<PasteCleanupSettings> = {},
-): PasteCleanupSettings {
+function settings(overrides: Partial<PasteCleanupSettings> = {}): PasteCleanupSettings {
   return {
     preset: "keepAll",
     options: { ...PASTE_CLEANUP_PRESETS.keepAll },
@@ -22,9 +20,7 @@ function settings(
   };
 }
 
-function withOptions(
-  partial: Partial<PasteCleanupOptions>,
-): PasteCleanupSettings {
+function withOptions(partial: Partial<PasteCleanupOptions>): PasteCleanupSettings {
   return settings({
     options: { ...PASTE_CLEANUP_PRESETS.keepAll, ...partial },
   });
@@ -56,20 +52,14 @@ function clean(html: string, s: PasteCleanupSettings): HTMLElement {
 
 describe("cleanPastedHtml() — hygiene", () => {
   it("unwraps a Google Docs <b> wrapper", () => {
-    const out = clean(
-      '<b id="docs-internal-guid-abc"><p>Hi</p></b>',
-      settings(),
-    );
+    const out = clean('<b id="docs-internal-guid-abc"><p>Hi</p></b>', settings());
     expect(out.querySelector("b")).toBeNull();
     expect(out.querySelectorAll("p")).toHaveLength(1);
     expect(out.textContent).toBe("Hi");
   });
 
   it("unwraps a Google Docs <span> wrapper", () => {
-    const out = clean(
-      '<span id="docs-internal-guid-xyz"><p>Body</p></span>',
-      settings(),
-    );
+    const out = clean('<span id="docs-internal-guid-xyz"><p>Body</p></span>', settings());
     expect(out.querySelector("span")).toBeNull();
     expect(out.textContent).toBe("Body");
   });
@@ -88,7 +78,7 @@ describe("cleanPastedHtml() — hygiene", () => {
   it("strips mso- style declarations and Mso classes", () => {
     const out = clean(
       '<p class="MsoNormal" style="mso-pagination:none;color:red">x</p>',
-      settings(),
+      settings()
     );
     const p = out.querySelector("p");
     expect(p?.hasAttribute("class")).toBe(false);
@@ -98,7 +88,7 @@ describe("cleanPastedHtml() — hygiene", () => {
   it("removes docs-/kix- ids, classes and data attributes", () => {
     const out = clean(
       '<p id="docs-x" class="kix-line" data-kix-id="1" data-x="keep">t</p>',
-      settings(),
+      settings()
     );
     const p = out.querySelector("p");
     expect(p?.hasAttribute("id")).toBe(false);
@@ -144,7 +134,7 @@ describe("cleanPastedHtml() — keepAll preset", () => {
   it("preserves source colors, fonts, sizes and indentation", () => {
     const out = clean(
       '<p style="color:rgb(255,0,0);font-family:Georgia;font-size:24px;text-indent:40px">x</p>',
-      settings(),
+      settings()
     );
     const style = out.querySelector("p")?.getAttribute("style") ?? "";
     expect(style).toContain("color");
@@ -154,23 +144,15 @@ describe("cleanPastedHtml() — keepAll preset", () => {
   });
 
   it("caps excessive source margins at 24px", () => {
-    const out = clean(
-      '<p style="margin-top:100px;margin-bottom:8px">x</p>',
-      settings(),
-    );
+    const out = clean('<p style="margin-top:100px;margin-bottom:8px">x</p>', settings());
     const p = out.querySelector("p");
     expect(p?.style.marginTop).toBe("24px");
     expect(p?.style.marginBottom).toBe("8px");
   });
 
   it("mirrors span background-color as data-color for the Highlight extension", () => {
-    const out = clean(
-      '<span style="background-color:rgb(255,255,0)">hl</span>',
-      settings(),
-    );
-    expect(out.querySelector("span")?.getAttribute("data-color")).toBe(
-      "rgb(255, 255, 0)",
-    );
+    const out = clean('<span style="background-color:rgb(255,255,0)">hl</span>', settings());
+    expect(out.querySelector("span")?.getAttribute("data-color")).toBe("rgb(255, 255, 0)");
   });
 });
 
@@ -180,7 +162,7 @@ describe("cleanPastedHtml() — strippedProperties", () => {
   it("strips each listed property and keeps the rest", () => {
     const out = clean(
       '<p style="color:red;font-size:24px;font-family:Georgia">x</p>',
-      withOptions({ strippedProperties: ["color", "font-size"] }),
+      withOptions({ strippedProperties: ["color", "font-size"] })
     );
     const p = out.querySelector("p");
     expect(p?.style.color).toBe("");
@@ -196,7 +178,7 @@ describe("cleanPastedHtml() — strippedProperties", () => {
   it("removes data-color when background-color is stripped", () => {
     const out = clean(
       '<span class="keep" style="background-color:yellow" data-color="yellow">x</span>',
-      withOptions({ strippedProperties: ["background-color"] }),
+      withOptions({ strippedProperties: ["background-color"] })
     );
     const span = out.querySelector<HTMLSpanElement>("span.keep");
     expect(span?.style.backgroundColor).toBe("");
@@ -220,7 +202,7 @@ describe("cleanPastedHtml() — unwrapBareInlineTags", () => {
   it("keeps spans that still carry attributes", () => {
     const out = clean(
       '<p><span class="keep">a</span><span style="color:red">b</span></p>',
-      settings(),
+      settings()
     );
     expect(out.querySelectorAll("span")).toHaveLength(2);
   });
@@ -233,7 +215,7 @@ describe("cleanPastedHtml() — unwrapBareInlineTags", () => {
   it("strips a junk span down to clean text (the end-to-end chain)", () => {
     const out = clean(
       '<p><span style="font-family:-webkit-standard;font-size:medium">x</span></p>',
-      withOptions({ strippedProperties: ["font-family", "font-size"] }),
+      withOptions({ strippedProperties: ["font-family", "font-size"] })
     );
     expect(out.querySelector("span")).toBeNull();
     expect(out.querySelector("p")?.outerHTML).toBe("<p>x</p>");
@@ -242,10 +224,7 @@ describe("cleanPastedHtml() — unwrapBareInlineTags", () => {
 
 describe("cleanPastedHtml() — category: demoteHeadings", () => {
   it("converts headings to paragraphs when enabled", () => {
-    const out = clean(
-      "<h2>Title</h2>",
-      withOptions({ demoteHeadings: true }),
-    );
+    const out = clean("<h2>Title</h2>", withOptions({ demoteHeadings: true }));
     expect(out.querySelector("h2")).toBeNull();
     expect(out.querySelector("p")?.textContent).toBe("Title");
   });
@@ -258,10 +237,7 @@ describe("cleanPastedHtml() — category: demoteHeadings", () => {
 
 describe("cleanPastedHtml() — category: stripLinks", () => {
   it("unwraps links to plain text when enabled", () => {
-    const out = clean(
-      '<p><a href="https://x.com">link</a></p>',
-      withOptions({ stripLinks: true }),
-    );
+    const out = clean('<p><a href="https://x.com">link</a></p>', withOptions({ stripLinks: true }));
     expect(out.querySelector("a")).toBeNull();
     expect(out.textContent).toBe("link");
   });
@@ -274,21 +250,15 @@ describe("cleanPastedHtml() — category: stripLinks", () => {
 
 describe("cleanPastedHtml() — category: flattenLists", () => {
   it("flattens list items to paragraphs when enabled", () => {
-    const out = clean(
-      "<ul><li>A</li><li>B</li></ul>",
-      withOptions({ flattenLists: true }),
-    );
+    const out = clean("<ul><li>A</li><li>B</li></ul>", withOptions({ flattenLists: true }));
     expect(out.querySelector("ul")).toBeNull();
-    expect(Array.from(out.querySelectorAll("p")).map((p) => p.textContent)).toEqual([
-      "A",
-      "B",
-    ]);
+    expect(Array.from(out.querySelectorAll("p")).map((p) => p.textContent)).toEqual(["A", "B"]);
   });
 
   it("flattens nested lists fully", () => {
     const out = clean(
       "<ul><li>A<ul><li>A1</li></ul></li></ul>",
-      withOptions({ flattenLists: true }),
+      withOptions({ flattenLists: true })
     );
     expect(out.querySelector("ul")).toBeNull();
     expect(out.querySelectorAll("p")).toHaveLength(2);
@@ -302,10 +272,7 @@ describe("cleanPastedHtml() — category: flattenLists", () => {
 
 describe("cleanPastedHtml() — category: removeImages", () => {
   it("removes images when enabled", () => {
-    const out = clean(
-      '<p>text</p><img src="x.png" alt="">',
-      withOptions({ removeImages: true }),
-    );
+    const out = clean('<p>text</p><img src="x.png" alt="">', withOptions({ removeImages: true }));
     expect(out.querySelector("img")).toBeNull();
     expect(out.textContent).toBe("text");
   });
@@ -320,7 +287,7 @@ describe("cleanPastedHtml() — category: unwrapFormattingTags", () => {
   it("unwraps bold/italic/underline tags when enabled", () => {
     const out = clean(
       "<p><strong>b</strong><em>i</em><u>u</u></p>",
-      withOptions({ unwrapFormattingTags: true }),
+      withOptions({ unwrapFormattingTags: true })
     );
     expect(out.querySelector("strong")).toBeNull();
     expect(out.querySelector("em")).toBeNull();
@@ -340,7 +307,7 @@ describe("cleanPastedHtml() — preset end-to-end", () => {
   it("matchBook strips styling but keeps structure", () => {
     const out = clean(
       '<h2 style="color:red">Title</h2><p><a href="x">link</a> <strong>bold</strong></p>',
-      settings({ preset: "matchBook", options: PASTE_CLEANUP_PRESETS.matchBook }),
+      settings({ preset: "matchBook", options: PASTE_CLEANUP_PRESETS.matchBook })
     );
     expect(out.querySelector("h2")?.style.color).toBe("");
     expect(out.querySelector("h2")).not.toBeNull();
@@ -351,7 +318,7 @@ describe("cleanPastedHtml() — preset end-to-end", () => {
   it("plainText reduces content to plain paragraphs and text", () => {
     const out = clean(
       '<h2>Title</h2><p><a href="x">link</a> <strong>bold</strong></p>',
-      settings({ preset: "plainText", options: PASTE_CLEANUP_PRESETS.plainText }),
+      settings({ preset: "plainText", options: PASTE_CLEANUP_PRESETS.plainText })
     );
     expect(out.querySelector("h2")).toBeNull();
     expect(out.querySelector("a")).toBeNull();
@@ -367,7 +334,7 @@ describe("cleanPastedHtml() — custom rules", () => {
   it("deletes elements matching a tag rule", () => {
     const out = clean(
       "<p>keep</p><div>drop</div>",
-      settings({ rules: [rule({ target: "tag", value: "div", action: "delete" })] }),
+      settings({ rules: [rule({ target: "tag", value: "div", action: "delete" })] })
     );
     expect(out.querySelector("div")).toBeNull();
     expect(out.textContent).toBe("keep");
@@ -376,7 +343,7 @@ describe("cleanPastedHtml() — custom rules", () => {
   it("unwraps elements matching a tag rule", () => {
     const out = clean(
       "<div><p>x</p></div>",
-      settings({ rules: [rule({ target: "tag", value: "div", action: "unwrap" })] }),
+      settings({ rules: [rule({ target: "tag", value: "div", action: "unwrap" })] })
     );
     expect(out.querySelector("div")).toBeNull();
     expect(out.querySelector("p")?.textContent).toBe("x");
@@ -387,7 +354,7 @@ describe("cleanPastedHtml() — custom rules", () => {
       '<p class="foo" style="color:red">x</p>',
       settings({
         rules: [rule({ target: "cssClass", value: "foo", action: "removeStyle" })],
-      }),
+      })
     );
     expect(out.querySelector("p")?.hasAttribute("style")).toBe(false);
   });
@@ -403,7 +370,7 @@ describe("cleanPastedHtml() — custom rules", () => {
             action: "removeStyle",
           }),
         ],
-      }),
+      })
     );
     const span = out.querySelector("span");
     expect(span?.style.fontFamily).toBe("");
@@ -421,7 +388,7 @@ describe("cleanPastedHtml() — custom rules", () => {
             action: "removeStyle",
           }),
         ],
-      }),
+      })
     );
     const spans = out.querySelectorAll("span");
     expect(spans[0]?.style.fontSize).toBe("");
@@ -442,7 +409,7 @@ describe("cleanPastedHtml() — custom rules", () => {
             action: "removeStyle",
           }),
         ],
-      }),
+      })
     );
     const spans = out.querySelectorAll("span");
     expect(spans[0]?.style.fontFamily).toBe("");
@@ -455,10 +422,7 @@ describe("cleanPastedHtml() — custom rules", () => {
     const input =
       '<span style="font-size: medium; color: red; font-weight: 700">drop</span><span style="font-size: 12px; color: red">keep-color</span><span style="font-size: medium; color: blue">keep-size</span>';
 
-    for (const value of [
-      "font-size: medium; color: red;",
-      "font-size: medium; color: red",
-    ]) {
+    for (const value of ["font-size: medium; color: red;", "font-size: medium; color: red"]) {
       const out = clean(
         input,
         settings({
@@ -469,7 +433,7 @@ describe("cleanPastedHtml() — custom rules", () => {
               action: "removeStyle",
             }),
           ],
-        }),
+        })
       );
       const spans = out.querySelectorAll("span");
       expect(spans[0]?.style.fontSize).toBe("");
@@ -493,7 +457,7 @@ describe("cleanPastedHtml() — custom rules", () => {
             action: "removeStyle",
           }),
         ],
-      }),
+      })
     );
     const span = out.querySelector("span");
     const em = out.querySelector("em");
@@ -518,7 +482,7 @@ describe("cleanPastedHtml() — custom rules", () => {
             action: "removeStyle",
           }),
         ],
-      }),
+      })
     );
     expect(out.textContent).toBe("x");
     expect(out.querySelector("span")).toBeNull();
@@ -529,7 +493,7 @@ describe("cleanPastedHtml() — custom rules", () => {
       '<p>a</p><p class="x">b</p>',
       settings({
         rules: [rule({ target: "cssSelector", value: "p.x", action: "delete" })],
-      }),
+      })
     );
     expect(out.querySelectorAll("p")).toHaveLength(1);
     expect(out.textContent).toBe("a");
@@ -539,10 +503,8 @@ describe("cleanPastedHtml() — custom rules", () => {
     const out = clean(
       "<div>x</div>",
       settings({
-        rules: [
-          rule({ enabled: false, target: "tag", value: "div", action: "delete" }),
-        ],
-      }),
+        rules: [rule({ enabled: false, target: "tag", value: "div", action: "delete" })],
+      })
     );
     expect(out.querySelector("div")).not.toBeNull();
   });
@@ -550,7 +512,7 @@ describe("cleanPastedHtml() — custom rules", () => {
   it("skips rules with an empty value", () => {
     const out = clean(
       "<div>x</div>",
-      settings({ rules: [rule({ target: "tag", value: "  ", action: "delete" })] }),
+      settings({ rules: [rule({ target: "tag", value: "  ", action: "delete" })] })
     );
     expect(out.querySelector("div")).not.toBeNull();
   });
@@ -580,8 +542,8 @@ describe("cleanPastedHtml() — rule ordering", () => {
         settings({
           options: { ...PASTE_CLEANUP_PRESETS.keepAll, strippedProperties: ["color"] },
           rules: [rule({ target: "textColor", value: "red", action: "removeStyle" })],
-        }),
-      ),
+        })
+      )
     ).not.toThrow();
   });
 });
@@ -597,7 +559,7 @@ describe("cleanPastedHtml() — invalid rule safety", () => {
           rule({ target: "cssSelector", value: ">>>", action: "delete" }),
           rule({ target: "tag", value: "div", action: "delete" }),
         ],
-      }),
+      })
     );
     expect(out.querySelector("div")).toBeNull();
     expect(out.querySelector("span.keep")).not.toBeNull();
@@ -607,8 +569,8 @@ describe("cleanPastedHtml() — invalid rule safety", () => {
     expect(() =>
       cleanPastedHtml(
         "<p>x</p>",
-        settings({ rules: [rule({ target: "tag", value: "1bad", action: "delete" })] }),
-      ),
+        settings({ rules: [rule({ target: "tag", value: "1bad", action: "delete" })] })
+      )
     ).not.toThrow();
   });
 
@@ -616,8 +578,8 @@ describe("cleanPastedHtml() — invalid rule safety", () => {
     expect(() =>
       cleanPastedHtml(
         "<p>unclosed<span>text",
-        settings({ rules: [rule({ target: "tag", value: "span", action: "unwrap" })] }),
-      ),
+        settings({ rules: [rule({ target: "tag", value: "span", action: "unwrap" })] })
+      )
     ).not.toThrow();
   });
 });

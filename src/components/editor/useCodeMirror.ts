@@ -108,9 +108,7 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
           }
         }
         if (update.selectionSet) {
-          optionsRef.current.onSelectionChange?.(
-            !update.state.selection.main.empty,
-          );
+          optionsRef.current.onSelectionChange?.(!update.state.selection.main.empty);
         }
         warningCount = diagnosticCount(update.state);
       });

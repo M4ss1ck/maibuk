@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { SmartItalic } from "../editor/extensions/SmartItalic";
+import { createRichTextExtensions } from "../editor/extensions/createRichTextExtensions";
+import { MarkdownPasteDialog } from "../editor/MarkdownPasteDialog";
+import { useSettingsStore } from "../../features/settings/store";
 import {
   Bold,
   Italic,
@@ -26,12 +26,16 @@ interface QuickNoteEditorProps {
 export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps) {
   const { t } = useTranslation();
   const [showToolbar, setShowToolbar] = useState(false);
+  const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
+  const language = useSettingsStore((state) => state.language);
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ underline: false, italic: false }),
-      SmartItalic,
-      Underline,
+      ...createRichTextExtensions({
+        onMarkdownPaste: setPendingMarkdownPaste,
+        spellCheck: { enabled: spellCheckEnabled, language },
+      }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Placeholder.configure({ placeholder: placeholder ?? "" }),
@@ -47,7 +51,7 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
     label: string,
     Icon: typeof Bold,
     isActive: boolean,
-    action: () => void,
+    action: () => void
   ) => (
     <button
       type="button"
@@ -69,46 +73,37 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
         {showToolbar && editor ? (
           <div className="flex items-center gap-0.5">
             {toolbarButton(t("editor.bold"), Bold, editor.isActive("bold"), () =>
-              editor.chain().focus().toggleBold().run(),
+              editor.chain().focus().toggleBold().run()
             )}
             {toolbarButton(t("editor.italic"), Italic, editor.isActive("italic"), () =>
-              editor.chain().focus().toggleItalic().run(),
+              editor.chain().focus().toggleItalic().run()
             )}
-            {toolbarButton(
-              t("editor.underline"),
-              UnderlineIcon,
-              editor.isActive("underline"),
-              () => editor.chain().focus().toggleUnderline().run(),
+            {toolbarButton(t("editor.underline"), UnderlineIcon, editor.isActive("underline"), () =>
+              editor.chain().focus().toggleUnderline().run()
             )}
             {toolbarButton(
               t("editor.heading1"),
               Heading1,
               editor.isActive("heading", { level: 1 }),
-              () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+              () => editor.chain().focus().toggleHeading({ level: 1 }).run()
             )}
             {toolbarButton(
               t("editor.heading2"),
               Heading2,
               editor.isActive("heading", { level: 2 }),
-              () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+              () => editor.chain().focus().toggleHeading({ level: 2 }).run()
             )}
             {toolbarButton(
               t("editor.heading3"),
               Heading3,
               editor.isActive("heading", { level: 3 }),
-              () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+              () => editor.chain().focus().toggleHeading({ level: 3 }).run()
             )}
-            {toolbarButton(
-              t("editor.bulletList"),
-              List,
-              editor.isActive("bulletList"),
-              () => editor.chain().focus().toggleBulletList().run(),
+            {toolbarButton(t("editor.bulletList"), List, editor.isActive("bulletList"), () =>
+              editor.chain().focus().toggleBulletList().run()
             )}
-            {toolbarButton(
-              t("editor.taskList"),
-              ListChecks,
-              editor.isActive("taskList"),
-              () => editor.chain().focus().toggleTaskList().run(),
+            {toolbarButton(t("editor.taskList"), ListChecks, editor.isActive("taskList"), () =>
+              editor.chain().focus().toggleTaskList().run()
             )}
           </div>
         ) : (
@@ -130,6 +125,13 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
       <div className="max-h-64 overflow-y-auto px-2">
         <EditorContent editor={editor} />
       </div>
+      {editor && (
+        <MarkdownPasteDialog
+          editor={editor}
+          markdown={pendingMarkdownPaste}
+          onClose={() => setPendingMarkdownPaste(null)}
+        />
+      )}
     </div>
   );
 }

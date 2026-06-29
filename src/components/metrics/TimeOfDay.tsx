@@ -21,7 +21,10 @@ export function TimeOfDay({ aggregate, isLoading }: TimeOfDayProps) {
       ) : (
         <div className="mt-4 space-y-2">
           {buckets.map((bucket) => (
-            <div key={bucket.hour} className="grid grid-cols-[3rem_1fr_4rem] items-center gap-3 text-sm">
+            <div
+              key={bucket.hour}
+              className="grid grid-cols-[3rem_1fr_4rem] items-center gap-3 text-sm"
+            >
               <span className="tabular-nums text-muted-foreground">
                 {String(bucket.hour).padStart(2, "0")}:00
               </span>
@@ -31,9 +34,7 @@ export function TimeOfDay({ aggregate, isLoading }: TimeOfDayProps) {
                   style={{ width: `${Math.max(4, (Math.abs(bucket.words) / maxWords) * 100)}%` }}
                 />
               </div>
-              <span className="text-right tabular-nums">
-                {bucket.words.toLocaleString()}
-              </span>
+              <span className="text-right tabular-nums">{bucket.words.toLocaleString()}</span>
             </div>
           ))}
         </div>

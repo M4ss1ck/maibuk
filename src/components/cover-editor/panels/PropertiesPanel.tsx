@@ -51,9 +51,23 @@ function TextProperties({ layer }: { layer: TextLayer }) {
       />
 
       <div className="grid grid-cols-2 gap-2">
-        <NumberField label={t("cover.props.size")} value={layer.font.size} min={1} onChange={(size) => patchFont({ size })} />
-        <NumberField label={t("cover.props.lineHeight")} value={layer.font.lineHeight} step={0.1} onChange={(lineHeight) => patchFont({ lineHeight })} />
-        <NumberField label={t("cover.props.letterSpacing")} value={layer.font.letterSpacing} onChange={(letterSpacing) => patchFont({ letterSpacing })} />
+        <NumberField
+          label={t("cover.props.size")}
+          value={layer.font.size}
+          min={1}
+          onChange={(size) => patchFont({ size })}
+        />
+        <NumberField
+          label={t("cover.props.lineHeight")}
+          value={layer.font.lineHeight}
+          step={0.1}
+          onChange={(lineHeight) => patchFont({ lineHeight })}
+        />
+        <NumberField
+          label={t("cover.props.letterSpacing")}
+          value={layer.font.letterSpacing}
+          onChange={(letterSpacing) => patchFont({ letterSpacing })}
+        />
       </div>
 
       <div className="flex gap-1">
@@ -109,14 +123,25 @@ function TextProperties({ layer }: { layer: TextLayer }) {
             <input
               type="color"
               value={layer.stroke.color}
-              onChange={(e) => updateLayer(layer.id, { stroke: { color: e.target.value, width: layer.stroke?.width ?? 2 } })}
+              onChange={(e) =>
+                updateLayer(layer.id, {
+                  stroke: { color: e.target.value, width: layer.stroke?.width ?? 2 },
+                })
+              }
               className="w-8 h-8 cursor-pointer rounded border border-border"
             />
             <input
               type="number"
               min={0}
               value={layer.stroke.width}
-              onChange={(e) => updateLayer(layer.id, { stroke: { color: layer.stroke?.color ?? "#000000", width: Number(e.target.value) } })}
+              onChange={(e) =>
+                updateLayer(layer.id, {
+                  stroke: {
+                    color: layer.stroke?.color ?? "#000000",
+                    width: Number(e.target.value),
+                  },
+                })
+              }
               className="no-spinner w-16 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
             />
           </div>
@@ -158,7 +183,9 @@ function TextProperties({ layer }: { layer: TextLayer }) {
               min={0}
               max={180}
               value={layer.curve.spread}
-              onChange={(e) => updateLayer(layer.id, { curve: { type: "arc", spread: Number(e.target.value) } })}
+              onChange={(e) =>
+                updateLayer(layer.id, { curve: { type: "arc", spread: Number(e.target.value) } })
+              }
               className="flex-1"
             />
             <span className="w-10 text-right text-xs">{Math.round(layer.curve.spread)}°</span>
@@ -181,7 +208,12 @@ function ShapeProperties({ layer }: { layer: ShapeLayer }) {
         </div>
       )}
       {layer.shape === "rect" && (
-        <NumberField label={t("cover.props.radius")} value={layer.radius ?? 0} min={0} onChange={(radius) => updateLayer(layer.id, { radius })} />
+        <NumberField
+          label={t("cover.props.radius")}
+          value={layer.radius ?? 0}
+          min={0}
+          onChange={(radius) => updateLayer(layer.id, { radius })}
+        />
       )}
       <div className="space-y-1 pt-2 border-t border-border">
         <label className="flex items-center justify-between gap-2 text-sm">
@@ -190,7 +222,9 @@ function ShapeProperties({ layer }: { layer: ShapeLayer }) {
             type="checkbox"
             checked={!!layer.stroke}
             onChange={(e) =>
-              updateLayer(layer.id, { stroke: e.target.checked ? { color: "#000000", width: 2 } : undefined })
+              updateLayer(layer.id, {
+                stroke: e.target.checked ? { color: "#000000", width: 2 } : undefined,
+              })
             }
           />
         </label>
@@ -199,14 +233,25 @@ function ShapeProperties({ layer }: { layer: ShapeLayer }) {
             <input
               type="color"
               value={layer.stroke.color}
-              onChange={(e) => updateLayer(layer.id, { stroke: { color: e.target.value, width: layer.stroke?.width ?? 2 } })}
+              onChange={(e) =>
+                updateLayer(layer.id, {
+                  stroke: { color: e.target.value, width: layer.stroke?.width ?? 2 },
+                })
+              }
               className="w-8 h-8 cursor-pointer rounded border border-border"
             />
             <input
               type="number"
               min={0}
               value={layer.stroke.width}
-              onChange={(e) => updateLayer(layer.id, { stroke: { color: layer.stroke?.color ?? "#000000", width: Number(e.target.value) } })}
+              onChange={(e) =>
+                updateLayer(layer.id, {
+                  stroke: {
+                    color: layer.stroke?.color ?? "#000000",
+                    width: Number(e.target.value),
+                  },
+                })
+              }
               className="no-spinner w-16 px-2 py-1 border border-border rounded bg-background text-foreground text-right"
             />
           </div>
@@ -223,7 +268,12 @@ function ImageProperties({ layer }: { layer: ImageLayer }) {
   const setFilter = (patch: Partial<typeof DEFAULT_FILTERS>) =>
     updateLayer(layer.id, { filters: { ...f, ...patch } });
 
-  const sliders: Array<{ key: keyof typeof DEFAULT_FILTERS; label: string; min: number; max: number }> = [
+  const sliders: Array<{
+    key: keyof typeof DEFAULT_FILTERS;
+    label: string;
+    min: number;
+    max: number;
+  }> = [
     { key: "brightness", label: t("cover.filters.brightness"), min: -1, max: 1 },
     { key: "contrast", label: t("cover.filters.contrast"), min: -1, max: 1 },
     { key: "saturation", label: t("cover.filters.saturation"), min: -1, max: 1 },
@@ -274,10 +324,30 @@ export function PropertiesPanel() {
       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
         <NumberField label="X" value={layer.x} onChange={(x) => updateLayer(layer.id, { x })} />
         <NumberField label="Y" value={layer.y} onChange={(y) => updateLayer(layer.id, { y })} />
-        <NumberField label={t("cover.props.width")} value={layer.width} min={1} onChange={(width) => updateLayer(layer.id, { width })} />
-        <NumberField label={t("cover.props.height")} value={layer.height} min={1} onChange={(height) => updateLayer(layer.id, { height })} />
-        <NumberField label={t("cover.props.rotation")} value={layer.rotation} onChange={(rotation) => updateLayer(layer.id, { rotation })} />
-        <NumberField label={t("cover.props.opacity")} value={layer.opacity} step={0.1} min={0} onChange={(opacity) => updateLayer(layer.id, { opacity })} />
+        <NumberField
+          label={t("cover.props.width")}
+          value={layer.width}
+          min={1}
+          onChange={(width) => updateLayer(layer.id, { width })}
+        />
+        <NumberField
+          label={t("cover.props.height")}
+          value={layer.height}
+          min={1}
+          onChange={(height) => updateLayer(layer.id, { height })}
+        />
+        <NumberField
+          label={t("cover.props.rotation")}
+          value={layer.rotation}
+          onChange={(rotation) => updateLayer(layer.id, { rotation })}
+        />
+        <NumberField
+          label={t("cover.props.opacity")}
+          value={layer.opacity}
+          step={0.1}
+          min={0}
+          onChange={(opacity) => updateLayer(layer.id, { opacity })}
+        />
       </div>
     </div>
   );

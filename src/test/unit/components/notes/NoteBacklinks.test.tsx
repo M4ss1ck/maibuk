@@ -20,12 +20,8 @@ describe("NoteBacklinks", () => {
 
   it("renders nothing when there are no backlinks", async () => {
     const mod = await import("../../../../features/links/link-index");
-    (mod.getBacklinksForNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      [],
-    );
-    const { container } = render(
-      <NoteBacklinks noteId="lonely" onOpen={() => {}} />,
-    );
+    (mod.getBacklinksForNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    const { container } = render(<NoteBacklinks noteId="lonely" onOpen={() => {}} />);
     await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 });

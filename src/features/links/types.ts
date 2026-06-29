@@ -1,9 +1,4 @@
-export type LinkTargetType =
-  | "note"
-  | "book"
-  | "chapter"
-  | "heading"
-  | "noteHeading";
+export type LinkTargetType = "note" | "book" | "chapter" | "heading" | "noteHeading";
 
 export interface ParsedLink {
   targetType: LinkTargetType;

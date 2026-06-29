@@ -357,16 +357,7 @@ describe("useVersionStore", () => {
           await testDb.execute(
             `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              `close-quota-${i}`,
-              "book-1",
-              null,
-              "{}",
-              i,
-              `close-q-${i}`,
-              "close",
-              baseTime + i,
-            ]
+            [`close-quota-${i}`, "book-1", null, "{}", i, `close-q-${i}`, "close", baseTime + i]
           );
         }
 
@@ -398,16 +389,7 @@ describe("useVersionStore", () => {
           await testDb.execute(
             `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              `other-${i}`,
-              "book-2",
-              null,
-              "{}",
-              i,
-              `o-${i}`,
-              "auto-idle",
-              baseTime + i,
-            ]
+            [`other-${i}`, "book-2", null, "{}", i, `o-${i}`, "auto-idle", baseTime + i]
           );
         }
         await seedAutoIdle(MAX_KEEP + 10);
@@ -642,9 +624,9 @@ describe("useVersionStore", () => {
     });
 
     it("throws when version is not found", async () => {
-      await expect(
-        useVersionStore.getState().getVersionSnapshot("missing")
-      ).rejects.toThrow("Version not found");
+      await expect(useVersionStore.getState().getVersionSnapshot("missing")).rejects.toThrow(
+        "Version not found"
+      );
     });
   });
 
@@ -664,7 +646,7 @@ describe("useVersionStore", () => {
       });
 
       await useVersionStore.getState().restoreVersion(target!.id, {
-        preRestoreName: "Before restoring \"Target\"",
+        preRestoreName: 'Before restoring "Target"',
       });
 
       const rows = await testDb.select<Record<string, unknown>[]>(

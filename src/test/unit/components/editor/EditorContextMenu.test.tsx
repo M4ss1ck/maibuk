@@ -63,7 +63,7 @@ describe("EditorContextMenu", () => {
         onInspect={vi.fn()}
         onLookup={vi.fn()}
         onEditLink={onEditLink}
-      />,
+      />
     );
 
     fireEvent.contextMenu(setup.link, { clientX: 10, clientY: 10 });
@@ -84,7 +84,7 @@ describe("EditorContextMenu", () => {
         onInspect={vi.fn()}
         onLookup={vi.fn()}
         onEditLink={onEditLink}
-      />,
+      />
     );
 
     fireEvent.contextMenu(setup.link, { clientX: 10, clientY: 10 });

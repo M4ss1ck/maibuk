@@ -100,9 +100,11 @@ describe("src/lib/db/index.ts", () => {
       expect(executedSql).toEqual(
         expect.arrayContaining([
           expect.stringContaining("ALTER TABLE notes ADD COLUMN language TEXT"),
-          expect.stringContaining("SELECT books.language FROM books WHERE books.id = notes.book_id"),
+          expect.stringContaining(
+            "SELECT books.language FROM books WHERE books.id = notes.book_id"
+          ),
           expect.stringContaining("WHERE language IS NULL"),
-        ]),
+        ])
       );
     });
   });

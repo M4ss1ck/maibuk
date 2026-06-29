@@ -56,7 +56,7 @@ vi.mock("react-i18next", () => ({
     },
     i18n: { language: "en" },
   }),
-  initReactI18next: { type: "3rdParty", init: () => { } },
+  initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
 vi.mock("../../../../features/settings/store", () => ({
@@ -77,7 +77,7 @@ vi.mock("../../../../lib/platform", () => ({
       close: vi.fn(() => Promise.resolve()),
       exportData: vi.fn(() => Promise.resolve(new Uint8Array())),
       importData: vi.fn(() => Promise.resolve()),
-    }),
+    })
   ),
 }));
 
@@ -149,8 +149,8 @@ describe("NoteEditor task bar tag editing", () => {
         expect.objectContaining({
           id: "note-1",
           tags: ["draft", "research"],
-        }),
-      ),
+        })
+      )
     );
   });
 });

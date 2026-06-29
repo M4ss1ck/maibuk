@@ -64,14 +64,14 @@ class WebDatabaseAdapter implements DatabaseAdapter {
     // Generate SQL dump for consistency with Tauri export
     const [books, chapters, bookVersions, notes, syncTombstones, coverTemplates, settings] =
       await Promise.all([
-      this.select<Record<string, unknown>[]>("SELECT * FROM books"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM book_versions"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM sync_tombstones"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
-    ]);
+        this.select<Record<string, unknown>[]>("SELECT * FROM books"),
+        this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
+        this.select<Record<string, unknown>[]>("SELECT * FROM book_versions"),
+        this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
+        this.select<Record<string, unknown>[]>("SELECT * FROM sync_tombstones"),
+        this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
+        this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
+      ]);
 
     const lines: string[] = [
       "-- Maibuk Database Export (SQL Dump)",

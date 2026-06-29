@@ -12,13 +12,7 @@ interface NoteTagsRowProps {
   interactiveOverflow?: boolean;
 }
 
-function TagChip({
-  tag,
-  className = "",
-}: {
-  tag: string;
-  className?: string;
-}) {
+function TagChip({ tag, className = "" }: { tag: string; className?: string }) {
   const color = tagColor(tag);
 
   return (
@@ -59,9 +53,7 @@ export function NoteTagsRow({
 
       const dateWidth = children[0]?.offsetWidth ?? 0;
       const counterWidth = children[children.length - 1]?.offsetWidth ?? 0;
-      const tagWidths = children
-        .slice(1, 1 + tags.length)
-        .map((el) => el.offsetWidth);
+      const tagWidths = children.slice(1, 1 + tags.length).map((el) => el.offsetWidth);
       const actionWidth = actionRef.current?.offsetWidth ?? 0;
       const actionGap = actionWidth > 0 ? GAP : 0;
       const availableForTags = container.clientWidth - dateWidth - actionWidth - actionGap;

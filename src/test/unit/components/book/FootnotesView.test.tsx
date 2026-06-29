@@ -29,7 +29,7 @@ describe("FootnotesView", () => {
         chapters={[buildChapter({ content: "<p>plain</p>" })]}
         currentChapterId={null}
         onSelectChapter={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.getByText("editor.noFootnotes")).toBeInTheDocument();
@@ -39,17 +39,10 @@ describe("FootnotesView", () => {
     const chapter = buildChapter({
       id: "c1",
       title: "Chapter One",
-      content:
-        '<p>Text<sup data-footnote-content="My note" data-footnote-id="f1">1</sup></p>',
+      content: '<p>Text<sup data-footnote-content="My note" data-footnote-id="f1">1</sup></p>',
     });
 
-    render(
-      <FootnotesView
-        chapters={[chapter]}
-        currentChapterId="c1"
-        onSelectChapter={vi.fn()}
-      />,
-    );
+    render(<FootnotesView chapters={[chapter]} currentChapterId="c1" onSelectChapter={vi.fn()} />);
 
     expect(screen.getByText("My note")).toBeInTheDocument();
     expect(screen.getByText("Chapter One")).toBeInTheDocument();

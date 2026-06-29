@@ -12,10 +12,10 @@ describe("link-uri", () => {
     expect(formatLinkUri({ targetType: "book", targetId: "b1" })).toBe("maibuk://book/b1");
     expect(formatLinkUri({ targetType: "chapter", targetId: "c1" })).toBe("maibuk://chapter/c1");
     expect(formatLinkUri({ targetType: "heading", targetId: "c1", headingId: "h-abc" })).toBe(
-      "maibuk://heading/c1/h-abc",
+      "maibuk://heading/c1/h-abc"
     );
     expect(formatLinkUri({ targetType: "noteHeading", targetId: "n1", headingId: "h-note" })).toBe(
-      "maibuk://note-heading/n1/h-note",
+      "maibuk://note-heading/n1/h-note"
     );
   });
 

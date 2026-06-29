@@ -23,7 +23,10 @@ export function formatLinkUri(link: ParsedLink): string {
 
 export function parseLinkUri(href: string | null | undefined): ParsedLink | null {
   if (!isInternalLink(href)) return null;
-  const parts = (href as string).slice(PREFIX.length).split("/").filter((p) => p.length > 0);
+  const parts = (href as string)
+    .slice(PREFIX.length)
+    .split("/")
+    .filter((p) => p.length > 0);
   const kind = parts[0] as LinkTargetType;
   if (kind === "note" || kind === "book" || kind === "chapter") {
     if (parts.length !== 2) return null;
@@ -44,7 +47,9 @@ export function extractLinks(html: string | null | undefined): ExtractedLink[] {
   if (!html) return [];
   const doc = new DOMParser().parseFromString(html, "text/html");
   const out: ExtractedLink[] = [];
-  for (const anchor of Array.from(doc.querySelectorAll<HTMLAnchorElement>('a[href^="maibuk://"]'))) {
+  for (const anchor of Array.from(
+    doc.querySelectorAll<HTMLAnchorElement>('a[href^="maibuk://"]')
+  )) {
     const parsed = parseLinkUri(anchor.getAttribute("href"));
     if (!parsed) continue;
     out.push({ ...parsed, label: anchor.textContent ?? "" });

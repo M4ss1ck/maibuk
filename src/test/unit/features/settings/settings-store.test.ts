@@ -473,17 +473,17 @@ describe("useSettingsStore", () => {
     it("normalizes and de-duplicates added properties", () => {
       useSettingsStore.getState().addStrippedProperty("  Font-Size  ");
       useSettingsStore.getState().addStrippedProperty("font-size");
-      expect(
-        useSettingsStore.getState().pasteCleanup.options.strippedProperties,
-      ).toEqual(["font-size"]);
+      expect(useSettingsStore.getState().pasteCleanup.options.strippedProperties).toEqual([
+        "font-size",
+      ]);
     });
 
     it("removes a property", () => {
       useSettingsStore.getState().addStrippedProperty("color");
       useSettingsStore.getState().removeStrippedProperty("color");
-      expect(
-        useSettingsStore.getState().pasteCleanup.options.strippedProperties,
-      ).not.toContain("color");
+      expect(useSettingsStore.getState().pasteCleanup.options.strippedProperties).not.toContain(
+        "color"
+      );
     });
   });
 
@@ -550,25 +550,19 @@ describe("useSettingsStore", () => {
     it("moves a rule up", () => {
       const [a, b, c] = addThreeRules();
       useSettingsStore.getState().movePasteCleanupRule(b, "up");
-      expect(
-        useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)
-      ).toEqual([b, a, c]);
+      expect(useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)).toEqual([b, a, c]);
     });
 
     it("does not move the first rule up", () => {
       const [a, b, c] = addThreeRules();
       useSettingsStore.getState().movePasteCleanupRule(a, "up");
-      expect(
-        useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)
-      ).toEqual([a, b, c]);
+      expect(useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)).toEqual([a, b, c]);
     });
 
     it("does not move the last rule down", () => {
       const [a, b, c] = addThreeRules();
       useSettingsStore.getState().movePasteCleanupRule(c, "down");
-      expect(
-        useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)
-      ).toEqual([a, b, c]);
+      expect(useSettingsStore.getState().pasteCleanup.rules.map((r) => r.id)).toEqual([a, b, c]);
     });
   });
 
@@ -705,15 +699,12 @@ describe("normalizePasteCleanup()", () => {
     expect(normalizePasteCleanup(undefined).preset).toBe("keepAll");
     expect(normalizePasteCleanup("garbage").preset).toBe("keepAll");
     expect(
-      normalizePasteCleanup({ preset: "custom", options: null }).options
-        .strippedProperties,
+      normalizePasteCleanup({ preset: "custom", options: null }).options.strippedProperties
     ).toEqual([]);
   });
 
   it("drops non-array or malformed rules", () => {
-    expect(
-      normalizePasteCleanup({ preset: "keepAll", rules: "nope" }).rules,
-    ).toEqual([]);
+    expect(normalizePasteCleanup({ preset: "keepAll", rules: "nope" }).rules).toEqual([]);
     const result = normalizePasteCleanup({
       preset: "keepAll",
       rules: [

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { collectFonts } from "../../../../features/covers/scene/fonts";
-import { createDefaultScene, createTextLayer, createShapeLayer } from "../../../../features/covers/scene/defaults";
+import {
+  createDefaultScene,
+  createTextLayer,
+  createShapeLayer,
+} from "../../../../features/covers/scene/defaults";
 
 describe("collectFonts", () => {
   it("returns an empty list for a scene with no text", () => {

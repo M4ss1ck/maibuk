@@ -1,4 +1,10 @@
-import { COVER_SCHEMA_VERSION, type Background, type CoverDoc, type CoverScene, type Layer } from "./schema";
+import {
+  COVER_SCHEMA_VERSION,
+  type Background,
+  type CoverDoc,
+  type CoverScene,
+  type Layer,
+} from "./schema";
 import { DEFAULT_BACKGROUND_COLOR } from "./defaults";
 
 function genId(): string {
@@ -78,11 +84,10 @@ function toLayer(o: LegacyObject): Layer | null {
         size: num(o.fontSize, 40),
         weight: o.fontWeight === "bold" ? "bold" : "normal",
         style: o.fontStyle === "italic" ? "italic" : "normal",
-        letterSpacing: num(o.charSpacing) ? num(o.charSpacing) / 1000 * num(o.fontSize, 40) : 0,
+        letterSpacing: num(o.charSpacing) ? (num(o.charSpacing) / 1000) * num(o.fontSize, 40) : 0,
         lineHeight: num(o.lineHeight, 1.2),
       },
-      align:
-        o.textAlign === "left" || o.textAlign === "right" ? o.textAlign : "center",
+      align: o.textAlign === "left" || o.textAlign === "right" ? o.textAlign : "center",
       fill: { type: "solid", color: typeof o.fill === "string" ? o.fill : "#ffffff" },
       ...(shadow
         ? {
@@ -110,7 +115,8 @@ function toLayer(o: LegacyObject): Layer | null {
 }
 
 function migrateLegacy(parsed: Record<string, unknown>, doc: CoverDoc): CoverScene {
-  const bgColor = typeof parsed.background === "string" ? parsed.background : DEFAULT_BACKGROUND_COLOR;
+  const bgColor =
+    typeof parsed.background === "string" ? parsed.background : DEFAULT_BACKGROUND_COLOR;
   const background: Background = { type: "solid", color: bgColor };
   const objects = Array.isArray(parsed.objects) ? (parsed.objects as LegacyObject[]) : [];
   const layers = objects.map(toLayer).filter((l): l is Layer => l !== null);

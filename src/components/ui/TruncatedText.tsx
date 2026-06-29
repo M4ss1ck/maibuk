@@ -12,11 +12,7 @@ interface TruncatedTextProps {
  * class) and shows the full text as a native tooltip only when it actually
  * overflows the available width.
  */
-export function TruncatedText({
-  text,
-  as: Tag = "span",
-  className,
-}: TruncatedTextProps) {
+export function TruncatedText({ text, as: Tag = "span", className }: TruncatedTextProps) {
   const ref = useRef<HTMLElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
 

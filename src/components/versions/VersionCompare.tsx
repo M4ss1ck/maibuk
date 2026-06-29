@@ -91,9 +91,7 @@ export function VersionCompare({ current, target }: VersionCompareProps) {
 
       <div
         className={`grid min-h-0 flex-1 gap-3 ${
-          showChapterList
-            ? "grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]"
-            : "grid-cols-1"
+          showChapterList ? "grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]" : "grid-cols-1"
         }`}
       >
         {showChapterList && (

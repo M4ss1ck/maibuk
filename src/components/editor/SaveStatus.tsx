@@ -9,12 +9,7 @@ interface SaveStatusProps {
   saveShortcut?: string;
 }
 
-export function SaveStatus({
-  status,
-  onSave,
-  disabled,
-  saveShortcut,
-}: SaveStatusProps) {
+export function SaveStatus({ status, onSave, disabled, saveShortcut }: SaveStatusProps) {
   const { t } = useTranslation();
 
   if (status === "saving") {
@@ -35,9 +30,7 @@ export function SaveStatus({
     );
   }
 
-  const title = saveShortcut
-    ? `${t("common.save")} (${saveShortcut})`
-    : t("common.save");
+  const title = saveShortcut ? `${t("common.save")} (${saveShortcut})` : t("common.save");
 
   return (
     <button

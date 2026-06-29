@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Heatmap,
-  PerWorkList,
-  StreakCard,
-  TimeOfDay,
-  WpmChart,
-} from "../components/metrics";
+import { Heatmap, PerWorkList, StreakCard, TimeOfDay, WpmChart } from "../components/metrics";
 import { getSnapshotMetrics } from "../features/metrics/events-repo";
 import { useSettingsStore } from "../features/settings/store";
 import { getDatabase } from "../lib/db";
@@ -20,9 +14,7 @@ import type {
 
 export function Metrics() {
   const { t } = useTranslation();
-  const threshold = useSettingsStore(
-    (state) => state.metrics.streakDailyWordThreshold,
-  );
+  const threshold = useSettingsStore((state) => state.metrics.streakDailyWordThreshold);
   const enabled = useSettingsStore((state) => state.metrics.enabled);
   const [snapshot, setSnapshot] = useState<SnapshotMetrics | null>(null);
   const [heatmap, setHeatmap] = useState<HeatmapAggregate | null>(null);
@@ -32,9 +24,11 @@ export function Metrics() {
 
   useEffect(() => {
     let cancelled = false;
-    void getDatabase().then(getSnapshotMetrics).then((value) => {
-      if (!cancelled) setSnapshot(value);
-    });
+    void getDatabase()
+      .then(getSnapshotMetrics)
+      .then((value) => {
+        if (!cancelled) setSnapshot(value);
+      });
     return () => {
       cancelled = true;
     };
@@ -76,8 +70,7 @@ export function Metrics() {
     };
   }, [enabled.engagement, enabled.time, enabled.writing, threshold]);
 
-  const allCategoriesDisabled =
-    !enabled.writing && !enabled.time && !enabled.engagement;
+  const allCategoriesDisabled = !enabled.writing && !enabled.time && !enabled.engagement;
   const displayedTotalWords = enabled.writing ? (snapshot?.totalWords ?? 0) : 0;
   const displayedSnapshot = enabled.writing ? snapshot : { totalWords: 0, perWork: [] };
 
@@ -86,12 +79,8 @@ export function Metrics() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6 p-6 md:p-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-normal">
-              {t("metrics.title")}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("metrics.subtitle")}
-            </p>
+            <h1 className="text-3xl font-semibold tracking-normal">{t("metrics.title")}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{t("metrics.subtitle")}</p>
           </div>
           <div className="rounded-lg border border-border bg-card px-4 py-3 text-right">
             <p className="text-sm text-muted-foreground">{t("metrics.totalWords")}</p>
@@ -103,9 +92,7 @@ export function Metrics() {
 
         {allCategoriesDisabled ? (
           <section className="rounded-lg border border-border bg-card p-6">
-            <p className="text-sm text-muted-foreground">
-              {t("metrics.disabledEmpty")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("metrics.disabledEmpty")}</p>
           </section>
         ) : (
           <>
@@ -122,17 +109,13 @@ export function Metrics() {
                 <WpmChart aggregate={dashboard} isLoading={eventsLoading} />
               ) : (
                 <section className="rounded-lg border border-border bg-card p-4">
-                  <h2 className="text-lg font-semibold">
-                    {t("metrics.wpm")}
-                  </h2>
+                  <h2 className="text-lg font-semibold">{t("metrics.wpm")}</h2>
                   <p className="mt-4 text-sm text-muted-foreground">
                     {t("metrics.engagementDisabled")}
                   </p>
                 </section>
               )}
-              {enabled.time && (
-                <TimeOfDay aggregate={dashboard} isLoading={eventsLoading} />
-              )}
+              {enabled.time && <TimeOfDay aggregate={dashboard} isLoading={eventsLoading} />}
             </div>
 
             <PerWorkList

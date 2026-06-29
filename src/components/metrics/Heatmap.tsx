@@ -17,9 +17,7 @@ export function Heatmap({ aggregate, isLoading }: HeatmapProps) {
       <div className="flex items-baseline justify-between mb-3">
         <h2 className="text-lg font-semibold">{t("metrics.heatmap")}</h2>
         {isLoading && (
-          <span className="text-sm text-muted-foreground">
-            {t("metrics.loadingEvents")}
-          </span>
+          <span className="text-sm text-muted-foreground">{t("metrics.loadingEvents")}</span>
         )}
       </div>
       <div className="overflow-x-auto">
@@ -42,9 +40,7 @@ export function Heatmap({ aggregate, isLoading }: HeatmapProps) {
 }
 
 function buildDays(year: number, aggregate: HeatmapAggregate | null) {
-  const byDate = new Map(
-    (aggregate?.days ?? []).map((day) => [day.date, day] as const),
-  );
+  const byDate = new Map((aggregate?.days ?? []).map((day) => [day.date, day] as const));
   const result: { date: string; words: number; events: number }[] = [];
   const cursor = new Date(year, 0, 1);
   while (cursor.getFullYear() === year) {

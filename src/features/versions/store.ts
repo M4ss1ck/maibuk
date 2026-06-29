@@ -3,12 +3,7 @@ import { getDatabase } from "../../lib/db";
 import { serializeBook, applyBookSnapshot } from "../sync/serializer";
 import { computeChecksum } from "../../lib/checksum";
 import { VERSION_AUTO_PRUNE_KEEP } from "../../constants";
-import type {
-  BookVersion,
-  CreateVersionInput,
-  RestoreOptions,
-  VersionTrigger,
-} from "./types";
+import type { BookVersion, CreateVersionInput, RestoreOptions, VersionTrigger } from "./types";
 import type { BookSnapshot } from "../sync/types";
 
 export const DEFAULT_VERSIONS_PAGE_SIZE = 10;
@@ -203,9 +198,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
         const db = await getDatabase();
         const pruned = await pruneAllAutoTriggers(db, bookId, VERSION_AUTO_PRUNE_KEEP);
         if (pruned > 0) {
-          console.info(
-            `[versions] Pruned ${pruned} auto-version(s) for book ${bookId}`
-          );
+          console.info(`[versions] Pruned ${pruned} auto-version(s) for book ${bookId}`);
         }
       } catch (err) {
         console.warn("[versions] Auto-version prune failed:", err);
@@ -213,11 +206,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     }
 
     try {
-      const { versions, totalCount, clampedPage } = await fetchPage(
-        bookId,
-        page,
-        pageSize
-      );
+      const { versions, totalCount, clampedPage } = await fetchPage(bookId, page, pageSize);
       set({
         versions,
         totalCount,
@@ -366,15 +355,10 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
 
   renameVersion: async (versionId: string, name: string) => {
     const db = await getDatabase();
-    await db.execute(
-      "UPDATE book_versions SET name = ? WHERE id = ?",
-      [name, versionId]
-    );
+    await db.execute("UPDATE book_versions SET name = ? WHERE id = ?", [name, versionId]);
 
     set((state) => ({
-      versions: state.versions.map((v) =>
-        v.id === versionId ? { ...v, name } : v
-      ),
+      versions: state.versions.map((v) => (v.id === versionId ? { ...v, name } : v)),
     }));
   },
 

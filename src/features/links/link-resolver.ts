@@ -19,10 +19,7 @@ export interface ResolvedTarget {
   exists: boolean;
 }
 
-function bookIdForChapter(
-  chapterId: string,
-  data: ResolverData,
-): string | undefined {
+function bookIdForChapter(chapterId: string, data: ResolverData): string | undefined {
   return data.chapters.find((c) => c.id === chapterId)?.bookId;
 }
 
@@ -30,7 +27,7 @@ function resolveById(
   type: LinkTargetType,
   id: string,
   headingId: string | undefined,
-  data: ResolverData,
+  data: ResolverData
 ): ResolvedTarget | null {
   switch (type) {
     case "note": {
@@ -43,14 +40,10 @@ function resolveById(
     }
     case "chapter": {
       const ch = data.chapters.find((c) => c.id === id);
-      return ch
-        ? { type, id, title: ch.title, bookId: ch.bookId, exists: true }
-        : null;
+      return ch ? { type, id, title: ch.title, bookId: ch.bookId, exists: true } : null;
     }
     case "heading": {
-      const h = data.headings.find(
-        (x) => x.chapterId === id && x.id === headingId,
-      );
+      const h = data.headings.find((x) => x.chapterId === id && x.id === headingId);
       if (!h) return null;
       return {
         type,
@@ -62,9 +55,7 @@ function resolveById(
       };
     }
     case "noteHeading": {
-      const h = data.noteHeadings?.find(
-        (x) => x.noteId === id && x.id === headingId,
-      );
+      const h = data.noteHeadings?.find((x) => x.noteId === id && x.id === headingId);
       if (!h) return null;
       return {
         type,
@@ -77,17 +68,12 @@ function resolveById(
   }
 }
 
-export function resolveByTitle(
-  title: string,
-  data: ResolverData,
-): ResolvedTarget | null {
+export function resolveByTitle(title: string, data: ResolverData): ResolvedTarget | null {
   const note = data.notes.find((n) => n.title === title);
-  if (note)
-    return { type: "note", id: note.id, title: note.title, exists: true };
+  if (note) return { type: "note", id: note.id, title: note.title, exists: true };
 
   const book = data.books.find((b) => b.title === title);
-  if (book)
-    return { type: "book", id: book.id, title: book.title, exists: true };
+  if (book) return { type: "book", id: book.id, title: book.title, exists: true };
 
   const ch = data.chapters.find((c) => c.title === title);
   if (ch)
@@ -130,16 +116,11 @@ export function resolveByTitle(
 export function resolveLink(
   hrefOrTitle: string,
   label: string | undefined,
-  data: ResolverData,
+  data: ResolverData
 ): ResolvedTarget | null {
   const parsed = parseLinkUri(hrefOrTitle);
   if (parsed) {
-    const byId = resolveById(
-      parsed.targetType,
-      parsed.targetId,
-      parsed.headingId,
-      data,
-    );
+    const byId = resolveById(parsed.targetType, parsed.targetId, parsed.headingId, data);
     if (byId) return byId;
     if (label) return resolveByTitle(label, data);
     return null;

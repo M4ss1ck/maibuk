@@ -40,9 +40,7 @@ export function LayersPanel() {
             <div
               key={layer.id}
               className={`group flex items-center gap-1 px-2 py-1.5 border-l-2 ${
-                isSelected
-                  ? "bg-primary/10 border-primary"
-                  : "border-transparent hover:bg-muted"
+                isSelected ? "bg-primary/10 border-primary" : "border-transparent hover:bg-muted"
               }`}
             >
               {editingId === layer.id ? (
@@ -101,7 +99,11 @@ export function LayersPanel() {
                   toggleHidden(layer.id);
                 }}
               >
-                {layer.hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                {layer.hidden ? (
+                  <EyeOff className="w-3.5 h-3.5" />
+                ) : (
+                  <Eye className="w-3.5 h-3.5" />
+                )}
               </button>
               <button
                 type="button"
@@ -112,7 +114,11 @@ export function LayersPanel() {
                   toggleLocked(layer.id);
                 }}
               >
-                {layer.locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                {layer.locked ? (
+                  <Lock className="w-3.5 h-3.5" />
+                ) : (
+                  <Unlock className="w-3.5 h-3.5" />
+                )}
               </button>
             </div>
           );

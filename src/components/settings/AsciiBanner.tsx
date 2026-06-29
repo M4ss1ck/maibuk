@@ -31,11 +31,7 @@ const SETTLE_MS = 450;
 const SHOW_FIELD = true;
 const ENABLE_DISTORTION = true;
 
-export function AsciiBanner({
-  art = maibukArt,
-  label = "maibuk",
-  color,
-}: AsciiBannerProps) {
+export function AsciiBanner({ art = maibukArt, label = "maibuk", color }: AsciiBannerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -52,13 +48,11 @@ export function AsciiBanner({
     const grid: Grid = parseArt(art);
     const { rows, cols, cells } = grid;
 
-    const reduceMotion = matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const pointerFine = matchMedia("(pointer:fine)").matches;
 
     const fieldGlyph: string[][] = cells.map((row) =>
-      row.map((ch) => (ch === " " ? randomGlyph() : ch)),
+      row.map((ch) => (ch === " " ? randomGlyph() : ch))
     );
 
     const mutGlyph: string[][] = cells.map((row) => row.map(() => ""));
@@ -127,8 +121,7 @@ export function AsciiBanner({
     const draw = (now: number) => {
       clear();
 
-      const elapsed =
-        entranceStart === null ? Infinity : now - entranceStart;
+      const elapsed = entranceStart === null ? Infinity : now - entranceStart;
       const inEntrance = elapsed < totalDuration;
       const entranceComplete = entranceStart !== null && !inEntrance;
       const doMutate = now - lastMutate >= MUTATE_INTERVAL_MS;
@@ -148,10 +141,7 @@ export function AsciiBanner({
 
           if (inEntrance && elapsed < lockAt[r][c]) {
             glyph = randomGlyph();
-            color = colorString(
-              0,
-              isLetter ? LETTER_ALPHA : FIELD_ALPHA + 0.15,
-            );
+            color = colorString(0, isLetter ? LETTER_ALPHA : FIELD_ALPHA + 0.15);
           } else {
             glyph = isLetter ? target : fieldGlyph[r][c];
 
@@ -164,10 +154,7 @@ export function AsciiBanner({
 
               if (intensity > 0) {
                 if (doMutate) {
-                  mutGlyph[r][c] =
-                    Math.random() < intensity * MUTATE_RATE
-                      ? randomGlyph()
-                      : "";
+                  mutGlyph[r][c] = Math.random() < intensity * MUTATE_RATE ? randomGlyph() : "";
                 }
                 if (mutGlyph[r][c]) glyph = mutGlyph[r][c];
 
@@ -181,10 +168,7 @@ export function AsciiBanner({
               }
             }
 
-            color = colorString(
-              intensity,
-              isLetter ? LETTER_ALPHA : FIELD_ALPHA,
-            );
+            color = colorString(intensity, isLetter ? LETTER_ALPHA : FIELD_ALPHA);
           }
 
           ctx.fillStyle = color;
@@ -217,10 +201,7 @@ export function AsciiBanner({
           if (!isLetter && !SHOW_FIELD) continue;
 
           const glyph = isLetter ? target : fieldGlyph[r][c];
-          ctx.fillStyle = colorString(
-            0,
-            isLetter ? LETTER_ALPHA : FIELD_ALPHA,
-          );
+          ctx.fillStyle = colorString(0, isLetter ? LETTER_ALPHA : FIELD_ALPHA);
           ctx.fillText(glyph, c * cellWidth, r * rowHeight);
         }
       }
@@ -252,7 +233,7 @@ export function AsciiBanner({
           }
         }
       },
-      { threshold: 0.2 },
+      { threshold: 0.2 }
     );
 
     const onMove = (event: MouseEvent) => {

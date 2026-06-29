@@ -1,8 +1,4 @@
-import type {
-  DailyAggregateMetricPayload,
-  MetricEvent,
-  WritingMetricPayload,
-} from "../types";
+import type { DailyAggregateMetricPayload, MetricEvent, WritingMetricPayload } from "../types";
 import type { DayWordTotal } from "../events-repo";
 import type {
   AggregateKey,
@@ -18,7 +14,7 @@ import type {
 export function computeAggregate(
   key: AggregateKey,
   rows: MetricEvent[],
-  params: AggregateParams = {},
+  params: AggregateParams = {}
 ): AggregatePayload {
   if (key.startsWith("heatmap:")) {
     return computeHeatmap(rows);
@@ -32,7 +28,7 @@ export function computeAggregate(
 
 export function computeStreakFromDayTotals(
   dayTotals: DayWordTotal[],
-  params: AggregateParams = {},
+  params: AggregateParams = {}
 ): StreakAggregate {
   const threshold = params.dailyWordThreshold ?? 50;
   const today = params.today ?? formatLocalDate(new Date());
@@ -43,7 +39,7 @@ export function computeStreakFromDayTotals(
 export function mergeAggregatePayloads(
   key: AggregateKey,
   payloads: AggregatePayload[],
-  params: AggregateParams = {},
+  params: AggregateParams = {}
 ): AggregatePayload {
   if (payloads.length === 0) {
     return computeAggregate(key, [], params);
@@ -75,29 +71,23 @@ export function mergeAggregatePayloads(
   }
 
   return finalizeDashboard(
-    (payloads as DashboardAggregate[]).reduce(
-      (acc, payload) => {
-        acc.typedWords += payload.typedWords;
-        acc.deletedWords += payload.deletedWords;
-        acc.pastedWords += payload.pastedWords;
-        acc.activeSec += payload.activeSec;
-        acc.deepestSessionSec = Math.max(
-          acc.deepestSessionSec,
-          payload.deepestSessionSec,
+    (payloads as DashboardAggregate[]).reduce((acc, payload) => {
+      acc.typedWords += payload.typedWords;
+      acc.deletedWords += payload.deletedWords;
+      acc.pastedWords += payload.pastedWords;
+      acc.activeSec += payload.activeSec;
+      acc.deepestSessionSec = Math.max(acc.deepestSessionSec, payload.deepestSessionSec);
+      for (const bucket of payload.timeOfDay) {
+        acc.timeOfDay.set(bucket.hour, (acc.timeOfDay.get(bucket.hour) ?? 0) + bucket.words);
+      }
+      for (const bucket of payload.timeByWork) {
+        acc.timeByWork.set(
+          bucket.workId,
+          (acc.timeByWork.get(bucket.workId) ?? 0) + bucket.activeSec
         );
-        for (const bucket of payload.timeOfDay) {
-          acc.timeOfDay.set(bucket.hour, (acc.timeOfDay.get(bucket.hour) ?? 0) + bucket.words);
-        }
-        for (const bucket of payload.timeByWork) {
-          acc.timeByWork.set(
-            bucket.workId,
-            (acc.timeByWork.get(bucket.workId) ?? 0) + bucket.activeSec,
-          );
-        }
-        return acc;
-      },
-      emptyDashboardAccumulator(),
-    ),
+      }
+      return acc;
+    }, emptyDashboardAccumulator())
   );
 }
 
@@ -132,10 +122,7 @@ function computeHeatmap(rows: MetricEvent[]): HeatmapAggregate {
   };
 }
 
-function computeStreak(
-  rows: MetricEvent[],
-  params: AggregateParams,
-): StreakAggregate {
+function computeStreak(rows: MetricEvent[], params: AggregateParams): StreakAggregate {
   const threshold = params.dailyWordThreshold ?? 50;
   const today = params.today ?? formatLocalDate(new Date());
   const byDate = new Map<string, number>();
@@ -158,12 +145,12 @@ function computeStreak(
 function computeStreakFromMap(
   byDate: Map<string, number>,
   threshold: number,
-  today: string,
+  today: string
 ): StreakAggregate {
   const qualifying = new Set(
     Array.from(byDate.entries())
       .filter(([, words]) => words >= threshold)
-      .map(([date]) => date),
+      .map(([date]) => date)
   );
 
   const sorted = Array.from(qualifying).sort();
@@ -177,11 +164,7 @@ function computeStreakFromMap(
   }
 
   let currentStreak = 0;
-  for (
-    let cursor = addDays(today, -1);
-    qualifying.has(cursor);
-    cursor = addDays(cursor, -1)
-  ) {
+  for (let cursor = addDays(today, -1); qualifying.has(cursor); cursor = addDays(cursor, -1)) {
     currentStreak += 1;
   }
   if (qualifying.has(today)) currentStreak += 1;
@@ -206,20 +189,14 @@ function computeDashboard(rows: MetricEvent[]): DashboardAggregate {
         acc.deletedWords += payload.deletedWords;
         acc.pastedWords += payload.pastedWords;
         acc.activeSec += payload.activeSec;
-        acc.deepestSessionSec = Math.max(
-          acc.deepestSessionSec,
-          payload.deepestSessionSec,
-        );
+        acc.deepestSessionSec = Math.max(acc.deepestSessionSec, payload.deepestSessionSec);
         for (const bucket of payload.timeOfDay) {
-          acc.timeOfDay.set(
-            bucket.hour,
-            (acc.timeOfDay.get(bucket.hour) ?? 0) + bucket.words,
-          );
+          acc.timeOfDay.set(bucket.hour, (acc.timeOfDay.get(bucket.hour) ?? 0) + bucket.words);
         }
         for (const bucket of payload.timeByWork) {
           acc.timeByWork.set(
             bucket.workId,
-            (acc.timeByWork.get(bucket.workId) ?? 0) + bucket.activeSec,
+            (acc.timeByWork.get(bucket.workId) ?? 0) + bucket.activeSec
           );
         }
         break;
@@ -246,17 +223,14 @@ function computeDashboard(rows: MetricEvent[]): DashboardAggregate {
         const activeSec = getNumber(row.payload, "activeSec");
         acc.activeSec += activeSec;
         if (row.workId) {
-          acc.timeByWork.set(
-            row.workId,
-            (acc.timeByWork.get(row.workId) ?? 0) + activeSec,
-          );
+          acc.timeByWork.set(row.workId, (acc.timeByWork.get(row.workId) ?? 0) + activeSec);
         }
         break;
       }
       case "session.ended":
         acc.deepestSessionSec = Math.max(
           acc.deepestSessionSec,
-          getNumber(row.payload, "deepestStreakSec"),
+          getNumber(row.payload, "deepestStreakSec")
         );
         break;
       case "session.started":
@@ -296,10 +270,7 @@ function finalizeDashboard(acc: ReturnType<typeof emptyDashboardAccumulator>): D
     deletedWords: acc.deletedWords,
     pastedWords: acc.pastedWords,
     netWords,
-    editRatio:
-      acc.typedWords > 0
-        ? roundTwo(acc.deletedWords / acc.typedWords)
-        : 0,
+    editRatio: acc.typedWords > 0 ? roundTwo(acc.deletedWords / acc.typedWords) : 0,
     activeSec: acc.activeSec,
     deepestSessionSec: acc.deepestSessionSec,
     wpm: activeMinutes > 0 ? roundTwo(netWords / activeMinutes) : 0,
@@ -312,9 +283,7 @@ function getWords(event: MetricEvent): number {
   return getNumber(event.payload, "words");
 }
 
-function getDailyAggregatePayload(
-  event: MetricEvent,
-): DailyAggregateMetricPayload | null {
+function getDailyAggregatePayload(event: MetricEvent): DailyAggregateMetricPayload | null {
   const payload = event.payload as Partial<DailyAggregateMetricPayload>;
   if (payload.bucket !== "daily-v1") return null;
   return {
@@ -328,20 +297,22 @@ function getDailyAggregatePayload(
     deepestSessionSec: getFiniteNumber(payload.deepestSessionSec),
     timeOfDay: Array.isArray(payload.timeOfDay)
       ? payload.timeOfDay
-          .filter((bucket) => (
-            Number.isInteger(bucket.hour) &&
-            typeof bucket.words === "number" &&
-            Number.isFinite(bucket.words)
-          ))
+          .filter(
+            (bucket) =>
+              Number.isInteger(bucket.hour) &&
+              typeof bucket.words === "number" &&
+              Number.isFinite(bucket.words)
+          )
           .map((bucket) => ({ hour: bucket.hour, words: bucket.words }))
       : [],
     timeByWork: Array.isArray(payload.timeByWork)
       ? payload.timeByWork
-          .filter((bucket) => (
-            typeof bucket.workId === "string" &&
-            typeof bucket.activeSec === "number" &&
-            Number.isFinite(bucket.activeSec)
-          ))
+          .filter(
+            (bucket) =>
+              typeof bucket.workId === "string" &&
+              typeof bucket.activeSec === "number" &&
+              Number.isFinite(bucket.activeSec)
+          )
           .map((bucket) => ({
             workId: bucket.workId,
             activeSec: bucket.activeSec,
@@ -360,9 +331,7 @@ function getFiniteNumber(value: unknown): number {
 }
 
 function addHourWords(target: Map<number, number>, row: MetricEvent, words: number) {
-  const localTime = new Date(
-    new Date(row.timestamp).getTime() + row.tzOffsetMin * 60_000,
-  );
+  const localTime = new Date(new Date(row.timestamp).getTime() + row.tzOffsetMin * 60_000);
   const hour = localTime.getUTCHours();
   target.set(hour, (target.get(hour) ?? 0) + words);
 }

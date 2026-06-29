@@ -1,10 +1,7 @@
 export const METRICS_AGGREGATE_VERSION = 1;
 export const METRICS_AGGREGATE_PAGE_SIZE = 10_000;
 
-export type AggregateKey =
-  | `heatmap:${number}`
-  | "streak:current"
-  | "dashboard:last30d";
+export type AggregateKey = `heatmap:${number}` | "streak:current" | "dashboard:last30d";
 
 export interface HeatmapDay {
   date: string;
@@ -46,10 +43,7 @@ export interface DashboardAggregate {
   timeByWork: WorkTimeBucket[];
 }
 
-export type AggregatePayload =
-  | HeatmapAggregate
-  | StreakAggregate
-  | DashboardAggregate;
+export type AggregatePayload = HeatmapAggregate | StreakAggregate | DashboardAggregate;
 
 export interface AggregateParams {
   today?: string;

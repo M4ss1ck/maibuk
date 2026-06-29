@@ -65,7 +65,9 @@ describe("normalizeXhtmlToEditorHtml()", () => {
     });
 
     expect(result.html).toContain('<figure data-image="">');
-    expect(result.html).toContain('<img src="maibuk-asset:asset-cover" alt="Cover" title="Front cover">');
+    expect(result.html).toContain(
+      '<img src="maibuk-asset:asset-cover" alt="Cover" title="Front cover">'
+    );
     expect(result.referencedAssetIds).toEqual(["asset-cover"]);
     expect(result.references).toEqual(
       expect.arrayContaining([

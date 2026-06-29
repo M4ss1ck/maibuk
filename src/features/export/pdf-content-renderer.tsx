@@ -228,7 +228,11 @@ function renderHeading(
   key: string
 ): ReactNode {
   const headingId = el.getAttribute("id");
-  return createElement(Text, { key, id: headingId ?? undefined, style: styles[level] }, ...renderInlineChildren(el, styles));
+  return createElement(
+    Text,
+    { key, id: headingId ?? undefined, style: styles[level] },
+    ...renderInlineChildren(el, styles)
+  );
 }
 
 function renderList(
@@ -296,7 +300,7 @@ function renderSceneBreak(el: Element, styles: PdfStyles, key: string): ReactNod
       return createElement(
         View,
         { key, style: styles.sceneBreak },
-        createElement(Image, { src, style: styles.image }),
+        createElement(Image, { src, style: styles.image })
       );
     }
   }
@@ -305,7 +309,7 @@ function renderSceneBreak(el: Element, styles: PdfStyles, key: string): ReactNod
   return createElement(
     View,
     { key, style: styles.sceneBreak },
-    createElement(Text, { style: styles.sceneBreakText }, symbols),
+    createElement(Text, { style: styles.sceneBreakText }, symbols)
   );
 }
 

@@ -7,10 +7,7 @@ import { NotesList, NoteEditor, EmptyNotes } from "../components/notes";
 import { useSettingsStore } from "../features/settings/store";
 import { normalizeLanguage } from "../features/settings/types";
 import { useShortcuts } from "../lib/shortcuts";
-import {
-  markdownToEditorHtml,
-  titleFromMarkdown,
-} from "../features/markdown";
+import { markdownToEditorHtml, titleFromMarkdown } from "../features/markdown";
 
 export function Notes() {
   const notes = useNoteStore((s) => s.notes);
@@ -33,8 +30,7 @@ export function Notes() {
   const navigate = useNavigate();
   const { noteId } = useParams();
   const hasPendingHeadingScroll = Boolean(
-    (location.state as { scrollToHeadingId?: string } | null)
-      ?.scrollToHeadingId,
+    (location.state as { scrollToHeadingId?: string } | null)?.scrollToHeadingId
   );
   const [returnTarget, setReturnTarget] = useState<{
     to: string;
@@ -44,7 +40,7 @@ export function Notes() {
   const getBookLanguage = useCallback(
     (bookId?: string | null) =>
       normalizeLanguage(books.find((book) => book.id === bookId)?.language),
-    [books],
+    [books]
   );
 
   useEffect(() => {
@@ -65,9 +61,8 @@ export function Notes() {
   // Open the note named in the route. Fall back to the gallery if it is gone.
   useEffect(() => {
     if (!noteId) return;
-    const scrollToHeadingId = (
-      location.state as { scrollToHeadingId?: string } | null
-    )?.scrollToHeadingId;
+    const scrollToHeadingId = (location.state as { scrollToHeadingId?: string } | null)
+      ?.scrollToHeadingId;
     void loadNote(noteId).then(() => {
       if (!useNoteStore.getState().currentNote) {
         navigate("/notes", { replace: true });
@@ -123,10 +118,7 @@ export function Notes() {
     void updateNote({ id: noteId, bookId, language: getBookLanguage(bookId) });
   };
 
-  const handleImportMarkdown = async (
-    markdown: string,
-    filenameStem: string,
-  ) => {
+  const handleImportMarkdown = async (markdown: string, filenameStem: string) => {
     const title = titleFromMarkdown(markdown, filenameStem);
     const content = markdownToEditorHtml(markdown);
     const note = await createNote({ title, content, language: "en" });
@@ -157,10 +149,7 @@ export function Notes() {
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         if (!isResizing.current) return;
-        const newWidth = Math.max(
-          200,
-          Math.min(480, startWidth + moveEvent.clientX - startX),
-        );
+        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
         setNotesSidebarWidth(newWidth);
       };
 
@@ -177,7 +166,7 @@ export function Notes() {
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [notesSidebarWidth, setNotesSidebarWidth],
+    [notesSidebarWidth, setNotesSidebarWidth]
   );
 
   return (
@@ -204,9 +193,7 @@ export function Notes() {
           className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
         />
       </div>
-      <div
-        className={`flex-1 min-w-0 ${currentNote ? "flex" : "hidden md:flex"} flex-col`}
-      >
+      <div className={`flex-1 min-w-0 ${currentNote ? "flex" : "hidden md:flex"} flex-col`}>
         {currentNote ? (
           <NoteEditor
             key={currentNote.id}
@@ -216,17 +203,12 @@ export function Notes() {
               setCurrentNote(null);
               setLastNoteId(null);
             }}
-            onReturnToBook={
-              returnTarget ? () => navigate(returnTarget.to) : undefined
-            }
+            onReturnToBook={returnTarget ? () => navigate(returnTarget.to) : undefined}
             returnLabel={returnTarget?.label}
             suppressRestore={hasPendingHeadingScroll}
           />
         ) : (
-          <EmptyNotes
-            onCreateNote={handleCreateNote}
-            onBack={() => navigate("/notes")}
-          />
+          <EmptyNotes onCreateNote={handleCreateNote} onBack={() => navigate("/notes")} />
         )}
       </div>
     </div>

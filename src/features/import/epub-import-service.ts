@@ -1,7 +1,12 @@
 import { getDatabase } from "../../lib/db";
 import { useBookStore } from "../books/store";
 import { useChapterStore } from "../chapters/store";
-import { insertBookMetadata, insertBookStyles, insertChapterEpubMeta, insertEpubStructure } from "./epub-project-repo";
+import {
+  insertBookMetadata,
+  insertBookStyles,
+  insertChapterEpubMeta,
+  insertEpubStructure,
+} from "./epub-project-repo";
 import { readEpub } from "./epub-reader";
 import { scanEpub, buildImportPreview } from "./epub-scanner";
 import { normalizeEpubProject } from "./epub-normalizer";
@@ -78,9 +83,7 @@ export async function importEpubProject(input: {
     for (const c of rewritten) {
       const original = importedChapters.find((x) => x.chapterId === c.chapterId);
       if (original && original.content !== c.content) {
-        await useChapterStore
-          .getState()
-          .updateChapter(c.chapterId, { content: c.content });
+        await useChapterStore.getState().updateChapter(c.chapterId, { content: c.content });
       }
     }
 

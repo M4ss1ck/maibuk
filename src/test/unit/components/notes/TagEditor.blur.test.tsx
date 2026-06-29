@@ -20,7 +20,7 @@ describe("TagEditor blur behavior", () => {
       <>
         <TagEditor tags={[]} allTags={["draft"]} onChange={vi.fn()} onClose={onClose} />
         <button type="button">Outside</button>
-      </>,
+      </>
     );
 
     expect(screen.getByRole("combobox")).toBeInTheDocument();

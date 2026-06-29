@@ -1,11 +1,4 @@
-import {
-  readTextFile,
-  writeTextFile,
-  readDir,
-  remove,
-  mkdir,
-  stat,
-} from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, readDir, remove, mkdir, stat } from "@tauri-apps/plugin-fs";
 import { appConfigDir, join } from "@tauri-apps/api/path";
 import type { DirEntry } from "@tauri-apps/plugin-fs";
 import type { BackupAdapter, BackupEntry, BackupPage, BackupPageOptions } from "../types";
@@ -39,7 +32,7 @@ function isManagedMetaFile(name: string | undefined): name is string {
   return (
     typeof name === "string" &&
     /^maibuk-backup-(daily|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.meta\.json$/.test(
-      name,
+      name
     )
   );
 }
@@ -61,14 +54,14 @@ function timestampFromFilename(filename: string): number {
     Number(day),
     Number(hour),
     Number(minute),
-    Number(second),
+    Number(second)
   );
 }
 
 async function cleanupOrphanMetaFiles(
   backupDir: string,
   files: DirEntry[],
-  sqlFiles: string[],
+  sqlFiles: string[]
 ): Promise<void> {
   const metaFiles = files.map((file) => file.name).filter(isManagedMetaFile);
   const sqlNames = new Set(sqlFiles);
@@ -97,7 +90,7 @@ function metaPath(sqlPath: string): string {
 async function buildMetaFromSql(
   sqlPath: string,
   filename: string,
-  sqlContent: string,
+  sqlContent: string
 ): Promise<BackupMeta> {
   const fileStat = await stat(sqlPath);
   return {
@@ -279,9 +272,7 @@ class TauriBackupAdapter implements BackupAdapter {
   }
 }
 
-export async function createTauriBackup(
-  customDir?: string,
-): Promise<BackupAdapter> {
+export async function createTauriBackup(customDir?: string): Promise<BackupAdapter> {
   const dir = await getBackupDir(customDir);
   return new TauriBackupAdapter(dir);
 }

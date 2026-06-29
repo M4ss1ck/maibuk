@@ -33,7 +33,7 @@ vi.mock("../../../../features/settings/store", () => ({
         editorShowBorder: false,
         metrics: { enabled: { writing: false } },
       }),
-    },
+    }
   ),
 }));
 
@@ -71,9 +71,7 @@ vi.mock("../../../../components/editor/FootnoteList", () => ({
 }));
 
 vi.mock("../../../../components/editor/extensions/SpellCheck", async () => {
-  const { Extension } = await vi.importActual<typeof import("@tiptap/core")>(
-    "@tiptap/core",
-  );
+  const { Extension } = await vi.importActual<typeof import("@tiptap/core")>("@tiptap/core");
   return {
     SpellCheck: Extension.create({ name: "mockSpellCheck" }),
   };
@@ -87,11 +85,7 @@ describe("Editor", () => {
 
   it("does not re-apply initial content after the editor is created", async () => {
     render(
-      <Editor
-        content={"<p>Loaded chapter</p>\n"}
-        onUpdate={vi.fn()}
-        onWordCountChange={vi.fn()}
-      />,
+      <Editor content={"<p>Loaded chapter</p>\n"} onUpdate={vi.fn()} onWordCountChange={vi.fn()} />
     );
 
     await waitFor(() => {
@@ -100,14 +94,7 @@ describe("Editor", () => {
   });
 
   it("passes bookId and internalTargets to EditorToolbar", async () => {
-    render(
-      <Editor
-        content={"<p>Chapter</p>\n"}
-        onUpdate={vi.fn()}
-        bookId="b1"
-        chapterId="c1"
-      />,
-    );
+    render(<Editor content={"<p>Chapter</p>\n"} onUpdate={vi.fn()} bookId="b1" chapterId="c1" />);
 
     await waitFor(() => {
       expect(capturedToolbarProps.length).toBeGreaterThan(0);
@@ -127,7 +114,7 @@ describe("Editor", () => {
         onUpdate={vi.fn()}
         spellCheckLanguage="es"
         onSpellCheckLanguageChange={onSpellCheckLanguageChange}
-      />,
+      />
     );
 
     await waitFor(() => {
@@ -149,7 +136,7 @@ describe("Editor", () => {
         onEditorReady={(instance) => {
           editor = instance;
         }}
-      />,
+      />
     );
 
     await waitFor(() => {
@@ -178,7 +165,7 @@ describe("Editor", () => {
         onEditorReady={(instance) => {
           editor = instance;
         }}
-      />,
+      />
     );
 
     await waitFor(() => {
@@ -208,7 +195,7 @@ describe("Editor", () => {
         onEditorReady={(instance) => {
           editor = instance;
         }}
-      />,
+      />
     );
 
     const copyButton = await screen.findByRole("button", { name: "editor.copyCode" });
@@ -231,7 +218,7 @@ describe("Editor", () => {
       <Editor
         content={'<pre><code class="language-javascript">const value = 1</code></pre>'}
         onUpdate={onUpdate}
-      />,
+      />
     );
 
     const languageButton = await screen.findByRole("button", {
@@ -245,9 +232,7 @@ describe("Editor", () => {
     await userEvent.type(languageInput, "python{Enter}");
 
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith(
-        expect.stringContaining('class="language-python"'),
-      );
+      expect(onUpdate).toHaveBeenCalledWith(expect.stringContaining('class="language-python"'));
     });
   });
 
@@ -268,7 +253,7 @@ describe("Editor", () => {
         onEditorReady={(instance) => {
           editor = instance;
         }}
-      />,
+      />
     );
 
     await waitFor(() => {

@@ -7,12 +7,10 @@ let captured: ((e: { preventDefault: () => void }) => Promise<void>) | null = nu
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     hide: mockHide,
-    onCloseRequested: vi.fn(
-      async (cb: (e: { preventDefault: () => void }) => Promise<void>) => {
-        captured = cb;
-        return () => {};
-      },
-    ),
+    onCloseRequested: vi.fn(async (cb: (e: { preventDefault: () => void }) => Promise<void>) => {
+      captured = cb;
+      return () => {};
+    }),
   }),
 }));
 
@@ -41,9 +39,7 @@ describe("installWindowCloseHandler", () => {
   });
 
   async function installFresh(): Promise<void> {
-    const { installWindowCloseHandler } = await import(
-      "../../../../lib/window/closeHandler"
-    );
+    const { installWindowCloseHandler } = await import("../../../../lib/window/closeHandler");
     await installWindowCloseHandler();
     await new Promise((r) => setTimeout(r, 0));
   }

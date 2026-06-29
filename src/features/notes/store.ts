@@ -83,7 +83,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
     try {
       const db = await getDatabase();
       const rows = await db.select<Record<string, unknown>[]>(
-        'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC',
+        'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC'
       );
       set({ notes: rows.map(toModel), isLoading: false });
     } catch (error) {
@@ -95,10 +95,9 @@ export const useNoteStore = create<NoteStore>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const db = await getDatabase();
-      const rows = await db.select<Record<string, unknown>[]>(
-        "SELECT * FROM notes WHERE id = ?",
-        [id],
-      );
+      const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [
+        id,
+      ]);
       set({ currentNote: rows.length > 0 ? toModel(rows[0]) : null, isLoading: false });
     } catch (error) {
       set({ error: String(error), isLoading: false });
@@ -111,7 +110,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
     const now = nowSeconds();
 
     const orderResult = await db.select<{ max_order: number | null }[]>(
-      'SELECT MAX("order") as max_order FROM notes',
+      'SELECT MAX("order") as max_order FROM notes'
     );
     const order = input.order ?? (orderResult[0]?.max_order ?? -1) + 1;
 
@@ -148,7 +147,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
         note.createdAt,
         note.updatedAt,
         note.contentUpdatedAt,
-      ],
+      ]
     );
 
     set((state) => ({ notes: sortNotes([...state.notes, note]) }));
@@ -157,10 +156,9 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
   updateNote: async (input: UpdateNoteInput) => {
     const db = await getDatabase();
-    const rows = await db.select<Record<string, unknown>[]>(
-      "SELECT * FROM notes WHERE id = ?",
-      [input.id],
-    );
+    const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [
+      input.id,
+    ]);
     if (rows.length === 0) return;
     const existing = toModel(rows[0]);
     const now = nowSeconds();
@@ -192,7 +190,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
         updated.updatedAt,
         updated.contentUpdatedAt,
         updated.id,
-      ],
+      ]
     );
 
     set((state) => ({
@@ -211,9 +209,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
   deleteNote: async (id: string) => {
     const db = await getDatabase();
-    const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [
-      id,
-    ]);
+    const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [id]);
     if (rows.length > 0) {
       await recordTombstone({
         entityType: "note",
@@ -233,7 +229,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
     const db = await getDatabase();
     const now = nowSeconds();
     const ordered = orderedItems.map((item) =>
-      typeof item === "string" ? { id: item, pinned: undefined } : item,
+      typeof item === "string" ? { id: item, pinned: undefined } : item
     );
 
     for (let i = 0; i < ordered.length; i++) {
@@ -274,15 +270,13 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
   saveCollapsedHeadings: async (noteId: string, collapsedHeadings: string[]) => {
     const db = await getDatabase();
-    await db.execute(
-      'UPDATE notes SET collapsed_headings = ? WHERE id = ?',
-      [JSON.stringify(collapsedHeadings), noteId],
-    );
+    await db.execute("UPDATE notes SET collapsed_headings = ? WHERE id = ?", [
+      JSON.stringify(collapsedHeadings),
+      noteId,
+    ]);
 
     set((state) => ({
-      notes: state.notes.map((n) =>
-        n.id === noteId ? { ...n, collapsedHeadings } : n,
-      ),
+      notes: state.notes.map((n) => (n.id === noteId ? { ...n, collapsedHeadings } : n)),
       currentNote:
         state.currentNote?.id === noteId
           ? { ...state.currentNote, collapsedHeadings }

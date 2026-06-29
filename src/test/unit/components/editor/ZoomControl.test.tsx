@@ -14,12 +14,8 @@ vi.mock("../../../../lib/platform", () => ({
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { ZoomControl } = await import(
-  "../../../../components/editor/ZoomControl"
-);
-const { useSettingsStore } = await import(
-  "../../../../features/settings/store"
-);
+const { ZoomControl } = await import("../../../../components/editor/ZoomControl");
+const { useSettingsStore } = await import("../../../../features/settings/store");
 
 describe("ZoomControl", () => {
   beforeEach(() => {

@@ -117,6 +117,14 @@ export default defineConfig(() => ({
         "src/components/settings/AsciiBanner.tsx",
         "src/components/settings/AsciiFieldBackground.tsx",
         "src/features/settings/AppSettingsProvider.tsx",
+        // Phase 13: Infinite Canvas
+        "src/features/canvas/serialization.ts",
+        "src/features/canvas/reactFlowAdapter.ts",
+        "src/features/canvas/store.ts",
+        // Phase 14: Canvas rich-text parity
+        "src/components/editor/extensions/createRichTextExtensions.ts",
+        "src/components/editor/plain-text-html.ts",
+        "src/features/canvas/nodes/staticRichText.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

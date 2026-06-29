@@ -14,15 +14,9 @@ describe("clipboard pure helpers", () => {
   });
 
   it("derives plain text, preferring text over html", () => {
-    expect(
-      snapshotToPlainText({ text: "hi", html: "<b>hi</b>", hasImage: false }),
-    ).toBe("hi");
-    expect(
-      snapshotToPlainText({ text: "", html: "<b>bold</b>", hasImage: false }),
-    ).toBe("bold");
-    expect(snapshotToPlainText({ text: "", html: null, hasImage: true })).toBe(
-      "",
-    );
+    expect(snapshotToPlainText({ text: "hi", html: "<b>hi</b>", hasImage: false })).toBe("hi");
+    expect(snapshotToPlainText({ text: "", html: "<b>bold</b>", hasImage: false })).toBe("bold");
+    expect(snapshotToPlainText({ text: "", html: null, hasImage: true })).toBe("");
   });
 
   it("converts plain text to escaped, line-broken HTML", () => {
@@ -35,8 +29,7 @@ describe("clipboard pure helpers", () => {
 describe("readClipboardSnapshot - navigator path", () => {
   const makeItem = (map: Record<string, string>) => ({
     types: Object.keys(map),
-    getType: (type: string) =>
-      Promise.resolve(new Blob([map[type]], { type })),
+    getType: (type: string) => Promise.resolve(new Blob([map[type]], { type })),
   });
 
   afterEach(() => {
@@ -46,9 +39,9 @@ describe("readClipboardSnapshot - navigator path", () => {
   it("reads html + plain text from navigator", async () => {
     vi.stubGlobal("navigator", {
       clipboard: {
-        read: vi.fn().mockResolvedValue([
-          makeItem({ "text/html": "<b>hi</b>", "text/plain": "hi" }),
-        ]),
+        read: vi
+          .fn()
+          .mockResolvedValue([makeItem({ "text/html": "<b>hi</b>", "text/plain": "hi" })]),
       },
     });
     const snap = await readClipboardSnapshot();
@@ -88,9 +81,7 @@ describe("readClipboardSnapshot - Tauri fallback", () => {
       readText: vi.fn().mockResolvedValue("from tauri"),
       readImage: vi.fn().mockRejectedValue(new Error("no image")),
     }));
-    const { readClipboardSnapshot: read } = await import(
-      "../../../../components/editor/clipboard"
-    );
+    const { readClipboardSnapshot: read } = await import("../../../../components/editor/clipboard");
     const snap = await read();
     expect(snap.text).toBe("from tauri");
     expect(snap.html).toBeNull();

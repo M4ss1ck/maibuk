@@ -12,9 +12,7 @@ describe("useReadingPositionStore", () => {
 
   it("saves and retrieves a position with a timestamp", () => {
     vi.spyOn(Date, "now").mockReturnValue(1000);
-    useReadingPositionStore
-      .getState()
-      .savePosition("chapter:a", { caret: 5, top: 3 });
+    useReadingPositionStore.getState().savePosition("chapter:a", { caret: 5, top: 3 });
 
     expect(useReadingPositionStore.getState().getPosition("chapter:a")).toEqual({
       caret: 5,
@@ -24,9 +22,7 @@ describe("useReadingPositionStore", () => {
   });
 
   it("returns undefined for an unknown key", () => {
-    expect(
-      useReadingPositionStore.getState().getPosition("note:missing"),
-    ).toBeUndefined();
+    expect(useReadingPositionStore.getState().getPosition("note:missing")).toBeUndefined();
   });
 
   it("overwrites an existing key in place", () => {
@@ -40,9 +36,7 @@ describe("useReadingPositionStore", () => {
       top: 8,
       updatedAt: 2,
     });
-    expect(Object.keys(useReadingPositionStore.getState().positions)).toHaveLength(
-      1,
-    );
+    expect(Object.keys(useReadingPositionStore.getState().positions)).toHaveLength(1);
   });
 
   it("evicts the oldest entries once the cap is exceeded", () => {

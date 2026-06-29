@@ -1,5 +1,6 @@
 import { createDatabase, IS_TAURI, type DatabaseAdapter } from "../platform";
 import { ensureMetricsSchema } from "../../features/metrics/events-repo";
+import { DEFAULT_CANVAS_DOC_JSON } from "../canvas/defaultDoc";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;
@@ -186,12 +187,8 @@ async function initializeSchema(): Promise<void> {
   await db
     .execute(`ALTER TABLE notes ADD COLUMN collapsed_headings TEXT DEFAULT '[]'`)
     .catch(() => {});
-  await db
-    .execute(`ALTER TABLE notes ADD COLUMN book_id TEXT`)
-    .catch(() => {});
-  await db
-    .execute(`ALTER TABLE notes ADD COLUMN language TEXT`)
-    .catch(() => {});
+  await db.execute(`ALTER TABLE notes ADD COLUMN book_id TEXT`).catch(() => {});
+  await db.execute(`ALTER TABLE notes ADD COLUMN language TEXT`).catch(() => {});
   await db
     .execute(`
       UPDATE notes
@@ -205,12 +202,24 @@ async function initializeSchema(): Promise<void> {
   // Migration: Add content_updated_at (user-facing "modified" time, bumped only
   // by title/content edits — not by tagging, pinning, or reordering). Backfill
   // existing rows from updated_at so their displayed date is preserved.
-  await db
-    .execute(`ALTER TABLE notes ADD COLUMN content_updated_at INTEGER`)
-    .catch(() => {});
+  await db.execute(`ALTER TABLE notes ADD COLUMN content_updated_at INTEGER`).catch(() => {});
   await db
     .execute(`UPDATE notes SET content_updated_at = updated_at WHERE content_updated_at IS NULL`)
     .catch(() => {});
+
+  const escapedDefaultCanvasDoc = DEFAULT_CANVAS_DOC_JSON.split("'").join("''");
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS canvases (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      doc TEXT NOT NULL DEFAULT '${escapedDefaultCanvasDoc}',
+      pinned INTEGER NOT NULL DEFAULT 0,
+      "order" INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      content_updated_at INTEGER NOT NULL
+    )
+  `);
 
   // Link index: edges extracted from note/chapter content (powers backlinks).
   await db.execute(`
@@ -346,6 +355,7 @@ export async function resetDatabase(): Promise<void> {
   await database.execute("DELETE FROM books");
   await database.execute("DELETE FROM cover_templates");
   await database.execute("DELETE FROM notes").catch(() => {});
+  await database.execute("DELETE FROM canvases").catch(() => {});
   await database.execute("DELETE FROM links").catch(() => {});
   await database.execute("DELETE FROM sync_tombstones").catch(() => {});
   await database.execute("DELETE FROM settings");

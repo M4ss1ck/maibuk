@@ -51,7 +51,9 @@ function buildParsedEpub(overrides: Partial<ParsedEpub> = {}): ParsedEpub {
         absoluteHref: "EPUB/chapter-1.xhtml",
         mediaType: "application/xhtml+xml",
         properties: [],
-        data: strToU8("<html><head><title>Document Title</title></head><body><p>One</p></body></html>"),
+        data: strToU8(
+          "<html><head><title>Document Title</title></head><body><p>One</p></body></html>"
+        ),
         text: "<html><head><title>Document Title</title></head><body><p>One</p></body></html>",
       },
       {

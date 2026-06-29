@@ -24,20 +24,19 @@ afterEach(() => {
 
 describe("ResponsiveToggleGroup", () => {
   it("shows labels when the measured full toggle fits the available width", async () => {
-    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (
+      this: HTMLElement
+    ) {
       return this.getAttribute("data-testid") === "view-toggle-group" ? 180 : 0;
     });
-    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (
+      this: HTMLElement
+    ) {
       return this.getAttribute("data-testid") === "view-toggle-measure" ? 140 : 0;
     });
 
     render(
-      <ResponsiveToggleGroup
-        value="list"
-        options={options}
-        onChange={vi.fn()}
-        testId="view"
-      />,
+      <ResponsiveToggleGroup value="list" options={options} onChange={vi.fn()} testId="view" />
     );
 
     await waitFor(() => {
@@ -49,20 +48,19 @@ describe("ResponsiveToggleGroup", () => {
   });
 
   it("hides labels visually when the measured full toggle does not fit", async () => {
-    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (
+      this: HTMLElement
+    ) {
       return this.getAttribute("data-testid") === "view-toggle-group" ? 110 : 0;
     });
-    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (
+      this: HTMLElement
+    ) {
       return this.getAttribute("data-testid") === "view-toggle-measure" ? 160 : 0;
     });
 
     render(
-      <ResponsiveToggleGroup
-        value="list"
-        options={options}
-        onChange={vi.fn()}
-        testId="view"
-      />,
+      <ResponsiveToggleGroup value="list" options={options} onChange={vi.fn()} testId="view" />
     );
 
     await waitFor(() => {
@@ -77,12 +75,7 @@ describe("ResponsiveToggleGroup", () => {
     const onChange = vi.fn();
 
     render(
-      <ResponsiveToggleGroup
-        value="list"
-        options={options}
-        onChange={onChange}
-        testId="view"
-      />,
+      <ResponsiveToggleGroup value="list" options={options} onChange={onChange} testId="view" />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));

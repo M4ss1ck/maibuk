@@ -1,8 +1,5 @@
 import type { DatabaseAdapter } from "../../lib/platform/types";
-import type {
-  AggregateKey,
-  SnapshotMetrics,
-} from "./aggregates/types";
+import type { AggregateKey, SnapshotMetrics } from "./aggregates/types";
 import type {
   DailyAggregateMetricPayload,
   MetricEvent,
@@ -63,9 +60,7 @@ export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
     )
   `);
   // Additive migration for installs that predate the pushed_at column.
-  await db
-    .execute("ALTER TABLE metrics_events ADD COLUMN pushed_at TEXT")
-    .catch(() => {});
+  await db.execute("ALTER TABLE metrics_events ADD COLUMN pushed_at TEXT").catch(() => {});
 
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_metrics_events_local_date
@@ -113,9 +108,7 @@ export async function ensureMetricsSchema(db: DatabaseAdapter): Promise<void> {
   `);
 
   // Additive migration for installs that predate the window_start column.
-  await db
-    .execute("ALTER TABLE metrics_cache ADD COLUMN window_start TEXT")
-    .catch(() => {});
+  await db.execute("ALTER TABLE metrics_cache ADD COLUMN window_start TEXT").catch(() => {});
 }
 
 export function getWindowLowerBound(key: AggregateKey): string {
@@ -131,19 +124,13 @@ export function getWindowLowerBound(key: AggregateKey): string {
   return "";
 }
 
-export async function insertEvents(
-  db: DatabaseAdapter,
-  events: MetricEvent[],
-): Promise<void> {
+export async function insertEvents(db: DatabaseAdapter, events: MetricEvent[]): Promise<void> {
   for (const event of events) {
     await insertEventRow(db, event);
   }
 }
 
-async function insertEventRow(
-  db: DatabaseAdapter,
-  event: MetricEvent,
-): Promise<void> {
+async function insertEventRow(db: DatabaseAdapter, event: MetricEvent): Promise<void> {
   await db.execute(
     `INSERT OR IGNORE INTO metrics_events
       (id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version)
@@ -158,17 +145,17 @@ async function insertEventRow(
       event.workId,
       JSON.stringify(event.payload),
       event.schemaVersion,
-    ],
+    ]
   );
 }
 
 export async function insertIfNotTombstoned(
   db: DatabaseAdapter,
-  event: MetricEvent,
+  event: MetricEvent
 ): Promise<boolean> {
   const tombstones = await db.select<{ id: string }[]>(
     "SELECT id FROM metrics_event_tombstones WHERE id = ? LIMIT 1",
-    [event.id],
+    [event.id]
   );
   if (tombstones.length > 0) return false;
   await insertEventRow(db, event);
@@ -177,7 +164,7 @@ export async function insertIfNotTombstoned(
 
 export async function insertEventsRespectingTombstones(
   db: DatabaseAdapter,
-  events: MetricEvent[],
+  events: MetricEvent[]
 ): Promise<void> {
   for (const event of events) {
     await insertIfNotTombstoned(db, event);
@@ -188,18 +175,16 @@ export async function listEvents(db: DatabaseAdapter): Promise<MetricEvent[]> {
   const rows = await db.select<MetricEventRow[]>(
     `SELECT id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version
      FROM metrics_events
-     ORDER BY timestamp ASC, id ASC`,
+     ORDER BY timestamp ASC, id ASC`
   );
   return rows.map(toMetricEvent);
 }
 
-export async function getSnapshotMetrics(
-  db: DatabaseAdapter,
-): Promise<SnapshotMetrics> {
+export async function getSnapshotMetrics(db: DatabaseAdapter): Promise<SnapshotMetrics> {
   const rows = await db.select<SnapshotWorkRow[]>(
     `SELECT id, title, word_count
      FROM books
-     ORDER BY updated_at DESC, title ASC`,
+     ORDER BY updated_at DESC, title ASC`
   );
 
   return {
@@ -214,14 +199,14 @@ export async function getSnapshotMetrics(
 
 export async function getCacheEntry(
   db: DatabaseAdapter,
-  cacheKey: string,
+  cacheKey: string
 ): Promise<MetricsCacheEntry | null> {
   const rows = await db.select<CacheRow[]>(
     `SELECT cache_key, aggregate_version, source_high_watermark, window_start, computed_at, payload
      FROM metrics_cache
      WHERE cache_key = ?
      LIMIT 1`,
-    [cacheKey],
+    [cacheKey]
   );
   if (rows.length === 0) return null;
   const row = rows[0];
@@ -237,24 +222,24 @@ export async function getCacheEntry(
 
 export async function getSourceHighWatermark(
   db: DatabaseAdapter,
-  key: AggregateKey,
+  key: AggregateKey
 ): Promise<string> {
   const { where, params } = buildAggregateWhere(key);
   const rows = await db.select<{ watermark: string | null }[]>(
     `SELECT MAX(timestamp) AS watermark FROM metrics_events ${where}`,
-    params,
+    params
   );
   return rows[0]?.watermark ?? "";
 }
 
 export async function getCategoryMeasuringSince(
   db: DatabaseAdapter,
-  category: MetricsCategory,
+  category: MetricsCategory
 ): Promise<string | null> {
   const { where, params } = buildCategoryWhere(category);
   const rows = await db.select<{ timestamp: string | null }[]>(
     `SELECT MIN(timestamp) AS timestamp FROM metrics_events ${where}`,
-    params,
+    params
   );
   return rows[0]?.timestamp ?? null;
 }
@@ -262,7 +247,7 @@ export async function getCategoryMeasuringSince(
 export async function listEventsForAggregate(
   db: DatabaseAdapter,
   key: AggregateKey,
-  options: { limit: number; offset: number },
+  options: { limit: number; offset: number }
 ): Promise<MetricEvent[]> {
   const { where, params } = buildAggregateWhere(key);
   const rows = await db.select<MetricEventRow[]>(
@@ -271,7 +256,7 @@ export async function listEventsForAggregate(
      ${where}
      ORDER BY timestamp ASC, id ASC
      LIMIT ? OFFSET ?`,
-    [...params, options.limit, options.offset],
+    [...params, options.limit, options.offset]
   );
   return rows.map(toMetricEvent);
 }
@@ -281,9 +266,7 @@ export interface DayWordTotal {
   words: number;
 }
 
-export async function listDailyWritingTotals(
-  db: DatabaseAdapter,
-): Promise<DayWordTotal[]> {
+export async function listDailyWritingTotals(db: DatabaseAdapter): Promise<DayWordTotal[]> {
   const rows = await db.select<{ local_date: string; total: number | null }[]>(
     `SELECT local_date, SUM(words) AS total
        FROM (
@@ -297,7 +280,7 @@ export async function listDailyWritingTotals(
            FROM metrics_events
           WHERE event_type = 'aggregate.daily'
        )
-      GROUP BY local_date`,
+      GROUP BY local_date`
   );
   return rows.map((row) => ({
     date: row.local_date,
@@ -305,11 +288,9 @@ export async function listDailyWritingTotals(
   }));
 }
 
-export async function getDailyWritingHighWatermark(
-  db: DatabaseAdapter,
-): Promise<string> {
+export async function getDailyWritingHighWatermark(db: DatabaseAdapter): Promise<string> {
   const rows = await db.select<{ watermark: string | null }[]>(
-    "SELECT MAX(timestamp) AS watermark FROM metrics_events WHERE event_type = 'writing.typed'",
+    "SELECT MAX(timestamp) AS watermark FROM metrics_events WHERE event_type = 'writing.typed'"
   );
   return rows[0]?.watermark ?? "";
 }
@@ -318,12 +299,12 @@ export async function purgeEventsByPrefix(
   db: DatabaseAdapter,
   eventTypePrefix: string,
   deviceId: string,
-  deletedAt: string,
+  deletedAt: string
 ): Promise<number> {
   const pattern = `${eventTypePrefix}%`;
   const rows = await db.select<{ id: string }[]>(
     "SELECT id FROM metrics_events WHERE event_type LIKE ?",
-    [pattern],
+    [pattern]
   );
 
   for (const row of rows) {
@@ -331,7 +312,7 @@ export async function purgeEventsByPrefix(
       `INSERT OR IGNORE INTO metrics_event_tombstones
         (id, deleted_at, device_id, reason)
        VALUES (?, ?, ?, ?)`,
-      [row.id, deletedAt, deviceId, "category-opt-out"],
+      [row.id, deletedAt, deviceId, "category-opt-out"]
     );
   }
 
@@ -339,10 +320,7 @@ export async function purgeEventsByPrefix(
   return rows.length;
 }
 
-export async function upsertCache(
-  db: DatabaseAdapter,
-  entry: MetricsCacheEntry,
-): Promise<void> {
+export async function upsertCache(db: DatabaseAdapter, entry: MetricsCacheEntry): Promise<void> {
   await db.execute(
     `INSERT OR REPLACE INTO metrics_cache
       (cache_key, aggregate_version, source_high_watermark, window_start, computed_at, payload)
@@ -354,22 +332,17 @@ export async function upsertCache(
       entry.windowStart,
       entry.computedAt,
       JSON.stringify(entry.payload),
-    ],
+    ]
   );
 }
 
-export async function invalidateCache(
-  db: DatabaseAdapter,
-  prefixes: string[],
-): Promise<void> {
+export async function invalidateCache(db: DatabaseAdapter, prefixes: string[]): Promise<void> {
   for (const prefix of prefixes) {
     await db.execute("DELETE FROM metrics_cache WHERE cache_key LIKE ?", [`${prefix}%`]);
   }
 }
 
-export async function invalidateAllAggregateCaches(
-  db: DatabaseAdapter,
-): Promise<void> {
+export async function invalidateAllAggregateCaches(db: DatabaseAdapter): Promise<void> {
   await db.execute("DELETE FROM metrics_cache");
 }
 
@@ -382,7 +355,7 @@ export interface TombstoneRow {
 
 export async function listUnpushedEvents(
   db: DatabaseAdapter,
-  limit: number,
+  limit: number
 ): Promise<MetricEvent[]> {
   const rows = await db.select<MetricEventRow[]>(
     `SELECT id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version
@@ -390,27 +363,25 @@ export async function listUnpushedEvents(
      WHERE pushed_at IS NULL
      ORDER BY timestamp ASC, id ASC
      LIMIT ?`,
-    [limit],
+    [limit]
   );
   return rows.map(toMetricEvent);
 }
 
 export async function countUnpushedEvents(db: DatabaseAdapter): Promise<number> {
   const rows = await db.select<{ n: number }[]>(
-    "SELECT COUNT(*) AS n FROM metrics_events WHERE pushed_at IS NULL",
+    "SELECT COUNT(*) AS n FROM metrics_events WHERE pushed_at IS NULL"
   );
   return rows[0]?.n ?? 0;
 }
 
-export async function compactUnpushedRawMetricEvents(
-  db: DatabaseAdapter,
-): Promise<number> {
+export async function compactUnpushedRawMetricEvents(db: DatabaseAdapter): Promise<number> {
   const rows = await db.select<MetricEventRow[]>(
     `SELECT id, timestamp, local_date, tz_offset_min, device_id, event_type, work_id, payload, schema_version
        FROM metrics_events
       WHERE pushed_at IS NULL
         AND event_type != 'aggregate.daily'
-      ORDER BY device_id ASC, local_date ASC, timestamp ASC, id ASC`,
+      ORDER BY device_id ASC, local_date ASC, timestamp ASC, id ASC`
   );
   if (rows.length === 0) return 0;
 
@@ -454,17 +425,14 @@ export async function compactUnpushedRawMetricEvents(
 export async function markEventPushed(
   db: DatabaseAdapter,
   id: string,
-  pushedAt: string,
+  pushedAt: string
 ): Promise<void> {
-  await db.execute(
-    "UPDATE metrics_events SET pushed_at = ? WHERE id = ?",
-    [pushedAt, id],
-  );
+  await db.execute("UPDATE metrics_events SET pushed_at = ? WHERE id = ?", [pushedAt, id]);
 }
 
 export async function listUnpushedTombstones(
   db: DatabaseAdapter,
-  limit: number,
+  limit: number
 ): Promise<TombstoneRow[]> {
   const rows = await db.select<
     { id: string; deleted_at: string; device_id: string; reason: string }[]
@@ -474,7 +442,7 @@ export async function listUnpushedTombstones(
      WHERE pushed_at IS NULL
      ORDER BY deleted_at ASC, id ASC
      LIMIT ?`,
-    [limit],
+    [limit]
   );
   return rows.map((row) => ({
     id: row.id,
@@ -487,22 +455,22 @@ export async function listUnpushedTombstones(
 export async function markTombstonePushed(
   db: DatabaseAdapter,
   id: string,
-  pushedAt: string,
+  pushedAt: string
 ): Promise<void> {
-  await db.execute(
-    "UPDATE metrics_event_tombstones SET pushed_at = ? WHERE id = ?",
-    [pushedAt, id],
-  );
+  await db.execute("UPDATE metrics_event_tombstones SET pushed_at = ? WHERE id = ?", [
+    pushedAt,
+    id,
+  ]);
 }
 
 export async function applyRemoteEvent(
   db: DatabaseAdapter,
   event: MetricEvent,
-  pushedAt: string,
+  pushedAt: string
 ): Promise<boolean> {
   const tombstones = await db.select<{ id: string }[]>(
     "SELECT id FROM metrics_event_tombstones WHERE id = ? LIMIT 1",
-    [event.id],
+    [event.id]
   );
   if (tombstones.length > 0) return false;
   await db.execute(
@@ -520,7 +488,7 @@ export async function applyRemoteEvent(
       JSON.stringify(event.payload),
       event.schemaVersion,
       pushedAt,
-    ],
+    ]
   );
   if (event.eventType === "aggregate.daily") {
     await suppressCompactedSourceEvents(db, event, pushedAt);
@@ -531,13 +499,13 @@ export async function applyRemoteEvent(
 export async function applyRemoteTombstone(
   db: DatabaseAdapter,
   tombstone: TombstoneRow,
-  pushedAt: string,
+  pushedAt: string
 ): Promise<void> {
   await db.execute(
     `INSERT OR IGNORE INTO metrics_event_tombstones
       (id, deleted_at, device_id, reason, pushed_at)
      VALUES (?, ?, ?, ?, ?)`,
-    [tombstone.id, tombstone.deletedAt, tombstone.deviceId, tombstone.reason, pushedAt],
+    [tombstone.id, tombstone.deletedAt, tombstone.deviceId, tombstone.reason, pushedAt]
   );
   await db.execute("DELETE FROM metrics_events WHERE id = ?", [tombstone.id]);
 }
@@ -559,7 +527,7 @@ function toMetricEvent(row: MetricEventRow): MetricEvent {
 async function suppressCompactedSourceEvents(
   db: DatabaseAdapter,
   event: MetricEvent,
-  pushedAt: string,
+  pushedAt: string
 ): Promise<void> {
   const payload = event.payload as Partial<DailyAggregateMetricPayload>;
   if (!Array.isArray(payload.sourceEventIds)) return;
@@ -570,7 +538,7 @@ async function suppressCompactedSourceEvents(
       `INSERT OR IGNORE INTO metrics_event_tombstones
         (id, deleted_at, device_id, reason, pushed_at)
        VALUES (?, ?, ?, ?, ?)`,
-      [sourceId, event.timestamp, event.deviceId, "compacted", pushedAt],
+      [sourceId, event.timestamp, event.deviceId, "compacted", pushedAt]
     );
     await db.execute("DELETE FROM metrics_events WHERE id = ?", [sourceId]);
   }
@@ -627,10 +595,7 @@ function hashMetricIds(ids: string[]): string {
   return (hash >>> 0).toString(36);
 }
 
-function addRowToDailyAggregate(
-  acc: DailyAggregateAccumulator,
-  row: MetricEventRow,
-): void {
+function addRowToDailyAggregate(acc: DailyAggregateAccumulator, row: MetricEventRow): void {
   acc.rawEvents += 1;
   acc.sourceEventIds.push(row.id);
   if (row.timestamp > acc.timestamp) acc.timestamp = row.timestamp;
@@ -659,25 +624,19 @@ function addRowToDailyAggregate(
       const activeSec = getNumber(payload.activeSec);
       acc.activeSec += activeSec;
       if (row.work_id) {
-        acc.timeByWork.set(
-          row.work_id,
-          (acc.timeByWork.get(row.work_id) ?? 0) + activeSec,
-        );
+        acc.timeByWork.set(row.work_id, (acc.timeByWork.get(row.work_id) ?? 0) + activeSec);
       }
       break;
     }
     case "session.ended":
-      acc.deepestSessionSec = Math.max(
-        acc.deepestSessionSec,
-        getNumber(payload.deepestStreakSec),
-      );
+      acc.deepestSessionSec = Math.max(acc.deepestSessionSec, getNumber(payload.deepestStreakSec));
       break;
   }
 }
 
 async function upsertDailyAggregateEvent(
   db: DatabaseAdapter,
-  acc: DailyAggregateAccumulator,
+  acc: DailyAggregateAccumulator
 ): Promise<void> {
   const payload: DailyAggregateMetricPayload = {
     bucket: DAILY_AGGREGATE_BUCKET,
@@ -711,18 +670,12 @@ async function upsertDailyAggregateEvent(
       null,
       JSON.stringify(payload),
       1,
-    ],
+    ]
   );
 }
 
-function addHourWords(
-  acc: DailyAggregateAccumulator,
-  row: MetricEventRow,
-  words: number,
-): void {
-  const localTime = new Date(
-    new Date(row.timestamp).getTime() + row.tz_offset_min * 60_000,
-  );
+function addHourWords(acc: DailyAggregateAccumulator, row: MetricEventRow, words: number): void {
+  const localTime = new Date(new Date(row.timestamp).getTime() + row.tz_offset_min * 60_000);
   const hour = localTime.getUTCHours();
   acc.timeOfDay.set(hour, (acc.timeOfDay.get(hour) ?? 0) + words);
 }
@@ -770,8 +723,7 @@ function buildCategoryWhere(category: MetricsCategory): {
   }
 
   return {
-    where:
-      "WHERE event_type LIKE 'writing.%' OR event_type LIKE 'session.%'",
+    where: "WHERE event_type LIKE 'writing.%' OR event_type LIKE 'session.%'",
     params: [],
   };
 }

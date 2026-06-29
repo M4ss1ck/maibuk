@@ -9,10 +9,7 @@ export type NotesSortOption = "date-desc" | "date-asc" | "title-asc" | "title-de
 
 export const DEFAULT_NOTES_SORT: NotesSortOption = "date-desc";
 
-export function sortNotesBy(
-  notes: NoteWithBook[],
-  option: NotesSortOption,
-): NoteWithBook[] {
+export function sortNotesBy(notes: NoteWithBook[], option: NotesSortOption): NoteWithBook[] {
   const [field, direction] = option.split("-");
   const sign = direction === "asc" ? 1 : -1;
   return [...notes].sort((a, b) => {
@@ -106,7 +103,7 @@ function normalizeCriteria(criteria: string | NoteFilterCriteria): NoteFilterCri
 
 export function filterNotes(
   notes: NoteWithBook[],
-  criteria: string | NoteFilterCriteria,
+  criteria: string | NoteFilterCriteria
 ): NoteWithBook[] {
   const filters = normalizeCriteria(criteria);
   const query = filters.query?.trim().toLowerCase() ?? "";
@@ -139,7 +136,7 @@ export function filterNotes(
 
 export function buildListNoteSections(
   notes: NoteWithBook[],
-  criteria: string | NoteFilterCriteria,
+  criteria: string | NoteFilterCriteria
 ): NoteSection[] {
   const filtered = filterNotes(notes, criteria);
   return [
@@ -226,7 +223,9 @@ export function buildDateNoteGroups(notes: NoteWithBook[], now = new Date()): Da
     { id: "this-week", title: "This week", notes: thisWeek },
   ];
 
-  for (const [year, groupedNotes] of [...years.entries()].sort(([a], [b]) => Number(b) - Number(a))) {
+  for (const [year, groupedNotes] of [...years.entries()].sort(
+    ([a], [b]) => Number(b) - Number(a)
+  )) {
     groups.push({ id: year, title: year, notes: groupedNotes });
   }
 

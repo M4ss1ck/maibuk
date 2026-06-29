@@ -14,17 +14,10 @@ vi.mock("../../../../lib/platform", () => ({
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { WidthControl } = await import(
-  "../../../../components/editor/WidthControl"
-);
-const { useSettingsStore } = await import(
-  "../../../../features/settings/store"
-);
-const {
-  EDITOR_CONTENT_WIDTH_FULL,
-  EDITOR_CONTENT_WIDTH_MAX,
-  EDITOR_CONTENT_WIDTH_STEP,
-} = await import("../../../../features/settings/types");
+const { WidthControl } = await import("../../../../components/editor/WidthControl");
+const { useSettingsStore } = await import("../../../../features/settings/store");
+const { EDITOR_CONTENT_WIDTH_FULL, EDITOR_CONTENT_WIDTH_MAX, EDITOR_CONTENT_WIDTH_STEP } =
+  await import("../../../../features/settings/types");
 
 function getPresetHighlightOpacity(name: RegExp): number {
   const button = screen.getByRole("button", { name });
@@ -47,9 +40,7 @@ describe("WidthControl", () => {
   it("opens the popover from the trigger", () => {
     render(<WidthControl />);
     fireEvent.click(screen.getByTitle("editor.contentWidth"));
-    expect(
-      screen.getByRole("slider", { name: "editor.contentWidth" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "editor.contentWidth" })).toBeInTheDocument();
   });
 
   it("selects a preset", () => {
@@ -78,9 +69,7 @@ describe("WidthControl", () => {
 
     fireEvent.change(slider, { target: { value: String(fullSliderValue) } });
 
-    expect(useSettingsStore.getState().editorContentWidth).toBe(
-      EDITOR_CONTENT_WIDTH_FULL,
-    );
+    expect(useSettingsStore.getState().editorContentWidth).toBe(EDITOR_CONTENT_WIDTH_FULL);
     expect(getPresetHighlightOpacity(/editor\.widthFull/i)).toBe(1);
   });
 
@@ -119,7 +108,7 @@ describe("WidthControl", () => {
     });
 
     expect(getPresetHighlightOpacity(/editor\.widthWide/i)).toBeGreaterThan(
-      getPresetHighlightOpacity(/editor\.widthComfortable/i),
+      getPresetHighlightOpacity(/editor\.widthComfortable/i)
     );
     expect(screen.getByText("960px")).toBeInTheDocument();
     expect(screen.getByText("100%")).toBeInTheDocument();
@@ -153,8 +142,6 @@ describe("WidthControl", () => {
     render(<WidthControl />);
     fireEvent.click(screen.getByTitle("editor.contentWidth"));
     expect(screen.getByText("editor.pagePadding")).toBeInTheDocument();
-    expect(
-      screen.getByRole("slider", { name: "editor.pagePadding" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "editor.pagePadding" })).toBeInTheDocument();
   });
 });

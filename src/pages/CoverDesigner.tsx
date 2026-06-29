@@ -119,14 +119,24 @@ export function CoverDesigner() {
   }, [navigate, bookId]);
 
   useShortcuts([
-    { keys: ["delete", "backspace"], onTrigger: () => {
-      const { selectedId, removeLayer } = useCoverStore.getState();
-      if (selectedId) removeLayer(selectedId);
-    } },
+    {
+      keys: ["delete", "backspace"],
+      onTrigger: () => {
+        const { selectedId, removeLayer } = useCoverStore.getState();
+        if (selectedId) removeLayer(selectedId);
+      },
+    },
     { keys: ["ctrl+s", "meta+s"], onTrigger: () => handleSave(), allowInInput: true },
     { keys: ["ctrl+z", "meta+z"], onTrigger: () => useCoverStore.getState().undo() },
-    { keys: ["ctrl+shift+z", "meta+shift+z", "ctrl+y"], onTrigger: () => useCoverStore.getState().redo() },
-    { keys: ["ctrl+d", "meta+d"], onTrigger: () => useCoverStore.getState().duplicateSelected(), preventDefault: true },
+    {
+      keys: ["ctrl+shift+z", "meta+shift+z", "ctrl+y"],
+      onTrigger: () => useCoverStore.getState().redo(),
+    },
+    {
+      keys: ["ctrl+d", "meta+d"],
+      onTrigger: () => useCoverStore.getState().duplicateSelected(),
+      preventDefault: true,
+    },
     { keys: ["arrowup"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, -1) },
     { keys: ["arrowdown"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, 1) },
     { keys: ["arrowleft"], onTrigger: () => useCoverStore.getState().nudgeSelected(-1, 0) },
@@ -135,14 +145,20 @@ export function CoverDesigner() {
     { keys: ["shift+arrowdown"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, 10) },
     { keys: ["shift+arrowleft"], onTrigger: () => useCoverStore.getState().nudgeSelected(-10, 0) },
     { keys: ["shift+arrowright"], onTrigger: () => useCoverStore.getState().nudgeSelected(10, 0) },
-    { keys: ["["], onTrigger: () => {
-      const { selectedId, sendBackward } = useCoverStore.getState();
-      if (selectedId) sendBackward(selectedId);
-    } },
-    { keys: ["]"], onTrigger: () => {
-      const { selectedId, bringForward } = useCoverStore.getState();
-      if (selectedId) bringForward(selectedId);
-    } },
+    {
+      keys: ["["],
+      onTrigger: () => {
+        const { selectedId, sendBackward } = useCoverStore.getState();
+        if (selectedId) sendBackward(selectedId);
+      },
+    },
+    {
+      keys: ["]"],
+      onTrigger: () => {
+        const { selectedId, bringForward } = useCoverStore.getState();
+        if (selectedId) bringForward(selectedId);
+      },
+    },
     { keys: ["escape"], onTrigger: () => useCoverStore.getState().select(null) },
   ]);
 
@@ -168,13 +184,23 @@ export function CoverDesigner() {
           <h1 className="font-medium text-sm sm:text-base truncate">{t("cover.title")}</h1>
           <p className="text-xs text-muted-foreground truncate">{currentBook.title}</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={handleSave} disabled={!dirty || isSaving} className="text-xs sm:text-sm">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleSave}
+          disabled={!dirty || isSaving}
+          className="text-xs sm:text-sm"
+        >
           {isSaving ? t("common.loading") : dirty ? t("cover.saveCover") : t("cover.saved")}
         </Button>
       </div>
 
       {/* Toolbar */}
-      <Toolbar onExport={exportAndSave} bookTitle={currentBook.title} bookAuthor={currentBook.authorName} />
+      <Toolbar
+        onExport={exportAndSave}
+        bookTitle={currentBook.title}
+        bookAuthor={currentBook.authorName}
+      />
 
       {/* Main area: layers | canvas | properties */}
       <div className="flex-1 flex min-h-0">

@@ -35,9 +35,7 @@ describe("Wikilink node", () => {
   });
 
   it("parses a bound wikilink back from html", () => {
-    const editor = makeEditor(
-      '<p><a class="wikilink" href="maibuk://book/b1">Book</a></p>',
-    );
+    const editor = makeEditor('<p><a class="wikilink" href="maibuk://book/b1">Book</a></p>');
     const json = editor.getJSON();
     const node = JSON.stringify(json);
     expect(node).toContain("wikilink");
