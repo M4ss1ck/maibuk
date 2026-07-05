@@ -1,8 +1,12 @@
+import { Tooltip } from "@/components/ui";
+import type { ShortcutId } from "@/lib/shortcut-registry";
+
 interface ToolbarButtonProps {
   onClick: () => void;
   isActive?: boolean;
   disabled?: boolean;
-  title: string;
+  label: string;
+  shortcut?: ShortcutId;
   children: React.ReactNode;
 }
 
@@ -10,21 +14,24 @@ export function ToolbarButton({
   onClick,
   isActive,
   disabled,
-  title,
+  label,
+  shortcut,
   children,
 }: ToolbarButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`p-2 rounded transition-colors ${
-        isActive ? "bg-primary text-white" : "hover:bg-muted"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-    >
-      {children}
-    </button>
+    <Tooltip content={label} shortcut={shortcut}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        className={`p-2 rounded transition-colors ${
+          isActive ? "bg-primary text-white" : "hover:bg-muted"
+        } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 

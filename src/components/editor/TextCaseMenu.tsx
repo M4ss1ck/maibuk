@@ -78,11 +78,11 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
 
   return (
     <>
-      <ToolbarButton onClick={toUpperCase} title={t("editor.uppercase")}>
+      <ToolbarButton onClick={toUpperCase} label={t("editor.uppercase")}>
         <CaseUpper className="w-4 h-4" />
       </ToolbarButton>
 
-      <ToolbarButton onClick={toLowerCase} title={t("editor.lowercase")}>
+      <ToolbarButton onClick={toLowerCase} label={t("editor.lowercase")}>
         <CaseLower className="w-4 h-4" />
       </ToolbarButton>
 
