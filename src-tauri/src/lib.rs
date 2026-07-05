@@ -21,10 +21,22 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                // The window is created hidden and shown manually in setup()
+                // depending on --minimized; never let the plugin restore
+                // visibility or it fights that logic.
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        .difference(tauri_plugin_window_state::StateFlags::VISIBLE),
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
         ))
+        .invoke_handler(tauri::generate_handler![tray::set_tray_syncing])
         .setup(|app| {
             use tauri::Manager;
 

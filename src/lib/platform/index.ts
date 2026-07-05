@@ -86,6 +86,20 @@ export async function setWindowAlwaysOnTop(enabled: boolean): Promise<void> {
   await getCurrentWindow().setAlwaysOnTop(enabled);
 }
 
+// Swap the tray icon while a sync is running. No-op on web and on
+// platforms without a tray (the Rust command handles that).
+export async function setTraySyncing(syncing: boolean): Promise<void> {
+  if (
+    !IS_TAURI ||
+    typeof window === "undefined" ||
+    !("__TAURI_INTERNALS__" in window)
+  ) {
+    return;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("set_tray_syncing", { syncing });
+}
+
 // Launch the app at login (hidden in the tray). No-op on web.
 export async function setLaunchOnStartup(enabled: boolean): Promise<void> {
   if (!IS_TAURI || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
