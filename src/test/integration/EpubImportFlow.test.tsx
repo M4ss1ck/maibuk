@@ -23,6 +23,7 @@ const { mockGetDatabase, mockNavigate, mockOpenWithData } = vi.hoisted(() => ({
 vi.mock("../../lib/db", () => ({ getDatabase: mockGetDatabase }));
 vi.mock("../../lib/platform", () => ({
   IS_WEB: true,
+  isMac: () => false,
   getDialog: vi.fn(),
   getFileSystem: vi.fn(),
   getWebDialog: vi.fn(async () => ({ openWithData: mockOpenWithData })),

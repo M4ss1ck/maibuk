@@ -15,6 +15,7 @@ import { isModKey, isTypingTarget } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { scanEpubForImport } from "@/features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "@/features/import";
+import { formatKeys, SHORTCUTS } from "@/lib/shortcut-registry";
 
 interface EpubImportState {
   bytes: Uint8Array;
@@ -177,7 +178,10 @@ export function Home() {
             <AddIcon className="w-5 h-5" />
             <span className="hidden sm:inline">{t("books.newBook")}</span>
             <span className="sm:hidden">{t("common.new")}</span>
-            <KeyboardShortcut keys={["Ctrl", "N"]} className="hidden lg:inline-flex" />
+            <KeyboardShortcut
+              shortcut={formatKeys(SHORTCUTS["home.newBook"])}
+              className="hidden lg:inline-flex"
+            />
           </Button>
         </div>
       </div>

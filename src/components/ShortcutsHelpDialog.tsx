@@ -1,11 +1,6 @@
 import { Modal, KeyboardShortcut } from "@/components/ui";
+import type { ShortcutItem } from "@/hooks/useActiveShortcuts";
 import { useTranslation } from "react-i18next";
-
-interface ShortcutItem {
-  id: string;
-  label: string;
-  keys: string[];
-}
 
 interface ShortcutsHelpDialogProps {
   isOpen: boolean;
@@ -34,7 +29,7 @@ export function ShortcutsHelpDialog({
               className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
             >
               <span className="text-sm text-foreground">{shortcut.label}</span>
-              <KeyboardShortcut keys={shortcut.keys} alwaysVisible />
+              <KeyboardShortcut shortcut={shortcut.formatted} alwaysVisible />
             </div>
           ))
         )}

@@ -8,6 +8,7 @@ import { ProjectsIcon, SettingsIcon, CloseIcon, MaibukLogo } from "@/components/
 import { BarChart3, Menu, NotebookPen, Workflow } from "lucide-react";
 import { KeyboardShortcut } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
+import { formatKeys, SHORTCUTS } from "@/lib/shortcut-registry";
 
 export function Layout() {
   const { t } = useTranslation();
@@ -129,7 +130,10 @@ export function Layout() {
           >
             <ProjectsIcon className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.projects")}</span>
-            <KeyboardShortcut keys={["g", "p"]} className="ml-auto hidden lg:inline-flex" />
+            <KeyboardShortcut
+              shortcut={formatKeys(SHORTCUTS["global.gotoProjects"])}
+              className="ml-auto hidden lg:inline-flex"
+            />
           </NavLink>
 
           <NavLink
@@ -143,7 +147,10 @@ export function Layout() {
           >
             <NotebookPen className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.notes")}</span>
-            <KeyboardShortcut keys={["g", "n"]} className="ml-auto hidden lg:inline-flex" />
+            <KeyboardShortcut
+              shortcut={formatKeys(SHORTCUTS["global.gotoNotes"])}
+              className="ml-auto hidden lg:inline-flex"
+            />
           </NavLink>
 
           <NavLink
@@ -157,7 +164,10 @@ export function Layout() {
           >
             <Workflow className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.canvas")}</span>
-            <KeyboardShortcut keys={["g", "c"]} className="ml-auto hidden lg:inline-flex" />
+            <KeyboardShortcut
+              shortcut={formatKeys(SHORTCUTS["global.gotoCanvas"])}
+              className="ml-auto hidden lg:inline-flex"
+            />
           </NavLink>
 
           <NavLink
@@ -171,7 +181,10 @@ export function Layout() {
           >
             <BarChart3 className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.metrics")}</span>
-            <KeyboardShortcut keys={["g", "m"]} className="ml-auto hidden lg:inline-flex" />
+            <KeyboardShortcut
+              shortcut={formatKeys(SHORTCUTS["global.gotoMetrics"])}
+              className="ml-auto hidden lg:inline-flex"
+            />
           </NavLink>
 
           <NavLink
@@ -185,7 +198,10 @@ export function Layout() {
           >
             <SettingsIcon className="w-5 h-5 shrink-0" />
             <span className="flex-1 truncate">{t("common.settings")}</span>
-            <KeyboardShortcut keys={["g", "s"]} className="ml-auto hidden lg:inline-flex" />
+            <KeyboardShortcut
+              shortcut={formatKeys(SHORTCUTS["global.gotoSettings"])}
+              className="ml-auto hidden lg:inline-flex"
+            />
           </NavLink>
         </nav>
 

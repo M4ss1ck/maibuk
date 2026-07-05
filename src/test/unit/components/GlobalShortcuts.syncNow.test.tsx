@@ -29,6 +29,7 @@ vi.mock("../../../lib/shortcuts", () => ({
 
 vi.mock("../../../lib/platform", () => ({
   IS_TAURI: false,
+  isMac: () => false,
 }));
 
 const themeState = { theme: "light", setTheme: vi.fn() };
