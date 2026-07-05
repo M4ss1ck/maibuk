@@ -16,6 +16,7 @@ import { PathTracker } from "@/components/PathTracker";
 import { ToastViewport } from "@/components/ui";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { runDailyBackupOnce } from "@/features/backup/lifecycle";
+import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
 
@@ -32,6 +33,7 @@ function App() {
     void runDailyBackupOnce();
     void installWindowCloseHandler();
     void installAlwaysOnTopReapply();
+    installTraySyncIndicator();
   }, [embedMode]);
 
   if (embedMode) {
