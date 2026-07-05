@@ -25,7 +25,15 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main_window(app),
-            "quit" => app.exit(0),
+            "quit" => {
+                // Quit bypasses the window close event the plugin saves on;
+                // persist the latest window state explicitly first.
+                use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+                let _ = app.save_window_state(
+                    StateFlags::all().difference(StateFlags::VISIBLE),
+                );
+                app.exit(0);
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
