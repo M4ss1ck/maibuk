@@ -29,6 +29,7 @@ import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
 import { openExternal } from "@/lib/platform";
 import { isModKey } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
+import { matchKeys } from "@/lib/shortcut-registry";
 import {
   Bold,
   Italic,
@@ -328,7 +329,7 @@ export function EditorToolbar({
 
   useShortcuts([
     {
-      keys: ["ctrl+f", "meta+f"],
+      keys: matchKeys("editor.findReplace"),
       allowInInput: true,
       onTrigger: openFindReplace,
     },

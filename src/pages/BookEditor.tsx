@@ -52,6 +52,7 @@ import {
 import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { HistoryMenuButton } from "@/components/versions/HistoryMenuButton";
 import { useShortcuts } from "@/lib/shortcuts";
+import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
 import { IS_TAURI, isMac } from "@/lib/platform";
 import { useAutoCheckpoint } from "@/features/versions/useAutoCheckpoint";
 import { useVersionStore } from "@/features/versions/store";
@@ -601,14 +602,14 @@ export function BookEditor() {
       allowInInput: true,
     },
     {
-      keys: ["ctrl+s", "meta+s"],
+      keys: matchKeys("editor.save"),
       onTrigger: () => {
         handleSaveNow();
       },
       allowInInput: true,
     },
     {
-      keys: ["ctrl+\\", "meta+\\"],
+      keys: matchKeys("editor.toggleSidebar"),
       onTrigger: () => {
         setShowSidebar((prev) => {
           if (!prev) setSidebarWidth(256);
@@ -623,14 +624,14 @@ export function BookEditor() {
       },
     },
     {
-      keys: ["ctrl+alt+s", "meta+alt+s"],
+      keys: matchKeys("editor.saveVersion"),
       onTrigger: () => {
         void handleSaveVersion();
       },
       allowInInput: true,
     },
     {
-      sequence: ["g", "v"],
+      sequence: SHORTCUTS["editor.versionHistory"].sequence,
       onTrigger: () => {
         setShowVersionPanel(true);
       },

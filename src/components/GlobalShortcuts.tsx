@@ -10,6 +10,7 @@ import { useNoteStore } from "@/features/notes";
 import { getPassphrase } from "@/features/sync/crypto";
 import { IS_TAURI } from "@/lib/platform";
 import { useActiveShortcuts } from "@/hooks";
+import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
 
 export function GlobalShortcuts() {
   const { t } = useTranslation();
@@ -27,7 +28,7 @@ export function GlobalShortcuts() {
 
   useShortcuts([
     {
-      sequence: ["g", "p"],
+      sequence: SHORTCUTS["global.gotoProjects"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/") {
           navigate("/");
@@ -35,7 +36,7 @@ export function GlobalShortcuts() {
       },
     },
     {
-      sequence: ["g", "s"],
+      sequence: SHORTCUTS["global.gotoSettings"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/settings") {
           navigate("/settings");
@@ -43,7 +44,7 @@ export function GlobalShortcuts() {
       },
     },
     {
-      sequence: ["g", "m"],
+      sequence: SHORTCUTS["global.gotoMetrics"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/metrics") {
           navigate("/metrics");
@@ -51,7 +52,7 @@ export function GlobalShortcuts() {
       },
     },
     {
-      sequence: ["g", "n"],
+      sequence: SHORTCUTS["global.gotoNotes"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/notes") {
           navigate("/notes");
@@ -59,7 +60,7 @@ export function GlobalShortcuts() {
       },
     },
     {
-      sequence: ["g", "c"],
+      sequence: SHORTCUTS["global.gotoCanvas"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/canvas") {
           navigate("/canvas");
@@ -67,20 +68,20 @@ export function GlobalShortcuts() {
       },
     },
     {
-      sequence: ["g", "t"],
+      sequence: SHORTCUTS["global.toggleTheme"].sequence,
       onTrigger: () => {
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         setTheme(getCycledTheme(theme, prefersDark));
       },
     },
     {
-      sequence: ["g", "h"],
+      sequence: SHORTCUTS["global.toggleShortcutHints"].sequence,
       onTrigger: () => {
         setHideKeyboardHints(!hideKeyboardHints);
       },
     },
     {
-      keys: ["ctrl+shift+p", "meta+shift+p"],
+      keys: matchKeys("global.toggleAlwaysOnTop"),
       allowInInput: true,
       enabled: IS_TAURI,
       onTrigger: () => {
@@ -88,7 +89,7 @@ export function GlobalShortcuts() {
       },
     },
     {
-      keys: ["ctrl+shift+y", "meta+shift+y"],
+      keys: matchKeys("global.syncNow"),
       allowInInput: true,
       onTrigger: () => {
         const store = useSyncStore.getState();

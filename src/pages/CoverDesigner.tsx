@@ -12,6 +12,7 @@ import { dataUrlToBytes, exportScene, exportScenePdf } from "@/features/covers/e
 import { Button } from "@/components/ui/Button";
 import { BackIcon } from "@/components/icons";
 import { useShortcuts } from "@/lib/shortcuts";
+import { matchKeys } from "@/lib/shortcut-registry";
 
 const DEFAULT_PRESET = "6x9";
 
@@ -126,14 +127,14 @@ export function CoverDesigner() {
         if (selectedId) removeLayer(selectedId);
       },
     },
-    { keys: ["ctrl+s", "meta+s"], onTrigger: () => handleSave(), allowInInput: true },
+    { keys: matchKeys("cover.save"), onTrigger: () => handleSave(), allowInInput: true },
     { keys: ["ctrl+z", "meta+z"], onTrigger: () => useCoverStore.getState().undo() },
     {
       keys: ["ctrl+shift+z", "meta+shift+z", "ctrl+y"],
       onTrigger: () => useCoverStore.getState().redo(),
     },
     {
-      keys: ["ctrl+d", "meta+d"],
+      keys: matchKeys("cover.duplicate"),
       onTrigger: () => useCoverStore.getState().duplicateSelected(),
       preventDefault: true,
     },

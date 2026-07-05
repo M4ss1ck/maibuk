@@ -15,7 +15,7 @@ import { isModKey, isTypingTarget } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { scanEpubForImport } from "@/features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "@/features/import";
-import { formatKeys, SHORTCUTS } from "@/lib/shortcut-registry";
+import { formatKeys, SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
 
 interface EpubImportState {
   bytes: Uint8Array;
@@ -52,7 +52,7 @@ export function Home() {
 
   useShortcuts([
     {
-      keys: ["ctrl+n", "meta+n"],
+      keys: matchKeys("home.newBook"),
       onTrigger: (event) => {
         if (isTypingTarget(event.target) || isModKey(event) === false) return;
         setIsNewBookOpen(true);

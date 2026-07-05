@@ -13,6 +13,7 @@ import { CollapsibleHeading } from "@/components/editor/extensions";
 import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/CollapsibleHeading";
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import { useShortcuts } from "@/lib/shortcuts";
+import { matchKeys } from "@/lib/shortcut-registry";
 import { BackIcon } from "@/components/icons";
 import { TagEditor } from "@/components/notes/TagEditor";
 import { timeAgo } from "@/components/notes/timeAgo";
@@ -352,7 +353,7 @@ export function NoteEditor({
 
   useShortcuts([
     {
-      keys: ["ctrl+s", "meta+s"],
+      keys: matchKeys("editor.save"),
       onTrigger: () => {
         void saveNow();
       },
