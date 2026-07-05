@@ -36,6 +36,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
         ))
+        .invoke_handler(tauri::generate_handler![tray::set_tray_syncing])
         .setup(|app| {
             use tauri::Manager;
 
