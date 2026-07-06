@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Eye, EyeOff, Lock, Unlock } from "lucide-react"
 import { useTranslation } from "react-i18next";
 import { useCoverStore } from "@/features/covers/store";
 import type { Layer } from "@/features/covers/scene/schema";
+import { Tooltip } from "@/components/ui";
 
 function layerLabel(layer: Layer): string {
   if (layer.type === "text") return layer.text || layer.name;
@@ -68,58 +69,66 @@ export function LayersPanel() {
                 </button>
               )}
 
-              <button
-                type="button"
-                title={t("cover.layers.reorderUp")}
-                className="p-1 text-muted-foreground hover:text-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  bringForward(layer.id);
-                }}
-              >
-                <ChevronUp className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                title={t("cover.layers.reorderDown")}
-                className="p-1 text-muted-foreground hover:text-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  sendBackward(layer.id);
-                }}
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                title={t("cover.layers.toggleVisible")}
-                className="p-1 text-muted-foreground hover:text-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleHidden(layer.id);
-                }}
-              >
-                {layer.hidden ? (
-                  <EyeOff className="w-3.5 h-3.5" />
-                ) : (
-                  <Eye className="w-3.5 h-3.5" />
-                )}
-              </button>
-              <button
-                type="button"
-                title={t("cover.layers.toggleLock")}
-                className="p-1 text-muted-foreground hover:text-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleLocked(layer.id);
-                }}
-              >
-                {layer.locked ? (
-                  <Lock className="w-3.5 h-3.5" />
-                ) : (
-                  <Unlock className="w-3.5 h-3.5" />
-                )}
-              </button>
+              <Tooltip content={t("cover.layers.reorderUp")}>
+                <button
+                  type="button"
+                  aria-label={t("cover.layers.reorderUp")}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    bringForward(layer.id);
+                  }}
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+              </Tooltip>
+              <Tooltip content={t("cover.layers.reorderDown")}>
+                <button
+                  type="button"
+                  aria-label={t("cover.layers.reorderDown")}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    sendBackward(layer.id);
+                  }}
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </Tooltip>
+              <Tooltip content={t("cover.layers.toggleVisible")}>
+                <button
+                  type="button"
+                  aria-label={t("cover.layers.toggleVisible")}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleHidden(layer.id);
+                  }}
+                >
+                  {layer.hidden ? (
+                    <EyeOff className="w-3.5 h-3.5" />
+                  ) : (
+                    <Eye className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </Tooltip>
+              <Tooltip content={t("cover.layers.toggleLock")}>
+                <button
+                  type="button"
+                  aria-label={t("cover.layers.toggleLock")}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleLocked(layer.id);
+                  }}
+                >
+                  {layer.locked ? (
+                    <Lock className="w-3.5 h-3.5" />
+                  ) : (
+                    <Unlock className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </Tooltip>
             </div>
           );
         })}

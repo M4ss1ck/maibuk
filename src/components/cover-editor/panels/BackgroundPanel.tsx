@@ -4,6 +4,7 @@ import { useCoverStore } from "@/features/covers/store";
 import { PRESET_COLORS } from "@/features/covers/scene/defaults";
 import type { Background, Paint } from "@/features/covers/scene/schema";
 import { PaintControl } from "@/components/cover-editor/panels/PaintControl";
+import { Tooltip } from "@/components/ui";
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -48,18 +49,19 @@ export function BackgroundPanel() {
         <>
           <div className="grid grid-cols-8 gap-1">
             {PRESET_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                onClick={() => setBackground({ type: "solid", color })}
-                className={`w-6 h-6 rounded border transition-transform hover:scale-110 ${
-                  background.type === "solid" && background.color === color
-                    ? "border-primary"
-                    : "border-border"
-                }`}
-                style={{ backgroundColor: color }}
-                title={color}
-              />
+              <Tooltip key={color} content={color}>
+                <button
+                  type="button"
+                  onClick={() => setBackground({ type: "solid", color })}
+                  aria-label={color}
+                  className={`w-6 h-6 rounded border transition-transform hover:scale-110 ${
+                    background.type === "solid" && background.color === color
+                      ? "border-primary"
+                      : "border-border"
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              </Tooltip>
             ))}
           </div>
           <PaintControl paint={asPaint} onChange={(p) => setBackground(p as Background)} />

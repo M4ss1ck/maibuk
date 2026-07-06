@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { GradientStop, Paint } from "@/features/covers/scene/schema";
+import { Tooltip } from "@/components/ui";
 
 type PaintType = Paint["type"];
 
@@ -122,15 +123,17 @@ export function PaintControl({ paint, onChange }: { paint: Paint; onChange: (p: 
                 onChange={(e) => updateStop(i, { offset: Number(e.target.value) })}
                 className="no-spinner w-16 px-1 py-0.5 border border-border rounded bg-background text-foreground text-right text-xs"
               />
-              <button
-                type="button"
-                onClick={() => removeStop(i)}
-                disabled={paint.stops.length <= 2}
-                className="px-1 text-muted-foreground hover:text-destructive disabled:opacity-30"
-                title={t("cover.paint.removeStop")}
-              >
-                ×
-              </button>
+              <Tooltip content={t("cover.paint.removeStop")}>
+                <button
+                  type="button"
+                  onClick={() => removeStop(i)}
+                  disabled={paint.stops.length <= 2}
+                  aria-label={t("cover.paint.removeStop")}
+                  className="px-1 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                >
+                  ×
+                </button>
+              </Tooltip>
             </div>
           ))}
           <button
