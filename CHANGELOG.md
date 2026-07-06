@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.15] - 2026-07-06
+
+### Added
+- Custom tooltips with keyboard shortcut keycap chips throughout the editor, canvas, notes, and settings
+- Desktop window state persistence (size, position, and maximized) across sessions
+- Tray icon now indicates sync-in-progress status
+
+### Changed
+- Help dialog now displays keyboard shortcuts as keycap chips, consistent with tooltips
+
+### Fixed
+- Sequential shortcut chips no longer have an arrow separator (e.g., "G N" renders as two adjacent keycaps)
+
 ## [0.4.14] - 2026-06-28
 
 ### Added
