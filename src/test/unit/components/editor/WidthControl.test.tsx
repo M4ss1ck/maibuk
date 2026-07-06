@@ -39,20 +39,20 @@ describe("WidthControl", () => {
 
   it("opens the popover from the trigger", () => {
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
     expect(screen.getByRole("slider", { name: "editor.contentWidth" })).toBeInTheDocument();
   });
 
   it("selects a preset", () => {
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
     fireEvent.click(screen.getByText("editor.widthWide"));
     expect(useSettingsStore.getState().editorContentWidth).toBe(960);
   });
 
   it("drives width via the slider", () => {
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
     fireEvent.change(screen.getByRole("slider", { name: "editor.contentWidth" }), {
       target: { value: "600" },
     });
@@ -61,7 +61,7 @@ describe("WidthControl", () => {
 
   it("maps the slider end to the Full preset", () => {
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
 
     const slider = screen.getByRole("slider", { name: "editor.contentWidth" });
     const fullSliderValue = EDITOR_CONTENT_WIDTH_MAX + EDITOR_CONTENT_WIDTH_STEP;
@@ -75,7 +75,7 @@ describe("WidthControl", () => {
 
   it("commits a typed px value from the input", () => {
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
 
     const valueButton = screen.getByRole("button", {
       name: "editor.contentWidth px",
@@ -102,7 +102,7 @@ describe("WidthControl", () => {
 
   it("keeps the nearest preset visually selected while the slider moves", () => {
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
     fireEvent.change(screen.getByRole("slider", { name: "editor.contentWidth" }), {
       target: { value: "860" },
     });
@@ -116,7 +116,7 @@ describe("WidthControl", () => {
 
   it("toggles the show-border checkbox", () => {
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
     fireEvent.click(screen.getByRole("checkbox"));
     expect(useSettingsStore.getState().editorShowBorder).toBe(true);
   });
@@ -127,7 +127,7 @@ describe("WidthControl", () => {
       editorPagePadding: { top: 64, right: 64, bottom: 64, left: 64 },
     });
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
     fireEvent.click(screen.getByText("editor.resetLayout"));
     expect(useSettingsStore.getState().editorContentWidth).toBe(720);
     expect(useSettingsStore.getState().editorPagePadding).toEqual({
@@ -140,7 +140,7 @@ describe("WidthControl", () => {
 
   it("renders the page padding control", () => {
     render(<WidthControl />);
-    fireEvent.click(screen.getByTitle("editor.contentWidth"));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
     expect(screen.getByText("editor.pagePadding")).toBeInTheDocument();
     expect(screen.getByRole("slider", { name: "editor.pagePadding" })).toBeInTheDocument();
   });

@@ -62,7 +62,7 @@ describe("SceneBreakMenu", () => {
     const user = userEvent.setup();
     render(<SceneBreakMenu editor={createEditorMock()} />);
 
-    await user.click(screen.getByTitle("editor.sceneBreakOptions"));
+    await user.click(screen.getByRole("button", { name: "editor.sceneBreakOptions" }));
     const uploadButton = screen.getByRole("button", {
       name: /editor\.sceneBreakUploadImage/,
     });

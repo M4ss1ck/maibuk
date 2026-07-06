@@ -793,7 +793,6 @@ export function BookEditor() {
                 handleSaveNow();
               }}
               disabled={!currentChapter?.content}
-              saveShortcut="Ctrl+S"
             />
 
             {/* Sync */}
