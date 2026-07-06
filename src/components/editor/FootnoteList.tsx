@@ -1,5 +1,6 @@
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
+import { useTranslation } from "react-i18next";
 
 interface FootnoteItem {
   id: string;
@@ -13,6 +14,7 @@ interface FootnoteListProps {
 }
 
 export function FootnoteList({ editor, startIndex = 1 }: FootnoteListProps) {
+  const { t } = useTranslation();
   const footnotes = useEditorState({
     editor,
     selector: ({ editor: e }): FootnoteItem[] => {
@@ -51,7 +53,7 @@ export function FootnoteList({ editor, startIndex = 1 }: FootnoteListProps) {
               className="footnote-backref"
               href={`#fnref-${fn.id}`}
               onClick={(e) => handleBackClick(e, fn.id)}
-              title="↩"
+              aria-label={t("editor.goToReference")}
             >
               ↩
             </a>

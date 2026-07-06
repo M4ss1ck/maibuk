@@ -3,7 +3,7 @@ import { isTypingTarget } from "@/lib/keyboard";
 
 type Shortcut = {
   keys?: string | string[];
-  sequence?: [string, string];
+  sequence?: readonly [string, string];
   onTrigger: (event: KeyboardEvent) => void;
   preventDefault?: boolean;
   allowInInput?: boolean;

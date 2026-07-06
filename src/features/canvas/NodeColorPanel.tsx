@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Palette } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "@/features/canvas/store";
+import { Tooltip } from "@/components/ui";
 
 const NODE_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
 
@@ -15,19 +16,20 @@ export function NodeColorPanel() {
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <button
-        type="button"
-        aria-label={t("canvas.nodeColor")}
-        title={t("canvas.nodeColor")}
-        onClick={() => setExpanded((previous) => !previous)}
-        className={`flex size-8 items-center justify-center rounded-lg border shadow-sm backdrop-blur transition-colors ${
-          expanded
-            ? "border-primary bg-primary/10 text-primary"
-            : "border-border bg-card/95 text-foreground hover:bg-muted"
-        }`}
-      >
-        <Palette className="size-4" aria-hidden="true" />
-      </button>
+      <Tooltip content={t("canvas.nodeColor")}>
+        <button
+          type="button"
+          aria-label={t("canvas.nodeColor")}
+          onClick={() => setExpanded((previous) => !previous)}
+          className={`flex size-8 items-center justify-center rounded-lg border shadow-sm backdrop-blur transition-colors ${
+            expanded
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border bg-card/95 text-foreground hover:bg-muted"
+          }`}
+        >
+          <Palette className="size-4" aria-hidden="true" />
+        </button>
+      </Tooltip>
       {expanded && (
         <div className="flex w-56 flex-col gap-2 rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur">
           <span className="text-xs text-muted-foreground">{t("canvas.nodeColor")}</span>

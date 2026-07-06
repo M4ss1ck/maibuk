@@ -15,6 +15,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
+import { Tooltip, TooltipGroup } from "@/components/ui";
 import { useVersionStore, DEFAULT_VERSIONS_PAGE_SIZE } from "@/features/versions/store";
 import type { BookVersion } from "@/features/versions/types";
 import type { BookSnapshot } from "@/features/sync/types";
@@ -379,54 +380,64 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => void handleCompare(version)}
-                          title={t("versions.compare")}
-                          className="px-1.5"
-                        >
-                          <GitCompareArrows className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setConfirmAction({
-                              type: "restore",
-                              versionId: version.id,
-                            })
-                          }
-                          title={t("versions.restore")}
-                          className="px-1.5"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => startRename(version)}
-                          title={t("versions.rename")}
-                          className="px-1.5"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setConfirmAction({
-                              type: "delete",
-                              versionId: version.id,
-                            })
-                          }
-                          title={t("versions.delete")}
-                          className="px-1.5"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      <TooltipGroup>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <Tooltip content={t("versions.compare")}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void handleCompare(version)}
+                              aria-label={t("versions.compare")}
+                              className="px-1.5"
+                            >
+                              <GitCompareArrows className="w-4 h-4" />
+                            </Button>
+                          </Tooltip>
+                          <Tooltip content={t("versions.restore")}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setConfirmAction({
+                                  type: "restore",
+                                  versionId: version.id,
+                                })
+                              }
+                              aria-label={t("versions.restore")}
+                              className="px-1.5"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </Button>
+                          </Tooltip>
+                          <Tooltip content={t("versions.rename")}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => startRename(version)}
+                              aria-label={t("versions.rename")}
+                              className="px-1.5"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          </Tooltip>
+                          <Tooltip content={t("versions.delete")}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setConfirmAction({
+                                  type: "delete",
+                                  versionId: version.id,
+                                })
+                              }
+                              aria-label={t("versions.delete")}
+                              className="px-1.5"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </Tooltip>
+                        </div>
+                      </TooltipGroup>
                     </>
                   )}
                 </li>

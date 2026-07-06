@@ -13,6 +13,7 @@ import { CollapsibleHeading } from "@/components/editor/extensions";
 import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/CollapsibleHeading";
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import { useShortcuts } from "@/lib/shortcuts";
+import { matchKeys } from "@/lib/shortcut-registry";
 import { BackIcon } from "@/components/icons";
 import { TagEditor } from "@/components/notes/TagEditor";
 import { timeAgo } from "@/components/notes/timeAgo";
@@ -20,6 +21,7 @@ import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { toast } from "@/components/ui/Toast";
+import { Tooltip } from "@/components/ui";
 import { editorHtmlToMarkdown, markdownFilename, saveMarkdownFile } from "@/features/markdown";
 import {
   generateDocumentPdf,
@@ -352,7 +354,7 @@ export function NoteEditor({
 
   useShortcuts([
     {
-      keys: ["ctrl+s", "meta+s"],
+      keys: matchKeys("editor.save"),
       onTrigger: () => {
         void saveNow();
       },
@@ -584,16 +586,17 @@ export function NoteEditor({
                 datePosition="left"
                 action={
                   <div ref={tagEditorRef} className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowTagEditor((current) => !current)}
-                      className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      title={t("notes.addTag")}
-                      aria-label={t("notes.addTag")}
-                      aria-expanded={showTagEditor}
-                    >
-                      <Tags className="h-4 w-4" />
-                    </button>
+                    <Tooltip content={t("notes.addTag")}>
+                      <button
+                        type="button"
+                        onClick={() => setShowTagEditor((current) => !current)}
+                        className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label={t("notes.addTag")}
+                        aria-expanded={showTagEditor}
+                      >
+                        <Tags className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
                     {showTagEditor && (
                       <div className="absolute left-0 top-full z-30 mt-2">
                         <TagEditor
@@ -622,16 +625,18 @@ export function NoteEditor({
         <ThemeToggle variant="dropdown" />
 
         {IS_TAURI && (
-          <button
-            type="button"
-            onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-            className={`p-1 rounded transition-colors ${
-              alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
-            }`}
-            title={t("settings.alwaysOnTop")}
-          >
-            <Pin className="w-4 h-4" />
-          </button>
+          <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
+            <button
+              type="button"
+              onClick={() => setAlwaysOnTop(!alwaysOnTop)}
+              className={`p-1 rounded transition-colors ${
+                alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
+              }`}
+              aria-label={t("settings.alwaysOnTop")}
+            >
+              <Pin className="w-4 h-4" />
+            </button>
+          </Tooltip>
         )}
       </div>
 

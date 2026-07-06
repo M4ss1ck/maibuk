@@ -4,6 +4,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { AlignLeft, AlignCenter, AlignRight, Trash2 } from "lucide-react";
 import { NodeSelection } from "@tiptap/pm/state";
+import { Tooltip } from "@/components/ui";
 
 const HANDLES = ["nw", "ne", "sw", "se"] as const;
 
@@ -163,34 +164,42 @@ export function ImageView({
       {/* Floating toolbar on selection */}
       {selected && (
         <div className="image-floating-toolbar" contentEditable={false}>
-          <button
-            onClick={() => updateAttributes({ alignment: "left" })}
-            className={alignment === "left" ? "active" : ""}
-            title={t("editor.alignLeft")}
-            type="button"
-          >
-            <AlignLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => updateAttributes({ alignment: "center" })}
-            className={alignment === "center" ? "active" : ""}
-            title={t("editor.alignCenter")}
-            type="button"
-          >
-            <AlignCenter className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => updateAttributes({ alignment: "right" })}
-            className={alignment === "right" ? "active" : ""}
-            title={t("editor.alignRight")}
-            type="button"
-          >
-            <AlignRight className="w-4 h-4" />
-          </button>
+          <Tooltip content={t("editor.alignLeft")}>
+            <button
+              onClick={() => updateAttributes({ alignment: "left" })}
+              className={alignment === "left" ? "active" : ""}
+              aria-label={t("editor.alignLeft")}
+              type="button"
+            >
+              <AlignLeft className="w-4 h-4" />
+            </button>
+          </Tooltip>
+          <Tooltip content={t("editor.alignCenter")}>
+            <button
+              onClick={() => updateAttributes({ alignment: "center" })}
+              className={alignment === "center" ? "active" : ""}
+              aria-label={t("editor.alignCenter")}
+              type="button"
+            >
+              <AlignCenter className="w-4 h-4" />
+            </button>
+          </Tooltip>
+          <Tooltip content={t("editor.alignRight")}>
+            <button
+              onClick={() => updateAttributes({ alignment: "right" })}
+              className={alignment === "right" ? "active" : ""}
+              aria-label={t("editor.alignRight")}
+              type="button"
+            >
+              <AlignRight className="w-4 h-4" />
+            </button>
+          </Tooltip>
           <div className="toolbar-divider" />
-          <button onClick={() => deleteNode()} title={t("common.delete")} type="button">
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <Tooltip content={t("common.delete")}>
+            <button onClick={() => deleteNode()} aria-label={t("common.delete")} type="button">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       )}
 

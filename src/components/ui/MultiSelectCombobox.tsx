@@ -1,6 +1,7 @@
 import type { CSSProperties, ForwardedRef, KeyboardEvent } from "react";
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface MultiSelectComboboxProps {
   value: string[];
@@ -165,18 +166,19 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
               style={getChipStyle?.(item)}
             >
               <span className="truncate">{item}</span>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  removeValue(item);
-                }}
-                className="rounded-full text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                aria-label={removeLabel(item)}
-                title={removeLabel(item)}
-              >
-                <X className="h-3 w-3" />
-              </button>
+              <Tooltip content={removeLabel(item)}>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    removeValue(item);
+                  }}
+                  className="rounded-full text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  aria-label={removeLabel(item)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Tooltip>
             </span>
           ))}
           <input

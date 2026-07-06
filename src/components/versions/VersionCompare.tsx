@@ -4,6 +4,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { BookSnapshot } from "@/features/sync/types";
 import { diffSnapshots, type ChapterDiff, type ChapterDiffStatus } from "@/features/versions";
 import { sanitizeChapterHtml } from "@/features/versions/sanitize";
+import { Tooltip } from "@/components/ui";
 
 interface VersionCompareProps {
   current: BookSnapshot;
@@ -74,19 +75,22 @@ export function VersionCompare({ current, target }: VersionCompareProps) {
         <h3 className="min-w-0 truncate text-sm font-semibold text-foreground">
           {target.book.title}
         </h3>
-        <button
-          type="button"
-          onClick={() => setShowChapterList((show) => !show)}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          aria-label={t(showChapterList ? "versions.hideChapterList" : "versions.showChapterList")}
-          title={t(showChapterList ? "versions.hideChapterList" : "versions.showChapterList")}
+        <Tooltip
+          content={t(showChapterList ? "versions.hideChapterList" : "versions.showChapterList")}
         >
-          {showChapterList ? (
-            <PanelLeftClose className="h-4 w-4" />
-          ) : (
-            <PanelLeftOpen className="h-4 w-4" />
-          )}
-        </button>
+          <button
+            type="button"
+            onClick={() => setShowChapterList((show) => !show)}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={t(showChapterList ? "versions.hideChapterList" : "versions.showChapterList")}
+          >
+            {showChapterList ? (
+              <PanelLeftClose className="h-4 w-4" />
+            ) : (
+              <PanelLeftOpen className="h-4 w-4" />
+            )}
+          </button>
+        </Tooltip>
       </div>
 
       <div

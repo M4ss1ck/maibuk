@@ -11,6 +11,7 @@ import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
 import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
+import { Tooltip } from "@/components/ui";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -155,28 +156,33 @@ export function ChapterList({
       <div className="p-4 pt-12 md:pt-4 border-b border-border flex items-center justify-between bg-background z-10 shrink-0">
         <h3 className="font-medium">{t("chapters.title")}</h3>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={toggleChapterListView}
-            className="p-1 hover:bg-muted rounded transition-colors"
-            title={
+          <Tooltip
+            content={
               isCompactView ? t("chapters.switchToNormalView") : t("chapters.switchToCompactView")
             }
-            aria-label={
-              isCompactView ? t("chapters.switchToNormalView") : t("chapters.switchToCompactView")
-            }
-            aria-pressed={isCompactView}
           >
-            {isCompactView ? <Rows3 className="w-5 h-5" /> : <List className="w-5 h-5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowNewDialog(true)}
-            className="p-1 hover:bg-muted rounded transition-colors"
-            title={t("chapters.addChapter")}
-          >
-            <AddIcon className="w-5 h-5" />
-          </button>
+            <button
+              type="button"
+              onClick={toggleChapterListView}
+              className="p-1 hover:bg-muted rounded transition-colors"
+              aria-label={
+                isCompactView ? t("chapters.switchToNormalView") : t("chapters.switchToCompactView")
+              }
+              aria-pressed={isCompactView}
+            >
+              {isCompactView ? <Rows3 className="w-5 h-5" /> : <List className="w-5 h-5" />}
+            </button>
+          </Tooltip>
+          <Tooltip content={t("chapters.addChapter")}>
+            <button
+              type="button"
+              onClick={() => setShowNewDialog(true)}
+              className="p-1 hover:bg-muted rounded transition-colors"
+              aria-label={t("chapters.addChapter")}
+            >
+              <AddIcon className="w-5 h-5" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -240,24 +246,25 @@ export function ChapterList({
               const isActive = currentChapterId === chapter.id;
               const outlineToggle =
                 isActive && editor ? (
-                  <button
-                    type="button"
-                    draggable={false}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowChapterOutline(!showChapterOutline);
-                    }}
-                    title={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
-                    aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
-                    aria-pressed={showChapterOutline}
-                    className={`shrink-0 p-1 rounded transition-colors ${
-                      showChapterOutline
-                        ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    <ListTree className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip content={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}>
+                    <button
+                      type="button"
+                      draggable={false}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowChapterOutline(!showChapterOutline);
+                      }}
+                      aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
+                      aria-pressed={showChapterOutline}
+                      className={`shrink-0 p-1 rounded transition-colors ${
+                        showChapterOutline
+                          ? "text-primary bg-primary/10 hover:bg-primary/20"
+                          : "text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <ListTree className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 ) : null;
 
               return (
@@ -344,30 +351,34 @@ export function ChapterList({
 
                             {/* Edit/Delete - revealed on hover and focus */}
                             <span className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                              <button
-                                type="button"
-                                draggable={false}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  startEditing(chapter);
-                                }}
-                                className="p-1 hover:bg-muted rounded transition-colors"
-                                title={t("chapters.editChapter")}
-                              >
-                                <EditIcon className="w-4 h-4 text-foreground" />
-                              </button>
-                              <button
-                                type="button"
-                                draggable={false}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteConfirmId(chapter.id);
-                                }}
-                                className="p-1 hover:bg-destructive/10 rounded transition-colors"
-                                title={t("chapters.deleteChapter")}
-                              >
-                                <DeleteIcon className="w-4 h-4 text-destructive" />
-                              </button>
+                              <Tooltip content={t("chapters.editChapter")}>
+                                <button
+                                  type="button"
+                                  draggable={false}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditing(chapter);
+                                  }}
+                                  className="p-1 hover:bg-muted rounded transition-colors"
+                                  aria-label={t("chapters.editChapter")}
+                                >
+                                  <EditIcon className="w-4 h-4 text-foreground" />
+                                </button>
+                              </Tooltip>
+                              <Tooltip content={t("chapters.deleteChapter")}>
+                                <button
+                                  type="button"
+                                  draggable={false}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteConfirmId(chapter.id);
+                                  }}
+                                  className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                                  aria-label={t("chapters.deleteChapter")}
+                                >
+                                  <DeleteIcon className="w-4 h-4 text-destructive" />
+                                </button>
+                              </Tooltip>
                             </span>
 
                             {/* Compact view has no metadata line: keep the toggle here */}

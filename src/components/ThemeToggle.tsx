@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/features/theme";
 import { useTranslation } from "react-i18next";
 import { SunIcon, MoonIcon, MonitorIcon } from "@/components/icons";
+import { Tooltip } from "@/components/ui";
 
 interface ThemeToggleProps {
   variant?: "inline" | "dropdown";
@@ -44,14 +45,16 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
   if (variant === "dropdown") {
     return (
       <div className="relative" ref={dropdownRef}>
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-2 hover:bg-muted rounded transition-colors"
-          title={`Theme: ${currentTheme.label}`}
-        >
-          <CurrentIcon className="w-5 h-5" />
-        </button>
+        <Tooltip content={`Theme: ${currentTheme.label}`}>
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-2 hover:bg-muted rounded transition-colors"
+            aria-label={`Theme: ${currentTheme.label}`}
+          >
+            <CurrentIcon className="w-5 h-5" />
+          </button>
+        </Tooltip>
 
         {isOpen && (
           <div className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg py-1 min-w-30 z-50 dropdown-enter">
@@ -83,19 +86,20 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
   return (
     <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
       {themes.map(({ value, label, icon: Icon }) => (
-        <button
-          type="button"
-          key={value}
-          onClick={() => setTheme(value)}
-          className={`p-2 rounded-md transition-colors ${
-            theme === value
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          title={label}
-        >
-          <Icon className="w-4 h-4" />
-        </button>
+        <Tooltip key={value} content={label}>
+          <button
+            type="button"
+            onClick={() => setTheme(value)}
+            className={`p-2 rounded-md transition-colors ${
+              theme === value
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            aria-label={label}
+          >
+            <Icon className="w-4 h-4" />
+          </button>
+        </Tooltip>
       ))}
     </div>
   );

@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { upsertSeparatorAsset } from "@/features/import/project-assets-repo";
 import { useSettingsStore } from "@/features/settings/store";
 import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "@/lib/platform";
-import { Input, Switch } from "@/components/ui";
+import { Input, Switch, Tooltip } from "@/components/ui";
 import {
   BUILTIN_SCENE_BREAKS,
   resolveCustomSymbols,
@@ -131,24 +131,28 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
 
   return (
     <div ref={btnRef} className="flex items-center">
-      <button
-        type="button"
-        onClick={() => insert(lastSceneBreak)}
-        title={t("editor.sceneBreak")}
-        className="p-2 rounded-l transition-colors hover:bg-muted"
-      >
-        <Ellipsis className="w-4 h-4" />
-      </button>
-      <button
-        type="button"
-        onClick={toggle}
-        title={t("editor.sceneBreakOptions")}
-        className={`px-1 py-2 rounded-r transition-colors ${
-          open ? "bg-primary text-white" : "hover:bg-muted"
-        }`}
-      >
-        <span className="text-xs">▾</span>
-      </button>
+      <Tooltip content={t("editor.sceneBreak")}>
+        <button
+          type="button"
+          onClick={() => insert(lastSceneBreak)}
+          aria-label={t("editor.sceneBreak")}
+          className="p-2 rounded-l transition-colors hover:bg-muted"
+        >
+          <Ellipsis className="w-4 h-4" />
+        </button>
+      </Tooltip>
+      <Tooltip content={t("editor.sceneBreakOptions")}>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={t("editor.sceneBreakOptions")}
+          className={`px-1 py-2 rounded-r transition-colors ${
+            open ? "bg-primary text-white" : "hover:bg-muted"
+          }`}
+        >
+          <span className="text-xs">▾</span>
+        </button>
+      </Tooltip>
 
       {open &&
         createPortal(
@@ -187,14 +191,16 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
                           ? t("editor.sceneBreakImagePreset")
                           : descriptor.symbols}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => removeSceneBreakPreset(index)}
-                        title={t("editor.sceneBreakDeletePreset")}
-                        className="p-1 rounded hover:bg-destructive/10 text-destructive"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                      <Tooltip content={t("editor.sceneBreakDeletePreset")}>
+                        <button
+                          type="button"
+                          onClick={() => removeSceneBreakPreset(index)}
+                          aria-label={t("editor.sceneBreakDeletePreset")}
+                          className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Tooltip>
                     </div>
                   ))}
                 </div>

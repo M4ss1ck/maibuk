@@ -13,6 +13,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useThemeStore } from "@/features/theme/store";
 import type { HtmlEditorTheme } from "@/features/settings/types";
 import { WrapText, Sparkles, ListPlus } from "lucide-react";
+import { Tooltip } from "@/components/ui";
 
 interface HtmlViewPanelProps {
   editor: Editor;
@@ -240,33 +241,39 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
           )}
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleAddRuleFromSelection}
-            disabled={!cmHandle || !hasSelection}
-            title={t("editor.addCleanupRule")}
-          >
-            <ListPlus className="w-4 h-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => cmHandle?.prettify()}
-            disabled={!cmHandle}
-            title={t("editor.prettify")}
-          >
-            <Sparkles className="w-4 h-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => cmHandle?.toggleWrap()}
-            disabled={!cmHandle}
-            title={t("editor.wordWrap")}
-          >
-            <WrapText className="w-4 h-4" />
-          </Button>
+          <Tooltip content={t("editor.addCleanupRule")}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleAddRuleFromSelection}
+              disabled={!cmHandle || !hasSelection}
+              aria-label={t("editor.addCleanupRule")}
+            >
+              <ListPlus className="w-4 h-4" />
+            </Button>
+          </Tooltip>
+          <Tooltip content={t("editor.prettify")}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => cmHandle?.prettify()}
+              disabled={!cmHandle}
+              aria-label={t("editor.prettify")}
+            >
+              <Sparkles className="w-4 h-4" />
+            </Button>
+          </Tooltip>
+          <Tooltip content={t("editor.wordWrap")}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => cmHandle?.toggleWrap()}
+              disabled={!cmHandle}
+              aria-label={t("editor.wordWrap")}
+            >
+              <WrapText className="w-4 h-4" />
+            </Button>
+          </Tooltip>
           <Select
             value={currentThemeSetting}
             onChange={(v) => setThemeSetting(v as HtmlEditorTheme)}

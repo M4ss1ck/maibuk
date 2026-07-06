@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, History } from "lucide-react";
+import { Tooltip } from "@/components/ui";
 
 interface HistoryMenuButtonProps {
   onOpenPanel: () => void;
@@ -102,16 +103,17 @@ export function HistoryMenuButton({
       ref={rootRef}
       className="relative inline-flex items-center rounded-lg border border-border bg-card"
     >
-      <button
-        type="button"
-        onClick={onOpenPanel}
-        onKeyDown={handleButtonKeyDown}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        aria-label={t("versions.openHistory")}
-        title={`${t("versions.title")} (${panelShortcut})`}
-      >
-        <History className="h-4 w-4" />
-      </button>
+      <Tooltip content={t("versions.title")} shortcut="editor.versionHistory">
+        <button
+          type="button"
+          onClick={onOpenPanel}
+          onKeyDown={handleButtonKeyDown}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          aria-label={t("versions.openHistory")}
+        >
+          <History className="h-4 w-4" />
+        </button>
+      </Tooltip>
       <button
         type="button"
         onClick={() => setMenuOpen((open) => !open)}

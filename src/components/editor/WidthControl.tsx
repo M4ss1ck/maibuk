@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { MoveHorizontal } from "lucide-react";
+import { Tooltip } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
 import {
   EDITOR_CONTENT_WIDTH_MIN,
@@ -113,17 +114,19 @@ export function WidthControl() {
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
-        title={t("editor.contentWidth")}
-        className={`px-2 py-1 rounded transition-colors ${
-          showMenu ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"
-        }`}
-      >
-        <MoveHorizontal className="w-4 h-4" />
-      </button>
+      <Tooltip content={t("editor.contentWidth")}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
+          aria-label={t("editor.contentWidth")}
+          className={`px-2 py-1 rounded transition-colors ${
+            showMenu ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"
+          }`}
+        >
+          <MoveHorizontal className="w-4 h-4" />
+        </button>
+      </Tooltip>
 
       {showMenu &&
         createPortal(

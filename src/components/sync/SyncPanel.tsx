@@ -6,6 +6,7 @@ import { useSyncStore } from "@/features/sync/store";
 import type { SyncOptions } from "@/features/sync/types";
 import { SyncControls } from "@/components/sync/SyncControls";
 import { timeAgo } from "@/components/notes/timeAgo";
+import { Tooltip } from "@/components/ui";
 
 interface SyncPanelProps {
   triggerRef: React.RefObject<HTMLButtonElement | null>;
@@ -61,9 +62,9 @@ export function SyncPanel({ triggerRef, onClose, onSync }: SyncPanelProps) {
     >
       <div className="px-4 py-3 border-b border-border">
         <p className="text-sm font-medium truncate">{userEmail}</p>
-        <p className="text-xs text-muted-foreground mt-0.5" title={formatLastSynced(true)}>
-          {formatLastSynced()}
-        </p>
+        <Tooltip content={formatLastSynced(true)}>
+          <p className="text-xs text-muted-foreground mt-0.5">{formatLastSynced()}</p>
+        </Tooltip>
       </div>
 
       {syncError && (

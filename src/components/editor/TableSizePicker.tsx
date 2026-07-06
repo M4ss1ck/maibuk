@@ -31,7 +31,6 @@ export function TableSizePicker({ onSelect }: TableSizePickerProps) {
                 onMouseEnter={() => setHoveredCell({ row, col })}
                 onMouseLeave={() => setHoveredCell(null)}
                 className={`w-full h-6 border border-muted rounded text-xs ${isActive ? "bg-primary text-white border-primary" : "hover:bg-primary hover:border-primary"}`}
-                title={`${t("editor.table", { dimensions: `${row}x${col}` })}`}
               />
             );
           })

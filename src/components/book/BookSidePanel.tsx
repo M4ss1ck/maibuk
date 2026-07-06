@@ -4,6 +4,7 @@ import type { Chapter } from "@/features/chapters/types";
 import type { Note } from "@/features/notes";
 import { FootnotesView } from "@/components/editor/FootnotesView";
 import { BookNotesView } from "@/components/book/BookNotesView";
+import { Tooltip } from "@/components/ui";
 
 export type BookSidePanelTab = "footnotes" | "notes";
 
@@ -59,25 +60,27 @@ export function BookSidePanel({
 
   return (
     <aside className="notes-panel relative" style={{ width: `${width}px`, minWidth: `${width}px` }}>
-      <div
-        onMouseDown={onResizeStart}
-        title={t("bookSidePanel.resize")}
-        className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
-      />
+      <Tooltip content={t("bookSidePanel.resize")}>
+        <div
+          onMouseDown={onResizeStart}
+          className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+        />
+      </Tooltip>
       <div className="notes-panel-header">
         <div className="flex items-center gap-1">
           {tab("footnotes", t("bookSidePanel.footnotes"))}
           {tab("notes", t("bookSidePanel.notes"))}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="notes-panel-close"
-          aria-label={t("common.close")}
-          title={t("common.close")}
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <Tooltip content={t("common.close")}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="notes-panel-close"
+            aria-label={t("common.close")}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </Tooltip>
       </div>
 
       {activeTab === "footnotes" ? (

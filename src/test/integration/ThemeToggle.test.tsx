@@ -28,15 +28,15 @@ describe("ThemeToggle", () => {
   describe("inline variant (default)", () => {
     it("renders three theme buttons with titles", () => {
       render(<ThemeToggle />);
-      expect(screen.getByTitle("Light")).toBeInTheDocument();
-      expect(screen.getByTitle("Dark")).toBeInTheDocument();
-      expect(screen.getByTitle("System")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Light" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Dark" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "System" })).toBeInTheDocument();
     });
 
     it("switches theme to dark on click", async () => {
       const user = userEvent.setup();
       render(<ThemeToggle />);
-      await user.click(screen.getByTitle("Dark"));
+      await user.click(screen.getByRole("button", { name: "Dark" }));
       expect(useThemeStore.getState().theme).toBe("dark");
     });
 
@@ -44,7 +44,7 @@ describe("ThemeToggle", () => {
       const user = userEvent.setup();
       useThemeStore.setState({ theme: "dark" });
       render(<ThemeToggle />);
-      await user.click(screen.getByTitle("Light"));
+      await user.click(screen.getByRole("button", { name: "Light" }));
       expect(useThemeStore.getState().theme).toBe("light");
     });
   });

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { tagColor } from "@/components/notes/tagColor";
+import { Tooltip } from "@/components/ui";
 
 const GAP = 4;
 
@@ -16,13 +17,14 @@ function TagChip({ tag, className = "" }: { tag: string; className?: string }) {
   const color = tagColor(tag);
 
   return (
-    <span
-      className={`rounded-full px-1.5 py-0.5 text-[10px] border font-medium ${className}`}
-      style={{ color, backgroundColor: `${color}26`, borderColor: `${color}80` }}
-      title={tag}
-    >
-      {tag}
-    </span>
+    <Tooltip content={tag}>
+      <span
+        className={`rounded-full px-1.5 py-0.5 text-[10px] border font-medium ${className}`}
+        style={{ color, backgroundColor: `${color}26`, borderColor: `${color}80` }}
+      >
+        {tag}
+      </span>
+    </Tooltip>
   );
 }
 

@@ -9,3 +9,4 @@ export type { ResponsiveToggleOption } from "@/components/ui/ResponsiveToggleGro
 export { Select } from "@/components/ui/Select";
 export { Switch } from "@/components/ui/Switch";
 export { ToastViewport, toast } from "@/components/ui/Toast";
+export { Tooltip, TooltipGroup } from "@/components/ui/Tooltip";

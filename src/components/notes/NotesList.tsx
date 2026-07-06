@@ -15,7 +15,7 @@ import {
 import type { Book } from "@/features/books/types";
 import type { ReorderNoteItem } from "@/features/notes";
 import { AddIcon } from "@/components/icons/AddIcon";
-import { ResponsiveToggleGroup } from "@/components/ui";
+import { ResponsiveToggleGroup, Tooltip } from "@/components/ui";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { NoteListItem } from "@/components/notes/NoteListItem";
 import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
@@ -393,15 +393,16 @@ export function NotesList({
               >
                 <span className="min-w-0 truncate text-sm font-medium">{title}</span>
                 {group.book && (
-                  <button
-                    type="button"
-                    onClick={() => onCreateNote(group.book?.id ?? null)}
-                    title={t("notes.addNoteToBook")}
-                    aria-label={t("notes.addNoteToBook")}
-                    className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-all duration-200 hover:bg-muted hover:text-foreground group-hover:opacity-100"
-                  >
-                    <AddIcon className="h-3.5 w-3.5" />
-                  </button>
+                  <Tooltip content={t("notes.addNoteToBook")}>
+                    <button
+                      type="button"
+                      onClick={() => onCreateNote(group.book?.id ?? null)}
+                      aria-label={t("notes.addNoteToBook")}
+                      className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-all duration-200 hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    >
+                      <AddIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </Tooltip>
                 )}
               </span>
               <span
@@ -503,15 +504,16 @@ export function NotesList({
           testId="notes-view"
           className="flex-1"
         />
-        <button
-          type="button"
-          onClick={() => onCreateNote(null)}
-          aria-label={t("notes.newNote")}
-          className="p-1 hover:bg-muted rounded transition-colors"
-          title={t("notes.newNote")}
-        >
-          <AddIcon className="w-5 h-5" />
-        </button>
+        <Tooltip content={t("notes.newNote")}>
+          <button
+            type="button"
+            onClick={() => onCreateNote(null)}
+            aria-label={t("notes.newNote")}
+            className="p-1 hover:bg-muted rounded transition-colors"
+          >
+            <AddIcon className="w-5 h-5" />
+          </button>
+        </Tooltip>
       </div>
 
       <div className="px-3 pb-3 shrink-0">

@@ -42,7 +42,10 @@ export function BookCard({
       className={`book-card-enter relative flex flex-col bg-card border rounded-xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200 text-left w-full ${isFocused ? "border-primary ring-1 ring-primary/30" : "border-border"}`}
     >
       {indexHint ? (
-        <KeyboardShortcut keys={[String(indexHint)]} className="absolute left-2 top-2 z-10" />
+        <KeyboardShortcut
+          shortcut={{ groups: [[String(indexHint)]], isSequence: false }}
+          className="absolute left-2 top-2 z-10"
+        />
       ) : null}
 
       {/* Cover */}

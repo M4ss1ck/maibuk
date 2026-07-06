@@ -6,6 +6,7 @@ import { MoreHorizontal, ImagePlus, Asterisk } from "lucide-react";
 import { TableSizePicker } from "@/components/editor/TableSizePicker";
 import { ImageInsertDialog } from "@/components/editor/ImageInsertDialog";
 import { FootnoteDialog } from "@/components/editor/FootnoteDialog";
+import { Tooltip } from "@/components/ui";
 
 interface CanvasRichContentMenuProps {
   editor: Editor;
@@ -48,17 +49,18 @@ export function CanvasRichContentMenu({ editor, onOverlayOpenChange }: CanvasRic
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label={t("canvas.moreFormatting")}
-        title={t("canvas.moreFormatting")}
-        onPointerDown={keepEditorSelection}
-        onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
-        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
-      >
-        <MoreHorizontal className="h-4 w-4" />
-      </button>
+      <Tooltip content={t("canvas.moreFormatting")}>
+        <button
+          ref={buttonRef}
+          type="button"
+          aria-label={t("canvas.moreFormatting")}
+          onPointerDown={keepEditorSelection}
+          onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </Tooltip>
 
       {menuOpen &&
         createPortal(

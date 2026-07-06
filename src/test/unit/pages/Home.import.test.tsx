@@ -37,6 +37,7 @@ vi.mock("../../../features/books/store", () => ({
 
 vi.mock("../../../lib/platform", () => ({
   IS_WEB: true,
+  isMac: () => false,
   getDialog: vi.fn(),
   getFileSystem: vi.fn(),
   getWebDialog: mockGetWebDialog,

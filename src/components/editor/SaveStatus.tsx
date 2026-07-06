@@ -1,15 +1,14 @@
 import { useTranslation } from "react-i18next";
 import { CheckIcon, SaveIcon, SpinnerIcon } from "@/components/icons";
+import { Tooltip } from "@/components/ui";
 
 interface SaveStatusProps {
   status: "idle" | "saving" | "saved";
   onSave: () => void;
   disabled?: boolean;
-  /** Optional shortcut hint appended to the save button tooltip, e.g. "Ctrl+S". */
-  saveShortcut?: string;
 }
 
-export function SaveStatus({ status, onSave, disabled, saveShortcut }: SaveStatusProps) {
+export function SaveStatus({ status, onSave, disabled }: SaveStatusProps) {
   const { t } = useTranslation();
 
   if (status === "saving") {
@@ -30,17 +29,17 @@ export function SaveStatus({ status, onSave, disabled, saveShortcut }: SaveStatu
     );
   }
 
-  const title = saveShortcut ? `${t("common.save")} (${saveShortcut})` : t("common.save");
-
   return (
-    <button
-      type="button"
-      onClick={onSave}
-      disabled={disabled}
-      title={title}
-      className="p-2 rounded transition-colors text-muted-foreground hover:text-primary"
-    >
-      <SaveIcon className="w-5 h-5" />
-    </button>
+    <Tooltip content={t("common.save")} shortcut="editor.save">
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={disabled}
+        aria-label={t("common.save")}
+        className="p-2 rounded transition-colors text-muted-foreground hover:text-primary"
+      >
+        <SaveIcon className="w-5 h-5" />
+      </button>
+    </Tooltip>
   );
 }

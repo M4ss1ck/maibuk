@@ -14,6 +14,7 @@ import {
   Heading3,
 } from "lucide-react";
 import { ToolbarButton, Divider } from "@/components/editor/ToolbarButton";
+import { TooltipGroup } from "@/components/ui";
 
 export function FormattingButtons({
   editor,
@@ -40,39 +41,42 @@ export function FormattingButtons({
   });
 
   return (
-    <>
+    <TooltipGroup>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
         isActive={s.isBold}
-        title={t("editor.bold")}
+        label={t("editor.bold")}
+        shortcut="editor.bold"
       >
         <Bold className="w-3.5 h-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleItalic().run()}
         isActive={s.isItalic}
-        title={t("editor.italic")}
+        label={t("editor.italic")}
+        shortcut="editor.italic"
       >
         <Italic className="w-3.5 h-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         isActive={s.isUnderline}
-        title={t("editor.underline")}
+        label={t("editor.underline")}
+        shortcut="editor.underline"
       >
         <Underline className="w-3.5 h-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleStrike().run()}
         isActive={s.isStrike}
-        title={t("editor.strikethrough")}
+        label={t("editor.strikethrough")}
       >
         <Strikethrough className="w-3.5 h-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleHighlight({ color: "#FFFF00" }).run()}
         isActive={s.isHighlight}
-        title={t("editor.highlight")}
+        label={t("editor.highlight")}
       >
         <Highlighter className="w-3.5 h-3.5" />
       </ToolbarButton>
@@ -80,21 +84,21 @@ export function FormattingButtons({
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
         isActive={s.isH1}
-        title={t("editor.heading1")}
+        label={t("editor.heading1")}
       >
         <Heading1 className="w-3.5 h-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         isActive={s.isH2}
-        title={t("editor.heading2")}
+        label={t("editor.heading2")}
       >
         <Heading2 className="w-3.5 h-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         isActive={s.isH3}
-        title={t("editor.heading3")}
+        label={t("editor.heading3")}
       >
         <Heading3 className="w-3.5 h-3.5" />
       </ToolbarButton>
@@ -102,17 +106,18 @@ export function FormattingButtons({
       <ToolbarButton
         onClick={onLinkClick}
         isActive={s.isLink}
-        title={t("editor.insertLinkShortcut")}
+        label={t("editor.insertLink")}
+        shortcut="editor.insertLink"
       >
         <Link className="w-3.5 h-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleCode().run()}
         isActive={s.isCode}
-        title={t("editor.code")}
+        label={t("editor.code")}
       >
         <Code className="w-3.5 h-3.5" />
       </ToolbarButton>
-    </>
+    </TooltipGroup>
   );
 }

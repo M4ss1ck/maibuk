@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { TableSizePicker } from "@/components/editor/TableSizePicker";
+import { Tooltip, TooltipGroup } from "@/components/ui";
 import {
   Table,
   Columns2,
@@ -66,30 +67,34 @@ export function TableMenu({ editor }: TableMenuProps) {
 
   if (!isInTable && !showMenu) {
     return (
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={handleShowMenu}
-        title={t("editor.insertTable")}
-        className="p-2 rounded transition-colors hover:bg-muted"
-      >
-        <Table className="w-4 h-4" />
-      </button>
+      <Tooltip content={t("editor.insertTable")}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={handleShowMenu}
+          aria-label={t("editor.insertTable")}
+          className="p-2 rounded transition-colors hover:bg-muted"
+        >
+          <Table className="w-4 h-4" />
+        </button>
+      </Tooltip>
     );
   }
 
   if (showMenu && !isInTable) {
     return (
       <>
-        <button
-          ref={buttonRef}
-          type="button"
-          onClick={() => setShowMenu(false)}
-          title={t("editor.insertTable")}
-          className="p-2 rounded transition-colors bg-primary text-white"
-        >
-          <Table className="w-4 h-4" />
-        </button>
+        <Tooltip content={t("editor.insertTable")}>
+          <button
+            ref={buttonRef}
+            type="button"
+            onClick={() => setShowMenu(false)}
+            aria-label={t("editor.insertTable")}
+            className="p-2 rounded transition-colors bg-primary text-white"
+          >
+            <Table className="w-4 h-4" />
+          </button>
+        </Tooltip>
         {createPortal(
           <div
             className="tiptap-table-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50"
@@ -105,78 +110,94 @@ export function TableMenu({ editor }: TableMenuProps) {
 
   // Table editing controls when inside a table
   return (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().addColumnBefore().run()}
-        disabled={!editor.can().addColumnBefore()}
-        title={t("editor.addColumnBefore")}
-        className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
-      >
-        <BetweenVerticalStart className="w-3.5 h-3.5" />
-      </button>
+    <TooltipGroup>
+      <div className="flex items-center gap-1">
+        <Tooltip content={t("editor.addColumnBefore")}>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().addColumnBefore().run()}
+            disabled={!editor.can().addColumnBefore()}
+            aria-label={t("editor.addColumnBefore")}
+            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <BetweenVerticalStart className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
 
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().addColumnAfter().run()}
-        disabled={!editor.can().addColumnAfter()}
-        title={t("editor.addColumnAfter")}
-        className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
-      >
-        <BetweenVerticalEnd className="w-3.5 h-3.5" />
-      </button>
+        <Tooltip content={t("editor.addColumnAfter")}>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().addColumnAfter().run()}
+            disabled={!editor.can().addColumnAfter()}
+            aria-label={t("editor.addColumnAfter")}
+            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <BetweenVerticalEnd className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
 
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().addRowBefore().run()}
-        disabled={!editor.can().addRowBefore()}
-        title={t("editor.addRowBefore")}
-        className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
-      >
-        <BetweenHorizonalStart className="w-3.5 h-3.5" />
-      </button>
+        <Tooltip content={t("editor.addRowBefore")}>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().addRowBefore().run()}
+            disabled={!editor.can().addRowBefore()}
+            aria-label={t("editor.addRowBefore")}
+            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <BetweenHorizonalStart className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
 
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().addRowAfter().run()}
-        disabled={!editor.can().addRowAfter()}
-        title={t("editor.addRowAfter")}
-        className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
-      >
-        <BetweenHorizonalEnd className="w-3.5 h-3.5" />
-      </button>
+        <Tooltip content={t("editor.addRowAfter")}>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().addRowAfter().run()}
+            disabled={!editor.can().addRowAfter()}
+            aria-label={t("editor.addRowAfter")}
+            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <BetweenHorizonalEnd className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
 
-      <div className="w-px h-4 bg-border mx-1" />
+        <div className="w-px h-4 bg-border mx-1" />
 
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().deleteColumn().run()}
-        disabled={!editor.can().deleteColumn()}
-        title={t("editor.deleteColumn")}
-        className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
-      >
-        <Columns2 className="w-3.5 h-3.5" />
-      </button>
+        <Tooltip content={t("editor.deleteColumn")}>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().deleteColumn().run()}
+            disabled={!editor.can().deleteColumn()}
+            aria-label={t("editor.deleteColumn")}
+            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
+          >
+            <Columns2 className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
 
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().deleteRow().run()}
-        disabled={!editor.can().deleteRow()}
-        title={t("editor.deleteRow")}
-        className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
-      >
-        <Rows2 className="w-3.5 h-3.5" />
-      </button>
+        <Tooltip content={t("editor.deleteRow")}>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().deleteRow().run()}
+            disabled={!editor.can().deleteRow()}
+            aria-label={t("editor.deleteRow")}
+            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
+          >
+            <Rows2 className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
 
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().deleteTable().run()}
-        disabled={!editor.can().deleteTable()}
-        title={t("editor.deleteTable")}
-        className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
-    </div>
+        <Tooltip content={t("editor.deleteTable")}>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().deleteTable().run()}
+            disabled={!editor.can().deleteTable()}
+            aria-label={t("editor.deleteTable")}
+            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
+      </div>
+    </TooltipGroup>
   );
 }

@@ -1,5 +1,6 @@
 import { NodeViewWrapper, useEditorState } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
+import { Tooltip } from "@/components/ui";
 
 export function FootnoteView({ node, editor, getPos }: NodeViewProps) {
   // Reactively recompute the footnote number whenever the document changes
@@ -32,15 +33,16 @@ export function FootnoteView({ node, editor, getPos }: NodeViewProps) {
 
   return (
     <NodeViewWrapper as="sup" className="footnote-ref">
-      <button
-        type="button"
-        id={`fnref-${node.attrs.id}`}
-        className="footnote-ref-link"
-        onClick={handleClick}
-        title={node.attrs.content}
-      >
-        {number}
-      </button>
+      <Tooltip content={node.attrs.content}>
+        <button
+          type="button"
+          id={`fnref-${node.attrs.id}`}
+          className="footnote-ref-link"
+          onClick={handleClick}
+        >
+          {number}
+        </button>
+      </Tooltip>
     </NodeViewWrapper>
   );
 }

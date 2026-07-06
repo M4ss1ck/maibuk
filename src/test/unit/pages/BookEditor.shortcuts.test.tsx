@@ -230,7 +230,7 @@ describe("BookEditor shortcuts", () => {
     const user = userEvent.setup();
     render(<BookEditor />);
 
-    await user.click(screen.getByTitle("common.more"));
+    await user.click(screen.getByRole("button", { name: "common.more" }));
 
     expect(screen.getByText("versions.saveVersion")).toBeInTheDocument();
     expect(screen.getByText("versions.showHistory")).toBeInTheDocument();

@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Tooltip } from "@/components/ui";
 
 interface OutlineItem {
   pos: number;
@@ -85,19 +86,20 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
         if (item.type === "sceneBreak") {
           return (
             <li key={item.pos}>
-              <button
-                type="button"
-                onClick={() => navigate(item.pos)}
-                style={{ paddingLeft: "1.75rem" }}
-                className={`w-full text-left py-0.5 rounded text-xs italic tracking-widest transition-colors ${
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground/70 hover:bg-muted/50"
-                }`}
-                title={t("toc.sceneBreak")}
-              >
-                * * *
-              </button>
+              <Tooltip content={t("toc.sceneBreak")}>
+                <button
+                  type="button"
+                  onClick={() => navigate(item.pos)}
+                  style={{ paddingLeft: "1.75rem" }}
+                  className={`w-full text-left py-0.5 rounded text-xs italic tracking-widest transition-colors ${
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground/70 hover:bg-muted/50"
+                  }`}
+                >
+                  * * *
+                </button>
+              </Tooltip>
             </li>
           );
         }

@@ -6,6 +6,7 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { useSettingsStore } from "@/features/settings/store";
+import { Tooltip } from "@/components/ui";
 import {
   Bold,
   Italic,
@@ -53,18 +54,19 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
     isActive: boolean,
     action: () => void
   ) => (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      aria-pressed={isActive}
-      onClick={action}
-      className={`rounded p-1 transition-colors hover:bg-muted ${
-        isActive ? "bg-muted text-primary" : "text-muted-foreground"
-      }`}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
+    <Tooltip content={label}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={isActive}
+        onClick={action}
+        className={`rounded p-1 transition-colors hover:bg-muted ${
+          isActive ? "bg-muted text-primary" : "text-muted-foreground"
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+      </button>
+    </Tooltip>
   );
 
   return (
@@ -109,18 +111,19 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
         ) : (
           <span />
         )}
-        <button
-          type="button"
-          aria-label={t("bookNotes.formatting")}
-          title={t("bookNotes.formatting")}
-          aria-pressed={showToolbar}
-          onClick={() => setShowToolbar((value) => !value)}
-          className={`rounded p-1 transition-colors hover:bg-muted ${
-            showToolbar ? "bg-muted text-primary" : "text-muted-foreground"
-          }`}
-        >
-          <Settings2 className="h-4 w-4" />
-        </button>
+        <Tooltip content={t("bookNotes.formatting")}>
+          <button
+            type="button"
+            aria-label={t("bookNotes.formatting")}
+            aria-pressed={showToolbar}
+            onClick={() => setShowToolbar((value) => !value)}
+            className={`rounded p-1 transition-colors hover:bg-muted ${
+              showToolbar ? "bg-muted text-primary" : "text-muted-foreground"
+            }`}
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
+        </Tooltip>
       </div>
       <div className="max-h-64 overflow-y-auto px-2">
         <EditorContent editor={editor} />

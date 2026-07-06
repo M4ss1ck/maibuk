@@ -13,6 +13,7 @@ import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 import { findBlockOffsetInHtml } from "@/components/editor/HtmlInspectMenu";
 import { ColorPicker } from "@/components/editor/ColorPicker";
 import { ToolbarButton, Divider } from "@/components/editor/ToolbarButton";
+import { Tooltip, TooltipGroup } from "@/components/ui";
 import { TextCaseMenu } from "@/components/editor/TextCaseMenu";
 import { FontSizeSelect } from "@/components/editor/FontSizeSelect";
 import { LineHeightSelect } from "@/components/editor/LineHeightSelect";
@@ -28,6 +29,7 @@ import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
 import { openExternal } from "@/lib/platform";
 import { isModKey } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
+import { matchKeys } from "@/lib/shortcut-registry";
 import {
   Bold,
   Italic,
@@ -327,20 +329,22 @@ export function EditorToolbar({
 
   useShortcuts([
     {
-      keys: ["ctrl+f", "meta+f"],
+      keys: matchKeys("editor.findReplace"),
       allowInInput: true,
       onTrigger: openFindReplace,
     },
   ]);
 
   return (
+    <TooltipGroup>
     <div className="border-b border-border bg-background sticky top-0 z-10">
       {/* Compact toolbar — always visible */}
       <div className="flex flex-wrap items-center px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1">
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editorState.canUndo}
-          title={t("editor.undo")}
+          label={t("editor.undo")}
+          shortcut="editor.undo"
         >
           <Undo2 className="w-4 h-4" />
         </ToolbarButton>
@@ -348,7 +352,8 @@ export function EditorToolbar({
         <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editorState.canRedo}
-          title={t("editor.redo")}
+          label={t("editor.redo")}
+          shortcut="editor.redo"
         >
           <Redo2 className="w-4 h-4" />
         </ToolbarButton>
@@ -363,7 +368,8 @@ export function EditorToolbar({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           isActive={editorState.isBold}
-          title={t("editor.bold")}
+          label={t("editor.bold")}
+          shortcut="editor.bold"
         >
           <Bold className="w-4 h-4" />
         </ToolbarButton>
@@ -371,7 +377,8 @@ export function EditorToolbar({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
           isActive={editorState.isItalic}
-          title={t("editor.italic")}
+          label={t("editor.italic")}
+          shortcut="editor.italic"
         >
           <Italic className="w-4 h-4" />
         </ToolbarButton>
@@ -379,7 +386,8 @@ export function EditorToolbar({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           isActive={editorState.isUnderline}
-          title={t("editor.underline")}
+          label={t("editor.underline")}
+          shortcut="editor.underline"
         >
           <Underline className="w-4 h-4" />
         </ToolbarButton>
@@ -387,7 +395,7 @@ export function EditorToolbar({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleStrike().run()}
           isActive={editorState.isStrike}
-          title={t("editor.strikethrough")}
+          label={t("editor.strikethrough")}
         >
           <Strikethrough className="w-4 h-4" />
         </ToolbarButton>
@@ -397,7 +405,7 @@ export function EditorToolbar({
         <ToolbarButton
           onClick={() => handleHeadingToggle(1)}
           isActive={editorState.isH1}
-          title={t("editor.heading1")}
+          label={t("editor.heading1")}
         >
           <Heading1 className="w-4 h-4" />
         </ToolbarButton>
@@ -405,7 +413,7 @@ export function EditorToolbar({
         <ToolbarButton
           onClick={() => handleHeadingToggle(2)}
           isActive={editorState.isH2}
-          title={t("editor.heading2")}
+          label={t("editor.heading2")}
         >
           <Heading2 className="w-4 h-4" />
         </ToolbarButton>
@@ -413,7 +421,7 @@ export function EditorToolbar({
         <ToolbarButton
           onClick={() => handleHeadingToggle(3)}
           isActive={editorState.isH3}
-          title={t("editor.heading3")}
+          label={t("editor.heading3")}
         >
           <Heading3 className="w-4 h-4" />
         </ToolbarButton>
@@ -429,7 +437,8 @@ export function EditorToolbar({
             }
           }}
           isActive={showFindReplace}
-          title={t("editor.findReplaceShortcut")}
+          label={t("editor.findReplace")}
+          shortcut="editor.findReplace"
         >
           <Search className="w-4 h-4" />
         </ToolbarButton>
@@ -439,18 +448,20 @@ export function EditorToolbar({
           <WidthControl />
           <Divider />
           <ZoomControl />
-          <button
-            type="button"
-            onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
-            className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
-            title={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
-          >
-            {isToolbarExpanded ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
-          </button>
+          <Tooltip content={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}>
+            <button
+              type="button"
+              onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
+              className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
+              aria-label={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
+            >
+              {isToolbarExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -475,25 +486,25 @@ export function EditorToolbar({
                 .run()
             }
             isActive={editorState.isHighlight}
-            title={t("editor.highlight")}
+            label={t("editor.highlight")}
             icon={<Highlighter className="w-4 h-4" />}
           />
 
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleSubscript().run()}
-            isActive={editorState.isSubscript}
-            title={t("editor.subscript")}
-          >
-            <Subscript className="w-4 h-4" />
-          </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleSubscript().run()}
+          isActive={editorState.isSubscript}
+          label={t("editor.subscript")}
+        >
+          <Subscript className="w-4 h-4" />
+        </ToolbarButton>
 
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleSuperscript().run()}
-            isActive={editorState.isSuperscript}
-            title={t("editor.superscript")}
-          >
-            <Superscript className="w-4 h-4" />
-          </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleSuperscript().run()}
+          isActive={editorState.isSuperscript}
+          label={t("editor.superscript")}
+        >
+          <Superscript className="w-4 h-4" />
+        </ToolbarButton>
 
           <ColorPicker
             value={editorState.color}
@@ -505,40 +516,41 @@ export function EditorToolbar({
                 : editor.chain().focus().setColor("#000000").run()
             }
             isActive={!!editorState.color}
-            title={t("editor.textColor")}
+            label={t("editor.textColor")}
             icon={<Baseline className="w-4 h-4" />}
           />
 
-          <ToolbarButton
-            onClick={() => setShowLinkDialog(true)}
-            isActive={editorState.isLink}
-            title={t("editor.insertLinkShortcut")}
-          >
-            <Link className="w-4 h-4" />
-          </ToolbarButton>
+        <ToolbarButton
+          onClick={() => setShowLinkDialog(true)}
+          isActive={editorState.isLink}
+          label={t("editor.insertLink")}
+          shortcut="editor.insertLink"
+        >
+          <Link className="w-4 h-4" />
+        </ToolbarButton>
 
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleCode().run()}
-            isActive={editorState.isCode}
-            title={t("editor.code")}
-          >
-            <Code className="w-4 h-4" />
-          </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleCode().run()}
+          isActive={editorState.isCode}
+          label={t("editor.code")}
+        >
+          <Code className="w-4 h-4" />
+        </ToolbarButton>
 
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-            isActive={editorState.isCodeBlock}
-            title={t("editor.codeBlock")}
-          >
-            <SquareCode className="w-4 h-4" />
-          </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          isActive={editorState.isCodeBlock}
+          label={t("editor.codeBlock")}
+        >
+          <SquareCode className="w-4 h-4" />
+        </ToolbarButton>
 
           <Divider />
 
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             isActive={editorState.isBulletList}
-            title={t("editor.bulletList")}
+            label={t("editor.bulletList")}
           >
             <List className="w-4 h-4" />
           </ToolbarButton>
@@ -546,7 +558,7 @@ export function EditorToolbar({
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             isActive={editorState.isOrderedList}
-            title={t("editor.numberedList")}
+            label={t("editor.numberedList")}
           >
             <ListOrdered className="w-4 h-4" />
           </ToolbarButton>
@@ -555,7 +567,7 @@ export function EditorToolbar({
             <ToolbarButton
               onClick={() => (editor.commands as any).toggleTaskList()}
               isActive={editorState.isTaskList}
-              title={t("editor.taskList")}
+              label={t("editor.taskList")}
             >
               <ListChecks className="w-4 h-4" />
             </ToolbarButton>
@@ -564,7 +576,7 @@ export function EditorToolbar({
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             isActive={editorState.isBlockquote}
-            title={t("editor.quote")}
+            label={t("editor.quote")}
           >
             <Quote className="w-4 h-4" />
           </ToolbarButton>
@@ -577,7 +589,8 @@ export function EditorToolbar({
                 ? editor.chain().focus().sinkListItem("listItem").run()
                 : editor.chain().focus().increaseIndent().run()
             }
-            title={t("editor.increaseIndent")}
+            label={t("editor.increaseIndent")}
+            shortcut="editor.increaseIndent"
           >
             <IndentIncrease className="w-4 h-4" />
           </ToolbarButton>
@@ -588,21 +601,22 @@ export function EditorToolbar({
                 ? editor.chain().focus().liftListItem("listItem").run()
                 : editor.chain().focus().decreaseIndent().run()
             }
-            title={t("editor.decreaseIndent")}
+            label={t("editor.decreaseIndent")}
+            shortcut="editor.decreaseIndent"
           >
             <IndentDecrease className="w-4 h-4" />
           </ToolbarButton>
 
           <ToolbarButton
             onClick={() => editor.chain().focus().increaseFirstLineIndent().run()}
-            title={t("editor.increaseFirstLineIndent")}
+            label={t("editor.increaseFirstLineIndent")}
           >
             <WrapText className="w-4 h-4" />
           </ToolbarButton>
 
           <ToolbarButton
             onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()}
-            title={t("editor.decreaseFirstLineIndent")}
+            label={t("editor.decreaseFirstLineIndent")}
           >
             <WrapText className="w-4 h-4 scale-x-[-1]" />
           </ToolbarButton>
@@ -612,7 +626,7 @@ export function EditorToolbar({
           <ToolbarButton
             onClick={() => editor.chain().focus().setTextAlign("left").run()}
             isActive={editorState.isAlignLeft}
-            title={t("editor.alignLeft")}
+            label={t("editor.alignLeft")}
           >
             <AlignLeft className="w-4 h-4" />
           </ToolbarButton>
@@ -620,7 +634,7 @@ export function EditorToolbar({
           <ToolbarButton
             onClick={() => editor.chain().focus().setTextAlign("center").run()}
             isActive={editorState.isAlignCenter}
-            title={t("editor.alignCenter")}
+            label={t("editor.alignCenter")}
           >
             <AlignCenter className="w-4 h-4" />
           </ToolbarButton>
@@ -628,7 +642,7 @@ export function EditorToolbar({
           <ToolbarButton
             onClick={() => editor.chain().focus().setTextAlign("right").run()}
             isActive={editorState.isAlignRight}
-            title={t("editor.alignRight")}
+            label={t("editor.alignRight")}
           >
             <AlignRight className="w-4 h-4" />
           </ToolbarButton>
@@ -637,7 +651,7 @@ export function EditorToolbar({
 
           <ToolbarButton
             onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-            title={t("editor.removeFormatting")}
+            label={t("editor.removeFormatting")}
           >
             <RemoveFormatting className="w-4 h-4" />
           </ToolbarButton>
@@ -650,7 +664,7 @@ export function EditorToolbar({
 
           <TableMenu editor={editor} />
 
-          <ToolbarButton onClick={() => setShowImageDialog(true)} title={t("editor.insertImage")}>
+          <ToolbarButton onClick={() => setShowImageDialog(true)} label={t("editor.insertImage")}>
             <Image className="w-4 h-4" />
           </ToolbarButton>
 
@@ -667,7 +681,7 @@ export function EditorToolbar({
                 setShowNotesChapter(true);
               }
             }}
-            title={t("editor.footnote")}
+            label={t("editor.footnote")}
           >
             <MessageSquareText className="w-4 h-4" />
           </ToolbarButton>
@@ -676,7 +690,7 @@ export function EditorToolbar({
 
           <ToolbarButton
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            title={t("editor.horizontalRule")}
+            label={t("editor.horizontalRule")}
           >
             <Minus className="w-4 h-4" />
           </ToolbarButton>
@@ -684,7 +698,7 @@ export function EditorToolbar({
           <ToolbarButton
             onClick={handleSpellCheckToggle}
             isActive={spellCheckEnabled}
-            title={t("editor.spellCheck")}
+            label={t("editor.spellCheck")}
           >
             <SpellCheck className="w-4 h-4" />
           </ToolbarButton>
@@ -697,7 +711,7 @@ export function EditorToolbar({
           <ToolbarButton
             onClick={handleOpenDictionary}
             disabled={!editorState.hasSelection}
-            title={t("editor.dictionary")}
+            label={t("editor.dictionary")}
           >
             <BookOpen className="w-4 h-4" />
           </ToolbarButton>
@@ -706,24 +720,24 @@ export function EditorToolbar({
             onClick={() => {
               setShowHtmlPanel(true);
             }}
-            title={t("editor.viewHtml")}
+            label={t("editor.viewHtml")}
           >
             <Code2 className="w-4 h-4" />
           </ToolbarButton>
 
           {(onExportMarkdown || onExportPdf || onExportImage) && <Divider />}
           {onExportMarkdown && (
-            <ToolbarButton onClick={onExportMarkdown} title={t("editor.exportMarkdown")}>
+            <ToolbarButton onClick={onExportMarkdown} label={t("editor.exportMarkdown")}>
               <FileDown className="w-4 h-4" />
             </ToolbarButton>
           )}
           {onExportPdf && (
-            <ToolbarButton onClick={onExportPdf} title={t("editor.exportPdf")}>
+            <ToolbarButton onClick={onExportPdf} label={t("editor.exportPdf")}>
               <FileText className="w-4 h-4" />
             </ToolbarButton>
           )}
           {onExportImage && (
-            <ToolbarButton onClick={onExportImage} title={t("editor.exportImage")}>
+            <ToolbarButton onClick={onExportImage} label={t("editor.exportImage")}>
               <ImageDown className="w-4 h-4" />
             </ToolbarButton>
           )}
@@ -732,7 +746,7 @@ export function EditorToolbar({
 
           <ToolbarButton
             onClick={() => setShowShortcutsHelp(true)}
-            title={t("shortcuts.title")}
+            label={t("shortcuts.title")}
           >
             <span className="w-4 h-4 flex items-center justify-center font-bold">?</span>
           </ToolbarButton>
@@ -796,6 +810,7 @@ export function EditorToolbar({
         shortcuts={shortcuts}
       />
     </div>
+    </TooltipGroup>
   );
 }
 
@@ -834,18 +849,19 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={toggle}
-        title={label}
-        aria-label={label}
-        className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${open ? "bg-primary text-white" : "hover:bg-muted"
-          }`}
-      >
-        <span className="uppercase">{selected.value}</span>
-        <ChevronDown className="h-2.5 w-2.5" />
-      </button>
+      <Tooltip content={label}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={toggle}
+          aria-label={label}
+          className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${open ? "bg-primary text-white" : "hover:bg-muted"
+            }`}
+        >
+          <span className="uppercase">{selected.value}</span>
+          <ChevronDown className="h-2.5 w-2.5" />
+        </button>
+      </Tooltip>
       {open &&
         createPortal(
           <div
