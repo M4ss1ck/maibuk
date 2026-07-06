@@ -7,6 +7,7 @@ import { Editor, ChapterList, SaveStatus } from "@/components/editor";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { BookSidePanel } from "@/components/book/BookSidePanel";
 import { TruncatedText } from "@/components/ui/TruncatedText";
+import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { EditorStats } from "@/components/editor/Editor";
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -732,44 +733,54 @@ export function BookEditor() {
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Header bar - hidden in focus mode */}
         {!focusMode && (
+          <TooltipGroup>
           <div className="h-12 border-b border-border flex items-center px-2 sm:px-4 gap-1 sm:gap-2 md:gap-4">
             {/* Mobile chapter toggle */}
-            <button
-              type="button"
-              onClick={() => setShowMobileChapters(true)}
-              className="md:hidden p-2 hover:bg-muted rounded transition-colors"
-              title={t("chapters.title")}
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+            <Tooltip content={t("chapters.title")}>
+              <button
+                type="button"
+                onClick={() => setShowMobileChapters(true)}
+                className="md:hidden p-2 hover:bg-muted rounded transition-colors"
+                aria-label={t("chapters.title")}
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            </Tooltip>
 
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              className="p-2 hover:bg-muted rounded transition-colors"
-              title={t("nav.backToHome")}
-            >
-              <BackIcon className="w-5 h-5" />
-            </button>
+            <Tooltip content={t("nav.backToHome")}>
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="p-2 hover:bg-muted rounded transition-colors"
+                aria-label={t("nav.backToHome")}
+              >
+                <BackIcon className="w-5 h-5" />
+              </button>
+            </Tooltip>
 
             {/* Desktop sidebar toggle */}
-            <button
-              type="button"
-              onClick={() =>
-                setShowSidebar((prev) => {
-                  if (!prev) setSidebarWidth(256);
-                  return !prev;
-                })
-              }
-              className="hidden md:block p-2 hover:bg-muted rounded transition-colors"
-              title={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
+            <Tooltip
+              content={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
+              shortcut="editor.toggleSidebar"
             >
-              {showSidebar ? (
-                <PanelLeftClose className="w-5 h-5" />
-              ) : (
-                <PanelLeftOpen className="w-5 h-5" />
-              )}
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setShowSidebar((prev) => {
+                    if (!prev) setSidebarWidth(256);
+                    return !prev;
+                  })
+                }
+                className="hidden md:block p-2 hover:bg-muted rounded transition-colors"
+                aria-label={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
+              >
+                {showSidebar ? (
+                  <PanelLeftClose className="w-5 h-5" />
+                ) : (
+                  <PanelLeftOpen className="w-5 h-5" />
+                )}
+              </button>
+            </Tooltip>
 
             <div className="flex-1 min-w-0">
               <TruncatedText
@@ -805,26 +816,30 @@ export function BookEditor() {
                 panelShortcut={panelShortcut}
               />
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setBookSidePanelTab("notes");
-                setShowNotesChapter(true);
-              }}
-              disabled={showNotesChapter && bookSidePanelTab === "notes"}
-              className="hidden md:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-              title={t("nav.bookNotes")}
-            >
-              <NotebookText className="w-5 h-5" />
-            </button>
+            <Tooltip content={t("nav.bookNotes")}>
+              <button
+                type="button"
+                onClick={() => {
+                  setBookSidePanelTab("notes");
+                  setShowNotesChapter(true);
+                }}
+                disabled={showNotesChapter && bookSidePanelTab === "notes"}
+                className="hidden md:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                aria-label={t("nav.bookNotes")}
+              >
+                <NotebookText className="w-5 h-5" />
+              </button>
+            </Tooltip>
 
             {/* Word count - hidden on mobile */}
             <div className="hidden sm:block text-sm text-muted-foreground">
               {editorStats?.hasSelection ? (
-                <span title={t("editor.selectionStats")}>
-                  {editorStats.words.toLocaleString()} {t("common.words")} /{" "}
-                  {editorStats.characters.toLocaleString()} {t("common.chars")}
-                </span>
+                <Tooltip content={t("editor.selectionStats")}>
+                  <span>
+                    {editorStats.words.toLocaleString()} {t("common.words")} /{" "}
+                    {editorStats.characters.toLocaleString()} {t("common.chars")}
+                  </span>
+                </Tooltip>
               ) : (
                 <span>
                   {wordCount.toLocaleString()} {t("common.words")}
@@ -835,72 +850,84 @@ export function BookEditor() {
             {/* Desktop action buttons */}
             <div className="hidden md:flex items-center gap-1">
               {/* Export button */}
-              <button
-                type="button"
-                onClick={() => setShowExportDialog(true)}
-                className="p-2 hover:bg-muted rounded transition-colors"
-                title={t("nav.exportBook")}
-              >
-                <ExportIcon className="w-5 h-5" />
-              </button>
+              <Tooltip content={t("nav.exportBook")}>
+                <button
+                  type="button"
+                  onClick={() => setShowExportDialog(true)}
+                  className="p-2 hover:bg-muted rounded transition-colors"
+                  aria-label={t("nav.exportBook")}
+                >
+                  <ExportIcon className="w-5 h-5" />
+                </button>
+              </Tooltip>
 
               {/* Design Cover button */}
-              <button
-                type="button"
-                onClick={() => navigate(`/book/${bookId}/cover`)}
-                className="p-2 hover:bg-muted rounded transition-colors"
-                title={t("nav.designCover")}
-              >
-                <CoverDesignIcon className="w-5 h-5" />
-              </button>
+              <Tooltip content={t("nav.designCover")}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/book/${bookId}/cover`)}
+                  className="p-2 hover:bg-muted rounded transition-colors"
+                  aria-label={t("nav.designCover")}
+                >
+                  <CoverDesignIcon className="w-5 h-5" />
+                </button>
+              </Tooltip>
 
               {/* Book Settings button */}
-              <button
-                type="button"
-                onClick={() => setShowSettingsDialog(true)}
-                className="p-2 hover:bg-muted rounded transition-colors"
-                title={t("bookSettings.title")}
-              >
-                <SettingsIcon className="w-5 h-5" />
-              </button>
+              <Tooltip content={t("bookSettings.title")}>
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsDialog(true)}
+                  className="p-2 hover:bg-muted rounded transition-colors"
+                  aria-label={t("bookSettings.title")}
+                >
+                  <SettingsIcon className="w-5 h-5" />
+                </button>
+              </Tooltip>
 
               {/** Theme toggle */}
               <ThemeToggle variant="dropdown" />
 
               {IS_TAURI && (
-                <button
-                  type="button"
-                  onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-                  className={`p-2 rounded transition-colors ${
-                    alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
-                  }`}
-                  title={t("settings.alwaysOnTop")}
-                >
-                  <Pin className="w-5 h-5" />
-                </button>
+                <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
+                  <button
+                    type="button"
+                    onClick={() => setAlwaysOnTop(!alwaysOnTop)}
+                    className={`p-2 rounded transition-colors ${
+                      alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
+                    }`}
+                    aria-label={t("settings.alwaysOnTop")}
+                  >
+                    <Pin className="w-5 h-5" />
+                  </button>
+                </Tooltip>
               )}
 
               {/* Focus mode toggle */}
-              <button
-                type="button"
-                onClick={toggleFocusMode}
-                className="p-2 hover:bg-muted rounded transition-colors"
-                title={t("nav.focusMode")}
-              >
-                <FocusModeIcon className="w-5 h-5" />
-              </button>
+              <Tooltip content={t("nav.focusMode")} shortcut="editor.focusMode">
+                <button
+                  type="button"
+                  onClick={toggleFocusMode}
+                  className="p-2 hover:bg-muted rounded transition-colors"
+                  aria-label={t("nav.focusMode")}
+                >
+                  <FocusModeIcon className="w-5 h-5" />
+                </button>
+              </Tooltip>
             </div>
 
             {/* Mobile more menu */}
             <div className="md:hidden relative">
-              <button
-                type="button"
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="p-2 hover:bg-muted rounded transition-colors"
-                title={t("common.more")}
-              >
-                <MoreVertical className="w-5 h-5" />
-              </button>
+              <Tooltip content={t("common.more")}>
+                <button
+                  type="button"
+                  onClick={() => setShowMobileMenu(!showMobileMenu)}
+                  className="p-2 hover:bg-muted rounded transition-colors"
+                  aria-label={t("common.more")}
+                >
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+              </Tooltip>
 
               {showMobileMenu && (
                 <>
@@ -1010,6 +1037,7 @@ export function BookEditor() {
               )}
             </div>
           </div>
+          </TooltipGroup>
         )}
 
         {/* Editor */}

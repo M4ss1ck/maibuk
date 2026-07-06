@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { HeatmapAggregate } from "@/features/metrics/aggregates/types";
+import { Tooltip } from "@/components/ui";
 
 interface HeatmapProps {
   aggregate: HeatmapAggregate | null;
@@ -27,11 +28,12 @@ export function Heatmap({ aggregate, isLoading }: HeatmapProps) {
           aria-label={t("metrics.heatmap")}
         >
           {days.map((day) => (
-            <div
+            <Tooltip
               key={day.date}
-              title={`${day.date}: ${day.words.toLocaleString()} ${t("common.words")}`}
-              className={`aspect-square rounded-sm ${getIntensityClass(day.words, maxWords)}`}
-            />
+              content={`${day.date}: ${day.words.toLocaleString()} ${t("common.words")}`}
+            >
+              <div className={`aspect-square rounded-sm ${getIntensityClass(day.words, maxWords)}`} />
+            </Tooltip>
           ))}
         </div>
       </div>

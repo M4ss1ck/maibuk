@@ -18,6 +18,7 @@ import { NotesSortMenu } from "@/components/notes/NotesSortMenu";
 import { filterNotes, sortNotesBy } from "@/components/notes/notes-list-model";
 import { Button } from "@/components/ui/Button";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { AddIcon, MaibukLogo } from "@/components/icons";
 import { useShortcuts } from "@/lib/shortcuts";
 
@@ -186,16 +187,17 @@ export function NotesGallery() {
                   <span>{t("notes.advancedFilters")}</span>
                 </Button>
                 {hasFilters && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={clearFilters}
-                    className="h-11 border border-border px-3"
-                    aria-label={t("notes.clearFilters")}
-                    title={t("notes.clearFilters")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <Tooltip content={t("notes.clearFilters")}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={clearFilters}
+                      className="h-11 border border-border px-3"
+                      aria-label={t("notes.clearFilters")}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
                 )}
               </div>
             </div>
