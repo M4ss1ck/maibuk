@@ -230,7 +230,7 @@ describe("VersionPanel", () => {
       />
     );
 
-    await user.click(screen.getByTitle("Compare"));
+    await user.click(screen.getByRole("button", { name: "Compare" }));
 
     expect(await screen.findByTestId("compare-view")).toHaveTextContent("Current vs Saved");
     expect(mockFlushBeforeCompare).toHaveBeenCalledTimes(1);
@@ -259,7 +259,7 @@ describe("VersionPanel", () => {
       />
     );
 
-    await user.click(screen.getByTitle("Compare"));
+    await user.click(screen.getByRole("button", { name: "Compare" }));
 
     const compareLayout = await screen.findByTestId("version-compare-layout");
     const compareBody = screen.getByTestId("version-compare-body");
