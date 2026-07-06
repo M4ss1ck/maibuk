@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "@/components/icons";
+import { Tooltip } from "@/components/ui";
 
 interface ColorPickerProps {
   value: string;
@@ -9,7 +10,7 @@ interface ColorPickerProps {
   onClear?: () => void;
   onToggle?: () => void;
   isActive?: boolean;
-  title: string;
+  label: string;
   icon: React.ReactNode;
 }
 
@@ -42,7 +43,7 @@ export function ColorPicker({
   onClear,
   onToggle,
   isActive,
-  title,
+  label,
   icon,
 }: ColorPickerProps) {
   const { t } = useTranslation();
@@ -101,35 +102,39 @@ export function ColorPicker({
     <>
       <div ref={containerRef} className="flex items-center">
         {/* Main button - triggers toggle action */}
-        <button
-          type="button"
-          onClick={onToggle}
-          title={title}
-          className={`p-2 rounded-l transition-colors ${
-            isActive ? "bg-primary text-white" : "hover:bg-muted"
-          }`}
-        >
-          <span className="relative">
-            {icon}
-            {value && (
-              <span
-                className="absolute -bottom-0.5 left-0 right-0 h-1 rounded-sm"
-                style={{ backgroundColor: value }}
-              />
-            )}
-          </span>
-        </button>
+        <Tooltip content={label}>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={label}
+            className={`p-2 rounded-l transition-colors ${
+              isActive ? "bg-primary text-white" : "hover:bg-muted"
+            }`}
+          >
+            <span className="relative">
+              {icon}
+              {value && (
+                <span
+                  className="absolute -bottom-0.5 left-0 right-0 h-1 rounded-sm"
+                  style={{ backgroundColor: value }}
+                />
+              )}
+            </span>
+          </button>
+        </Tooltip>
         {/* Dropdown arrow button - opens color picker */}
-        <button
-          type="button"
-          onClick={handleDropdownToggle}
-          title={`${title} options`}
-          className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${
-            isOpen ? "bg-muted" : "hover:bg-muted"
-          }`}
-        >
-          <ChevronDownIcon className="w-2 h-2" />
-        </button>
+        <Tooltip content={`${label} options`}>
+          <button
+            type="button"
+            onClick={handleDropdownToggle}
+            aria-label={`${label} options`}
+            className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${
+              isOpen ? "bg-muted" : "hover:bg-muted"
+            }`}
+          >
+            <ChevronDownIcon className="w-2 h-2" />
+          </button>
+        </Tooltip>
       </div>
 
       {isOpen &&
@@ -141,32 +146,35 @@ export function ColorPicker({
           >
             <div className="grid grid-cols-5 gap-1 mb-2">
               {PRESET_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => {
-                    onChange(color);
-                    setIsOpen(false);
-                  }}
-                  className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${
-                    value === color ? "border-primary" : "border-transparent"
-                  }`}
-                  style={{ backgroundColor: color }}
-                  title={color}
-                />
+                <Tooltip key={color} content={color}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(color);
+                      setIsOpen(false);
+                    }}
+                    className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${
+                      value === color ? "border-primary" : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: color }}
+                    aria-label={color}
+                  />
+                </Tooltip>
               ))}
             </div>
 
             <div className="flex items-center gap-2 pt-2 border-t border-border">
-              <input
-                type="color"
-                value={value || "#000000"}
-                onChange={(e) => {
-                  onChange(e.target.value);
-                }}
-                className="w-8 h-8 cursor-pointer rounded border border-border"
-                title={t("editor.customColor")}
-              />
+              <Tooltip content={t("editor.customColor")}>
+                <input
+                  type="color"
+                  value={value || "#000000"}
+                  onChange={(e) => {
+                    onChange(e.target.value);
+                  }}
+                  className="w-8 h-8 cursor-pointer rounded border border-border"
+                  aria-label={t("editor.customColor")}
+                />
+              </Tooltip>
               <span className="text-xs text-muted-foreground flex-1">{t("cover.custom")}</span>
               {onClear && (
                 <button

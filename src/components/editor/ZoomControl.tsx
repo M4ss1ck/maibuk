@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Minus, Plus } from "lucide-react";
 import { useSettingsStore } from "@/features/settings/store";
 import { EDITOR_ZOOM_MIN, EDITOR_ZOOM_MAX, EDITOR_ZOOM_STEP } from "@/features/settings/types";
+import { Tooltip } from "@/components/ui";
 
 export function ZoomControl() {
   const { t } = useTranslation();
@@ -42,17 +43,18 @@ export function ZoomControl() {
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
-        title={t("editor.zoom")}
-        className={`px-2 py-1 rounded text-sm transition-colors ${
-          showMenu ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"
-        }`}
-      >
-        {editorZoom}%
-      </button>
+      <Tooltip content={t("editor.zoom")}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
+          className={`px-2 py-1 rounded text-sm transition-colors ${
+            showMenu ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"
+          }`}
+        >
+          {editorZoom}%
+        </button>
+      </Tooltip>
 
       {showMenu &&
         createPortal(
@@ -61,14 +63,16 @@ export function ZoomControl() {
             className="zoom-control-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 flex items-center gap-2"
             style={{ top: menuPosition.top, left: menuPosition.left }}
           >
-            <button
-              type="button"
-              onClick={zoomOut}
-              title={t("editor.zoomOut")}
-              className="p-1 rounded hover:bg-muted"
-            >
-              <Minus className="w-4 h-4" />
-            </button>
+            <Tooltip content={t("editor.zoomOut")} shortcut="editor.zoomOut">
+              <button
+                type="button"
+                onClick={zoomOut}
+                aria-label={t("editor.zoomOut")}
+                className="p-1 rounded hover:bg-muted"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+            </Tooltip>
             <input
               type="range"
               min={EDITOR_ZOOM_MIN}
@@ -79,14 +83,16 @@ export function ZoomControl() {
               aria-label={t("editor.zoom")}
               className="w-32"
             />
-            <button
-              type="button"
-              onClick={zoomIn}
-              title={t("editor.zoomIn")}
-              className="p-1 rounded hover:bg-muted"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            <Tooltip content={t("editor.zoomIn")} shortcut="editor.zoomIn">
+              <button
+                type="button"
+                onClick={zoomIn}
+                aria-label={t("editor.zoomIn")}
+                className="p-1 rounded hover:bg-muted"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </Tooltip>
             <button
               type="button"
               onClick={resetZoom}

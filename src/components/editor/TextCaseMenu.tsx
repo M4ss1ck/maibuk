@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { CaseSensitive, CaseUpper, CaseLower, ChevronDown } from "lucide-react";
+import { Tooltip } from "@/components/ui";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
 
 interface TextCaseMenuProps {
@@ -86,16 +87,18 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
         <CaseLower className="w-4 h-4" />
       </ToolbarButton>
 
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
-        title={t("editor.textCase")}
-        className={`p-2 rounded transition-colors flex items-center gap-0.5 ${showMenu ? "bg-primary text-white" : "hover:bg-muted"}`}
-      >
-        <CaseSensitive className="w-4 h-4" />
-        <ChevronDown className="w-3 h-3" />
-      </button>
+      <Tooltip content={t("editor.textCase")}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
+          aria-label={t("editor.textCase")}
+          className={`p-2 rounded transition-colors flex items-center gap-0.5 ${showMenu ? "bg-primary text-white" : "hover:bg-muted"}`}
+        >
+          <CaseSensitive className="w-4 h-4" />
+          <ChevronDown className="w-3 h-3" />
+        </button>
+      </Tooltip>
 
       {showMenu &&
         createPortal(

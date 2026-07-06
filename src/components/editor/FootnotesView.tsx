@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Chapter } from "@/features/chapters/types";
 import { useTranslation } from "react-i18next";
+import { Tooltip } from "@/components/ui";
 
 interface FootnoteEntry {
   id: string;
@@ -103,14 +104,16 @@ export function FootnotesView({ chapters, currentChapterId, onSelectChapter }: F
             {group.items.map((fn) => (
               <li key={fn.id} className="notes-item" value={fn.number}>
                 <span className="footnote-content">{fn.content}</span>
-                <a
-                  className="footnote-backref"
-                  href={`#fnref-${fn.id}`}
-                  onClick={(e) => handleGoToRef(e, fn)}
-                  title={t("editor.goToReference")}
-                >
-                  ↩
-                </a>
+                <Tooltip content={t("editor.goToReference")}>
+                  <a
+                    className="footnote-backref"
+                    href={`#fnref-${fn.id}`}
+                    onClick={(e) => handleGoToRef(e, fn)}
+                    aria-label={t("editor.goToReference")}
+                  >
+                    ↩
+                  </a>
+                </Tooltip>
               </li>
             ))}
           </ol>

@@ -21,6 +21,8 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { buildSearchRegExp, findMatches, type SearchMatch } from "@/components/editor/extensions/SearchReplace";
+import { Tooltip, TooltipGroup } from "@/components/ui";
+import type { ShortcutId } from "@/lib/shortcut-registry";
 
 interface FindReplaceProps {
   editor: Editor;
@@ -33,27 +35,31 @@ function IconButton({
   onClick,
   disabled,
   active,
-  title,
+  label,
+  shortcut,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
-  title: string;
+  label: string;
+  shortcut?: ShortcutId;
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
-        active ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"
-      } ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
-    >
-      {children}
-    </button>
+    <Tooltip content={label} shortcut={shortcut}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+          active ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"
+        } ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -300,81 +306,97 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
       : "";
 
   return (
-    <div
-      ref={panelRef}
-      className="absolute top-2 right-2 z-50 flex flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg"
-    >
-      {/* Find row */}
-      <div className="flex items-center gap-1">
-        <div className="relative">
-          <input
-            ref={findInputRef}
-            type="text"
-            placeholder={t("editor.find")}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={handleFindKeyDown}
-            className={`h-7 w-56 rounded border bg-background pr-[68px] pl-2 text-sm text-foreground outline-none focus:border-primary ${
-              regexError ? "border-destructive" : "border-border"
-            }`}
-          />
-          <div className="absolute inset-y-0 right-1 flex items-center gap-0.5">
-            <IconButton
-              active={caseSensitive}
-              onClick={() => setCaseSensitive((v) => !v)}
-              title={t("editor.matchCase")}
-            >
-              <CaseSensitive className="h-4 w-4" />
-            </IconButton>
-            <IconButton
-              active={wholeWord}
-              onClick={() => setWholeWord((v) => !v)}
-              title={t("editor.matchWholeWord")}
-            >
-              <WholeWord className="h-4 w-4" />
-            </IconButton>
-            <IconButton
-              active={regex}
-              onClick={() => setRegex((v) => !v)}
-              title={t("editor.useRegex")}
-            >
-              <Regex className="h-4 w-4" />
-            </IconButton>
+    <TooltipGroup>
+      <div
+        ref={panelRef}
+        className="absolute top-2 right-2 z-50 flex flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg"
+      >
+        {/* Find row */}
+        <div className="flex items-center gap-1">
+          <div className="relative">
+            <input
+              ref={findInputRef}
+              type="text"
+              placeholder={t("editor.find")}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={handleFindKeyDown}
+              className={`h-7 w-56 rounded border bg-background pr-[68px] pl-2 text-sm text-foreground outline-none focus:border-primary ${
+                regexError ? "border-destructive" : "border-border"
+              }`}
+            />
+            <div className="absolute inset-y-0 right-1 flex items-center gap-0.5">
+              <IconButton
+                active={caseSensitive}
+                onClick={() => setCaseSensitive((v) => !v)}
+                label={t("editor.matchCase")}
+              >
+                <CaseSensitive className="h-4 w-4" />
+              </IconButton>
+              <IconButton
+                active={wholeWord}
+                onClick={() => setWholeWord((v) => !v)}
+                label={t("editor.matchWholeWord")}
+              >
+                <WholeWord className="h-4 w-4" />
+              </IconButton>
+              <IconButton
+                active={regex}
+                onClick={() => setRegex((v) => !v)}
+                label={t("editor.useRegex")}
+              >
+                <Regex className="h-4 w-4" />
+              </IconButton>
+            </div>
           </div>
+
+          <span className="min-w-[72px] text-center text-xs text-muted-foreground tabular-nums">
+            {status}
+          </span>
+
+          <IconButton
+            onClick={findPrev}
+            disabled={!hasMatches}
+            label={t("editor.findPrevious")}
+            shortcut="editor.findPrevious"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </IconButton>
+          <IconButton
+            onClick={findNext}
+            disabled={!hasMatches}
+            label={t("editor.findNext")}
+            shortcut="editor.findNext"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </IconButton>
+          <IconButton
+            onClick={onClose}
+            label={t("editor.closeFindReplace")}
+            shortcut="editor.closeFindReplace"
+          >
+            <X className="h-4 w-4" />
+          </IconButton>
         </div>
 
-        <span className="min-w-[72px] text-center text-xs text-muted-foreground tabular-nums">
-          {status}
-        </span>
-
-        <IconButton onClick={findPrev} disabled={!hasMatches} title={t("editor.findPrevious")}>
-          <ChevronUp className="h-4 w-4" />
-        </IconButton>
-        <IconButton onClick={findNext} disabled={!hasMatches} title={t("editor.findNext")}>
-          <ChevronDown className="h-4 w-4" />
-        </IconButton>
-        <IconButton onClick={onClose} title={t("editor.closeFindReplace")}>
-          <X className="h-4 w-4" />
-        </IconButton>
+        {/* Replace row */}
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            placeholder={t("editor.replaceWith")}
+            value={replaceTerm}
+            onChange={(e) => setReplaceTerm(e.target.value)}
+            onKeyDown={handleReplaceKeyDown}
+            className="h-7 w-56 rounded border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary"
+          />
+          <IconButton onClick={replaceCurrent} disabled={!hasMatches} label={t("editor.replace")}>
+            <Replace className="h-4 w-4" />
+          </IconButton>
+          <IconButton onClick={replaceAll} disabled={!hasMatches} label={t("editor.replaceAll")}>
+            <ReplaceAll className="h-4 w-4" />
+          </IconButton>
+        </div>
       </div>
-
-      {/* Replace row */}
-      <div className="flex items-center gap-1">
-        <input
-          type="text"
-          placeholder={t("editor.replaceWith")}
-          value={replaceTerm}
-          onChange={(e) => setReplaceTerm(e.target.value)}
-          onKeyDown={handleReplaceKeyDown}
-          className="h-7 w-56 rounded border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary"
-        />
-        <IconButton onClick={replaceCurrent} disabled={!hasMatches} title={t("editor.replace")}>
-          <Replace className="h-4 w-4" />
-        </IconButton>
-        <IconButton onClick={replaceAll} disabled={!hasMatches} title={t("editor.replaceAll")}>
-          <ReplaceAll className="h-4 w-4" />
-        </IconButton>
-      </div>
-    </div>
+    </TooltipGroup>
   );
 }

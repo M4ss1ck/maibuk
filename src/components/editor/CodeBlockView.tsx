@@ -3,6 +3,7 @@ import { NodeViewWrapper, NodeViewContent } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy } from "lucide-react";
+import { Tooltip } from "@/components/ui";
 
 export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
   const { t } = useTranslation();
@@ -71,29 +72,31 @@ export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
           contentEditable={false}
         />
       ) : (
+        <Tooltip content={t("editor.editCodeBlockLanguage")}>
+          <button
+            type="button"
+            className="code-block-language"
+            onClick={() => setIsEditingLanguage(true)}
+            onMouseDown={(e) => e.preventDefault()}
+            contentEditable={false}
+            aria-label={t("editor.editCodeBlockLanguage")}
+          >
+            {language || t("editor.codeBlockNoLanguage")}
+          </button>
+        </Tooltip>
+      )}
+      <Tooltip content={copied ? t("editor.copied") : t("editor.copyCode")}>
         <button
           type="button"
-          className="code-block-language"
-          onClick={() => setIsEditingLanguage(true)}
+          className="code-block-copy"
+          onClick={handleCopy}
           onMouseDown={(e) => e.preventDefault()}
           contentEditable={false}
-          title={t("editor.editCodeBlockLanguage")}
-          aria-label={t("editor.editCodeBlockLanguage")}
+          aria-label={copied ? t("editor.copied") : t("editor.copyCode")}
         >
-          {language || t("editor.codeBlockNoLanguage")}
+          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
         </button>
-      )}
-      <button
-        type="button"
-        className="code-block-copy"
-        onClick={handleCopy}
-        onMouseDown={(e) => e.preventDefault()}
-        contentEditable={false}
-        title={copied ? t("editor.copied") : t("editor.copyCode")}
-        aria-label={copied ? t("editor.copied") : t("editor.copyCode")}
-      >
-        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-      </button>
+      </Tooltip>
       <pre>
         <NodeViewContent<"code"> as="code" />
       </pre>

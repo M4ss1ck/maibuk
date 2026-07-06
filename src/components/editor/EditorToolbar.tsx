@@ -13,7 +13,7 @@ import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 import { findBlockOffsetInHtml } from "@/components/editor/HtmlInspectMenu";
 import { ColorPicker } from "@/components/editor/ColorPicker";
 import { ToolbarButton, Divider } from "@/components/editor/ToolbarButton";
-import { TooltipGroup } from "@/components/ui";
+import { Tooltip, TooltipGroup } from "@/components/ui";
 import { TextCaseMenu } from "@/components/editor/TextCaseMenu";
 import { FontSizeSelect } from "@/components/editor/FontSizeSelect";
 import { LineHeightSelect } from "@/components/editor/LineHeightSelect";
@@ -448,18 +448,20 @@ export function EditorToolbar({
           <WidthControl />
           <Divider />
           <ZoomControl />
-          <button
-            type="button"
-            onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
-            className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
-            title={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
-          >
-            {isToolbarExpanded ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
-          </button>
+          <Tooltip content={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}>
+            <button
+              type="button"
+              onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
+              className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
+              aria-label={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
+            >
+              {isToolbarExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -484,7 +486,7 @@ export function EditorToolbar({
                 .run()
             }
             isActive={editorState.isHighlight}
-            title={t("editor.highlight")}
+            label={t("editor.highlight")}
             icon={<Highlighter className="w-4 h-4" />}
           />
 
@@ -514,7 +516,7 @@ export function EditorToolbar({
                 : editor.chain().focus().setColor("#000000").run()
             }
             isActive={!!editorState.color}
-            title={t("editor.textColor")}
+            label={t("editor.textColor")}
             icon={<Baseline className="w-4 h-4" />}
           />
 
@@ -847,18 +849,19 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={toggle}
-        title={label}
-        aria-label={label}
-        className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${open ? "bg-primary text-white" : "hover:bg-muted"
-          }`}
-      >
-        <span className="uppercase">{selected.value}</span>
-        <ChevronDown className="h-2.5 w-2.5" />
-      </button>
+      <Tooltip content={label}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={toggle}
+          aria-label={label}
+          className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${open ? "bg-primary text-white" : "hover:bg-muted"
+            }`}
+        >
+          <span className="uppercase">{selected.value}</span>
+          <ChevronDown className="h-2.5 w-2.5" />
+        </button>
+      </Tooltip>
       {open &&
         createPortal(
           <div
