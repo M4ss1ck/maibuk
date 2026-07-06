@@ -14,14 +14,14 @@ describe("KeyboardShortcut", () => {
     expect(screen.getByText("S").tagName).toBe("KBD");
   });
 
-  it("separates sequence groups with a visible arrow", () => {
+  it("renders sequence groups as adjacent chips without a separator", () => {
     render(
       <KeyboardShortcut
         shortcut={{ groups: [["G"], ["N"]], isSequence: true }}
       />,
     );
 
-    expect(screen.getByText("→")).toBeVisible();
+    expect(screen.queryByText("→")).not.toBeInTheDocument();
   });
 
   it("does not add arrows between alternative groups", () => {
