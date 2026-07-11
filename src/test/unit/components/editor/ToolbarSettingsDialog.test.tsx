@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import { useSettingsStore } from "@/features/settings/store";
 import { ALL_GROUP_IDS, type ToolbarConfig } from "@/features/settings/toolbar-config";
@@ -291,4 +291,312 @@ it("calls onClose when the Close button is clicked", () => {
   render(<ToolbarSettingsDialog isOpen onClose={onClose} />);
   fireEvent.click(screen.getByRole("button", { name: "toolbar.settings.close" }));
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+describe("auto-scroll during drag", () => {
+  let frameQueue: Array<{ id: number; cb: FrameRequestCallback }> = [];
+  let nextFrameId = 1;
+
+  beforeEach(() => {
+    frameQueue = [];
+    nextFrameId = 1;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      const id = nextFrameId++;
+      frameQueue.push({ id, cb });
+      return id;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
+      frameQueue = frameQueue.filter((frame) => frame.id !== id);
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function flushFrames(count = 1) {
+    for (let i = 0; i < count; i++) {
+      if (frameQueue.length === 0) break;
+      const frames = [...frameQueue];
+      frameQueue = [];
+      frames.forEach((frame) => frame.cb(0));
+    }
+  }
+
+  function setupLaneGeometry(lane: HTMLElement, scrollTop = 100) {
+    Object.defineProperty(lane, "scrollTop", {
+      value: scrollTop,
+      writable: true,
+      configurable: true,
+    });
+    lane.getBoundingClientRect = () =>
+      ({
+        top: 0,
+        bottom: 500,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: 500,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+  }
+
+  function makeDataTransfer() {
+    return {
+      effectAllowed: "none",
+      dropEffect: "none",
+      setData: vi.fn(),
+    };
+  }
+
+  function dragOverWithClientY(
+    target: HTMLElement,
+    clientY: number,
+    dataTransfer: ReturnType<typeof makeDataTransfer>
+  ) {
+    const event = new MouseEvent("dragover", { bubbles: true, clientY });
+    Object.defineProperty(event, "dataTransfer", {
+      value: dataTransfer,
+      configurable: true,
+    });
+    target.dispatchEvent(event);
+  }
+
+  function dropWithClientY(
+    target: HTMLElement,
+    clientY: number,
+    dataTransfer: ReturnType<typeof makeDataTransfer>
+  ) {
+    const event = new MouseEvent("drop", { bubbles: true, clientY });
+    Object.defineProperty(event, "dataTransfer", {
+      value: dataTransfer,
+      configurable: true,
+    });
+    target.dispatchEvent(event);
+  }
+
+  it("renders bounded overflow-y-auto listboxes", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    expect(startLane).toHaveClass("min-h-8", "max-h-[55vh]", "overflow-y-auto");
+  });
+
+  it("scrolls downward when dragging near the bottom of a lane", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    setupLaneGeometry(startLane, 100);
+    const history = screen.getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    const dataTransfer = makeDataTransfer();
+
+    fireEvent.dragStart(
+      within(history).getByLabelText("toolbar.settings.dragHandle"),
+      { dataTransfer }
+    );
+    dragOverWithClientY(startLane, 495, dataTransfer);
+    flushFrames(1);
+
+    expect(startLane.scrollTop).toBeGreaterThan(100);
+  });
+
+  it("scrolls upward when dragging near the top of a lane", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    setupLaneGeometry(startLane, 100);
+    const history = screen.getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    const dataTransfer = makeDataTransfer();
+
+    fireEvent.dragStart(
+      within(history).getByLabelText("toolbar.settings.dragHandle"),
+      { dataTransfer }
+    );
+    dragOverWithClientY(startLane, 8, dataTransfer);
+    flushFrames(1);
+
+    expect(startLane.scrollTop).toBeLessThan(100);
+  });
+
+  it("stops scrolling on row drop", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    setupLaneGeometry(startLane, 100);
+    const history = screen.getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    const basicMarks = screen.getByRole("option", {
+      name: /toolbar\.groups\.basicMarks/,
+    });
+    vi.spyOn(basicMarks, "getBoundingClientRect").mockReturnValue({
+      top: 100,
+      height: 40,
+    } as DOMRect);
+    const dataTransfer = makeDataTransfer();
+
+    fireEvent.dragStart(
+      within(history).getByLabelText("toolbar.settings.dragHandle"),
+      { dataTransfer }
+    );
+    dragOverWithClientY(basicMarks, 495, dataTransfer);
+    flushFrames(1);
+    const scrolledTop = startLane.scrollTop;
+    expect(scrolledTop).toBeGreaterThan(100);
+
+    dropWithClientY(basicMarks, 139, dataTransfer);
+    flushFrames(1);
+
+    expect(startLane.scrollTop).toBe(scrolledTop);
+  });
+
+  it("stops scrolling on lane drop", () => {
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: TEST_CONFIG.start,
+        end: TEST_CONFIG.start,
+      },
+    });
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    const endLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.end",
+    });
+    setupLaneGeometry(endLane, 100);
+    const history = within(startLane).getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    const dataTransfer = makeDataTransfer();
+
+    fireEvent.dragStart(
+      within(history).getByLabelText("toolbar.settings.dragHandle"),
+      { dataTransfer }
+    );
+    dragOverWithClientY(endLane, 495, dataTransfer);
+    flushFrames(1);
+    const scrolledTop = endLane.scrollTop;
+    expect(scrolledTop).toBeGreaterThan(100);
+
+    fireEvent.drop(endLane, { dataTransfer });
+    flushFrames(1);
+
+    expect(endLane.scrollTop).toBe(scrolledTop);
+  });
+
+  it("stops scrolling on drag end", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    setupLaneGeometry(startLane, 100);
+    const history = screen.getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    const dataTransfer = makeDataTransfer();
+
+    fireEvent.dragStart(
+      within(history).getByLabelText("toolbar.settings.dragHandle"),
+      { dataTransfer }
+    );
+    dragOverWithClientY(startLane, 495, dataTransfer);
+    flushFrames(1);
+    const scrolledTop = startLane.scrollTop;
+    expect(scrolledTop).toBeGreaterThan(100);
+
+    window.dispatchEvent(new Event("dragend", { bubbles: true }));
+    flushFrames(1);
+
+    expect(startLane.scrollTop).toBe(scrolledTop);
+  });
+
+  it("stops the other lane's auto-scroll when drag ends without dropping", () => {
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: TEST_CONFIG.start,
+        end: TEST_CONFIG.start,
+      },
+    });
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    const endLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.end",
+    });
+    setupLaneGeometry(startLane, 100);
+    setupLaneGeometry(endLane, 100);
+    const history = within(startLane).getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    const dataTransfer = makeDataTransfer();
+
+    fireEvent.dragStart(
+      within(history).getByLabelText("toolbar.settings.dragHandle"),
+      { dataTransfer }
+    );
+    dragOverWithClientY(endLane, 495, dataTransfer);
+    flushFrames(1);
+    expect(endLane.scrollTop).toBeGreaterThan(100);
+    const endScrolledTop = endLane.scrollTop;
+
+    window.dispatchEvent(new Event("dragend", { bubbles: true }));
+    flushFrames(1);
+
+    expect(endLane.scrollTop).toBe(endScrolledTop);
+    expect(startLane.scrollTop).toBe(100);
+  });
+
+  it("stops the destination lane before applying a cross-lane move", () => {
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: TEST_CONFIG.start,
+        end: TEST_CONFIG.start,
+      },
+    });
+    const originalMove = useSettingsStore.getState().moveToolbarEntryTo;
+    const moveToolbarEntryTo = vi.fn((...args: Parameters<typeof originalMove>) => {
+      originalMove(...args);
+    });
+    useSettingsStore.setState({ moveToolbarEntryTo });
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    const endLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.end",
+    });
+    setupLaneGeometry(endLane, 100);
+    const history = within(startLane).getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    const dataTransfer = makeDataTransfer();
+
+    fireEvent.dragStart(
+      within(history).getByLabelText("toolbar.settings.dragHandle"),
+      { dataTransfer }
+    );
+    dragOverWithClientY(endLane, 495, dataTransfer);
+    flushFrames(1);
+    const scrolledTop = endLane.scrollTop;
+    expect(scrolledTop).toBeGreaterThan(100);
+
+    fireEvent.drop(endLane, { dataTransfer });
+    flushFrames(1);
+
+    expect(moveToolbarEntryTo).toHaveBeenCalledWith("start", 0, "end", 3);
+    expect(endLane.scrollTop).toBe(scrolledTop);
+    useSettingsStore.setState({ moveToolbarEntryTo: originalMove });
+  });
 });

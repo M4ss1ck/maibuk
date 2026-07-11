@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeftRight, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
+import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 import { Button, Modal, Switch, Tooltip } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
 import { TOOLBAR_GROUP_META } from "@/components/editor/toolbar/toolbar-groups";
@@ -198,22 +199,32 @@ interface ToolbarLaneProps {
 function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId, setRowRef, onMove, onTransfer, draggedEntry, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd }: ToolbarLaneProps) {
   const { t } = useTranslation();
   const addToolbarDivider = useSettingsStore((state) => state.addToolbarDivider);
+  const listboxRef = useRef<HTMLDivElement>(null);
+  const autoScroll = useDragAutoScroll(listboxRef);
+
+  useEffect(() => {
+    window.addEventListener("dragend", autoScroll.stop);
+    return () => window.removeEventListener("dragend", autoScroll.stop);
+  }, [autoScroll.stop]);
 
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold">{title}</h3>
       <div
-        className="min-h-8 space-y-2"
+        ref={listboxRef}
+        className="min-h-8 max-h-[55vh] overflow-y-auto space-y-2"
         role="listbox"
         aria-label={title}
         onDragOver={(event) => {
           if (!draggedEntry || event.currentTarget !== event.target) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
+          autoScroll.onDragOver(event.clientY);
         }}
         onDrop={(event) => {
           if (!draggedEntry || event.currentTarget !== event.target) return;
           event.preventDefault();
+          autoScroll.stop();
           onDrop(section, entries.length, "before");
         }}
       >
@@ -230,7 +241,7 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
               setRowRef={(element) => setRowRef(entry.id, element)}
               onMove={(direction) => onMove(section, index, entry.id, direction)}
               onTransfer={() => onTransfer(section, index, entry.id)}
-              dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd)}
+              dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd, autoScroll)}
             />
           ) : (
             <DividerRow
@@ -244,7 +255,7 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
               setRowRef={(element) => setRowRef(entry.id, element)}
               onMove={(direction) => onMove(section, index, entry.id, direction)}
               onTransfer={() => onTransfer(section, index, entry.id)}
-              dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd)}
+              dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd, autoScroll)}
             />
           )
         )}
@@ -453,7 +464,8 @@ function makeRowDndProps(
   onDragStart: ToolbarLaneProps["onDragStart"],
   onDragOver: ToolbarLaneProps["onDragOver"],
   onDrop: ToolbarLaneProps["onDrop"],
-  onDragEnd: () => void
+  onDragEnd: () => void,
+  autoScroll: ReturnType<typeof useDragAutoScroll>
 ): RowDndProps {
   return {
     dropPlacement: dropTarget?.section === section && dropTarget.index === index ? dropTarget.placement : null,
@@ -468,14 +480,19 @@ function makeRowDndProps(
       event.dataTransfer.dropEffect = "move";
       const rect = event.currentTarget.getBoundingClientRect();
       onDragOver(index, event.clientY < rect.top + rect.height / 2 ? "before" : "after");
+      autoScroll.onDragOver(event.clientY);
     },
     onDrop: (event) => {
       event.preventDefault();
       event.stopPropagation();
+      autoScroll.stop();
       const rect = event.currentTarget.getBoundingClientRect();
       onDrop(section, index, event.clientY < rect.top + rect.height / 2 ? "before" : "after");
     },
-    onDragEnd,
+    onDragEnd: () => {
+      autoScroll.stop();
+      onDragEnd();
+    },
   };
 }
 
