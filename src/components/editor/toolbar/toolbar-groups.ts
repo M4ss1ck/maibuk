@@ -26,6 +26,7 @@ import {
   Undo2,
   type LucideIcon,
 } from "lucide-react";
+import type { ParseKeys } from "i18next";
 import {
   ALL_GROUP_IDS,
   FLOATING_ELIGIBLE_IDS,
@@ -34,7 +35,7 @@ import {
 
 export interface ToolbarGroupMeta {
   id: ToolbarGroupId;
-  labelKey: string;
+  labelKey: ParseKeys;
   Icon: LucideIcon;
   floatingEligible: boolean;
   childLabelKeys?: string[];
@@ -101,7 +102,7 @@ export const TOOLBAR_GROUP_META = ALL_GROUP_IDS.reduce(
   (metaById, id) => {
     metaById[id] = {
       id,
-      labelKey: `toolbar.groups.${LABEL_SUFFIX[id]}`,
+      labelKey: `toolbar.groups.${LABEL_SUFFIX[id]}` as ParseKeys,
       Icon: ICONS[id],
       floatingEligible: FLOATING_ELIGIBLE_IDS.has(id),
     };
