@@ -271,7 +271,7 @@ export function EditorToolbar({
                 <button
                   type="button"
                   onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
-                  className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground"
+                  className="p-2 rounded hover:bg-muted transition-colors"
                   aria-label={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
                 >
                   {isToolbarExpanded ? (
