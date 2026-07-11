@@ -30,6 +30,7 @@ function renderEntry(
   entry: ToolbarEntry,
   editor: Editor,
   callbacks: ToolbarGroupCallbacks,
+  wrapItems = false,
 ): ReactNode {
   if (entry.kind === "divider") return <Divider key={entry.id} />;
   return (
@@ -38,6 +39,7 @@ function renderEntry(
       editor={editor}
       groupIds={[entry.id]}
       callbacks={callbacks}
+      wrapItems={wrapItems}
     />
   );
 }
@@ -87,7 +89,9 @@ export function ResponsiveEditorToolbar({
       <div className="border-b border-border bg-background sticky top-0 z-10">
         <div ref={rootRef} className={rowClass}>
           <div data-testid="toolbar-start-lane" className={startBlockClass}>
-            {visibleStart.map((entry) => renderEntry(entry, editor, callbacks))}
+            {visibleStart.map((entry) =>
+              renderEntry(entry, editor, callbacks, toolbarExpanded),
+            )}
           </div>
           <div
             ref={endRef}

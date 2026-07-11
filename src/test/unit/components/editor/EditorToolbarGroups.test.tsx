@@ -68,6 +68,24 @@ describe("EditorToolbarGroups", () => {
     expect(screen.getByLabelText("editor.insertTable")).toBeInTheDocument();
   });
 
+  it("exposes table controls to the parent wrapping flow when requested", () => {
+    const { container } = render(
+      <EditorToolbarGroups
+        editor={makeToolbarEditor()}
+        groupIds={["table"]}
+        callbacks={callbacks}
+        wrapItems
+      />,
+    );
+
+    expect(container.querySelector('[data-group-id="table"]')).toHaveClass(
+      "contents",
+    );
+    expect(screen.getByLabelText("editor.insertTable").parentElement).toHaveClass(
+      "contents",
+    );
+  });
+
   it("wraps each requested group in a measurable boundary", () => {
     const { container } = render(
       <EditorToolbarGroups

@@ -84,16 +84,22 @@ export interface ToolbarGroupCallbacks {
 
 interface ToolbarGroupBoundaryProps {
   children: ReactNode;
+  wrapItems?: boolean;
   "data-group-id"?: string;
 }
 
 export function ToolbarGroupBoundary({
   children,
+  wrapItems = false,
   ...rest
 }: ToolbarGroupBoundaryProps) {
   return (
     <span
-      className="inline-flex flex-shrink-0 items-center gap-0.5 sm:gap-1"
+      className={
+        wrapItems
+          ? "contents"
+          : "inline-flex flex-shrink-0 items-center gap-0.5 sm:gap-1"
+      }
       {...rest}
     >
       {children}
@@ -106,6 +112,7 @@ interface EditorToolbarGroupsProps {
   groupIds: ToolbarGroupId[];
   callbacks: ToolbarGroupCallbacks;
   iconSize?: "sm" | "md";
+  wrapItems?: boolean;
 }
 
 export function EditorToolbarGroups({
@@ -113,6 +120,7 @@ export function EditorToolbarGroups({
   groupIds,
   callbacks,
   iconSize = "md",
+  wrapItems = false,
 }: EditorToolbarGroupsProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore(
@@ -233,7 +241,7 @@ export function EditorToolbarGroups({
       case "text-case":
         return <TextCaseMenu editor={editor} />;
       case "table":
-        return <TableMenu editor={editor} />;
+        return <TableMenu editor={editor} wrapItems={wrapItems} />;
       case "image":
         return <ToolbarButton onClick={callbacks.openImageDialog} label={t("editor.insertImage")}><Image className={icon} /></ToolbarButton>;
       case "scene-break":
@@ -256,7 +264,11 @@ export function EditorToolbarGroups({
   return (
     <>
       {groupIds.map((id) => (
-        <ToolbarGroupBoundary key={id} data-group-id={id}>
+        <ToolbarGroupBoundary
+          key={id}
+          data-group-id={id}
+          wrapItems={wrapItems}
+        >
           {renderGroup(id)}
         </ToolbarGroupBoundary>
       ))}

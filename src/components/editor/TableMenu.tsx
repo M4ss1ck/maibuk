@@ -17,9 +17,10 @@ import {
 
 interface TableMenuProps {
   editor: Editor;
+  wrapItems?: boolean;
 }
 
-export function TableMenu({ editor }: TableMenuProps) {
+export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{
@@ -67,7 +68,7 @@ export function TableMenu({ editor }: TableMenuProps) {
 
   return (
     <TooltipGroup>
-      <div className="flex items-center gap-1">
+      <div className={wrapItems ? "contents" : "flex items-center gap-1"}>
         <Tooltip content={t("editor.insertTable")}>
           <button
             ref={buttonRef}

@@ -144,6 +144,27 @@ it("expanded: Start lane uses contents", () => {
   expect(startLane.classList.contains("contents")).toBe(true);
 });
 
+it("expanded: Start group boundaries expose their controls to the wrapping row", () => {
+  useSettingsStore.setState({ toolbarExpanded: true });
+  const { getByTestId } = renderToolbar();
+  const historyGroup = getByTestId("toolbar-start-lane").querySelector(
+    '[data-group-id="history"]',
+  );
+
+  expect(historyGroup).toHaveClass("contents");
+  expect(historyGroup).not.toHaveClass("flex-shrink-0");
+});
+
+it("collapsed: Start group boundaries remain non-wrapping measurable units", () => {
+  const { getByTestId } = renderToolbar();
+  const historyGroup = getByTestId("toolbar-start-lane").querySelector(
+    '[data-group-id="history"]',
+  );
+
+  expect(historyGroup).toHaveClass("inline-flex", "flex-shrink-0");
+  expect(historyGroup).not.toHaveClass("contents");
+});
+
 it("expanded: End lane is non-wrapping, non-shrinking, and right-aligned", () => {
   useSettingsStore.setState({ toolbarExpanded: true });
   const { getByTestId } = renderToolbar();
