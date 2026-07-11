@@ -231,10 +231,10 @@ function InsertDividerControl({ section, index }: { section: ToolbarSection; ind
   );
 }
 
-function ColumnHeader({ label, help }: { label: string; help: string }) {
+function ColumnHeader({ label, help, className = "" }: { label: string; help: string; className?: string }) {
   return (
     <Tooltip content={help}>
-      <span className="truncate rounded">{label}</span>
+      <span className={`truncate rounded ${className}`}>{label}</span>
     </Tooltip>
   );
 }
@@ -258,11 +258,11 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
             className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} px-2 pb-1 text-xs font-medium text-muted-foreground`}
           >
             <ColumnHeader label={t("toolbar.settings.itemColumn")} help={t("toolbar.settings.itemColumnHelp")} />
-            <ColumnHeader label={t("toolbar.settings.toolbarColumn")} help={t("toolbar.settings.toolbarColumnHelp")} />
-            <ColumnHeader label={t("toolbar.settings.selectionMenuColumn")} help={t("toolbar.settings.selectionMenuColumnHelp")} />
-            <ColumnHeader label={t("toolbar.settings.orderColumn")} help={t("toolbar.settings.orderColumnHelp")} />
-            <ColumnHeader label={t("toolbar.settings.sectionColumn")} help={t("toolbar.settings.sectionColumnHelp")} />
-            <ColumnHeader label={t("toolbar.settings.actionsColumn")} help={t("toolbar.settings.actionsColumnHelp")} />
+            <ColumnHeader label={t("toolbar.settings.toolbarColumn")} help={t("toolbar.settings.toolbarColumnHelp")} className="text-center" />
+            <ColumnHeader label={t("toolbar.settings.selectionMenuColumn")} help={t("toolbar.settings.selectionMenuColumnHelp")} className="text-center" />
+            <ColumnHeader label={t("toolbar.settings.orderColumn")} help={t("toolbar.settings.orderColumnHelp")} className="text-center" />
+            <ColumnHeader label={t("toolbar.settings.sectionColumn")} help={t("toolbar.settings.sectionColumnHelp")} className="text-center" />
+            <ColumnHeader label={t("toolbar.settings.actionsColumn")} help={t("toolbar.settings.actionsColumnHelp")} className="text-center" />
           </div>
           <div
             ref={listboxRef}
@@ -364,7 +364,7 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
       tabIndex={active ? 0 : -1}
       onFocus={(event) => event.currentTarget === event.target && setActive()}
       onKeyDown={(event) => handleRowKeyDown(event, section, onMove, onTransfer)}
-      className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} items-center gap-2 rounded-lg border border-border p-2`}
+      className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} select-none items-center gap-2 rounded-lg border border-border p-2`}
       onDragOver={dnd.onDragOver}
       onDrop={dnd.onDrop}
     >
@@ -490,7 +490,7 @@ function DividerRow({ section, index, entry, laneLength, active, setActive, setR
       tabIndex={active ? 0 : -1}
       onFocus={(event) => event.currentTarget === event.target && setActive()}
       onKeyDown={(event) => handleRowKeyDown(event, section, onMove, onTransfer)}
-      className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} items-center gap-2 rounded-lg border border-dashed border-border p-2`}
+      className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} select-none items-center gap-2 rounded-lg border border-dashed border-border p-2`}
       onDragOver={dnd.onDragOver}
       onDrop={dnd.onDrop}
     >

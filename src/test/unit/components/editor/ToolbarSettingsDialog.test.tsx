@@ -877,13 +877,37 @@ describe("column headers and tooltips", () => {
     ).toBeInTheDocument();
   });
 
-  it("exposes header help tooltips when a column header is focused", () => {
+  it("aligns action column headers with their centered content", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const centeredHeaders = [
+      "toolbar.settings.toolbarColumn",
+      "toolbar.settings.selectionMenuColumn",
+      "toolbar.settings.orderColumn",
+      "toolbar.settings.sectionColumn",
+      "toolbar.settings.actionsColumn",
+    ];
+    for (const header of centeredHeaders) {
+      expect(screen.getAllByText(header)[0]).toHaveClass("text-center");
+    }
+    expect(screen.getAllByText("toolbar.settings.itemColumn")[0]).not.toHaveClass("text-center");
+  });
+
+  it("exposes header help tooltips when a column header is hovered", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
     const itemHeader = screen.getAllByText("toolbar.settings.itemColumn")[0];
-    fireEvent.focus(itemHeader);
+    fireEvent.mouseEnter(itemHeader);
+    act(() => vi.advanceTimersByTime(500));
     expect(screen.getByRole("tooltip")).toHaveTextContent(
       "toolbar.settings.itemColumnHelp"
     );
+  });
+
+  it("prevents text selection on draggable rows", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+    const divider = screen.getByRole("option", { name: "toolbar.settings.dividerLabel" });
+    expect(history).toHaveClass("select-none");
+    expect(divider).toHaveClass("select-none");
   });
 
   it("exposes control tooltips when an icon-only button is hovered", () => {
