@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { it, expect, beforeEach, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useRef } from "react";
 import { useToolbarOverflow } from "@/components/editor/toolbar/useToolbarOverflow";
