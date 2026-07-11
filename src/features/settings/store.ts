@@ -43,6 +43,21 @@ import {
 import { normalizeMetrics } from "@/features/metrics/settings";
 import { DEFAULT_NOTES_SORT } from "@/components/notes/notes-list-model";
 import { setLaunchOnStartup as applyLaunchOnStartup } from "@/lib/platform";
+import {
+  DEFAULT_TOOLBAR_CONFIG,
+  addDivider,
+  cloneToolbarConfig,
+  moveEntry,
+  moveEntryTo,
+  normalizeToolbarConfig,
+  removeDivider,
+  resetToolbarConfig as makeResetToolbarConfig,
+  setGroupFloatingVisible,
+  setGroupToolbarVisible,
+  transferEntry,
+  type ToolbarGroupId,
+  type ToolbarSection,
+} from "@/features/settings/toolbar-config";
 
 const STORAGE_KEY = "maibuk-settings";
 const isWebBuild = import.meta.env.VITE_BUILD_TARGET === "web";
@@ -76,6 +91,23 @@ interface SettingsStore extends Settings {
   setSidebarWidth: (width: number) => void;
   setNotesSidebarWidth: (width: number) => void;
   setToolbarExpanded: (expanded: boolean) => void;
+  moveToolbarEntry: (
+    section: ToolbarSection,
+    index: number,
+    direction: "up" | "down"
+  ) => void;
+  moveToolbarEntryTo: (
+    from: ToolbarSection,
+    index: number,
+    to: ToolbarSection,
+    toIndex: number
+  ) => void;
+  transferToolbarEntry: (from: ToolbarSection, index: number) => void;
+  setToolbarGroupVisible: (id: ToolbarGroupId, visible: boolean) => void;
+  setToolbarGroupFloatingVisible: (id: ToolbarGroupId, visible: boolean) => void;
+  addToolbarDivider: (section: ToolbarSection, index?: number) => void;
+  removeToolbarDivider: (section: ToolbarSection, dividerId: string) => void;
+  resetToolbarConfig: () => void;
   setChapterListView: (view: ChapterListView) => void;
   setShowChapterOutline: (enabled: boolean) => void;
   setNotesListView: (view: NotesListViewMode) => void;
@@ -145,6 +177,7 @@ const defaultSettings: Settings = {
   sidebarWidth: 256,
   notesSidebarWidth: 256,
   toolbarExpanded: false,
+  toolbarConfig: cloneToolbarConfig(DEFAULT_TOOLBAR_CONFIG),
   chapterListView: "normal",
   showChapterOutline: true,
   notesListView: "list",
@@ -319,6 +352,36 @@ export const useSettingsStore = create<SettingsStore>()(
       setNotesSidebarWidth: (notesSidebarWidth) =>
         set({ notesSidebarWidth: Math.max(200, Math.min(480, notesSidebarWidth)) }),
       setToolbarExpanded: (toolbarExpanded) => set({ toolbarExpanded }),
+      moveToolbarEntry: (section, index, direction) =>
+        set((state) => ({
+          toolbarConfig: moveEntry(state.toolbarConfig, section, index, direction),
+        })),
+      moveToolbarEntryTo: (from, index, to, toIndex) =>
+        set((state) => ({
+          toolbarConfig: moveEntryTo(state.toolbarConfig, from, index, to, toIndex),
+        })),
+      transferToolbarEntry: (from, index) =>
+        set((state) => ({
+          toolbarConfig: transferEntry(state.toolbarConfig, from, index),
+        })),
+      setToolbarGroupVisible: (id, visible) =>
+        set((state) => ({
+          toolbarConfig: setGroupToolbarVisible(state.toolbarConfig, id, visible),
+        })),
+      setToolbarGroupFloatingVisible: (id, visible) =>
+        set((state) => ({
+          toolbarConfig: setGroupFloatingVisible(state.toolbarConfig, id, visible),
+        })),
+      addToolbarDivider: (section, index) =>
+        set((state) => ({
+          toolbarConfig: addDivider(state.toolbarConfig, section, index),
+        })),
+      removeToolbarDivider: (section, dividerId) =>
+        set((state) => ({
+          toolbarConfig: removeDivider(state.toolbarConfig, section, dividerId),
+        })),
+      resetToolbarConfig: () =>
+        set({ toolbarConfig: makeResetToolbarConfig() }),
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setNotesListView: (notesListView) => set({ notesListView }),
@@ -558,6 +621,7 @@ export const useSettingsStore = create<SettingsStore>()(
           pasteCleanup: normalizePasteCleanup(persisted.pasteCleanup),
           lastSceneBreak: normalizeSceneBreak(persisted.lastSceneBreak),
           metrics: normalizeMetrics(persisted.metrics),
+          toolbarConfig: normalizeToolbarConfig(persisted.toolbarConfig),
         };
       },
       onRehydrateStorage: () => {

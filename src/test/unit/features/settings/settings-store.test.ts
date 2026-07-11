@@ -3,6 +3,11 @@ import {
   DEFAULT_METRICS_SETTINGS,
   PASTE_CLEANUP_PRESETS,
 } from "@/features/settings/types";
+import {
+  ALL_GROUP_IDS,
+  DEFAULT_TOOLBAR_CONFIG,
+  FLOATING_ELIGIBLE_IDS,
+} from "@/features/settings/toolbar-config";
 
 // Mock i18n before importing the store
 const { mockChangeLanguage } = vi.hoisted(() => ({
@@ -57,6 +62,7 @@ describe("useSettingsStore", () => {
       sidebarWidth: 256,
       notesSidebarWidth: 256,
       toolbarExpanded: false,
+      toolbarConfig: DEFAULT_TOOLBAR_CONFIG,
       editorContentWidth: 720,
       editorShowBorder: false,
       editorPagePadding: {
@@ -767,5 +773,102 @@ describe("editorPagePadding", () => {
       bottom: 32,
       left: 32,
     });
+  });
+});
+
+describe("toolbarConfig actions", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useSettingsStore.setState({
+      toolbarConfig: DEFAULT_TOOLBAR_CONFIG,
+      toolbarExpanded: false,
+    });
+  });
+
+  it("initializes to the default config", () => {
+    expect(useSettingsStore.getState().toolbarConfig).toEqual(
+      DEFAULT_TOOLBAR_CONFIG,
+    );
+  });
+
+  it("transferToolbarEntry moves a group to End and updates live", () => {
+    const firstGroupIndex = useSettingsStore
+      .getState()
+      .toolbarConfig.start.findIndex(
+        (entry) => entry.kind === "group" && entry.id === "history",
+      );
+    useSettingsStore.getState().transferToolbarEntry("start", firstGroupIndex);
+    const config = useSettingsStore.getState().toolbarConfig;
+    expect(
+      config.end.some(
+        (entry) => entry.kind === "group" && entry.id === "history",
+      ),
+    ).toBe(true);
+    expect(
+      config.start.some(
+        (entry) => entry.kind === "group" && entry.id === "history",
+      ),
+    ).toBe(false);
+  });
+
+  it("setToolbarGroupFloatingVisible is a no-op for ineligible groups", () => {
+    useSettingsStore
+      .getState()
+      .setToolbarGroupFloatingVisible("history", true);
+    const historyEntry = useSettingsStore
+      .getState()
+      .toolbarConfig.start.find(
+        (entry) => entry.kind === "group" && entry.id === "history",
+      );
+    expect(historyEntry).toMatchObject({ floatingVisible: false });
+    expect(FLOATING_ELIGIBLE_IDS.has("history")).toBe(false);
+  });
+
+  it("resetToolbarConfig restores semantic defaults with fresh divider ids without touching toolbarExpanded", () => {
+    useSettingsStore.setState({ toolbarExpanded: true });
+    useSettingsStore.getState().addToolbarDivider("end");
+    useSettingsStore.getState().resetToolbarConfig();
+    const config = useSettingsStore.getState().toolbarConfig;
+    const semanticLayout = config.start.map((entry) =>
+      entry.kind === "divider" ? "D" : entry.id,
+    );
+    const defaultLayout = DEFAULT_TOOLBAR_CONFIG.start.map((entry) =>
+      entry.kind === "divider" ? "D" : entry.id,
+    );
+    const resetDividerIds = config.start
+      .filter((entry) => entry.kind === "divider")
+      .map((entry) => entry.id);
+    const defaultDividerIds = DEFAULT_TOOLBAR_CONFIG.start
+      .filter((entry) => entry.kind === "divider")
+      .map((entry) => entry.id);
+
+    expect(semanticLayout).toEqual(defaultLayout);
+    expect(config.end).toEqual([]);
+    expect(resetDividerIds).not.toEqual(defaultDividerIds);
+    expect(useSettingsStore.getState().toolbarExpanded).toBe(true);
+  });
+
+  it("merge normalizes a malformed persisted toolbarConfig", async () => {
+    localStorage.setItem(
+      "maibuk-settings",
+      JSON.stringify({
+        state: {
+          toolbarConfig: {
+            start: [{ kind: "group", id: "bogus" }],
+            end: 5,
+          },
+        },
+        version: 0,
+      }),
+    );
+    await useSettingsStore.persist.rehydrate();
+    const config = useSettingsStore.getState().toolbarConfig;
+    const ids = [...config.start, ...config.end]
+      .filter((entry) => entry.kind === "group")
+      .map((entry) => entry.id)
+      .sort();
+    expect(ids).toEqual([...ALL_GROUP_IDS].sort());
+    expect(new Set(ids).size).toBe(ALL_GROUP_IDS.length);
+    expect(ids).not.toContain("bogus");
   });
 });
