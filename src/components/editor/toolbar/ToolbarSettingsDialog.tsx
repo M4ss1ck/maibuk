@@ -277,7 +277,12 @@ function ToolbarList({
               .map((i) => i.entry),
             insertionIndex
           ) ? (
-            <InsertDividerControl key={`add-${entry.id}`} section={section} index={insertionIndex} />
+            <InsertDividerControl
+              key={`add-${entry.id}`}
+              section={section}
+              index={insertionIndex}
+              isDragging={draggedEntry !== null}
+            />
           ) : null;
 
           const posInSet = items
@@ -341,7 +346,15 @@ function canInsertDivider(entries: ToolbarEntry[], index: number): boolean {
   return previous?.kind !== "divider" && next?.kind !== "divider";
 }
 
-function InsertDividerControl({ section, index }: { section: ToolbarSection; index: number }) {
+function InsertDividerControl({
+  section,
+  index,
+  isDragging,
+}: {
+  section: ToolbarSection;
+  index: number;
+  isDragging: boolean;
+}) {
   const { t } = useTranslation();
   const addToolbarDivider = useSettingsStore((state) => state.addToolbarDivider);
   const label = t("toolbar.settings.addDivider");
@@ -349,19 +362,25 @@ function InsertDividerControl({ section, index }: { section: ToolbarSection; ind
   return (
     <div
       data-testid={`toolbar-add-divider-${section}-${index}`}
-      className="pointer-events-none absolute bottom-0 left-1/2 z-20 -translate-x-1/2 translate-y-1/2 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+      className={`absolute bottom-0 left-1/2 z-20 w-[90%] -translate-x-1/2 translate-y-1/2 transition-opacity ${
+        isDragging
+          ? "pointer-events-none opacity-0"
+          : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+      }`}
     >
-      <Tooltip content={label}>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={label}
-          onClick={() => addToolbarDivider(section, index)}
-          className="h-5 w-5 p-0 pointer-events-auto"
-        >
+      <button
+        type="button"
+        aria-label={label}
+        onClick={() => addToolbarDivider(section, index)}
+        className="flex h-6 w-full items-center gap-2 rounded text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <span className="h-px flex-1 bg-border" aria-hidden="true" />
+        <span className="flex shrink-0 items-center gap-1 bg-background px-2">
           <Plus className="h-3 w-3" aria-hidden="true" />
-        </Button>
-      </Tooltip>
+          {label}
+        </span>
+        <span className="h-px flex-1 bg-border" aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -404,7 +423,7 @@ function SectionHeaderRow({ section, dropPlacement, onDragOver, onDrop }: Sectio
           onDrop(event.clientY < rect.top + rect.height / 2 ? "before" : "after");
         }}
       >
-        {t(`toolbar.settings.${section}`)}
+        <span className="col-span-5">{t(`toolbar.settings.${section}`)}</span>
       </div>
       <DropIndicator entryId={rowId} placement="after" active={dropPlacement === "after"} />
     </div>

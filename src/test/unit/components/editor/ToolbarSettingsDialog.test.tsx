@@ -99,9 +99,7 @@ describe("contextual add divider controls", () => {
     });
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
 
-    const controls = screen.getAllByRole("button", {
-      name: "toolbar.settings.addDivider",
-    });
+    const controls = screen.getAllByTestId(/^toolbar-add-divider-/);
     expect(controls).toHaveLength(2);
     expect(
       screen.getByTestId("toolbar-add-divider-start-1")
@@ -133,7 +131,7 @@ describe("contextual add divider controls", () => {
     expect(start[2].id).toBe("basic-marks");
   });
 
-  it("does not render a control before the first entry or in an empty lane", () => {
+  it("does not render a contextual control before the first entry or in an empty lane", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: [TEST_CONFIG.start[0]],
@@ -142,31 +140,19 @@ describe("contextual add divider controls", () => {
     });
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
 
-    const controls = screen.queryAllByRole("button", {
-      name: "toolbar.settings.addDivider",
-    });
+    const controls = screen.queryAllByTestId(/^toolbar-add-divider-/);
     expect(controls).toHaveLength(1);
     expect(
       screen.queryByTestId("toolbar-add-divider-start-0")
     ).not.toBeInTheDocument();
 
-    const listbox = screen.getByRole("listbox", {
-      name: "toolbar.settings.title",
-    });
-    const endHeader = within(listbox).getByTestId("toolbar-section-header-end");
-    expect(
-      within(endHeader).queryByRole("button", {
-        name: "toolbar.settings.addDivider",
-      })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("toolbar-add-divider-end-0")).not.toBeInTheDocument();
   });
 
   it("does not render controls immediately before or after an existing divider", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
 
-    const controls = screen.getAllByRole("button", {
-      name: "toolbar.settings.addDivider",
-    });
+    const controls = screen.getAllByTestId(/^toolbar-add-divider-/);
     // TEST_CONFIG.start = [history, divider, basic-marks]; only the trailing gap is eligible.
     expect(controls).toHaveLength(1);
     expect(
@@ -184,7 +170,7 @@ describe("contextual add divider controls", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
 
     expect(
-      screen.getAllByRole("button", { name: "toolbar.settings.addDivider" })
+      screen.getAllByTestId(/^toolbar-add-divider-/)
     ).toHaveLength(1);
 
     const removeButtons = screen.getAllByRole("button", {
@@ -193,7 +179,7 @@ describe("contextual add divider controls", () => {
     fireEvent.click(removeButtons[0]);
 
     expect(
-      screen.getAllByRole("button", { name: "toolbar.settings.addDivider" })
+      screen.getAllByTestId(/^toolbar-add-divider-/)
     ).toHaveLength(2);
     expect(
       screen.getByTestId("toolbar-add-divider-start-1")
@@ -209,23 +195,28 @@ describe("contextual add divider controls", () => {
     });
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
 
-    const control = screen.getByRole("button", {
-      name: "toolbar.settings.addDivider",
-    });
+    const control = within(screen.getByTestId("toolbar-add-divider-start-1")).getByRole(
+      "button",
+      { name: "toolbar.settings.addDivider" }
+    );
     control.focus();
     expect(control).toHaveFocus();
     expect(control).toHaveAttribute("aria-label", "toolbar.settings.addDivider");
   });
 
-  it("keeps layout-stable, pointer-safe classes and does not replace DnD indicators", () => {
+  it("appears on row hover or focus, spans most of the row, and stays out of the drag path", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
 
     const control = screen.getByTestId("toolbar-add-divider-start-3");
     expect(control).toHaveClass(
       "absolute",
+      "w-[90%]",
       "pointer-events-none",
+      "opacity-0",
       "group-hover:pointer-events-auto",
-      "focus-within:pointer-events-auto"
+      "group-hover:opacity-100",
+      "focus-within:pointer-events-auto",
+      "focus-within:opacity-100"
     );
     expect(control.querySelector("svg")).toBeInTheDocument();
 
@@ -242,6 +233,15 @@ describe("contextual add divider controls", () => {
     };
 
     fireEvent.dragStart(within(history).getByLabelText("toolbar.settings.dragHandle"), { dataTransfer });
+
+    expect(control).toHaveClass("pointer-events-none", "opacity-0");
+    expect(control).not.toHaveClass(
+      "group-hover:pointer-events-auto",
+      "group-hover:opacity-100",
+      "focus-within:pointer-events-auto",
+      "focus-within:opacity-100"
+    );
+
     fireEvent.dragOver(basicMarks, { clientY: 139, dataTransfer });
 
     expect(
