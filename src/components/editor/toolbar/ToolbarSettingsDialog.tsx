@@ -234,12 +234,7 @@ function InsertDividerControl({ section, index }: { section: ToolbarSection; ind
 function ColumnHeader({ label, help }: { label: string; help: string }) {
   return (
     <Tooltip content={help}>
-      <span
-        tabIndex={0}
-        className="truncate rounded outline-none focus:ring-1 focus:ring-primary"
-      >
-        {label}
-      </span>
+      <span className="truncate rounded">{label}</span>
     </Tooltip>
   );
 }

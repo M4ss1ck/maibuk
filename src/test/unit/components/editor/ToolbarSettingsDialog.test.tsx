@@ -462,7 +462,9 @@ describe("auto-scroll during drag", () => {
       if (frameQueue.length === 0) break;
       const frames = [...frameQueue];
       frameQueue = [];
-      frames.forEach((frame) => frame.cb(0));
+      frames.forEach((frame) => {
+        frame.cb(0);
+      });
     }
   }
 
