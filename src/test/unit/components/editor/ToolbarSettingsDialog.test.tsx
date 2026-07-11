@@ -1,6 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
+import {
+  TOOLBAR_SETTINGS_ROW_GRID,
+  TOOLBAR_SETTINGS_ROW_MIN_WIDTH,
+  ToolbarSettingsDialog,
+} from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import { useSettingsStore } from "@/features/settings/store";
 import { ALL_GROUP_IDS, type ToolbarConfig } from "@/features/settings/toolbar-config";
 
@@ -737,5 +741,158 @@ describe("auto-scroll during drag", () => {
     expect(moveToolbarEntryTo).toHaveBeenCalledWith("start", 0, "end", 3);
     expect(endLane.scrollTop).toBe(scrolledTop);
     useSettingsStore.setState({ moveToolbarEntryTo: originalMove });
+  });
+});
+
+describe("column headers and tooltips", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    act(() => vi.runOnlyPendingTimers());
+    vi.useRealTimers();
+  });
+
+  it("renders six localized column headers in each lane", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const expectedHeaders = [
+      "toolbar.settings.itemColumn",
+      "toolbar.settings.toolbarColumn",
+      "toolbar.settings.selectionMenuColumn",
+      "toolbar.settings.orderColumn",
+      "toolbar.settings.sectionColumn",
+      "toolbar.settings.actionsColumn",
+    ];
+    for (const header of expectedHeaders) {
+      expect(screen.getAllByText(header)).toHaveLength(2);
+    }
+  });
+
+  it("shares the same grid template and minimum width between headers, listbox, and rows inside a horizontal scroll viewport", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const startListbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.start",
+    });
+    const viewport = startListbox.parentElement as HTMLElement;
+    expect(viewport).toHaveClass("overflow-x-auto");
+    expect(startListbox).toHaveClass(TOOLBAR_SETTINGS_ROW_MIN_WIDTH);
+
+    const header = viewport.firstElementChild as HTMLElement;
+    expect(header).toHaveClass(
+      TOOLBAR_SETTINGS_ROW_GRID,
+      TOOLBAR_SETTINGS_ROW_MIN_WIDTH
+    );
+
+    const history = screen.getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    expect(history).toHaveClass(
+      TOOLBAR_SETTINGS_ROW_GRID,
+      TOOLBAR_SETTINGS_ROW_MIN_WIDTH
+    );
+
+    const divider = screen.getByRole("option", {
+      name: "toolbar.settings.dividerLabel",
+    });
+    expect(divider).toHaveClass(
+      TOOLBAR_SETTINGS_ROW_GRID,
+      TOOLBAR_SETTINGS_ROW_MIN_WIDTH
+    );
+  });
+
+  it("places group controls and divider placeholders under the intended columns", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const history = screen.getByRole("option", {
+      name: /toolbar\.groups\.history/,
+    });
+    expect(history.children).toHaveLength(6);
+    expect(
+      within(history.children[0] as HTMLElement).getByLabelText(
+        "toolbar.settings.dragHandle"
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(history.children[1] as HTMLElement).getByRole("switch", {
+        name: "toolbar.settings.toolbarVisible",
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(history.children[2] as HTMLElement).getByRole("switch", {
+        name: "toolbar.settings.floatingUnavailable",
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(history.children[3] as HTMLElement).getAllByRole("button")
+    ).toHaveLength(2);
+    expect(
+      within(history.children[4] as HTMLElement).getByRole("button", {
+        name: "toolbar.settings.transferToEnd",
+      })
+    ).toBeInTheDocument();
+    expect(history.children[5].tagName).toBe("SPAN");
+    expect(history.children[5]).toHaveAttribute("aria-hidden", "true");
+
+    const divider = screen.getByRole("option", {
+      name: "toolbar.settings.dividerLabel",
+    });
+    expect(divider.children).toHaveLength(6);
+    expect(
+      within(divider.children[0] as HTMLElement).getByLabelText(
+        "toolbar.settings.dragHandle"
+      )
+    ).toBeInTheDocument();
+    expect(divider.children[1]).toHaveAttribute("aria-hidden", "true");
+    expect(divider.children[2]).toHaveAttribute("aria-hidden", "true");
+    expect(
+      within(divider.children[3] as HTMLElement).getAllByRole("button")
+    ).toHaveLength(2);
+    expect(
+      within(divider.children[4] as HTMLElement).getByRole("button", {
+        name: "toolbar.settings.transferToEnd",
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(divider.children[5] as HTMLElement).getByRole("button", {
+        name: "toolbar.settings.remove",
+      })
+    ).toBeInTheDocument();
+  });
+
+  it("retains localized accessible names for icon-only controls", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    expect(screen.getAllByLabelText("toolbar.settings.dragHandle")).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "toolbar.settings.moveUp" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "toolbar.settings.moveDown" })).toHaveLength(3);
+    expect(
+      screen.getAllByRole("button", { name: "toolbar.settings.transferToEnd" })
+    ).toHaveLength(3);
+    expect(
+      screen.queryAllByRole("button", { name: "toolbar.settings.transferToStart" })
+    ).toHaveLength(0);
+    expect(
+      screen.getByRole("button", { name: "toolbar.settings.remove" })
+    ).toBeInTheDocument();
+  });
+
+  it("exposes header help tooltips when a column header is focused", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const itemHeader = screen.getAllByText("toolbar.settings.itemColumn")[0];
+    fireEvent.focus(itemHeader);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "toolbar.settings.itemColumnHelp"
+    );
+  });
+
+  it("exposes control tooltips when an icon-only button is hovered", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+    const moveUp = screen.getAllByRole("button", {
+      name: "toolbar.settings.moveUp",
+    })[0];
+    fireEvent.mouseEnter(moveUp);
+    act(() => vi.advanceTimersByTime(500));
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "toolbar.settings.moveUp"
+    );
   });
 });
