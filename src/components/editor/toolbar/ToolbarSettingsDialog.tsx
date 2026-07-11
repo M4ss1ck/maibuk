@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeftRight, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { Button, Modal, Switch, Tooltip } from "@/components/ui";
@@ -17,6 +17,7 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
   const resetToolbarConfig = useSettingsStore((state) => state.resetToolbarConfig);
   const moveToolbarEntry = useSettingsStore((state) => state.moveToolbarEntry);
   const transferToolbarEntry = useSettingsStore((state) => state.transferToolbarEntry);
+  const moveToolbarEntryTo = useSettingsStore((state) => state.moveToolbarEntryTo);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [activeEntryIds, setActiveEntryIds] = useState<Record<ToolbarSection, string | null>>(
     () => ({
@@ -25,6 +26,12 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
     })
   );
   const [announcement, setAnnouncement] = useState("");
+  const [draggedEntry, setDraggedEntry] = useState<{ section: ToolbarSection; index: number } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    section: ToolbarSection;
+    index: number;
+    placement: "before" | "after";
+  } | null>(null);
   const [focusRequest, setFocusRequest] = useState<{ id: string; sequence: number } | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
 
@@ -91,6 +98,19 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
     }
   };
 
+  const clearDrag = () => {
+    setDraggedEntry(null);
+    setDropTarget(null);
+  };
+
+  const handleDrop = (section: ToolbarSection, index: number, placement: "before" | "after") => {
+    if (!draggedEntry) return;
+    let toIndex = index + (placement === "after" ? 1 : 0);
+    if (draggedEntry.section === section && draggedEntry.index < toIndex) toIndex -= 1;
+    moveToolbarEntryTo(draggedEntry.section, draggedEntry.index, section, toIndex);
+    clearDrag();
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -124,6 +144,12 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
           }}
           onMove={handleMove}
           onTransfer={handleTransfer}
+          draggedEntry={draggedEntry}
+          dropTarget={dropTarget}
+          onDragStart={(index) => setDraggedEntry({ section: "start", index })}
+          onDragOver={(index, placement) => setDropTarget({ section: "start", index, placement })}
+          onDrop={handleDrop}
+          onDragEnd={clearDrag}
         />
         <ToolbarLane
           section="end"
@@ -137,6 +163,12 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
           }}
           onMove={handleMove}
           onTransfer={handleTransfer}
+          draggedEntry={draggedEntry}
+          dropTarget={dropTarget}
+          onDragStart={(index) => setDraggedEntry({ section: "end", index })}
+          onDragOver={(index, placement) => setDropTarget({ section: "end", index, placement })}
+          onDrop={handleDrop}
+          onDragEnd={clearDrag}
         />
       </div>
       <div role="status" aria-live="polite" className="sr-only">
@@ -155,16 +187,36 @@ interface ToolbarLaneProps {
   setRowRef: (id: string, element: HTMLDivElement | null) => void;
   onMove: (section: ToolbarSection, index: number, entryId: string, direction: "up" | "down") => void;
   onTransfer: (section: ToolbarSection, index: number, entryId: string) => void;
+  draggedEntry: { section: ToolbarSection; index: number } | null;
+  dropTarget: { section: ToolbarSection; index: number; placement: "before" | "after" } | null;
+  onDragStart: (index: number) => void;
+  onDragOver: (index: number, placement: "before" | "after") => void;
+  onDrop: (section: ToolbarSection, index: number, placement: "before" | "after") => void;
+  onDragEnd: () => void;
 }
 
-function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId, setRowRef, onMove, onTransfer }: ToolbarLaneProps) {
+function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId, setRowRef, onMove, onTransfer, draggedEntry, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd }: ToolbarLaneProps) {
   const { t } = useTranslation();
   const addToolbarDivider = useSettingsStore((state) => state.addToolbarDivider);
 
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold">{title}</h3>
-      <div className="space-y-2" role="listbox" aria-label={title}>
+      <div
+        className="min-h-8 space-y-2"
+        role="listbox"
+        aria-label={title}
+        onDragOver={(event) => {
+          if (!draggedEntry || event.currentTarget !== event.target) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={(event) => {
+          if (!draggedEntry || event.currentTarget !== event.target) return;
+          event.preventDefault();
+          onDrop(section, entries.length, "before");
+        }}
+      >
         {entries.map((entry, index) =>
           entry.kind === "group" ? (
             <GroupRow
@@ -178,6 +230,7 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
               setRowRef={(element) => setRowRef(entry.id, element)}
               onMove={(direction) => onMove(section, index, entry.id, direction)}
               onTransfer={() => onTransfer(section, index, entry.id)}
+              dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd)}
             />
           ) : (
             <DividerRow
@@ -191,6 +244,7 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
               setRowRef={(element) => setRowRef(entry.id, element)}
               onMove={(direction) => onMove(section, index, entry.id, direction)}
               onTransfer={() => onTransfer(section, index, entry.id)}
+              dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd)}
             />
           )
         )}
@@ -213,9 +267,10 @@ interface GroupRowProps {
   setRowRef: (element: HTMLDivElement | null) => void;
   onMove: (direction: "up" | "down") => void;
   onTransfer: () => void;
+  dnd: RowDndProps;
 }
 
-function GroupRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer }: GroupRowProps) {
+function GroupRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer, dnd }: GroupRowProps) {
   const { t } = useTranslation();
   const setToolbarGroupVisible = useSettingsStore((state) => state.setToolbarGroupVisible);
   const setToolbarGroupFloatingVisible = useSettingsStore(
@@ -228,7 +283,8 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
       ? t("toolbar.settings.transferToEnd")
       : t("toolbar.settings.transferToStart");
 
-  return (
+  return <div className="relative">
+    <DropIndicator entryId={entry.id} placement="before" active={dnd.dropPlacement === "before"} />
     <div
       ref={setRowRef}
       role="option"
@@ -239,8 +295,10 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
       onFocus={(event) => event.currentTarget === event.target && setActive()}
       onKeyDown={(event) => handleRowKeyDown(event, section, onMove, onTransfer)}
       className="flex items-center gap-2 rounded-lg border border-border p-2"
+      onDragOver={dnd.onDragOver}
+      onDrop={dnd.onDrop}
     >
-      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <DragHandle onDragStart={dnd.onDragStart} onDragEnd={dnd.onDragEnd} />
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="flex-1 truncate text-sm">{t(meta.labelKey)}</span>
       <Switch
@@ -295,7 +353,8 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
         <ArrowLeftRight className="h-4 w-4" />
       </Button>
     </div>
-  );
+    <DropIndicator entryId={entry.id} placement="after" active={dnd.dropPlacement === "after"} />
+  </div>;
 }
 
 interface DividerRowProps {
@@ -308,9 +367,10 @@ interface DividerRowProps {
   setRowRef: (element: HTMLDivElement | null) => void;
   onMove: (direction: "up" | "down") => void;
   onTransfer: () => void;
+  dnd: RowDndProps;
 }
 
-function DividerRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer }: DividerRowProps) {
+function DividerRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer, dnd }: DividerRowProps) {
   const { t } = useTranslation();
   const removeToolbarDivider = useSettingsStore((state) => state.removeToolbarDivider);
   const transferLabel =
@@ -318,7 +378,8 @@ function DividerRow({ section, index, entry, laneLength, active, setActive, setR
       ? t("toolbar.settings.transferToEnd")
       : t("toolbar.settings.transferToStart");
 
-  return (
+  return <div className="relative">
+    <DropIndicator entryId={entry.id} placement="before" active={dnd.dropPlacement === "before"} />
     <div
       ref={setRowRef}
       role="option"
@@ -330,8 +391,10 @@ function DividerRow({ section, index, entry, laneLength, active, setActive, setR
       onFocus={(event) => event.currentTarget === event.target && setActive()}
       onKeyDown={(event) => handleRowKeyDown(event, section, onMove, onTransfer)}
       className="flex items-center gap-2 rounded-lg border border-dashed border-border p-2"
+      onDragOver={dnd.onDragOver}
+      onDrop={dnd.onDrop}
     >
-      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <DragHandle onDragStart={dnd.onDragStart} onDragEnd={dnd.onDragEnd} />
       <span className="flex-1 text-sm italic text-muted-foreground">
         {t("toolbar.settings.dividerLabel")}
       </span>
@@ -370,7 +433,74 @@ function DividerRow({ section, index, entry, laneLength, active, setActive, setR
         <Trash2 className="h-4 w-4" />
       </Button>
     </div>
+    <DropIndicator entryId={entry.id} placement="after" active={dnd.dropPlacement === "after"} />
+  </div>;
+}
+
+interface RowDndProps {
+  dropPlacement: "before" | "after" | null;
+  onDragStart: (event: DragEvent<HTMLSpanElement>) => void;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+  onDragEnd: () => void;
+}
+
+function makeRowDndProps(
+  section: ToolbarSection,
+  index: number,
+  entryId: string,
+  dropTarget: ToolbarLaneProps["dropTarget"],
+  onDragStart: ToolbarLaneProps["onDragStart"],
+  onDragOver: ToolbarLaneProps["onDragOver"],
+  onDrop: ToolbarLaneProps["onDrop"],
+  onDragEnd: () => void
+): RowDndProps {
+  return {
+    dropPlacement: dropTarget?.section === section && dropTarget.index === index ? dropTarget.placement : null,
+    onDragStart: (event) => {
+      onDragStart(index);
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", entryId);
+    },
+    onDragOver: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      const rect = event.currentTarget.getBoundingClientRect();
+      onDragOver(index, event.clientY < rect.top + rect.height / 2 ? "before" : "after");
+    },
+    onDrop: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = event.currentTarget.getBoundingClientRect();
+      onDrop(section, index, event.clientY < rect.top + rect.height / 2 ? "before" : "after");
+    },
+    onDragEnd,
+  };
+}
+
+function DragHandle({ onDragStart, onDragEnd }: Pick<RowDndProps, "onDragStart" | "onDragEnd">) {
+  const { t } = useTranslation();
+  return (
+    <span
+      draggable
+      aria-label={t("toolbar.settings.dragHandle")}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className="shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing"
+    >
+      <GripVertical className="h-4 w-4" aria-hidden="true" />
+    </span>
   );
+}
+
+function DropIndicator({ entryId, placement, active }: { entryId: string; placement: "before" | "after"; active: boolean }) {
+  return active ? (
+    <div
+      data-testid={`toolbar-drop-indicator-${placement}-${entryId}`}
+      className={`pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary ${placement === "before" ? "top-0" : "bottom-0"}`}
+    />
+  ) : null;
 }
 
 function handleRowKeyDown(

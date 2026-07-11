@@ -206,6 +206,63 @@ it("falls back to another tabbable option when the active entry is removed", () 
   ).toHaveLength(1);
 });
 
+it("reorders entries within a section by dragging the dedicated handle", () => {
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+  const basicMarks = screen.getByRole("option", { name: /toolbar\.groups\.basicMarks/ });
+  vi.spyOn(basicMarks, "getBoundingClientRect").mockReturnValue({
+    top: 100,
+    height: 40,
+  } as DOMRect);
+  const dataTransfer = {
+    effectAllowed: "none",
+    dropEffect: "none",
+    setData: vi.fn(),
+  };
+
+  fireEvent.dragStart(
+    within(history).getByLabelText("toolbar.settings.dragHandle"),
+    { dataTransfer }
+  );
+  fireEvent.dragOver(basicMarks, { clientY: 139, dataTransfer });
+  const indicator = screen.getByTestId("toolbar-drop-indicator-after-basic-marks");
+  expect(indicator).toHaveClass("pointer-events-none", "absolute", "bottom-0");
+  fireEvent.drop(basicMarks, { clientY: 139, dataTransfer });
+
+  expect(useSettingsStore.getState().toolbarConfig.start.map((entry) => entry.id)).toEqual([
+    "divider-1",
+    "basic-marks",
+    "history",
+  ]);
+});
+
+it("moves an entry across sections by dropping on the empty lane area", () => {
+  const originalMove = useSettingsStore.getState().moveToolbarEntryTo;
+  const moveToolbarEntryTo = vi.fn(originalMove);
+  useSettingsStore.setState({ moveToolbarEntryTo });
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+  const endLane = screen.getByRole("listbox", { name: "toolbar.settings.end" });
+  const dataTransfer = {
+    effectAllowed: "none",
+    dropEffect: "none",
+    setData: vi.fn(),
+  };
+
+  fireEvent.dragStart(
+    within(history).getByLabelText("toolbar.settings.dragHandle"),
+    { dataTransfer }
+  );
+  fireEvent.dragOver(endLane, { dataTransfer });
+  fireEvent.drop(endLane, { dataTransfer });
+
+  expect(moveToolbarEntryTo).toHaveBeenCalledWith("start", 0, "end", 0);
+  expect(useSettingsStore.getState().toolbarConfig.end).toEqual([
+    expect.objectContaining({ id: "history" }),
+  ]);
+  useSettingsStore.setState({ moveToolbarEntryTo: originalMove });
+});
+
 it("resets to defaults only after the inline confirm step", () => {
   render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
   const resetButton = screen.getByRole("button", {
