@@ -234,7 +234,7 @@ function InsertDividerControl({ section, index }: { section: ToolbarSection; ind
 function ColumnHeader({ label, help, className = "" }: { label: string; help: string; className?: string }) {
   return (
     <Tooltip content={help}>
-      <span className={`truncate rounded ${className}`}>{label}</span>
+      <span className={`block truncate rounded ${className}`}>{label}</span>
     </Tooltip>
   );
 }
@@ -255,7 +255,7 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
         <h3 className="text-sm font-semibold">{title}</h3>
         <div className="overflow-x-auto">
           <div
-            className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} px-2 pb-1 text-xs font-medium text-muted-foreground`}
+            className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} gap-2 px-2 pb-1 text-xs font-medium text-muted-foreground`}
           >
             <ColumnHeader label={t("toolbar.settings.itemColumn")} help={t("toolbar.settings.itemColumnHelp")} />
             <ColumnHeader label={t("toolbar.settings.toolbarColumn")} help={t("toolbar.settings.toolbarColumnHelp")} className="text-center" />
