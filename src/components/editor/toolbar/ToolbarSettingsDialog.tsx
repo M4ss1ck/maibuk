@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeftRight, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 import { Button, Modal, Switch, Tooltip, TooltipGroup } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
 import { TOOLBAR_GROUP_META } from "@/components/editor/toolbar/toolbar-groups";
 import type { ToolbarEntry, ToolbarSection } from "@/features/settings/toolbar-config";
 
-export const TOOLBAR_SETTINGS_ROW_GRID = "grid-cols-[minmax(0,1fr)_3rem_3rem_5.5rem_3rem_3rem]";
+export const TOOLBAR_SETTINGS_ROW_GRID = "grid-cols-[minmax(0,1fr)_3rem_3rem_3rem_3rem]";
 export const TOOLBAR_SETTINGS_ROW_MIN_WIDTH = "min-w-[24rem]";
 
 interface ToolbarSettingsDialogProps {
@@ -20,14 +20,10 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const resetToolbarConfig = useSettingsStore((state) => state.resetToolbarConfig);
   const moveToolbarEntry = useSettingsStore((state) => state.moveToolbarEntry);
-  const transferToolbarEntry = useSettingsStore((state) => state.transferToolbarEntry);
   const moveToolbarEntryTo = useSettingsStore((state) => state.moveToolbarEntryTo);
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const [activeEntryIds, setActiveEntryIds] = useState<Record<ToolbarSection, string | null>>(
-    () => ({
-      start: toolbarConfig.start[0]?.id ?? null,
-      end: toolbarConfig.end[0]?.id ?? null,
-    })
+  const [activeEntryId, setActiveEntryId] = useState<string | null>(
+    () => toolbarConfig.start[0]?.id ?? toolbarConfig.end[0]?.id ?? null
   );
   const [announcement, setAnnouncement] = useState("");
   const [draggedEntry, setDraggedEntry] = useState<{ section: ToolbarSection; index: number } | null>(null);
@@ -39,17 +35,17 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
   const [focusRequest, setFocusRequest] = useState<{ id: string; sequence: number } | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
 
+  const listItems = useMemo<ToolbarListItem[]>(() => buildListItems(toolbarConfig), [toolbarConfig]);
+
   useEffect(() => {
-    setActiveEntryIds((current) => {
-      const next = { ...current };
-      for (const section of ["start", "end"] as const) {
-        if (!toolbarConfig[section].some((entry) => entry.id === current[section])) {
-          next[section] = toolbarConfig[section][0]?.id ?? null;
-        }
+    setActiveEntryId((current) => {
+      if (!listItems.some((item) => item.kind === "entry" && item.entry.id === current)) {
+        const firstEntry = listItems.find((item): item is EntryItem => item.kind === "entry");
+        return firstEntry?.entry.id ?? null;
       }
-      return next.start === current.start && next.end === current.end ? current : next;
+      return current;
     });
-  }, [toolbarConfig]);
+  }, [listItems]);
 
   useEffect(() => {
     if (focusRequest) rowRefs.current.get(focusRequest.id)?.focus();
@@ -65,32 +61,13 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
     );
   };
 
-  const handleMove = (
-    section: ToolbarSection,
-    index: number,
-    entryId: string,
-    direction: "up" | "down"
-  ) => {
+  const handleMove = (section: ToolbarSection, index: number, entryId: string, direction: "up" | "down") => {
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= toolbarConfig[section].length) return;
     moveToolbarEntry(section, index, direction);
-    setActiveEntryIds((current) => ({ ...current, [section]: entryId }));
+    setActiveEntryId(entryId);
     setFocusRequest((request) => ({ id: entryId, sequence: (request?.sequence ?? 0) + 1 }));
     announceMove(section, targetIndex + 1, toolbarConfig[section].length);
-  };
-
-  const handleTransfer = (section: ToolbarSection, index: number, entryId: string) => {
-    const targetSection = section === "start" ? "end" : "start";
-    const targetPosition = toolbarConfig[targetSection].length + 1;
-    const sourceFallback = toolbarConfig[section][index + 1]?.id ?? toolbarConfig[section][index - 1]?.id ?? null;
-    transferToolbarEntry(section, index);
-    setActiveEntryIds((current) => ({
-      ...current,
-      [section]: sourceFallback,
-      [targetSection]: entryId,
-    }));
-    setFocusRequest((request) => ({ id: entryId, sequence: (request?.sequence ?? 0) + 1 }));
-    announceMove(targetSection, targetPosition, targetPosition);
   };
 
   const handleResetClick = () => {
@@ -135,42 +112,29 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
         </>
       }
     >
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <ToolbarLane
-          section="start"
-          title={t("toolbar.settings.start")}
-          entries={toolbarConfig.start}
-          activeEntryId={activeEntryIds.start}
-          setActiveEntryId={(id) => setActiveEntryIds((current) => ({ ...current, start: id }))}
+      <div className="overflow-x-auto">
+        <div
+          className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} sticky top-0 z-10 gap-2 border-b border-border bg-background px-2 pb-2 text-xs font-medium text-muted-foreground`}
+        >
+          <ColumnHeader label={t("toolbar.settings.itemColumn")} help={t("toolbar.settings.itemColumnHelp")} />
+          <ColumnHeader label={t("toolbar.settings.toolbarColumn")} help={t("toolbar.settings.toolbarColumnHelp")} className="text-center" />
+          <ColumnHeader label={t("toolbar.settings.selectionMenuColumn")} help={t("toolbar.settings.selectionMenuColumnHelp")} className="text-center" />
+          <ColumnHeader label={t("toolbar.settings.orderColumn")} help={t("toolbar.settings.orderColumnHelp")} className="text-center" />
+          <ColumnHeader label={t("toolbar.settings.actionsColumn")} help={t("toolbar.settings.actionsColumnHelp")} className="text-center" />
+        </div>
+        <ToolbarList
+          items={listItems}
+          activeEntryId={activeEntryId}
+          setActiveEntryId={setActiveEntryId}
           setRowRef={(id, element) => {
             if (element) rowRefs.current.set(id, element);
             else rowRefs.current.delete(id);
           }}
           onMove={handleMove}
-          onTransfer={handleTransfer}
           draggedEntry={draggedEntry}
           dropTarget={dropTarget}
-          onDragStart={(index) => setDraggedEntry({ section: "start", index })}
-          onDragOver={(index, placement) => setDropTarget({ section: "start", index, placement })}
-          onDrop={handleDrop}
-          onDragEnd={clearDrag}
-        />
-        <ToolbarLane
-          section="end"
-          title={t("toolbar.settings.end")}
-          entries={toolbarConfig.end}
-          activeEntryId={activeEntryIds.end}
-          setActiveEntryId={(id) => setActiveEntryIds((current) => ({ ...current, end: id }))}
-          setRowRef={(id, element) => {
-            if (element) rowRefs.current.set(id, element);
-            else rowRefs.current.delete(id);
-          }}
-          onMove={handleMove}
-          onTransfer={handleTransfer}
-          draggedEntry={draggedEntry}
-          dropTarget={dropTarget}
-          onDragStart={(index) => setDraggedEntry({ section: "end", index })}
-          onDragOver={(index, placement) => setDropTarget({ section: "end", index, placement })}
+          onDragStart={({ section, index }) => setDraggedEntry({ section, index })}
+          onDragOver={(section, index, placement) => setDropTarget({ section, index, placement })}
           onDrop={handleDrop}
           onDragEnd={clearDrag}
         />
@@ -182,21 +146,192 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
   );
 }
 
-interface ToolbarLaneProps {
+type ToolbarListItem = SectionItem | EntryItem;
+
+interface SectionItem {
+  kind: "section";
   section: ToolbarSection;
-  title: string;
-  entries: ToolbarEntry[];
+}
+
+interface EntryItem {
+  kind: "entry";
+  section: ToolbarSection;
+  index: number;
+  entry: ToolbarEntry;
+}
+
+function buildListItems(config: { start: ToolbarEntry[]; end: ToolbarEntry[] }): ToolbarListItem[] {
+  const items: ToolbarListItem[] = [];
+  items.push({ kind: "section", section: "start" });
+  config.start.forEach((entry, index) => items.push({ kind: "entry", section: "start", index, entry }));
+  items.push({ kind: "section", section: "end" });
+  config.end.forEach((entry, index) => items.push({ kind: "entry", section: "end", index, entry }));
+  return items;
+}
+
+interface ToolbarListProps {
+  items: ToolbarListItem[];
   activeEntryId: string | null;
   setActiveEntryId: (id: string) => void;
   setRowRef: (id: string, element: HTMLDivElement | null) => void;
   onMove: (section: ToolbarSection, index: number, entryId: string, direction: "up" | "down") => void;
-  onTransfer: (section: ToolbarSection, index: number, entryId: string) => void;
   draggedEntry: { section: ToolbarSection; index: number } | null;
   dropTarget: { section: ToolbarSection; index: number; placement: "before" | "after" } | null;
-  onDragStart: (index: number) => void;
-  onDragOver: (index: number, placement: "before" | "after") => void;
+  onDragStart: (location: { section: ToolbarSection; index: number }) => void;
+  onDragOver: (section: ToolbarSection, index: number, placement: "before" | "after") => void;
   onDrop: (section: ToolbarSection, index: number, placement: "before" | "after") => void;
   onDragEnd: () => void;
+}
+
+function ToolbarList({
+  items,
+  activeEntryId,
+  setActiveEntryId,
+  setRowRef,
+  onMove,
+  draggedEntry,
+  dropTarget,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+}: ToolbarListProps) {
+  const { t } = useTranslation();
+  const listboxRef = useRef<HTMLDivElement>(null);
+  const autoScroll = useDragAutoScroll(listboxRef);
+
+  useEffect(() => {
+    window.addEventListener("dragend", autoScroll.stop);
+    return () => window.removeEventListener("dragend", autoScroll.stop);
+  }, [autoScroll.stop]);
+
+  const totalEntries = items.filter((item) => item.kind === "entry").length;
+  const sectionLengths = useMemo(() => {
+    return {
+      start: items.filter((item): item is EntryItem => item.kind === "entry" && item.section === "start").length,
+      end: items.filter((item): item is EntryItem => item.kind === "entry" && item.section === "end").length,
+    };
+  }, [items]);
+
+  const computeDrop = (item: ToolbarListItem, placement: "before" | "after"): { section: ToolbarSection; index: number } => {
+    if (item.kind === "section") {
+      return { section: item.section, index: placement === "before" ? 0 : sectionLengths[item.section] };
+    }
+    return {
+      section: item.section,
+      index: item.index + (placement === "after" ? 1 : 0),
+    };
+  };
+
+  const sectionHeaderDropPlacement = (section: ToolbarSection): "before" | "after" | null => {
+    if (!dropTarget || dropTarget.section !== section) return null;
+    if (dropTarget.index === 0) return "before";
+    if (dropTarget.index === sectionLengths[section]) return "after";
+    return null;
+  };
+
+  return (
+    <TooltipGroup>
+      <div
+        ref={listboxRef}
+        className={`${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} min-h-8 max-h-[55vh] overflow-y-auto space-y-2 py-2`}
+        role="listbox"
+        aria-label={t("toolbar.settings.title")}
+        onDragOver={(event) => {
+          if (!draggedEntry || event.currentTarget !== event.target) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          autoScroll.onDragOver(event.clientY);
+        }}
+        onDrop={(event) => {
+          if (!draggedEntry || event.currentTarget !== event.target) return;
+          event.preventDefault();
+          autoScroll.stop();
+          onDrop("end", sectionLengths.end, "before");
+        }}
+      >
+        {items.map((item, flatIndex) => {
+          if (item.kind === "section") {
+            return (
+              <SectionHeaderRow
+                key={item.section}
+                section={item.section}
+                dropPlacement={sectionHeaderDropPlacement(item.section)}
+                onDragOver={(placement) => {
+                  const target = computeDrop(item, placement);
+                  onDragOver(target.section, target.index, placement);
+                }}
+                onDrop={(placement) => {
+                  const target = computeDrop(item, placement);
+                  onDrop(target.section, target.index, placement);
+                }}
+              />
+            );
+          }
+
+          const { section, index, entry } = item;
+          const insertionIndex = index + 1;
+          const insertionControl = canInsertDivider(
+            items
+              .filter((i): i is EntryItem => i.kind === "entry" && i.section === section)
+              .map((i) => i.entry),
+            insertionIndex
+          ) ? (
+            <InsertDividerControl key={`add-${entry.id}`} section={section} index={insertionIndex} />
+          ) : null;
+
+          const posInSet = items
+            .slice(0, flatIndex)
+            .filter((i): i is EntryItem => i.kind === "entry").length + 1;
+
+          const dnd = makeRowDndProps(
+            section,
+            index,
+            entry.id,
+            dropTarget,
+            onDragStart,
+            onDragOver,
+            onDrop,
+            onDragEnd,
+            autoScroll
+          );
+
+          return entry.kind === "group" ? (
+            <GroupRow
+              key={entry.id}
+              index={index}
+              entry={entry}
+              laneLength={items.filter((i): i is EntryItem => i.kind === "entry" && i.section === section).length}
+              posInSet={posInSet}
+              totalEntries={totalEntries}
+              active={activeEntryId === entry.id}
+              setActive={() => setActiveEntryId(entry.id)}
+              setRowRef={(element) => setRowRef(entry.id, element)}
+              onMove={(direction) => onMove(section, index, entry.id, direction)}
+              dnd={dnd}
+              insertionControl={insertionControl}
+            />
+          ) : (
+            <DividerRow
+              key={entry.id}
+              section={section}
+              index={index}
+              entry={entry}
+              laneLength={items.filter((i): i is EntryItem => i.kind === "entry" && i.section === section).length}
+              posInSet={posInSet}
+              totalEntries={totalEntries}
+              active={activeEntryId === entry.id}
+              setActive={() => setActiveEntryId(entry.id)}
+              setRowRef={(element) => setRowRef(entry.id, element)}
+              onMove={(direction) => onMove(section, index, entry.id, direction)}
+              dnd={dnd}
+              insertionControl={insertionControl}
+            />
+          );
+        })}
+      </div>
+    </TooltipGroup>
+  );
 }
 
 function canInsertDivider(entries: ToolbarEntry[], index: number): boolean {
@@ -239,108 +374,58 @@ function ColumnHeader({ label, help, className = "" }: { label: string; help: st
   );
 }
 
-function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId, setRowRef, onMove, onTransfer, draggedEntry, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd }: ToolbarLaneProps) {
-  const { t } = useTranslation();
-  const listboxRef = useRef<HTMLDivElement>(null);
-  const autoScroll = useDragAutoScroll(listboxRef);
+interface SectionHeaderRowProps {
+  section: ToolbarSection;
+  dropPlacement: "before" | "after" | null;
+  onDragOver: (placement: "before" | "after") => void;
+  onDrop: (placement: "before" | "after") => void;
+}
 
-  useEffect(() => {
-    window.addEventListener("dragend", autoScroll.stop);
-    return () => window.removeEventListener("dragend", autoScroll.stop);
-  }, [autoScroll.stop]);
+function SectionHeaderRow({ section, dropPlacement, onDragOver, onDrop }: SectionHeaderRowProps) {
+  const { t } = useTranslation();
+  const rowId = `section-header-${section}`;
 
   return (
-    <TooltipGroup>
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <div className="overflow-x-auto">
-          <div
-            className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} gap-2 px-2 pb-1 text-xs font-medium text-muted-foreground`}
-          >
-            <ColumnHeader label={t("toolbar.settings.itemColumn")} help={t("toolbar.settings.itemColumnHelp")} />
-            <ColumnHeader label={t("toolbar.settings.toolbarColumn")} help={t("toolbar.settings.toolbarColumnHelp")} className="text-center" />
-            <ColumnHeader label={t("toolbar.settings.selectionMenuColumn")} help={t("toolbar.settings.selectionMenuColumnHelp")} className="text-center" />
-            <ColumnHeader label={t("toolbar.settings.orderColumn")} help={t("toolbar.settings.orderColumnHelp")} className="text-center" />
-            <ColumnHeader label={t("toolbar.settings.sectionColumn")} help={t("toolbar.settings.sectionColumnHelp")} className="text-center" />
-            <ColumnHeader label={t("toolbar.settings.actionsColumn")} help={t("toolbar.settings.actionsColumnHelp")} className="text-center" />
-          </div>
-          <div
-            ref={listboxRef}
-            className={`${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} min-h-8 max-h-[55vh] overflow-y-auto space-y-2`}
-            role="listbox"
-            aria-label={title}
-            onDragOver={(event) => {
-              if (!draggedEntry || event.currentTarget !== event.target) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-              autoScroll.onDragOver(event.clientY);
-            }}
-            onDrop={(event) => {
-              if (!draggedEntry || event.currentTarget !== event.target) return;
-              event.preventDefault();
-              autoScroll.stop();
-              onDrop(section, entries.length, "before");
-            }}
-          >
-            {entries.map((entry, index) => {
-              const insertionIndex = index + 1;
-              const insertionControl = canInsertDivider(entries, insertionIndex) ? (
-                <InsertDividerControl key={`add-${entry.id}`} section={section} index={insertionIndex} />
-              ) : null;
-              return entry.kind === "group" ? (
-                <GroupRow
-                  key={entry.id}
-                  section={section}
-                  index={index}
-                  entry={entry}
-                  laneLength={entries.length}
-                  active={activeEntryId === entry.id}
-                  setActive={() => setActiveEntryId(entry.id)}
-                  setRowRef={(element) => setRowRef(entry.id, element)}
-                  onMove={(direction) => onMove(section, index, entry.id, direction)}
-                  onTransfer={() => onTransfer(section, index, entry.id)}
-                  dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd, autoScroll)}
-                  insertionControl={insertionControl}
-                />
-              ) : (
-                <DividerRow
-                  key={entry.id}
-                  section={section}
-                  index={index}
-                  entry={entry}
-                  laneLength={entries.length}
-                  active={activeEntryId === entry.id}
-                  setActive={() => setActiveEntryId(entry.id)}
-                  setRowRef={(element) => setRowRef(entry.id, element)}
-                  onMove={(direction) => onMove(section, index, entry.id, direction)}
-                  onTransfer={() => onTransfer(section, index, entry.id)}
-                  dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd, autoScroll)}
-                  insertionControl={insertionControl}
-                />
-              );
-            })}
-          </div>
-        </div>
+    <div className="group relative">
+      <DropIndicator entryId={rowId} placement="before" active={dropPlacement === "before"} />
+      <div
+        data-testid={`toolbar-section-header-${section}`}
+        className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} select-none items-center gap-2 rounded-lg bg-muted/50 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = event.currentTarget.getBoundingClientRect();
+          onDragOver(event.clientY < rect.top + rect.height / 2 ? "before" : "after");
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = event.currentTarget.getBoundingClientRect();
+          onDrop(event.clientY < rect.top + rect.height / 2 ? "before" : "after");
+        }}
+      >
+        {t(`toolbar.settings.${section}`)}
       </div>
-    </TooltipGroup>
+      <DropIndicator entryId={rowId} placement="after" active={dropPlacement === "after"} />
+    </div>
   );
 }
 
 interface GroupRowProps {
-  section: ToolbarSection;
   index: number;
   entry: Extract<ToolbarEntry, { kind: "group" }>;
   laneLength: number;
+  posInSet: number;
+  totalEntries: number;
   active: boolean;
   setActive: () => void;
   setRowRef: (element: HTMLDivElement | null) => void;
   onMove: (direction: "up" | "down") => void;
-  onTransfer: () => void;
   dnd: RowDndProps;
   insertionControl?: ReactNode;
 }
 
-function GroupRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer, dnd, insertionControl }: GroupRowProps) {
+function GroupRow({ index, entry, laneLength, posInSet, totalEntries, active, setActive, setRowRef, onMove, dnd, insertionControl }: GroupRowProps) {
   const { t } = useTranslation();
   const setToolbarGroupVisible = useSettingsStore((state) => state.setToolbarGroupVisible);
   const setToolbarGroupFloatingVisible = useSettingsStore(
@@ -348,10 +433,6 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
   );
   const meta = TOOLBAR_GROUP_META[entry.id];
   const Icon = meta.Icon;
-  const transferLabel =
-    section === "start"
-      ? t("toolbar.settings.transferToEnd")
-      : t("toolbar.settings.transferToStart");
 
   return <div className="group relative">
     <DropIndicator entryId={entry.id} placement="before" active={dnd.dropPlacement === "before"} />
@@ -359,11 +440,11 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
       ref={setRowRef}
       role="option"
       aria-selected={active}
-      aria-setsize={laneLength}
-      aria-posinset={index + 1}
+      aria-setsize={totalEntries}
+      aria-posinset={posInSet}
       tabIndex={active ? 0 : -1}
       onFocus={(event) => event.currentTarget === event.target && setActive()}
-      onKeyDown={(event) => handleRowKeyDown(event, section, onMove, onTransfer)}
+      onKeyDown={(event) => handleRowKeyDown(event, onMove)}
       className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} select-none items-center gap-2 rounded-lg border border-border p-2`}
       onDragOver={dnd.onDragOver}
       onDrop={dnd.onDrop}
@@ -437,18 +518,6 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
           </Button>
         </Tooltip>
       </div>
-      <div className="flex justify-center">
-        <Tooltip content={transferLabel}>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={transferLabel}
-            onClick={onTransfer}
-          >
-            <ArrowLeftRight className="h-4 w-4" />
-          </Button>
-        </Tooltip>
-      </div>
       <span className="w-10" aria-hidden="true" />
     </div>
     <DropIndicator entryId={entry.id} placement="after" active={dnd.dropPlacement === "after"} />
@@ -461,22 +530,19 @@ interface DividerRowProps {
   index: number;
   entry: Extract<ToolbarEntry, { kind: "divider" }>;
   laneLength: number;
+  posInSet: number;
+  totalEntries: number;
   active: boolean;
   setActive: () => void;
   setRowRef: (element: HTMLDivElement | null) => void;
   onMove: (direction: "up" | "down") => void;
-  onTransfer: () => void;
   dnd: RowDndProps;
   insertionControl?: ReactNode;
 }
 
-function DividerRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer, dnd, insertionControl }: DividerRowProps) {
+function DividerRow({ section, index, entry, laneLength, posInSet, totalEntries, active, setActive, setRowRef, onMove, dnd, insertionControl }: DividerRowProps) {
   const { t } = useTranslation();
   const removeToolbarDivider = useSettingsStore((state) => state.removeToolbarDivider);
-  const transferLabel =
-    section === "start"
-      ? t("toolbar.settings.transferToEnd")
-      : t("toolbar.settings.transferToStart");
 
   return <div className="group relative">
     <DropIndicator entryId={entry.id} placement="before" active={dnd.dropPlacement === "before"} />
@@ -485,11 +551,11 @@ function DividerRow({ section, index, entry, laneLength, active, setActive, setR
       role="option"
       aria-label={t("toolbar.settings.dividerLabel")}
       aria-selected={active}
-      aria-setsize={laneLength}
-      aria-posinset={index + 1}
+      aria-setsize={totalEntries}
+      aria-posinset={posInSet}
       tabIndex={active ? 0 : -1}
       onFocus={(event) => event.currentTarget === event.target && setActive()}
-      onKeyDown={(event) => handleRowKeyDown(event, section, onMove, onTransfer)}
+      onKeyDown={(event) => handleRowKeyDown(event, onMove)}
       className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} select-none items-center gap-2 rounded-lg border border-dashed border-border p-2`}
       onDragOver={dnd.onDragOver}
       onDrop={dnd.onDrop}
@@ -538,18 +604,6 @@ function DividerRow({ section, index, entry, laneLength, active, setActive, setR
         </Tooltip>
       </div>
       <div className="flex justify-center">
-        <Tooltip content={transferLabel}>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={transferLabel}
-            onClick={onTransfer}
-          >
-            <ArrowLeftRight className="h-4 w-4" />
-          </Button>
-        </Tooltip>
-      </div>
-      <div className="flex justify-center">
         <Tooltip content={t("toolbar.settings.remove")}>
           <Button
             variant="ghost"
@@ -579,17 +633,17 @@ function makeRowDndProps(
   section: ToolbarSection,
   index: number,
   entryId: string,
-  dropTarget: ToolbarLaneProps["dropTarget"],
-  onDragStart: ToolbarLaneProps["onDragStart"],
-  onDragOver: ToolbarLaneProps["onDragOver"],
-  onDrop: ToolbarLaneProps["onDrop"],
+  dropTarget: ToolbarListProps["dropTarget"],
+  onDragStart: ToolbarListProps["onDragStart"],
+  onDragOver: ToolbarListProps["onDragOver"],
+  onDrop: ToolbarListProps["onDrop"],
   onDragEnd: () => void,
   autoScroll: ReturnType<typeof useDragAutoScroll>
 ): RowDndProps {
   return {
     dropPlacement: dropTarget?.section === section && dropTarget.index === index ? dropTarget.placement : null,
     onDragStart: (event) => {
-      onDragStart(index);
+      onDragStart({ section, index });
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", entryId);
     },
@@ -598,7 +652,7 @@ function makeRowDndProps(
       event.stopPropagation();
       event.dataTransfer.dropEffect = "move";
       const rect = event.currentTarget.getBoundingClientRect();
-      onDragOver(index, event.clientY < rect.top + rect.height / 2 ? "before" : "after");
+      onDragOver(section, index, event.clientY < rect.top + rect.height / 2 ? "before" : "after");
       autoScroll.onDragOver(event.clientY);
     },
     onDrop: (event) => {
@@ -617,20 +671,12 @@ function makeRowDndProps(
 
 function handleRowKeyDown(
   event: KeyboardEvent<HTMLDivElement>,
-  section: ToolbarSection,
-  onMove: (direction: "up" | "down") => void,
-  onTransfer: () => void
+  onMove: (direction: "up" | "down") => void
 ) {
   if (event.currentTarget !== event.target) return;
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
     event.preventDefault();
     onMove(event.key === "ArrowUp" ? "up" : "down");
-  } else if (
-    (event.key === "ArrowLeft" && section === "end") ||
-    (event.key === "ArrowRight" && section === "start")
-  ) {
-    event.preventDefault();
-    onTransfer();
   }
 }
 

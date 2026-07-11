@@ -43,10 +43,11 @@ beforeEach(() => {
   useSettingsStore.setState({ toolbarConfig: cloneConfig(TEST_CONFIG) });
 });
 
-it("renders two sections with icons and labels for each entry", () => {
+it("renders one listbox with section headers inside and labels for each entry", () => {
   render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-  expect(screen.getByText("toolbar.settings.start")).toBeInTheDocument();
-  expect(screen.getByText("toolbar.settings.end")).toBeInTheDocument();
+  expect(screen.getByRole("listbox", { name: "toolbar.settings.title" })).toBeInTheDocument();
+  expect(screen.getByTestId("toolbar-section-header-start")).toHaveTextContent("toolbar.settings.start");
+  expect(screen.getByTestId("toolbar-section-header-end")).toHaveTextContent("toolbar.settings.end");
   expect(screen.getByText("toolbar.groups.history")).toBeInTheDocument();
   expect(screen.getByText("toolbar.groups.basicMarks")).toBeInTheDocument();
 });
@@ -149,11 +150,12 @@ describe("contextual add divider controls", () => {
       screen.queryByTestId("toolbar-add-divider-start-0")
     ).not.toBeInTheDocument();
 
-    const endLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.end",
+    const listbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.title",
     });
+    const endHeader = within(listbox).getByTestId("toolbar-section-header-end");
     expect(
-      within(endLane).queryByRole("button", {
+      within(endHeader).queryByRole("button", {
         name: "toolbar.settings.addDivider",
       })
     ).not.toBeInTheDocument();
@@ -269,86 +271,6 @@ it("moves entries up and down and disables move buttons at boundaries", () => {
   expect(reordered[1].kind === "group" && reordered[1].id).toBe("history");
 });
 
-it("transfers an entry to the other section", () => {
-  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-  const transferButtons = screen.getAllByRole("button", {
-    name: "toolbar.settings.transferToEnd",
-  });
-  fireEvent.click(transferButtons[0]);
-
-  const state = useSettingsStore.getState().toolbarConfig;
-  expect(state.start).toHaveLength(TEST_CONFIG.start.length - 1);
-  expect(state.end).toHaveLength(1);
-  expect(state.end[0].kind === "group" && state.end[0].id).toBe("history");
-});
-
-it("reorders with ArrowDown and keeps focus on the moved option", () => {
-  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
-
-  history.focus();
-  fireEvent.keyDown(history, { key: "ArrowDown" });
-
-  const movedHistory = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
-  expect(movedHistory).toHaveFocus();
-  expect(movedHistory).toHaveAttribute("aria-posinset", "2");
-  expect(useSettingsStore.getState().toolbarConfig.start[1]).toMatchObject({
-    kind: "group",
-    id: "history",
-  });
-});
-
-it("transfers with ArrowRight and announces the new position", () => {
-  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
-
-  history.focus();
-  fireEvent.keyDown(history, { key: "ArrowRight" });
-
-  const movedHistory = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
-  expect(movedHistory).toHaveFocus();
-  expect(movedHistory).toHaveAttribute("aria-posinset", "1");
-  expect(useSettingsStore.getState().toolbarConfig.end[0]).toMatchObject({
-    kind: "group",
-    id: "history",
-  });
-  expect(screen.getByRole("status")).toHaveTextContent("toolbar.settings.moved");
-});
-
-it("keeps one tabbable option in each non-empty listbox", () => {
-  useSettingsStore.setState({
-    toolbarConfig: {
-      start: [TEST_CONFIG.start[0]],
-      end: [TEST_CONFIG.start[2]],
-    },
-  });
-  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-
-  const listboxes = screen.getAllByRole("listbox");
-  for (const listbox of listboxes) {
-    expect(
-      within(listbox)
-        .getAllByRole("option")
-        .filter((option) => option.tabIndex === 0)
-    ).toHaveLength(1);
-  }
-});
-
-it("falls back to another tabbable option when the active entry is removed", () => {
-  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-  const divider = screen.getByRole("option", { name: "toolbar.settings.dividerLabel" });
-  divider.focus();
-
-  fireEvent.click(within(divider).getByRole("button", { name: "toolbar.settings.remove" }));
-
-  const startListbox = screen.getByRole("listbox", { name: "toolbar.settings.start" });
-  expect(
-    within(startListbox)
-      .getAllByRole("option")
-      .filter((option) => option.tabIndex === 0)
-  ).toHaveLength(1);
-});
-
 it("reorders entries within a section by dragging the dedicated handle", () => {
   render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
   const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
@@ -379,31 +301,103 @@ it("reorders entries within a section by dragging the dedicated handle", () => {
   ]);
 });
 
-it("moves an entry across sections by dropping on the empty lane area", () => {
-  const originalMove = useSettingsStore.getState().moveToolbarEntryTo;
-  const moveToolbarEntryTo = vi.fn(originalMove);
-  useSettingsStore.setState({ moveToolbarEntryTo });
+it("moves an entry across sections by dropping after the destination section header", () => {
+  useSettingsStore.setState({
+    toolbarConfig: {
+      start: TEST_CONFIG.start,
+      end: [
+        {
+          kind: "group",
+          id: "find",
+          toolbarVisible: true,
+          floatingVisible: false,
+        },
+      ],
+    },
+  });
   render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
   const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
-  const endLane = screen.getByRole("listbox", { name: "toolbar.settings.end" });
+  const endHeader = screen.getByTestId("toolbar-section-header-end");
   const dataTransfer = {
     effectAllowed: "none",
     dropEffect: "none",
     setData: vi.fn(),
   };
 
+  vi.spyOn(endHeader, "getBoundingClientRect").mockReturnValue({
+    top: 200,
+    height: 32,
+  } as DOMRect);
+
   fireEvent.dragStart(
     within(history).getByLabelText("toolbar.settings.dragHandle"),
     { dataTransfer }
   );
-  fireEvent.dragOver(endLane, { dataTransfer });
-  fireEvent.drop(endLane, { dataTransfer });
+  fireEvent.dragOver(endHeader, { clientY: 223, dataTransfer });
+  fireEvent.drop(endHeader, { clientY: 223, dataTransfer });
 
-  expect(moveToolbarEntryTo).toHaveBeenCalledWith("start", 0, "end", 0);
-  expect(useSettingsStore.getState().toolbarConfig.end).toEqual([
-    expect.objectContaining({ id: "history" }),
-  ]);
-  useSettingsStore.setState({ moveToolbarEntryTo: originalMove });
+  const state = useSettingsStore.getState().toolbarConfig;
+  expect(state.start).toHaveLength(TEST_CONFIG.start.length - 1);
+  expect(state.end).toHaveLength(2);
+  expect(state.end[state.end.length - 1].kind === "group" && state.end[state.end.length - 1].id).toBe("history");
+});
+
+it("reorders with ArrowDown and keeps focus on the moved option", () => {
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+
+  history.focus();
+  fireEvent.keyDown(history, { key: "ArrowDown" });
+
+  const movedHistory = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+  expect(movedHistory).toHaveFocus();
+  expect(movedHistory).toHaveAttribute("aria-posinset", "2");
+  expect(useSettingsStore.getState().toolbarConfig.start[1]).toMatchObject({
+    kind: "group",
+    id: "history",
+  });
+});
+
+it("announces the new position after a move", () => {
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+
+  history.focus();
+  fireEvent.keyDown(history, { key: "ArrowDown" });
+
+  expect(screen.getByRole("status")).toHaveTextContent("toolbar.settings.moved");
+});
+
+it("keeps one tabbable option in the listbox", () => {
+  useSettingsStore.setState({
+    toolbarConfig: {
+      start: [TEST_CONFIG.start[0]],
+      end: [TEST_CONFIG.start[2]],
+    },
+  });
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+
+  const listbox = screen.getByRole("listbox");
+  expect(
+    within(listbox)
+      .getAllByRole("option")
+      .filter((option) => option.tabIndex === 0)
+  ).toHaveLength(1);
+});
+
+it("falls back to another tabbable option when the active entry is removed", () => {
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const divider = screen.getByRole("option", { name: "toolbar.settings.dividerLabel" });
+  divider.focus();
+
+  fireEvent.click(within(divider).getByRole("button", { name: "toolbar.settings.remove" }));
+
+  const listbox = screen.getByRole("listbox");
+  expect(
+    within(listbox)
+      .getAllByRole("option")
+      .filter((option) => option.tabIndex === 0)
+  ).toHaveLength(1);
 });
 
 it("resets to defaults only after the inline confirm step", () => {
@@ -522,20 +516,20 @@ describe("auto-scroll during drag", () => {
     target.dispatchEvent(event);
   }
 
-  it("renders bounded overflow-y-auto listboxes", () => {
+  it("renders bounded overflow-y-auto listbox", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
+    const listbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.title",
     });
-    expect(startLane).toHaveClass("min-h-8", "max-h-[55vh]", "overflow-y-auto");
+    expect(listbox).toHaveClass("min-h-8", "max-h-[55vh]", "overflow-y-auto");
   });
 
-  it("scrolls downward when dragging near the bottom of a lane", () => {
+  it("scrolls downward when dragging near the bottom of the list", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
+    const listbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.title",
     });
-    setupLaneGeometry(startLane, 100);
+    setupLaneGeometry(listbox, 100);
     const history = screen.getByRole("option", {
       name: /toolbar\.groups\.history/,
     });
@@ -545,18 +539,18 @@ describe("auto-scroll during drag", () => {
       within(history).getByLabelText("toolbar.settings.dragHandle"),
       { dataTransfer }
     );
-    dragOverWithClientY(startLane, 495, dataTransfer);
+    dragOverWithClientY(listbox, 495, dataTransfer);
     flushFrames(1);
 
-    expect(startLane.scrollTop).toBeGreaterThan(100);
+    expect(listbox.scrollTop).toBeGreaterThan(100);
   });
 
-  it("scrolls upward when dragging near the top of a lane", () => {
+  it("scrolls upward when dragging near the top of the list", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
+    const listbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.title",
     });
-    setupLaneGeometry(startLane, 100);
+    setupLaneGeometry(listbox, 100);
     const history = screen.getByRole("option", {
       name: /toolbar\.groups\.history/,
     });
@@ -566,18 +560,18 @@ describe("auto-scroll during drag", () => {
       within(history).getByLabelText("toolbar.settings.dragHandle"),
       { dataTransfer }
     );
-    dragOverWithClientY(startLane, 8, dataTransfer);
+    dragOverWithClientY(listbox, 8, dataTransfer);
     flushFrames(1);
 
-    expect(startLane.scrollTop).toBeLessThan(100);
+    expect(listbox.scrollTop).toBeLessThan(100);
   });
 
   it("stops scrolling on row drop", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
+    const listbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.title",
     });
-    setupLaneGeometry(startLane, 100);
+    setupLaneGeometry(listbox, 100);
     const history = screen.getByRole("option", {
       name: /toolbar\.groups\.history/,
     });
@@ -596,56 +590,34 @@ describe("auto-scroll during drag", () => {
     );
     dragOverWithClientY(basicMarks, 495, dataTransfer);
     flushFrames(1);
-    const scrolledTop = startLane.scrollTop;
+    const scrolledTop = listbox.scrollTop;
     expect(scrolledTop).toBeGreaterThan(100);
 
     dropWithClientY(basicMarks, 139, dataTransfer);
     flushFrames(1);
 
-    expect(startLane.scrollTop).toBe(scrolledTop);
+    expect(listbox.scrollTop).toBe(scrolledTop);
   });
 
-  it("stops scrolling on lane drop", () => {
+  it("stops scrolling on list drop", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: TEST_CONFIG.start,
-        end: TEST_CONFIG.start,
+        end: [
+          {
+            kind: "group",
+            id: "find",
+            toolbarVisible: true,
+            floatingVisible: false,
+          },
+        ],
       },
     });
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
+    const listbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.title",
     });
-    const endLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.end",
-    });
-    setupLaneGeometry(endLane, 100);
-    const history = within(startLane).getByRole("option", {
-      name: /toolbar\.groups\.history/,
-    });
-    const dataTransfer = makeDataTransfer();
-
-    fireEvent.dragStart(
-      within(history).getByLabelText("toolbar.settings.dragHandle"),
-      { dataTransfer }
-    );
-    dragOverWithClientY(endLane, 495, dataTransfer);
-    flushFrames(1);
-    const scrolledTop = endLane.scrollTop;
-    expect(scrolledTop).toBeGreaterThan(100);
-
-    fireEvent.drop(endLane, { dataTransfer });
-    flushFrames(1);
-
-    expect(endLane.scrollTop).toBe(scrolledTop);
-  });
-
-  it("stops scrolling on drag end", () => {
-    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
-    });
-    setupLaneGeometry(startLane, 100);
+    setupLaneGeometry(listbox, 100);
     const history = screen.getByRole("option", {
       name: /toolbar\.groups\.history/,
     });
@@ -655,34 +627,24 @@ describe("auto-scroll during drag", () => {
       within(history).getByLabelText("toolbar.settings.dragHandle"),
       { dataTransfer }
     );
-    dragOverWithClientY(startLane, 495, dataTransfer);
+    dragOverWithClientY(listbox, 495, dataTransfer);
     flushFrames(1);
-    const scrolledTop = startLane.scrollTop;
+    const scrolledTop = listbox.scrollTop;
     expect(scrolledTop).toBeGreaterThan(100);
 
-    window.dispatchEvent(new Event("dragend", { bubbles: true }));
+    fireEvent.drop(listbox, { dataTransfer });
     flushFrames(1);
 
-    expect(startLane.scrollTop).toBe(scrolledTop);
+    expect(listbox.scrollTop).toBe(scrolledTop);
   });
 
-  it("stops the other lane's auto-scroll when drag ends without dropping", () => {
-    useSettingsStore.setState({
-      toolbarConfig: {
-        start: TEST_CONFIG.start,
-        end: TEST_CONFIG.start,
-      },
-    });
+  it("stops scrolling on drag end", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
+    const listbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.title",
     });
-    const endLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.end",
-    });
-    setupLaneGeometry(startLane, 100);
-    setupLaneGeometry(endLane, 100);
-    const history = within(startLane).getByRole("option", {
+    setupLaneGeometry(listbox, 100);
+    const history = screen.getByRole("option", {
       name: /toolbar\.groups\.history/,
     });
     const dataTransfer = makeDataTransfer();
@@ -691,58 +653,15 @@ describe("auto-scroll during drag", () => {
       within(history).getByLabelText("toolbar.settings.dragHandle"),
       { dataTransfer }
     );
-    dragOverWithClientY(endLane, 495, dataTransfer);
+    dragOverWithClientY(listbox, 495, dataTransfer);
     flushFrames(1);
-    expect(endLane.scrollTop).toBeGreaterThan(100);
-    const endScrolledTop = endLane.scrollTop;
+    const scrolledTop = listbox.scrollTop;
+    expect(scrolledTop).toBeGreaterThan(100);
 
     window.dispatchEvent(new Event("dragend", { bubbles: true }));
     flushFrames(1);
 
-    expect(endLane.scrollTop).toBe(endScrolledTop);
-    expect(startLane.scrollTop).toBe(100);
-  });
-
-  it("stops the destination lane before applying a cross-lane move", () => {
-    useSettingsStore.setState({
-      toolbarConfig: {
-        start: TEST_CONFIG.start,
-        end: TEST_CONFIG.start,
-      },
-    });
-    const originalMove = useSettingsStore.getState().moveToolbarEntryTo;
-    const moveToolbarEntryTo = vi.fn((...args: Parameters<typeof originalMove>) => {
-      originalMove(...args);
-    });
-    useSettingsStore.setState({ moveToolbarEntryTo });
-    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
-    });
-    const endLane = screen.getByRole("listbox", {
-      name: "toolbar.settings.end",
-    });
-    setupLaneGeometry(endLane, 100);
-    const history = within(startLane).getByRole("option", {
-      name: /toolbar\.groups\.history/,
-    });
-    const dataTransfer = makeDataTransfer();
-
-    fireEvent.dragStart(
-      within(history).getByLabelText("toolbar.settings.dragHandle"),
-      { dataTransfer }
-    );
-    dragOverWithClientY(endLane, 495, dataTransfer);
-    flushFrames(1);
-    const scrolledTop = endLane.scrollTop;
-    expect(scrolledTop).toBeGreaterThan(100);
-
-    fireEvent.drop(endLane, { dataTransfer });
-    flushFrames(1);
-
-    expect(moveToolbarEntryTo).toHaveBeenCalledWith("start", 0, "end", 3);
-    expect(endLane.scrollTop).toBe(scrolledTop);
-    useSettingsStore.setState({ moveToolbarEntryTo: originalMove });
+    expect(listbox.scrollTop).toBe(scrolledTop);
   });
 });
 
@@ -756,29 +675,28 @@ describe("column headers and tooltips", () => {
     vi.useRealTimers();
   });
 
-  it("renders six localized column headers in each lane", () => {
+  it("renders five localized column headers once", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
     const expectedHeaders = [
       "toolbar.settings.itemColumn",
       "toolbar.settings.toolbarColumn",
       "toolbar.settings.selectionMenuColumn",
       "toolbar.settings.orderColumn",
-      "toolbar.settings.sectionColumn",
       "toolbar.settings.actionsColumn",
     ];
     for (const header of expectedHeaders) {
-      expect(screen.getAllByText(header)).toHaveLength(2);
+      expect(screen.getAllByText(header)).toHaveLength(1);
     }
   });
 
-  it("shares the same grid template and minimum width between headers, listbox, and rows inside a horizontal scroll viewport", () => {
+  it("shares the same grid template and minimum width between header, listbox, and rows inside a horizontal scroll viewport", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const startListbox = screen.getByRole("listbox", {
-      name: "toolbar.settings.start",
+    const listbox = screen.getByRole("listbox", {
+      name: "toolbar.settings.title",
     });
-    const viewport = startListbox.parentElement as HTMLElement;
+    const viewport = listbox.parentElement as HTMLElement;
     expect(viewport).toHaveClass("overflow-x-auto");
-    expect(startListbox).toHaveClass(TOOLBAR_SETTINGS_ROW_MIN_WIDTH);
+    expect(listbox).toHaveClass(TOOLBAR_SETTINGS_ROW_MIN_WIDTH);
 
     const header = viewport.firstElementChild as HTMLElement;
     expect(header).toHaveClass(
@@ -808,7 +726,7 @@ describe("column headers and tooltips", () => {
     const history = screen.getByRole("option", {
       name: /toolbar\.groups\.history/,
     });
-    expect(history.children).toHaveLength(6);
+    expect(history.children).toHaveLength(5);
     expect(
       within(history.children[0] as HTMLElement).getByLabelText(
         "toolbar.settings.dragHandle"
@@ -827,18 +745,13 @@ describe("column headers and tooltips", () => {
     expect(
       within(history.children[3] as HTMLElement).getAllByRole("button")
     ).toHaveLength(2);
-    expect(
-      within(history.children[4] as HTMLElement).getByRole("button", {
-        name: "toolbar.settings.transferToEnd",
-      })
-    ).toBeInTheDocument();
-    expect(history.children[5].tagName).toBe("SPAN");
-    expect(history.children[5]).toHaveAttribute("aria-hidden", "true");
+    expect(history.children[4].tagName).toBe("SPAN");
+    expect(history.children[4]).toHaveAttribute("aria-hidden", "true");
 
     const divider = screen.getByRole("option", {
       name: "toolbar.settings.dividerLabel",
     });
-    expect(divider.children).toHaveLength(6);
+    expect(divider.children).toHaveLength(5);
     expect(
       within(divider.children[0] as HTMLElement).getByLabelText(
         "toolbar.settings.dragHandle"
@@ -851,11 +764,6 @@ describe("column headers and tooltips", () => {
     ).toHaveLength(2);
     expect(
       within(divider.children[4] as HTMLElement).getByRole("button", {
-        name: "toolbar.settings.transferToEnd",
-      })
-    ).toBeInTheDocument();
-    expect(
-      within(divider.children[5] as HTMLElement).getByRole("button", {
         name: "toolbar.settings.remove",
       })
     ).toBeInTheDocument();
@@ -867,8 +775,8 @@ describe("column headers and tooltips", () => {
     expect(screen.getAllByRole("button", { name: "toolbar.settings.moveUp" })).toHaveLength(3);
     expect(screen.getAllByRole("button", { name: "toolbar.settings.moveDown" })).toHaveLength(3);
     expect(
-      screen.getAllByRole("button", { name: "toolbar.settings.transferToEnd" })
-    ).toHaveLength(3);
+      screen.queryAllByRole("button", { name: "toolbar.settings.transferToEnd" })
+    ).toHaveLength(0);
     expect(
       screen.queryAllByRole("button", { name: "toolbar.settings.transferToStart" })
     ).toHaveLength(0);
@@ -883,7 +791,6 @@ describe("column headers and tooltips", () => {
       "toolbar.settings.toolbarColumn",
       "toolbar.settings.selectionMenuColumn",
       "toolbar.settings.orderColumn",
-      "toolbar.settings.sectionColumn",
       "toolbar.settings.actionsColumn",
     ];
     for (const header of centeredHeaders) {
@@ -894,7 +801,7 @@ describe("column headers and tooltips", () => {
 
   it("exposes header help tooltips when a column header is hovered", () => {
     render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-    const itemHeader = screen.getAllByText("toolbar.settings.itemColumn")[0];
+    const itemHeader = screen.getByText("toolbar.settings.itemColumn");
     fireEvent.mouseEnter(itemHeader);
     act(() => vi.advanceTimersByTime(500));
     expect(screen.getByRole("tooltip")).toHaveTextContent(
