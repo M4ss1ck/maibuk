@@ -483,6 +483,7 @@ function DragHandle({ onDragStart, onDragEnd }: Pick<RowDndProps, "onDragStart" 
   const { t } = useTranslation();
   return (
     <span
+      role="img"
       draggable
       aria-label={t("toolbar.settings.dragHandle")}
       onDragStart={onDragStart}
