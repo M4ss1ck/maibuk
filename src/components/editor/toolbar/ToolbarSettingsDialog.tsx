@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeftRight, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { Button, Modal, Switch, Tooltip } from "@/components/ui";
@@ -15,7 +15,72 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
   const { t } = useTranslation();
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const resetToolbarConfig = useSettingsStore((state) => state.resetToolbarConfig);
+  const moveToolbarEntry = useSettingsStore((state) => state.moveToolbarEntry);
+  const transferToolbarEntry = useSettingsStore((state) => state.transferToolbarEntry);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [activeEntryIds, setActiveEntryIds] = useState<Record<ToolbarSection, string | null>>(
+    () => ({
+      start: toolbarConfig.start[0]?.id ?? null,
+      end: toolbarConfig.end[0]?.id ?? null,
+    })
+  );
+  const [announcement, setAnnouncement] = useState("");
+  const [focusRequest, setFocusRequest] = useState<{ id: string; sequence: number } | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+
+  useEffect(() => {
+    setActiveEntryIds((current) => {
+      const next = { ...current };
+      for (const section of ["start", "end"] as const) {
+        if (!toolbarConfig[section].some((entry) => entry.id === current[section])) {
+          next[section] = toolbarConfig[section][0]?.id ?? null;
+        }
+      }
+      return next.start === current.start && next.end === current.end ? current : next;
+    });
+  }, [toolbarConfig]);
+
+  useEffect(() => {
+    if (focusRequest) rowRefs.current.get(focusRequest.id)?.focus();
+  }, [focusRequest]);
+
+  const announceMove = (section: ToolbarSection, position: number, total: number) => {
+    setAnnouncement(
+      t("toolbar.settings.moved", {
+        section: t(`toolbar.settings.${section}`),
+        position,
+        total,
+      })
+    );
+  };
+
+  const handleMove = (
+    section: ToolbarSection,
+    index: number,
+    entryId: string,
+    direction: "up" | "down"
+  ) => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= toolbarConfig[section].length) return;
+    moveToolbarEntry(section, index, direction);
+    setActiveEntryIds((current) => ({ ...current, [section]: entryId }));
+    setFocusRequest((request) => ({ id: entryId, sequence: (request?.sequence ?? 0) + 1 }));
+    announceMove(section, targetIndex + 1, toolbarConfig[section].length);
+  };
+
+  const handleTransfer = (section: ToolbarSection, index: number, entryId: string) => {
+    const targetSection = section === "start" ? "end" : "start";
+    const targetPosition = toolbarConfig[targetSection].length + 1;
+    const sourceFallback = toolbarConfig[section][index + 1]?.id ?? toolbarConfig[section][index - 1]?.id ?? null;
+    transferToolbarEntry(section, index);
+    setActiveEntryIds((current) => ({
+      ...current,
+      [section]: sourceFallback,
+      [targetSection]: entryId,
+    }));
+    setFocusRequest((request) => ({ id: entryId, sequence: (request?.sequence ?? 0) + 1 }));
+    announceMove(targetSection, targetPosition, targetPosition);
+  };
 
   const handleResetClick = () => {
     if (confirmingReset) {
@@ -51,8 +116,31 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
           section="start"
           title={t("toolbar.settings.start")}
           entries={toolbarConfig.start}
+          activeEntryId={activeEntryIds.start}
+          setActiveEntryId={(id) => setActiveEntryIds((current) => ({ ...current, start: id }))}
+          setRowRef={(id, element) => {
+            if (element) rowRefs.current.set(id, element);
+            else rowRefs.current.delete(id);
+          }}
+          onMove={handleMove}
+          onTransfer={handleTransfer}
         />
-        <ToolbarLane section="end" title={t("toolbar.settings.end")} entries={toolbarConfig.end} />
+        <ToolbarLane
+          section="end"
+          title={t("toolbar.settings.end")}
+          entries={toolbarConfig.end}
+          activeEntryId={activeEntryIds.end}
+          setActiveEntryId={(id) => setActiveEntryIds((current) => ({ ...current, end: id }))}
+          setRowRef={(id, element) => {
+            if (element) rowRefs.current.set(id, element);
+            else rowRefs.current.delete(id);
+          }}
+          onMove={handleMove}
+          onTransfer={handleTransfer}
+        />
+      </div>
+      <div role="status" aria-live="polite" className="sr-only">
+        {announcement}
       </div>
     </Modal>
   );
@@ -62,16 +150,21 @@ interface ToolbarLaneProps {
   section: ToolbarSection;
   title: string;
   entries: ToolbarEntry[];
+  activeEntryId: string | null;
+  setActiveEntryId: (id: string) => void;
+  setRowRef: (id: string, element: HTMLDivElement | null) => void;
+  onMove: (section: ToolbarSection, index: number, entryId: string, direction: "up" | "down") => void;
+  onTransfer: (section: ToolbarSection, index: number, entryId: string) => void;
 }
 
-function ToolbarLane({ section, title, entries }: ToolbarLaneProps) {
+function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId, setRowRef, onMove, onTransfer }: ToolbarLaneProps) {
   const { t } = useTranslation();
   const addToolbarDivider = useSettingsStore((state) => state.addToolbarDivider);
 
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold">{title}</h3>
-      <div className="space-y-2">
+      <div className="space-y-2" role="listbox" aria-label={title}>
         {entries.map((entry, index) =>
           entry.kind === "group" ? (
             <GroupRow
@@ -80,6 +173,11 @@ function ToolbarLane({ section, title, entries }: ToolbarLaneProps) {
               index={index}
               entry={entry}
               laneLength={entries.length}
+              active={activeEntryId === entry.id}
+              setActive={() => setActiveEntryId(entry.id)}
+              setRowRef={(element) => setRowRef(entry.id, element)}
+              onMove={(direction) => onMove(section, index, entry.id, direction)}
+              onTransfer={() => onTransfer(section, index, entry.id)}
             />
           ) : (
             <DividerRow
@@ -88,6 +186,11 @@ function ToolbarLane({ section, title, entries }: ToolbarLaneProps) {
               index={index}
               entry={entry}
               laneLength={entries.length}
+              active={activeEntryId === entry.id}
+              setActive={() => setActiveEntryId(entry.id)}
+              setRowRef={(element) => setRowRef(entry.id, element)}
+              onMove={(direction) => onMove(section, index, entry.id, direction)}
+              onTransfer={() => onTransfer(section, index, entry.id)}
             />
           )
         )}
@@ -105,12 +208,15 @@ interface GroupRowProps {
   index: number;
   entry: Extract<ToolbarEntry, { kind: "group" }>;
   laneLength: number;
+  active: boolean;
+  setActive: () => void;
+  setRowRef: (element: HTMLDivElement | null) => void;
+  onMove: (direction: "up" | "down") => void;
+  onTransfer: () => void;
 }
 
-function GroupRow({ section, index, entry, laneLength }: GroupRowProps) {
+function GroupRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer }: GroupRowProps) {
   const { t } = useTranslation();
-  const moveToolbarEntry = useSettingsStore((state) => state.moveToolbarEntry);
-  const transferToolbarEntry = useSettingsStore((state) => state.transferToolbarEntry);
   const setToolbarGroupVisible = useSettingsStore((state) => state.setToolbarGroupVisible);
   const setToolbarGroupFloatingVisible = useSettingsStore(
     (state) => state.setToolbarGroupFloatingVisible
@@ -123,7 +229,17 @@ function GroupRow({ section, index, entry, laneLength }: GroupRowProps) {
       : t("toolbar.settings.transferToStart");
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border p-2">
+    <div
+      ref={setRowRef}
+      role="option"
+      aria-selected={active}
+      aria-setsize={laneLength}
+      aria-posinset={index + 1}
+      tabIndex={active ? 0 : -1}
+      onFocus={(event) => event.currentTarget === event.target && setActive()}
+      onKeyDown={(event) => handleRowKeyDown(event, section, onMove, onTransfer)}
+      className="flex items-center gap-2 rounded-lg border border-border p-2"
+    >
       <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="flex-1 truncate text-sm">{t(meta.labelKey)}</span>
@@ -157,7 +273,7 @@ function GroupRow({ section, index, entry, laneLength }: GroupRowProps) {
         size="sm"
         aria-label={t("toolbar.settings.moveUp")}
         disabled={index === 0}
-        onClick={() => moveToolbarEntry(section, index, "up")}
+        onClick={() => onMove("up")}
       >
         <ChevronUp className="h-4 w-4" />
       </Button>
@@ -166,7 +282,7 @@ function GroupRow({ section, index, entry, laneLength }: GroupRowProps) {
         size="sm"
         aria-label={t("toolbar.settings.moveDown")}
         disabled={index === laneLength - 1}
-        onClick={() => moveToolbarEntry(section, index, "down")}
+        onClick={() => onMove("down")}
       >
         <ChevronDown className="h-4 w-4" />
       </Button>
@@ -174,7 +290,7 @@ function GroupRow({ section, index, entry, laneLength }: GroupRowProps) {
         variant="ghost"
         size="sm"
         aria-label={transferLabel}
-        onClick={() => transferToolbarEntry(section, index)}
+        onClick={onTransfer}
       >
         <ArrowLeftRight className="h-4 w-4" />
       </Button>
@@ -187,12 +303,15 @@ interface DividerRowProps {
   index: number;
   entry: Extract<ToolbarEntry, { kind: "divider" }>;
   laneLength: number;
+  active: boolean;
+  setActive: () => void;
+  setRowRef: (element: HTMLDivElement | null) => void;
+  onMove: (direction: "up" | "down") => void;
+  onTransfer: () => void;
 }
 
-function DividerRow({ section, index, entry, laneLength }: DividerRowProps) {
+function DividerRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer }: DividerRowProps) {
   const { t } = useTranslation();
-  const moveToolbarEntry = useSettingsStore((state) => state.moveToolbarEntry);
-  const transferToolbarEntry = useSettingsStore((state) => state.transferToolbarEntry);
   const removeToolbarDivider = useSettingsStore((state) => state.removeToolbarDivider);
   const transferLabel =
     section === "start"
@@ -200,7 +319,18 @@ function DividerRow({ section, index, entry, laneLength }: DividerRowProps) {
       : t("toolbar.settings.transferToStart");
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-dashed border-border p-2">
+    <div
+      ref={setRowRef}
+      role="option"
+      aria-label={t("toolbar.settings.dividerLabel")}
+      aria-selected={active}
+      aria-setsize={laneLength}
+      aria-posinset={index + 1}
+      tabIndex={active ? 0 : -1}
+      onFocus={(event) => event.currentTarget === event.target && setActive()}
+      onKeyDown={(event) => handleRowKeyDown(event, section, onMove, onTransfer)}
+      className="flex items-center gap-2 rounded-lg border border-dashed border-border p-2"
+    >
       <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span className="flex-1 text-sm italic text-muted-foreground">
         {t("toolbar.settings.dividerLabel")}
@@ -210,7 +340,7 @@ function DividerRow({ section, index, entry, laneLength }: DividerRowProps) {
         size="sm"
         aria-label={t("toolbar.settings.moveUp")}
         disabled={index === 0}
-        onClick={() => moveToolbarEntry(section, index, "up")}
+        onClick={() => onMove("up")}
       >
         <ChevronUp className="h-4 w-4" />
       </Button>
@@ -219,7 +349,7 @@ function DividerRow({ section, index, entry, laneLength }: DividerRowProps) {
         size="sm"
         aria-label={t("toolbar.settings.moveDown")}
         disabled={index === laneLength - 1}
-        onClick={() => moveToolbarEntry(section, index, "down")}
+        onClick={() => onMove("down")}
       >
         <ChevronDown className="h-4 w-4" />
       </Button>
@@ -227,7 +357,7 @@ function DividerRow({ section, index, entry, laneLength }: DividerRowProps) {
         variant="ghost"
         size="sm"
         aria-label={transferLabel}
-        onClick={() => transferToolbarEntry(section, index)}
+        onClick={onTransfer}
       >
         <ArrowLeftRight className="h-4 w-4" />
       </Button>
@@ -241,4 +371,23 @@ function DividerRow({ section, index, entry, laneLength }: DividerRowProps) {
       </Button>
     </div>
   );
+}
+
+function handleRowKeyDown(
+  event: KeyboardEvent<HTMLDivElement>,
+  section: ToolbarSection,
+  onMove: (direction: "up" | "down") => void,
+  onTransfer: () => void
+) {
+  if (event.currentTarget !== event.target) return;
+  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+    event.preventDefault();
+    onMove(event.key === "ArrowUp" ? "up" : "down");
+  } else if (
+    (event.key === "ArrowLeft" && section === "end") ||
+    (event.key === "ArrowRight" && section === "start")
+  ) {
+    event.preventDefault();
+    onTransfer();
+  }
 }

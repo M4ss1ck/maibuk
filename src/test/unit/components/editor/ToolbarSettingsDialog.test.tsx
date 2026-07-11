@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import { useSettingsStore } from "@/features/settings/store";
@@ -137,6 +137,73 @@ it("transfers an entry to the other section", () => {
   expect(state.start).toHaveLength(TEST_CONFIG.start.length - 1);
   expect(state.end).toHaveLength(1);
   expect(state.end[0].kind === "group" && state.end[0].id).toBe("history");
+});
+
+it("reorders with ArrowDown and keeps focus on the moved option", () => {
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+
+  history.focus();
+  fireEvent.keyDown(history, { key: "ArrowDown" });
+
+  const movedHistory = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+  expect(movedHistory).toHaveFocus();
+  expect(movedHistory).toHaveAttribute("aria-posinset", "2");
+  expect(useSettingsStore.getState().toolbarConfig.start[1]).toMatchObject({
+    kind: "group",
+    id: "history",
+  });
+});
+
+it("transfers with ArrowRight and announces the new position", () => {
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+
+  history.focus();
+  fireEvent.keyDown(history, { key: "ArrowRight" });
+
+  const movedHistory = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+  expect(movedHistory).toHaveFocus();
+  expect(movedHistory).toHaveAttribute("aria-posinset", "1");
+  expect(useSettingsStore.getState().toolbarConfig.end[0]).toMatchObject({
+    kind: "group",
+    id: "history",
+  });
+  expect(screen.getByRole("status")).toHaveTextContent("toolbar.settings.moved");
+});
+
+it("keeps one tabbable option in each non-empty listbox", () => {
+  useSettingsStore.setState({
+    toolbarConfig: {
+      start: [TEST_CONFIG.start[0]],
+      end: [TEST_CONFIG.start[2]],
+    },
+  });
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+
+  const listboxes = screen.getAllByRole("listbox");
+  for (const listbox of listboxes) {
+    expect(
+      within(listbox)
+        .getAllByRole("option")
+        .filter((option) => option.tabIndex === 0)
+    ).toHaveLength(1);
+  }
+});
+
+it("falls back to another tabbable option when the active entry is removed", () => {
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const divider = screen.getByRole("option", { name: "toolbar.settings.dividerLabel" });
+  divider.focus();
+
+  fireEvent.click(within(divider).getByRole("button", { name: "toolbar.settings.remove" }));
+
+  const startListbox = screen.getByRole("listbox", { name: "toolbar.settings.start" });
+  expect(
+    within(startListbox)
+      .getAllByRole("option")
+      .filter((option) => option.tabIndex === 0)
+  ).toHaveLength(1);
 });
 
 it("resets to defaults only after the inline confirm step", () => {
