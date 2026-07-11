@@ -63,6 +63,7 @@ export function useActiveShortcuts(): ShortcutItem[] {
         "editor.zoomIn",
         "editor.zoomOut",
         "editor.zoomReset",
+        "editor.toolbarSettings",
       );
     }
 

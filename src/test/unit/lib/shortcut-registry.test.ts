@@ -79,6 +79,13 @@ describe("shortcut registry", () => {
     expect(matchKeys("home.moveSelection")).toEqual(["↑/↓", "j/k"]);
   });
 
+  it("normalizes the toolbar settings shortcut and expands Ctrl to Meta", () => {
+    expect(matchKeys("editor.toolbarSettings")).toEqual([
+      "ctrl+shift+,",
+      "meta+shift+,",
+    ]);
+  });
+
   it("rejects sequence shortcuts for direct key matching", () => {
     expect(() => matchKeys("global.gotoProjects")).toThrow(
       "Sequence shortcuts cannot be matched as key combinations",

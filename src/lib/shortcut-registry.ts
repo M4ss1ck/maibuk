@@ -92,6 +92,10 @@ export const SHORTCUTS = {
     labelKey: "editor.findReplace",
     keys: ["Ctrl+F"],
   },
+  "editor.toolbarSettings": {
+    labelKey: "toolbar.settings.open",
+    keys: ["Ctrl+Shift+,"],
+  },
   "editor.increaseIndent": {
     labelKey: "editor.increaseIndent",
     keys: ["Tab"],
