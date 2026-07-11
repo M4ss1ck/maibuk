@@ -225,8 +225,8 @@ function ToolbarList({
 
   const sectionHeaderDropPlacement = (section: ToolbarSection): "before" | "after" | null => {
     if (!dropTarget || dropTarget.section !== section) return null;
-    if (dropTarget.index === 0) return "before";
-    if (dropTarget.index === sectionLengths[section]) return "after";
+    if (dropTarget.placement === "before" && dropTarget.index === 0) return "before";
+    if (dropTarget.placement === "after" && dropTarget.index === sectionLengths[section]) return "after";
     return null;
   };
 

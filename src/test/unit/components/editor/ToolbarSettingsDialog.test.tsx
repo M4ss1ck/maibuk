@@ -342,6 +342,38 @@ it("moves an entry across sections by dropping after the destination section hea
   expect(state.end[state.end.length - 1].kind === "group" && state.end[state.end.length - 1].id).toBe("history");
 });
 
+it("moves an entry into an empty End section and shows the drop indicator below the header", () => {
+  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+  const endHeader = screen.getByTestId("toolbar-section-header-end");
+  const dataTransfer = {
+    effectAllowed: "none",
+    dropEffect: "none",
+    setData: vi.fn(),
+  };
+
+  vi.spyOn(endHeader, "getBoundingClientRect").mockReturnValue({
+    top: 200,
+    height: 32,
+  } as DOMRect);
+
+  fireEvent.dragStart(
+    within(history).getByLabelText("toolbar.settings.dragHandle"),
+    { dataTransfer }
+  );
+  fireEvent.dragOver(endHeader, { clientY: 223, dataTransfer });
+
+  const indicator = screen.getByTestId("toolbar-drop-indicator-after-section-header-end");
+  expect(indicator).toHaveClass("bottom-0");
+
+  fireEvent.drop(endHeader, { clientY: 223, dataTransfer });
+
+  const state = useSettingsStore.getState().toolbarConfig;
+  expect(state.start).toHaveLength(TEST_CONFIG.start.length - 1);
+  expect(state.end).toHaveLength(1);
+  expect(state.end[0].kind === "group" && state.end[0].id).toBe("history");
+});
+
 it("reorders with ArrowDown and keeps focus on the moved option", () => {
   render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
   const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
