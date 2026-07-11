@@ -4,6 +4,8 @@ import { useEditorState } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { useModalStore } from "@/components/ui/modal-store";
 import { FormattingButtons } from "@/components/editor/FormattingButtons";
+import { deriveFloatingGroupIds } from "@/features/settings/toolbar-config";
+import { useSettingsStore } from "@/features/settings/store";
 
 interface SelectionToolbarProps {
   editor: Editor;
@@ -27,6 +29,8 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
   });
 
   const isAnyModalOpen = useModalStore((s) => s.openCount > 0);
+  const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
+  const hasFloatingGroups = deriveFloatingGroupIds(toolbarConfig).length > 0;
 
   const updatePosition = useCallback(() => {
     if (!editor || editor.state.selection.empty) {
@@ -92,7 +96,14 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     return () => scrollContainer.removeEventListener("scroll", updatePosition);
   }, [editor, updatePosition]);
 
-  if (!editorState.hasSelection || !position || isAnyModalOpen) return null;
+  if (
+    !editorState.hasSelection ||
+    !position ||
+    isAnyModalOpen ||
+    !hasFloatingGroups
+  ) {
+    return null;
+  }
 
   return (
     <div
