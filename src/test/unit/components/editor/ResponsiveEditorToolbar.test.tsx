@@ -124,3 +124,47 @@ it("suppresses a leading divider at the Start lane boundary", () => {
   expect(startLane.querySelector('[data-group-id="history"]')).toBeInTheDocument();
   expect(startLane.querySelectorAll(".w-px.h-6.bg-border").length).toBe(0);
 });
+
+it("expanded: root is wrapping and does not use justify-between", () => {
+  useSettingsStore.setState({ toolbarExpanded: true });
+  const { getByTestId } = renderToolbar();
+  const root = getByTestId("toolbar-start-lane").parentElement as HTMLElement;
+
+  expect(root.classList.contains("flex-wrap")).toBe(true);
+  expect(root.classList.contains("flex-nowrap")).toBe(false);
+  expect(root.classList.contains("justify-start")).toBe(true);
+  expect(root.classList.contains("justify-between")).toBe(false);
+});
+
+it("expanded: Start lane uses contents", () => {
+  useSettingsStore.setState({ toolbarExpanded: true });
+  const { getByTestId } = renderToolbar();
+  const startLane = getByTestId("toolbar-start-lane");
+
+  expect(startLane.classList.contains("contents")).toBe(true);
+});
+
+it("expanded: End lane is non-wrapping, non-shrinking, and right-aligned", () => {
+  useSettingsStore.setState({ toolbarExpanded: true });
+  const { getByTestId } = renderToolbar();
+  const endLane = getByTestId("toolbar-end-lane");
+
+  expect(endLane.classList.contains("flex-nowrap")).toBe(true);
+  expect(endLane.classList.contains("flex-wrap")).toBe(false);
+  expect(endLane.classList.contains("shrink-0")).toBe(true);
+  expect(endLane.classList.contains("ml-auto")).toBe(true);
+});
+
+it("collapsed: retains nowrap overflow layout and End priority", () => {
+  const { getByTestId } = renderToolbar();
+  const root = getByTestId("toolbar-start-lane").parentElement as HTMLElement;
+  const startLane = getByTestId("toolbar-start-lane");
+  const endLane = getByTestId("toolbar-end-lane");
+
+  expect(root.classList.contains("flex-nowrap")).toBe(true);
+  expect(root.classList.contains("overflow-x-auto")).toBe(true);
+  expect(startLane.classList.contains("flex-nowrap")).toBe(true);
+  expect(endLane.classList.contains("flex-nowrap")).toBe(true);
+  expect(endLane.classList.contains("shrink-0")).toBe(true);
+  expect(endLane.classList.contains("ml-auto")).toBe(true);
+});

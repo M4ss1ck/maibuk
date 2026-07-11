@@ -71,15 +71,15 @@ export function ResponsiveEditorToolbar({
     : startEntries.slice(0, visibleCount);
 
   const rowClass = toolbarExpanded
-    ? "flex flex-wrap items-center justify-between gap-1 px-2 sm:px-4 py-1 sm:py-2"
+    ? "flex flex-wrap items-center justify-start gap-1 px-2 sm:px-4 py-1 sm:py-2"
     : "flex flex-nowrap items-center overflow-x-auto px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1";
 
   const startBlockClass = toolbarExpanded
-    ? "flex flex-wrap items-center gap-0.5 sm:gap-1"
+    ? "contents"
     : "flex flex-nowrap items-center gap-0.5 sm:gap-1";
 
   const endBlockClass = toolbarExpanded
-    ? "flex flex-wrap items-center gap-0.5 sm:gap-1"
+    ? "flex flex-nowrap items-center shrink-0 ml-auto gap-0.5 sm:gap-1"
     : "flex flex-nowrap items-center shrink-0 ml-auto gap-0.5 sm:gap-1";
 
   return (
