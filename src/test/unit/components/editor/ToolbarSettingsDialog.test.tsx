@@ -84,26 +84,165 @@ it("disables the floating switch for an ineligible group and labels it according
   expect(disabledFloatingSwitch).toBeDisabled();
 });
 
-it("adds a divider then removes it", () => {
-  render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
-  const addDividerButtons = screen.getAllByRole("button", {
-    name: "toolbar.settings.addDivider",
+describe("contextual add divider controls", () => {
+  it("exposes an Add divider control at eligible middle and end gaps", () => {
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
+        end: [],
+      },
+    });
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+
+    const controls = screen.getAllByRole("button", {
+      name: "toolbar.settings.addDivider",
+    });
+    expect(controls).toHaveLength(2);
+    expect(
+      screen.getByTestId("toolbar-add-divider-start-1")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("toolbar-add-divider-start-2")
+    ).toBeInTheDocument();
   });
-  // Start section's Add-divider button is first.
-  fireEvent.click(addDividerButtons[0]);
 
-  const afterAdd = useSettingsStore.getState().toolbarConfig.start;
-  expect(afterAdd).toHaveLength(TEST_CONFIG.start.length + 1);
-  const newDivider = afterAdd[afterAdd.length - 1];
-  expect(newDivider.kind).toBe("divider");
+  it("inserts a divider at the exact middle index when clicked", () => {
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
+        end: [],
+      },
+    });
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
 
-  const removeButtons = screen.getAllByRole("button", {
-    name: "toolbar.settings.remove",
+    const control = screen.getByTestId("toolbar-add-divider-start-1");
+    const button = within(control).getByRole("button", {
+      name: "toolbar.settings.addDivider",
+    });
+    fireEvent.click(button);
+
+    const start = useSettingsStore.getState().toolbarConfig.start;
+    expect(start).toHaveLength(3);
+    expect(start[0].id).toBe("history");
+    expect(start[1].kind).toBe("divider");
+    expect(start[2].id).toBe("basic-marks");
   });
-  fireEvent.click(removeButtons[removeButtons.length - 1]);
 
-  const afterRemove = useSettingsStore.getState().toolbarConfig.start;
-  expect(afterRemove).toHaveLength(TEST_CONFIG.start.length);
+  it("does not render a control before the first entry or in an empty lane", () => {
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: [TEST_CONFIG.start[0]],
+        end: [],
+      },
+    });
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+
+    const controls = screen.queryAllByRole("button", {
+      name: "toolbar.settings.addDivider",
+    });
+    expect(controls).toHaveLength(1);
+    expect(
+      screen.queryByTestId("toolbar-add-divider-start-0")
+    ).not.toBeInTheDocument();
+
+    const endLane = screen.getByRole("listbox", {
+      name: "toolbar.settings.end",
+    });
+    expect(
+      within(endLane).queryByRole("button", {
+        name: "toolbar.settings.addDivider",
+      })
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render controls immediately before or after an existing divider", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+
+    const controls = screen.getAllByRole("button", {
+      name: "toolbar.settings.addDivider",
+    });
+    // TEST_CONFIG.start = [history, divider, basic-marks]; only the trailing gap is eligible.
+    expect(controls).toHaveLength(1);
+    expect(
+      screen.queryByTestId("toolbar-add-divider-start-1")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("toolbar-add-divider-start-2")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("toolbar-add-divider-start-3")
+    ).toBeInTheDocument();
+  });
+
+  it("reveals a new eligible gap after removing an existing divider", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+
+    expect(
+      screen.getAllByRole("button", { name: "toolbar.settings.addDivider" })
+    ).toHaveLength(1);
+
+    const removeButtons = screen.getAllByRole("button", {
+      name: "toolbar.settings.remove",
+    });
+    fireEvent.click(removeButtons[0]);
+
+    expect(
+      screen.getAllByRole("button", { name: "toolbar.settings.addDivider" })
+    ).toHaveLength(2);
+    expect(
+      screen.getByTestId("toolbar-add-divider-start-1")
+    ).toBeInTheDocument();
+  });
+
+  it("is a keyboard-focusable button with the localized accessible name", () => {
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: [TEST_CONFIG.start[0]],
+        end: [],
+      },
+    });
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+
+    const control = screen.getByRole("button", {
+      name: "toolbar.settings.addDivider",
+    });
+    control.focus();
+    expect(control).toHaveFocus();
+    expect(control).toHaveAttribute("aria-label", "toolbar.settings.addDivider");
+  });
+
+  it("keeps layout-stable, pointer-safe classes and does not replace DnD indicators", () => {
+    render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+
+    const control = screen.getByTestId("toolbar-add-divider-start-3");
+    expect(control).toHaveClass(
+      "absolute",
+      "pointer-events-none",
+      "group-hover:pointer-events-auto",
+      "focus-within:pointer-events-auto"
+    );
+    expect(control.querySelector("svg")).toBeInTheDocument();
+
+    const history = screen.getByRole("option", { name: /toolbar\.groups\.history/ });
+    const basicMarks = screen.getByRole("option", { name: /toolbar\.groups\.basicMarks/ });
+    vi.spyOn(basicMarks, "getBoundingClientRect").mockReturnValue({
+      top: 100,
+      height: 40,
+    } as DOMRect);
+    const dataTransfer = {
+      effectAllowed: "none",
+      dropEffect: "none",
+      setData: vi.fn(),
+    };
+
+    fireEvent.dragStart(within(history).getByLabelText("toolbar.settings.dragHandle"), { dataTransfer });
+    fireEvent.dragOver(basicMarks, { clientY: 139, dataTransfer });
+
+    expect(
+      screen.getByTestId("toolbar-drop-indicator-after-basic-marks")
+    ).toBeInTheDocument();
+    expect(control).toBeInTheDocument();
+  });
 });
 
 it("moves entries up and down and disables move buttons at boundaries", () => {

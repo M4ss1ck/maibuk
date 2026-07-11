@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeftRight, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
@@ -196,9 +196,39 @@ interface ToolbarLaneProps {
   onDragEnd: () => void;
 }
 
-function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId, setRowRef, onMove, onTransfer, draggedEntry, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd }: ToolbarLaneProps) {
+function canInsertDivider(entries: ToolbarEntry[], index: number): boolean {
+  if (index <= 0 || index > entries.length) return false;
+  const previous = entries[index - 1];
+  const next = entries[index];
+  return previous?.kind !== "divider" && next?.kind !== "divider";
+}
+
+function InsertDividerControl({ section, index }: { section: ToolbarSection; index: number }) {
   const { t } = useTranslation();
   const addToolbarDivider = useSettingsStore((state) => state.addToolbarDivider);
+  const label = t("toolbar.settings.addDivider");
+
+  return (
+    <div
+      data-testid={`toolbar-add-divider-${section}-${index}`}
+      className="pointer-events-none absolute bottom-0 left-1/2 z-20 -translate-x-1/2 translate-y-1/2 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+    >
+      <Tooltip content={label}>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={label}
+          onClick={() => addToolbarDivider(section, index)}
+          className="h-5 w-5 p-0 pointer-events-auto"
+        >
+          <Plus className="h-3 w-3" aria-hidden="true" />
+        </Button>
+      </Tooltip>
+    </div>
+  );
+}
+
+function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId, setRowRef, onMove, onTransfer, draggedEntry, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd }: ToolbarLaneProps) {
   const listboxRef = useRef<HTMLDivElement>(null);
   const autoScroll = useDragAutoScroll(listboxRef);
 
@@ -228,8 +258,12 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
           onDrop(section, entries.length, "before");
         }}
       >
-        {entries.map((entry, index) =>
-          entry.kind === "group" ? (
+        {entries.map((entry, index) => {
+          const insertionIndex = index + 1;
+          const insertionControl = canInsertDivider(entries, insertionIndex) ? (
+            <InsertDividerControl key={`add-${entry.id}`} section={section} index={insertionIndex} />
+          ) : null;
+          return entry.kind === "group" ? (
             <GroupRow
               key={entry.id}
               section={section}
@@ -242,6 +276,7 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
               onMove={(direction) => onMove(section, index, entry.id, direction)}
               onTransfer={() => onTransfer(section, index, entry.id)}
               dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd, autoScroll)}
+              insertionControl={insertionControl}
             />
           ) : (
             <DividerRow
@@ -256,14 +291,11 @@ function ToolbarLane({ section, title, entries, activeEntryId, setActiveEntryId,
               onMove={(direction) => onMove(section, index, entry.id, direction)}
               onTransfer={() => onTransfer(section, index, entry.id)}
               dnd={makeRowDndProps(section, index, entry.id, dropTarget, onDragStart, onDragOver, onDrop, onDragEnd, autoScroll)}
+              insertionControl={insertionControl}
             />
-          )
-        )}
+          );
+        })}
       </div>
-      <Button variant="secondary" size="sm" onClick={() => addToolbarDivider(section)}>
-        <Plus className="h-4 w-4" />
-        {t("toolbar.settings.addDivider")}
-      </Button>
     </div>
   );
 }
@@ -279,9 +311,10 @@ interface GroupRowProps {
   onMove: (direction: "up" | "down") => void;
   onTransfer: () => void;
   dnd: RowDndProps;
+  insertionControl?: ReactNode;
 }
 
-function GroupRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer, dnd }: GroupRowProps) {
+function GroupRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer, dnd, insertionControl }: GroupRowProps) {
   const { t } = useTranslation();
   const setToolbarGroupVisible = useSettingsStore((state) => state.setToolbarGroupVisible);
   const setToolbarGroupFloatingVisible = useSettingsStore(
@@ -294,7 +327,7 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
       ? t("toolbar.settings.transferToEnd")
       : t("toolbar.settings.transferToStart");
 
-  return <div className="relative">
+  return <div className="group relative">
     <DropIndicator entryId={entry.id} placement="before" active={dnd.dropPlacement === "before"} />
     <div
       ref={setRowRef}
@@ -365,6 +398,7 @@ function GroupRow({ section, index, entry, laneLength, active, setActive, setRow
       </Button>
     </div>
     <DropIndicator entryId={entry.id} placement="after" active={dnd.dropPlacement === "after"} />
+    {insertionControl}
   </div>;
 }
 
@@ -379,9 +413,10 @@ interface DividerRowProps {
   onMove: (direction: "up" | "down") => void;
   onTransfer: () => void;
   dnd: RowDndProps;
+  insertionControl?: ReactNode;
 }
 
-function DividerRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer, dnd }: DividerRowProps) {
+function DividerRow({ section, index, entry, laneLength, active, setActive, setRowRef, onMove, onTransfer, dnd, insertionControl }: DividerRowProps) {
   const { t } = useTranslation();
   const removeToolbarDivider = useSettingsStore((state) => state.removeToolbarDivider);
   const transferLabel =
@@ -389,7 +424,7 @@ function DividerRow({ section, index, entry, laneLength, active, setActive, setR
       ? t("toolbar.settings.transferToEnd")
       : t("toolbar.settings.transferToStart");
 
-  return <div className="relative">
+  return <div className="group relative">
     <DropIndicator entryId={entry.id} placement="before" active={dnd.dropPlacement === "before"} />
     <div
       ref={setRowRef}
@@ -445,6 +480,7 @@ function DividerRow({ section, index, entry, laneLength, active, setActive, setR
       </Button>
     </div>
     <DropIndicator entryId={entry.id} placement="after" active={dnd.dropPlacement === "after"} />
+    {insertionControl}
   </div>;
 }
 
