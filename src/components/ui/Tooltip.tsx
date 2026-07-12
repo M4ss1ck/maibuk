@@ -27,6 +27,7 @@ import {
 } from "react";
 
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
+import { lowlight } from "@/lib/lowlight";
 import {
   SHORTCUTS,
   formatKeys,
@@ -35,6 +36,29 @@ import {
 
 const OPEN_DELAY = 500;
 
+type HastNode = ReturnType<typeof lowlight.highlight>["children"][number];
+
+/**
+ * Renders lowlight's hast tree as React spans so markdown hints get the
+ * same `hljs-*` token markup as a markdown code block in the editor.
+ */
+function renderHastNodes(nodes: HastNode[]): ReactNode[] {
+  return nodes.map((node, index) => {
+    if (node.type === "text") return node.value;
+    if (node.type === "element") {
+      const className = Array.isArray(node.properties?.className)
+        ? node.properties.className.join(" ")
+        : undefined;
+      return (
+        <span key={index} className={className}>
+          {renderHastNodes(node.children as HastNode[])}
+        </span>
+      );
+    }
+    return null;
+  });
+}
+
 type TooltipProps = {
   content: ReactNode;
   markdown?: string | string[];
@@ -42,9 +66,9 @@ type TooltipProps = {
   disabled?: boolean;
   children: ReactElement;
 } & (
-  | { shortcut?: ShortcutId; keys?: never }
-  | { shortcut?: never; keys?: string[] }
-);
+    | { shortcut?: ShortcutId; keys?: never }
+    | { shortcut?: never; keys?: string[] }
+  );
 
 interface TooltipGroupProps {
   children: ReactNode;
@@ -135,23 +159,37 @@ export function Tooltip({
             {...getFloatingProps()}
           >
             <div
-              className="flex max-w-xs items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-foreground shadow-lg"
+              className="flex max-w-xs flex-col items-start gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-foreground shadow-lg"
               style={transitionStyles}
             >
-              <span>{content}</span>
-              {shortcutDefinition && (
-                <KeyboardShortcut
-                  shortcut={formatKeys(shortcutDefinition)}
-                />
-              )}
-              {markdownHints.map((hint) => (
-                <code
-                  key={hint}
-                  className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground"
+              <div
+                data-testid="tooltip-primary-row"
+                className="flex items-center gap-2"
+              >
+                <span>{content}</span>
+                {shortcutDefinition && (
+                  <KeyboardShortcut
+                    shortcut={formatKeys(shortcutDefinition)}
+                  />
+                )}
+              </div>
+              {markdownHints.length > 0 && (
+                <div
+                  data-testid="tooltip-markdown-row"
+                  className="flex flex-wrap gap-4 mt-2 text-muted-foreground"
                 >
-                  {hint}
-                </code>
-              ))}
+                  {markdownHints.map((hint) => (
+                    <code
+                      key={hint}
+                      className="markdown-hint whitespace-nowrap font-mono leading-none"
+                    >
+                      {renderHastNodes(
+                        lowlight.highlight("markdown", hint).children,
+                      )}
+                    </code>
+                  ))}
+                </div>
+              )}
               <FloatingArrow
                 ref={arrowRef}
                 context={context}

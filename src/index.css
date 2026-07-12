@@ -561,119 +561,119 @@ option {
 }
 
 /* Syntax highlighting (highlight.js / lowlight) — light theme */
-.editor-content pre code .hljs-comment,
-.editor-content pre code .hljs-quote {
+:is(.editor-content pre code, .markdown-hint) .hljs-comment,
+:is(.editor-content pre code, .markdown-hint) .hljs-quote {
   color: #6e7781;
   font-style: italic;
 }
 
-.editor-content pre code .hljs-keyword,
-.editor-content pre code .hljs-selector-tag,
-.editor-content pre code .hljs-literal,
-.editor-content pre code .hljs-meta .hljs-keyword,
-.editor-content pre code .hljs-doctag {
+:is(.editor-content pre code, .markdown-hint) .hljs-keyword,
+:is(.editor-content pre code, .markdown-hint) .hljs-selector-tag,
+:is(.editor-content pre code, .markdown-hint) .hljs-literal,
+:is(.editor-content pre code, .markdown-hint) .hljs-meta .hljs-keyword,
+:is(.editor-content pre code, .markdown-hint) .hljs-doctag {
   color: #cf222e;
 }
 
-.editor-content pre code .hljs-string,
-.editor-content pre code .hljs-regexp,
-.editor-content pre code .hljs-addition {
+:is(.editor-content pre code, .markdown-hint) .hljs-string,
+:is(.editor-content pre code, .markdown-hint) .hljs-regexp,
+:is(.editor-content pre code, .markdown-hint) .hljs-addition {
   color: #0a3069;
 }
 
-.editor-content pre code .hljs-number,
-.editor-content pre code .hljs-bullet {
+:is(.editor-content pre code, .markdown-hint) .hljs-number,
+:is(.editor-content pre code, .markdown-hint) .hljs-bullet {
   color: #0550ae;
 }
 
-.editor-content pre code .hljs-title,
-.editor-content pre code .hljs-section,
-.editor-content pre code .hljs-name,
-.editor-content pre code .hljs-selector-id,
-.editor-content pre code .hljs-selector-class {
+:is(.editor-content pre code, .markdown-hint) .hljs-title,
+:is(.editor-content pre code, .markdown-hint) .hljs-section,
+:is(.editor-content pre code, .markdown-hint) .hljs-name,
+:is(.editor-content pre code, .markdown-hint) .hljs-selector-id,
+:is(.editor-content pre code, .markdown-hint) .hljs-selector-class {
   color: #6639ba;
 }
 
-.editor-content pre code .hljs-built_in,
-.editor-content pre code .hljs-type,
-.editor-content pre code .hljs-class,
-.editor-content pre code .hljs-symbol {
+:is(.editor-content pre code, .markdown-hint) .hljs-built_in,
+:is(.editor-content pre code, .markdown-hint) .hljs-type,
+:is(.editor-content pre code, .markdown-hint) .hljs-class,
+:is(.editor-content pre code, .markdown-hint) .hljs-symbol {
   color: #953800;
 }
 
-.editor-content pre code .hljs-attr,
-.editor-content pre code .hljs-attribute,
-.editor-content pre code .hljs-variable,
-.editor-content pre code .hljs-template-variable,
-.editor-content pre code .hljs-params {
+:is(.editor-content pre code, .markdown-hint) .hljs-attr,
+:is(.editor-content pre code, .markdown-hint) .hljs-attribute,
+:is(.editor-content pre code, .markdown-hint) .hljs-variable,
+:is(.editor-content pre code, .markdown-hint) .hljs-template-variable,
+:is(.editor-content pre code, .markdown-hint) .hljs-params {
   color: #0550ae;
 }
 
-.editor-content pre code .hljs-tag,
-.editor-content pre code .hljs-meta,
-.editor-content pre code .hljs-deletion {
+:is(.editor-content pre code, .markdown-hint) .hljs-tag,
+:is(.editor-content pre code, .markdown-hint) .hljs-meta,
+:is(.editor-content pre code, .markdown-hint) .hljs-deletion {
   color: #116329;
 }
 
-.editor-content pre code .hljs-emphasis {
+:is(.editor-content pre code, .markdown-hint) .hljs-emphasis {
   font-style: italic;
 }
 
-.editor-content pre code .hljs-strong {
+:is(.editor-content pre code, .markdown-hint) .hljs-strong {
   font-weight: 600;
 }
 
 /* Syntax highlighting — dark theme */
-.dark .editor-content pre code .hljs-comment,
-.dark .editor-content pre code .hljs-quote {
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-comment,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-quote {
   color: #6a9955;
 }
 
-.dark .editor-content pre code .hljs-keyword,
-.dark .editor-content pre code .hljs-selector-tag,
-.dark .editor-content pre code .hljs-literal,
-.dark .editor-content pre code .hljs-meta .hljs-keyword,
-.dark .editor-content pre code .hljs-doctag {
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-keyword,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-selector-tag,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-literal,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-meta .hljs-keyword,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-doctag {
   color: #569cd6;
 }
 
-.dark .editor-content pre code .hljs-string,
-.dark .editor-content pre code .hljs-regexp,
-.dark .editor-content pre code .hljs-addition {
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-string,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-regexp,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-addition {
   color: #ce9178;
 }
 
-.dark .editor-content pre code .hljs-number,
-.dark .editor-content pre code .hljs-bullet {
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-number,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-bullet {
   color: #b5cea8;
 }
 
-.dark .editor-content pre code .hljs-title,
-.dark .editor-content pre code .hljs-section,
-.dark .editor-content pre code .hljs-name,
-.dark .editor-content pre code .hljs-selector-id,
-.dark .editor-content pre code .hljs-selector-class {
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-title,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-section,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-name,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-selector-id,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-selector-class {
   color: #dcdcaa;
 }
 
-.dark .editor-content pre code .hljs-built_in,
-.dark .editor-content pre code .hljs-type,
-.dark .editor-content pre code .hljs-class,
-.dark .editor-content pre code .hljs-symbol {
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-built_in,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-type,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-class,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-symbol {
   color: #4ec9b0;
 }
 
-.dark .editor-content pre code .hljs-attr,
-.dark .editor-content pre code .hljs-attribute,
-.dark .editor-content pre code .hljs-variable,
-.dark .editor-content pre code .hljs-template-variable,
-.dark .editor-content pre code .hljs-params {
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-attr,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-attribute,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-variable,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-template-variable,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-params {
   color: #9cdcfe;
 }
 
-.dark .editor-content pre code .hljs-tag,
-.dark .editor-content pre code .hljs-meta,
-.dark .editor-content pre code .hljs-deletion {
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-tag,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-meta,
+.dark :is(.editor-content pre code, .markdown-hint) .hljs-deletion {
   color: #c586c0;
 }
 
