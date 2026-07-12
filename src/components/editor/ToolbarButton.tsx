@@ -7,6 +7,7 @@ interface ToolbarButtonProps {
   disabled?: boolean;
   label: string;
   shortcut?: ShortcutId;
+  markdownHint?: string | string[];
   children: React.ReactNode;
 }
 
@@ -16,10 +17,11 @@ export function ToolbarButton({
   disabled,
   label,
   shortcut,
+  markdownHint,
   children,
 }: ToolbarButtonProps) {
   return (
-    <Tooltip content={label} shortcut={shortcut}>
+    <Tooltip content={label} shortcut={shortcut} markdown={markdownHint}>
       <button
         type="button"
         onClick={onClick}

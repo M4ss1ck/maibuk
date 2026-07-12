@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   EditorToolbarGroups,
@@ -108,5 +108,55 @@ describe("EditorToolbarGroups", () => {
     expect(container.querySelectorAll("[data-group-id]")).toHaveLength(
       ALL_GROUP_IDS.length,
     );
+  });
+
+  it("shows the strikethrough shortcut and markdown hint in its tooltip", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <EditorToolbarGroups
+          editor={makeToolbarEditor()}
+          groupIds={["basic-marks"]}
+          callbacks={callbacks}
+        />,
+      );
+
+      fireEvent.mouseEnter(screen.getByLabelText("editor.strikethrough"));
+      act(() => vi.advanceTimersByTime(600));
+
+      const tooltip = screen.getByRole("tooltip");
+      expect(tooltip.querySelectorAll("kbd")).toHaveLength(3);
+      expect(tooltip.querySelector("code")).toHaveTextContent(
+        "editor.markdownHints.strikethrough",
+      );
+    } finally {
+      act(() => vi.runOnlyPendingTimers());
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows the highlight shortcut and markdown hint on the color picker toggle", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <EditorToolbarGroups
+          editor={makeToolbarEditor()}
+          groupIds={["highlight"]}
+          callbacks={callbacks}
+        />,
+      );
+
+      fireEvent.mouseEnter(screen.getByLabelText("editor.highlight"));
+      act(() => vi.advanceTimersByTime(600));
+
+      const tooltip = screen.getByRole("tooltip");
+      expect(tooltip.querySelectorAll("kbd")).toHaveLength(3);
+      expect(tooltip.querySelector("code")).toHaveTextContent(
+        "editor.markdownHints.highlight",
+      );
+    } finally {
+      act(() => vi.runOnlyPendingTimers());
+      vi.useRealTimers();
+    }
   });
 });

@@ -91,4 +91,25 @@ describe("shortcut registry", () => {
       "Sequence shortcuts cannot be matched as key combinations",
     );
   });
+
+  it.each([
+    ["editor.strikethrough", [["Ctrl", "Shift", "S"]]],
+    ["editor.highlight", [["Ctrl", "Shift", "H"]]],
+    ["editor.subscript", [["Ctrl", ","]]],
+    ["editor.superscript", [["Ctrl", "."]]],
+    ["editor.code", [["Ctrl", "E"]]],
+    ["editor.codeBlock", [["Ctrl", "Alt", "C"]]],
+    ["editor.heading1", [["Ctrl", "Alt", "1"]]],
+    ["editor.heading2", [["Ctrl", "Alt", "2"]]],
+    ["editor.heading3", [["Ctrl", "Alt", "3"]]],
+    ["editor.bulletList", [["Ctrl", "Shift", "8"]]],
+    ["editor.numberedList", [["Ctrl", "Shift", "7"]]],
+    ["editor.taskList", [["Ctrl", "Shift", "9"]]],
+    ["editor.quote", [["Ctrl", "Shift", "B"]]],
+    ["editor.alignLeft", [["Ctrl", "Shift", "L"]]],
+    ["editor.alignCenter", [["Ctrl", "Shift", "E"]]],
+    ["editor.alignRight", [["Ctrl", "Shift", "R"]]],
+  ] as const)("formats the %s formatting shortcut", (id, groups) => {
+    expect(formatKeys(SHORTCUTS[id], false).groups).toEqual(groups);
+  });
 });

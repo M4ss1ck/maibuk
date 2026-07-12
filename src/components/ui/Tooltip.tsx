@@ -37,6 +37,7 @@ const OPEN_DELAY = 500;
 
 type TooltipProps = {
   content: ReactNode;
+  markdown?: string | string[];
   side?: "top" | "bottom" | "left" | "right";
   disabled?: boolean;
   children: ReactElement;
@@ -61,6 +62,7 @@ export function Tooltip({
   content,
   shortcut,
   keys,
+  markdown,
   side = "top",
   disabled = false,
   children,
@@ -110,6 +112,9 @@ export function Tooltip({
       ? { keys, labelKey: "" }
       : null;
 
+  const markdownHints =
+    typeof markdown === "string" ? [markdown] : (markdown ?? []);
+
   if (disabled) return children;
 
   return (
@@ -139,6 +144,14 @@ export function Tooltip({
                   shortcut={formatKeys(shortcutDefinition)}
                 />
               )}
+              {markdownHints.map((hint) => (
+                <code
+                  key={hint}
+                  className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground"
+                >
+                  {hint}
+                </code>
+              ))}
               <FloatingArrow
                 ref={arrowRef}
                 context={context}

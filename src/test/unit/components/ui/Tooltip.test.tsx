@@ -237,4 +237,53 @@ describe("Tooltip", () => {
 
     expect(onClick).toHaveBeenCalledOnce();
   });
+
+  it("renders a markdown syntax chip when markdown is provided", () => {
+    render(
+      <Tooltip content="Bold" shortcut="editor.bold" markdown="**bold**">
+        <button type="button">Bold</button>
+      </Tooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button"));
+    act(() => vi.advanceTimersByTime(600));
+
+    const tooltip = screen.getByRole("tooltip");
+    const chip = tooltip.querySelector("code");
+    expect(chip).not.toBeNull();
+    expect(chip).toHaveTextContent("**bold**");
+  });
+
+  it("renders one chip per spelling when markdown is an array", () => {
+    render(
+      <Tooltip
+        content="Bold"
+        shortcut="editor.bold"
+        markdown={["**bold**", "__bold__"]}
+      >
+        <button type="button">Bold</button>
+      </Tooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button"));
+    act(() => vi.advanceTimersByTime(600));
+
+    const chips = screen.getByRole("tooltip").querySelectorAll("code");
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveTextContent("**bold**");
+    expect(chips[1]).toHaveTextContent("__bold__");
+  });
+
+  it("renders no markdown chip when the prop is absent", () => {
+    render(
+      <Tooltip content="Bold" shortcut="editor.bold">
+        <button type="button">Bold</button>
+      </Tooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button"));
+    act(() => vi.advanceTimersByTime(600));
+
+    expect(screen.getByRole("tooltip").querySelector("code")).toBeNull();
+  });
 });

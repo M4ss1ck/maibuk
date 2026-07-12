@@ -123,6 +123,8 @@ export function EditorToolbarGroups({
   wrapItems = false,
 }: EditorToolbarGroupsProps) {
   const { t } = useTranslation();
+  const markdownHints = (name: string) =>
+    (t as any)(`editor.markdownHints.${name}`, { returnObjects: true }) as string[];
   const spellCheckEnabled = useSettingsStore(
     (state) => state.spellCheckEnabled,
   );
@@ -202,18 +204,18 @@ export function EditorToolbarGroups({
       case "basic-marks":
         return (
           <>
-            <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={editorState.isBold} label={t("editor.bold")} shortcut="editor.bold"><Bold className={icon} /></ToolbarButton>
-            <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editorState.isItalic} label={t("editor.italic")} shortcut="editor.italic"><Italic className={icon} /></ToolbarButton>
+            <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={editorState.isBold} label={t("editor.bold")} shortcut="editor.bold" markdownHint={markdownHints("bold")}><Bold className={icon} /></ToolbarButton>
+            <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editorState.isItalic} label={t("editor.italic")} shortcut="editor.italic" markdownHint={markdownHints("italic")}><Italic className={icon} /></ToolbarButton>
             <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editorState.isUnderline} label={t("editor.underline")} shortcut="editor.underline"><Underline className={icon} /></ToolbarButton>
-            <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editorState.isStrike} label={t("editor.strikethrough")}><Strikethrough className={icon} /></ToolbarButton>
+            <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editorState.isStrike} label={t("editor.strikethrough")} shortcut="editor.strikethrough" markdownHint={markdownHints("strikethrough")}><Strikethrough className={icon} /></ToolbarButton>
           </>
         );
       case "headings":
         return (
           <>
-            <ToolbarButton onClick={() => handleHeadingToggle(1)} isActive={editorState.isH1} label={t("editor.heading1")}><Heading1 className={icon} /></ToolbarButton>
-            <ToolbarButton onClick={() => handleHeadingToggle(2)} isActive={editorState.isH2} label={t("editor.heading2")}><Heading2 className={icon} /></ToolbarButton>
-            <ToolbarButton onClick={() => handleHeadingToggle(3)} isActive={editorState.isH3} label={t("editor.heading3")}><Heading3 className={icon} /></ToolbarButton>
+            <ToolbarButton onClick={() => handleHeadingToggle(1)} isActive={editorState.isH1} label={t("editor.heading1")} shortcut="editor.heading1" markdownHint={markdownHints("heading1")}><Heading1 className={icon} /></ToolbarButton>
+            <ToolbarButton onClick={() => handleHeadingToggle(2)} isActive={editorState.isH2} label={t("editor.heading2")} shortcut="editor.heading2" markdownHint={markdownHints("heading2")}><Heading2 className={icon} /></ToolbarButton>
+            <ToolbarButton onClick={() => handleHeadingToggle(3)} isActive={editorState.isH3} label={t("editor.heading3")} shortcut="editor.heading3" markdownHint={markdownHints("heading3")}><Heading3 className={icon} /></ToolbarButton>
           </>
         );
       case "find":
@@ -221,21 +223,21 @@ export function EditorToolbarGroups({
       case "line-height":
         return <LineHeightSelect editor={editor} value={editorState.lineHeight} />;
       case "highlight":
-        return <ColorPicker value={editorState.highlightColor} onChange={(color) => editor.chain().focus().setHighlight({ color }).run()} onClear={() => editor.chain().focus().unsetHighlight().run()} onToggle={() => editor.chain().focus().toggleHighlight({ color: editorState.highlightColor || "#FFFF00" }).run()} isActive={editorState.isHighlight} label={t("editor.highlight")} icon={<Highlighter className={icon} />} />;
+        return <ColorPicker value={editorState.highlightColor} onChange={(color) => editor.chain().focus().setHighlight({ color }).run()} onClear={() => editor.chain().focus().unsetHighlight().run()} onToggle={() => editor.chain().focus().toggleHighlight({ color: editorState.highlightColor || "#FFFF00" }).run()} isActive={editorState.isHighlight} label={t("editor.highlight")} shortcut="editor.highlight" markdownHint={markdownHints("highlight")} icon={<Highlighter className={icon} />} />;
       case "script":
-        return <><ToolbarButton onClick={() => editor.chain().focus().toggleSubscript().run()} isActive={editorState.isSubscript} label={t("editor.subscript")}><Subscript className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().toggleSuperscript().run()} isActive={editorState.isSuperscript} label={t("editor.superscript")}><Superscript className={icon} /></ToolbarButton></>;
+        return <><ToolbarButton onClick={() => editor.chain().focus().toggleSubscript().run()} isActive={editorState.isSubscript} label={t("editor.subscript")} shortcut="editor.subscript"><Subscript className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().toggleSuperscript().run()} isActive={editorState.isSuperscript} label={t("editor.superscript")} shortcut="editor.superscript"><Superscript className={icon} /></ToolbarButton></>;
       case "text-color":
         return <ColorPicker value={editorState.color} onChange={(color) => editor.chain().focus().setColor(color).run()} onClear={() => editor.chain().focus().unsetColor().run()} onToggle={() => editorState.color ? editor.chain().focus().unsetColor().run() : editor.chain().focus().setColor("#000000").run()} isActive={!!editorState.color} label={t("editor.textColor")} icon={<Baseline className={icon} />} />;
       case "link-code":
-        return <><ToolbarButton onClick={callbacks.openLinkDialog} isActive={editorState.isLink} label={t("editor.insertLink")} shortcut="editor.insertLink"><Link className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editorState.isCode} label={t("editor.code")}><Code className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editorState.isCodeBlock} label={t("editor.codeBlock")}><SquareCode className={icon} /></ToolbarButton></>;
+        return <><ToolbarButton onClick={callbacks.openLinkDialog} isActive={editorState.isLink} label={t("editor.insertLink")} shortcut="editor.insertLink"><Link className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editorState.isCode} label={t("editor.code")} shortcut="editor.code" markdownHint={markdownHints("code")}><Code className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editorState.isCodeBlock} label={t("editor.codeBlock")} shortcut="editor.codeBlock" markdownHint={markdownHints("codeBlock")}><SquareCode className={icon} /></ToolbarButton></>;
       case "lists":
-        return <><ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editorState.isBulletList} label={t("editor.bulletList")}><List className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editorState.isOrderedList} label={t("editor.numberedList")}><ListOrdered className={icon} /></ToolbarButton><ToolbarButton onClick={() => (editor.commands as { toggleTaskList: () => unknown }).toggleTaskList()} isActive={editorState.isTaskList} disabled={editor.schema.nodes.taskList === undefined} label={t("editor.taskList")}><ListChecks className={icon} /></ToolbarButton></>;
+        return <><ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editorState.isBulletList} label={t("editor.bulletList")} shortcut="editor.bulletList" markdownHint={markdownHints("bulletList")}><List className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editorState.isOrderedList} label={t("editor.numberedList")} shortcut="editor.numberedList" markdownHint={markdownHints("numberedList")}><ListOrdered className={icon} /></ToolbarButton><ToolbarButton onClick={() => (editor.commands as { toggleTaskList: () => unknown }).toggleTaskList()} isActive={editorState.isTaskList} disabled={editor.schema.nodes.taskList === undefined} label={t("editor.taskList")} shortcut="editor.taskList" markdownHint={markdownHints("taskList")}><ListChecks className={icon} /></ToolbarButton></>;
       case "blockquote":
-        return <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editorState.isBlockquote} label={t("editor.quote")}><Quote className={icon} /></ToolbarButton>;
+        return <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editorState.isBlockquote} label={t("editor.quote")} shortcut="editor.quote" markdownHint={markdownHints("quote")}><Quote className={icon} /></ToolbarButton>;
       case "indent":
         return <><ToolbarButton onClick={() => editorState.canSinkListItem ? editor.chain().focus().sinkListItem("listItem").run() : editor.chain().focus().increaseIndent().run()} label={t("editor.increaseIndent")} shortcut="editor.increaseIndent"><IndentIncrease className={icon} /></ToolbarButton><ToolbarButton onClick={() => editorState.canLiftListItem ? editor.chain().focus().liftListItem("listItem").run() : editor.chain().focus().decreaseIndent().run()} label={t("editor.decreaseIndent")} shortcut="editor.decreaseIndent"><IndentDecrease className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().increaseFirstLineIndent().run()} label={t("editor.increaseFirstLineIndent")}><WrapText className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()} label={t("editor.decreaseFirstLineIndent")}><WrapText className={`${icon} scale-x-[-1]`} /></ToolbarButton></>;
       case "align":
-        return <><ToolbarButton onClick={() => editor.chain().focus().setTextAlign("left").run()} isActive={editorState.isAlignLeft} label={t("editor.alignLeft")}><AlignLeft className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().setTextAlign("center").run()} isActive={editorState.isAlignCenter} label={t("editor.alignCenter")}><AlignCenter className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().setTextAlign("right").run()} isActive={editorState.isAlignRight} label={t("editor.alignRight")}><AlignRight className={icon} /></ToolbarButton></>;
+        return <><ToolbarButton onClick={() => editor.chain().focus().setTextAlign("left").run()} isActive={editorState.isAlignLeft} label={t("editor.alignLeft")} shortcut="editor.alignLeft"><AlignLeft className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().setTextAlign("center").run()} isActive={editorState.isAlignCenter} label={t("editor.alignCenter")} shortcut="editor.alignCenter"><AlignCenter className={icon} /></ToolbarButton><ToolbarButton onClick={() => editor.chain().focus().setTextAlign("right").run()} isActive={editorState.isAlignRight} label={t("editor.alignRight")} shortcut="editor.alignRight"><AlignRight className={icon} /></ToolbarButton></>;
       case "clear-formatting":
         return <ToolbarButton onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} label={t("editor.removeFormatting")}><RemoveFormatting className={icon} /></ToolbarButton>;
       case "text-case":
@@ -249,7 +251,7 @@ export function EditorToolbarGroups({
       case "footnote":
         return <ToolbarButton onClick={callbacks.openFootnote} label={t("editor.footnote")}><MessageSquareText className={icon} /></ToolbarButton>;
       case "horizontal-rule":
-        return <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} label={t("editor.horizontalRule")}><Minus className={icon} /></ToolbarButton>;
+        return <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} label={t("editor.horizontalRule")} markdownHint={markdownHints("horizontalRule")}><Minus className={icon} /></ToolbarButton>;
       case "spellcheck":
         return <><ToolbarButton onClick={() => setSpellCheckEnabled(!spellCheckEnabled)} isActive={spellCheckEnabled} label={t("editor.spellCheck")}><SpellCheck className={icon} /></ToolbarButton><SpellCheckLanguageMenu value={callbacks.spellCheckLanguage} onChange={callbacks.onSpellCheckLanguageChange} label={t("editor.spellCheckLanguage")} /></>;
       case "dictionary":
