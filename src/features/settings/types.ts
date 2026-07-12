@@ -1,6 +1,7 @@
 import type { MetricsCategory, MetricsSettings } from "@/features/metrics/types";
 import { DEFAULT_METRICS_SETTINGS } from "@/features/metrics/settings";
 import type { SceneBreakDescriptor } from "@/components/editor/extensions/scene-break-utils";
+import type { ToolbarConfig } from "@/features/settings/toolbar-config";
 import type {
   NotesListViewMode,
   NotesSortOption,
@@ -178,6 +179,7 @@ export interface Settings {
   sidebarWidth: number;
   notesSidebarWidth: number;
   toolbarExpanded: boolean;
+  toolbarConfig: ToolbarConfig;
   editorContentWidth: number;
   editorPagePadding: EditorPagePadding;
   editorShowBorder: boolean;

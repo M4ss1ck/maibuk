@@ -3,7 +3,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { resolve } from "path";
+import { resolve } from "node:path";
 import { version } from "./package.json";
 
 const host = process.env.TAURI_DEV_HOST;
@@ -46,6 +46,7 @@ export default defineConfig(() => ({
         "src/features/chapters/store.ts",
         "src/features/notes/store.ts",
         "src/features/settings/store.ts",
+        "src/features/settings/toolbar-config.ts",
         "src/features/theme/store.ts",
         "src/features/sync/store.ts",
         "src/hooks/useAutoSave.ts",
@@ -82,6 +83,8 @@ export default defineConfig(() => ({
         "src/components/editor/paste-cleanup.ts",
         "src/components/editor/PagePaddingControl.tsx",
         "src/components/editor/WidthControl.tsx",
+        "src/components/editor/toolbar/toolbar-groups.ts",
+        "src/components/editor/toolbar/useToolbarOverflow.ts",
         "src/components/editor/extensions/scene-break-utils.ts",
         "src/components/editor/extensions/SceneBreak.ts",
         "src/features/export/pdf-content-renderer.tsx",

@@ -123,11 +123,11 @@ export function ColorPicker({
           </button>
         </Tooltip>
         {/* Dropdown arrow button - opens color picker */}
-        <Tooltip content={`${label} options`}>
+        <Tooltip content={t("editor.colorOptions", { label })}>
           <button
             type="button"
             onClick={handleDropdownToggle}
-            aria-label={`${label} options`}
+            aria-label={t("editor.colorOptions", { label })}
             className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${
               isOpen ? "bg-muted" : "hover:bg-muted"
             }`}

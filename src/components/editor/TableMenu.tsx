@@ -17,9 +17,10 @@ import {
 
 interface TableMenuProps {
   editor: Editor;
+  wrapItems?: boolean;
 }
 
-export function TableMenu({ editor }: TableMenuProps) {
+export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{
@@ -62,63 +63,34 @@ export function TableMenu({ editor }: TableMenuProps) {
         left: rect.left,
       });
     }
-    setShowMenu(true);
+    setShowMenu((isOpen) => !isOpen);
   };
 
-  if (!isInTable && !showMenu) {
-    return (
-      <Tooltip content={t("editor.insertTable")}>
-        <button
-          ref={buttonRef}
-          type="button"
-          onClick={handleShowMenu}
-          aria-label={t("editor.insertTable")}
-          className="p-2 rounded transition-colors hover:bg-muted"
-        >
-          <Table className="w-4 h-4" />
-        </button>
-      </Tooltip>
-    );
-  }
-
-  if (showMenu && !isInTable) {
-    return (
-      <>
+  return (
+    <TooltipGroup>
+      <div className={wrapItems ? "contents" : "flex items-center gap-1"}>
         <Tooltip content={t("editor.insertTable")}>
           <button
             ref={buttonRef}
             type="button"
-            onClick={() => setShowMenu(false)}
+            onClick={handleShowMenu}
+            disabled={isInTable}
             aria-label={t("editor.insertTable")}
-            className="p-2 rounded transition-colors bg-primary text-white"
+            className={`p-2 rounded transition-colors ${
+              showMenu ? "bg-primary text-white" : "hover:bg-muted"
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <Table className="w-4 h-4" />
           </button>
         </Tooltip>
-        {createPortal(
-          <div
-            className="tiptap-table-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50"
-            style={{ top: menuPosition.top, left: menuPosition.left }}
-          >
-            <TableSizePicker onSelect={insertTable} />
-          </div>,
-          document.body
-        )}
-      </>
-    );
-  }
 
-  // Table editing controls when inside a table
-  return (
-    <TooltipGroup>
-      <div className="flex items-center gap-1">
         <Tooltip content={t("editor.addColumnBefore")}>
           <button
             type="button"
             onClick={() => editor.chain().focus().addColumnBefore().run()}
             disabled={!editor.can().addColumnBefore()}
             aria-label={t("editor.addColumnBefore")}
-            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <BetweenVerticalStart className="w-3.5 h-3.5" />
           </button>
@@ -130,7 +102,7 @@ export function TableMenu({ editor }: TableMenuProps) {
             onClick={() => editor.chain().focus().addColumnAfter().run()}
             disabled={!editor.can().addColumnAfter()}
             aria-label={t("editor.addColumnAfter")}
-            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <BetweenVerticalEnd className="w-3.5 h-3.5" />
           </button>
@@ -142,7 +114,7 @@ export function TableMenu({ editor }: TableMenuProps) {
             onClick={() => editor.chain().focus().addRowBefore().run()}
             disabled={!editor.can().addRowBefore()}
             aria-label={t("editor.addRowBefore")}
-            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <BetweenHorizonalStart className="w-3.5 h-3.5" />
           </button>
@@ -154,7 +126,7 @@ export function TableMenu({ editor }: TableMenuProps) {
             onClick={() => editor.chain().focus().addRowAfter().run()}
             disabled={!editor.can().addRowAfter()}
             aria-label={t("editor.addRowAfter")}
-            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50"
+            className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <BetweenHorizonalEnd className="w-3.5 h-3.5" />
           </button>
@@ -168,7 +140,7 @@ export function TableMenu({ editor }: TableMenuProps) {
             onClick={() => editor.chain().focus().deleteColumn().run()}
             disabled={!editor.can().deleteColumn()}
             aria-label={t("editor.deleteColumn")}
-            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
+            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Columns2 className="w-3.5 h-3.5" />
           </button>
@@ -180,7 +152,7 @@ export function TableMenu({ editor }: TableMenuProps) {
             onClick={() => editor.chain().focus().deleteRow().run()}
             disabled={!editor.can().deleteRow()}
             aria-label={t("editor.deleteRow")}
-            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
+            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Rows2 className="w-3.5 h-3.5" />
           </button>
@@ -192,12 +164,24 @@ export function TableMenu({ editor }: TableMenuProps) {
             onClick={() => editor.chain().focus().deleteTable().run()}
             disabled={!editor.can().deleteTable()}
             aria-label={t("editor.deleteTable")}
-            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50"
+            className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </Tooltip>
       </div>
+
+      {showMenu &&
+        !isInTable &&
+        createPortal(
+          <div
+            className="tiptap-table-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50"
+            style={{ top: menuPosition.top, left: menuPosition.left }}
+          >
+            <TableSizePicker onSelect={insertTable} />
+          </div>,
+          document.body
+        )}
     </TooltipGroup>
   );
 }
