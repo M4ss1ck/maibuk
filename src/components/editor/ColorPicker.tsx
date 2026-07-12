@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "@/components/icons";
 import { Tooltip } from "@/components/ui";
+import type { ShortcutId } from "@/lib/shortcut-registry";
 
 interface ColorPickerProps {
   value: string;
@@ -11,6 +12,8 @@ interface ColorPickerProps {
   onToggle?: () => void;
   isActive?: boolean;
   label: string;
+  shortcut?: ShortcutId;
+  markdownHint?: string | string[];
   icon: React.ReactNode;
 }
 
@@ -44,6 +47,8 @@ export function ColorPicker({
   onToggle,
   isActive,
   label,
+  shortcut,
+  markdownHint,
   icon,
 }: ColorPickerProps) {
   const { t } = useTranslation();
@@ -102,7 +107,7 @@ export function ColorPicker({
     <>
       <div ref={containerRef} className="flex items-center">
         {/* Main button - triggers toggle action */}
-        <Tooltip content={label}>
+        <Tooltip content={label} shortcut={shortcut} markdown={markdownHint}>
           <button
             type="button"
             onClick={onToggle}

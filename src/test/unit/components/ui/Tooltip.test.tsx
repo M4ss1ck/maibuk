@@ -237,4 +237,87 @@ describe("Tooltip", () => {
 
     expect(onClick).toHaveBeenCalledOnce();
   });
+
+  it("renders the markdown hint on its own row below the primary row", () => {
+    render(
+      <Tooltip content="Bold" shortcut="editor.bold" markdown="**bold**">
+        <button type="button">Bold</button>
+      </Tooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button"));
+    act(() => vi.advanceTimersByTime(600));
+
+    const primaryRow = screen.getByTestId("tooltip-primary-row");
+    const markdownRow = screen.getByTestId("tooltip-markdown-row");
+    expect(primaryRow).toHaveTextContent("Bold");
+    expect(primaryRow.querySelectorAll("kbd").length).toBeGreaterThan(0);
+    expect(primaryRow.nextElementSibling).toBe(markdownRow);
+    expect(markdownRow).toHaveTextContent("**bold**");
+    expect(markdownRow.querySelector("kbd")).toBeNull();
+
+    const hint = markdownRow.querySelector("code");
+    expect(hint).not.toBeNull();
+    expect(hint).toHaveTextContent("**bold**");
+    expect(hint).not.toHaveClass("border");
+    expect(hint).not.toHaveClass("rounded");
+    expect(hint).not.toHaveClass("bg-muted");
+    expect(hint).not.toHaveClass("px-1.5");
+    expect(hint).not.toHaveClass("py-0.5");
+  });
+
+  it("renders one hint per spelling in the same markdown row", () => {
+    render(
+      <Tooltip
+        content="Bold"
+        shortcut="editor.bold"
+        markdown={["**bold**", "__bold__"]}
+      >
+        <button type="button">Bold</button>
+      </Tooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button"));
+    act(() => vi.advanceTimersByTime(600));
+
+    const chips = screen
+      .getByTestId("tooltip-markdown-row")
+      .querySelectorAll("code");
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveTextContent("**bold**");
+    expect(chips[1]).toHaveTextContent("__bold__");
+  });
+
+  it("syntax-highlights markdown hints like a markdown code block", () => {
+    render(
+      <Tooltip content="Bold" shortcut="editor.bold" markdown="**bold**">
+        <button type="button">Bold</button>
+      </Tooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button"));
+    act(() => vi.advanceTimersByTime(600));
+
+    const hint = screen
+      .getByTestId("tooltip-markdown-row")
+      .querySelector("code");
+    expect(hint).toHaveClass("markdown-hint");
+    expect(hint?.querySelector(".hljs-strong")).not.toBeNull();
+    expect(hint).toHaveTextContent("**bold**");
+  });
+
+  it("renders no markdown row when the prop is absent", () => {
+    render(
+      <Tooltip content="Bold" shortcut="editor.bold">
+        <button type="button">Bold</button>
+      </Tooltip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button"));
+    act(() => vi.advanceTimersByTime(600));
+
+    expect(screen.getByTestId("tooltip-primary-row")).toHaveTextContent("Bold");
+    expect(screen.queryByTestId("tooltip-markdown-row")).toBeNull();
+    expect(screen.getByRole("tooltip").querySelector("code")).toBeNull();
+  });
 });
