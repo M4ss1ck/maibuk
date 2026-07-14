@@ -44,6 +44,19 @@
 
 ## 2. Development Principles
 
+### Keyboard & Accessibility Are Completion Requirements
+
+Every new or modified UI feature ships keyboard-operable and screen-reader-correct, or it is **not done** — same standing as tests passing. Definition of done for any interactive UI:
+
+1. **Fully operable by keyboard alone** — every action reachable without a mouse. Pointer-only interactions (drag-and-drop, hover-only controls, canvas gestures) need a keyboard path or an explicit, documented exemption in the PR.
+2. **Focus is managed** — visible focus, dialogs trap and restore focus to their trigger, arrow-key navigation inside lists/menus/toolbars, Escape closes or exits.
+3. **Library behavior, never hand-rolled focus code** — Headless UI for the primitives already in `src/components/ui/`; React Aria is the approved standard for collections, roving focus, and keyboard-operable drag-and-drop. Do not hand-write roving tabindex, focus traps, or listbox key handling.
+4. **Labels are localized** — every `aria-label` goes through i18n like any other user-visible string.
+5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) so they surface in the shortcut help.
+6. **Proven by behavioral tests** — see the Keyboard & Accessibility Test Gate in section 6.
+
+Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and `tabIndex` wiring looked correct while the widget was inoperable by keyboard, and attribute-level tests stayed green. Attributes are not accessibility; behavior is.
+
 ### DRY — Search Before Creating
 
 Before writing any new utility, hook, component, or helper:
@@ -298,7 +311,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 - **Typography**: Three font families defined — `font-sans` (Inter), `font-serif` (Literata), `font-mono`
 - **Button variants**: `primary`, `secondary`, `ghost`, `destructive` — use the existing `Button` component, don't create ad-hoc button styles
 - **Border radius**: Consistently `rounded-lg` across the codebase
-- **Keyboard compatibility**: Any UI feature with interactive controls must support keyboard navigation, clear focus placement, and relevant shortcuts via `useShortcuts` when a shortcut is part of the workflow
+- **Keyboard compatibility**: Any UI feature with interactive controls must meet the keyboard & accessibility completion requirements in section 2 and the test gate in section 6 — this is a definition-of-done item, not a styling preference
 
 ---
 
@@ -506,6 +519,18 @@ Rules for this feature:
 - Do **not** keep destructive restore/sync orchestration only inside React components. Put it in feature services/stores so it can be tested without UI wiring.
 - For this feature, passing tests should be enough to recreate confidence from scratch: every data-loss prevention guarantee must have at least one test that fails if the guarantee regresses.
 
+### Keyboard & Accessibility Test Gate (all interactive UI)
+
+Any change that adds or modifies interactive UI is **not done** until behavioral keyboard tests exist:
+
+1. **Test behavior, not attributes.** Asserting `tabIndex`, `role`, or `aria-*` values alone is insufficient — such tests have stayed green on widgets that were inoperable by keyboard. Use `@testing-library/user-event` to press the actual keys.
+2. **Required coverage:**
+   - Every user-facing action in the feature is exercised keyboard-only (arrows / Enter / Space / Escape / Tab as appropriate), asserting the resulting state or focus change.
+   - Dialogs: Escape closes, and focus returns to the trigger element.
+   - Lists / menus / toolbars: arrow keys move focus — assert `document.activeElement` changed, not that a handler is attached.
+   - Reordering / drag-and-drop: the keyboard reorder path is tested end-to-end.
+3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected and are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`).
+
 ### Linting & Formatting
 
 There is **no ESLint or Prettier configured** in the project. TypeScript strict mode (`tsconfig.json`) serves as the primary code quality gate.
@@ -559,6 +584,9 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 - **Hardcode strings** shown to users — use i18n translation keys
 - **Use relative imports** — always use `@/` prefix for all internal imports
 - **Use `get()` inside Zustand stores** — existing stores only use `set()`
+- **Hand-roll focus management** — no bespoke roving tabindex, focus traps, or listbox key handling; use React Aria / Headless UI behavior (see section 2)
+- **Ship pointer-only interactions** — drag-and-drop, hover-only controls, and canvas gestures need a keyboard-accessible path
+- **Prove keyboard support with attribute assertions** — tests must press keys via `user-event` and assert behavior, not check `tabIndex`/`aria-*` values (see section 6 test gate)
 
 ### Known Footguns
 

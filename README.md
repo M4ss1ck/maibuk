@@ -259,6 +259,8 @@ maibuk/
 
 Contributions are welcome. Please open a pull request.
 
+**Keyboard & accessibility are completion requirements**: any new or modified UI must be fully operable by keyboard and backed by behavioral keyboard tests. See the "Keyboard & Accessibility Are Completion Requirements" and "Keyboard & Accessibility Test Gate" sections in [AGENTS.md](AGENTS.md) — a feature that can't be driven without a mouse is not done.
+
 ## License
 
 Licensed under the MIT License. See [LICENSE](LICENSE) for details.
