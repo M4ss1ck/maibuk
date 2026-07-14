@@ -11,6 +11,7 @@ import { Button, Select } from "@/components/ui";
 import { useTranslation } from "react-i18next";
 import { TrashIcon, ChevronDownIcon } from "@/components/icons";
 import type { Book, UpdateBookInput } from "@/features/books/types";
+import { useModalScope } from "@/hooks";
 
 interface BookSettingsDialogProps {
   isOpen: boolean;
@@ -51,6 +52,8 @@ export function BookSettingsDialog({
   );
   const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(book.status);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  useModalScope(isOpen);
 
   const hasChanges =
     title !== book.title ||

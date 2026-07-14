@@ -1,7 +1,7 @@
 export function CheckIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Check"
+      aria-hidden="true"
       className={className}
       fill="none"
       viewBox="0 0 24 24"

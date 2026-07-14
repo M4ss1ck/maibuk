@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { isTypingTarget } from "@/lib/keyboard";
+import { useModalStore } from "@/components/ui/modal-store";
 
 type Shortcut = {
   keys?: string | string[];
@@ -38,6 +39,7 @@ function matchesCombo(combo: string, shortcutKeys: string | string[]): boolean {
 export function useShortcuts(shortcuts: Shortcut[], options: UseShortcutsOptions = {}) {
   const shortcutsRef = useRef(shortcuts);
   const sequenceRef = useRef<{ key: string; time: number } | null>(null);
+  const modalIdsLen = useModalStore((s) => s.modalIds.length);
 
   useEffect(() => {
     shortcutsRef.current = shortcuts;
@@ -45,6 +47,10 @@ export function useShortcuts(shortcuts: Shortcut[], options: UseShortcutsOptions
 
   useEffect(() => {
     if (options.enabled === false) return;
+    if (modalIdsLen > 0) {
+      sequenceRef.current = null;
+      return;
+    }
 
     const timeout = options.sequenceTimeout ?? 600;
 
@@ -114,5 +120,5 @@ export function useShortcuts(shortcuts: Shortcut[], options: UseShortcutsOptions
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [options.enabled, options.sequenceTimeout]);
+  }, [options.enabled, options.sequenceTimeout, modalIdsLen]);
 }

@@ -1,7 +1,7 @@
 export function DocumentIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Document"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

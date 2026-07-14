@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useNoteStore } from "@/features/notes";
 import type { Note, UpdateNoteInput } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
@@ -10,6 +11,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { markdownToEditorHtml, titleFromMarkdown } from "@/features/markdown";
 
 export function Notes() {
+  const { t } = useTranslation();
   const notes = useNoteStore((s) => s.notes);
   const currentNote = useNoteStore((s) => s.currentNote);
   const loadNotes = useNoteStore((s) => s.loadNotes);
@@ -171,7 +173,10 @@ export function Notes() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      <div
+      <section
+        data-focus-pane="notes-sidebar"
+        tabIndex={-1}
+        aria-label={t("panes.notesSidebar")}
         className={`h-full relative shrink-0 ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
         style={{ width: `${notesSidebarWidth}px` }}
       >
@@ -192,8 +197,13 @@ export function Notes() {
           onMouseDown={handleResizeStart}
           className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
         />
-      </div>
-      <div className={`flex-1 min-w-0 ${currentNote ? "flex" : "hidden md:flex"} flex-col`}>
+      </section>
+      <main
+        className={`flex-1 min-w-0 ${currentNote ? "flex" : "hidden md:flex"} flex-col`}
+        data-focus-pane="notes-content"
+        tabIndex={-1}
+        aria-label={t("panes.notesContent")}
+      >
         {currentNote ? (
           <NoteEditor
             key={currentNote.id}
@@ -210,7 +220,7 @@ export function Notes() {
         ) : (
           <EmptyNotes onCreateNote={handleCreateNote} onBack={() => navigate("/notes")} />
         )}
-      </div>
+      </main>
     </div>
   );
 }

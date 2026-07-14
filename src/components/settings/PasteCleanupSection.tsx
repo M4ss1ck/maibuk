@@ -63,9 +63,7 @@ export function PasteCleanupSection() {
     navigate(location.pathname, { replace: true, state: null });
   }, [location, navigate]);
 
-  // Capture the targeted rule's value input without focusing as a side effect:
-  // the focus is driven by a one-shot effect below so it fires exactly once
-  // (on open) instead of on every keystroke/re-render.
+  // Capture the declaratively focused rule so it can be revealed once on open.
   const focusRuleNodeRef = useRef<HTMLTextAreaElement | null>(null);
   const captureFocusRule = useCallback((node: HTMLTextAreaElement | null) => {
     focusRuleNodeRef.current = node;
@@ -74,7 +72,6 @@ export function PasteCleanupSection() {
     if (!rulesOpen || !focusRuleId) return;
     const node = focusRuleNodeRef.current;
     if (!node) return;
-    node.focus();
     node.scrollIntoView({ block: "center" });
     setFocusRuleId(null);
   }, [rulesOpen, focusRuleId]);
@@ -305,6 +302,7 @@ export function PasteCleanupSection() {
                     />
                     <AutoGrowTextarea
                       ref={rule.id === focusRuleId ? captureFocusRule : undefined}
+                      autoFocus={rule.id === focusRuleId}
                       value={rule.value}
                       onChange={(e) =>
                         updatePasteCleanupRule(rule.id, {

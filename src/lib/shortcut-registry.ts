@@ -43,6 +43,10 @@ export const SHORTCUTS = {
     labelKey: "shortcuts.toggleAlwaysOnTop",
     keys: ["Ctrl+Shift+P"],
   },
+  "global.cyclePanes": {
+    labelKey: "shortcuts.cyclePanes",
+    keys: ["F6", "Shift+F6"],
+  },
 
   "home.newBook": { labelKey: "shortcuts.newBook", keys: ["Ctrl+N"] },
   "home.jumpBooks": { labelKey: "shortcuts.jumpBooks", keys: ["1-9"] },

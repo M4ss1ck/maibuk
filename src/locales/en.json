@@ -39,9 +39,15 @@
     "canvas": "Canvas",
     "copied": "Copied!",
     "paste": "Paste",
-    "copy": "Copy"
+    "copy": "Copy",
+    "increaseValue": "Increase value",
+    "decreaseValue": "Decrease value",
+    "closeChapters": "Close chapters"
   },
   "nav": {
+    "primary": "Primary navigation",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
     "backToHome": "Back to Home",
     "exportBook": "Export Book",
     "designCover": "Design Cover",
@@ -84,6 +90,7 @@
   },
   "books": {
     "title": "My Books",
+    "collectionLabel": "Book projects",
     "newBook": "New Book",
     "editBook": "Edit Book",
     "deleteBook": "Delete Book",
@@ -142,7 +149,14 @@
     "normalView": "Normal view",
     "compactView": "Compact view",
     "switchToNormalView": "Switch to normal view",
-    "switchToCompactView": "Switch to compact view"
+    "switchToCompactView": "Switch to compact view",
+    "reorder": "Reorder",
+    "typeChapter": "Chapter",
+    "typePrologue": "Prologue",
+    "typeEpilogue": "Epilogue",
+    "typePart": "Part",
+    "typeFrontmatter": "Front Matter",
+    "typeBackmatter": "Back Matter"
   },
   "notes": {
     "title": "Notes",
@@ -618,6 +632,7 @@
     "dark": "Dark",
     "light": "Light",
     "system": "System",
+    "themeDropdown": "Theme: {{theme}}",
     "general": "General",
     "about": "About",
     "export": "Export Defaults",
@@ -859,6 +874,7 @@
       "solid": "Solid",
       "linear": "Linear",
       "radial": "Radial",
+      "color": "Color",
       "angle": "Angle",
       "addStop": "Add stop",
       "removeStop": "Remove stop"
@@ -926,7 +942,8 @@
     "keepLocal": "Keep Local & Push",
     "useRemote": "Use Remote & Pull",
     "cancelSync": "Cancel",
-    "sessionExpired": "Your session has expired. Please log in again."
+    "sessionExpired": "Your session has expired. Please log in again.",
+    "syncStatus": "Sync status"
   },
   "errors": {
     "titleRequired": "Title is required",
@@ -962,7 +979,8 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "zoomReset": "Reset zoom",
-    "deleteSelection": "Delete selected object"
+    "deleteSelection": "Delete selected object",
+    "cyclePanes": "Cycle through panes"
   },
   "versions": {
     "title": "Version history",
@@ -1007,6 +1025,15 @@
       "pre-restore": "Before restore"
     },
     "restoredName": "Before restoring \"{{name}}\""
+  },
+  "panes": {
+    "navSidebar": "Navigation sidebar",
+    "mainContent": "Main content",
+    "chapterList": "Chapter list",
+    "editorMain": "Editor",
+    "bookSidePanel": "Book side panel",
+    "notesSidebar": "Notes list",
+    "notesContent": "Note editor"
   },
   "backup": {
     "title": "Backups",

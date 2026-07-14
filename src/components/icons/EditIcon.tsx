@@ -1,7 +1,7 @@
 export function EditIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Edit"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

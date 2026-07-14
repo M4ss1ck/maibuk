@@ -1,7 +1,7 @@
 export function TextIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="text"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

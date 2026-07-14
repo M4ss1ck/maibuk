@@ -139,7 +139,7 @@ export function NotesGallery() {
       <div className="mb-6 flex flex-col gap-4 sm:mb-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("notes.title")}</h2>
+            <h1 data-route-heading className="text-xl font-semibold tracking-tight sm:text-2xl">{t("notes.title")}</h1>
             {notes.length > 0 && (
               <p className="mt-1 text-sm text-muted-foreground">
                 {hasFilters

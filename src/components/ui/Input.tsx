@@ -1,5 +1,6 @@
 import { InputHTMLAttributes, ReactNode, forwardRef, useRef } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -9,6 +10,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className = "", label, error, endAdornment, id, type, disabled, readOnly, ...props }, ref) => {
+    const { t } = useTranslation();
     const inputId = id || props.name;
     const inputRef = useRef<HTMLInputElement | null>(null);
     const showNumberControls = type === "number" && !endAdornment;
@@ -90,7 +92,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             <div className="absolute inset-y-1 right-1 flex w-6 flex-col overflow-hidden rounded-md border border-border bg-card">
               <button
                 type="button"
-                aria-label="Increase value"
+                aria-label={t("common.increaseValue")}
                 disabled={disabled || readOnly}
                 onClick={() => stepValue("up")}
                 className="flex h-1/2 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:bg-muted focus:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -99,7 +101,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               </button>
               <button
                 type="button"
-                aria-label="Decrease value"
+                aria-label={t("common.decreaseValue")}
                 disabled={disabled || readOnly}
                 onClick={() => stepValue("down")}
                 className="flex h-1/2 items-center justify-center border-t border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:bg-muted focus:text-foreground disabled:cursor-not-allowed disabled:opacity-50"

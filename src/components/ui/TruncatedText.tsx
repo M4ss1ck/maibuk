@@ -1,10 +1,8 @@
-import { useLayoutEffect, useRef, useState, type ElementType } from "react";
+import { useLayoutEffect, useRef, useState, type ElementType, type HTMLAttributes } from "react";
 
-interface TruncatedTextProps {
+interface TruncatedTextProps extends HTMLAttributes<HTMLElement> {
   text: string;
-  /** Element to render. Defaults to a span. */
   as?: ElementType;
-  className?: string;
 }
 
 /**
@@ -12,7 +10,7 @@ interface TruncatedTextProps {
  * class) and shows the full text as a native tooltip only when it actually
  * overflows the available width.
  */
-export function TruncatedText({ text, as: Tag = "span", className }: TruncatedTextProps) {
+export function TruncatedText({ text, as: Tag = "span", className, ...rest }: TruncatedTextProps) {
   const ref = useRef<HTMLElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
 
@@ -30,7 +28,7 @@ export function TruncatedText({ text, as: Tag = "span", className }: TruncatedTe
   }, [text]);
 
   return (
-    <Tag ref={ref} className={className} title={isOverflowing ? text : undefined}>
+    <Tag ref={ref} className={className} title={isOverflowing ? text : undefined} {...rest}>
       {text}
     </Tag>
   );

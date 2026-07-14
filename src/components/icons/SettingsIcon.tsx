@@ -1,7 +1,7 @@
 export function SettingsIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="settings"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

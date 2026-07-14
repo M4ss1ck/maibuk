@@ -22,7 +22,7 @@ export function NoteCard({ note, bookTitle, onClick }: NoteCardProps) {
       onClick={onClick}
       className="flex h-44 flex-col overflow-hidden rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
     >
-      <h3 className="truncate font-medium text-foreground">{title}</h3>
+      <h2 className="truncate font-medium text-foreground">{title}</h2>
 
       <p className="mt-1 line-clamp-2 min-h-8 text-sm text-muted-foreground">{preview}</p>
 

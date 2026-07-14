@@ -565,6 +565,11 @@ export function NoteEditor({
           type="button"
           onClick={onReturnToBook ?? (() => navigate("/notes"))}
           className="inline-flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label={
+            onReturnToBook && returnLabel
+              ? undefined
+              : t("common.back")
+          }
         >
           <ArrowLeft className="w-5 h-5" />
           {onReturnToBook && returnLabel ? (
@@ -575,9 +580,9 @@ export function NoteEditor({
         </button>
 
         <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium leading-tight text-foreground">
+          <h1 data-route-heading className="block truncate text-sm font-medium leading-tight text-foreground">
             {title || note.title || t("notes.untitled")}
-          </span>
+          </h1>
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0 flex-1">
               <NoteTagsRow

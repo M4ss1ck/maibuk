@@ -21,6 +21,7 @@ import type { Chapter } from "@/features/chapters/types";
 import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, CheckIcon, XIcon } from "@/components/icons";
+import { useModalScope } from "@/hooks";
 
 interface ExportDialogProps {
   isOpen: boolean;
@@ -40,6 +41,8 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
     generateMaibukToc: true,
   });
   const [hasProjectEpubData, setHasProjectEpubData] = useState(false);
+
+  useModalScope(isOpen);
 
   const [progress, setProgress] = useState<ExportProgress>({
     status: "idle",

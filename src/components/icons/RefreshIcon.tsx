@@ -1,7 +1,7 @@
 export function RefreshIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Refresh"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

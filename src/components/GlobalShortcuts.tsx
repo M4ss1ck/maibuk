@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useTranslation } from "react-i18next";
@@ -9,8 +9,31 @@ import { useSyncStore } from "@/features/sync/store";
 import { useNoteStore } from "@/features/notes";
 import { getPassphrase } from "@/features/sync/crypto";
 import { IS_TAURI } from "@/lib/platform";
-import { useActiveShortcuts } from "@/hooks";
+import { useActiveShortcuts, type ShortcutItem } from "@/hooks";
 import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
+
+function isVisiblePane(pane: HTMLElement): boolean {
+  if (pane.closest('[hidden], [inert], [aria-hidden="true"], [data-closed]')) return false;
+  const style = window.getComputedStyle(pane);
+  return style.display !== "none" && style.visibility !== "hidden";
+}
+
+function cyclePanes(forward: boolean) {
+  const panes = [...document.querySelectorAll<HTMLElement>("[data-focus-pane]")].filter(
+    isVisiblePane
+  );
+  if (panes.length === 0) return;
+
+  const active = document.activeElement;
+  const currentIndex = panes.findIndex((pane) => pane === active || pane.contains(active));
+  const nextIndex =
+    currentIndex < 0
+      ? forward
+        ? 0
+        : panes.length - 1
+      : (currentIndex + (forward ? 1 : -1) + panes.length) % panes.length;
+  panes[nextIndex].focus();
+}
 
 export function GlobalShortcuts() {
   const { t } = useTranslation();
@@ -25,6 +48,12 @@ export function GlobalShortcuts() {
   const setAlwaysOnTop = useSettingsStore((state) => state.setAlwaysOnTop);
 
   const activeShortcuts = useActiveShortcuts();
+  const helpSnapshotRef = useRef<ShortcutItem[]>([]);
+
+  const openHelp = useCallback(() => {
+    helpSnapshotRef.current = activeShortcuts;
+    setShowShortcutsHelp(true);
+  }, [activeShortcuts]);
 
   useShortcuts([
     {
@@ -117,9 +146,16 @@ export function GlobalShortcuts() {
       },
     },
     {
+      keys: matchKeys("global.cyclePanes"),
+      allowInInput: true,
+      onTrigger: (event) => {
+        cyclePanes(!event.shiftKey);
+      },
+    },
+    {
       keys: ["shift+/", "shift+?", "?"],
       onTrigger: () => {
-        setShowShortcutsHelp(true);
+        openHelp();
       },
     },
   ]);
@@ -129,7 +165,7 @@ export function GlobalShortcuts() {
       isOpen={showShortcutsHelp}
       onClose={() => setShowShortcutsHelp(false)}
       title={t("shortcuts.title")}
-      shortcuts={activeShortcuts}
+      shortcuts={helpSnapshotRef.current}
     />
   );
 }

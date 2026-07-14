@@ -1,7 +1,7 @@
 export function PrintIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Print"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

@@ -198,12 +198,12 @@ describe("BookEditor loading state", () => {
     mockBookState.currentBook = null;
     mockBookState.isLoading = true;
 
-    render(<BookEditor />);
+    const { container } = render(<BookEditor />);
 
-    const logo = screen.getByLabelText("Maibuk");
-    const loadingSurface = logo.parentElement?.parentElement;
+    const logo = container.querySelector("svg.loading-entrance");
+    const loadingSurface = logo?.parentElement?.parentElement;
     expect(logo).toBeInTheDocument();
-    expect(logo.classList.contains("loading-entrance")).toBe(true);
+    expect(logo?.classList.contains("loading-entrance")).toBe(true);
     expect(loadingSurface).toHaveClass("h-dvh");
     expect(screen.getByText("editor.loading")).toBeInTheDocument();
   });
@@ -211,11 +211,11 @@ describe("BookEditor loading state", () => {
   it("shows an editor loading state while chapters are loading", () => {
     mockChapterState.isLoading = true;
 
-    render(<BookEditor />);
+    const { container } = render(<BookEditor />);
 
-    const logo = screen.getByLabelText("Maibuk");
+    const logo = container.querySelector("svg.loading-entrance");
     expect(logo).toBeInTheDocument();
-    expect(logo.classList.contains("loading-entrance")).toBe(true);
+    expect(logo?.classList.contains("loading-entrance")).toBe(true);
     expect(screen.getByText("editor.loadingEditor")).toBeInTheDocument();
     expect(screen.queryByText("editor.noChapter")).not.toBeInTheDocument();
   });
@@ -235,11 +235,11 @@ describe("BookEditor loading state", () => {
       },
     ];
 
-    render(<BookEditor />);
+    const { container } = render(<BookEditor />);
 
-    const logo = screen.getByLabelText("Maibuk");
+    const logo = container.querySelector("svg.loading-entrance");
     expect(logo).toBeInTheDocument();
-    expect(logo.classList.contains("loading-entrance")).toBe(true);
+    expect(logo?.classList.contains("loading-entrance")).toBe(true);
     expect(screen.getByText("editor.loadingEditor")).toBeInTheDocument();
     expect(screen.queryByText("editor.noChapter")).not.toBeInTheDocument();
     expect(mockSetCurrentChapter).toHaveBeenCalledWith(mockChapterState.chapters[0]);

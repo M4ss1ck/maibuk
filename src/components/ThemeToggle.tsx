@@ -50,7 +50,7 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
             type="button"
             onClick={() => setIsOpen(!isOpen)}
             className="p-2 hover:bg-muted rounded transition-colors"
-            aria-label={`Theme: ${currentTheme.label}`}
+            aria-label={t("settings.themeDropdown", { theme: currentTheme.label })}
           >
             <CurrentIcon className="w-5 h-5" />
           </button>

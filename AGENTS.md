@@ -281,6 +281,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useNoteStore` / `saveCollapsedHeadings`                          | `src/features/notes/store.ts`              |
 | `CollapsibleHeading` / `collapsibleHeadingPluginKey`              | `src/components/editor/extensions/CollapsibleHeading.ts` |
 | `SceneBreakDescriptor` / scene-break attribute helpers             | `src/components/editor/extensions/scene-break-utils.ts` |
+| `useModalScope(isOpen)` (LIFO modal ID registration/unregistration) | `src/hooks/useModalScope.ts`                 |
 
 ---
 

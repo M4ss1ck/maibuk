@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ExportDialog } from "@/components/export/ExportDialog";
 import { buildBook, buildChapter } from "@/test/support/fixtures";
+import { useModalStore } from "@/components/ui/modal-store";
 
 const { mockGetEpubStructure, mockListBookStyles } = vi.hoisted(() => ({
   mockGetEpubStructure: vi.fn(),
@@ -78,5 +79,50 @@ describe("ExportDialog project EPUB options", () => {
       expect(mockGetEpubStructure).toHaveBeenCalledWith("book-1");
     });
     expect(screen.queryByText("Imported EPUB options")).not.toBeInTheDocument();
+  });
+});
+
+describe("ExportDialog modal registration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useModalStore.setState({ modalIds: [], openCount: 0 });
+    mockGetEpubStructure.mockResolvedValue(null);
+    mockListBookStyles.mockResolvedValue([]);
+  });
+
+  it("registers in the modal store when open and unregisters on close", () => {
+    expect(useModalStore.getState().openCount).toBe(0);
+
+    const { unmount } = render(
+      <ExportDialog
+        isOpen
+        onClose={vi.fn()}
+        book={buildBook({ id: "book-1" })}
+        chapters={[buildChapter({ bookId: "book-1" })]}
+      />
+    );
+
+    expect(useModalStore.getState().openCount).toBe(1);
+    expect(useModalStore.getState().modalIds).toHaveLength(1);
+
+    unmount();
+
+    expect(useModalStore.getState().openCount).toBe(0);
+    expect(useModalStore.getState().modalIds).toEqual([]);
+  });
+
+  it("does not register when closed", () => {
+    expect(useModalStore.getState().openCount).toBe(0);
+
+    render(
+      <ExportDialog
+        isOpen={false}
+        onClose={vi.fn()}
+        book={buildBook({ id: "book-1" })}
+        chapters={[buildChapter({ bookId: "book-1" })]}
+      />
+    );
+
+    expect(useModalStore.getState().openCount).toBe(0);
   });
 });

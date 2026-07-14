@@ -198,11 +198,11 @@ export function Settings() {
     <div className="h-full overflow-auto relative">
       <AsciiFieldBackground color={primaryColor} />
       <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background">
-        <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h2>
+        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h1>
 
         {/* Appearance Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.appearance")}</h3>
+          <h2 className="text-lg text-primary font-medium mb-4">{t("settings.appearance")}</h2>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
@@ -297,9 +297,9 @@ export function Settings() {
         {/* Window Settings */}
         {IS_TAURI && !isMac() && (
           <section className="mb-6 sm:mb-8">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t("settings.window")}
-            </h3>
+            </h2>
             <div className="divide-y divide-border">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
                 <div>
@@ -334,9 +334,9 @@ export function Settings() {
 
         {/* General Settings */}
         <section className="mb-6 sm:mb-8">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             {t("settings.general")}
-          </h3>
+          </h2>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
@@ -381,7 +381,7 @@ export function Settings() {
 
         {/* Sync Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("sync.title")}</h3>
+          <h2 className="text-lg text-primary font-medium mb-4">{t("sync.title")}</h2>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div className="flex-1">
@@ -466,7 +466,7 @@ export function Settings() {
 
         {/* Editor Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.editor")}</h3>
+          <h2 className="text-lg text-primary font-medium mb-4">{t("settings.editor")}</h2>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
@@ -567,9 +567,9 @@ export function Settings() {
 
         {/* Export Settings */}
         <section className="mb-6 sm:mb-8">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             {t("settings.export")}
-          </h3>
+          </h2>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
@@ -594,7 +594,7 @@ export function Settings() {
             onClick={() => setAdvancedOpen(!advancedOpen)}
             className="flex items-center justify-between w-full text-left"
           >
-            <h3 className="text-lg text-destructive font-medium">{t("settings.advanced")}</h3>
+            <h2 className="text-lg text-destructive font-medium">{t("settings.advanced")}</h2>
             <ChevronDownIcon
               className={`w-5 h-5 text-muted-foreground transition-transform ${advancedOpen ? "rotate-180" : ""}`}
             />

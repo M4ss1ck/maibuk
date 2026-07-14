@@ -1,6 +1,6 @@
 export function SpinnerIcon({ className }: { className?: string }) {
   return (
-    <svg aria-label="spinner" className={className} viewBox="0 0 24 24">
+    <svg aria-hidden="true" className={className} viewBox="0 0 24 24">
       <path
         className="opacity-75"
         fill="currentColor"

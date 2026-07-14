@@ -1,9 +1,10 @@
-import { renderHook } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
 import { useActiveShortcuts } from "@/hooks/useActiveShortcuts";
+import { useModalStore } from "@/components/ui/modal-store";
 
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
@@ -17,6 +18,10 @@ function wrapperFor(path: string) {
     );
   };
 }
+
+beforeEach(() => {
+  useModalStore.setState({ modalIds: [], openCount: 0 });
+});
 
 it("includes the toolbar settings shortcut on a book route", () => {
   const { result } = renderHook(() => useActiveShortcuts(), {
@@ -36,4 +41,34 @@ it("excludes the toolbar settings shortcut on a non-book route", () => {
   expect(
     result.current.some((item) => item.id === "editor.toolbarSettings"),
   ).toBe(false);
+});
+
+it("returns empty list while any modal is open", () => {
+  useModalStore.setState({ modalIds: ["modal-1"], openCount: 1 });
+
+  const { result } = renderHook(() => useActiveShortcuts(), {
+    wrapper: wrapperFor("/book/abc"),
+  });
+
+  expect(result.current).toEqual([]);
+});
+
+it("returns shortcuts again after all modals close", () => {
+  useModalStore.setState({ modalIds: ["modal-1"], openCount: 1 });
+
+  const { result, rerender } = renderHook(() => useActiveShortcuts(), {
+    wrapper: wrapperFor("/book/abc"),
+  });
+
+  expect(result.current).toEqual([]);
+
+  act(() => {
+    useModalStore.setState({ modalIds: [], openCount: 0 });
+  });
+  rerender();
+
+  expect(result.current.length).toBeGreaterThan(0);
+  expect(
+    result.current.some((item) => item.id === "editor.toolbarSettings"),
+  ).toBe(true);
 });

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { GridList } from "react-aria-components/GridList";
 import { useBookStore } from "@/features/books/store";
 import { BookCard } from "@/components/project/BookCard";
 import { NewBookDialog } from "@/components/project/NewBookDialog";
@@ -28,27 +29,45 @@ export function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [isNewBookOpen, setIsNewBookOpen] = useState(false);
-  const [focusedBookIndex, setFocusedBookIndex] = useState(0);
+  const [focusedBookId, setFocusedBookId] = useState<string | null>(null);
   const [epubImport, setEpubImport] = useState<EpubImportState | null>(null);
   const [isScanningEpub, setIsScanningEpub] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
   const { books, isLoading, loadBooks } = useBookStore();
+  const gridRef = useRef<HTMLDivElement>(null);
+  const previousBookIdsRef = useRef<string[]>([]);
+  const activatedBookIdsRef = useRef(new Set<string>());
+
+  const focusBook = useCallback((bookId: string) => {
+    const rows = gridRef.current?.querySelectorAll<HTMLElement>("[data-key]");
+    const row = [...(rows ?? [])].find((candidate) => candidate.dataset.key === bookId);
+    row?.focus();
+  }, []);
+
+  const activateBook = useCallback(
+    (bookId: string) => {
+      if (activatedBookIdsRef.current.has(bookId)) return;
+      activatedBookIdsRef.current.add(bookId);
+      queueMicrotask(() => activatedBookIdsRef.current.delete(bookId));
+      navigate(`/book/${bookId}`);
+    },
+    [navigate]
+  );
 
   useEffect(() => {
     loadBooks();
   }, [loadBooks]);
 
   useEffect(() => {
-    if (books.length === 0) {
-      setFocusedBookIndex(0);
-      return;
+    if (focusedBookId && !books.some((book) => book.id === focusedBookId)) {
+      const previousIndex = previousBookIdsRef.current.indexOf(focusedBookId);
+      const fallback = books[Math.min(Math.max(previousIndex, 0), books.length - 1)];
+      setFocusedBookId(fallback?.id ?? null);
+      if (fallback) focusBook(fallback.id);
     }
-
-    if (focusedBookIndex > books.length - 1) {
-      setFocusedBookIndex(books.length - 1);
-    }
-  }, [books.length, focusedBookIndex]);
+    previousBookIdsRef.current = books.map((book) => book.id);
+  }, [books, focusBook, focusedBookId]);
 
   useShortcuts([
     {
@@ -60,35 +79,32 @@ export function Home() {
       allowInInput: true,
     },
     {
-      keys: ["arrowdown", "arrowright", "j"],
+      keys: "j",
       onTrigger: () => {
-        setFocusedBookIndex((prev) => Math.min(prev + 1, books.length - 1));
+        const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
+        const currentIndex = books.findIndex((book) => book.id === activeBookId);
+        const targetIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, books.length - 1);
+        const target = books[targetIndex];
+        if (target) focusBook(target.id);
       },
       enabled: !isNewBookOpen && books.length > 0,
     },
     {
-      keys: ["arrowup", "arrowleft", "k"],
+      keys: "k",
       onTrigger: () => {
-        setFocusedBookIndex((prev) => Math.max(prev - 1, 0));
-      },
-      enabled: !isNewBookOpen && books.length > 0,
-    },
-    {
-      keys: "enter",
-      onTrigger: () => {
-        const selected = books[focusedBookIndex];
-        if (selected) {
-          navigate(`/book/${selected.id}`);
-        }
+        const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
+        const currentIndex = books.findIndex((book) => book.id === activeBookId);
+        const targetIndex = currentIndex < 0 ? books.length - 1 : Math.max(currentIndex - 1, 0);
+        const target = books[targetIndex];
+        if (target) focusBook(target.id);
       },
       enabled: !isNewBookOpen && books.length > 0,
     },
     ...Array.from({ length: 9 }, (_, i) => ({
       keys: String(i + 1),
       onTrigger: () => {
-        if (i < books.length) {
-          setFocusedBookIndex(i);
-        }
+        const target = books[i];
+        if (target) focusBook(target.id);
       },
       enabled: !isNewBookOpen && books.length > 0,
     })),
@@ -150,7 +166,7 @@ export function Home() {
   return (
     <div className="p-4 sm:p-8 overflow-auto h-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-        <h2 className="text-xl sm:text-2xl font-semibold">{t("books.title")}</h2>
+        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold">{t("books.title")}</h1>
         <div className="flex items-center gap-2">
           {IS_WEB && (
             <Button
@@ -205,17 +221,29 @@ export function Home() {
         </div>
       ) : (
         /* Book grid */
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {books.map((book, index) => (
-            <BookCard
-              key={book.id}
-              book={book}
-              onClick={() => navigate(`/book/${book.id}`)}
-              indexHint={index < 9 ? index + 1 : undefined}
-              isFocused={books[focusedBookIndex]?.id === book.id}
-              index={index}
-            />
-          ))}
+        <div
+          onFocusCapture={(event) => {
+            const row = (event.target as HTMLElement).closest<HTMLElement>("[data-key]");
+            if (row?.dataset.key) setFocusedBookId(row.dataset.key);
+          }}
+        >
+          <GridList
+            ref={gridRef}
+            aria-label={t("books.collectionLabel")}
+            items={books}
+            layout="grid"
+            selectionMode="none"
+            onAction={(key) => activateBook(String(key))}
+            className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+          >
+            {(book) => (
+              <BookCard
+                book={book}
+                index={books.findIndex((candidate) => candidate.id === book.id)}
+                onPress={() => activateBook(book.id)}
+              />
+            )}
+          </GridList>
         </div>
       )}
 

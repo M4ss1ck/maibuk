@@ -1,7 +1,7 @@
 export function ArrowDownIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Arrow Down"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

@@ -38,9 +38,9 @@ export function CanvasGallery() {
       <div className="mb-6 flex flex-col gap-4 sm:mb-8">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            <h1 data-route-heading className="text-xl font-semibold tracking-tight sm:text-2xl">
               {t("canvas.title")}
-            </h2>
+            </h1>
             {canvases.length > 0 && (
               <p className="mt-1 text-sm text-muted-foreground">
                 {t("canvas.canvasCount", { count: canvases.length })}

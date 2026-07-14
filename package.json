@@ -99,6 +99,7 @@
     "pocketbase": "^0.26.8",
     "prettier": "^3.8.1",
     "react": "^19.1.0",
+    "react-aria-components": "^1.19.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^16.5.1",
     "react-router-dom": "^7.1.1",
@@ -128,7 +129,8 @@
     "tailwindcss": "^4.0.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "vitest-axe": "^0.1.0"
   },
   "packageManager": "pnpm@11.8.0+sha512.c1f5e7c4cb241c8f174b743851d82f42b802324afc8b0f116b96adb15aa06664948dde36960a3ba1079ba5b4b29dd0140135b94b5b5f5263592249d68e555f26"
 }

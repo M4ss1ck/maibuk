@@ -1,19 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
 describe("LoadingScreen", () => {
   it("renders the app logo", () => {
-    render(<LoadingScreen />);
-    const logo = screen.getByLabelText("Maibuk");
+    const { container } = render(<LoadingScreen />);
+    const logo = container.querySelector("svg.loading-entrance");
     expect(logo).toBeInTheDocument();
-    expect(logo.tagName).toBe("svg");
+    expect(logo?.tagName).toBe("svg");
   });
 
   it("applies entrance animation to the logo", () => {
-    render(<LoadingScreen />);
-    const logo = screen.getByLabelText("Maibuk");
-    expect(logo.classList.contains("loading-entrance")).toBe(true);
+    const { container } = render(<LoadingScreen />);
+    const logo = container.querySelector("svg.loading-entrance");
+    expect(logo?.classList.contains("loading-entrance")).toBe(true);
   });
 
   it("uses full dynamic viewport height", () => {

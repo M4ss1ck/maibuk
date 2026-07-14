@@ -115,7 +115,7 @@ describe("Notes page return-to-book navigation", () => {
   });
 
   it("passes the return label and navigates to the book on return", async () => {
-    render(<Notes />);
+    const { container } = render(<Notes />);
 
     await waitFor(() => {
       expect(screen.getByTestId("return-label")).toHaveTextContent("My Book");
@@ -123,6 +123,13 @@ describe("Notes page return-to-book navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "back-to-book" }));
     expect(mockNavigate).toHaveBeenCalledWith("/book/book-1");
+    expect(container.querySelector('[data-focus-pane="notes-sidebar"]')).toHaveAccessibleName(
+      "panes.notesSidebar"
+    );
+    expect(container.querySelector('[data-focus-pane="notes-content"]')).toHaveAccessibleName(
+      "panes.notesContent"
+    );
+    expect(container.querySelectorAll("main")).toHaveLength(1);
   });
 
   it("passes suppressRestore while a note heading deep-link is pending", () => {

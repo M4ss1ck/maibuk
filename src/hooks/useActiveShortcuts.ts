@@ -10,6 +10,7 @@ import {
   type FormattedShortcut,
   type ShortcutId,
 } from "@/lib/shortcut-registry";
+import { useModalStore } from "@/components/ui/modal-store";
 
 export interface ShortcutItem {
   id: ShortcutId;
@@ -25,8 +26,11 @@ function item(id: ShortcutId, t: TFunction): ShortcutItem {
 export function useActiveShortcuts(): ShortcutItem[] {
   const { t } = useTranslation();
   const location = useLocation();
+  const modalOpen = useModalStore((s) => s.openCount > 0);
 
   return useMemo(() => {
+    if (modalOpen) return [];
+
     const ids: ShortcutId[] = [
       "global.gotoProjects",
       "global.gotoNotes",
@@ -86,5 +90,5 @@ export function useActiveShortcuts(): ShortcutItem[] {
     }
 
     return ids.map((id) => item(id, t));
-  }, [location.pathname, t]);
+  }, [location.pathname, t, modalOpen]);
 }

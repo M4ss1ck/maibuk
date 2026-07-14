@@ -411,6 +411,9 @@ function CanvasEditor() {
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
+      <h1 data-route-heading className="sr-only">
+        {current?.title || t("canvas.title")}
+      </h1>
       <header className="z-10 flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
         <Button variant="ghost" size="sm" onClick={() => navigate("/canvas")}>
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -465,7 +468,7 @@ function CanvasEditor() {
         </Button>
       </header>
 
-      <div ref={surfaceRef} className="relative min-h-0 flex-1">
+      <main ref={surfaceRef} className="relative min-h-0 flex-1">
         <ReactFlow
           colorMode={theme}
           className={connecting ? "canvas-connecting" : undefined}
@@ -521,7 +524,7 @@ function CanvasEditor() {
             onDelete={deleteSelection}
           />
         )}
-      </div>
+      </main>
 
       <Modal
         isOpen={notePickerOpen}

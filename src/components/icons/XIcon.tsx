@@ -1,7 +1,7 @@
 export function XIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="close"
+      aria-hidden="true"
       className={className}
       fill="none"
       viewBox="0 0 24 24"
