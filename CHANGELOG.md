@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.17] - 2026-07-15
+
+### Added
+- Keyboard navigation for all core app surfaces including dialogs, menus, sidebars, and editor controls
+- Text transformation modes: horizontal mirror, upside-down, reverse, and leetspeak, preserving text formatting
+
+### Changed
+- Replaced Headless UI component library with React Aria for improved accessibility and consistency
+
+### Fixed
+- Typing after an inline code span now exits the code properly without inserting an extra space
+- Multi-line selections toggled as code block now merge into a single block instead of separate ones
+- Editor caret no longer jumps to the document start when content saves with auto-assigned heading IDs
+- Removed an incorrect page border shadow that appeared in some editor layouts
+- Sidebar navigation now activates on a single click instead of requiring a double-click
+- Chapter outline appears directly below its active chapter and supports navigation with arrow keys
+- Removed invalid ARIA attributes and improved focus management for assistive technology
+
 ## [0.4.16] - 2026-07-12
 
 ### Added
