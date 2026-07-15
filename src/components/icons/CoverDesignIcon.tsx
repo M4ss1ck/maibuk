@@ -1,7 +1,7 @@
 export function CoverDesignIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Cover Design"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

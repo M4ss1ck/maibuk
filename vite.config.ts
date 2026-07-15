@@ -67,6 +67,7 @@ export default defineConfig(() => ({
         "src/components/ThemeToggle.tsx",
         "src/components/StartupRedirect.tsx",
         "src/components/Layout.tsx",
+        "src/components/RouteAnnouncer.tsx",
         // Phase 5: Backup + sync safety
         "src/features/backup/backup-service.ts",
         "src/features/backup/generate-sql-dump.ts",

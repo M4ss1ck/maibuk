@@ -25,6 +25,7 @@ export function LineHeightSelect({ editor, value }: LineHeightSelectProps) {
       onChange={handleChange}
       options={LINE_HEIGHT_OPTIONS}
       placeholder={t("editor.lineHeight")}
+      ariaLabel={t("editor.lineHeight")}
     />
   );
 }

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesGallery } from "@/pages/NotesGallery";
 
@@ -48,22 +49,25 @@ vi.mock("../../../features/settings/store", () => {
   return { useSettingsStore };
 });
 
-vi.mock("../../../components/notes", () => ({
-  NoteCard: ({
-    note,
-    bookTitle,
-    onClick,
-  }: {
-    note: { id: string; title: string };
-    bookTitle?: string | null;
-    onClick: () => void;
-  }) => (
-    <button type="button" onClick={onClick}>
-      {note.title}
-      {bookTitle ? ` (${bookTitle})` : ""}
-    </button>
-  ),
-}));
+vi.mock("../../../components/notes", async () => {
+  const { GridListItem } = await import("react-aria-components/GridList");
+  return {
+    NoteCard: ({
+      note,
+      bookTitle,
+      onClick,
+    }: {
+      note: { id: string; title: string };
+      bookTitle?: string | null;
+      onClick: () => void;
+    }) => (
+      <GridListItem id={note.id} textValue={note.title} onPress={onClick}>
+        {note.title}
+        {bookTitle ? ` (${bookTitle})` : ""}
+      </GridListItem>
+    ),
+  };
+});
 
 describe("NotesGallery", () => {
   beforeEach(() => {
@@ -84,6 +88,38 @@ describe("NotesGallery", () => {
     fireEvent.click(screen.getByText("First (My Book)"));
     expect(settingsState.setLastNoteId).toHaveBeenCalledWith("n1");
     expect(mockNavigate).toHaveBeenCalledWith("/notes/n1");
+  });
+
+  it("moves focus between notes with arrow keys and opens the focused note", async () => {
+    const user = userEvent.setup();
+    render(<NotesGallery />);
+    const [first, second] = screen.getAllByRole("row");
+
+    first.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(second).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(mockNavigate).toHaveBeenCalledWith("/notes/n2");
+  });
+
+  it("enters the note grid with an arrow key before anything has been tabbed to", async () => {
+    const user = userEvent.setup();
+    render(<NotesGallery />);
+
+    expect(document.body).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getAllByRole("row")[0]).toHaveFocus();
+  });
+
+  it("makes note search the first Tab stop", async () => {
+    const user = userEvent.setup();
+    render(<NotesGallery />);
+
+    await user.tab();
+
+    expect(screen.getByPlaceholderText("notes.search")).toHaveFocus();
   });
 
   it("creates a note and opens its editor from the empty state", async () => {

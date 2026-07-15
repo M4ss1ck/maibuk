@@ -64,6 +64,7 @@ export function PaintControl({ paint, onChange }: { paint: Paint; onChange: (p: 
       {paint.type === "solid" && (
         <input
           type="color"
+          aria-label={t("cover.paint.color")}
           value={paint.color}
           onChange={(e) => onChange({ type: "solid", color: e.target.value })}
           className="w-full h-8 cursor-pointer rounded border border-border"

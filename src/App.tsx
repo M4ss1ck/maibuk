@@ -13,6 +13,7 @@ import { CanvasGallery } from "@/pages/CanvasGallery";
 import { Embed } from "@/pages/Embed";
 import { StartupRedirect } from "@/components/StartupRedirect";
 import { PathTracker } from "@/components/PathTracker";
+import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { ToastViewport } from "@/components/ui";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { runDailyBackupOnce } from "@/features/backup/lifecycle";
@@ -47,6 +48,7 @@ function App() {
   return (
     <StartupRedirect>
       <PathTracker />
+      <RouteAnnouncer />
       <GlobalShortcuts />
       <Routes>
         <Route path="/" element={<Layout />}>

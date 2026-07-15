@@ -1,7 +1,7 @@
 export function SunIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="sun"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

@@ -1,7 +1,7 @@
 export function MaibukLogo({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Maibuk"
+      aria-hidden="true"
       className={className}
       fill="currentColor"
       fillRule="evenodd"

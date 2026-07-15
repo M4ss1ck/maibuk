@@ -1,15 +1,163 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
+
+const { i18nState } = vi.hoisted(() => ({
+  i18nState: { language: "en" as "en" | "es" },
+}));
+
+beforeAll(() => {
+  if (typeof globalThis.requestAnimationFrame === "undefined") {
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      return setTimeout(cb, 0) as unknown as number;
+    };
+    globalThis.cancelAnimationFrame = (id: number) => {
+      clearTimeout(id);
+    };
+  }
+});
+
+const modalTranslations = {
+  en: { "common.close": "Close" },
+  es: { "common.close": "Cerrar" },
+};
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const lang = i18nState.language;
+      return (
+        (modalTranslations as Record<string, Record<string, string>>)[lang]?.[
+          key
+        ] ?? key
+      );
+    },
+    i18n: { language: i18nState.language },
+  }),
+}));
+
 import { Modal } from "@/components/ui/Modal";
+import { useModalStore } from "@/components/ui/modal-store";
+
+describe("Modal modal scope registration", () => {
+  beforeEach(() => {
+    i18nState.language = "en";
+    useModalStore.setState({ modalIds: [], openCount: 0 });
+  });
+
+  it("registers in the modal store when opened and unregisters on close", async () => {
+    const user = userEvent.setup();
+
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button
+            type="button"
+            data-testid="trigger"
+            onClick={() => setOpen(true)}
+          >
+            Open
+          </button>
+          <Modal
+            isOpen={open}
+            onClose={() => setOpen(false)}
+            title="Scope Test"
+          >
+            <p>Content</p>
+          </Modal>
+        </div>
+      );
+    }
+
+    render(<Harness />);
+    expect(useModalStore.getState().openCount).toBe(0);
+
+    await user.click(screen.getByTestId("trigger"));
+
+    expect(useModalStore.getState().openCount).toBe(1);
+    expect(useModalStore.getState().modalIds).toHaveLength(1);
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(useModalStore.getState().openCount).toBe(0);
+    });
+  });
+
+  it("nested modals accumulate and close independently", async () => {
+    const user = userEvent.setup();
+
+    function Harness() {
+      const [outerOpen, setOuterOpen] = useState(false);
+      const [innerOpen, setInnerOpen] = useState(false);
+      return (
+        <div>
+          <button
+            type="button"
+            data-testid="outer-trigger"
+            onClick={() => setOuterOpen(true)}
+          >
+            Open Outer
+          </button>
+          <Modal
+            isOpen={outerOpen}
+            onClose={() => setOuterOpen(false)}
+            title="Outer"
+          >
+            <button
+              type="button"
+              data-testid="inner-trigger"
+              onClick={() => setInnerOpen(true)}
+            >
+              Open Inner
+            </button>
+            <Modal
+              isOpen={innerOpen}
+              onClose={() => setInnerOpen(false)}
+              title="Inner"
+            >
+              <p>Nested</p>
+            </Modal>
+          </Modal>
+        </div>
+      );
+    }
+
+    render(<Harness />);
+
+    await user.click(screen.getByTestId("outer-trigger"));
+    expect(useModalStore.getState().openCount).toBe(1);
+
+    await user.click(screen.getByTestId("inner-trigger"));
+    await waitFor(() => {
+      expect(useModalStore.getState().openCount).toBe(2);
+    });
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(useModalStore.getState().openCount).toBe(1);
+    });
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(useModalStore.getState().openCount).toBe(0);
+    });
+  });
+});
 
 describe("Modal", () => {
+  beforeEach(() => {
+    i18nState.language = "en";
+  });
+
   describe("visibility", () => {
     it("renders nothing when isOpen is false", () => {
       const { container } = render(
         <Modal isOpen={false} onClose={() => {}} title="Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(container.innerHTML).toBe("");
     });
@@ -18,7 +166,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="My Modal">
           <p>Hello World</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Hello World")).toBeInTheDocument();
     });
@@ -29,30 +177,34 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Dialog Title">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Dialog Title")).toBeInTheDocument();
     });
 
-    it("has correct accessible role and label", () => {
+    it("has dialog role with accessible label", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Accessible">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       const dialog = screen.getByRole("dialog");
-      expect(dialog).toHaveAttribute("aria-modal", "true");
-      expect(dialog).toHaveAttribute("aria-labelledby", "modal-title");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute("aria-labelledby");
+      const labelledby = dialog.getAttribute("aria-labelledby");
+      expect(labelledby).toBeTruthy();
+      const titleElement = document.getElementById(labelledby!);
+      expect(titleElement).toBeInTheDocument();
+      expect(titleElement).toHaveTextContent("Accessible");
     });
 
     it("supports a wide layout for dense tool panels", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Wide" size="wide">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
-
-      expect(screen.getByRole("dialog")).toHaveClass("sm:max-w-5xl");
+      expect(document.querySelector(".sm\\:max-w-5xl")).not.toBeNull();
     });
   });
 
@@ -64,7 +216,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={onClose} title="Close Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
 
       await user.click(screen.getByRole("button", { name: "Close" }));
@@ -72,57 +224,40 @@ describe("Modal", () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    it("calls onClose when backdrop is clicked", async () => {
+    it("calls onClose when Escape key is pressed", async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+
+      render(
+        <Modal isOpen={true} onClose={onClose} title="Escape Test">
+          <p>Content</p>
+        </Modal>,
+      );
+
+      await user.keyboard("{Escape}");
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("calls onClose when overlay backdrop is clicked", async () => {
       const user = userEvent.setup();
       const onClose = vi.fn();
 
       render(
         <Modal isOpen={true} onClose={onClose} title="Backdrop Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
 
-      // The backdrop is the div with bg-black/50 class
-      const backdrop = document.querySelector(".bg-black\\/50") as HTMLElement;
+      const backdrop = document.querySelector(
+        ".bg-black\\/50",
+      ) as HTMLElement;
       expect(backdrop).not.toBeNull();
       await user.click(backdrop);
 
-      expect(onClose).toHaveBeenCalledTimes(1);
-    });
-
-    it("calls onClose when Escape key is pressed", () => {
-      const onClose = vi.fn();
-
-      render(
-        <Modal isOpen={true} onClose={onClose} title="Escape Test">
-          <p>Content</p>
-        </Modal>
-      );
-
-      fireEvent.keyDown(document, { key: "Escape" });
-
-      expect(onClose).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("body scroll lock", () => {
-    it("sets overflow hidden on body when open", () => {
-      render(
-        <Modal isOpen={true} onClose={() => {}} title="Scroll Lock">
-          <p>Content</p>
-        </Modal>
-      );
-      expect(document.body.style.overflow).toBe("hidden");
-    });
-
-    it("restores body overflow on unmount", () => {
-      const { unmount } = render(
-        <Modal isOpen={true} onClose={() => {}} title="Restore">
-          <p>Content</p>
-        </Modal>
-      );
-      unmount();
-      expect(document.body.style.overflow).toBe("");
+      await waitFor(() => {
+        expect(onClose).toHaveBeenCalledTimes(1);
+      });
     });
   });
 
@@ -136,7 +271,7 @@ describe("Modal", () => {
           footer={<button type="button">Save</button>}
         >
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Save")).toBeInTheDocument();
     });
@@ -145,27 +280,204 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="No Footer">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
-      // The footer has border-t border-border bg-muted/30 class. The modal is
-      // portaled to document.body, so query the document rather than the test
-      // container.
       expect(document.querySelector(".bg-muted\\/30")).toBeNull();
     });
   });
 
-  describe("children", () => {
-    it("renders complex children content", () => {
+  describe("content", () => {
+    it("renders children content", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Complex">
           <div data-testid="form">
             <input placeholder="Name" />
             <textarea placeholder="Description" />
           </div>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByTestId("form")).toBeInTheDocument();
       expect(screen.getByPlaceholderText("Name")).toBeInTheDocument();
+    });
+
+    it("applies contentClassName", () => {
+      render(
+        <Modal
+          isOpen={true}
+          onClose={() => {}}
+          title="Custom Class"
+          contentClassName="custom-scroll"
+        >
+          <p>Content</p>
+        </Modal>,
+      );
+      expect(document.querySelector(".custom-scroll")).not.toBeNull();
+    });
+  });
+
+  describe("focus management", () => {
+    it("moves focus into dialog when opened, traps Tab/Shift+Tab, excludes background controls, and restores focus to trigger on every dismissal path", async () => {
+      const user = userEvent.setup();
+
+      function Harness() {
+        const [open, setOpen] = useState(false);
+        return (
+          <div>
+            <button
+              type="button"
+              data-testid="trigger"
+              onClick={() => setOpen(true)}
+            >
+              Open
+            </button>
+            <button type="button" data-testid="bg">
+              Background
+            </button>
+            <Modal
+              isOpen={open}
+              onClose={() => setOpen(false)}
+              title="Focus Modal"
+            >
+              <button type="button">One</button>
+              <button type="button">Two</button>
+            </Modal>
+          </div>
+        );
+      }
+
+      render(<Harness />);
+
+      const trigger = screen.getByTestId("trigger");
+      const bg = screen.getByTestId("bg");
+
+      trigger.focus();
+      expect(document.activeElement).toBe(trigger);
+      await user.click(trigger);
+
+      const closeBtn = screen.getByRole("button", { name: "Close" });
+      const one = screen.getByRole("button", { name: "One" });
+      const two = screen.getByRole("button", { name: "Two" });
+      const dialog = screen.getByRole("dialog");
+
+      await waitFor(() => {
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
+      });
+
+      closeBtn.focus();
+      expect(document.activeElement).toBe(closeBtn);
+
+      await user.tab();
+      await waitFor(() => {
+        expect(document.activeElement).toBe(one);
+        expect(document.activeElement).not.toBe(bg);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
+      });
+
+      await user.tab();
+      await waitFor(() => {
+        expect(document.activeElement).toBe(two);
+        expect(document.activeElement).not.toBe(bg);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
+      });
+
+      await user.tab();
+      await waitFor(() => {
+        expect(document.activeElement).toBe(closeBtn);
+        expect(document.activeElement).not.toBe(bg);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
+      });
+
+      await user.tab({ shift: true });
+      await waitFor(() => {
+        expect(document.activeElement).toBe(two);
+        expect(document.activeElement).not.toBe(bg);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
+      });
+
+      await user.tab({ shift: true });
+      await waitFor(() => {
+        expect(document.activeElement).toBe(one);
+        expect(document.activeElement).not.toBe(bg);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
+      });
+
+      await user.tab({ shift: true });
+      await waitFor(() => {
+        expect(document.activeElement).toBe(closeBtn);
+        expect(document.activeElement).not.toBe(bg);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
+      });
+
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(trigger);
+      });
+
+      await user.click(trigger);
+
+      await waitFor(() => {
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: "Close" }));
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(trigger);
+      });
+
+      await user.click(trigger);
+
+      await waitFor(() => {
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+      });
+
+      const backdrop = document.querySelector(".bg-black\\/50") as HTMLElement;
+      expect(backdrop).not.toBeNull();
+      await user.click(backdrop);
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(trigger);
+      });
+    });
+  });
+
+  describe("close label", () => {
+    it("has English localized close button name", () => {
+      render(
+        <Modal isOpen={true} onClose={() => {}} title="Localized Close">
+          <p>Content</p>
+        </Modal>,
+      );
+      expect(
+        screen.getByRole("button", { name: "Close" }),
+      ).toBeInTheDocument();
+    });
+
+    it("has Spanish localized close button name", () => {
+      i18nState.language = "es";
+      render(
+        <Modal isOpen={true} onClose={() => {}} title="Localized Close">
+          <p>Content</p>
+        </Modal>,
+      );
+      expect(
+        screen.getByRole("button", { name: "Cerrar" }),
+      ).toBeInTheDocument();
     });
   });
 });

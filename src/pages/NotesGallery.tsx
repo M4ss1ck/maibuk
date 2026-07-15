@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { GridList } from "react-aria-components/GridList";
 import {
   CalendarDays,
   ChevronLeft,
@@ -40,6 +41,8 @@ export function NotesGallery() {
   const [dateTo, setDateTo] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tagFilterInputRef = useRef<HTMLInputElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const activatedNoteIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     void loadNotes();
@@ -80,10 +83,16 @@ export function NotesGallery() {
 
   const hasFilters = Boolean(search.trim() || tagFilters.length > 0 || dateFrom || dateTo);
 
-  const openNote = (id: string) => {
-    setLastNoteId(id);
-    navigate(`/notes/${id}`);
-  };
+  const openNote = useCallback(
+    (id: string) => {
+      if (activatedNoteIdsRef.current.has(id)) return;
+      activatedNoteIdsRef.current.add(id);
+      queueMicrotask(() => activatedNoteIdsRef.current.delete(id));
+      setLastNoteId(id);
+      navigate(`/notes/${id}`);
+    },
+    [navigate, setLastNoteId]
+  );
 
   const handleCreateNote = async () => {
     const note = await createNote({ title: "", bookId: null });
@@ -111,6 +120,12 @@ export function NotesGallery() {
     searchInput.select();
   }, []);
 
+  const focusNote = useCallback((noteId: string) => {
+    const rows = gridRef.current?.querySelectorAll<HTMLElement>("[data-key]");
+    const row = [...(rows ?? [])].find((candidate) => candidate.dataset.key === noteId);
+    row?.focus();
+  }, []);
+
   useShortcuts(
     [
       {
@@ -130,38 +145,45 @@ export function NotesGallery() {
         allowInInput: true,
         onTrigger: openAdvancedFilters,
       },
+      {
+        keys: ["arrowdown", "arrowright", "arrowup", "arrowleft"],
+        preventDefault: false,
+        onTrigger: (event) => {
+          if (document.activeElement !== document.body) return;
+          const target =
+            event.key === "ArrowUp" || event.key === "ArrowLeft"
+              ? filteredNotes[filteredNotes.length - 1]
+              : filteredNotes[0];
+          if (!target) return;
+          event.preventDefault();
+          focusNote(target.id);
+        },
+      },
     ],
     { enabled: notes.length > 0 }
   );
 
   return (
     <div className="p-4 sm:p-8 overflow-auto h-full">
-      <div className="mb-6 flex flex-col gap-4 sm:mb-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("notes.title")}</h2>
-            {notes.length > 0 && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {hasFilters
-                  ? t("notes.matchingCount", {
-                      count: filteredNotes.length,
-                      total: notes.length,
-                    })
-                  : t("notes.noteCount", { count: notes.length })}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 sm:ml-auto">
-            {notes.length > 0 && <NotesSortMenu value={sort} onChange={setSort} />}
-            <Button onClick={handleCreateNote} className="text-sm">
-              <AddIcon className="w-5 h-5" />
-              <span>{t("notes.newNote")}</span>
-            </Button>
-          </div>
+      <div className="mb-6 grid gap-4 sm:mb-8 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="row-start-1">
+          <h1 data-route-heading className="text-xl font-semibold tracking-tight sm:text-2xl">
+            {t("notes.title")}
+          </h1>
+          {notes.length > 0 && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {hasFilters
+                ? t("notes.matchingCount", {
+                    count: filteredNotes.length,
+                    total: notes.length,
+                  })
+                : t("notes.noteCount", { count: notes.length })}
+            </p>
+          )}
         </div>
 
         {notes.length > 0 && (
-          <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+          <div className="row-start-3 rounded-lg border border-border bg-card p-3 shadow-sm sm:col-span-2 sm:row-start-2">
             <div className="flex flex-col gap-3 lg:flex-row">
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -254,6 +276,14 @@ export function NotesGallery() {
             )}
           </div>
         )}
+
+        <div className="row-start-2 flex items-center gap-2 sm:col-start-2 sm:row-start-1 sm:ml-auto">
+          {notes.length > 0 && <NotesSortMenu value={sort} onChange={setSort} />}
+          <Button onClick={handleCreateNote} className="text-sm">
+            <AddIcon className="w-5 h-5" />
+            <span>{t("notes.newNote")}</span>
+          </Button>
+        </div>
       </div>
 
       {notes.length === 0 ? (
@@ -284,16 +314,23 @@ export function NotesGallery() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredNotes.map((note) => (
+        <GridList
+          ref={gridRef}
+          aria-label={t("notes.collectionLabel")}
+          items={filteredNotes}
+          layout="grid"
+          selectionMode="none"
+          onAction={(key) => openNote(String(key))}
+          className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+        >
+          {(note) => (
             <NoteCard
-              key={note.id}
               note={note}
               bookTitle={note.bookId ? bookTitleById.get(note.bookId) : null}
               onClick={() => openNote(note.id)}
             />
-          ))}
-        </div>
+          )}
+        </GridList>
       )}
     </div>
   );

@@ -105,7 +105,14 @@ export function BackgroundPanel() {
       >
         {t("cover.backgroundImage")}
       </button>
-      <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImage}
+        className="hidden"
+        aria-label={t("cover.backgroundImage")}
+      />
 
       {background.type === "image" && (
         <button

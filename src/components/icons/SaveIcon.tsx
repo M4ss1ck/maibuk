@@ -1,7 +1,7 @@
 export function SaveIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Save"
+      aria-hidden="true"
       className={className}
       fill="currentColor"
       viewBox="0 0 32 32"

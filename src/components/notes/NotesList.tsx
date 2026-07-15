@@ -1,6 +1,13 @@
-import { Fragment, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { Collection } from "react-aria-components/Collection";
+import {
+  GridList,
+  GridListHeader,
+  GridListItem,
+  GridListSection,
+} from "react-aria-components/GridList";
 import {
   BookOpen,
   CalendarDays,
@@ -73,6 +80,7 @@ export function NotesList({
 }: NotesListProps) {
   const { t } = useTranslation();
   const listContainerRef = useRef<HTMLDivElement>(null);
+  const activatedNoteIdsRef = useRef(new Set<string>());
   const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
     listContainerRef,
     onImportMarkdown ?? (() => {})
@@ -142,7 +150,14 @@ export function NotesList({
   const pinnedCount = notes.filter((note) => note.pinned).length;
   const isSearchActive = query.length > 0;
 
-  const handleDragStart = (e: DragEvent<HTMLLIElement>, id: string) => {
+  const activateNote = (note: NoteWithBook) => {
+    if (activatedNoteIdsRef.current.has(note.id)) return;
+    activatedNoteIdsRef.current.add(note.id);
+    queueMicrotask(() => activatedNoteIdsRef.current.delete(note.id));
+    onSelectNote(note);
+  };
+
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, id: string) => {
     if (isSearchActive) return;
     setDraggedId(id);
     e.dataTransfer.effectAllowed = "move";
@@ -161,7 +176,7 @@ export function NotesList({
     setDropTarget({ sectionId, targetId: null, placement: "after" });
   };
 
-  const handleNoteDragOver = (e: DragEvent<HTMLLIElement>, note: NoteWithBook) => {
+  const handleNoteDragOver = (e: DragEvent<HTMLDivElement>, note: NoteWithBook) => {
     e.stopPropagation();
     handleDragOver(e);
     if (!draggedId || draggedId === note.id || isSearchActive) return;
@@ -176,7 +191,7 @@ export function NotesList({
     setDropTarget({ sectionId, targetId: note.id, placement });
   };
 
-  const handleDrop = (e: DragEvent<HTMLLIElement>, targetId: string) => {
+  const handleDrop = (e: DragEvent<HTMLDivElement>, targetId: string) => {
     e.preventDefault();
     e.stopPropagation();
     autoScroll.stop();
@@ -303,12 +318,19 @@ export function NotesList({
   };
 
   const renderNote = (note: NoteWithBook) => (
-    <Fragment key={note.id}>
+    <GridListItem
+      id={note.id}
+      textValue={note.title || t("notes.untitled")}
+      onAction={() => activateNote(note)}
+      className={({ isFocusVisible }) =>
+        `rounded-md ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
+      }
+    >
       {renderDropIndicator(note, "before")}
       <NoteListItem
         note={note}
         isSelected={currentNoteId === note.id}
-        onSelect={onSelectNote}
+        onSelect={activateNote}
         onDelete={onDeleteNote}
         onDuplicate={onDuplicateNote}
         onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
@@ -320,7 +342,7 @@ export function NotesList({
         isDragging={draggedId === note.id}
       />
       {renderDropIndicator(note, "after")}
-    </Fragment>
+    </GridListItem>
   );
 
   const renderTreeNote = (note: NoteWithBook) => (
@@ -328,7 +350,7 @@ export function NotesList({
       key={note.id}
       note={note}
       isSelected={currentNoteId === note.id}
-      onSelect={onSelectNote}
+      onSelect={activateNote}
       onDelete={onDeleteNote}
       onDuplicate={onDuplicateNote}
       onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
@@ -415,7 +437,7 @@ export function NotesList({
             {!isCollapsed && (
               <div className="ml-5">
                 {group.notes.length > 0 ? (
-                  <ul className="space-y-1">{group.notes.map(renderTreeNote)}</ul>
+                  <div className="space-y-1">{group.notes.map(renderTreeNote)}</div>
                 ) : (
                   <p className="px-2 py-2 text-xs text-muted-foreground">{t("notes.noNotesYet")}</p>
                 )}
@@ -452,7 +474,9 @@ export function NotesList({
                 {group.notes.length}
               </span>
             </div>
-            {!isCollapsed && <ul className="ml-5 space-y-1">{group.notes.map(renderNote)}</ul>}
+            {!isCollapsed && (
+              <div className="ml-5 space-y-1">{group.notes.map(renderTreeNote)}</div>
+            )}
           </div>
         );
       });
@@ -487,7 +511,7 @@ export function NotesList({
               {group.notes.length}
             </span>
           </div>
-          {!isCollapsed && <ul className="ml-5 space-y-1">{group.notes.map(renderNote)}</ul>}
+          {!isCollapsed && <div className="ml-5 space-y-1">{group.notes.map(renderTreeNote)}</div>}
         </div>
       );
     });
@@ -556,30 +580,46 @@ export function NotesList({
         ) : viewMode === "tree" ? (
           <div className="pb-2">{renderTreeGroups()}</div>
         ) : (
-          <div className="p-2">
+          <GridList
+            aria-label={t("notes.title")}
+            keyboardNavigationBehavior="tab"
+            dependencies={[
+              currentNoteId,
+              draggedId,
+              dropTarget,
+              isSearchActive,
+              onDeleteNote,
+              onDuplicateNote,
+              onRenameNote,
+            ]}
+            selectedKeys={currentNoteId ? [currentNoteId] : []}
+            selectionMode="single"
+            selectionBehavior="replace"
+            disallowEmptySelection
+            className="p-2"
+          >
             {listSections.map((section) => (
-              <section
-                key={section.id}
-                data-testid={`notes-section-${section.id}`}
-                data-drop-active={dropTarget?.sectionId === section.id ? "true" : undefined}
-                onDragOver={(e) => handleSectionDragOver(e, section.id)}
-                onDrop={(e) => handleSectionDrop(e, section.id)}
-                className={`mb-3 min-h-8 rounded-md transition-colors last:mb-0 ${
-                  dropTarget?.sectionId === section.id
-                    ? "bg-primary/10 ring-1 ring-inset ring-primary/40"
-                    : ""
-                }`}
-              >
-                <h4 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {section.id === "pinned" ? t("notes.sectionPinned") : t("notes.sectionAll")}
-                </h4>
-                {section.notes.length > 0 && (
-                  <ul className="space-y-1">{section.notes.map(renderNote)}</ul>
-                )}
-                {renderSectionAppendIndicator(section.id)}
-              </section>
+              <GridListSection key={section.id} id={section.id} className="mb-3 min-h-8 last:mb-0">
+                <GridListHeader>
+                  <div
+                    data-testid={`notes-section-${section.id}`}
+                    data-drop-active={dropTarget?.sectionId === section.id ? "true" : undefined}
+                    onDragOver={(e) => handleSectionDragOver(e, section.id)}
+                    onDrop={(e) => handleSectionDrop(e, section.id)}
+                    className={`min-h-8 rounded-md px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors ${
+                      dropTarget?.sectionId === section.id
+                        ? "bg-primary/10 ring-1 ring-inset ring-primary/40"
+                        : ""
+                    }`}
+                  >
+                    {section.id === "pinned" ? t("notes.sectionPinned") : t("notes.sectionAll")}
+                    {renderSectionAppendIndicator(section.id)}
+                  </div>
+                </GridListHeader>
+                <Collection items={section.notes}>{renderNote}</Collection>
+              </GridListSection>
             ))}
-          </div>
+          </GridList>
         )}
       </div>
 

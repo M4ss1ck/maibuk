@@ -43,6 +43,7 @@ function TextProperties({ layer }: { layer: TextLayer }) {
   return (
     <div className="space-y-3">
       <Select
+        ariaLabel={t("cover.props.fontFamily")}
         value={layer.font.family}
         onChange={(family) => patchFont({ family })}
         options={FONT_FAMILIES.map((f) => ({ value: f, label: f }))}

@@ -1,7 +1,7 @@
 export function TrashIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="trash"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

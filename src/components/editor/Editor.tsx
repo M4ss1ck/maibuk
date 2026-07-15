@@ -64,6 +64,7 @@ interface EditorProps {
   onExportMarkdown?: () => void;
   onExportPdf?: () => void;
   onExportImage?: () => void;
+  onEscape?: () => void;
 }
 
 export function Editor({
@@ -92,6 +93,7 @@ export function Editor({
   onExportMarkdown,
   onExportPdf,
   onExportImage,
+  onEscape,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -101,6 +103,21 @@ export function Editor({
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const [scrollContainerEl, setScrollContainerEl] = useState<HTMLDivElement | null>(null);
+  const showBubbleLinkDialogRef = useRef(showBubbleLinkDialog);
+  const pendingMarkdownPasteRef = useRef(pendingMarkdownPaste);
+  const onEscapeRef = useRef(onEscape);
+
+  useEffect(() => {
+    showBubbleLinkDialogRef.current = showBubbleLinkDialog;
+  }, [showBubbleLinkDialog]);
+
+  useEffect(() => {
+    pendingMarkdownPasteRef.current = pendingMarkdownPaste;
+  }, [pendingMarkdownPaste]);
+
+  useEffect(() => {
+    onEscapeRef.current = onEscape;
+  }, [onEscape]);
   useEditorZoomControls(scrollContainerEl);
   const handleMarkdownPaste = useCallback((text: string) => {
     setPendingMarkdownPaste(text);
@@ -159,6 +176,18 @@ export function Editor({
     editorProps: {
       attributes: {
         class: "editor-content outline-none min-h-[500px]",
+      },
+      handleKeyDown: (_view, event) => {
+        if (event.key !== "Escape") return false;
+        if (showBubbleLinkDialogRef.current || pendingMarkdownPasteRef.current) {
+          return false;
+        }
+        const handler = onEscapeRef.current;
+        if (handler) {
+          handler();
+          return true;
+        }
+        return false;
       },
     },
     onUpdate: ({ editor }) => {

@@ -1,7 +1,7 @@
 export function ChapterIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Chapter"
+      aria-hidden="true"
       className={className}
       viewBox="0 0 24 24"
       fill="none"

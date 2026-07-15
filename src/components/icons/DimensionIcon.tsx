@@ -1,7 +1,7 @@
 export function DimensionIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Dimension"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

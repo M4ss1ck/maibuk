@@ -1,13 +1,18 @@
 import { fireEvent, render, screen, act } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import type { Note, UpdateNoteInput } from "@/features/notes";
+
+const { noteI18nState } = vi.hoisted(() => ({
+  noteI18nState: { language: "en" as "en" | "es" },
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, params?: { title?: string }) => {
       const map: Record<string, string> = {
-        "common.back": "Back",
+        "common.back": noteI18nState.language === "es" ? "Volver" : "Back",
         "common.words": "words",
         "notes.saving": "Saving",
         "notes.saved": "Saved",
@@ -19,7 +24,7 @@ vi.mock("react-i18next", () => ({
       if (key === "notes.backToBook") return `Back to ${params?.title ?? ""}`;
       return map[key] ?? key;
     },
-    i18n: { language: "en" },
+    i18n: { language: noteI18nState.language },
   }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
@@ -46,8 +51,12 @@ vi.mock("../../../../lib/platform", () => ({
   ),
 }));
 
+const { noteNavigateMock } = vi.hoisted(() => ({
+  noteNavigateMock: vi.fn(),
+}));
+
 vi.mock("react-router-dom", () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => noteNavigateMock,
 }));
 
 vi.mock("../../../../components/editor", () => ({
@@ -98,6 +107,11 @@ function buildNote(overrides: Partial<Note>): Note {
 }
 
 describe("NoteEditor", () => {
+  beforeEach(() => {
+    noteI18nState.language = "en";
+    noteNavigateMock.mockClear();
+  });
+
   it("debounces and saves full payload after content changes", async () => {
     vi.useFakeTimers();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
@@ -169,8 +183,9 @@ describe("NoteEditor", () => {
     expect(onReturnToBook).toHaveBeenCalled();
   });
 
-  it("shows an icon-only back button when no return target is provided", () => {
-    const { container } = render(
+  it("activates the localized icon-only back button by keyboard", async () => {
+    const user = userEvent.setup();
+    render(
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
@@ -178,9 +193,28 @@ describe("NoteEditor", () => {
       />
     );
 
-    // No book label is rendered for the gallery-back case…
     expect(screen.queryByText(/Back to/)).not.toBeInTheDocument();
-    // …but the back arrow is still present.
-    expect(container.querySelector(".lucide-arrow-left")).toBeInTheDocument();
+
+    const backButtons = screen.getAllByRole("button", { name: "Back" });
+    const backBtn = backButtons[backButtons.length - 1];
+    expect(backButtons).toHaveLength(2);
+    expect(backBtn).toBeInTheDocument();
+
+    backBtn.focus();
+    await user.keyboard("{Enter}");
+    expect(noteNavigateMock).toHaveBeenCalledWith("/notes");
+  });
+
+  it("localizes the icon-only back button in Spanish", () => {
+    noteI18nState.language = "es";
+    render(
+      <NoteEditor
+        note={buildNote({})}
+        onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+        onBack={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByRole("button", { name: "Volver" })).toHaveLength(2);
   });
 });

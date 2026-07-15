@@ -15,10 +15,10 @@ interface NoteListItemProps {
   onRename?: (note: Note, title: string) => void;
   draggable?: boolean;
   isDragging?: boolean;
-  onDragStart?: (e: DragEvent<HTMLLIElement>) => void;
-  onDragOver?: (e: DragEvent<HTMLLIElement>) => void;
-  onDrop?: (e: DragEvent<HTMLLIElement>) => void;
-  onDragEnd?: (e: DragEvent<HTMLLIElement>) => void;
+  onDragStart?: (e: DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (e: DragEvent<HTMLDivElement>) => void;
+  onDrop?: (e: DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: (e: DragEvent<HTMLDivElement>) => void;
 }
 
 function formatDate(unixSeconds: number) {
@@ -79,7 +79,8 @@ export function NoteListItem({
   };
 
   return (
-    <li
+    <div
+      data-note-row
       draggable={draggable && !isEditing ? true : undefined}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -180,6 +181,6 @@ export function NoteListItem({
       <div className="mt-2 min-h-4">
         <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.contentUpdatedAt)} />
       </div>
-    </li>
+    </div>
   );
 }

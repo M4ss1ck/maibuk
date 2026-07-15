@@ -1,7 +1,7 @@
 export function DownloadIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Download"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

@@ -130,6 +130,39 @@ export function BookEditor() {
   const saveVersionShortcut = isMac() ? "⌘⌥S" : "Ctrl+Alt+S";
   const panelShortcut = "g v";
 
+  const chapterPaneRef = useRef<HTMLDivElement | null>(null);
+  const mobilePaneRef = useRef<HTMLDivElement | null>(null);
+  const focusModeRef = useRef(focusMode);
+  const showSidebarRef = useRef(showSidebar);
+  useEffect(() => {
+    focusModeRef.current = focusMode;
+  }, [focusMode]);
+  useEffect(() => {
+    showSidebarRef.current = showSidebar;
+  }, [showSidebar]);
+
+  const handleEditorEscape = useCallback(() => {
+    if (focusModeRef.current) {
+      setFocusMode(false);
+      return;
+    }
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      setShowMobileChapters(true);
+      requestAnimationFrame(() => {
+        mobilePaneRef.current?.focus();
+      });
+    } else {
+      if (!showSidebarRef.current) {
+        setShowSidebar(true);
+        setSidebarWidth(256);
+      }
+      requestAnimationFrame(() => {
+        chapterPaneRef.current?.focus();
+      });
+    }
+  }, []);
+
   const allNotes = useNoteStore((s) => s.notes);
   const loadNotes = useNoteStore((s) => s.loadNotes);
   const createNote = useNoteStore((s) => s.createNote);
@@ -593,9 +626,8 @@ export function BookEditor() {
   useShortcuts([
     {
       keys: "escape",
-      onTrigger: () => setFocusMode(false),
-      enabled: focusMode,
-      allowInInput: true,
+      onTrigger: () => handleEditorEscape(),
+      allowInInput: false,
     },
     {
       keys: ["f11", "ctrl+shift+f", "meta+shift+f"],
@@ -670,17 +702,20 @@ export function BookEditor() {
         <>
           {/* Mobile drawer */}
           <div
+            ref={mobilePaneRef}
             className={`
               md:hidden fixed z-50 w-72
               h-full transform transition-transform duration-300 ease-in-out
               ${showMobileChapters ? "translate-x-0" : "-translate-x-full"}
             `}
+            tabIndex={-1}
+            data-focus-pane="chapters"
           >
             <button
               type="button"
               onClick={() => setShowMobileChapters(false)}
               className="absolute top-3 right-3 z-10 p-2 hover:bg-muted rounded-lg transition-colors"
-              aria-label="Close chapters"
+              aria-label={t("common.closeChapters")}
             >
               <CloseIcon className="w-5 h-5" />
             </button>
@@ -702,7 +737,10 @@ export function BookEditor() {
 
           {/* Desktop sidebar — width controlled by drag */}
           <div
+            ref={chapterPaneRef}
             className="hidden md:flex h-full relative shrink-0"
+            tabIndex={-1}
+            data-focus-pane="chapters"
             style={{
               width: showSidebar ? `${sidebarWidth}px` : 0,
               overflow: showSidebar ? undefined : "hidden",
@@ -730,7 +768,12 @@ export function BookEditor() {
       )}
 
       {/* Main editor area */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      <main
+        className="flex-1 flex flex-col min-h-0 min-w-0"
+        data-focus-pane="editor-main"
+        tabIndex={-1}
+        aria-label={t("panes.editorMain")}
+      >
         {/* Header bar - hidden in focus mode */}
         {!focusMode && (
           <TooltipGroup>
@@ -784,10 +827,11 @@ export function BookEditor() {
 
             <div className="flex-1 min-w-0">
               <TruncatedText
-                as="h1"
-                text={currentBook.title}
-                className="font-medium truncate text-sm sm:text-base"
-              />
+              as="h1"
+              data-route-heading
+              text={currentBook.title}
+              className="font-medium truncate text-sm sm:text-base"
+            />
               {currentChapter && (
                 <TruncatedText
                   as="p"
@@ -1066,6 +1110,7 @@ export function BookEditor() {
             onExportMarkdown={handleExportMarkdown}
             onExportPdf={handleExportPdf}
             onExportImage={handleExportImage}
+            onEscape={handleEditorEscape}
           />
         ) : isChapterPreparing ? (
           <div className="flex-1 flex items-center justify-center">
@@ -1092,7 +1137,7 @@ export function BookEditor() {
             {t("editor.exitFocus")}
           </div>
         )}
-      </div>
+      </main>
 
       {/* Book Side Panel (footnotes + book notes) */}
       <BookSidePanel

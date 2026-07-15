@@ -1,6 +1,6 @@
 export function FocusModeIcon({ className }: { className?: string }) {
   return (
-    <svg aria-label="Focus Mode" className={className} fill="currentColor" viewBox="0 0 20 20">
+    <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 20 20">
       <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
       <g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g>
       <g id="SVGRepo_iconCarrier">

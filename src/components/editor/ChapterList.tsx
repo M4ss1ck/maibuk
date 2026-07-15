@@ -1,17 +1,19 @@
-import { Fragment, useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type Key } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import type { Chapter, ChapterType } from "@/features/chapters/types";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { Select } from "@/components/ui/Select";
 import { useTranslation } from "react-i18next";
-import { List, ListTree, Rows3 } from "lucide-react";
+import { List, ListTree, Rows3, GripVertical } from "lucide-react";
 import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
 import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
-import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 import { Tooltip } from "@/components/ui";
+import { GridList, GridListItem } from "react-aria-components/GridList";
+import { Button as AriaButton } from "react-aria-components/Button";
+import { useDragAndDrop } from "react-aria-components/useDragAndDrop";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -25,14 +27,7 @@ interface ChapterListProps {
   onImportMarkdown?: (markdown: string, filenameStem: string) => void;
 }
 
-const chapterTypeLabels: Record<ChapterType, string> = {
-  chapter: "Chapter",
-  prologue: "Prologue",
-  epilogue: "Epilogue",
-  part: "Part",
-  frontmatter: "Front Matter",
-  backmatter: "Back Matter",
-};
+const CHAPTER_DND_TYPE = "chapter";
 
 export function ChapterList({
   chapters,
@@ -45,41 +40,90 @@ export function ChapterList({
   onReorderChapters,
   onImportMarkdown,
 }: ChapterListProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const chapterListView = useSettingsStore((state) => state.chapterListView);
   const setChapterListView = useSettingsStore((state) => state.setChapterListView);
   const showChapterOutline = useSettingsStore((state) => state.showChapterOutline);
   const setShowChapterOutline = useSettingsStore((state) => state.setShowChapterOutline);
   const isCompactView = chapterListView === "compact";
   const listContainerRef = useRef<HTMLDivElement>(null);
-  const selectedItemRef = useRef<HTMLLIElement>(null);
   const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
     listContainerRef,
     onImportMarkdown ?? (() => {})
   );
-  const autoScroll = useDragAutoScroll(listContainerRef);
 
   const toggleChapterListView = () => {
     setChapterListView(isCompactView ? "normal" : "compact");
   };
 
-  // Scroll to selected chapter or bottom of list on mount/change
   useEffect(() => {
-    if (selectedItemRef.current) {
-      selectedItemRef.current.scrollIntoView({ block: "nearest" });
-    } else if (listContainerRef.current) {
-      listContainerRef.current.scrollTop = listContainerRef.current.scrollHeight;
+    const container = listContainerRef.current;
+    if (!container) return;
+    if (chapters.length === 0) {
+      container.scrollTop = 0;
+      return;
+    }
+    const selectedEl = container.querySelector('[aria-selected="true"]');
+    if (selectedEl) {
+      selectedEl.scrollIntoView({ block: "nearest" });
     }
   }, [currentChapterId, chapters.length]);
 
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState<ChapterType>("chapter");
-  const [draggedId, setDraggedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editType, setEditType] = useState<ChapterType>("chapter");
+  const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+
+  const chapterTypeLabels: Record<ChapterType, string> = {
+    chapter: t("chapters.typeChapter"),
+    prologue: t("chapters.typePrologue"),
+    epilogue: t("chapters.typeEpilogue"),
+    part: t("chapters.typePart"),
+    frontmatter: t("chapters.typeFrontmatter"),
+    backmatter: t("chapters.typeBackmatter"),
+  };
+
+  const chaptersRef = useRef(chapters);
+  chaptersRef.current = chapters;
+  const activatedKeysRef = useRef(new Set<Key>());
+
+  const activateChapter = (key: Key) => {
+    if (activatedKeysRef.current.has(key)) return;
+    activatedKeysRef.current.add(key);
+    queueMicrotask(() => activatedKeysRef.current.delete(key));
+    const chapter = chaptersRef.current.find((item) => item.id === String(key));
+    if (chapter) onSelectChapter(chapter);
+  };
+
+  const { dragAndDropHooks } = useDragAndDrop({
+    getItems: (keys) =>
+      [...keys].map((key) => ({
+        [CHAPTER_DND_TYPE]: String(key),
+      })),
+    onReorder: (e) => {
+      const chs = chaptersRef.current;
+      const key = [...e.keys][0];
+      if (key === undefined) return;
+      const fromIndex = chs.findIndex((c) => c.id === key);
+      if (fromIndex === -1) return;
+
+      const reordered = [...chs];
+      const [moved] = reordered.splice(fromIndex, 1);
+      let toIndex = chs.findIndex((c) => c.id === e.target.key);
+      if (e.target.dropPosition === "after") toIndex++;
+      if (fromIndex < toIndex) toIndex--;
+      reordered.splice(toIndex, 0, moved);
+
+      onReorderChapters(reordered.map((c) => c.id));
+    },
+    getDropOperation: (_target, types, allowedOperations) =>
+      types.has(CHAPTER_DND_TYPE) && allowedOperations.includes("move") ? "move" : "cancel",
+  });
 
   const handleCreate = () => {
     if (newTitle.trim()) {
@@ -90,44 +134,24 @@ export function ChapterList({
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, id: string) => {
-    setDraggedId(id);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", id);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    autoScroll.onDragOver(e.clientY);
-  };
-
-  const handleDrop = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    autoScroll.stop();
-    if (!draggedId || draggedId === targetId) return;
-
-    const draggedIndex = chapters.findIndex((c) => c.id === draggedId);
-    const targetIndex = chapters.findIndex((c) => c.id === targetId);
-
-    if (draggedIndex === -1 || targetIndex === -1) return;
-
-    const newOrder = [...chapters];
-    const [removed] = newOrder.splice(draggedIndex, 1);
-    newOrder.splice(targetIndex, 0, removed);
-
-    onReorderChapters(newOrder.map((c) => c.id));
-    setDraggedId(null);
-  };
-
-  const handleDragEnd = () => {
-    autoScroll.stop();
-    setDraggedId(null);
-  };
-
   const handleDelete = (id: string) => {
+    const chapterIndex = chaptersRef.current.findIndex((chapter) => chapter.id === id);
+    const focusChapter =
+      chaptersRef.current[chapterIndex + 1] ?? chaptersRef.current[chapterIndex - 1];
     onDeleteChapter(id);
     setDeleteConfirmId(null);
+    requestAnimationFrame(() => {
+      const rows = listContainerRef.current?.querySelectorAll<HTMLElement>("[data-key]");
+      const focusTarget = [...(rows ?? [])].find(
+        (row) => row.getAttribute("data-key") === focusChapter?.id
+      );
+      (focusTarget ?? addButtonRef.current)?.focus();
+    });
+  };
+
+  const cancelDelete = (id: string) => {
+    setDeleteConfirmId(null);
+    requestAnimationFrame(() => deleteButtonRefs.current.get(id)?.focus());
   };
 
   const startEditing = (chapter: Chapter) => {
@@ -151,7 +175,7 @@ export function ChapterList({
   };
 
   return (
-    <aside className="w-full border-r border-border flex flex-col bg-background h-full shrink-0">
+    <aside className="w-full border-r border-border flex flex-col bg-background h-full shrink-0" data-focus-pane="chapter-list" tabIndex={-1} aria-label={t("panes.chapterList")}>
       {/* Sticky header */}
       <div className="p-4 pt-12 md:pt-4 border-b border-border flex items-center justify-between bg-background z-10 shrink-0">
         <h3 className="font-medium">{t("chapters.title")}</h3>
@@ -175,6 +199,7 @@ export function ChapterList({
           </Tooltip>
           <Tooltip content={t("chapters.addChapter")}>
             <button
+              ref={addButtonRef}
               type="button"
               onClick={() => setShowNewDialog(true)}
               className="p-1 hover:bg-muted rounded transition-colors"
@@ -202,6 +227,7 @@ export function ChapterList({
             }}
           />
           <Select
+            ariaLabel={t("chapters.chapterType")}
             value={newType}
             onChange={(value) => setNewType(value)}
             className="mb-2"
@@ -236,203 +262,218 @@ export function ChapterList({
         className={`flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
         {...(onImportMarkdown ? dropHandlers : {})}
       >
-        {chapters.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground text-sm">
-            <p>{t("chapters.noChapters")}</p>
-          </div>
-        ) : (
-          <ul className="p-2 space-y-1">
-            {chapters.map((chapter) => {
-              const isActive = currentChapterId === chapter.id;
-              const outlineToggle =
-                isActive && editor ? (
-                  <Tooltip content={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}>
-                    <button
-                      type="button"
-                      draggable={false}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowChapterOutline(!showChapterOutline);
-                      }}
-                      aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
-                      aria-pressed={showChapterOutline}
-                      className={`shrink-0 p-1 rounded transition-colors ${
-                        showChapterOutline
-                          ? "text-primary bg-primary/10 hover:bg-primary/20"
-                          : "text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      <ListTree className="w-3.5 h-3.5" />
-                    </button>
-                  </Tooltip>
-                ) : null;
-
-              return (
-                <Fragment key={chapter.id}>
-                  <li
-                    ref={isActive ? selectedItemRef : null}
-                    draggable={true}
-                    onDragStart={(e) => handleDragStart(e, chapter.id)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, chapter.id)}
-                    onDragEnd={handleDragEnd}
-                    className={`group relative select-none rounded transition-colors cursor-pointer ${
-                      draggedId === chapter.id ? "opacity-50" : ""
-                    } ${
-                      isActive ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
-                    }${isActive && showChapterOutline ? " sticky top-0 backdrop-blur-sm" : ""}`}
+        <GridList
+          aria-label={t("chapters.title")}
+          keyboardNavigationBehavior="tab"
+          items={chapters}
+          dependencies={[
+            currentChapterId,
+            deleteConfirmId,
+            editTitle,
+            editType,
+            editingId,
+            editor,
+            isCompactView,
+            i18n.resolvedLanguage,
+            showChapterOutline,
+            t,
+          ]}
+          selectedKeys={currentChapterId ? [currentChapterId] : []}
+          selectionMode="single"
+          selectionBehavior="replace"
+          disallowEmptySelection
+          onAction={activateChapter}
+          dragAndDropHooks={dragAndDropHooks}
+          className="p-2 space-y-1"
+          renderEmptyState={() => (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              <p>{t("chapters.noChapters")}</p>
+            </div>
+          )}
+        >
+          {(chapter) => {
+            const isActive = currentChapterId === chapter.id;
+            const outlineToggle =
+              isActive && editor ? (
+                <Tooltip
+                  content={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
+                >
+                  <AriaButton
+                    onPress={() => setShowChapterOutline(!showChapterOutline)}
+                    aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
+                    aria-pressed={showChapterOutline}
+                    className={`shrink-0 p-1 rounded transition-colors ${
+                      showChapterOutline
+                        ? "text-primary bg-primary/10 hover:bg-primary/20"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
                   >
-                    {/* Edit form overlay */}
-                    {editingId === chapter.id ? (
-                      <div className="p-2">
-                        <input
-                          type="text"
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleUpdate();
-                            if (e.key === "Escape") cancelEditing();
-                          }}
-                        />
-                        <Select
-                          value={editType}
-                          onChange={(value) => setEditType(value)}
-                          options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
-                            value: value as ChapterType,
-                            label,
-                          }))}
-                          className="mb-2"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={handleUpdate}
-                            disabled={!editTitle.trim()}
-                            className="flex-1 px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
+                    <ListTree className="w-3.5 h-3.5" />
+                  </AriaButton>
+                </Tooltip>
+              ) : null;
+
+            return (
+              <GridListItem
+                id={chapter.id}
+                textValue={chapter.title}
+                onPress={() => activateChapter(chapter.id)}
+                className={`group relative rounded transition-colors ${
+                  isActive
+                    ? "bg-primary/10 border-l-2 border-primary"
+                    : "hover:bg-muted/50"
+                }`}
+              >
+                <div
+                  className={
+                    isActive && showChapterOutline
+                      ? "sticky top-0 z-10 rounded backdrop-blur-sm"
+                      : ""
+                  }
+                >
+                {/* Edit form overlay */}
+                {editingId === chapter.id ? (
+                  <div className="p-2">
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleUpdate();
+                        if (e.key === "Escape") cancelEditing();
+                      }}
+                    />
+                    <Select
+                      ariaLabel={t("chapters.chapterType")}
+                      value={editType}
+                      onChange={(value) => setEditType(value)}
+                      options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
+                        value: value as ChapterType,
+                        label,
+                      }))}
+                      className="mb-2"
+                    />
+                    <div className="flex gap-2">
+                      <AriaButton
+                        onPress={handleUpdate}
+                        isDisabled={!editTitle.trim()}
+                        className="flex-1 px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
+                      >
+                        {t("common.save")}
+                      </AriaButton>
+                      <AriaButton
+                        onPress={cancelEditing}
+                        className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
+                      >
+                        {t("common.cancel")}
+                      </AriaButton>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex w-full min-w-0 items-center">
+                      <AriaButton
+                        slot="drag"
+                        aria-label={t("chapters.reorder")}
+                        className="shrink-0 cursor-grab rounded p-0.5 mr-1 text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      >
+                        <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
+                      </AriaButton>
+
+                      <div className={`flex-1 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}>
+                        {/* Title line: icon, title, inline edit/delete actions */}
+                        <div className="flex min-w-0 items-center gap-2">
+                          <ChapterIcon
+                            className={`shrink-0 text-muted-foreground ${
+                              isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
+                            }`}
+                          />
+                          <span
+                            className={`flex-1 min-w-0 truncate font-medium ${
+                              isCompactView ? "text-xs" : "text-sm"
+                            }`}
                           >
-                            {t("common.save")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEditing}
-                            className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
-                          >
-                            {t("common.cancel")}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* biome-ignore lint/a11y/useSemanticElements: Cannot use <button> because it contains nested action <button> elements */}
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          draggable={false}
-                          onClick={() => onSelectChapter(chapter)}
-                          onKeyDown={() => onSelectChapter(chapter)}
-                          className={`w-full text-left ${isCompactView ? "px-2 py-1.5" : "p-3"}`}
-                        >
-                          {/* Title line: icon, title, inline edit/delete actions */}
-                          <div className="flex min-w-0 items-center gap-2">
-                            <ChapterIcon
-                              className={`shrink-0 text-muted-foreground ${
-                                isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
-                              }`}
-                            />
-                            <span
-                              className={`flex-1 min-w-0 truncate font-medium ${
-                                isCompactView ? "text-xs" : "text-sm"
-                              }`}
-                            >
-                              {chapter.title}
-                            </span>
+                            {chapter.title}
+                          </span>
 
-                            {/* Edit/Delete - revealed on hover and focus */}
-                            <span className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                              <Tooltip content={t("chapters.editChapter")}>
-                                <button
-                                  type="button"
-                                  draggable={false}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    startEditing(chapter);
-                                  }}
-                                  className="p-1 hover:bg-muted rounded transition-colors"
-                                  aria-label={t("chapters.editChapter")}
-                                >
-                                  <EditIcon className="w-4 h-4 text-foreground" />
-                                </button>
-                              </Tooltip>
-                              <Tooltip content={t("chapters.deleteChapter")}>
-                                <button
-                                  type="button"
-                                  draggable={false}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeleteConfirmId(chapter.id);
-                                  }}
-                                  className="p-1 hover:bg-destructive/10 rounded transition-colors"
-                                  aria-label={t("chapters.deleteChapter")}
-                                >
-                                  <DeleteIcon className="w-4 h-4 text-destructive" />
-                                </button>
-                              </Tooltip>
-                            </span>
+                          {/* Edit/Delete - revealed on hover and focus */}
+                          <span className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                            <Tooltip content={t("chapters.editChapter")}>
+                              <AriaButton
+                                onPress={() => startEditing(chapter)}
+                                className="p-1 hover:bg-muted rounded transition-colors"
+                                aria-label={t("chapters.editChapter")}
+                              >
+                                <EditIcon className="w-4 h-4 text-foreground" />
+                              </AriaButton>
+                            </Tooltip>
+                            <Tooltip content={t("chapters.deleteChapter")}>
+                              <AriaButton
+                                ref={(element) => {
+                                  if (element) deleteButtonRefs.current.set(chapter.id, element);
+                                  else deleteButtonRefs.current.delete(chapter.id);
+                                }}
+                                onPress={() => setDeleteConfirmId(chapter.id)}
+                                className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                                aria-label={t("chapters.deleteChapter")}
+                              >
+                                <DeleteIcon className="w-4 h-4 text-destructive" />
+                              </AriaButton>
+                            </Tooltip>
+                          </span>
 
-                            {/* Compact view has no metadata line: keep the toggle here */}
-                            {isCompactView && outlineToggle}
-                          </div>
-
-                          {/* Metadata line: word count, status, outline toggle */}
-                          {!isCompactView && (
-                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground truncate">
-                              <span>
-                                {chapter.wordCount.toLocaleString()} {t("common.words")}
-                              </span>
-                              <span>•</span>
-                              <span className="capitalize">{chapter.status}</span>
-                              {outlineToggle && (
-                                <span className="ml-auto flex">{outlineToggle}</span>
-                              )}
-                            </div>
-                          )}
+                          {/* Compact view has no metadata line: keep the toggle here */}
+                          {isCompactView && outlineToggle}
                         </div>
 
-                        {/* Delete confirmation */}
-                        {deleteConfirmId === chapter.id && (
-                          <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
-                            <span className="text-xs">{t("common.deleteConfirm")}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(chapter.id)}
-                              className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
-                            >
-                              {t("common.yes")}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirmId(null)}
-                              className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
-                            >
-                              {t("common.no")}
-                            </button>
+                        {/* Metadata line: word count, status, outline toggle */}
+                        {!isCompactView && (
+                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground truncate">
+                            <span>
+                              {chapter.wordCount.toLocaleString()} {t("common.words")}
+                            </span>
+                            <span>•</span>
+                            <span className="capitalize">{chapter.status}</span>
+                            {outlineToggle && (
+                              <span className="ml-auto flex">{outlineToggle}</span>
+                            )}
                           </div>
                         )}
-                      </>
+                      </div>
+                    </div>
+
+                    {/* Delete confirmation */}
+                    {deleteConfirmId === chapter.id && (
+                      <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
+                        <span className="text-xs">{t("common.deleteConfirm")}</span>
+                        <AriaButton
+                          onPress={() => handleDelete(chapter.id)}
+                          className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
+                        >
+                          {t("common.yes")}
+                        </AriaButton>
+                        <AriaButton
+                          onPress={() => cancelDelete(chapter.id)}
+                          className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
+                        >
+                          {t("common.no")}
+                        </AriaButton>
+                      </div>
                     )}
-                  </li>
-                  {isActive && editor && showChapterOutline && (
-                    <li className="list-none">
-                      <ChapterOutline editor={editor} />
-                    </li>
-                  )}
-                </Fragment>
-              );
-            })}
-          </ul>
-        )}
+                  </>
+                )}
+                </div>
+                {isActive && editor && showChapterOutline && (
+                  <div className="list-none">
+                    <ChapterOutline editor={editor} />
+                  </div>
+                )}
+              </GridListItem>
+            );
+          }}
+        </GridList>
       </div>
 
       {/* Sticky footer - Word count summary */}

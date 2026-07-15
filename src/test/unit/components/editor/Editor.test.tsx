@@ -10,6 +10,53 @@ const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),
 }));
 
+// ProseMirror measures the selection while handling real keyboard events, but
+// jsdom does not implement these geometry methods on every possible node.
+const emptyRect: DOMRect = {
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  toJSON: () => ({}),
+};
+const emptyRects = (): DOMRectList =>
+  ({ 0: emptyRect, length: 1, item: () => emptyRect }) as unknown as DOMRectList;
+
+for (const prototype of [Range.prototype, Text.prototype, Comment.prototype]) {
+  const geometry = prototype as unknown as {
+    getClientRects?: () => DOMRectList;
+    getBoundingClientRect?: () => DOMRect;
+  };
+  geometry.getClientRects ??= emptyRects;
+  geometry.getBoundingClientRect ??= () => emptyRect;
+}
+
+// jsdom polyfill — DataTransfer and ClipboardEvent are not defined in jsdom
+if (typeof globalThis.DataTransfer === "undefined") {
+  (globalThis as any).DataTransfer = class DataTransfer {
+    private data: Record<string, string> = {};
+    getData(format: string) { return this.data[format] ?? ""; }
+    setData(format: string, value: string) { this.data[format] = value; }
+    clearData() { this.data = {}; }
+    get types() { return Object.keys(this.data); }
+    get files() { return []; }
+    get items() { return []; }
+  };
+}
+if (typeof globalThis.ClipboardEvent === "undefined") {
+  (globalThis as any).ClipboardEvent = class ClipboardEvent extends Event {
+    clipboardData: any;
+    constructor(type: string, init?: any) {
+      super(type, init);
+      this.clipboardData = init?.clipboardData ?? null;
+    }
+  };
+}
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -25,6 +72,7 @@ vi.mock("../../../../features/settings/store", () => ({
         language: "en",
         editorShowBorder: false,
         metrics: { enabled: { writing: false } },
+        promptMarkdownOnPaste: true,
       }),
     {
       getState: () => ({
@@ -32,6 +80,7 @@ vi.mock("../../../../features/settings/store", () => ({
         language: "en",
         editorShowBorder: false,
         metrics: { enabled: { writing: false } },
+        promptMarkdownOnPaste: true,
       }),
     }
   ),
@@ -51,7 +100,12 @@ vi.mock("../../../../components/editor/EditorToolbar", () => ({
 }));
 
 vi.mock("../../../../components/editor/SelectionToolbar", () => ({
-  SelectionToolbar: () => null,
+  SelectionToolbar: ({ onLinkClick }: { onLinkClick?: () => void }) =>
+    onLinkClick ? (
+      <button type="button" data-testid="open-link-dialog" onClick={onLinkClick}>
+        link
+      </button>
+    ) : null,
 }));
 
 vi.mock("../../../../components/editor/LinkClickHandler", () => ({
@@ -59,7 +113,17 @@ vi.mock("../../../../components/editor/LinkClickHandler", () => ({
 }));
 
 vi.mock("../../../../components/editor/LinkDialog", () => ({
-  LinkDialog: () => null,
+  LinkDialog: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
+    isOpen ? (
+      <div
+        data-testid="link-dialog"
+        role="dialog"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onClose();
+        }}
+      />
+    ) : null,
 }));
 
 vi.mock("../../../../components/editor/ImageContextMenu", () => ({
@@ -68,6 +132,11 @@ vi.mock("../../../../components/editor/ImageContextMenu", () => ({
 
 vi.mock("../../../../components/editor/FootnoteList", () => ({
   FootnoteList: () => null,
+}));
+
+vi.mock("../../../../components/editor/MarkdownPasteDialog", async () => ({
+  MarkdownPasteDialog: ({ markdown }: { markdown: string | null }) =>
+    markdown ? <div data-testid="markdown-paste-dialog" role="dialog">{markdown}</div> : null,
 }));
 
 vi.mock("../../../../components/editor/extensions/SpellCheck", async () => {
@@ -268,6 +337,109 @@ describe("Editor", () => {
     fireEvent.click(toggle, { bubbles: true, cancelable: true });
 
     expect(focusCalls.some((args) => args.length === 0)).toBe(false);
+  });
+
+  it("calls onEscape when Escape is pressed in the editor", async () => {
+    const user = userEvent.setup();
+    const onEscape = vi.fn();
+    let editor: TiptapEditor | null = null;
+
+    const { container } = render(
+      <Editor
+        content={"<p>hello</p>"}
+        onUpdate={vi.fn()}
+        onEscape={onEscape}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(editor).not.toBeNull();
+    });
+
+    const editorEl = container.querySelector('[contenteditable="true"]') as HTMLElement;
+    editorEl.focus();
+    await user.keyboard("{Escape}");
+
+    expect(onEscape).toHaveBeenCalled();
+  });
+
+  it("does not call onEscape when non-Escape key is pressed", async () => {
+    const user = userEvent.setup();
+    const onEscape = vi.fn();
+    let editor: TiptapEditor | null = null;
+
+    const { container } = render(
+      <Editor
+        content={"<p>hello</p>"}
+        onUpdate={vi.fn()}
+        onEscape={onEscape}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(editor).not.toBeNull();
+    });
+
+    const editorEl = container.querySelector('[contenteditable="true"]') as HTMLElement;
+    editorEl.focus();
+    await user.keyboard("{ArrowLeft}");
+
+    expect(onEscape).not.toHaveBeenCalled();
+  });
+
+  it("Escape defers to open LinkDialog and does not call onEscape", async () => {
+    const user = userEvent.setup();
+    const onEscape = vi.fn();
+    let editor: TiptapEditor | null = null;
+
+    const { container } = render(
+      <Editor
+        content={"<p>hello world</p>"}
+        onUpdate={vi.fn()}
+        onEscape={onEscape}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(editor).not.toBeNull();
+    });
+
+    // Select some text to make the SelectionToolbar appear
+    editor!.chain().setTextSelection({ from: 1, to: 5 }).run();
+
+    // Click the "open link dialog" button rendered by SelectionToolbar mock
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="open-link-dialog"]')).not.toBeNull();
+    });
+    const linkBtn = container.querySelector('[data-testid="open-link-dialog"]') as HTMLElement;
+    fireEvent.click(linkBtn);
+
+    // LinkDialog should now be open
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="link-dialog"]')).not.toBeNull();
+    });
+
+    // Press Escape on the editor
+    const editorEl = container.querySelector('[contenteditable="true"]') as HTMLElement;
+    fireEvent.keyDown(editorEl, { key: "Escape", code: "Escape" });
+
+    // The editor defers structural Escape while its popup is open.
+    expect(onEscape).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    screen.getByRole("dialog").focus();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(onEscape).not.toHaveBeenCalled();
   });
 });
 

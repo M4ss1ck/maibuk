@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Cloud, CloudOff, CloudUpload, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
 import { useSyncStore } from "@/features/sync/store";
 import { useBookStore } from "@/features/books/store";
@@ -10,6 +11,7 @@ import { ConflictDialog } from "@/components/sync/ConflictDialog";
 import type { SyncOptions } from "@/features/sync/types";
 
 export function SyncStatusButton() {
+  const { t } = useTranslation();
   const { authStatus, syncStatus, lastSyncedAt } = useSyncStore();
   const { books } = useBookStore();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
@@ -90,7 +92,7 @@ export function SyncStatusButton() {
         type="button"
         onClick={handleClick}
         className={`p-2 rounded transition-colors hover:bg-muted ${statusClass}`}
-        aria-label="Sync status"
+        aria-label={t("sync.syncStatus")}
       >
         {renderIcon()}
       </button>

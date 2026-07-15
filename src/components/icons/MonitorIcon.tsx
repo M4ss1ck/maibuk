@@ -1,7 +1,7 @@
 export function MonitorIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Monitor"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

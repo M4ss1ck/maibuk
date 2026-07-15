@@ -1,10 +1,39 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
+
+const { i18nState } = vi.hoisted(() => ({
+  i18nState: { language: "en" as "en" | "es" },
+}));
+
+const translations = {
+  en: {
+    "common.increaseValue": "Increase value",
+    "common.decreaseValue": "Decrease value",
+  },
+  es: {
+    "common.increaseValue": "Incrementar valor",
+    "common.decreaseValue": "Reducir valor",
+  },
+} as const;
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const lang = i18nState.language;
+      return (translations as Record<string, Record<string, string>>)[lang]?.[key] ?? key;
+    },
+  }),
+}));
+
 import { Input } from "@/components/ui/Input";
 
 describe("Input", () => {
+  beforeEach(() => {
+    i18nState.language = "en";
+  });
+
   describe("rendering", () => {
     it("renders an input element", () => {
       render(<Input />);
@@ -73,14 +102,21 @@ describe("Input", () => {
   });
 
   describe("number controls", () => {
-    it("renders themed step controls for number inputs", () => {
+    it("renders themed step controls for number inputs with English names", () => {
       render(<Input type="number" />);
 
       const input = screen.getByRole("spinbutton");
-
       expect(input.className).toContain("[appearance:textfield]");
       expect(screen.getByRole("button", { name: "Increase value" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Decrease value" })).toBeInTheDocument();
+    });
+
+    it("renders themed step controls for number inputs with Spanish names", () => {
+      i18nState.language = "es";
+      render(<Input type="number" />);
+
+      expect(screen.getByRole("button", { name: "Incrementar valor" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Reducir valor" })).toBeInTheDocument();
     });
 
     it("steps the input value when themed controls are clicked", async () => {
@@ -92,6 +128,23 @@ describe("Input", () => {
 
       await user.click(screen.getByRole("button", { name: "Decrease value" }));
       expect(screen.getByRole("spinbutton")).toHaveValue(1);
+    });
+
+    it("steps the input value via keyboard when themed controls are focused and activated", async () => {
+      const user = userEvent.setup();
+      i18nState.language = "es";
+      render(<Input type="number" defaultValue="5" step="1" />);
+
+      const incBtn = screen.getByRole("button", { name: "Incrementar valor" });
+      const decBtn = screen.getByRole("button", { name: "Reducir valor" });
+
+      incBtn.focus();
+      await user.keyboard("{Enter}");
+      expect(screen.getByRole("spinbutton")).toHaveValue(6);
+
+      decBtn.focus();
+      await user.keyboard("{Enter}");
+      expect(screen.getByRole("spinbutton")).toHaveValue(5);
     });
 
     it("emits change events when themed controls are clicked", async () => {

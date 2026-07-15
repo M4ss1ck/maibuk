@@ -1,7 +1,7 @@
 export function ImageIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Image"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

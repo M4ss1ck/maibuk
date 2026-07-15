@@ -7,6 +7,18 @@ export interface IndentOptions {
   defaultIndent: number;
 }
 
+const TABLE_NODE_TYPES = new Set(["tableCell", "tableHeader"]);
+const CODE_NODE_TYPES = new Set(["codeBlock"]);
+
+function isInTableOrCode(editor: { state: { selection: { $from: { node: (depth: number) => { type: { name: string } }; depth: number } } } }): boolean {
+  const { $from } = editor.state.selection;
+  for (let d = $from.depth; d > 0; d--) {
+    const name = $from.node(d).type.name;
+    if (TABLE_NODE_TYPES.has(name) || CODE_NODE_TYPES.has(name)) return true;
+  }
+  return false;
+}
+
 /**
  * Parse an indent value string (px, pt, em, rem) and convert to pixels.
  * Handles pasted content from Google Docs, Word, etc.
@@ -334,48 +346,42 @@ export const Indent = Extension.create<IndentOptions>({
   addKeyboardShortcuts() {
     return {
       Tab: ({ editor }) => {
-        // If we're in a list item, let default behavior handle it (sink list item)
         if (editor.isActive("listItem")) {
+          editor.commands.sinkListItem("listItem");
+          return true;
+        }
+        if (isInTableOrCode(editor)) {
           return false;
         }
 
-        // If we're in a paragraph or heading with no indent, convert to bullet list
         const { selection } = editor.state;
         const { $from } = selection;
         const node = $from.parent;
 
         if (this.options.types.includes(node.type.name)) {
-          const hasIndent = node.attrs.indent && node.attrs.indent > 0;
-
-          if (!hasIndent) {
-            // Convert to bullet list
-            editor.chain().focus().toggleBulletList().run();
-            return true;
-          }
+          editor.commands.increaseIndent();
+          return true;
         }
 
-        // Let default behavior handle other cases
         return false;
       },
 
       "Shift-Tab": ({ editor }) => {
-        // If we're in a list item, let default behavior handle it (lift list item)
         if (editor.isActive("listItem")) {
+          editor.commands.liftListItem("listItem");
+          return true;
+        }
+        if (isInTableOrCode(editor)) {
           return false;
         }
 
-        // Otherwise decrease indent if possible
         const { selection } = editor.state;
         const { $from } = selection;
         const node = $from.parent;
 
         if (this.options.types.includes(node.type.name)) {
-          const hasIndent = node.attrs.indent && node.attrs.indent > 0;
-
-          if (hasIndent) {
-            editor.commands.decreaseIndent();
-            return true;
-          }
+          editor.commands.decreaseIndent();
+          return true;
         }
 
         return false;

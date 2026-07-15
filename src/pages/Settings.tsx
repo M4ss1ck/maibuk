@@ -198,11 +198,11 @@ export function Settings() {
     <div className="h-full overflow-auto relative">
       <AsciiFieldBackground color={primaryColor} />
       <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background">
-        <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h2>
+        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h1>
 
         {/* Appearance Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.appearance")}</h3>
+          <h2 className="text-lg text-primary font-medium mb-4">{t("settings.appearance")}</h2>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
@@ -252,6 +252,7 @@ export function Settings() {
                 <p className="text-sm text-muted-foreground">{t("settings.fontSizeDescription")}</p>
               </div>
               <Select<FontSize>
+                ariaLabel={t("settings.fontSize")}
                 value={appFontSize}
                 onChange={setAppFontSize}
                 options={FONT_SIZE_OPTIONS}
@@ -263,7 +264,12 @@ export function Settings() {
                 <p className="font-medium">{t("settings.font")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.fontDescription")}</p>
               </div>
-              <Select<FontFamily> value={appFont} onChange={setAppFont} options={FONT_OPTIONS} />
+              <Select<FontFamily>
+                ariaLabel={t("settings.font")}
+                value={appFont}
+                onChange={setAppFont}
+                options={FONT_OPTIONS}
+              />
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
@@ -297,9 +303,9 @@ export function Settings() {
         {/* Window Settings */}
         {IS_TAURI && !isMac() && (
           <section className="mb-6 sm:mb-8">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t("settings.window")}
-            </h3>
+            </h2>
             <div className="divide-y divide-border">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
                 <div>
@@ -334,9 +340,9 @@ export function Settings() {
 
         {/* General Settings */}
         <section className="mb-6 sm:mb-8">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             {t("settings.general")}
-          </h3>
+          </h2>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
@@ -371,6 +377,7 @@ export function Settings() {
                 <p className="text-sm text-muted-foreground">{t("settings.languageDescription")}</p>
               </div>
               <Select<Language>
+                ariaLabel={t("settings.language")}
                 value={language}
                 onChange={setLanguage}
                 options={LANGUAGE_OPTIONS}
@@ -381,7 +388,7 @@ export function Settings() {
 
         {/* Sync Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("sync.title")}</h3>
+          <h2 className="text-lg text-primary font-medium mb-4">{t("sync.title")}</h2>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div className="flex-1">
@@ -466,7 +473,7 @@ export function Settings() {
 
         {/* Editor Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
-          <h3 className="text-lg text-primary font-medium mb-4">{t("settings.editor")}</h3>
+          <h2 className="text-lg text-primary font-medium mb-4">{t("settings.editor")}</h2>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
               <div>
@@ -567,9 +574,9 @@ export function Settings() {
 
         {/* Export Settings */}
         <section className="mb-6 sm:mb-8">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             {t("settings.export")}
-          </h3>
+          </h2>
           <div className="divide-y divide-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
@@ -579,6 +586,7 @@ export function Settings() {
                 </p>
               </div>
               <Select<ExportFormat>
+                ariaLabel={t("settings.defaultFormat")}
                 value={defaultExportFormat}
                 onChange={setDefaultExportFormat}
                 options={EXPORT_FORMAT_OPTIONS}
@@ -594,7 +602,7 @@ export function Settings() {
             onClick={() => setAdvancedOpen(!advancedOpen)}
             className="flex items-center justify-between w-full text-left"
           >
-            <h3 className="text-lg text-destructive font-medium">{t("settings.advanced")}</h3>
+            <h2 className="text-lg text-destructive font-medium">{t("settings.advanced")}</h2>
             <ChevronDownIcon
               className={`w-5 h-5 text-muted-foreground transition-transform ${advancedOpen ? "rotate-180" : ""}`}
             />

@@ -1,6 +1,12 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, expect } from "vitest";
+// vitest-axe exports toHaveNoViolations via export type* in the .d.ts
+// barrel but as a value in the dist .js; import from the dist path
+// to satisfy both runtime and type-check.
+import { toHaveNoViolations } from "vitest-axe/dist/matchers";
+
+expect.extend({ toHaveNoViolations });
 
 // Polyfill getClientRects for TipTap/ProseMirror in jsdom
 // ProseMirror calls this during scrollToSelection / dispatch, which crashes in jsdom
@@ -13,7 +19,7 @@ if (typeof Element.prototype.getClientRects !== "function") {
     }) as unknown as DOMRectList;
 }
 
-// Polyfill ResizeObserver for Headless UI components in jsdom
+// Polyfill ResizeObserver for accessible UI components in jsdom
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}

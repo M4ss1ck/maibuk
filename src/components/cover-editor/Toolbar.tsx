@@ -306,6 +306,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         accept="image/*"
         onChange={handleImage}
         className="hidden"
+        aria-label={t("cover.addImage")}
       />
 
       {/* Add shape */}

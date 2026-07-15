@@ -1,7 +1,7 @@
 export function BookStackIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Book Stack"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

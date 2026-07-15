@@ -178,11 +178,11 @@ export function CoverDesigner() {
     <div className="flex flex-col h-dvh">
       {/* Header */}
       <div className="h-12 border-b border-border flex items-center px-2 sm:px-4 gap-2 sm:gap-4">
-        <Button variant="ghost" size="sm" onClick={handleBack}>
-          <BackIcon className="w-5 h-5" />
+        <Button variant="ghost" size="sm" onClick={handleBack} aria-label={t("common.back")}>
+          <BackIcon className="w-5 h-5" aria-hidden="true" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="font-medium text-sm sm:text-base truncate">{t("cover.title")}</h1>
+          <h1 data-route-heading className="font-medium text-sm sm:text-base truncate">{t("cover.title")}</h1>
           <p className="text-xs text-muted-foreground truncate">{currentBook.title}</p>
         </div>
         <Button
@@ -204,7 +204,7 @@ export function CoverDesigner() {
       />
 
       {/* Main area: layers | canvas | properties */}
-      <div className="flex-1 flex min-h-0">
+      <main className="flex-1 flex min-h-0">
         <div className="w-56 border-r border-border hidden md:block">
           <LayersPanel />
         </div>
@@ -212,7 +212,7 @@ export function CoverDesigner() {
         <div className="w-64 border-l border-border overflow-y-auto hidden lg:block">
           <PropertiesPanel />
         </div>
-      </div>
+      </main>
     </div>
   );
 }

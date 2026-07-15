@@ -1,7 +1,7 @@
 export function CloseIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Close"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"

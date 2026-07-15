@@ -39,9 +39,15 @@
     "canvas": "Lienzos",
     "copied": "¡Copiado!",
     "paste": "Pegar",
-    "copy": "Copiar"
+    "copy": "Copiar",
+    "increaseValue": "Incrementar valor",
+    "decreaseValue": "Reducir valor",
+    "closeChapters": "Cerrar capítulos"
   },
   "nav": {
+    "primary": "Navegación principal",
+    "openMenu": "Abrir menú de navegación",
+    "closeMenu": "Cerrar menú de navegación",
     "backToHome": "Inicio",
     "exportBook": "Exportar Libro",
     "designCover": "Diseñar Portada",
@@ -84,6 +90,8 @@
   },
   "books": {
     "title": "Mis Libros",
+    "collectionLabel": "Proyectos de libros",
+    "actions": "Acciones del proyecto",
     "newBook": "Nuevo Libro",
     "editBook": "Editar Libro",
     "deleteBook": "Eliminar Libro",
@@ -142,10 +150,19 @@
     "normalView": "Vista normal",
     "compactView": "Vista compacta",
     "switchToNormalView": "Cambiar a vista normal",
-    "switchToCompactView": "Cambiar a vista compacta"
+    "switchToCompactView": "Cambiar a vista compacta",
+    "reorder": "Reordenar",
+    "chapterType": "Tipo de capítulo",
+    "typeChapter": "Capítulo",
+    "typePrologue": "Prólogo",
+    "typeEpilogue": "Epílogo",
+    "typePart": "Parte",
+    "typeFrontmatter": "Anteportada",
+    "typeBackmatter": "Apéndice"
   },
   "notes": {
     "title": "Notas",
+    "collectionLabel": "Notas",
     "newNote": "Nueva nota",
     "search": "Buscar notas...",
     "advancedFilters": "Filtros",
@@ -618,6 +635,7 @@
     "dark": "Oscuro",
     "light": "Claro",
     "system": "Sistema",
+    "themeDropdown": "Tema: {{theme}}",
     "general": "General",
     "about": "Acerca de",
     "export": "Exportar",
@@ -842,6 +860,7 @@
     },
     "props": {
       "title": "Propiedades",
+      "fontFamily": "Fuente",
       "size": "Tamaño",
       "lineHeight": "Interlineado",
       "letterSpacing": "Espaciado",
@@ -859,6 +878,7 @@
       "solid": "Sólido",
       "linear": "Lineal",
       "radial": "Radial",
+      "color": "Color",
       "angle": "Ángulo",
       "addStop": "Añadir parada",
       "removeStop": "Quitar parada"
@@ -926,7 +946,8 @@
     "keepLocal": "Mantener local y subir",
     "useRemote": "Usar remoto y descargar",
     "cancelSync": "Cancelar",
-    "sessionExpired": "Tu sesión ha expirado. Por favor, inicia sesión de nuevo."
+    "sessionExpired": "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.",
+    "syncStatus": "Estado de sincronización"
   },
   "errors": {
     "titleRequired": "El título es obligatorio",
@@ -962,7 +983,8 @@
     "zoomIn": "Acercar",
     "zoomOut": "Alejar",
     "zoomReset": "Restablecer zoom",
-    "deleteSelection": "Eliminar objeto seleccionado"
+    "deleteSelection": "Eliminar objeto seleccionado",
+    "cyclePanes": "Navegar entre paneles"
   },
   "versions": {
     "title": "Historial de versiones",
@@ -1007,6 +1029,15 @@
       "pre-restore": "Antes de restaurar"
     },
     "restoredName": "Antes de restaurar \"{{name}}\""
+  },
+  "panes": {
+    "navSidebar": "Barra de navegación",
+    "mainContent": "Contenido principal",
+    "chapterList": "Lista de capítulos",
+    "editorMain": "Editor",
+    "bookSidePanel": "Panel lateral del libro",
+    "notesSidebar": "Lista de notas",
+    "notesContent": "Editor de notas"
   },
   "backup": {
     "title": "Copias de seguridad",

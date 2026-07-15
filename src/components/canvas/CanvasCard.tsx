@@ -72,7 +72,7 @@ export function CanvasCard({
         <button type="button" className="min-w-0 flex-1 text-left" onClick={onOpen}>
           <div className="flex items-center gap-2">
             <Network className="size-5 shrink-0 text-primary" aria-hidden="true" />
-            <h3 className="truncate font-medium">{canvas.title || t("canvas.untitled")}</h3>
+            <h2 className="truncate font-medium">{canvas.title || t("canvas.untitled")}</h2>
             {canvas.pinned && <Pin className="size-4 shrink-0 text-primary" aria-hidden="true" />}
           </div>
           {metadata}

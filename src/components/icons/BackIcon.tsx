@@ -1,7 +1,7 @@
 export function BackIcon({ className }: { className?: string }) {
   return (
     <svg
-      aria-label="Back"
+      aria-hidden="true"
       className={className}
       fill="none"
       stroke="currentColor"
