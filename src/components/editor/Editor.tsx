@@ -30,6 +30,30 @@ import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/
 import { setContentSilently } from "@/features/metrics/programmatic";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 
+/**
+ * Serialize HTML with heading ids stripped, parsing through a single serializer
+ * so attribute order and whitespace are normalized consistently for comparison.
+ */
+function stripHeadingIds(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  for (const heading of doc.body.querySelectorAll("h1, h2, h3")) {
+    heading.removeAttribute("id");
+  }
+  return doc.body.innerHTML;
+}
+
+/**
+ * Whether `incoming` is the editor's own current document echoed back rather
+ * than a genuine external change. The chapter store re-normalizes saved HTML
+ * with `assignHeadingIds`, stamping ids onto headings, so the byte-for-byte
+ * reference check in the sync effect misses this echo. Comparing with heading
+ * ids stripped recognizes it, avoiding a destructive full-document reset that
+ * would move the caret while the user is typing.
+ */
+function isSameDocumentIgnoringHeadingIds(incoming: string, current: string): boolean {
+  return stripHeadingIds(incoming) === stripHeadingIds(current);
+}
+
 export interface EditorStats {
   words: number;
   characters: number;
@@ -212,6 +236,16 @@ export function Editor({
   useEffect(() => {
     if (!editor || content === null) return;
     if (appliedContentRef.current === content) return;
+
+    // The chapter store echoes saved HTML back through `content` after stamping
+    // heading ids onto it (assignHeadingIds). That echo is the editor's own
+    // document, not an external change, so adopt it as applied without resetting
+    // — otherwise the caret jumps away mid-edit. Genuinely different content
+    // (e.g. a version restore) still fails this check and gets applied.
+    if (isSameDocumentIgnoringHeadingIds(content, editor.getHTML())) {
+      appliedContentRef.current = content;
+      return;
+    }
 
     setContentSilently(editor, content);
     appliedContentRef.current = content;
