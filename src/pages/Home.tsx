@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GridList } from "react-aria-components/GridList";
+import { Toolbar } from "react-aria-components/Toolbar";
 import { useBookStore } from "@/features/books/store";
 import { BookCard } from "@/components/project/BookCard";
 import { NewBookDialog } from "@/components/project/NewBookDialog";
@@ -35,6 +36,7 @@ export function Home() {
   const [importError, setImportError] = useState<string | null>(null);
 
   const { books, isLoading, loadBooks } = useBookStore();
+  const actionsRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const previousBookIdsRef = useRef<string[]>([]);
   const activatedBookIdsRef = useRef(new Set<string>());
@@ -70,6 +72,27 @@ export function Home() {
   }, [books, focusBook, focusedBookId]);
 
   useShortcuts([
+    {
+      keys: ["arrowdown", "arrowright", "arrowup", "arrowleft"],
+      onTrigger: (event) => {
+        const activeElement = document.activeElement;
+        const isEnteringFromActions =
+          event.key === "ArrowDown" &&
+          activeElement instanceof HTMLElement &&
+          actionsRef.current?.contains(activeElement);
+        if (activeElement !== document.body && !isEnteringFromActions) return;
+        const target =
+          books.find((book) => book.id === focusedBookId) ??
+          (event.key === "ArrowUp" || event.key === "ArrowLeft"
+            ? books[books.length - 1]
+            : books[0]);
+        if (!target) return;
+        event.preventDefault();
+        focusBook(target.id);
+      },
+      preventDefault: false,
+      enabled: !isNewBookOpen && books.length > 0,
+    },
     {
       keys: matchKeys("home.newBook"),
       onTrigger: (event) => {
@@ -166,8 +189,14 @@ export function Home() {
   return (
     <div className="p-4 sm:p-8 overflow-auto h-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold">{t("books.title")}</h1>
-        <div className="flex items-center gap-2">
+        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold">
+          {t("books.title")}
+        </h1>
+        <Toolbar
+          ref={actionsRef}
+          aria-label={t("books.actions")}
+          className="flex items-center gap-2"
+        >
           {IS_WEB && (
             <Button
               variant="secondary"
@@ -199,7 +228,7 @@ export function Home() {
               className="hidden lg:inline-flex"
             />
           </Button>
-        </div>
+        </Toolbar>
       </div>
 
       {books.length === 0 ? (

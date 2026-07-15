@@ -1,4 +1,5 @@
 import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "@/components/notes/NotesList";
 import { useSettingsStore } from "@/features/settings/store";
@@ -106,6 +107,33 @@ function dragOverAt(target: Element, dataTransfer: DataTransfer, clientY: number
 }
 
 describe("NotesList", () => {
+  it("navigates and activates note rows with the same arrow-key behavior as chapters", async () => {
+    const user = userEvent.setup();
+    const onSelectNote = vi.fn();
+    const notes = [
+      buildNote({ id: "a", title: "Alpha", pinned: true }),
+      buildNote({ id: "b", title: "Bravo" }),
+    ];
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={onSelectNote}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />
+    );
+
+    const rows = screen.getAllByRole("row").filter((row) => row.hasAttribute("data-key"));
+    rows[0].focus();
+    expect(rows[0]).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(rows[1]).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(onSelectNote).toHaveBeenCalledWith(notes[1]);
+  });
   it("renders list and tree view toggle in the title bar", () => {
     const onCreateNote = vi.fn();
 
@@ -470,8 +498,8 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Charlie").closest("li");
-    const target = screen.getByText("Alpha").closest("li");
+    const source = screen.getByText("Charlie").closest("[data-note-row]");
+    const target = screen.getByText("Alpha").closest("[data-note-row]");
 
     expect(source).not.toBeNull();
     expect(target).not.toBeNull();
@@ -487,7 +515,7 @@ describe("NotesList", () => {
     } as unknown as DataTransfer;
 
     fireEvent.dragStart(source, { dataTransfer });
-    const activeTarget = screen.getByText("Alpha").closest("li");
+    const activeTarget = screen.getByText("Alpha").closest("[data-note-row]");
     if (!activeTarget) {
       throw new Error("Expected active target row to exist");
     }
@@ -520,8 +548,8 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Bravo").closest("li");
-    const target = screen.getByText("Alpha").closest("li");
+    const source = screen.getByText("Bravo").closest("[data-note-row]");
+    const target = screen.getByText("Alpha").closest("[data-note-row]");
 
     expect(source).not.toBeNull();
     expect(target).not.toBeNull();
@@ -537,7 +565,7 @@ describe("NotesList", () => {
     } as unknown as DataTransfer;
 
     fireEvent.dragStart(source, { dataTransfer });
-    const activeTarget = screen.getByText("Alpha").closest("li");
+    const activeTarget = screen.getByText("Alpha").closest("[data-note-row]");
     if (!activeTarget) {
       throw new Error("Expected active target row to exist");
     }
@@ -570,7 +598,7 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Alpha").closest("li");
+    const source = screen.getByText("Alpha").closest("[data-note-row]");
     if (!source) {
       throw new Error("Expected source row to exist");
     }
@@ -582,7 +610,7 @@ describe("NotesList", () => {
     } as unknown as DataTransfer;
 
     fireEvent.dragStart(source, { dataTransfer });
-    const target = screen.getByText("Bravo").closest("li");
+    const target = screen.getByText("Bravo").closest("[data-note-row]");
     if (!target) {
       throw new Error("Expected target row to exist");
     }
@@ -615,7 +643,7 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Regular").closest("li");
+    const source = screen.getByText("Regular").closest("[data-note-row]");
     if (!source) {
       throw new Error("Expected note row to exist");
     }
@@ -651,7 +679,7 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Regular").closest("li");
+    const source = screen.getByText("Regular").closest("[data-note-row]");
     if (!source) {
       throw new Error("Expected note row to exist");
     }
@@ -686,7 +714,7 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Regular").closest("li");
+    const source = screen.getByText("Regular").closest("[data-note-row]");
     if (!source) {
       throw new Error("Expected note row to exist");
     }
@@ -719,8 +747,8 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Bravo").closest("li");
-    const target = screen.getByText("Alpha").closest("li");
+    const source = screen.getByText("Bravo").closest("[data-note-row]");
+    const target = screen.getByText("Alpha").closest("[data-note-row]");
     if (!source || !target) {
       throw new Error("Expected note rows to exist");
     }
@@ -732,7 +760,7 @@ describe("NotesList", () => {
     } as unknown as DataTransfer;
 
     fireEvent.dragStart(source, { dataTransfer });
-    const activeTarget = screen.getByText("Alpha").closest("li");
+    const activeTarget = screen.getByText("Alpha").closest("[data-note-row]");
     if (!activeTarget) {
       throw new Error("Expected active target row to exist");
     }
@@ -758,8 +786,8 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Bravo").closest("li");
-    const target = screen.getByText("Alpha").closest("li");
+    const source = screen.getByText("Bravo").closest("[data-note-row]");
+    const target = screen.getByText("Alpha").closest("[data-note-row]");
     if (!source || !target) {
       throw new Error("Expected note rows to exist");
     }
@@ -771,7 +799,7 @@ describe("NotesList", () => {
     } as unknown as DataTransfer;
 
     fireEvent.dragStart(source, { dataTransfer });
-    const activeTarget = screen.getByText("Alpha").closest("li");
+    const activeTarget = screen.getByText("Alpha").closest("[data-note-row]");
     if (!activeTarget) {
       throw new Error("Expected active target row to exist");
     }
@@ -798,7 +826,7 @@ describe("NotesList", () => {
       />
     );
 
-    const source = screen.getByText("Already pinned").closest("li");
+    const source = screen.getByText("Already pinned").closest("[data-note-row]");
     if (!source) {
       throw new Error("Expected note row to exist");
     }
@@ -842,7 +870,7 @@ describe("NotesList", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
 
-    const source = screen.getByText("Novel note").closest("li");
+    const source = screen.getByText("Novel note").closest("[data-note-row]");
     const targetGroup = screen.getByTestId("book-group-book-b");
     expect(source).not.toBeNull();
 
@@ -883,7 +911,7 @@ describe("NotesList", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
 
-    const source = screen.getByText("Novel note").closest("li");
+    const source = screen.getByText("Novel note").closest("[data-note-row]");
     if (!source) {
       throw new Error("Expected note row to exist");
     }
@@ -925,7 +953,7 @@ describe("NotesList", () => {
       target: { value: "alp" },
     });
 
-    const row = screen.getByText("Alpha").closest("li");
+    const row = screen.getByText("Alpha").closest("[data-note-row]");
     expect(row).not.toBeNull();
 
     if (!row) {

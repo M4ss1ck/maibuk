@@ -87,7 +87,7 @@ describe("NoteListItem tags", () => {
       </ul>
     );
 
-    const row = screen.getByText("Draggable").closest("li");
+    const row = screen.getByText("Draggable").closest("[data-note-row]");
     expect(row).not.toBeNull();
     expect(row).toHaveClass("cursor-grab");
     expect(row).toHaveClass("active:cursor-grabbing");

@@ -91,6 +91,7 @@
   "books": {
     "title": "My Books",
     "collectionLabel": "Book projects",
+    "actions": "Project actions",
     "newBook": "New Book",
     "editBook": "Edit Book",
     "deleteBook": "Delete Book",
@@ -160,6 +161,7 @@
   },
   "notes": {
     "title": "Notes",
+    "collectionLabel": "Notes",
     "newNote": "New note",
     "search": "Search notes...",
     "advancedFilters": "Filters",

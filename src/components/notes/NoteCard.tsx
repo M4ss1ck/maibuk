@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { GridListItem } from "react-aria-components/GridList";
 import { BookOpen } from "lucide-react";
 import type { Note } from "@/features/notes";
 import { notePlainText } from "@/components/notes/notes-list-model";
@@ -17,10 +18,15 @@ export function NoteCard({ note, bookTitle, onClick }: NoteCardProps) {
   const preview = notePlainText(note.content);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-44 flex-col overflow-hidden rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
+    <GridListItem
+      id={note.id}
+      textValue={title}
+      onAction={onClick}
+      className={({ isFocusVisible, isHovered, isPressed }) =>
+        `flex h-44 flex-col overflow-hidden rounded-xl border bg-card p-4 text-left transition-all duration-200 ${
+          isFocusVisible ? "border-primary ring-2 ring-primary ring-offset-2" : "border-border"
+        } ${isHovered || isPressed ? "-translate-y-1 shadow-lg" : ""}`
+      }
     >
       <h2 className="truncate font-medium text-foreground">{title}</h2>
 
@@ -40,6 +46,6 @@ export function NoteCard({ note, bookTitle, onClick }: NoteCardProps) {
           interactiveOverflow={false}
         />
       </div>
-    </button>
+    </GridListItem>
   );
 }

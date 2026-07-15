@@ -41,6 +41,7 @@ vi.mock("react-i18next", () => ({
       ({
         "books.title": "Books",
         "books.collectionLabel": "Book projects",
+        "books.actions": "Project actions",
         "books.newBook": "New Book",
         "books.createBook": "Create Book",
         "books.bookTitle": "Book title",
@@ -110,6 +111,40 @@ describe("Home keyboard navigation", () => {
 
     await user.keyboard("gam");
     expect(rows[2]).toHaveFocus();
+  });
+
+  it("enters the book grid with an arrow key before anything has been tabbed to", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    expect(document.body).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getAllByRole("row")[0]).toHaveFocus();
+  });
+
+  it("moves horizontally through project actions", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    const importButton = screen.getByRole("button", { name: /Import EPUB/i });
+    const newBookButton = screen.getByRole("button", { name: /New Book/i });
+
+    importButton.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(newBookButton).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(importButton).toHaveFocus();
+  });
+
+  it("moves down from project actions into the book grid", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    const importButton = screen.getByRole("button", { name: /Import EPUB/i });
+
+    importButton.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getAllByRole("row")[0]).toHaveFocus();
   });
 
   it("navigates from a focused card with Enter and Space", async () => {
