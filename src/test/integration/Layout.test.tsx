@@ -168,12 +168,31 @@ describe("Layout", () => {
     await waitFor(() => expect(screen.getByTestId("current-route")).toHaveTextContent("/settings"));
   });
 
-  it("exposes the current route as selected and current", () => {
+  it("navigates to a destination on a single click", async () => {
+    const user = userEvent.setup();
+    renderLayout("/");
+    expect(screen.getByTestId("current-route")).toHaveTextContent("/");
+
+    await user.click(getNavigationLink("Settings"));
+    await waitFor(() =>
+      expect(screen.getByTestId("current-route")).toHaveTextContent("/settings")
+    );
+  });
+
+  it("keeps selection off so a single click navigates instead of selecting", () => {
+    renderLayout("/settings");
+    for (const name of ["Projects", "Notes", "Canvas", "Metrics", "Settings"]) {
+      expect(getNavigationLink(name)).not.toHaveAttribute("aria-selected");
+    }
+  });
+
+  it("exposes the current route as the current destination", () => {
     renderLayout("/settings");
     const settings = getNavigationLink("Settings");
+    const projects = getNavigationLink("Projects");
 
-    expect(settings).toHaveAttribute("aria-selected", "true");
     expect(within(settings).getByText("Settings")).toHaveAttribute("aria-current", "page");
+    expect(within(projects).getByText("Projects")).not.toHaveAttribute("aria-current");
   });
 
   it("moves focus into the mobile drawer and traps Tab away from the background", async () => {

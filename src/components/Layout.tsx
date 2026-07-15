@@ -112,10 +112,7 @@ export function Layout() {
             aria-label={t("nav.primary")}
             items={navigationItems}
             dependencies={[i18n.resolvedLanguage, location.pathname]}
-            selectionMode="single"
-            selectionBehavior="replace"
-            selectedKeys={[location.pathname]}
-            disallowEmptySelection
+            selectionMode="none"
             className="flex flex-col gap-2"
           >
             {(item) => (
@@ -124,9 +121,11 @@ export function Layout() {
                 href={item.id}
                 textValue={item.label}
                 onAction={closeMobileMenu}
-                className={({ isFocusVisible, isSelected }) =>
+                className={({ isFocusVisible }) =>
                   `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                    isSelected ? "bg-primary text-white" : "hover:bg-muted text-foreground"
+                    location.pathname === item.id
+                      ? "bg-primary text-white"
+                      : "hover:bg-muted text-foreground"
                   } ${isFocusVisible ? "outline-2 outline-offset-2 outline-primary" : "outline-none"}`
                 }
               >
