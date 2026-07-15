@@ -710,7 +710,6 @@ export function BookEditor() {
             `}
             tabIndex={-1}
             data-focus-pane="chapters"
-            aria-label={t("chapters.title")}
           >
             <button
               type="button"
@@ -742,7 +741,6 @@ export function BookEditor() {
             className="hidden md:flex h-full relative shrink-0"
             tabIndex={-1}
             data-focus-pane="chapters"
-            aria-label={t("chapters.title")}
             style={{
               width: showSidebar ? `${sidebarWidth}px` : 0,
               overflow: showSidebar ? undefined : "hidden",
