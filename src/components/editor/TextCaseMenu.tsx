@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/react";
-import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
+import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { CaseSensitive, CaseUpper, CaseLower, ChevronDown } from "lucide-react";
 import { Tooltip } from "@/components/ui";
@@ -67,10 +67,11 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
             >
               {t("editor.titleCase")}
             </MenuItem>
+            <Separator className="my-1 border-t border-muted" />
             <MenuItem
               id="horizontalMirror"
               textValue={t("editor.horizontalMirror")}
-              className="cursor-pointer whitespace-nowrap border-t border-border px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
+              className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
               {t("editor.horizontalMirror")}
             </MenuItem>
