@@ -182,9 +182,6 @@ option {
 
 .editor-content-surface.editor-show-border {
   border-inline: 1px solid var(--color-border);
-  box-shadow:
-    -8px 0 14px -18px var(--color-foreground),
-    8px 0 14px -18px var(--color-foreground);
 }
 
 /* Editor typography */
