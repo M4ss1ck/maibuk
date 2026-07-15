@@ -22,6 +22,7 @@ import { Indent } from "@/components/editor/extensions/Indent";
 import { PasteHandler } from "@/components/editor/extensions/PasteHandler";
 import { CopyHandler } from "@/components/editor/extensions/CopyHandler";
 import { CodeBlockWithCopy } from "@/components/editor/extensions/CodeBlock";
+import { CustomCode } from "@/components/editor/extensions/CustomCode";
 import { SmartItalic } from "@/components/editor/extensions/SmartItalic";
 import { SpellCheck } from "@/components/editor/extensions/SpellCheck";
 import { Footnote } from "@/components/editor/extensions/Footnote";
@@ -52,8 +53,10 @@ export function createRichTextExtensions({
       underline: false,
       codeBlock: false,
       italic: false,
+      code: false,
     }),
     CodeBlockWithCopy,
+    CustomCode,
     SmartItalic,
     HeadingId,
     Underline,
