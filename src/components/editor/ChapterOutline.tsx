@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Tooltip } from "@/components/ui";
 
@@ -51,6 +51,7 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
   const { t } = useTranslation();
   const [items, setItems] = useState<OutlineItem[]>(() => buildOutline(editor));
   const [activePos, setActivePos] = useState<number | null>(() => findActivePos(editor));
+  const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     const updateItems = () => setItems(buildOutline(editor));
@@ -72,6 +73,24 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
 
   if (items.length === 0) return null;
 
+  // Move focus between heading buttons with the arrow keys instead of letting
+  // the browser scroll the list container.
+  const handleArrowKeys = (event: KeyboardEvent<HTMLUListElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const buttons = Array.from(
+      listRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []
+    );
+    if (buttons.length === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const next =
+      event.key === "ArrowDown"
+        ? Math.min(current + 1, buttons.length - 1)
+        : Math.max((current < 0 ? buttons.length : current) - 1, 0);
+    buttons[next]?.focus();
+  };
+
   const navigate = (pos: number) => {
     const dom = editor.view.nodeDOM(pos);
     const el = dom instanceof HTMLElement ? dom : (dom?.parentElement ?? null);
@@ -80,7 +99,7 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
   };
 
   return (
-    <ul className="py-1 pr-2">
+    <ul ref={listRef} className="py-1 pr-2" onKeyDown={handleArrowKeys}>
       {items.map((item) => {
         const isActive = activePos === item.pos;
         if (item.type === "sceneBreak") {
