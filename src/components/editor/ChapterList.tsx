@@ -321,8 +321,15 @@ export function ChapterList({
                   isActive
                     ? "bg-primary/10 border-l-2 border-primary"
                     : "hover:bg-muted/50"
-                }${isActive && showChapterOutline ? " sticky top-0 backdrop-blur-sm" : ""}`}
+                }`}
               >
+                <div
+                  className={
+                    isActive && showChapterOutline
+                      ? "sticky top-0 z-10 rounded backdrop-blur-sm"
+                      : ""
+                  }
+                >
                 {/* Edit form overlay */}
                 {editingId === chapter.id ? (
                   <div className="p-2">
@@ -455,15 +462,16 @@ export function ChapterList({
                     )}
                   </>
                 )}
+                </div>
+                {isActive && editor && showChapterOutline && (
+                  <div className="list-none">
+                    <ChapterOutline editor={editor} />
+                  </div>
+                )}
               </GridListItem>
             );
           }}
         </GridList>
-        {currentChapterId && editor && showChapterOutline && (
-          <div className="list-none">
-            <ChapterOutline editor={editor} />
-          </div>
-        )}
       </div>
 
       {/* Sticky footer - Word count summary */}

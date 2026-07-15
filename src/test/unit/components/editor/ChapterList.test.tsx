@@ -681,6 +681,13 @@ describe("ChapterList", () => {
       expect(screen.getByTestId("chapter-outline")).toBeInTheDocument();
     });
 
+    it("renders the outline inside the active chapter row, not at the bottom of the list", () => {
+      storeState.showChapterOutline = true;
+      renderCL({ editor: { state: {} } });
+      const rows = screen.getAllByRole("row");
+      expect(within(rows[0]).getByTestId("chapter-outline")).toBeInTheDocument();
+    });
+
     it("does not show outline toggle on inactive chapters", () => {
       renderCL({ editor: { state: {} }, currentChapterId: defaultChapters[0].id });
       const rows = screen.getAllByRole("row");
