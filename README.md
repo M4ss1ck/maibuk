@@ -206,14 +206,14 @@ never errors out. Configure it via a local `.env` file (git-ignored; copy
 
 Both providers are OpenAI-compatible HTTP APIs and require an API key.
 
-| Variable | Purpose |
-| --- | --- |
-| `CHANGELOG_AI_PROVIDER` | `opencode`, `openai`, or empty to disable AI |
-| `CHANGELOG_AI_MODEL` | Model id. opencode: required (e.g. `deepseek-v4-pro`); openai: defaults to `gpt-4o-mini` |
-| `OPENCODE_API_KEY` | Required for `opencode` (from [opencode.ai/auth](https://opencode.ai/auth)) |
-| `OPENCODE_BASE_URL` | Optional; defaults to `https://opencode.ai/zen/go/v1` |
-| `OPENAI_API_KEY` | Required for `openai` |
-| `OPENAI_BASE_URL` | Optional; any OpenAI-compatible endpoint (defaults to `https://api.openai.com/v1`) |
+| Variable                | Purpose                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| `CHANGELOG_AI_PROVIDER` | `opencode`, `openai`, or empty to disable AI                                             |
+| `CHANGELOG_AI_MODEL`    | Model id. opencode: required (e.g. `deepseek-v4-pro`); openai: defaults to `gpt-4o-mini` |
+| `OPENCODE_API_KEY`      | Required for `opencode` (from [opencode.ai/auth](https://opencode.ai/auth))              |
+| `OPENCODE_BASE_URL`     | Optional; defaults to `https://opencode.ai/zen/go/v1`                                    |
+| `OPENAI_API_KEY`        | Required for `openai`                                                                    |
+| `OPENAI_BASE_URL`       | Optional; any OpenAI-compatible endpoint (defaults to `https://api.openai.com/v1`)       |
 
 - **opencode** targets [opencode Go](https://opencode.ai/docs/go/), an
   OpenAI-compatible API at `https://opencode.ai/zen/go/v1`.
@@ -254,6 +254,47 @@ maibuk/
   - [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
   - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
   - [Tailwind CSS IntelliSense](https://marketplace.visualstudio.com/items?itemName=bradlc.vscode-tailwindcss)
+
+## Accessibility
+
+Maibuk is built to be operated entirely from the keyboard, with a screen-reader
+compatibility baseline for the application's core surfaces. This is a v1 statement,
+not a claim of full WCAG conformance.
+
+**Platform targets**
+
+- **Web build** and **Windows (Tauri / WebView2)** with **NVDA** are the primary,
+  actively verified targets.
+- **Linux (WebKitGTK)** with **Orca** is treated as observational only; its support
+  status is not yet verified and no compatibility is claimed until a full session
+  passes.
+
+**Covered in v1**
+
+Keyboard and screen-reader access to the application chrome and content structure:
+
+- dialogs (focus trap, Escape, and focus restoration);
+- primary navigation / sidebar;
+- the Home book grid;
+- the chapter list;
+- editor structural navigation (pane cycling, Escape behavior, Tab indentation);
+- route-change announcements; and
+- ordinary form controls and buttons.
+
+**Excluded in v1**
+
+Semantic access to the _content_ of visual canvas surfaces is out of scope:
+
+- the mind-map canvas nodes and edges (xyflow); and
+- the cover designer artwork itself (Fabric.js).
+
+The headings, toolbars, and panels surrounding these canvases remain keyboard- and
+screen-reader-accessible; only the visual graph/artwork content lacks an alternative
+representation. A future release may add one.
+
+Automated checks (axe) run per route as a safety net, but automated status alone is
+not treated as evidence of screen-reader support — behavioral keyboard tests and
+manual assistive-technology sessions are the authority.
 
 ## Contributing
 
