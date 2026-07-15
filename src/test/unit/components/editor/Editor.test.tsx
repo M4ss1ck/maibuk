@@ -1,10 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Editor } from "@/components/editor/Editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
+import { assignHeadingIds } from "@/features/links/heading-ids";
 
 const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),
@@ -159,6 +161,84 @@ describe("Editor", () => {
 
     await waitFor(() => {
       expect(mockSetContentSilently).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression: the chapter store normalizes saved HTML with assignHeadingIds
+  // (adding ids to headings) and echoes it back into the `content` prop. That
+  // normalized echo differs from the raw HTML the editor emitted, so the
+  // external-content sync used to fire setContentSilently mid-edit, resetting
+  // the document and jerking the caret elsewhere.
+  it("does not re-apply content that is a normalized echo of the user's own edit", async () => {
+    let editor: TiptapEditor | null = null;
+    let lastContentProp = "";
+
+    // Harness mirrors BookEditor -> chapter store: every update is normalized
+    // through assignHeadingIds (which stamps ids onto un-id'd headings) and fed
+    // straight back down as `content`.
+    function RoundTripHarness() {
+      const [content, setContent] = useState("<h2>Chapter Title</h2><p>Body</p>");
+      lastContentProp = content;
+      return (
+        <Editor
+          content={content}
+          onUpdate={(html) => setContent(assignHeadingIds(html).html)}
+          onWordCountChange={vi.fn()}
+          onEditorReady={(instance) => {
+            editor = instance;
+          }}
+        />
+      );
+    }
+
+    render(<RoundTripHarness />);
+
+    await waitFor(() => {
+      expect(editor).not.toBeNull();
+    });
+
+    mockSetContentSilently.mockClear();
+
+    // Simulate the user typing a character. This fires onUpdate, which routes
+    // the raw HTML through assignHeadingIds and echoes the normalized result
+    // (now carrying a fresh heading id) back into the `content` prop.
+    editor!.chain().focus("end").insertContent("!").run();
+
+    // Wait until the normalized echo has propagated back down as `content`.
+    // waitFor flushes React effects between polls, so once the id-bearing echo
+    // is the current prop, the external-content sync effect has already run.
+    await waitFor(() => {
+      expect(lastContentProp).toContain('id="h-');
+    });
+
+    // The normalized echo is the editor's own output, not a genuine external
+    // change, so it must NOT trigger a full-document reset (which would jerk
+    // the caret away from where the user is typing).
+    expect(mockSetContentSilently).not.toHaveBeenCalled();
+  });
+
+  it("still applies a genuinely external content change (e.g. version restore)", async () => {
+    const { rerender } = render(
+      <Editor content={"<p>Original</p>"} onUpdate={vi.fn()} onWordCountChange={vi.fn()} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Original")).toBeInTheDocument();
+    });
+
+    mockSetContentSilently.mockClear();
+
+    // An external change (not an echo of the editor's own document) must reset
+    // the document so restores/deep-links keep working.
+    rerender(
+      <Editor content={"<p>Restored from a version</p>"} onUpdate={vi.fn()} onWordCountChange={vi.fn()} />
+    );
+
+    await waitFor(() => {
+      expect(mockSetContentSilently).toHaveBeenCalledWith(
+        expect.anything(),
+        "<p>Restored from a version</p>"
+      );
     });
   });
 
