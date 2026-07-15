@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
+import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { CaseSensitive, CaseUpper, CaseLower, ChevronDown } from "lucide-react";
 import { Tooltip } from "@/components/ui";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
+import { transformSelectedText, type TextTransform } from "@/components/editor/text-transforms";
 
 interface TextCaseMenuProps {
   editor: Editor;
@@ -12,133 +12,92 @@ interface TextCaseMenuProps {
 
 export function TextCaseMenu({ editor }: TextCaseMenuProps) {
   const { t } = useTranslation();
-  const [showMenu, setShowMenu] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{
-    top: number;
-    left: number;
-  }>({
-    top: 0,
-    left: 0,
-  });
-  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const getSelectedText = (): string => {
-    const { from, to } = editor.state.selection;
-    return editor.state.doc.textBetween(from, to, "");
+  const runTransform = (transform: TextTransform) => {
+    transformSelectedText(editor, transform);
   };
-
-  const transformSelectedText = (transformer: (text: string) => string) => {
-    const { from, to } = editor.state.selection;
-    const text = getSelectedText();
-    if (text) {
-      editor.chain().focus().deleteRange({ from, to }).insertContent(transformer(text)).run();
-    }
-  };
-
-  const toUpperCase = () => transformSelectedText((text) => text.toUpperCase());
-  const toLowerCase = () => transformSelectedText((text) => text.toLowerCase());
-  const toAlternatingCase = () =>
-    transformSelectedText((text) =>
-      text
-        .split("")
-        .map((char, i) => (i % 2 === 0 ? char.toLowerCase() : char.toUpperCase()))
-        .join("")
-    );
-  const toSentenceCase = () =>
-    transformSelectedText((text) =>
-      text.toLowerCase().replace(/(^\s*\w|[.!?]\s+\w)/g, (c) => c.toUpperCase())
-    );
-  const toTitleCase = () =>
-    transformSelectedText((text) => text.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()));
-
-  const handleShowMenu = () => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setMenuPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-      });
-    }
-    setShowMenu(true);
-  };
-
-  useEffect(() => {
-    if (!showMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (
-        buttonRef.current &&
-        !buttonRef.current.contains(e.target as Node) &&
-        !(e.target instanceof HTMLElement && e.target.closest(".text-case-menu-portal"))
-      ) {
-        setShowMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [showMenu]);
 
   return (
     <>
-      <ToolbarButton onClick={toUpperCase} label={t("editor.uppercase")}>
+      <ToolbarButton onClick={() => runTransform("uppercase")} label={t("editor.uppercase")}>
         <CaseUpper className="w-4 h-4" />
       </ToolbarButton>
 
-      <ToolbarButton onClick={toLowerCase} label={t("editor.lowercase")}>
+      <ToolbarButton onClick={() => runTransform("lowercase")} label={t("editor.lowercase")}>
         <CaseLower className="w-4 h-4" />
       </ToolbarButton>
 
-      <Tooltip content={t("editor.textCase")}>
-        <button
-          ref={buttonRef}
-          type="button"
-          onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
-          aria-label={t("editor.textCase")}
-          className={`p-2 rounded transition-colors flex items-center gap-0.5 ${showMenu ? "bg-primary text-white" : "hover:bg-muted"}`}
-        >
-          <CaseSensitive className="w-4 h-4" />
-          <ChevronDown className="w-3 h-3" />
-        </button>
-      </Tooltip>
-
-      {showMenu &&
-        createPortal(
-          <div
-            className="text-case-menu-portal fixed bg-card border border-border rounded-lg shadow-lg py-1 z-50 max-w-min"
-            style={{ top: menuPosition.top, left: menuPosition.left }}
+      <MenuTrigger>
+        <Tooltip content={t("editor.textCase")}>
+          <Button
+            aria-label={t("editor.textCase")}
+            className="flex items-center gap-0.5 rounded p-2 transition-colors hover:bg-muted data-pressed:bg-primary data-pressed:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <button
-              type="button"
-              onClick={() => {
-                toAlternatingCase();
-                setShowMenu(false);
-              }}
-              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
+            <CaseSensitive className="w-4 h-4" />
+            <ChevronDown className="w-3 h-3" />
+          </Button>
+        </Tooltip>
+        <Popover
+          placement="bottom start"
+          className="z-50 mt-1 min-w-max rounded-lg border border-border bg-card py-1 shadow-lg focus:outline-none"
+        >
+          <Menu
+            aria-label={t("editor.textCase")}
+            onAction={(key) => runTransform(key as TextTransform)}
+            className="outline-none"
+          >
+            <MenuItem
+              id="alternatingCase"
+              textValue={t("editor.alternatingCase")}
+              className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
               {t("editor.alternatingCase")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                toSentenceCase();
-                setShowMenu(false);
-              }}
-              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
+            </MenuItem>
+            <MenuItem
+              id="sentenceCase"
+              textValue={t("editor.sentenceCase")}
+              className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
               {t("editor.sentenceCase")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                toTitleCase();
-                setShowMenu(false);
-              }}
-              className="w-full px-3 py-1.5 text-sm text-left hover:bg-muted transition-colors whitespace-nowrap"
+            </MenuItem>
+            <MenuItem
+              id="titleCase"
+              textValue={t("editor.titleCase")}
+              className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
               {t("editor.titleCase")}
-            </button>
-          </div>,
-          document.body
-        )}
+            </MenuItem>
+            <MenuItem
+              id="horizontalMirror"
+              textValue={t("editor.horizontalMirror")}
+              className="cursor-pointer whitespace-nowrap border-t border-border px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
+            >
+              {t("editor.horizontalMirror")}
+            </MenuItem>
+            <MenuItem
+              id="upsideDown"
+              textValue={t("editor.upsideDown")}
+              className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
+            >
+              {t("editor.upsideDown")}
+            </MenuItem>
+            <MenuItem
+              id="reverseText"
+              textValue={t("editor.reverseText")}
+              className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
+            >
+              {t("editor.reverseText")}
+            </MenuItem>
+            <MenuItem
+              id="leetspeak"
+              textValue={t("editor.leetspeak")}
+              className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
+            >
+              {t("editor.leetspeak")}
+            </MenuItem>
+          </Menu>
+        </Popover>
+      </MenuTrigger>
     </>
   );
 }

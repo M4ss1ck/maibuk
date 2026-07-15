@@ -84,6 +84,7 @@ export default defineConfig(() => ({
         "src/components/editor/paste-cleanup.ts",
         "src/components/editor/PagePaddingControl.tsx",
         "src/components/editor/WidthControl.tsx",
+        "src/components/editor/text-transforms.ts",
         "src/components/editor/toolbar/toolbar-groups.ts",
         "src/components/editor/toolbar/useToolbarOverflow.ts",
         "src/components/editor/extensions/scene-break-utils.ts",
