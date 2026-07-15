@@ -275,6 +275,7 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
             </Button>
           </Tooltip>
           <Select
+            ariaLabel={t("editor.editorTheme")}
             value={currentThemeSetting}
             onChange={(v) => setThemeSetting(v as HtmlEditorTheme)}
             options={

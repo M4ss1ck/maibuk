@@ -37,6 +37,7 @@ export function FontFamilySelect({ editor, value }: FontFamilySelectProps) {
       onChange={handleChange}
       options={FONT_FAMILY_OPTIONS}
       placeholder={t("editor.fontFamily")}
+      ariaLabel={t("editor.fontFamily")}
       inputClasses="w-40"
     />
   );

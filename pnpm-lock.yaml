@@ -38,9 +38,6 @@ importers:
       '@floating-ui/react':
         specifier: ^0.27.19
         version: 0.27.19(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@headlessui/react':
-        specifier: ^2.2.9
-        version: 2.2.9(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@react-pdf/renderer':
         specifier: ^4.3.2
         version: 4.3.2(react@19.2.3)
@@ -218,6 +215,9 @@ importers:
       react:
         specifier: ^19.1.0
         version: 19.2.3
+      react-aria:
+        specifier: ^3.50.0
+        version: 3.50.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react-aria-components:
         specifier: ^1.19.0
         version: 1.19.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -1080,20 +1080,8 @@ packages:
   '@floating-ui/dom@1.7.6':
     resolution: {integrity: sha512-9gZSAI5XM36880PPMm//9dfiEngYoC6Am2izES1FF406YFsjvyBMmeJ2g4SAju3xWwtuynNRFL2s9hgxpLI5SQ==}
 
-  '@floating-ui/react-dom@2.1.6':
-    resolution: {integrity: sha512-4JX6rEatQEvlmgU80wZyq9RT96HZJa88q8hp0pBd+LrczeDI4o6uA2M+uvxngVHo4Ihr8uibXxH6+70zhAFrVw==}
-    peerDependencies:
-      react: '>=16.8.0'
-      react-dom: '>=16.8.0'
-
   '@floating-ui/react-dom@2.1.8':
     resolution: {integrity: sha512-cC52bHwM/n/CxS87FH0yWdngEZrjdtLW/qVruo68qg+prK7ZQ4YGdut2GyDVpoGeAYe/h899rVeOVm6Oi40k2A==}
-    peerDependencies:
-      react: '>=16.8.0'
-      react-dom: '>=16.8.0'
-
-  '@floating-ui/react@0.26.28':
-    resolution: {integrity: sha512-yORQuuAtVpiRjpMhdc0wJj06b9JFjrYF4qp96j++v2NBpbi6SEGF7donUJ3TMieerQ6qVkAv1tgr7L4r5roTqw==}
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
@@ -1109,13 +1097,6 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
-
-  '@headlessui/react@2.2.9':
-    resolution: {integrity: sha512-Mb+Un58gwBn0/yWZfyrCh0TJyurtT+dETj7YHleylHk5od3dv2XqETPGWMyQ5/7sYN7oWdyM1u9MvC0OC8UmzQ==}
-    engines: {node: '>=10'}
-    peerDependencies:
-      react: ^18 || ^19 || ^19.0.0-rc
-      react-dom: ^18 || ^19 || ^19.0.0-rc
 
   '@internationalized/date@3.12.2':
     resolution: {integrity: sha512-FY1Y+H64NDs+HAF6omlnWxm3mEpfgaCSWtL5l551ZZfImA+kGjPFgrnJrGjH6lfmLL0g8Z/mBu1R3kufeCp6Jw==}
@@ -1172,30 +1153,6 @@ packages:
   '@pdf-lib/upng@1.0.1':
     resolution: {integrity: sha512-dQK2FUMQtowVP00mtIksrlZhdFXQZPC+taih1q4CvPZ5vqdxR/LKBaFg0oAfzd1GlHZXXSPdQfzQnt+ViGvEIQ==}
 
-  '@react-aria/focus@3.21.3':
-    resolution: {integrity: sha512-FsquWvjSCwC2/sBk4b+OqJyONETUIXQ2vM0YdPAuC+QFQh2DT6TIBo6dOZVSezlhudDla69xFBd6JvCFq1AbUw==}
-    peerDependencies:
-      react: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
-      react-dom: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
-
-  '@react-aria/interactions@3.26.0':
-    resolution: {integrity: sha512-AAEcHiltjfbmP1i9iaVw34Mb7kbkiHpYdqieWufldh4aplWgsF11YQZOfaCJW4QoR2ML4Zzoa9nfFwLXA52R7Q==}
-    peerDependencies:
-      react: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
-      react-dom: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
-
-  '@react-aria/ssr@3.9.10':
-    resolution: {integrity: sha512-hvTm77Pf+pMBhuBm760Li0BVIO38jv1IBws1xFm1NoL26PU+fe+FMW5+VZWyANR6nYL65joaJKZqOdTQMkO9IQ==}
-    engines: {node: '>= 12'}
-    peerDependencies:
-      react: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
-
-  '@react-aria/utils@3.32.0':
-    resolution: {integrity: sha512-/7Rud06+HVBIlTwmwmJa2W8xVtgxgzm0+kLbuFooZRzKDON6hhozS1dOMR/YLMxyJOaYOTpImcP4vRR9gL1hEg==}
-    peerDependencies:
-      react: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
-      react-dom: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
-
   '@react-pdf/fns@3.1.2':
     resolution: {integrity: sha512-qTKGUf0iAMGg2+OsUcp9ffKnKi41RukM/zYIWMDJ4hRVYSr89Q7e3wSDW/Koqx3ea3Uy/z3h2y3wPX6Bdfxk6g==}
 
@@ -1238,19 +1195,6 @@ packages:
 
   '@react-pdf/types@2.9.2':
     resolution: {integrity: sha512-dufvpKId9OajLLbgn9q7VLUmyo1Jf+iyGk2ZHmCL8nIDtL8N1Ejh9TH7+pXXrR0tdie1nmnEb5Bz9U7g4hI4/g==}
-
-  '@react-stately/flags@3.1.2':
-    resolution: {integrity: sha512-2HjFcZx1MyQXoPqcBGALwWWmgFVUk2TuKVIQxCbRq7fPyWXIl6VHcakCLurdtYC2Iks7zizvz0Idv48MQ38DWg==}
-
-  '@react-stately/utils@3.11.0':
-    resolution: {integrity: sha512-8LZpYowJ9eZmmYLpudbo/eclIRnbhWIJZ994ncmlKlouNzKohtM8qTC6B1w1pwUbiwGdUoyzLuQbeaIor5Dvcw==}
-    peerDependencies:
-      react: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
-
-  '@react-types/shared@3.32.1':
-    resolution: {integrity: sha512-famxyD5emrGGpFuUlgOP6fVW2h/ZaF405G5KDi3zPHzyjAWys/8W6NAVJtNbkCkhedmvL0xOhvt8feGXyXaw5w==}
-    peerDependencies:
-      react: ^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1
 
   '@react-types/shared@3.36.0':
     resolution: {integrity: sha512-DkP/H0C2YjjS7gZWKNqOmU8a16qHPjQNdzMwmTq9SzplM6Iw0kVMTZ0OIoe6FOgGqa+FwMsE2QbPjh/n3g/jXQ==}
@@ -1504,15 +1448,6 @@ packages:
     resolution: {integrity: sha512-jVA+/UpKL1vRLg6Hkao5jldawNmRo7mQYrZtNHMIVpLfLhDml5nMRUo/8MwoX2vNXvnaXNNMedrMfMugAVX1nA==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7
-
-  '@tanstack/react-virtual@3.13.18':
-    resolution: {integrity: sha512-dZkhyfahpvlaV0rIKnvQiVoWPyURppl6w4m9IwMDpuIjcJ1sD9YGWrt0wISvgU7ewACXx2Ct46WPgI6qAD4v6A==}
-    peerDependencies:
-      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
-  '@tanstack/virtual-core@3.13.18':
-    resolution: {integrity: sha512-Mx86Hqu1k39icq2Zusq+Ey2J6dDWTjDvEv43PJtRCoEYTLyfaPnxIQ6iy7YAOK0NV/qOEmZQ/uCufrppZxTgcg==}
 
   '@tauri-apps/api@2.9.1':
     resolution: {integrity: sha512-IGlhP6EivjXHepbBic618GOmiWe4URJiIeZFlB7x3czM0yDHHYviH1Xvoiv4FefdkQtn6v7TuwWCRfOGdnVUGw==}
@@ -4214,6 +4149,7 @@ snapshots:
   '@floating-ui/core@1.7.3':
     dependencies:
       '@floating-ui/utils': 0.2.10
+    optional: true
 
   '@floating-ui/core@1.7.5':
     dependencies:
@@ -4223,31 +4159,18 @@ snapshots:
     dependencies:
       '@floating-ui/core': 1.7.3
       '@floating-ui/utils': 0.2.10
+    optional: true
 
   '@floating-ui/dom@1.7.6':
     dependencies:
       '@floating-ui/core': 1.7.5
       '@floating-ui/utils': 0.2.11
 
-  '@floating-ui/react-dom@2.1.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@floating-ui/dom': 1.7.4
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-
   '@floating-ui/react-dom@2.1.8(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@floating-ui/dom': 1.7.6
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-
-  '@floating-ui/react@0.26.28(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@floating-ui/react-dom': 2.1.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@floating-ui/utils': 0.2.10
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-      tabbable: 6.4.0
 
   '@floating-ui/react@0.27.19(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
@@ -4257,19 +4180,10 @@ snapshots:
       react-dom: 19.2.3(react@19.2.3)
       tabbable: 6.4.0
 
-  '@floating-ui/utils@0.2.10': {}
+  '@floating-ui/utils@0.2.10':
+    optional: true
 
   '@floating-ui/utils@0.2.11': {}
-
-  '@headlessui/react@2.2.9(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@floating-ui/react': 0.26.28(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@react-aria/focus': 3.21.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@react-aria/interactions': 3.26.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@tanstack/react-virtual': 3.13.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-      use-sync-external-store: 1.6.0(react@19.2.3)
 
   '@internationalized/date@3.12.2':
     dependencies:
@@ -4341,42 +4255,6 @@ snapshots:
   '@pdf-lib/upng@1.0.1':
     dependencies:
       pako: 1.0.11
-
-  '@react-aria/focus@3.21.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@react-aria/interactions': 3.26.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@react-aria/utils': 3.32.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@react-types/shared': 3.32.1(react@19.2.3)
-      '@swc/helpers': 0.5.18
-      clsx: 2.1.1
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-
-  '@react-aria/interactions@3.26.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@react-aria/ssr': 3.9.10(react@19.2.3)
-      '@react-aria/utils': 3.32.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@react-stately/flags': 3.1.2
-      '@react-types/shared': 3.32.1(react@19.2.3)
-      '@swc/helpers': 0.5.18
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-
-  '@react-aria/ssr@3.9.10(react@19.2.3)':
-    dependencies:
-      '@swc/helpers': 0.5.18
-      react: 19.2.3
-
-  '@react-aria/utils@3.32.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@react-aria/ssr': 3.9.10(react@19.2.3)
-      '@react-stately/flags': 3.1.2
-      '@react-stately/utils': 3.11.0(react@19.2.3)
-      '@react-types/shared': 3.32.1(react@19.2.3)
-      '@swc/helpers': 0.5.18
-      clsx: 2.1.1
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
 
   '@react-pdf/fns@3.1.2': {}
 
@@ -4478,19 +4356,6 @@ snapshots:
       '@react-pdf/font': 4.0.4
       '@react-pdf/primitives': 4.1.1
       '@react-pdf/stylesheet': 6.1.2
-
-  '@react-stately/flags@3.1.2':
-    dependencies:
-      '@swc/helpers': 0.5.18
-
-  '@react-stately/utils@3.11.0(react@19.2.3)':
-    dependencies:
-      '@swc/helpers': 0.5.18
-      react: 19.2.3
-
-  '@react-types/shared@3.32.1(react@19.2.3)':
-    dependencies:
-      react: 19.2.3
 
   '@react-types/shared@3.36.0(react@19.2.3)':
     dependencies:
@@ -4650,14 +4515,6 @@ snapshots:
       '@tailwindcss/oxide': 4.1.18
       tailwindcss: 4.1.18
       vite: 7.3.0(@types/node@25.0.10)(jiti@2.6.1)(lightningcss@1.30.2)
-
-  '@tanstack/react-virtual@3.13.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
-    dependencies:
-      '@tanstack/virtual-core': 3.13.18
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
-
-  '@tanstack/virtual-core@3.13.18': {}
 
   '@tauri-apps/api@2.9.1': {}
 

@@ -20,7 +20,7 @@
 | Database         | SQLite (Tauri plugin) / sql.js (web) via Drizzle ORM schema |
 | i18n             | i18next + react-i18next (English, Spanish)                  |
 | Icons            | Lucide React + custom SVGs in `src/components/icons/`       |
-| Accessible UI    | Headless UI 2.2                                             |
+| Accessible UI    | React Aria 3 / React Aria Components 1                     |
 | Package Manager  | pnpm 10                                                     |
 
 ### Entry Points
@@ -50,7 +50,7 @@ Every new or modified UI feature ships keyboard-operable and screen-reader-corre
 
 1. **Fully operable by keyboard alone** — every action reachable without a mouse. Pointer-only interactions (drag-and-drop, hover-only controls, canvas gestures) need a keyboard path or an explicit, documented exemption in the PR.
 2. **Focus is managed** — visible focus, dialogs trap and restore focus to their trigger, arrow-key navigation inside lists/menus/toolbars, Escape closes or exits.
-3. **Library behavior, never hand-rolled focus code** — Headless UI for the primitives already in `src/components/ui/`; React Aria is the approved standard for collections, roving focus, and keyboard-operable drag-and-drop. Do not hand-write roving tabindex, focus traps, or listbox key handling.
+3. **Library behavior, never hand-rolled focus code** — React Aria is the approved standard for dialogs, collections, roving focus, and keyboard-operable drag-and-drop. Do not hand-write roving tabindex, focus traps, or listbox key handling.
 4. **Labels are localized** — every `aria-label` goes through i18n like any other user-visible string.
 5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) so they surface in the shortcut help.
 6. **Proven by behavioral tests** — see the Keyboard & Accessibility Test Gate in section 6.
@@ -170,7 +170,7 @@ src/
 Imports follow this order (observed from existing code):
 
 1. React / React DOM
-2. Third-party libraries (`zustand`, `react-router-dom`, `@tiptap/*`, `@headlessui/react`, `lucide-react`)
+2. Third-party libraries (`zustand`, `react-router-dom`, `@tiptap/*`, `react-aria-components`, `lucide-react`)
 3. Internal imports via `@/` alias (`@/features/books`, `@/lib/db`, `@/hooks/useAutoSave`)
 4. CSS imports (only in `main.tsx`)
 
@@ -201,13 +201,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(...)
 Button.displayName = "Button";
 ```
 
-**Dialog/Modal pattern** (uses Headless UI):
+**Dialog/Modal pattern** (uses the shared React Aria modal):
 
 ```tsx
-<Dialog open={isOpen} onClose={onClose}>
-  <DialogBackdrop />
-  <DialogPanel>...</DialogPanel>
-</Dialog>
+<Modal isOpen={isOpen} onClose={onClose} title={title}>
+  ...
+</Modal>
 ```
 
 ### State Management
@@ -585,7 +584,7 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 - **Hardcode strings** shown to users — use i18n translation keys
 - **Use relative imports** — always use `@/` prefix for all internal imports
 - **Use `get()` inside Zustand stores** — existing stores only use `set()`
-- **Hand-roll focus management** — no bespoke roving tabindex, focus traps, or listbox key handling; use React Aria / Headless UI behavior (see section 2)
+- **Hand-roll focus management** — no bespoke roving tabindex, focus traps, or listbox key handling; use React Aria behavior (see section 2)
 - **Ship pointer-only interactions** — drag-and-drop, hover-only controls, and canvas gestures need a keyboard-accessible path
 - **Prove keyboard support with attribute assertions** — tests must press keys via `user-event` and assert behavior, not check `tabIndex`/`aria-*` values (see section 6 test gate)
 

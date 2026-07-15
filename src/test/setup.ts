@@ -19,7 +19,7 @@ if (typeof Element.prototype.getClientRects !== "function") {
     }) as unknown as DOMRectList;
 }
 
-// Polyfill ResizeObserver for Headless UI components in jsdom
+// Polyfill ResizeObserver for accessible UI components in jsdom
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}

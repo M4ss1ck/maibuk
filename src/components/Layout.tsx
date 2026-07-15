@@ -1,7 +1,13 @@
-import { useCallback, useRef, useState } from "react";
-import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { FocusScope, Overlay, useModalOverlay } from "react-aria";
+import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
-import { RouterProvider } from "react-aria-components";
 import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BarChart3, Menu, NotebookPen, Workflow } from "lucide-react";
@@ -23,8 +29,50 @@ export function Layout() {
   const mainSidebarWidth = useSettingsStore((s) => s.mainSidebarWidth);
   const setMainSidebarWidth = useSettingsStore((s) => s.setMainSidebarWidth);
   const isResizing = useRef(false);
+  const mobileDialogRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRestoreFocusRef = useRef<HTMLElement | null>(null);
+  const wasMobileMenuOpenRef = useRef(false);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+  const mobileMenuState = useMemo(
+    () => ({
+      isOpen: isMobileMenuOpen,
+      open: () => setIsMobileMenuOpen(true),
+      close: closeMobileMenu,
+      toggle: () => setIsMobileMenuOpen((open) => !open),
+      setOpen: setIsMobileMenuOpen,
+    }),
+    [isMobileMenuOpen],
+  );
+  const { modalProps: mobileModalProps, underlayProps: mobileUnderlayProps } =
+    useModalOverlay(
+      { isDismissable: true },
+      mobileMenuState,
+      mobileDialogRef,
+    );
+
+  if (
+    isMobileMenuOpen &&
+    !wasMobileMenuOpenRef.current &&
+    typeof document !== "undefined"
+  ) {
+    const activeElement = document.activeElement;
+    mobileMenuRestoreFocusRef.current =
+      activeElement instanceof HTMLElement ? activeElement : null;
+  }
+  wasMobileMenuOpenRef.current = isMobileMenuOpen;
+
+  const restoreMobileMenuFocus = () => {
+    const target = mobileMenuRestoreFocusRef.current;
+    mobileMenuRestoreFocusRef.current = null;
+    if (target?.isConnected && target !== document.body) target.focus();
+  };
+
+  useLayoutEffect(() => {
+    if (!isMobileMenuOpen) restoreMobileMenuFocus();
+  }, [isMobileMenuOpen]);
+
+  useLayoutEffect(() => restoreMobileMenuFocus, []);
 
   const navigationItems = [
     {
@@ -183,27 +231,35 @@ export function Layout() {
         <div className="w-10" />
       </div>
 
-      <Dialog
-        open={isMobileMenuOpen}
-        onClose={closeMobileMenu}
-        className="relative z-50 md:hidden"
-        aria-label={t("nav.primary")}
-      >
-        <DialogBackdrop
-          data-testid="mobile-menu-backdrop"
-          className="fixed inset-0 bg-black/50"
-        />
-        <div className="fixed inset-0 flex">
-          <DialogPanel
-            as="aside"
-            transition
-            style={{ width: `${mainSidebarWidth}px` }}
-            className="h-full border-r border-border flex flex-col bg-background transition duration-300 ease-in-out data-closed:-translate-x-full"
+      {isMobileMenuOpen && (
+        <Overlay disableFocusManagement>
+          <div
+            {...mobileUnderlayProps}
+            data-testid="mobile-menu-backdrop"
+            className="fixed inset-0 z-50 flex bg-black/50 md:hidden"
           >
-            {sidebarContent(true)}
-          </DialogPanel>
-        </div>
-      </Dialog>
+            <FocusScope contain autoFocus>
+              <div
+                {...mobileModalProps}
+                ref={mobileDialogRef}
+                className="contents"
+              >
+                <Dialog
+                  aria-label={t("nav.primary")}
+                  className="contents outline-none"
+                >
+                  <aside
+                    style={{ width: `${mainSidebarWidth}px` }}
+                    className="h-full border-r border-border flex flex-col bg-background transition duration-300 ease-in-out"
+                  >
+                    {sidebarContent(true)}
+                  </aside>
+                </Dialog>
+              </div>
+            </FocusScope>
+          </div>
+        </Overlay>
+      )}
 
       <aside
         data-focus-pane="nav-sidebar"

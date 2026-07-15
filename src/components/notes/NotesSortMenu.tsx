@@ -1,5 +1,11 @@
-import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import { useMemo } from "react";
+import {
+  Button,
+  ListBox,
+  ListBoxItem,
+  Popover,
+  Select,
+} from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { ArrowUpDown, Check, ChevronDown } from "lucide-react";
 import type { NotesSortOption } from "@/components/notes/notes-list-model";
@@ -26,43 +32,52 @@ export function NotesSortMenu({ value, onChange }: NotesSortMenuProps) {
   const activeLabel = options.find((option) => option.value === value)?.label ?? options[0].label;
 
   return (
-    <Listbox value={value} onChange={onChange}>
+    <Select
+      aria-label={t("notes.sortBy")}
+      selectedKey={value}
+      onSelectionChange={(key) => {
+        const option = options.find((item) => item.value === key);
+        if (option) onChange(option.value);
+      }}
+    >
       <div className="relative">
         <Tooltip content={t("notes.sortBy")}>
-          <ListboxButton
+          <Button
             aria-label={t("notes.sortBy")}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
           >
             <ArrowUpDown className="h-4 w-4 shrink-0" />
             <span className="truncate">{activeLabel}</span>
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </ListboxButton>
+          </Button>
         </Tooltip>
 
-        <ListboxOptions
-          anchor="bottom end"
+        <Popover
+          placement="bottom end"
           className="z-50 mt-1 w-52 overflow-auto rounded-lg border border-border bg-background shadow-lg focus:outline-none"
         >
-          {options.map((option) => (
-            <ListboxOption
-              key={option.value}
-              value={option.value}
-              className="relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-sm text-foreground data-focus:bg-muted data-selected:text-primary"
-            >
-              {({ selected }) => (
+          <ListBox items={options}>
+            {(option) => (
+              <ListBoxItem
+                id={option.value}
+                textValue={option.label}
+                className="relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted data-selected:text-primary"
+              >
+                {({ isSelected }) => (
                 <>
                   <Check
-                    className={`h-3.5 w-3.5 shrink-0 ${selected ? "opacity-100" : "opacity-0"}`}
+                    className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "opacity-100" : "opacity-0"}`}
                   />
-                  <span className={`truncate ${selected ? "font-medium" : "font-normal"}`}>
+                  <span className={`truncate ${isSelected ? "font-medium" : "font-normal"}`}>
                     {option.label}
                   </span>
                 </>
-              )}
-            </ListboxOption>
-          ))}
-        </ListboxOptions>
+                )}
+              </ListBoxItem>
+            )}
+          </ListBox>
+        </Popover>
       </div>
-    </Listbox>
+    </Select>
   );
 }

@@ -21,7 +21,7 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 - **Backend**: Tauri (Rust)
 - **Editor**: TipTap
 - **Database**: SQLite (via Drizzle ORM)
-- **UI**: Tailwind CSS + Headless UI
+- **UI**: Tailwind CSS + React Aria
 - **Canvas**: Fabric.js (cover designer)
 
 ## Installation

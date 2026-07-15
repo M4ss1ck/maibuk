@@ -122,6 +122,7 @@ export function PasteCleanupSection() {
           </p>
         </div>
         <Select<PasteCleanupPreset>
+          ariaLabel={t("settings.pasteCleanup.preset.label")}
           value={preset}
           onChange={setPasteCleanupPreset}
           options={presetOptions}
@@ -296,6 +297,7 @@ export function PasteCleanupSection() {
                   </div>
                   <div className="flex flex-col flex-wrap justify-center gap-2">
                     <Select<PasteRuleTarget>
+                      ariaLabel={t("settings.pasteCleanup.rules.target")}
                       value={rule.target}
                       onChange={(value) => updatePasteCleanupRule(rule.id, { target: value })}
                       options={targetOptions}
@@ -313,6 +315,7 @@ export function PasteCleanupSection() {
                       aria-label={t("settings.pasteCleanup.rules.value")}
                     />
                     <Select<PasteRuleAction>
+                      ariaLabel={t("settings.pasteCleanup.rules.action")}
                       value={rule.action}
                       onChange={(value) => updatePasteCleanupRule(rule.id, { action: value })}
                       options={actionOptions}

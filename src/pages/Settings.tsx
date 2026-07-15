@@ -252,6 +252,7 @@ export function Settings() {
                 <p className="text-sm text-muted-foreground">{t("settings.fontSizeDescription")}</p>
               </div>
               <Select<FontSize>
+                ariaLabel={t("settings.fontSize")}
                 value={appFontSize}
                 onChange={setAppFontSize}
                 options={FONT_SIZE_OPTIONS}
@@ -263,7 +264,12 @@ export function Settings() {
                 <p className="font-medium">{t("settings.font")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.fontDescription")}</p>
               </div>
-              <Select<FontFamily> value={appFont} onChange={setAppFont} options={FONT_OPTIONS} />
+              <Select<FontFamily>
+                ariaLabel={t("settings.font")}
+                value={appFont}
+                onChange={setAppFont}
+                options={FONT_OPTIONS}
+              />
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
@@ -371,6 +377,7 @@ export function Settings() {
                 <p className="text-sm text-muted-foreground">{t("settings.languageDescription")}</p>
               </div>
               <Select<Language>
+                ariaLabel={t("settings.language")}
                 value={language}
                 onChange={setLanguage}
                 options={LANGUAGE_OPTIONS}
@@ -579,6 +586,7 @@ export function Settings() {
                 </p>
               </div>
               <Select<ExportFormat>
+                ariaLabel={t("settings.defaultFormat")}
                 value={defaultExportFormat}
                 onChange={setDefaultExportFormat}
                 options={EXPORT_FORMAT_OPTIONS}

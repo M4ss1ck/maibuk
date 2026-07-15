@@ -313,6 +313,7 @@ export function BackupSection() {
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>{t("backup.itemsPerPage")}</span>
               <Select
+                ariaLabel={t("backup.itemsPerPage")}
                 value={backupListPageSize}
                 onChange={setBackupListPageSize}
                 options={pageSizeOptions}
@@ -334,6 +335,7 @@ export function BackupSection() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{t("backup.pageLabel")}</span>
                 <Select
+                  ariaLabel={t("backup.pageLabel")}
                   value={backupListPage}
                   onChange={setBackupListPage}
                   options={pageOptions}

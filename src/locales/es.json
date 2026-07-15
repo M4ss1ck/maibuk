@@ -152,6 +152,7 @@
     "switchToNormalView": "Cambiar a vista normal",
     "switchToCompactView": "Cambiar a vista compacta",
     "reorder": "Reordenar",
+    "chapterType": "Tipo de capítulo",
     "typeChapter": "Capítulo",
     "typePrologue": "Prólogo",
     "typeEpilogue": "Epílogo",
@@ -859,6 +860,7 @@
     },
     "props": {
       "title": "Propiedades",
+      "fontFamily": "Fuente",
       "size": "Tamaño",
       "lineHeight": "Interlineado",
       "letterSpacing": "Espaciado",

@@ -77,11 +77,18 @@ export function SyncControls({ onSync, layout = "popover" }: SyncControlsProps) 
       >
         <div className="space-y-1">
           <p className="text-xs font-medium text-muted-foreground">{t("sync.scope")}</p>
-          <Select value={scope} onChange={setScope} options={scopeOptions} minWidth="none" />
+          <Select
+            ariaLabel={t("sync.scope")}
+            value={scope}
+            onChange={setScope}
+            options={scopeOptions}
+            minWidth="none"
+          />
         </div>
         <div className="space-y-1">
           <p className="text-xs font-medium text-muted-foreground">{t("sync.direction")}</p>
           <Select
+            ariaLabel={t("sync.direction")}
             value={direction}
             onChange={setDirection}
             options={directionOptions}

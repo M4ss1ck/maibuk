@@ -7,34 +7,53 @@ const options = ["Arial", "Georgia", "Helvetica", "Times New Roman"];
 
 describe("Combobox", () => {
   describe("rendering", () => {
-    it("renders an input element", () => {
-      render(<Combobox value="Arial" onChange={() => {}} options={options} />);
+    it("renders an input element with combobox role", () => {
+      render(
+        <Combobox value="Arial" onChange={() => {}} options={options} ariaLabel="Font" />,
+      );
       expect(screen.getByRole("combobox")).toBeInTheDocument();
     });
 
-    it("displays the current value", () => {
-      render(<Combobox value="Georgia" onChange={() => {}} options={options} />);
-      expect(screen.getByRole("combobox")).toHaveValue("Georgia");
+    it("displays the current value when closed", () => {
+      render(
+        <Combobox
+          value="Georgia"
+          onChange={() => {}}
+          options={options}
+          ariaLabel="Font"
+        />,
+      );
+      const input = screen.getByRole("combobox") as HTMLInputElement;
+      expect(input.value).toBe("Georgia");
     });
 
     it("renders a placeholder when provided", () => {
       render(
-        <Combobox value="" onChange={() => {}} options={options} placeholder="Select font..." />
+        <Combobox
+          value=""
+          onChange={() => {}}
+          options={options}
+          placeholder="Select font..."
+          ariaLabel="Font"
+        />,
       );
-      expect(screen.getByPlaceholderText("Select font...")).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText("Select font..."),
+      ).toBeInTheDocument();
     });
   });
 
   describe("filtering", () => {
     it("filters options as user types", async () => {
       const user = userEvent.setup();
-      render(<Combobox value="" onChange={() => {}} options={options} />);
+      render(
+        <Combobox value="" onChange={() => {}} options={options} ariaLabel="Font" />,
+      );
 
       const input = screen.getByRole("combobox");
       await user.click(input);
       await user.type(input, "Hel");
 
-      // Helvetica should be visible, Arial should be filtered out
       expect(screen.getByText("Helvetica")).toBeInTheDocument();
       expect(screen.queryByText("Arial")).not.toBeInTheDocument();
     });
@@ -45,13 +64,15 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(<Combobox value="" onChange={onChange} options={options} />);
+      render(
+        <Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />,
+      );
 
-      // Click the chevron button to open the dropdown
       const button = screen.getByRole("button");
       await user.click(button);
 
-      await user.click(await screen.findByText("Georgia"));
+      const georgiaOption = await screen.findByText("Georgia");
+      await user.click(georgiaOption);
 
       expect(onChange).toHaveBeenCalledWith("Georgia");
     });
@@ -60,7 +81,9 @@ describe("Combobox", () => {
   describe("custom value", () => {
     it("shows custom value option when typing a non-matching value", async () => {
       const user = userEvent.setup();
-      render(<Combobox value="" onChange={() => {}} options={options} />);
+      render(
+        <Combobox value="" onChange={() => {}} options={options} ariaLabel="Font" />,
+      );
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -73,11 +96,14 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(<Combobox value="" onChange={onChange} options={options} />);
+      render(
+        <Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />,
+      );
 
       const input = screen.getByRole("combobox");
       await user.click(input);
-      await user.type(input, "MyFont{Enter}");
+      await user.type(input, "MyFont");
+      await user.keyboard("{Enter}");
 
       expect(onChange).toHaveBeenCalledWith("MyFont");
     });
@@ -86,12 +112,14 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(<Combobox value="" onChange={onChange} options={options} />);
+      render(
+        <Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />,
+      );
 
       const input = screen.getByRole("combobox");
       await user.click(input);
       await user.type(input, "MyFont");
-      await user.keyboard("[NumpadEnter]");
+      await user.keyboard("{NumpadEnter}");
 
       expect(onChange).toHaveBeenCalledWith("MyFont");
     });
@@ -102,7 +130,9 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(<Combobox value="" onChange={onChange} options={options} />);
+      render(
+        <Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />,
+      );
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -113,20 +143,24 @@ describe("Combobox", () => {
   });
 
   describe("divider", () => {
-    it("renders hr for divider options", async () => {
+    it("renders separator for divider options", async () => {
       const user = userEvent.setup();
       const optionsWithDivider = ["Arial", "divider", "Courier"];
 
-      render(<Combobox value="" onChange={() => {}} options={optionsWithDivider} />);
+      render(
+        <Combobox
+          value=""
+          onChange={() => {}}
+          options={optionsWithDivider}
+          ariaLabel="Font"
+        />,
+      );
 
-      // Click the button to open the dropdown (portal-rendered)
       const button = screen.getByRole("button");
       await user.click(button);
 
-      // Wait for options to render, then check for hr in the document body
       await screen.findByText("Arial");
-      const hrs = document.body.querySelectorAll("hr");
-      expect(hrs.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole("separator")).toBeInTheDocument();
     });
   });
 });

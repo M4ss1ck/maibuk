@@ -27,7 +27,11 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => {
       const lang = i18nState.language;
-      return (modalTranslations as Record<string, Record<string, string>>)[lang]?.[key] ?? key;
+      return (
+        (modalTranslations as Record<string, Record<string, string>>)[lang]?.[
+          key
+        ] ?? key
+      );
     },
     i18n: { language: i18nState.language },
   }),
@@ -49,10 +53,18 @@ describe("Modal modal scope registration", () => {
       const [open, setOpen] = useState(false);
       return (
         <div>
-          <button type="button" data-testid="trigger" onClick={() => setOpen(true)}>
+          <button
+            type="button"
+            data-testid="trigger"
+            onClick={() => setOpen(true)}
+          >
             Open
           </button>
-          <Modal isOpen={open} onClose={() => setOpen(false)} title="Scope Test">
+          <Modal
+            isOpen={open}
+            onClose={() => setOpen(false)}
+            title="Scope Test"
+          >
             <p>Content</p>
           </Modal>
         </div>
@@ -82,14 +94,30 @@ describe("Modal modal scope registration", () => {
       const [innerOpen, setInnerOpen] = useState(false);
       return (
         <div>
-          <button type="button" data-testid="outer-trigger" onClick={() => setOuterOpen(true)}>
+          <button
+            type="button"
+            data-testid="outer-trigger"
+            onClick={() => setOuterOpen(true)}
+          >
             Open Outer
           </button>
-          <Modal isOpen={outerOpen} onClose={() => setOuterOpen(false)} title="Outer">
-            <button type="button" data-testid="inner-trigger" onClick={() => setInnerOpen(true)}>
+          <Modal
+            isOpen={outerOpen}
+            onClose={() => setOuterOpen(false)}
+            title="Outer"
+          >
+            <button
+              type="button"
+              data-testid="inner-trigger"
+              onClick={() => setInnerOpen(true)}
+            >
               Open Inner
             </button>
-            <Modal isOpen={innerOpen} onClose={() => setInnerOpen(false)} title="Inner">
+            <Modal
+              isOpen={innerOpen}
+              onClose={() => setInnerOpen(false)}
+              title="Inner"
+            >
               <p>Nested</p>
             </Modal>
           </Modal>
@@ -129,7 +157,7 @@ describe("Modal", () => {
       const { container } = render(
         <Modal isOpen={false} onClose={() => {}} title="Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(container.innerHTML).toBe("");
     });
@@ -138,7 +166,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="My Modal">
           <p>Hello World</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Hello World")).toBeInTheDocument();
     });
@@ -149,7 +177,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Dialog Title">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Dialog Title")).toBeInTheDocument();
     });
@@ -158,7 +186,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Accessible">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       const dialog = screen.getByRole("dialog");
       expect(dialog).toBeInTheDocument();
@@ -174,7 +202,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Wide" size="wide">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(document.querySelector(".sm\\:max-w-5xl")).not.toBeNull();
     });
@@ -188,27 +216,10 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={onClose} title="Close Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
 
       await user.click(screen.getByRole("button", { name: "Close" }));
-
-      expect(onClose).toHaveBeenCalledTimes(1);
-    });
-
-    it("calls onClose when backdrop is clicked", async () => {
-      const user = userEvent.setup();
-      const onClose = vi.fn();
-
-      render(
-        <Modal isOpen={true} onClose={onClose} title="Backdrop Test">
-          <p>Content</p>
-        </Modal>
-      );
-
-      const backdrop = document.querySelector(".bg-black\\/50") as HTMLElement;
-      expect(backdrop).not.toBeNull();
-      await user.click(backdrop);
 
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -220,12 +231,33 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={onClose} title="Escape Test">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
 
       await user.keyboard("{Escape}");
 
       expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("calls onClose when overlay backdrop is clicked", async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+
+      render(
+        <Modal isOpen={true} onClose={onClose} title="Backdrop Test">
+          <p>Content</p>
+        </Modal>,
+      );
+
+      const backdrop = document.querySelector(
+        ".bg-black\\/50",
+      ) as HTMLElement;
+      expect(backdrop).not.toBeNull();
+      await user.click(backdrop);
+
+      await waitFor(() => {
+        expect(onClose).toHaveBeenCalledTimes(1);
+      });
     });
   });
 
@@ -239,7 +271,7 @@ describe("Modal", () => {
           footer={<button type="button">Save</button>}
         >
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByText("Save")).toBeInTheDocument();
     });
@@ -248,7 +280,7 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="No Footer">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(document.querySelector(".bg-muted\\/30")).toBeNull();
     });
@@ -262,7 +294,7 @@ describe("Modal", () => {
             <input placeholder="Name" />
             <textarea placeholder="Description" />
           </div>
-        </Modal>
+        </Modal>,
       );
       expect(screen.getByTestId("form")).toBeInTheDocument();
       expect(screen.getByPlaceholderText("Name")).toBeInTheDocument();
@@ -277,14 +309,14 @@ describe("Modal", () => {
           contentClassName="custom-scroll"
         >
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
       expect(document.querySelector(".custom-scroll")).not.toBeNull();
     });
   });
 
   describe("focus management", () => {
-    it("moves focus into dialog when opened, traps Tab/Shift+Tab, excludes background controls, and restores focus to trigger on Escape, close-button, and backdrop dismissal", async () => {
+    it("moves focus into dialog when opened, traps Tab/Shift+Tab, excludes background controls, and restores focus to trigger on every dismissal path", async () => {
       const user = userEvent.setup();
 
       function Harness() {
@@ -298,7 +330,9 @@ describe("Modal", () => {
             >
               Open
             </button>
-            <button type="button" data-testid="bg">Background</button>
+            <button type="button" data-testid="bg">
+              Background
+            </button>
             <Modal
               isOpen={open}
               onClose={() => setOpen(false)}
@@ -316,7 +350,6 @@ describe("Modal", () => {
       const trigger = screen.getByTestId("trigger");
       const bg = screen.getByTestId("bg");
 
-      // Phase 1 — open via trigger click
       trigger.focus();
       expect(document.activeElement).toBe(trigger);
       await user.click(trigger);
@@ -326,67 +359,75 @@ describe("Modal", () => {
       const two = screen.getByRole("button", { name: "Two" });
       const dialog = screen.getByRole("dialog");
 
-      // Phase 2 — focus moves into dialog on open
       await waitFor(() => {
         expect(dialog).toContainElement(
-          document.activeElement as HTMLElement
+          document.activeElement as HTMLElement,
         );
       });
 
-      // Phase 3 — forward Tab: Close → One → Two → Close
       closeBtn.focus();
       expect(document.activeElement).toBe(closeBtn);
+
       await user.tab();
       await waitFor(() => {
         expect(document.activeElement).toBe(one);
         expect(document.activeElement).not.toBe(bg);
-        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
       });
 
       await user.tab();
       await waitFor(() => {
         expect(document.activeElement).toBe(two);
         expect(document.activeElement).not.toBe(bg);
-        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
       });
 
       await user.tab();
       await waitFor(() => {
         expect(document.activeElement).toBe(closeBtn);
         expect(document.activeElement).not.toBe(bg);
-        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
       });
 
-      // Phase 4 — reverse Shift+Tab: Close → Two → One → Close
       await user.tab({ shift: true });
       await waitFor(() => {
         expect(document.activeElement).toBe(two);
         expect(document.activeElement).not.toBe(bg);
-        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
       });
 
       await user.tab({ shift: true });
       await waitFor(() => {
         expect(document.activeElement).toBe(one);
         expect(document.activeElement).not.toBe(bg);
-        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
       });
 
       await user.tab({ shift: true });
       await waitFor(() => {
         expect(document.activeElement).toBe(closeBtn);
         expect(document.activeElement).not.toBe(bg);
-        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+        expect(dialog).toContainElement(
+          document.activeElement as HTMLElement,
+        );
       });
 
-      // Phase 5 — close via Escape, then verify focus restored to trigger
       await user.keyboard("{Escape}");
 
       await waitFor(() => {
         expect(document.activeElement).toBe(trigger);
       });
 
-      // Phase 6 — re-open, close via close button, verify focus restored
       await user.click(trigger);
 
       await waitFor(() => {
@@ -399,7 +440,6 @@ describe("Modal", () => {
         expect(document.activeElement).toBe(trigger);
       });
 
-      // Phase 7 — re-open, close via backdrop, verify focus restored
       await user.click(trigger);
 
       await waitFor(() => {
@@ -421,9 +461,11 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Localized Close">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
-      expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Close" }),
+      ).toBeInTheDocument();
     });
 
     it("has Spanish localized close button name", () => {
@@ -431,9 +473,11 @@ describe("Modal", () => {
       render(
         <Modal isOpen={true} onClose={() => {}} title="Localized Close">
           <p>Content</p>
-        </Modal>
+        </Modal>,
       );
-      expect(screen.getByRole("button", { name: "Cerrar" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Cerrar" }),
+      ).toBeInTheDocument();
     });
   });
 });

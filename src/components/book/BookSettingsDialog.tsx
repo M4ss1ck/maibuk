@@ -1,17 +1,13 @@
 import { useState, useCallback } from "react";
 import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
+  Button as AriaButton,
   Disclosure,
-  DisclosureButton,
   DisclosurePanel,
-} from "@headlessui/react";
-import { Button, Select } from "@/components/ui";
+} from "react-aria-components";
+import { Button, Modal, Select } from "@/components/ui";
 import { useTranslation } from "react-i18next";
 import { TrashIcon, ChevronDownIcon } from "@/components/icons";
 import type { Book, UpdateBookInput } from "@/features/books/types";
-import { useModalScope } from "@/hooks";
 
 interface BookSettingsDialogProps {
   isOpen: boolean;
@@ -52,8 +48,6 @@ export function BookSettingsDialog({
   );
   const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(book.status);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  useModalScope(isOpen);
 
   const hasChanges =
     title !== book.title ||
@@ -118,23 +112,14 @@ export function BookSettingsDialog({
     "w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-accent";
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0"
-        aria-hidden="true"
-      />
-
-      {/* Dialog container */}
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <DialogPanel
-          transition
-          className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 border border-border max-h-[90vh] overflow-y-auto transition duration-200 ease-out data-closed:translate-y-4 data-closed:opacity-0 data-closed:sm:scale-95 data-closed:sm:translate-y-0"
-        >
-          <DialogTitle className="text-xl font-semibold text-foreground mb-4">
-            {t("bookSettings.title")}
-          </DialogTitle>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={t("bookSettings.title")}
+      unstyled
+      panelClassName="bg-background rounded-lg shadow-xl max-w-md w-full mx-4 p-6 border border-border max-h-[90vh] overflow-y-auto"
+      titleClassName="text-xl font-semibold text-foreground mb-4"
+    >
           {/* Book info */}
           <div className="mb-6 space-y-3">
             <div>
@@ -229,6 +214,8 @@ export function BookSettingsDialog({
                   {t("books.language")}
                 </label>
                 <Select
+                  id="book-language"
+                  ariaLabel={t("books.language")}
                   value={language}
                   onChange={setLanguage}
                   options={LANGUAGES.map((lang) => ({
@@ -282,15 +269,18 @@ export function BookSettingsDialog({
           </div>
 
           {/* Danger zone accordion */}
-          <Disclosure>
-            {({ open }) => (
-              <div className="border-t border-border pt-4 mt-4">
-                <DisclosureButton className="flex w-full items-center justify-between text-sm font-medium text-destructive">
+          <Disclosure className="border-t border-border pt-4 mt-4">
+            {({ isExpanded }) => (
+              <>
+                <AriaButton
+                  slot="trigger"
+                  className="flex w-full items-center justify-between text-sm font-medium text-destructive"
+                >
                   {t("bookSettings.dangerZone")}
                   <ChevronDownIcon
-                    className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`}
+                    className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                   />
-                </DisclosureButton>
+                </AriaButton>
                 <DisclosurePanel className="mt-3">
                   {!showDeleteConfirm ? (
                     <button
@@ -321,7 +311,7 @@ export function BookSettingsDialog({
                     </div>
                   )}
                 </DisclosurePanel>
-              </div>
+              </>
             )}
           </Disclosure>
 
@@ -334,8 +324,6 @@ export function BookSettingsDialog({
               {t("common.save")}
             </Button>
           </div>
-        </DialogPanel>
-      </div>
-    </Dialog>
+    </Modal>
   );
 }

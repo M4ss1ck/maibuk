@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
-import { Button, Switch, Select } from "@/components/ui";
+import { Button, Modal, Switch, Select } from "@/components/ui";
 import {
   generateEpub,
   getEpubFilename,
@@ -21,7 +20,6 @@ import type { Chapter } from "@/features/chapters/types";
 import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, CheckIcon, XIcon } from "@/components/icons";
-import { useModalScope } from "@/hooks";
 
 interface ExportDialogProps {
   isOpen: boolean;
@@ -41,8 +39,6 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
     generateMaibukToc: true,
   });
   const [hasProjectEpubData, setHasProjectEpubData] = useState(false);
-
-  useModalScope(isOpen);
 
   const [progress, setProgress] = useState<ExportProgress>({
     status: "idle",
@@ -175,23 +171,14 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
   ];
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} className="relative z-50" transition>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-closed:opacity-0"
-        aria-hidden="true"
-      />
-
-      {/* Dialog container */}
-      <div className="fixed inset-0 flex items-end sm:items-center justify-center sm:p-4">
-        <DialogPanel
-          transition
-          className="bg-background rounded-t-xl sm:rounded-lg shadow-xl max-w-md w-full p-4 sm:p-6 border border-border max-h-[90vh] overflow-auto transition duration-200 ease-out data-closed:translate-y-4 data-closed:opacity-0 data-closed:sm:scale-95 data-closed:sm:translate-y-0"
-        >
-          <DialogTitle className="text-lg sm:text-xl font-semibold text-foreground mb-4">
-            {t("export.title")}
-          </DialogTitle>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={t("export.title")}
+      unstyled
+      panelClassName="bg-background rounded-t-xl sm:rounded-lg shadow-xl max-w-md w-full sm:mx-4 p-4 sm:p-6 border border-border max-h-[90vh] overflow-auto"
+      titleClassName="text-lg sm:text-xl font-semibold text-foreground mb-4"
+    >
           {/* Book info */}
           <div className="mb-6 p-3 bg-info-bg rounded-lg border border-border">
             <p className="font-medium text-foreground">{book.title}</p>
@@ -408,6 +395,7 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
                   </label>
                   <Select
                     id="page-size"
+                    ariaLabel={t("export.pageSize")}
                     value={pdfOptions.pageSize}
                     onChange={(value) =>
                       setPdfOptions((prev) => ({
@@ -425,6 +413,7 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
                   </label>
                   <Select
                     id="margin-presets"
+                    ariaLabel={t("export.marginPreset")}
                     value={pdfOptions.margins}
                     onChange={(value) =>
                       setPdfOptions((prev) => ({
@@ -478,8 +467,6 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
                   : t("export.exportPdf")}
             </Button>
           </div>
-        </DialogPanel>
-      </div>
-    </Dialog>
+    </Modal>
   );
 }

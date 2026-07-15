@@ -12,4 +12,6 @@ export function useModalScope(isOpen: boolean) {
       unregister(id);
     };
   }, [isOpen, id]);
+
+  return id;
 }

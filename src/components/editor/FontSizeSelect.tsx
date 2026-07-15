@@ -25,6 +25,7 @@ export function FontSizeSelect({ editor, value }: FontSizeSelectProps) {
       onChange={handleChange}
       options={FONT_SIZE_OPTIONS}
       placeholder={t("editor.size")}
+      ariaLabel={t("editor.size")}
     />
   );
 }

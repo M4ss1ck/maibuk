@@ -152,6 +152,7 @@
     "switchToNormalView": "Switch to normal view",
     "switchToCompactView": "Switch to compact view",
     "reorder": "Reorder",
+    "chapterType": "Chapter type",
     "typeChapter": "Chapter",
     "typePrologue": "Prologue",
     "typeEpilogue": "Epilogue",
@@ -859,6 +860,7 @@
     },
     "props": {
       "title": "Properties",
+      "fontFamily": "Font",
       "size": "Size",
       "lineHeight": "Line height",
       "letterSpacing": "Spacing",

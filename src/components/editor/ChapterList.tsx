@@ -227,6 +227,7 @@ export function ChapterList({
             }}
           />
           <Select
+            ariaLabel={t("chapters.chapterType")}
             value={newType}
             onChange={(value) => setNewType(value)}
             className="mb-2"
@@ -345,6 +346,7 @@ export function ChapterList({
                       }}
                     />
                     <Select
+                      ariaLabel={t("chapters.chapterType")}
                       value={editType}
                       onChange={(value) => setEditType(value)}
                       options={Object.entries(chapterTypeLabels).map(([value, label]) => ({

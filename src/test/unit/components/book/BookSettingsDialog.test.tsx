@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -67,5 +67,27 @@ describe("BookSettingsDialog modal registration", () => {
     await user.keyboard("{Escape}");
 
     expect(useModalStore.getState().openCount).toBe(0);
+  });
+
+  it("expands and collapses the danger zone with the keyboard", async () => {
+    const user = userEvent.setup();
+
+    render(<Harness initialOpen />);
+
+    const trigger = screen.getByRole("button", {
+      name: "bookSettings.dangerZone",
+    });
+    trigger.focus();
+
+    await user.keyboard(" ");
+    expect(
+      screen.getByRole("button", { name: "books.deleteBook" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard(" ");
+    expect(
+      screen.queryByRole("button", { name: "books.deleteBook" }),
+    ).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });
