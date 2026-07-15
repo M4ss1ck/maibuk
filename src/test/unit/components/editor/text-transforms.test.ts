@@ -41,16 +41,34 @@ describe("transformSelectedText", () => {
     expect(instance.getText()).toBe("B👩‍💻A");
   });
 
-  it("mirrors supported characters and leaves unsupported ones intact", () => {
+  it("mirrors supported characters and preserves punctuation without a substitute", () => {
     const instance = transformAll("<p>abc!</p>", "horizontalMirror");
 
     expect(instance.getText()).toBe("!ɔdɒ");
+  });
+
+  it("provides horizontal mirror substitutions for the complete ASCII alphabet", () => {
+    const instance = transformAll(
+      "<p>ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz</p>",
+      "horizontalMirror"
+    );
+
+    expect(instance.getText()).toBe("zyxwvutƨɿpqoᴎml𝼃ꞁih𝼁ꟻɘbɔdɒZYXWVUTƧЯϘꟼOИM⅃ꓘႱIH⅁ꟻƎꓷↃꓭA");
   });
 
   it("turns text upside down with Unicode approximations", () => {
     const instance = transformAll("<p>Hello!</p>", "upsideDown");
 
     expect(instance.getText()).toBe("¡ollǝH");
+  });
+
+  it("provides upside-down substitutions for the complete ASCII alphabet", () => {
+    const instance = transformAll(
+      "<p>ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz</p>",
+      "upsideDown"
+    );
+
+    expect(instance.getText()).toBe("zʎxʍʌnʇsɹbdouɯlʞɾᴉɥƃɟǝpɔqɐZ⅄XMΛ∩⊥SᴚΌԀONW˥⋊ſIHפℲƎꓷƆꓭ∀");
   });
 
   it("converts the selected characters to leetspeak in place", () => {
