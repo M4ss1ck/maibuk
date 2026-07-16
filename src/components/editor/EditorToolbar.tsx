@@ -16,11 +16,12 @@ import { Tooltip, TooltipGroup } from "@/components/ui";
 import { ZoomControl } from "@/components/editor/ZoomControl";
 import { WidthControl } from "@/components/editor/WidthControl";
 import { DictionaryDialog } from "@/components/editor/DictionaryDialog";
+import { DictionaryPromptDialog } from "@/components/editor/DictionaryPromptDialog";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
-import { useActiveShortcuts } from "@/hooks";
+import { useActiveShortcuts, type ShortcutItem } from "@/hooks";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Language } from "@/features/settings/types";
@@ -63,10 +64,18 @@ export function EditorToolbar({
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showHtmlPanel, setShowHtmlPanel] = useState(false);
   const [showDictionaryDialog, setShowDictionaryDialog] = useState(false);
+  const [showDictionaryPrompt, setShowDictionaryPrompt] = useState(false);
   const [dictionaryWord, setDictionaryWord] = useState("");
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showToolbarSettings, setShowToolbarSettings] = useState(false);
   const shortcuts = useActiveShortcuts();
+  // Snapshot the active shortcuts before opening the help dialog: useActiveShortcuts
+  // returns [] while any modal is open, and the help dialog is itself a modal.
+  const helpSnapshotRef = useRef<ShortcutItem[]>([]);
+  const openShortcutsHelp = useCallback(() => {
+    helpSnapshotRef.current = shortcuts;
+    setShowShortcutsHelp(true);
+  }, [shortcuts]);
   const [isToolbarExpanded, setIsToolbarExpanded] = [
     useSettingsStore((state) => state.toolbarExpanded),
     useSettingsStore((state) => state.setToolbarExpanded),
@@ -76,6 +85,7 @@ export function EditorToolbar({
   const bookSidePanelTab = useSettingsStore((state) => state.bookSidePanelTab);
   const setBookSidePanelTab = useSettingsStore((state) => state.setBookSidePanelTab);
   const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
+  const setDictionaryOpenInBrowser = useSettingsStore((state) => state.setDictionaryOpenInBrowser);
 
   // Track editor focus with a delayed blur so toolbar clicks still read it as focused
   const editorWasFocusedRef = useRef(false);
@@ -145,16 +155,19 @@ export function EditorToolbar({
   const handleOpenDictionary = () => {
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to, " ").trim();
-    if (!selectedText) return;
+    if (!selectedText) {
+      setShowDictionaryPrompt(true);
+      return;
+    }
     const word = selectedText.split(/\s+/)[0];
     if (!word) return;
     handleLookupWord(word);
   };
 
   const handleLookupWord = useCallback(
-    (word: string) => {
+    (word: string, language: Language = spellCheckLanguage) => {
       if (dictionaryOpenInBrowser) {
-        const url = `https://${spellCheckLanguage}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
+        const url = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
         openExternal(url);
         return;
       }
@@ -213,6 +226,11 @@ export function EditorToolbar({
       onTrigger: openFindReplace,
     },
     {
+      keys: matchKeys("editor.dictionary"),
+      allowInInput: true,
+      onTrigger: handleOpenDictionary,
+    },
+    {
       keys: matchKeys("editor.toolbarSettings"),
       allowInInput: true,
       onTrigger: () => setShowToolbarSettings(true),
@@ -253,10 +271,7 @@ export function EditorToolbar({
           callbacks={callbacks}
           utilityCluster={
             <>
-              <ToolbarButton
-                onClick={() => setShowShortcutsHelp(true)}
-                label={t("shortcuts.title")}
-              >
+              <ToolbarButton onClick={openShortcutsHelp} label={t("shortcuts.title")}>
                 <span className="w-4 h-4 flex items-center justify-center font-bold">?</span>
               </ToolbarButton>
               <Divider />
@@ -344,11 +359,19 @@ export function EditorToolbar({
           language={spellCheckLanguage}
           onClose={() => setShowDictionaryDialog(false)}
         />
+        <DictionaryPromptDialog
+          isOpen={showDictionaryPrompt}
+          defaultLanguage={spellCheckLanguage}
+          openInBrowser={dictionaryOpenInBrowser}
+          onOpenInBrowserChange={setDictionaryOpenInBrowser}
+          onClose={() => setShowDictionaryPrompt(false)}
+          onSubmit={(word, language) => handleLookupWord(word, language)}
+        />
         <ShortcutsHelpDialog
           isOpen={showShortcutsHelp}
           onClose={() => setShowShortcutsHelp(false)}
           title={t("shortcuts.title")}
-          shortcuts={shortcuts}
+          shortcuts={helpSnapshotRef.current}
         />
         <ToolbarSettingsDialog
           isOpen={showToolbarSettings}

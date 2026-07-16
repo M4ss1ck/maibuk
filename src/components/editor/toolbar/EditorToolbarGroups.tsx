@@ -555,8 +555,8 @@ export function EditorToolbarGroups({
         return (
           <ToolbarButton
             onClick={callbacks.openDictionary}
-            disabled={!editorState.hasSelection}
             label={t("editor.dictionary")}
+            shortcut="editor.dictionary"
           >
             <BookOpen className={icon} />
           </ToolbarButton>

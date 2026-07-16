@@ -37,6 +37,30 @@ it("excludes the toolbar settings shortcut on a non-book route", () => {
   expect(result.current.some((item) => item.id === "editor.toolbarSettings")).toBe(false);
 });
 
+it("includes the dictionary shortcut on a book route", () => {
+  const { result } = renderHook(() => useActiveShortcuts(), {
+    wrapper: wrapperFor("/book/abc"),
+  });
+
+  expect(result.current.some((item) => item.id === "editor.dictionary")).toBe(true);
+});
+
+it("includes the dictionary shortcut on the ephemeral route", () => {
+  const { result } = renderHook(() => useActiveShortcuts(), {
+    wrapper: wrapperFor("/ephemeral"),
+  });
+
+  expect(result.current.some((item) => item.id === "editor.dictionary")).toBe(true);
+});
+
+it("excludes the dictionary shortcut on a non-editor route", () => {
+  const { result } = renderHook(() => useActiveShortcuts(), {
+    wrapper: wrapperFor("/settings"),
+  });
+
+  expect(result.current.some((item) => item.id === "editor.dictionary")).toBe(false);
+});
+
 it("includes the localized Ephemeral shortcut between Canvas and Metrics", () => {
   const { result } = renderHook(() => useActiveShortcuts(), {
     wrapper: wrapperFor("/settings"),

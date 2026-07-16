@@ -12,4 +12,9 @@ describe("shortcut locale labels", () => {
     expect(en.shortcuts.toggleAlwaysOnTop).toBe("Toggle always on top");
     expect(es.shortcuts.toggleAlwaysOnTop).toBe("Alternar siempre visible");
   });
+
+  it("reuses the dictionary label for the dictionary shortcut", () => {
+    expect(en.editor.dictionary).toBe("Dictionary");
+    expect(es.editor.dictionary).toBe("Diccionario");
+  });
 });

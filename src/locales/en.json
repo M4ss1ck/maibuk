@@ -583,7 +583,12 @@
   "dictionary": {
     "title": "Dictionary",
     "noDefinition": "No definition found",
-    "viewOnWiktionary": "View on Wiktionary"
+    "viewOnWiktionary": "View on Wiktionary",
+    "promptTitle": "Look up a word",
+    "wordLabel": "Word",
+    "wordPlaceholder": "Enter a word",
+    "languageLabel": "Language",
+    "lookUp": "Look up"
   },
   "export": {
     "title": "Export Book",
