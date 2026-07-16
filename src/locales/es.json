@@ -37,6 +37,7 @@
     "metrics": "Métricas",
     "notes": "Notas",
     "canvas": "Lienzos",
+    "ephemeral": "Efímero",
     "copied": "¡Copiado!",
     "paste": "Pegar",
     "copy": "Copiar",
@@ -220,6 +221,11 @@
     "collapseHeading": "Contraer encabezado",
     "expandHeading": "Expandir encabezado",
     "backlinks": "Enlazado desde"
+  },
+  "ephemeral": {
+    "placeholder": "Escribe algo que no necesites guardar...",
+    "clear": "Vaciar",
+    "createNote": "Crear nota"
   },
   "canvas": {
     "title": "Lienzos",

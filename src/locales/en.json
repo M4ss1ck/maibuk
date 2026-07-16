@@ -37,6 +37,7 @@
     "metrics": "Metrics",
     "notes": "Notes",
     "canvas": "Canvas",
+    "ephemeral": "Ephemeral",
     "copied": "Copied!",
     "paste": "Paste",
     "copy": "Copy",
@@ -220,6 +221,11 @@
     "collapseHeading": "Collapse heading",
     "expandHeading": "Expand heading",
     "backlinks": "Linked from"
+  },
+  "ephemeral": {
+    "placeholder": "Type something you don't need to keep...",
+    "clear": "Clear",
+    "createNote": "Create note"
   },
   "canvas": {
     "title": "Canvas",
