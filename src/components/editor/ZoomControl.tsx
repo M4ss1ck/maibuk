@@ -48,8 +48,9 @@ export function ZoomControl() {
           ref={buttonRef}
           type="button"
           onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
-          className={`px-2 py-1 rounded text-sm transition-colors ${showMenu ? "bg-primary text-white" : "hover:bg-muted"
-            }`}
+          className={`px-2 py-1 rounded text-sm transition-colors ${
+            showMenu ? "bg-primary text-white" : "hover:bg-muted"
+          }`}
         >
           {editorZoom}%
         </button>

@@ -26,8 +26,7 @@ const settingsState = {
   setAlwaysOnTop: vi.fn(),
 };
 vi.mock("@/features/settings/store", () => ({
-  useSettingsStore: (selector: (state: typeof settingsState) => unknown) =>
-    selector(settingsState),
+  useSettingsStore: (selector: (state: typeof settingsState) => unknown) => selector(settingsState),
 }));
 
 vi.mock("@/features/sync/store", () => ({

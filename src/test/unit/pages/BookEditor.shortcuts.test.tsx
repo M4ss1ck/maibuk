@@ -63,12 +63,20 @@ vi.mock("../../../hooks/useAutoSave", () => ({
 vi.mock("../../../features/books/store", () => ({
   useBookStore: () => ({
     currentBook: {
-      id: "book-1", title: "Draft", authorName: "Author",
-      language: "en", wordCount: 0, status: "draft",
-      createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+      id: "book-1",
+      title: "Draft",
+      authorName: "Author",
+      language: "en",
+      wordCount: 0,
+      status: "draft",
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
     },
     isLoading: false,
-    loadBook: vi.fn(), updateWordCount: vi.fn(), updateBook: vi.fn(), deleteBook: vi.fn(),
+    loadBook: vi.fn(),
+    updateWordCount: vi.fn(),
+    updateBook: vi.fn(),
+    deleteBook: vi.fn(),
   }),
 }));
 
@@ -77,23 +85,39 @@ vi.mock("../../../features/chapters/store", () => ({
     chapters: [],
     currentBookId: "book-1",
     isLoading: false,
-    currentChapter: { id: "c1", title: "Ch1", content: "<p>x</p>", wordCount: 1, order: 0, chapterType: "chapter" },
-    loadChapters: vi.fn(), createChapter: vi.fn(), updateChapter: mockUpdateChapter,
-    deleteChapter: vi.fn(), reorderChapters: vi.fn(), setCurrentChapter: vi.fn(),
+    currentChapter: {
+      id: "c1",
+      title: "Ch1",
+      content: "<p>x</p>",
+      wordCount: 1,
+      order: 0,
+      chapterType: "chapter",
+    },
+    loadChapters: vi.fn(),
+    createChapter: vi.fn(),
+    updateChapter: mockUpdateChapter,
+    deleteChapter: vi.fn(),
+    reorderChapters: vi.fn(),
+    setCurrentChapter: vi.fn(),
   }),
 }));
 
 vi.mock("../../../features/settings/store", () => ({
   useSettingsStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
-      sidebarWidth: 256, setSidebarWidth: vi.fn(),
-      notesSidebarWidth: 256, setNotesSidebarWidth: vi.fn(),
+      sidebarWidth: 256,
+      setSidebarWidth: vi.fn(),
+      notesSidebarWidth: 256,
+      setNotesSidebarWidth: vi.fn(),
       showInlineFootnotes: true,
-      showNotesChapter: false, setShowNotesChapter: vi.fn(),
-      bookSidePanelTab: "footnotes", setBookSidePanelTab: vi.fn(),
+      showNotesChapter: false,
+      setShowNotesChapter: vi.fn(),
+      bookSidePanelTab: "footnotes",
+      setBookSidePanelTab: vi.fn(),
       hideKeyboardHints: true,
       setHideKeyboardHints: vi.fn(),
-      alwaysOnTop: false, setAlwaysOnTop: vi.fn(),
+      alwaysOnTop: false,
+      setAlwaysOnTop: vi.fn(),
     }),
 }));
 
@@ -106,10 +130,13 @@ vi.mock("../../../features/versions/store", () => ({
 }));
 
 vi.mock("../../../features/notes", () => ({
-  useNoteStore: Object.assign((selector?: (s: any) => any) => {
-    const state = { notes: [], loadNotes: vi.fn(), createNote: vi.fn() };
-    return selector ? selector(state) : state;
-  }, { getState: () => ({ currentNote: null }) }),
+  useNoteStore: Object.assign(
+    (selector?: (s: any) => any) => {
+      const state = { notes: [], loadNotes: vi.fn(), createNote: vi.fn() };
+      return selector ? selector(state) : state;
+    },
+    { getState: () => ({ currentNote: null }) }
+  ),
 }));
 
 vi.mock("../../../features/theme", () => ({
@@ -149,6 +176,7 @@ vi.mock("../../../lib/db", () => ({
 vi.mock("../../../components/editor", () => ({
   ChapterList: () => <div data-testid="chapter-list" />,
   Editor: ({ onEscape }: { onEscape?: () => void }) => (
+    // biome-ignore lint/a11y/useSemanticElements: A contenteditable rich-text editor is correctly exposed as a textbox.
     <div
       aria-label="Editor content"
       data-testid="editor"
@@ -194,9 +222,8 @@ import { BookEditor } from "@/pages/BookEditor";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { SHORTCUTS } from "@/lib/shortcut-registry";
 
-const { useShortcuts: useRealShortcuts } = await vi.importActual<
-  typeof import("@/lib/shortcuts")
->("@/lib/shortcuts");
+const { useShortcuts: useRealShortcuts } =
+  await vi.importActual<typeof import("@/lib/shortcuts")>("@/lib/shortcuts");
 
 type ShortcutConfig = Parameters<typeof useRealShortcuts>[0][number];
 type SequenceDefinition = Extract<
@@ -206,12 +233,14 @@ type SequenceDefinition = Extract<
 
 function BareSequenceHarness({ onTrigger }: { onTrigger: () => void }) {
   const sequences = Object.values(SHORTCUTS)
-    .filter((definition): definition is SequenceDefinition =>
-      "sequence" in definition && definition.sequence[0] === "g"
+    .filter(
+      (definition): definition is SequenceDefinition =>
+        "sequence" in definition && definition.sequence[0] === "g"
     )
     .map<ShortcutConfig>((definition) => ({ sequence: definition.sequence, onTrigger }));
   useRealShortcuts(sequences);
   return (
+    // biome-ignore lint/a11y/useSemanticElements: A contenteditable rich-text editor is correctly exposed as a textbox.
     <div
       aria-label="Sequence editor"
       contentEditable
@@ -344,6 +373,7 @@ describe("BookEditor shortcuts", () => {
     render(
       <>
         <GlobalShortcuts />
+        {/* biome-ignore lint/a11y/useSemanticElements: A contenteditable rich-text editor is correctly exposed as a textbox. */}
         <div
           aria-label="Global editor"
           contentEditable
@@ -358,11 +388,7 @@ describe("BookEditor shortcuts", () => {
     editor.focus();
 
     await user.keyboard("{Control>}{Shift>}y{/Shift}{/Control}");
-    expect(mockSyncSingleBook).toHaveBeenCalledWith(
-      "book-1",
-      "passphrase",
-      expect.any(Function)
-    );
+    expect(mockSyncSingleBook).toHaveBeenCalledWith("book-1", "passphrase", expect.any(Function));
 
     editor.focus();
     await user.keyboard("{F6}");

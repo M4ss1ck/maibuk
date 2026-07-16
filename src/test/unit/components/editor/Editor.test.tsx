@@ -41,12 +41,24 @@ for (const prototype of [Range.prototype, Text.prototype, Comment.prototype]) {
 if (typeof globalThis.DataTransfer === "undefined") {
   (globalThis as any).DataTransfer = class DataTransfer {
     private data: Record<string, string> = {};
-    getData(format: string) { return this.data[format] ?? ""; }
-    setData(format: string, value: string) { this.data[format] = value; }
-    clearData() { this.data = {}; }
-    get types() { return Object.keys(this.data); }
-    get files() { return []; }
-    get items() { return []; }
+    getData(format: string) {
+      return this.data[format] ?? "";
+    }
+    setData(format: string, value: string) {
+      this.data[format] = value;
+    }
+    clearData() {
+      this.data = {};
+    }
+    get types() {
+      return Object.keys(this.data);
+    }
+    get files() {
+      return [];
+    }
+    get items() {
+      return [];
+    }
   };
 }
 if (typeof globalThis.ClipboardEvent === "undefined") {
@@ -138,7 +150,11 @@ vi.mock("../../../../components/editor/FootnoteList", () => ({
 
 vi.mock("../../../../components/editor/MarkdownPasteDialog", async () => ({
   MarkdownPasteDialog: ({ markdown }: { markdown: string | null }) =>
-    markdown ? <div data-testid="markdown-paste-dialog" role="dialog">{markdown}</div> : null,
+    markdown ? (
+      <div data-testid="markdown-paste-dialog" role="dialog">
+        {markdown}
+      </div>
+    ) : null,
 }));
 
 vi.mock("../../../../components/editor/extensions/SpellCheck", async () => {
@@ -231,7 +247,11 @@ describe("Editor", () => {
     // An external change (not an echo of the editor's own document) must reset
     // the document so restores/deep-links keep working.
     rerender(
-      <Editor content={"<p>Restored from a version</p>"} onUpdate={vi.fn()} onWordCountChange={vi.fn()} />
+      <Editor
+        content={"<p>Restored from a version</p>"}
+        onUpdate={vi.fn()}
+        onWordCountChange={vi.fn()}
+      />
     );
 
     await waitFor(() => {

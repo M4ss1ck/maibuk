@@ -1,4 +1,8 @@
-import type { DailyAggregateMetricPayload, MetricEvent, WritingMetricPayload } from "@/features/metrics/types";
+import type {
+  DailyAggregateMetricPayload,
+  MetricEvent,
+  WritingMetricPayload,
+} from "@/features/metrics/types";
 import type { DayWordTotal } from "@/features/metrics/events-repo";
 import type {
   AggregateKey,

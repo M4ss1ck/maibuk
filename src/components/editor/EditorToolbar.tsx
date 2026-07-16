@@ -3,7 +3,11 @@ import type { Editor } from "@tiptap/react";
 import { FindReplace } from "@/components/editor/FindReplace";
 import { ImageInsertDialog } from "@/components/editor/ImageInsertDialog";
 import { FootnoteDialog } from "@/components/editor/FootnoteDialog";
-import { LinkDialog, type InternalTarget, type InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
+import {
+  LinkDialog,
+  type InternalTarget,
+  type InternalTargetChildrenLoader,
+} from "@/components/editor/LinkDialog";
 import { HtmlViewPanel } from "@/components/editor/HtmlViewPanel";
 import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 import { findBlockOffsetInHtml } from "@/components/editor/HtmlInspectMenu";
@@ -249,7 +253,10 @@ export function EditorToolbar({
           callbacks={callbacks}
           utilityCluster={
             <>
-              <ToolbarButton onClick={() => setShowShortcutsHelp(true)} label={t("shortcuts.title")}>
+              <ToolbarButton
+                onClick={() => setShowShortcutsHelp(true)}
+                label={t("shortcuts.title")}
+              >
                 <span className="w-4 h-4 flex items-center justify-center font-bold">?</span>
               </ToolbarButton>
               <Divider />
@@ -267,7 +274,9 @@ export function EditorToolbar({
               <WidthControl />
               <Divider />
               <ZoomControl />
-              <Tooltip content={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}>
+              <Tooltip
+                content={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
+              >
                 <button
                   type="button"
                   onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}

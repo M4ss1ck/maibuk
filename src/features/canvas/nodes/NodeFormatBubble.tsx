@@ -4,10 +4,7 @@ import { useStore } from "@xyflow/react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { FormattingButtons, LinkClickHandler, LinkDialog } from "@/components/editor";
-import type {
-  InternalTarget,
-  InternalTargetChildrenLoader,
-} from "@/components/editor/LinkDialog";
+import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { useBookStore } from "@/features/books/store";
 import { getChapterForLinking, listChaptersForBookLinking } from "@/features/chapters/store";
 import { assignHeadingIds } from "@/features/links/heading-ids";

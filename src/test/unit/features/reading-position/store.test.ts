@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  MAX_READING_POSITIONS,
-  useReadingPositionStore,
-} from "@/features/reading-position/store";
+import { MAX_READING_POSITIONS, useReadingPositionStore } from "@/features/reading-position/store";
 
 describe("useReadingPositionStore", () => {
   beforeEach(() => {

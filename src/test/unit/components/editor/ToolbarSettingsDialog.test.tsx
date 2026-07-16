@@ -18,11 +18,11 @@ vi.mock("react-i18next", async (importOriginal) => ({
   useTranslation: () => ({
     t: (key: string) =>
       (i18nTestState.localizeGroupLabels
-        ? ({
+        ? {
             "toolbar.groups.history": "History",
             "toolbar.groups.font": "Font",
             "toolbar.groups.basicMarks": "Basic marks",
-          })[key]
+          }[key]
         : undefined) ?? key,
   }),
 }));
@@ -82,10 +82,7 @@ async function tabToControl(
   expect(control).toHaveFocus();
 }
 
-async function arrowToDropTarget(
-  user: ReturnType<typeof userEvent.setup>,
-  accessibleName: string
-) {
+async function arrowToDropTarget(user: ReturnType<typeof userEvent.setup>, accessibleName: string) {
   for (
     let index = 0;
     index < 10 && document.activeElement?.getAttribute("aria-label") !== accessibleName;
@@ -191,8 +188,12 @@ it("renders two labelled grids with section headers inside and labels for each e
   renderDialog();
   expect(findStartGrid()).toBeInTheDocument();
   expect(findEndGrid()).toBeInTheDocument();
-  expect(screen.getByTestId("toolbar-section-header-start")).toHaveTextContent("toolbar.settings.start");
-  expect(screen.getByTestId("toolbar-section-header-end")).toHaveTextContent("toolbar.settings.end");
+  expect(screen.getByTestId("toolbar-section-header-start")).toHaveTextContent(
+    "toolbar.settings.start"
+  );
+  expect(screen.getByTestId("toolbar-section-header-end")).toHaveTextContent(
+    "toolbar.settings.end"
+  );
   expect(findRowByName(/toolbar\.groups\.history/)).toBeInTheDocument();
   expect(findRowByName(/toolbar\.groups\.basicMarks/)).toBeInTheDocument();
 });
@@ -218,7 +219,9 @@ it("toggles group floating visibility via keyboard Space when eligible", async (
   const user = userEvent.setup();
   renderDialog();
   const basicMarksRow = findRowByName(/toolbar\.groups\.basicMarks/);
-  const sw = within(basicMarksRow).getByRole("switch", { name: "toolbar.settings.floatingVisible" });
+  const sw = within(basicMarksRow).getByRole("switch", {
+    name: "toolbar.settings.floatingVisible",
+  });
   expect(sw).toHaveAttribute("aria-checked", "true");
 
   await tabToControl(user, basicMarksRow, sw);
@@ -325,10 +328,9 @@ describe("contextual add divider controls", () => {
     });
     renderDialog();
 
-    const control = within(screen.getByTestId("toolbar-add-divider-start-1")).getByRole(
-      "button",
-      { name: "toolbar.settings.addDivider" }
-    );
+    const control = within(screen.getByTestId("toolbar-add-divider-start-1")).getByRole("button", {
+      name: "toolbar.settings.addDivider",
+    });
     control.focus();
     expect(control).toHaveFocus();
     expect(control).toHaveAttribute("aria-label", "toolbar.settings.addDivider");
@@ -360,7 +362,9 @@ it("moves entries up and down via keyboard Enter and disables move buttons at bo
   const historyRow = findRowByName(/toolbar\.groups\.history/);
   const moveDownBtn = within(historyRow).getByRole("button", { name: "toolbar.settings.moveDown" });
 
-  expect(within(historyRow).getByRole("button", { name: "toolbar.settings.moveUp" })).toBeDisabled();
+  expect(
+    within(historyRow).getByRole("button", { name: "toolbar.settings.moveUp" })
+  ).toBeDisabled();
 
   moveDownBtn.focus();
   await user.keyboard("{Enter}");
@@ -387,7 +391,9 @@ describe("keyboard operation of every control", () => {
     const user = userEvent.setup();
     renderDialog();
     const basicMarksRow = findRowByName(/toolbar\.groups\.basicMarks/);
-    const sw = within(basicMarksRow).getByRole("switch", { name: "toolbar.settings.floatingVisible" });
+    const sw = within(basicMarksRow).getByRole("switch", {
+      name: "toolbar.settings.floatingVisible",
+    });
     expect(sw).toHaveAttribute("aria-checked", "true");
 
     await tabToControl(user, basicMarksRow, sw);
@@ -434,10 +440,9 @@ describe("keyboard operation of every control", () => {
     });
     renderDialog();
 
-    const addBtn = within(screen.getByTestId("toolbar-add-divider-start-1")).getByRole(
-      "button",
-      { name: "toolbar.settings.addDivider" }
-    );
+    const addBtn = within(screen.getByTestId("toolbar-add-divider-start-1")).getByRole("button", {
+      name: "toolbar.settings.addDivider",
+    });
 
     addBtn.focus();
     expect(addBtn).toHaveFocus();
@@ -458,7 +463,10 @@ describe("keyboard operation of every control", () => {
 
     expect(useSettingsStore.getState().toolbarConfig.start).toHaveLength(TEST_CONFIG.start.length);
 
-    const confirmBtn = screen.getByRole("button", { name: "toolbar.settings.resetConfirm", hidden: true });
+    const confirmBtn = screen.getByRole("button", {
+      name: "toolbar.settings.resetConfirm",
+      hidden: true,
+    });
     confirmBtn.focus();
     await user.keyboard("{Enter}");
 
@@ -625,9 +633,7 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: TEST_CONFIG.start,
-        end: [
-          { kind: "group", id: "find", toolbarVisible: true, floatingVisible: false },
-        ],
+        end: [{ kind: "group", id: "find", toolbarVisible: true, floatingVisible: false }],
       },
     });
     renderDialog();
@@ -685,7 +691,9 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     const user = userEvent.setup();
     renderDialog();
     const historyRow = findRowByName(/toolbar\.groups\.history/);
-    const dragHandle = within(historyRow).getByRole("button", { name: "toolbar.settings.dragHandle" });
+    const dragHandle = within(historyRow).getByRole("button", {
+      name: "toolbar.settings.dragHandle",
+    });
 
     await tabToControl(user, historyRow, dragHandle);
   });
@@ -806,22 +814,13 @@ describe("column headers and tooltips", () => {
     expect(viewport).toBeInTheDocument();
 
     const header = viewport.firstElementChild as HTMLElement;
-    expect(header).toHaveClass(
-      TOOLBAR_SETTINGS_ROW_GRID,
-      TOOLBAR_SETTINGS_ROW_MIN_WIDTH
-    );
+    expect(header).toHaveClass(TOOLBAR_SETTINGS_ROW_GRID, TOOLBAR_SETTINGS_ROW_MIN_WIDTH);
 
     const historyRow = findRowByName(/toolbar\.groups\.history/);
-    expect(historyRow).toHaveClass(
-      TOOLBAR_SETTINGS_ROW_GRID,
-      TOOLBAR_SETTINGS_ROW_MIN_WIDTH
-    );
+    expect(historyRow).toHaveClass(TOOLBAR_SETTINGS_ROW_GRID, TOOLBAR_SETTINGS_ROW_MIN_WIDTH);
 
     const dividerRow = findRowByName(/toolbar\.settings\.dividerLabel/);
-    expect(dividerRow).toHaveClass(
-      TOOLBAR_SETTINGS_ROW_GRID,
-      TOOLBAR_SETTINGS_ROW_MIN_WIDTH
-    );
+    expect(dividerRow).toHaveClass(TOOLBAR_SETTINGS_ROW_GRID, TOOLBAR_SETTINGS_ROW_MIN_WIDTH);
   });
 
   it("places group controls and divider placeholders under the intended columns", () => {
@@ -837,29 +836,39 @@ describe("column headers and tooltips", () => {
     expect(
       within(historyRow).getByRole("switch", { name: "toolbar.settings.floatingUnavailable" })
     ).toBeInTheDocument();
-    expect(within(historyRow).getAllByRole("button", { name: "toolbar.settings.moveUp" })).toHaveLength(1);
-    expect(within(historyRow).getAllByRole("button", { name: "toolbar.settings.moveDown" })).toHaveLength(1);
+    expect(
+      within(historyRow).getAllByRole("button", { name: "toolbar.settings.moveUp" })
+    ).toHaveLength(1);
+    expect(
+      within(historyRow).getAllByRole("button", { name: "toolbar.settings.moveDown" })
+    ).toHaveLength(1);
 
     const dividerRow = findRowByName(/toolbar\.settings\.dividerLabel/);
 
     expect(
       within(dividerRow).getByRole("button", { name: "toolbar.settings.dragHandle" })
     ).toBeInTheDocument();
-    expect(within(dividerRow).getAllByRole("button", { name: "toolbar.settings.moveUp" })).toHaveLength(1);
-    expect(within(dividerRow).getAllByRole("button", { name: "toolbar.settings.moveDown" })).toHaveLength(1);
+    expect(
+      within(dividerRow).getAllByRole("button", { name: "toolbar.settings.moveUp" })
+    ).toHaveLength(1);
+    expect(
+      within(dividerRow).getAllByRole("button", { name: "toolbar.settings.moveDown" })
+    ).toHaveLength(1);
     expect(
       within(dividerRow).getByRole("button", { name: "toolbar.settings.remove" })
     ).toBeInTheDocument();
 
-    const hiddenCells = within(dividerRow).getAllByRole("generic", { hidden: true }).filter(
-      (el) => el.getAttribute("aria-hidden") === "true"
-    );
+    const hiddenCells = within(dividerRow)
+      .getAllByRole("generic", { hidden: true })
+      .filter((el) => el.getAttribute("aria-hidden") === "true");
     expect(hiddenCells.length).toBeGreaterThanOrEqual(1);
   });
 
   it("retains localized accessible names for icon-only controls", () => {
     renderDialog();
-    expect(screen.getAllByLabelText("toolbar.settings.dragHandle").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByLabelText("toolbar.settings.dragHandle").length).toBeGreaterThanOrEqual(
+      3
+    );
     expect(screen.getAllByRole("button", { name: "toolbar.settings.moveUp" })).toHaveLength(3);
     expect(screen.getAllByRole("button", { name: "toolbar.settings.moveDown" })).toHaveLength(3);
     expect(
@@ -868,9 +877,7 @@ describe("column headers and tooltips", () => {
     expect(
       screen.queryAllByRole("button", { name: "toolbar.settings.transferToStart" })
     ).toHaveLength(0);
-    expect(
-      screen.getByRole("button", { name: "toolbar.settings.remove" })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "toolbar.settings.remove" })).toBeInTheDocument();
   });
 
   it("aligns action column headers with their centered content", () => {
@@ -892,9 +899,7 @@ describe("column headers and tooltips", () => {
     const itemHeader = screen.getByText("toolbar.settings.itemColumn");
     fireEvent.mouseEnter(itemHeader);
     act(() => vi.advanceTimersByTime(500));
-    expect(screen.getByRole("tooltip")).toHaveTextContent(
-      "toolbar.settings.itemColumnHelp"
-    );
+    expect(screen.getByRole("tooltip")).toHaveTextContent("toolbar.settings.itemColumnHelp");
   });
 
   it("prevents text selection on draggable rows", () => {
@@ -912,8 +917,6 @@ describe("column headers and tooltips", () => {
     })[0];
     fireEvent.mouseEnter(moveUp);
     act(() => vi.advanceTimersByTime(500));
-    expect(screen.getByRole("tooltip")).toHaveTextContent(
-      "toolbar.settings.moveUp"
-    );
+    expect(screen.getByRole("tooltip")).toHaveTextContent("toolbar.settings.moveUp");
   });
 });

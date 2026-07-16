@@ -22,9 +22,7 @@ describe("NotesSortMenu", () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
 
-    render(
-      <NotesSortMenu value="date-desc" onChange={onChange} />,
-    );
+    render(<NotesSortMenu value="date-desc" onChange={onChange} />);
 
     const trigger = screen.getByRole("button", { name: "Sort by" });
     trigger.focus();
@@ -39,9 +37,7 @@ describe("NotesSortMenu", () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
 
-    render(
-      <NotesSortMenu value="date-desc" onChange={onChange} />,
-    );
+    render(<NotesSortMenu value="date-desc" onChange={onChange} />);
 
     const trigger = screen.getByRole("button", { name: "Sort by" });
     trigger.focus();

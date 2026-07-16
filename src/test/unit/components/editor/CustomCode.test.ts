@@ -22,9 +22,7 @@ const AFTER_CODE = 4;
 
 function codeMarkAt(editor: Editor, pos: number): boolean {
   editor.commands.setTextSelection(pos);
-  return editor.state.selection.$head
-    .marks()
-    .some((mark) => mark.type.name === "code");
+  return editor.state.selection.$head.marks().some((mark) => mark.type.name === "code");
 }
 
 describe("CustomCode non-inclusive boundary", () => {

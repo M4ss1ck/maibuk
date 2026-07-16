@@ -1,4 +1,9 @@
-import type { BackupAdapter, BackupEntry, BackupPage, BackupPageOptions } from "@/lib/platform/types";
+import type {
+  BackupAdapter,
+  BackupEntry,
+  BackupPage,
+  BackupPageOptions,
+} from "@/lib/platform/types";
 import { computeChecksum } from "@/lib/checksum";
 import { parseTriggerFromFilename } from "@/features/backup/utils";
 

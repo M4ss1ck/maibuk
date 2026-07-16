@@ -226,8 +226,9 @@ vi.mock("@tiptap/pm/state", () => {
 
 vi.mock("@/components/editor/Editor", () => ({
   Editor: (props: Record<string, unknown>) => (
-    <div data-testid="mocked-editor" role="textbox" aria-label="Editor">
+    <div data-testid="mocked-editor">
       {props.headerContent as React.ReactNode}
+      <textarea aria-label="Editor" />
     </div>
   ),
 }));
@@ -429,7 +430,7 @@ describe("Home page", () => {
         <Routes>
           <Route path="/" element={<Home />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByText("books.loading")).not.toBeInTheDocument();
@@ -452,7 +453,7 @@ describe("NotesGallery page", () => {
         <Routes>
           <Route path="/notes" element={<NotesGallery />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByText("notes.title")).toBeInTheDocument();
@@ -474,7 +475,7 @@ describe("CanvasGallery page", () => {
         <Routes>
           <Route path="/canvas" element={<CanvasGallery />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByText("canvas.title")).toBeInTheDocument();
@@ -498,7 +499,7 @@ describe("Metrics page", () => {
         <Routes>
           <Route path="/metrics" element={<Metrics />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByText("metrics.title")).toBeInTheDocument();
@@ -516,7 +517,7 @@ describe("Settings page", () => {
         <Routes>
           <Route path="/settings" element={<Settings />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByText("settings.title")).toBeInTheDocument();
@@ -548,7 +549,7 @@ describe("Notes page", () => {
         <Routes>
           <Route path="/notes/:noteId" element={<Notes />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByText("notes.untitled")).not.toBeInTheDocument();
@@ -623,7 +624,7 @@ describe("Canvas page", () => {
         <Routes>
           <Route path="/canvas/:canvasId" element={<CanvasPage />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByTestId("react-flow")).toBeInTheDocument();
@@ -678,7 +679,7 @@ describe("BookEditor page", () => {
         <Routes>
           <Route path="/book/:bookId" element={<BookEditor />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByText("editor.loading")).not.toBeInTheDocument();
@@ -705,7 +706,7 @@ describe("CoverDesigner page", () => {
         <Routes>
           <Route path="/book/:bookId/cover" element={<CoverDesigner />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     await waitFor(() => {
       expect(screen.queryByTestId("cover-canvas-stage")).toBeInTheDocument();

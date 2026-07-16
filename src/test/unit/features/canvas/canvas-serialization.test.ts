@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  CURRENT_CANVAS_SCHEMA_VERSION,
-  DEFAULT_CANVAS_DOC_JSON,
-} from "@/lib/canvas/defaultDoc";
+import { CURRENT_CANVAS_SCHEMA_VERSION, DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 import {
   normalizeParsedCanvasDoc,
   parseCanvasDoc,

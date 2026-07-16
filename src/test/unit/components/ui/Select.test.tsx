@@ -12,16 +12,12 @@ const options = [
 describe("Select", () => {
   describe("rendering", () => {
     it("renders a select button", () => {
-      render(
-        <Select value="apple" onChange={() => {}} options={options} ariaLabel="Fruit" />,
-      );
+      render(<Select value="apple" onChange={() => {}} options={options} ariaLabel="Fruit" />);
       expect(screen.getByRole("button")).toBeInTheDocument();
     });
 
     it("displays the selected option label in the button", () => {
-      render(
-        <Select value="banana" onChange={() => {}} options={options} ariaLabel="Fruit" />,
-      );
+      render(<Select value="banana" onChange={() => {}} options={options} ariaLabel="Fruit" />);
       const button = screen.getByRole("button");
       expect(button).toHaveTextContent("Banana");
     });
@@ -34,7 +30,7 @@ describe("Select", () => {
           options={options}
           endAdornment="/3"
           ariaLabel="Fruit"
-        />,
+        />
       );
 
       expect(screen.getByRole("button")).toHaveTextContent("Banana/3");
@@ -48,7 +44,7 @@ describe("Select", () => {
           options={options}
           minWidth="none"
           ariaLabel="Fruit"
-        />,
+        />
       );
 
       expect(screen.getByRole("button")).not.toHaveClass("min-w-35");
@@ -58,9 +54,7 @@ describe("Select", () => {
   describe("interaction", () => {
     it("opens dropdown on click", async () => {
       const user = userEvent.setup();
-      render(
-        <Select value="apple" onChange={() => {}} options={options} ariaLabel="Fruit" />,
-      );
+      render(<Select value="apple" onChange={() => {}} options={options} ariaLabel="Fruit" />);
 
       await user.click(screen.getByRole("button"));
 
@@ -75,9 +69,7 @@ describe("Select", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(
-        <Select value="apple" onChange={onChange} options={options} ariaLabel="Fruit" />,
-      );
+      render(<Select value="apple" onChange={onChange} options={options} ariaLabel="Fruit" />);
 
       await user.click(screen.getByRole("button"));
       const cherryOption = screen
@@ -92,9 +84,7 @@ describe("Select", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(
-        <Select value="apple" onChange={onChange} options={options} ariaLabel="Fruit" />,
-      );
+      render(<Select value="apple" onChange={onChange} options={options} ariaLabel="Fruit" />);
 
       const trigger = screen.getByRole("button", { name: /Fruit/ });
       trigger.focus();
@@ -110,9 +100,7 @@ describe("Select", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(
-        <Select value="apple" onChange={onChange} options={options} ariaLabel="Fruit" />,
-      );
+      render(<Select value="apple" onChange={onChange} options={options} ariaLabel="Fruit" />);
 
       const trigger = screen.getByRole("button", { name: /Fruit/ });
       trigger.focus();
@@ -132,9 +120,7 @@ describe("Select", () => {
         { value: 20, label: "20px" },
       ];
 
-      render(
-        <Select value={16} onChange={() => {}} options={numOptions} ariaLabel="Size" />,
-      );
+      render(<Select value={16} onChange={() => {}} options={numOptions} ariaLabel="Size" />);
       expect(screen.getByRole("button")).toHaveTextContent("16px");
     });
   });
@@ -148,7 +134,7 @@ describe("Select", () => {
           options={options}
           className="w-40"
           ariaLabel="Fruit"
-        />,
+        />
       );
       const wrapper = container.querySelector(".w-40");
       expect(wrapper).toBeInTheDocument();

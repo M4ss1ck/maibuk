@@ -27,7 +27,7 @@ vi.stubGlobal(
     observe() {}
     disconnect() {}
     unobserve() {}
-  },
+  }
 );
 vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
   cb(0);
@@ -58,9 +58,7 @@ const TWO_START_ONE_END_CONFIG: ToolbarConfig = {
     { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
     { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
   ],
-  end: [
-    { kind: "group", id: "export", toolbarVisible: true, floatingVisible: false },
-  ],
+  end: [{ kind: "group", id: "export", toolbarVisible: true, floatingVisible: false }],
 };
 
 beforeEach(() => {
@@ -78,7 +76,7 @@ function renderToolbar() {
       callbacks={callbacks}
       fixedUtilities={<div>fixed</div>}
       utilityCluster={<div>utils</div>}
-    />,
+    />
   );
 }
 
@@ -147,9 +145,7 @@ it("expanded: Start lane uses contents", () => {
 it("expanded: Start group boundaries expose their controls to the wrapping row", () => {
   useSettingsStore.setState({ toolbarExpanded: true });
   const { getByTestId } = renderToolbar();
-  const historyGroup = getByTestId("toolbar-start-lane").querySelector(
-    '[data-group-id="history"]',
-  );
+  const historyGroup = getByTestId("toolbar-start-lane").querySelector('[data-group-id="history"]');
 
   expect(historyGroup).toHaveClass("contents");
   expect(historyGroup).not.toHaveClass("flex-shrink-0");
@@ -157,9 +153,7 @@ it("expanded: Start group boundaries expose their controls to the wrapping row",
 
 it("collapsed: Start group boundaries remain non-wrapping measurable units", () => {
   const { getByTestId } = renderToolbar();
-  const historyGroup = getByTestId("toolbar-start-lane").querySelector(
-    '[data-group-id="history"]',
-  );
+  const historyGroup = getByTestId("toolbar-start-lane").querySelector('[data-group-id="history"]');
 
   expect(historyGroup).toHaveClass("inline-flex", "flex-shrink-0");
   expect(historyGroup).not.toHaveClass("contents");

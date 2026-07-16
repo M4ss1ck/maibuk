@@ -44,11 +44,7 @@ vi.mock("../../../../features/export/pdf-document", () => ({
   PdfDocument: () => null,
 }));
 
-import {
-  generatePdf,
-  getPdfFilename,
-  sanitizePdfText,
-} from "@/features/export/pdf-generator";
+import { generatePdf, getPdfFilename, sanitizePdfText } from "@/features/export/pdf-generator";
 import { DEFAULT_PDF_OPTIONS } from "@/features/export/types";
 
 describe("sanitizePdfText()", () => {

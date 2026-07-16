@@ -1,9 +1,7 @@
 import type { Editor } from "@tiptap/react";
 import { TooltipGroup } from "@/components/ui";
 import { EditorToolbarGroups } from "@/components/editor/toolbar/EditorToolbarGroups";
-import {
-  deriveFloatingGroupIds,
-} from "@/features/settings/toolbar-config";
+import { deriveFloatingGroupIds } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
 
 interface FloatingFormattingGroupsProps {
@@ -11,10 +9,7 @@ interface FloatingFormattingGroupsProps {
   onLinkClick: () => void;
 }
 
-export function FloatingFormattingGroups({
-  editor,
-  onLinkClick,
-}: FloatingFormattingGroupsProps) {
+export function FloatingFormattingGroups({ editor, onLinkClick }: FloatingFormattingGroupsProps) {
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const groupIds = deriveFloatingGroupIds(toolbarConfig);
 

@@ -130,7 +130,7 @@ describe("CoverDesigner back button", () => {
         <Routes>
           <Route path="/book/:bookId/cover" element={<CoverDesigner />} />
         </Routes>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
   }
 

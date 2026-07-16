@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
-import {
-  ensureMetricsSchema,
-  insertEvents,
-  upsertCache,
-} from "@/features/metrics/events-repo";
+import { ensureMetricsSchema, insertEvents, upsertCache } from "@/features/metrics/events-repo";
 import {
   serializeMetricsBatch,
   applyMetricsBatch,

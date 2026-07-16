@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  formatKeys,
-  matchKeys,
-  SHORTCUTS,
-  type ShortcutDef,
-} from "@/lib/shortcut-registry";
+import { formatKeys, matchKeys, SHORTCUTS, type ShortcutDef } from "@/lib/shortcut-registry";
 
 describe("shortcut registry", () => {
   it("contains only valid shortcut definitions", () => {
@@ -31,12 +26,8 @@ describe("shortcut registry", () => {
   });
 
   it("retains terminal plus and minus keys", () => {
-    expect(formatKeys(SHORTCUTS["editor.zoomIn"], false).groups).toEqual([
-      ["Ctrl", "+"],
-    ]);
-    expect(formatKeys(SHORTCUTS["editor.zoomOut"], false).groups).toEqual([
-      ["Ctrl", "-"],
-    ]);
+    expect(formatKeys(SHORTCUTS["editor.zoomIn"], false).groups).toEqual([["Ctrl", "+"]]);
+    expect(formatKeys(SHORTCUTS["editor.zoomOut"], false).groups).toEqual([["Ctrl", "-"]]);
   });
 
   it.each([
@@ -72,23 +63,17 @@ describe("shortcut registry", () => {
 
   it("normalizes match keys and expands Ctrl to Meta", () => {
     expect(matchKeys("editor.save")).toEqual(["ctrl+s", "meta+s"]);
-    expect(matchKeys("global.syncNow")).toEqual([
-      "ctrl+shift+y",
-      "meta+shift+y",
-    ]);
+    expect(matchKeys("global.syncNow")).toEqual(["ctrl+shift+y", "meta+shift+y"]);
     expect(matchKeys("home.moveSelection")).toEqual(["↑/↓", "j/k"]);
   });
 
   it("normalizes the toolbar settings shortcut and expands Ctrl to Meta", () => {
-    expect(matchKeys("editor.toolbarSettings")).toEqual([
-      "ctrl+shift+,",
-      "meta+shift+,",
-    ]);
+    expect(matchKeys("editor.toolbarSettings")).toEqual(["ctrl+shift+,", "meta+shift+,"]);
   });
 
   it("rejects sequence shortcuts for direct key matching", () => {
     expect(() => matchKeys("global.gotoProjects")).toThrow(
-      "Sequence shortcuts cannot be matched as key combinations",
+      "Sequence shortcuts cannot be matched as key combinations"
     );
   });
 

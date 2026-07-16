@@ -8,10 +8,7 @@ import {
 } from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useToolbarOverflow } from "@/components/editor/toolbar/useToolbarOverflow";
 import { useSettingsStore } from "@/features/settings/store";
-import {
-  suppressOrphanDividers,
-  type ToolbarEntry,
-} from "@/features/settings/toolbar-config";
+import { suppressOrphanDividers, type ToolbarEntry } from "@/features/settings/toolbar-config";
 
 interface ResponsiveEditorToolbarProps {
   editor: Editor;
@@ -22,7 +19,7 @@ interface ResponsiveEditorToolbarProps {
 
 function visibleEntries(entries: ToolbarEntry[]): ToolbarEntry[] {
   return suppressOrphanDividers(
-    entries.filter((entry) => entry.kind !== "group" || entry.toolbarVisible),
+    entries.filter((entry) => entry.kind !== "group" || entry.toolbarVisible)
   );
 }
 
@@ -30,7 +27,7 @@ function renderEntry(
   entry: ToolbarEntry,
   editor: Editor,
   callbacks: ToolbarGroupCallbacks,
-  wrapItems = false,
+  wrapItems = false
 ): ReactNode {
   if (entry.kind === "divider") return <Divider key={entry.id} />;
   return (
@@ -68,9 +65,7 @@ export function ResponsiveEditorToolbar({
     deps: [toolbarConfig, toolbarExpanded],
   });
 
-  const visibleStart = toolbarExpanded
-    ? startEntries
-    : startEntries.slice(0, visibleCount);
+  const visibleStart = toolbarExpanded ? startEntries : startEntries.slice(0, visibleCount);
 
   const rowClass = toolbarExpanded
     ? "flex flex-wrap items-center justify-start gap-1 px-2 sm:px-4 py-1 sm:py-2"
@@ -89,15 +84,9 @@ export function ResponsiveEditorToolbar({
       <div className="border-b border-border bg-background sticky top-0 z-10">
         <div ref={rootRef} className={rowClass}>
           <div data-testid="toolbar-start-lane" className={startBlockClass}>
-            {visibleStart.map((entry) =>
-              renderEntry(entry, editor, callbacks, toolbarExpanded),
-            )}
+            {visibleStart.map((entry) => renderEntry(entry, editor, callbacks, toolbarExpanded))}
           </div>
-          <div
-            ref={endRef}
-            data-testid="toolbar-end-lane"
-            className={endBlockClass}
-          >
+          <div ref={endRef} data-testid="toolbar-end-lane" className={endBlockClass}>
             {endEntries.map((entry) => renderEntry(entry, editor, callbacks))}
             {utilityCluster}
             {fixedUtilities}

@@ -20,7 +20,11 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 
-import { buildSearchRegExp, findMatches, type SearchMatch } from "@/components/editor/extensions/SearchReplace";
+import {
+  buildSearchRegExp,
+  findMatches,
+  type SearchMatch,
+} from "@/components/editor/extensions/SearchReplace";
 import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { ShortcutId } from "@/lib/shortcut-registry";
 

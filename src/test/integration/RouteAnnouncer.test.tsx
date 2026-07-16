@@ -11,10 +11,17 @@ const { i18nState } = vi.hoisted(() => ({ i18nState: { language: "en" } }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => {
     const m: Record<string, string> = {
-      "books.title": "My Books", "notes.title": "Notes", "canvas.title": "Canvas",
-      "metrics.title": "Metrics", "settings.title": "Settings", "cover.title": "Cover Designer",
+      "books.title": "My Books",
+      "notes.title": "Notes",
+      "canvas.title": "Canvas",
+      "metrics.title": "Metrics",
+      "settings.title": "Settings",
+      "cover.title": "Cover Designer",
     };
-    return { t: (k: string) => m[k] ?? k, i18n: { language: i18nState.language, resolvedLanguage: i18nState.language } };
+    return {
+      t: (k: string) => m[k] ?? k,
+      i18n: { language: i18nState.language, resolvedLanguage: i18nState.language },
+    };
   },
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
@@ -29,10 +36,16 @@ function getRegion() {
 // ── behavioral tests ────────────────────────────────────────────────
 
 describe("RouteAnnouncer", () => {
-  beforeEach(() => { i18nState.language = "en"; });
+  beforeEach(() => {
+    i18nState.language = "en";
+  });
 
   it("renders a polite atomic live region", () => {
-    render(<MemoryRouter><RouteAnnouncer /></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <RouteAnnouncer />
+      </MemoryRouter>
+    );
     expect(getRegion()).toHaveAttribute("aria-live", "polite");
     expect(getRegion()).toHaveAttribute("aria-atomic", "true");
   });
@@ -71,7 +84,11 @@ describe("RouteAnnouncer", () => {
 
     function Nav() {
       const navigate = useNavigate();
-      return <button type="button" onClick={() => navigate("/metrics")}>Nav</button>;
+      return (
+        <button type="button" onClick={() => navigate("/metrics")}>
+          Nav
+        </button>
+      );
     }
 
     render(
@@ -95,7 +112,11 @@ describe("RouteAnnouncer", () => {
 
     function Nav() {
       const navigate = useNavigate();
-      return <button type="button" onClick={() => navigate("/settings")}>Nav</button>;
+      return (
+        <button type="button" onClick={() => navigate("/settings")}>
+          Nav
+        </button>
+      );
     }
 
     render(
@@ -134,7 +155,11 @@ describe("RouteAnnouncer", () => {
 
     function Nav() {
       const navigate = useNavigate();
-      return <button type="button" onClick={() => navigate("/late")}>Go</button>;
+      return (
+        <button type="button" onClick={() => navigate("/late")}>
+          Go
+        </button>
+      );
     }
 
     render(
@@ -170,9 +195,15 @@ const SRC = path.resolve(__dirname, "../../");
 function source(...segments: string[]) {
   return fs.readFileSync(path.join(SRC, ...segments), "utf-8");
 }
-function assertH1Route(s: string) { expect(s).toMatch(/<h1\b[^>]*data-route-heading/); }
-function assertNoMain(s: string) { expect(s).not.toMatch(/<main\b/); }
-function assertHasMain(s: string) { expect(s).toMatch(/<main\b/); }
+function assertH1Route(s: string) {
+  expect(s).toMatch(/<h1\b[^>]*data-route-heading/);
+}
+function assertNoMain(s: string) {
+  expect(s).not.toMatch(/<main\b/);
+}
+function assertHasMain(s: string) {
+  expect(s).toMatch(/<main\b/);
+}
 
 describe("Production source structural contracts", () => {
   it("Layout routes: Settings.tsx has h1 data-route-heading, no main", () => {

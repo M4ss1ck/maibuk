@@ -11,16 +11,26 @@ import { Indent } from "@/components/editor/extensions/Indent";
 // ProseMirror's domAtPos can return text nodes on which it calls
 // getClientRects / getBoundingClientRect; these are undefined in jsdom.
 const dummyDOMRect: DOMRect = {
-  x: 0, y: 0, width: 0, height: 0,
-  top: 0, right: 0, bottom: 0, left: 0,
-  toJSON() { return {}; },
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  toJSON() {
+    return {};
+  },
 };
 const dummyClientRects = (): DOMRectList =>
   ({
     length: 1,
     item: () => dummyDOMRect,
     [0 as unknown as number]: dummyDOMRect,
-    [Symbol.iterator]: function* () { yield dummyDOMRect; },
+    [Symbol.iterator]: function* () {
+      yield dummyDOMRect;
+    },
   }) as unknown as DOMRectList;
 
 for (const proto of [
@@ -83,10 +93,7 @@ function editorForCodeBlock(html: string): TiptapEditor {
   return editor;
 }
 
-function pressTab(
-  editor: TiptapEditor,
-  shift = false,
-): KeyboardEvent {
+function pressTab(editor: TiptapEditor, shift = false): KeyboardEvent {
   const event = new KeyboardEvent("keydown", {
     key: "Tab",
     code: "Tab",
@@ -198,9 +205,7 @@ describe("Indent extension keyboard shortcuts", () => {
 
   describe("listItem — Tab (sink)", () => {
     it("sinks root item, defaultPrevented true, focus retained", () => {
-      const editor = editorWithContent(
-        "<ul><li><p>alpha</p></li><li><p>beta</p></li></ul>",
-      );
+      const editor = editorWithContent("<ul><li><p>alpha</p></li><li><p>beta</p></li></ul>");
       selectItemWithText(editor, "beta");
       const depthBefore = editor.state.selection.$from.depth;
       editor.view.dom.focus();
@@ -211,7 +216,7 @@ describe("Indent extension keyboard shortcuts", () => {
     });
     it("lone nested item does not sink but still prevents default", () => {
       const editor = editorWithContent(
-        "<ul><li><p>alpha</p><ul><li><p>beta</p></li></ul></li></ul>",
+        "<ul><li><p>alpha</p><ul><li><p>beta</p></li></ul></li></ul>"
       );
       selectItemWithText(editor, "beta");
       const depthBefore = editor.state.selection.$from.depth;
@@ -226,7 +231,7 @@ describe("Indent extension keyboard shortcuts", () => {
   describe("listItem — Shift+Tab (lift)", () => {
     it("lifts nested item, defaultPrevented true, focus retained", () => {
       const editor = editorWithContent(
-        "<ul><li><p>alpha</p><ul><li><p>beta</p></li></ul></li></ul>",
+        "<ul><li><p>alpha</p><ul><li><p>beta</p></li></ul></li></ul>"
       );
       selectItemWithText(editor, "beta");
       const depthBefore = editor.state.selection.$from.depth;
@@ -237,9 +242,7 @@ describe("Indent extension keyboard shortcuts", () => {
       expect(document.activeElement).toBe(editor.view.dom);
     });
     it("root-level lift converts to paragraph, defaultPrevented true", () => {
-      const editor = editorWithContent(
-        "<ul><li><p>alpha</p></li><li><p>beta</p></li></ul>",
-      );
+      const editor = editorWithContent("<ul><li><p>alpha</p></li><li><p>beta</p></li></ul>");
       selectItemWithText(editor, "beta");
       editor.view.dom.focus();
       const ev = pressTab(editor, true);
@@ -262,9 +265,7 @@ describe("Indent extension keyboard shortcuts", () => {
     }
 
     it("Tab in a table cell does not change paragraph indent", () => {
-      const editor = editorForTable(
-        "<table><tr><td><p>a</p></td><td><p>b</p></td></tr></table>",
-      );
+      const editor = editorForTable("<table><tr><td><p>a</p></td><td><p>b</p></td></tr></table>");
       cursorInFirstCellPara(editor);
       const before = getIndent(editor);
       editor.view.dom.focus();
@@ -274,9 +275,7 @@ describe("Indent extension keyboard shortcuts", () => {
       expect(document.activeElement).toBe(editor.view.dom);
     });
     it("Shift+Tab in a table cell does not change paragraph indent", () => {
-      const editor = editorForTable(
-        "<table><tr><td><p>a</p></td><td><p>b</p></td></tr></table>",
-      );
+      const editor = editorForTable("<table><tr><td><p>a</p></td><td><p>b</p></td></tr></table>");
       cursorInFirstCellPara(editor);
       const before = getIndent(editor);
       editor.view.dom.focus();

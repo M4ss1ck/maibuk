@@ -22,7 +22,9 @@ import type { BookSnapshot } from "@/features/sync/types";
 import { serializeBook } from "@/features/sync/serializer";
 
 const VersionCompare = lazy(() =>
-  import("@/components/versions/VersionCompare").then((module) => ({ default: module.VersionCompare }))
+  import("@/components/versions/VersionCompare").then((module) => ({
+    default: module.VersionCompare,
+  }))
 );
 
 interface VersionPanelProps {

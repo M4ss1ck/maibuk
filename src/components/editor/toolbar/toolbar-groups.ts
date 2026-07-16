@@ -108,9 +108,9 @@ export const TOOLBAR_GROUP_META = ALL_GROUP_IDS.reduce(
     };
     return metaById;
   },
-  {} as Record<ToolbarGroupId, ToolbarGroupMeta>,
+  {} as Record<ToolbarGroupId, ToolbarGroupMeta>
 );
 
 export const TOOLBAR_GROUP_META_LIST: ToolbarGroupMeta[] = ALL_GROUP_IDS.map(
-  (id) => TOOLBAR_GROUP_META[id],
+  (id) => TOOLBAR_GROUP_META[id]
 );

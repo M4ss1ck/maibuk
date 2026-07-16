@@ -186,10 +186,7 @@ function splitCombination(combination: string): string[] {
   return parts;
 }
 
-export function formatKeys(
-  definition: ShortcutDef,
-  mac = isMac(),
-): FormattedShortcut {
+export function formatKeys(definition: ShortcutDef, mac = isMac()): FormattedShortcut {
   if ("sequence" in definition) {
     return {
       groups: definition.sequence.map((key) => [key.toUpperCase()]),
@@ -204,7 +201,7 @@ export function formatKeys(
         if (key === "Ctrl") return "⌘";
         if (key === "Alt") return "⌥";
         return key;
-      }),
+      })
     ),
     isSequence: false,
   };

@@ -22,7 +22,11 @@ export function TagEditor({ tags, allTags, onChange, onClose }: TagEditorProps) 
       customOptionLabel={(tag) => `"${tag}"`}
       removeLabel={(tag) => t("notes.removeTag", { tag })}
       chipClassName="transition-opacity hover:opacity-75 border"
-      getChipStyle={(tag) => ({ color: tagColor(tag), backgroundColor: `${tagColor(tag)}26`, borderColor: `${tagColor(tag)}80` })}
+      getChipStyle={(tag) => ({
+        color: tagColor(tag),
+        backgroundColor: `${tagColor(tag)}26`,
+        borderColor: `${tagColor(tag)}80`,
+      })}
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose?.();
       }}

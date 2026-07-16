@@ -42,7 +42,11 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { useVersionStore } from "@/features/versions/store";
 import { syncMetricsRows } from "@/features/metrics/metrics-sync";
-import { getTombstone, listPendingTombstones, markTombstonePushed } from "@/features/sync/tombstones";
+import {
+  getTombstone,
+  listPendingTombstones,
+  markTombstonePushed,
+} from "@/features/sync/tombstones";
 import { ensureGenericCollectionMigration } from "@/features/sync/migration-reset";
 
 let isSyncing = false;

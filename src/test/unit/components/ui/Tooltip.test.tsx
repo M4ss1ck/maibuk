@@ -25,7 +25,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     expect(screen.getByRole("button", { name: "Save book" })).toBeVisible();
@@ -36,7 +36,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
@@ -51,7 +51,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
@@ -68,7 +68,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     const child = screen.getByRole("button");
@@ -84,7 +84,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.touchStart(screen.getByRole("button"));
@@ -102,7 +102,7 @@ describe("Tooltip", () => {
         <Tooltip content="Second tooltip">
           <button type="button">Second</button>
         </Tooltip>
-      </TooltipGroup>,
+      </TooltipGroup>
     );
 
     const first = screen.getByRole("button", { name: "First" });
@@ -118,9 +118,7 @@ describe("Tooltip", () => {
     act(() => vi.advanceTimersByTime(1));
 
     expect(
-      screen
-        .getAllByRole("tooltip")
-        .some((tooltip) => tooltip.textContent === "Second tooltip"),
+      screen.getAllByRole("tooltip").some((tooltip) => tooltip.textContent === "Second tooltip")
     ).toBe(true);
   });
 
@@ -128,7 +126,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     const child = screen.getByRole("button");
@@ -144,7 +142,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save" shortcut="editor.save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
@@ -157,22 +155,22 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save" shortcut="editor.save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
     act(() => vi.advanceTimersByTime(600));
 
-    expect(
-      screen.getByRole("tooltip").querySelector(".kbd-shortcut"),
-    ).not.toHaveClass("kbd-shortcut-always");
+    expect(screen.getByRole("tooltip").querySelector(".kbd-shortcut")).not.toHaveClass(
+      "kbd-shortcut-always"
+    );
   });
 
   it("renders ad-hoc keys as one keyboard chip", () => {
     render(
       <Tooltip content="Open book" keys={["1-9"]}>
         <button type="button">Open book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
@@ -185,7 +183,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
@@ -200,7 +198,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save">
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     const child = screen.getByRole("button");
@@ -214,7 +212,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Save" disabled>
         <button type="button">Save book</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
@@ -230,7 +228,7 @@ describe("Tooltip", () => {
         <button type="button" onClick={onClick}>
           Save book
         </button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.click(screen.getByRole("button"));
@@ -242,7 +240,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Bold" shortcut="editor.bold" markdown="**bold**">
         <button type="button">Bold</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
@@ -268,21 +266,15 @@ describe("Tooltip", () => {
 
   it("renders one hint per spelling in the same markdown row", () => {
     render(
-      <Tooltip
-        content="Bold"
-        shortcut="editor.bold"
-        markdown={["**bold**", "__bold__"]}
-      >
+      <Tooltip content="Bold" shortcut="editor.bold" markdown={["**bold**", "__bold__"]}>
         <button type="button">Bold</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
     act(() => vi.advanceTimersByTime(600));
 
-    const chips = screen
-      .getByTestId("tooltip-markdown-row")
-      .querySelectorAll("code");
+    const chips = screen.getByTestId("tooltip-markdown-row").querySelectorAll("code");
     expect(chips).toHaveLength(2);
     expect(chips[0]).toHaveTextContent("**bold**");
     expect(chips[1]).toHaveTextContent("__bold__");
@@ -292,15 +284,13 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Bold" shortcut="editor.bold" markdown="**bold**">
         <button type="button">Bold</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));
     act(() => vi.advanceTimersByTime(600));
 
-    const hint = screen
-      .getByTestId("tooltip-markdown-row")
-      .querySelector("code");
+    const hint = screen.getByTestId("tooltip-markdown-row").querySelector("code");
     expect(hint).toHaveClass("markdown-hint");
     expect(hint?.querySelector(".hljs-strong")).not.toBeNull();
     expect(hint).toHaveTextContent("**bold**");
@@ -310,7 +300,7 @@ describe("Tooltip", () => {
     render(
       <Tooltip content="Bold" shortcut="editor.bold">
         <button type="button">Bold</button>
-      </Tooltip>,
+      </Tooltip>
     );
 
     fireEvent.mouseEnter(screen.getByRole("button"));

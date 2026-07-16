@@ -8,21 +8,12 @@ const options = ["Arial", "Georgia", "Helvetica", "Times New Roman"];
 describe("Combobox", () => {
   describe("rendering", () => {
     it("renders an input element with combobox role", () => {
-      render(
-        <Combobox value="Arial" onChange={() => {}} options={options} ariaLabel="Font" />,
-      );
+      render(<Combobox value="Arial" onChange={() => {}} options={options} ariaLabel="Font" />);
       expect(screen.getByRole("combobox")).toBeInTheDocument();
     });
 
     it("displays the current value when closed", () => {
-      render(
-        <Combobox
-          value="Georgia"
-          onChange={() => {}}
-          options={options}
-          ariaLabel="Font"
-        />,
-      );
+      render(<Combobox value="Georgia" onChange={() => {}} options={options} ariaLabel="Font" />);
       const input = screen.getByRole("combobox") as HTMLInputElement;
       expect(input.value).toBe("Georgia");
     });
@@ -35,20 +26,16 @@ describe("Combobox", () => {
           options={options}
           placeholder="Select font..."
           ariaLabel="Font"
-        />,
+        />
       );
-      expect(
-        screen.getByPlaceholderText("Select font..."),
-      ).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Select font...")).toBeInTheDocument();
     });
   });
 
   describe("filtering", () => {
     it("filters options as user types", async () => {
       const user = userEvent.setup();
-      render(
-        <Combobox value="" onChange={() => {}} options={options} ariaLabel="Font" />,
-      );
+      render(<Combobox value="" onChange={() => {}} options={options} ariaLabel="Font" />);
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -64,9 +51,7 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(
-        <Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />,
-      );
+      render(<Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />);
 
       const button = screen.getByRole("button");
       await user.click(button);
@@ -81,9 +66,7 @@ describe("Combobox", () => {
   describe("custom value", () => {
     it("shows custom value option when typing a non-matching value", async () => {
       const user = userEvent.setup();
-      render(
-        <Combobox value="" onChange={() => {}} options={options} ariaLabel="Font" />,
-      );
+      render(<Combobox value="" onChange={() => {}} options={options} ariaLabel="Font" />);
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -96,9 +79,7 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(
-        <Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />,
-      );
+      render(<Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />);
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -112,9 +93,7 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(
-        <Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />,
-      );
+      render(<Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />);
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -130,9 +109,7 @@ describe("Combobox", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(
-        <Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />,
-      );
+      render(<Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />);
 
       const input = screen.getByRole("combobox");
       await user.click(input);
@@ -148,12 +125,7 @@ describe("Combobox", () => {
       const optionsWithDivider = ["Arial", "divider", "Courier"];
 
       render(
-        <Combobox
-          value=""
-          onChange={() => {}}
-          options={optionsWithDivider}
-          ariaLabel="Font"
-        />,
+        <Combobox value="" onChange={() => {}} options={optionsWithDivider} ariaLabel="Font" />
       );
 
       const button = screen.getByRole("button");

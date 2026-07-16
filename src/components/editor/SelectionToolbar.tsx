@@ -96,12 +96,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     return () => scrollContainer.removeEventListener("scroll", updatePosition);
   }, [editor, updatePosition]);
 
-  if (
-    !editorState.hasSelection ||
-    !position ||
-    isAnyModalOpen ||
-    !hasFloatingGroups
-  ) {
+  if (!editorState.hasSelection || !position || isAnyModalOpen || !hasFloatingGroups) {
     return null;
   }
 

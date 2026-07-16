@@ -13,9 +13,7 @@ vi.mock("react-i18next", async (importOriginal) => ({
 
 function wrapperFor(path: string) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <MemoryRouter initialEntries={[path]}>{children}</MemoryRouter>
-    );
+    return <MemoryRouter initialEntries={[path]}>{children}</MemoryRouter>;
   };
 }
 
@@ -28,9 +26,7 @@ it("includes the toolbar settings shortcut on a book route", () => {
     wrapper: wrapperFor("/book/abc"),
   });
 
-  expect(
-    result.current.some((item) => item.id === "editor.toolbarSettings"),
-  ).toBe(true);
+  expect(result.current.some((item) => item.id === "editor.toolbarSettings")).toBe(true);
 });
 
 it("excludes the toolbar settings shortcut on a non-book route", () => {
@@ -38,9 +34,7 @@ it("excludes the toolbar settings shortcut on a non-book route", () => {
     wrapper: wrapperFor("/settings"),
   });
 
-  expect(
-    result.current.some((item) => item.id === "editor.toolbarSettings"),
-  ).toBe(false);
+  expect(result.current.some((item) => item.id === "editor.toolbarSettings")).toBe(false);
 });
 
 it("includes the localized Ephemeral shortcut between Canvas and Metrics", () => {
@@ -88,7 +82,5 @@ it("returns shortcuts again after all modals close", () => {
   rerender();
 
   expect(result.current.length).toBeGreaterThan(0);
-  expect(
-    result.current.some((item) => item.id === "editor.toolbarSettings"),
-  ).toBe(true);
+  expect(result.current.some((item) => item.id === "editor.toolbarSettings")).toBe(true);
 });

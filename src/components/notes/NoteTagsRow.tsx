@@ -97,8 +97,9 @@ export function NoteTagsRow({
 
   const dateEl = (
     <span
-      className={`shrink-0 text-xs text-muted-foreground ${datePosition === "right" ? "ml-auto" : ""
-        }`}
+      className={`shrink-0 text-xs text-muted-foreground ${
+        datePosition === "right" ? "ml-auto" : ""
+      }`}
     >
       {dateLabel}
     </span>

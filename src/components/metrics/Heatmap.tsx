@@ -32,7 +32,9 @@ export function Heatmap({ aggregate, isLoading }: HeatmapProps) {
               key={day.date}
               content={`${day.date}: ${day.words.toLocaleString()} ${t("common.words")}`}
             >
-              <div className={`aspect-square rounded-sm ${getIntensityClass(day.words, maxWords)}`} />
+              <div
+                className={`aspect-square rounded-sm ${getIntensityClass(day.words, maxWords)}`}
+              />
             </Tooltip>
           ))}
         </div>

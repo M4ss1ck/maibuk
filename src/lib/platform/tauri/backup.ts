@@ -1,7 +1,12 @@
 import { readTextFile, writeTextFile, readDir, remove, mkdir, stat } from "@tauri-apps/plugin-fs";
 import { appConfigDir, join } from "@tauri-apps/api/path";
 import type { DirEntry } from "@tauri-apps/plugin-fs";
-import type { BackupAdapter, BackupEntry, BackupPage, BackupPageOptions } from "@/lib/platform/types";
+import type {
+  BackupAdapter,
+  BackupEntry,
+  BackupPage,
+  BackupPageOptions,
+} from "@/lib/platform/types";
 import { computeChecksum } from "@/lib/checksum";
 import { parseTriggerFromFilename } from "@/features/backup/utils";
 

@@ -91,11 +91,7 @@ interface SettingsStore extends Settings {
   setSidebarWidth: (width: number) => void;
   setNotesSidebarWidth: (width: number) => void;
   setToolbarExpanded: (expanded: boolean) => void;
-  moveToolbarEntry: (
-    section: ToolbarSection,
-    index: number,
-    direction: "up" | "down"
-  ) => void;
+  moveToolbarEntry: (section: ToolbarSection, index: number, direction: "up" | "down") => void;
   moveToolbarEntryTo: (
     from: ToolbarSection,
     index: number,
@@ -380,8 +376,7 @@ export const useSettingsStore = create<SettingsStore>()(
         set((state) => ({
           toolbarConfig: removeDivider(state.toolbarConfig, section, dividerId),
         })),
-      resetToolbarConfig: () =>
-        set({ toolbarConfig: makeResetToolbarConfig() }),
+      resetToolbarConfig: () => set({ toolbarConfig: makeResetToolbarConfig() }),
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setNotesListView: (notesListView) => set({ notesListView }),
