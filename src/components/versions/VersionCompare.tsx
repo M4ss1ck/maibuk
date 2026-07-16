@@ -82,7 +82,9 @@ export function VersionCompare({ current, target }: VersionCompareProps) {
             type="button"
             onClick={() => setShowChapterList((show) => !show)}
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label={t(showChapterList ? "versions.hideChapterList" : "versions.showChapterList")}
+            aria-label={t(
+              showChapterList ? "versions.hideChapterList" : "versions.showChapterList"
+            )}
           >
             {showChapterList ? (
               <PanelLeftClose className="h-4 w-4" />

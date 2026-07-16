@@ -17,22 +17,11 @@ import {
   useRole,
   useTransitionStyles,
 } from "@floating-ui/react";
-import {
-  cloneElement,
-  useRef,
-  useState,
-  type ReactElement,
-  type ReactNode,
-  type Ref,
-} from "react";
+import { cloneElement, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
 
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { lowlight } from "@/lib/lowlight";
-import {
-  SHORTCUTS,
-  formatKeys,
-  type ShortcutId,
-} from "@/lib/shortcut-registry";
+import { SHORTCUTS, formatKeys, type ShortcutId } from "@/lib/shortcut-registry";
 
 const OPEN_DELAY = 500;
 
@@ -65,10 +54,7 @@ type TooltipProps = {
   side?: "top" | "bottom" | "left" | "right";
   disabled?: boolean;
   children: ReactElement;
-} & (
-    | { shortcut?: ShortcutId; keys?: never }
-    | { shortcut?: never; keys?: string[] }
-  );
+} & ({ shortcut?: ShortcutId; keys?: never } | { shortcut?: never; keys?: string[] });
 
 interface TooltipGroupProps {
   children: ReactNode;
@@ -76,9 +62,7 @@ interface TooltipGroupProps {
 
 export function TooltipGroup({ children }: TooltipGroupProps) {
   return (
-    <FloatingDelayGroup delay={{ open: OPEN_DELAY, close: 100 }}>
-      {children}
-    </FloatingDelayGroup>
+    <FloatingDelayGroup delay={{ open: OPEN_DELAY, close: 100 }}>{children}</FloatingDelayGroup>
   );
 }
 
@@ -101,28 +85,17 @@ export function Tooltip({
     onOpenChange: setOpen,
     placement: side,
     whileElementsMounted: autoUpdate,
-    middleware: [
-      offset(8),
-      flip(),
-      shift({ padding: 4 }),
-      arrow({ element: arrowRef }),
-    ],
+    middleware: [offset(8), flip(), shift({ padding: 4 }), arrow({ element: arrowRef })],
   });
   const { delay: groupDelay } = useDelayGroup(context);
   const hover = useHover(context, {
     mouseOnly: true,
-    delay:
-      groupDelay === 0 ? { open: OPEN_DELAY, close: 0 } : groupDelay,
+    delay: groupDelay === 0 ? { open: OPEN_DELAY, close: 0 } : groupDelay,
   });
   const focus = useFocus(context, { visibleOnly: false });
   const dismiss = useDismiss(context, { referencePress: true });
   const role = useRole(context, { role: "tooltip" });
-  const { getReferenceProps, getFloatingProps } = useInteractions([
-    hover,
-    focus,
-    dismiss,
-    role,
-  ]);
+  const { getReferenceProps, getFloatingProps } = useInteractions([hover, focus, dismiss, role]);
   const childRef = (children.props as { ref?: Ref<HTMLElement> }).ref;
   const mergedRef = useMergeRefs([refs.setReference, childRef]);
   const { isMounted, styles: transitionStyles } = useTransitionStyles(context, {
@@ -130,14 +103,9 @@ export function Tooltip({
     initial: { opacity: 0, transform: "translateY(2px)" },
     open: { opacity: 1, transform: "translateY(0)" },
   });
-  const shortcutDefinition = shortcut
-    ? SHORTCUTS[shortcut]
-    : keys
-      ? { keys, labelKey: "" }
-      : null;
+  const shortcutDefinition = shortcut ? SHORTCUTS[shortcut] : keys ? { keys, labelKey: "" } : null;
 
-  const markdownHints =
-    typeof markdown === "string" ? [markdown] : (markdown ?? []);
+  const markdownHints = typeof markdown === "string" ? [markdown] : (markdown ?? []);
 
   if (disabled) return children;
 
@@ -148,7 +116,7 @@ export function Tooltip({
         getReferenceProps({
           ...(children.props as Record<string, unknown>),
           ref: mergedRef,
-        }),
+        })
       )}
       {isMounted && (
         <FloatingPortal>
@@ -162,15 +130,10 @@ export function Tooltip({
               className="flex max-w-xs flex-col items-start gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-foreground shadow-lg"
               style={transitionStyles}
             >
-              <div
-                data-testid="tooltip-primary-row"
-                className="flex items-center gap-2"
-              >
+              <div data-testid="tooltip-primary-row" className="flex items-center gap-2">
                 <span>{content}</span>
                 {shortcutDefinition && (
-                  <KeyboardShortcut
-                    shortcut={formatKeys(shortcutDefinition)}
-                  />
+                  <KeyboardShortcut shortcut={formatKeys(shortcutDefinition)} />
                 )}
               </div>
               {markdownHints.length > 0 && (
@@ -183,9 +146,7 @@ export function Tooltip({
                       key={hint}
                       className="markdown-hint whitespace-nowrap font-mono leading-none"
                     >
-                      {renderHastNodes(
-                        lowlight.highlight("markdown", hint).children,
-                      )}
+                      {renderHastNodes(lowlight.highlight("markdown", hint).children)}
                     </code>
                   ))}
                 </div>

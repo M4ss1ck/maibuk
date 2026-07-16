@@ -4,17 +4,37 @@ import { useRef } from "react";
 import { useToolbarOverflow } from "@/components/editor/toolbar/useToolbarOverflow";
 
 beforeEach(() => {
-  vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} unobserve() {} });
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+  );
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    cb(0);
+    return 0;
+  });
 });
 
 function setup(rootWidth: number, endWidth: number, childWidths: number[]) {
   return renderHook(() => {
-    const rootRef = useRef<HTMLElement>({ getBoundingClientRect: () => ({ width: rootWidth }) } as HTMLElement);
-    const endRef = useRef<HTMLElement>({ getBoundingClientRect: () => ({ width: endWidth }) } as HTMLElement);
-    const children = childWidths.map((w) => ({ offsetWidth: w } as HTMLElement));
+    const rootRef = useRef<HTMLElement>({
+      getBoundingClientRect: () => ({ width: rootWidth }),
+    } as HTMLElement);
+    const endRef = useRef<HTMLElement>({
+      getBoundingClientRect: () => ({ width: endWidth }),
+    } as HTMLElement);
+    const children = childWidths.map((w) => ({ offsetWidth: w }) as HTMLElement);
     const measureRef = useRef<HTMLElement>({ children } as unknown as HTMLElement);
-    return useToolbarOverflow({ rootRef, endRef, measureRef, entryCount: childWidths.length, deps: [] });
+    return useToolbarOverflow({
+      rootRef,
+      endRef,
+      measureRef,
+      entryCount: childWidths.length,
+      deps: [],
+    });
   });
 }
 

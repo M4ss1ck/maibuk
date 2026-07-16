@@ -21,7 +21,11 @@ import {
   logout as pbLogout,
 } from "@/features/sync/client";
 import { clearPassphrase, setPassphrase as cryptoSetPassphrase } from "@/features/sync/crypto";
-import { syncAllBooks, syncBook, syncSingleNote as engineSyncSingleNote } from "@/features/sync/sync-engine";
+import {
+  syncAllBooks,
+  syncBook,
+  syncSingleNote as engineSyncSingleNote,
+} from "@/features/sync/sync-engine";
 import { confirmTombstones } from "@/features/sync/tombstones";
 
 const STORAGE_KEY = "maibuk-sync";

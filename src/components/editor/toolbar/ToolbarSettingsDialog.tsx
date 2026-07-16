@@ -3,10 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
-import {
-  useDragAndDrop,
-  type TextDropItem,
-} from "react-aria-components/useDragAndDrop";
+import { useDragAndDrop, type TextDropItem } from "react-aria-components/useDragAndDrop";
 import { Button, Modal, Switch, Tooltip, TooltipGroup } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
 import { TOOLBAR_GROUP_META } from "@/components/editor/toolbar/toolbar-groups";
@@ -71,11 +68,30 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
         <div
           className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} sticky top-0 z-10 gap-2 border-b border-border bg-background px-2 pb-2 text-xs font-medium text-muted-foreground`}
         >
-          <ColumnHeader label={t("toolbar.settings.itemColumn")} help={t("toolbar.settings.itemColumnHelp")} />
-          <ColumnHeader label={t("toolbar.settings.toolbarColumn")} help={t("toolbar.settings.toolbarColumnHelp")} className="text-center" />
-          <ColumnHeader label={t("toolbar.settings.selectionMenuColumn")} help={t("toolbar.settings.selectionMenuColumnHelp")} className="text-center" />
-          <ColumnHeader label={t("toolbar.settings.orderColumn")} help={t("toolbar.settings.orderColumnHelp")} className="text-center" />
-          <ColumnHeader label={t("toolbar.settings.actionsColumn")} help={t("toolbar.settings.actionsColumnHelp")} className="text-center" />
+          <ColumnHeader
+            label={t("toolbar.settings.itemColumn")}
+            help={t("toolbar.settings.itemColumnHelp")}
+          />
+          <ColumnHeader
+            label={t("toolbar.settings.toolbarColumn")}
+            help={t("toolbar.settings.toolbarColumnHelp")}
+            className="text-center"
+          />
+          <ColumnHeader
+            label={t("toolbar.settings.selectionMenuColumn")}
+            help={t("toolbar.settings.selectionMenuColumnHelp")}
+            className="text-center"
+          />
+          <ColumnHeader
+            label={t("toolbar.settings.orderColumn")}
+            help={t("toolbar.settings.orderColumnHelp")}
+            className="text-center"
+          />
+          <ColumnHeader
+            label={t("toolbar.settings.actionsColumn")}
+            help={t("toolbar.settings.actionsColumnHelp")}
+            className="text-center"
+          />
         </div>
         <SectionHeaderRow section="start" />
         <ToolbarSectionGrid
@@ -84,11 +100,7 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
           announceMove={announceMove}
         />
         <SectionHeaderRow section="end" />
-        <ToolbarSectionGrid
-          section="end"
-          entries={toolbarConfig.end}
-          announceMove={announceMove}
-        />
+        <ToolbarSectionGrid section="end" entries={toolbarConfig.end} announceMove={announceMove} />
       </div>
       <div role="status" aria-live="polite" className="sr-only">
         {announcement}
@@ -230,7 +242,9 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
   );
   const laneLength = useSettingsStore((state) => state.toolbarConfig[section].length);
   const setToolbarGroupVisible = useSettingsStore((state) => state.setToolbarGroupVisible);
-  const setToolbarGroupFloatingVisible = useSettingsStore((state) => state.setToolbarGroupFloatingVisible);
+  const setToolbarGroupFloatingVisible = useSettingsStore(
+    (state) => state.setToolbarGroupFloatingVisible
+  );
   const meta = TOOLBAR_GROUP_META[entry.id];
   const Icon = meta.Icon;
   const label = t(meta.labelKey);
@@ -436,7 +450,15 @@ function InsertDividerControl({
   );
 }
 
-function ColumnHeader({ label, help, className = "" }: { label: string; help: string; className?: string }) {
+function ColumnHeader({
+  label,
+  help,
+  className = "",
+}: {
+  label: string;
+  help: string;
+  className?: string;
+}) {
   return (
     <Tooltip content={help}>
       <span className={`block truncate rounded ${className}`}>{label}</span>

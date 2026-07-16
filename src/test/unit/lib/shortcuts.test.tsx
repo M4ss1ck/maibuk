@@ -19,13 +19,9 @@ describe("useShortcuts modal blocking", () => {
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
 
-    renderHook(() =>
-      useShortcuts([{ keys: ["ctrl+s"], onTrigger }])
-    );
+    renderHook(() => useShortcuts([{ keys: ["ctrl+s"], onTrigger }]));
 
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
-    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
 
     expect(onTrigger).not.toHaveBeenCalled();
   });
@@ -36,9 +32,7 @@ describe("useShortcuts modal blocking", () => {
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
 
-    renderHook(() =>
-      useShortcuts([{ keys: ["F11"], onTrigger, allowInInput: true }])
-    );
+    renderHook(() => useShortcuts([{ keys: ["F11"], onTrigger, allowInInput: true }]));
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "F11", bubbles: true }));
     expect(onTrigger).not.toHaveBeenCalled();
@@ -50,13 +44,9 @@ describe("useShortcuts modal blocking", () => {
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
 
-    renderHook(() =>
-      useShortcuts([{ keys: ["ctrl+s"], onTrigger }])
-    );
+    renderHook(() => useShortcuts([{ keys: ["ctrl+s"], onTrigger }]));
 
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
-    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
     expect(onTrigger).toHaveBeenCalledTimes(1);
   });
 
@@ -66,22 +56,16 @@ describe("useShortcuts modal blocking", () => {
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
 
-    renderHook(() =>
-      useShortcuts([{ keys: ["ctrl+s"], onTrigger }])
-    );
+    renderHook(() => useShortcuts([{ keys: ["ctrl+s"], onTrigger }]));
 
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
-    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
     expect(onTrigger).not.toHaveBeenCalled();
 
     act(() => {
       useModalStore.setState({ modalIds: [], openCount: 0 });
     });
 
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
-    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
     expect(onTrigger).toHaveBeenCalledTimes(1);
   });
 
@@ -91,9 +75,7 @@ describe("useShortcuts modal blocking", () => {
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
 
-    renderHook(() =>
-      useShortcuts([{ sequence: ["g", "p"] as const, onTrigger }])
-    );
+    renderHook(() => useShortcuts([{ sequence: ["g", "p"] as const, onTrigger }]));
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "g", bubbles: true }));
     act(() => {
@@ -110,9 +92,7 @@ describe("useShortcuts modal blocking", () => {
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
 
-    renderHook(() =>
-      useShortcuts([{ sequence: ["g", "p"] as const, onTrigger }])
-    );
+    renderHook(() => useShortcuts([{ sequence: ["g", "p"] as const, onTrigger }]));
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "g", bubbles: true }));
     act(() => {

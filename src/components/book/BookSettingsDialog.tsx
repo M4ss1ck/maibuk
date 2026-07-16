@@ -1,9 +1,5 @@
 import { useState, useCallback } from "react";
-import {
-  Button as AriaButton,
-  Disclosure,
-  DisclosurePanel,
-} from "react-aria-components";
+import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-components";
 import { Button, Modal, Select } from "@/components/ui";
 import { useTranslation } from "react-i18next";
 import { TrashIcon, ChevronDownIcon } from "@/components/icons";
@@ -120,210 +116,201 @@ export function BookSettingsDialog({
       panelClassName="bg-background rounded-lg shadow-xl max-w-md w-full mx-4 p-6 border border-border max-h-[90vh] overflow-y-auto"
       titleClassName="text-xl font-semibold text-foreground mb-4"
     >
-          {/* Book info */}
-          <div className="mb-6 space-y-3">
-            <div>
-              <label
-                htmlFor="book-title"
-                className="block text-sm font-medium text-foreground mb-1"
-              >
-                {t("books.bookTitle")}
-              </label>
-              <input
-                id="book-title"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className={inputClassName}
-              />
-            </div>
+      {/* Book info */}
+      <div className="mb-6 space-y-3">
+        <div>
+          <label htmlFor="book-title" className="block text-sm font-medium text-foreground mb-1">
+            {t("books.bookTitle")}
+          </label>
+          <input
+            id="book-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={inputClassName}
+          />
+        </div>
 
-            <div>
-              <label
-                htmlFor="book-subtitle"
-                className="block text-sm font-medium text-foreground mb-1"
-              >
-                {t("books.subtitle")}
-              </label>
-              <input
-                id="book-subtitle"
-                type="text"
-                value={subtitle}
-                onChange={(e) => setSubtitle(e.target.value)}
-                placeholder={t("books.subtitlePlaceholder")}
-                className={inputClassName}
-              />
-            </div>
+        <div>
+          <label htmlFor="book-subtitle" className="block text-sm font-medium text-foreground mb-1">
+            {t("books.subtitle")}
+          </label>
+          <input
+            id="book-subtitle"
+            type="text"
+            value={subtitle}
+            onChange={(e) => setSubtitle(e.target.value)}
+            placeholder={t("books.subtitlePlaceholder")}
+            className={inputClassName}
+          />
+        </div>
 
-            <div>
-              <label
-                htmlFor="book-author-name"
-                className="block text-sm font-medium text-foreground mb-1"
-              >
-                {t("books.authorName")}
-              </label>
-              <input
-                id="book-author-name"
-                type="text"
-                value={authorName}
-                onChange={(e) => setAuthorName(e.target.value)}
-                className={inputClassName}
-              />
-            </div>
+        <div>
+          <label
+            htmlFor="book-author-name"
+            className="block text-sm font-medium text-foreground mb-1"
+          >
+            {t("books.authorName")}
+          </label>
+          <input
+            id="book-author-name"
+            type="text"
+            value={authorName}
+            onChange={(e) => setAuthorName(e.target.value)}
+            className={inputClassName}
+          />
+        </div>
 
-            <div>
-              <label
-                htmlFor="book-description"
-                className="block text-sm font-medium text-foreground mb-1"
-              >
-                {t("books.description")}
-              </label>
-              <textarea
-                id="book-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t("books.descriptionPlaceholder")}
-                rows={3}
-                className={`${inputClassName} resize-none`}
-              />
-            </div>
+        <div>
+          <label
+            htmlFor="book-description"
+            className="block text-sm font-medium text-foreground mb-1"
+          >
+            {t("books.description")}
+          </label>
+          <textarea
+            id="book-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={t("books.descriptionPlaceholder")}
+            rows={3}
+            className={`${inputClassName} resize-none`}
+          />
+        </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label
-                  htmlFor="book-genre"
-                  className="block text-sm font-medium text-foreground mb-1"
-                >
-                  {t("books.genre")}
-                </label>
-                <input
-                  id="book-genre"
-                  type="text"
-                  value={genre}
-                  onChange={(e) => setGenre(e.target.value)}
-                  placeholder={t("books.genrePlaceholder")}
-                  className={inputClassName}
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="book-language"
-                  className="block text-sm font-medium text-foreground mb-1"
-                >
-                  {t("books.language")}
-                </label>
-                <Select
-                  id="book-language"
-                  ariaLabel={t("books.language")}
-                  value={language}
-                  onChange={setLanguage}
-                  options={LANGUAGES.map((lang) => ({
-                    value: lang.code,
-                    label: lang.name,
-                  }))}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="book-target-word-count"
-                className="block text-sm font-medium text-foreground mb-1"
-              >
-                {t("books.targetWordCount")}
-              </label>
-              <input
-                id="book-target-word-count"
-                type="number"
-                value={targetWordCount}
-                onChange={(e) => setTargetWordCount(e.target.value)}
-                placeholder={t("books.targetWordCountPlaceholder")}
-                min="0"
-                className={inputClassName}
-              />
-            </div>
-          </div>
-
-          {/* Status selector */}
-          <div className="mb-6">
-            <label htmlFor="book-status" className="block text-sm font-medium text-foreground mb-2">
-              {t("bookSettings.status")}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="book-genre" className="block text-sm font-medium text-foreground mb-1">
+              {t("books.genre")}
             </label>
-            <div className="flex gap-2" id="book-status">
-              {(["draft", "in-progress", "completed"] as const).map((s) => (
+            <input
+              id="book-genre"
+              type="text"
+              value={genre}
+              onChange={(e) => setGenre(e.target.value)}
+              placeholder={t("books.genrePlaceholder")}
+              className={inputClassName}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="book-language"
+              className="block text-sm font-medium text-foreground mb-1"
+            >
+              {t("books.language")}
+            </label>
+            <Select
+              id="book-language"
+              ariaLabel={t("books.language")}
+              value={language}
+              onChange={setLanguage}
+              options={LANGUAGES.map((lang) => ({
+                value: lang.code,
+                label: lang.name,
+              }))}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="book-target-word-count"
+            className="block text-sm font-medium text-foreground mb-1"
+          >
+            {t("books.targetWordCount")}
+          </label>
+          <input
+            id="book-target-word-count"
+            type="number"
+            value={targetWordCount}
+            onChange={(e) => setTargetWordCount(e.target.value)}
+            placeholder={t("books.targetWordCountPlaceholder")}
+            min="0"
+            className={inputClassName}
+          />
+        </div>
+      </div>
+
+      {/* Status selector */}
+      <div className="mb-6">
+        <label htmlFor="book-status" className="block text-sm font-medium text-foreground mb-2">
+          {t("bookSettings.status")}
+        </label>
+        <div className="flex gap-2" id="book-status">
+          {(["draft", "in-progress", "completed"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
+                status === s
+                  ? "bg-accent text-accent-foreground border-accent"
+                  : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+              }`}
+              onClick={() => setStatus(s)}
+            >
+              {t(`common.${s}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Danger zone accordion */}
+      <Disclosure className="border-t border-border pt-4 mt-4">
+        {({ isExpanded }) => (
+          <>
+            <AriaButton
+              slot="trigger"
+              className="flex w-full items-center justify-between text-sm font-medium text-destructive"
+            >
+              {t("bookSettings.dangerZone")}
+              <ChevronDownIcon
+                className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+              />
+            </AriaButton>
+            <DisclosurePanel className="mt-3">
+              {!showDeleteConfirm ? (
                 <button
-                  key={s}
                   type="button"
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
-                    status === s
-                      ? "bg-accent text-accent-foreground border-accent"
-                      : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
-                  }`}
-                  onClick={() => setStatus(s)}
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-destructive border border-destructive rounded-md hover:bg-destructive/10 transition-colors"
                 >
-                  {t(`common.${s}`)}
+                  <TrashIcon className="w-4 h-4" />
+                  {t("books.deleteBook")}
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Danger zone accordion */}
-          <Disclosure className="border-t border-border pt-4 mt-4">
-            {({ isExpanded }) => (
-              <>
-                <AriaButton
-                  slot="trigger"
-                  className="flex w-full items-center justify-between text-sm font-medium text-destructive"
-                >
-                  {t("bookSettings.dangerZone")}
-                  <ChevronDownIcon
-                    className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                  />
-                </AriaButton>
-                <DisclosurePanel className="mt-3">
-                  {!showDeleteConfirm ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="flex items-center gap-2 px-3 py-2 text-sm text-destructive border border-destructive rounded-md hover:bg-destructive/10 transition-colors"
+              ) : (
+                <div className="p-3 bg-destructive/10 border border-destructive rounded-md">
+                  <p className="text-sm text-foreground mb-3">
+                    {t("bookSettings.deleteConfirmMessage")}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="destructive" onClick={handleDelete} className="flex-1">
+                      {t("bookSettings.confirmDelete")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1"
                     >
-                      <TrashIcon className="w-4 h-4" />
-                      {t("books.deleteBook")}
-                    </button>
-                  ) : (
-                    <div className="p-3 bg-destructive/10 border border-destructive rounded-md">
-                      <p className="text-sm text-foreground mb-3">
-                        {t("bookSettings.deleteConfirmMessage")}
-                      </p>
-                      <div className="flex gap-2">
-                        <Button variant="destructive" onClick={handleDelete} className="flex-1">
-                          {t("bookSettings.confirmDelete")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          onClick={() => setShowDeleteConfirm(false)}
-                          className="flex-1"
-                        >
-                          {t("common.cancel")}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </DisclosurePanel>
-              </>
-            )}
-          </Disclosure>
+                      {t("common.cancel")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </DisclosurePanel>
+          </>
+        )}
+      </Disclosure>
 
-          {/* Action buttons */}
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="ghost" onClick={handleClose}>
-              {t("common.cancel")}
-            </Button>
-            <Button onClick={handleSave} disabled={!hasChanges}>
-              {t("common.save")}
-            </Button>
-          </div>
+      {/* Action buttons */}
+      <div className="flex justify-end gap-2 mt-6">
+        <Button variant="ghost" onClick={handleClose}>
+          {t("common.cancel")}
+        </Button>
+        <Button onClick={handleSave} disabled={!hasChanges}>
+          {t("common.save")}
+        </Button>
+      </div>
     </Modal>
   );
 }

@@ -2,7 +2,12 @@ import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
 import { recordTombstone } from "@/features/sync/tombstones";
 import { reindexSource } from "@/features/links/link-index";
-import type { CreateNoteInput, Note, ReorderNoteItem, UpdateNoteInput } from "@/features/notes/types";
+import type {
+  CreateNoteInput,
+  Note,
+  ReorderNoteItem,
+  UpdateNoteInput,
+} from "@/features/notes/types";
 
 function generateId(): string {
   return crypto.randomUUID();

@@ -182,7 +182,9 @@ export function CoverDesigner() {
           <BackIcon className="w-5 h-5" aria-hidden="true" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 data-route-heading className="font-medium text-sm sm:text-base truncate">{t("cover.title")}</h1>
+          <h1 data-route-heading className="font-medium text-sm sm:text-base truncate">
+            {t("cover.title")}
+          </h1>
           <p className="text-xs text-muted-foreground truncate">{currentBook.title}</p>
         </div>
         <Button

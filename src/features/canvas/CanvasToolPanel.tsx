@@ -71,9 +71,19 @@ export function CanvasToolPanel({
     label: string;
     shortcutId: ShortcutId;
   }> = [
-    { mode: "select", icon: MousePointer2, label: t("canvas.toolSelect"), shortcutId: "canvas.toolSelect" },
+    {
+      mode: "select",
+      icon: MousePointer2,
+      label: t("canvas.toolSelect"),
+      shortcutId: "canvas.toolSelect",
+    },
     { mode: "pen", icon: Pencil, label: t("canvas.toolPen"), shortcutId: "canvas.toolPen" },
-    { mode: "eraser", icon: Eraser, label: t("canvas.toolEraser"), shortcutId: "canvas.toolEraser" },
+    {
+      mode: "eraser",
+      icon: Eraser,
+      label: t("canvas.toolEraser"),
+      shortcutId: "canvas.toolEraser",
+    },
   ];
 
   return (
@@ -141,7 +151,9 @@ export function CanvasToolPanel({
               active={interactivityLocked}
               onClick={toggleInteractivityLocked}
               aria-label={
-                interactivityLocked ? t("canvas.unlockInteractivity") : t("canvas.lockInteractivity")
+                interactivityLocked
+                  ? t("canvas.unlockInteractivity")
+                  : t("canvas.lockInteractivity")
               }
             >
               {interactivityLocked ? (

@@ -187,301 +187,301 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
 
   return (
     <TooltipGroup>
-    <div
-      ref={rootRef}
-      className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2"
-    >
-      {/* Preset selector */}
-      <div className="relative">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => toggleMenu("presets")}
-          className="gap-1 sm:gap-2 text-xs sm:text-sm"
-        >
-          <DimensionIcon className="w-4 h-4" />
-          <span className="hidden sm:inline">{currentPreset.name}</span>
-          <ChevronDownIcon className="w-3 h-3" />
-        </Button>
-        {openMenu === "presets" && (
-          <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
-            {PRESETS.map((p) => (
-              <button
-                type="button"
-                key={p.id}
-                onClick={() => changePreset(p.id)}
-                className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${p.id === currentPreset.id ? "bg-muted" : ""}`}
-              >
-                <span className="font-medium">{p.name}</span>
-                <span className="text-xs text-muted-foreground">{p.description}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <div
+        ref={rootRef}
+        className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2"
+      >
+        {/* Preset selector */}
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleMenu("presets")}
+            className="gap-1 sm:gap-2 text-xs sm:text-sm"
+          >
+            <DimensionIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">{currentPreset.name}</span>
+            <ChevronDownIcon className="w-3 h-3" />
+          </Button>
+          {openMenu === "presets" && (
+            <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
+              {PRESETS.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  onClick={() => changePreset(p.id)}
+                  className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${p.id === currentPreset.id ? "bg-muted" : ""}`}
+                >
+                  <span className="font-medium">{p.name}</span>
+                  <span className="text-xs text-muted-foreground">{p.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-      {/* Templates */}
-      <div className="relative">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => toggleMenu("templates")}
-          className="gap-1 sm:gap-2 text-xs sm:text-sm"
-        >
-          <LayoutTemplate className="w-4 h-4" />
-          <span className="hidden sm:inline">{t("cover.templates")}</span>
-        </Button>
-        {openMenu === "templates" && (
-          <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
-            {TEMPLATES.map((tpl) => (
+        {/* Templates */}
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleMenu("templates")}
+            className="gap-1 sm:gap-2 text-xs sm:text-sm"
+          >
+            <LayoutTemplate className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("cover.templates")}</span>
+          </Button>
+          {openMenu === "templates" && (
+            <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
+              {TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => applyTemplate(tpl.id)}
+                  className="w-full px-4 py-2 text-left hover:bg-muted"
+                >
+                  {tpl.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
+
+        {/* Add text */}
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleMenu("text")}
+            className="gap-1 sm:gap-2 text-xs sm:text-sm"
+          >
+            <TextIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("cover.addText")}</span>
+          </Button>
+          {openMenu === "text" && (
+            <div className="absolute top-full left-0 mt-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
               <button
-                key={tpl.id}
                 type="button"
-                onClick={() => applyTemplate(tpl.id)}
+                onClick={() => addText("title")}
                 className="w-full px-4 py-2 text-left hover:bg-muted"
               >
-                {tpl.name}
+                {t("cover.toolbar.title")}
               </button>
-            ))}
-          </div>
-        )}
-      </div>
+              <button
+                type="button"
+                onClick={() => addText("subtitle")}
+                className="w-full px-4 py-2 text-left hover:bg-muted"
+              >
+                {t("cover.toolbar.subtitle")}
+              </button>
+              <button
+                type="button"
+                onClick={() => addText("author")}
+                className="w-full px-4 py-2 text-left hover:bg-muted"
+              >
+                {t("cover.toolbar.author")}
+              </button>
+            </div>
+          )}
+        </div>
 
-      <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
-
-      {/* Add text */}
-      <div className="relative">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => toggleMenu("text")}
-          className="gap-1 sm:gap-2 text-xs sm:text-sm"
-        >
-          <TextIcon className="w-4 h-4" />
-          <span className="hidden sm:inline">{t("cover.addText")}</span>
-        </Button>
-        {openMenu === "text" && (
-          <div className="absolute top-full left-0 mt-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
-            <button
-              type="button"
-              onClick={() => addText("title")}
-              className="w-full px-4 py-2 text-left hover:bg-muted"
-            >
-              {t("cover.toolbar.title")}
-            </button>
-            <button
-              type="button"
-              onClick={() => addText("subtitle")}
-              className="w-full px-4 py-2 text-left hover:bg-muted"
-            >
-              {t("cover.toolbar.subtitle")}
-            </button>
-            <button
-              type="button"
-              onClick={() => addText("author")}
-              className="w-full px-4 py-2 text-left hover:bg-muted"
-            >
-              {t("cover.toolbar.author")}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Add image */}
-      <Tooltip content={t("cover.addImage")}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => imageInputRef.current?.click()}
-          className="gap-1 sm:gap-2 text-xs sm:text-sm"
-          aria-label={t("cover.addImage")}
-        >
-          <ImageIcon className="w-4 h-4" />
-          <span className="hidden sm:inline">{t("cover.addImage")}</span>
-        </Button>
-      </Tooltip>
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleImage}
-        className="hidden"
-        aria-label={t("cover.addImage")}
-      />
-
-      {/* Add shape */}
-      <div className="relative">
-        <Tooltip content={t("cover.addShape")}>
+        {/* Add image */}
+        <Tooltip content={t("cover.addImage")}>
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => toggleMenu("shape")}
+            onClick={() => imageInputRef.current?.click()}
             className="gap-1 sm:gap-2 text-xs sm:text-sm"
-            aria-label={t("cover.addShape")}
+            aria-label={t("cover.addImage")}
           >
-            <Shapes className="w-4 h-4" />
-            <span className="hidden sm:inline">{t("cover.addShape")}</span>
+            <ImageIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("cover.addImage")}</span>
           </Button>
         </Tooltip>
-        {openMenu === "shape" && (
-          <div className="absolute top-full left-0 mt-1 w-44 bg-card border border-border rounded-lg shadow-lg z-50">
-            <button
-              type="button"
-              onClick={() => addShape("rect")}
-              className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImage}
+          className="hidden"
+          aria-label={t("cover.addImage")}
+        />
+
+        {/* Add shape */}
+        <div className="relative">
+          <Tooltip content={t("cover.addShape")}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleMenu("shape")}
+              className="gap-1 sm:gap-2 text-xs sm:text-sm"
+              aria-label={t("cover.addShape")}
             >
-              <Square className="w-4 h-4" /> {t("cover.shape.rect")}
-            </button>
-            <button
-              type="button"
-              onClick={() => addShape("ellipse")}
-              className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-            >
-              <Circle className="w-4 h-4" /> {t("cover.shape.ellipse")}
-            </button>
-            <button
-              type="button"
-              onClick={() => addShape("line")}
-              className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-            >
-              <Minus className="w-4 h-4" /> {t("cover.shape.line")}
-            </button>
-          </div>
-        )}
-      </div>
+              <Shapes className="w-4 h-4" />
+              <span className="hidden sm:inline">{t("cover.addShape")}</span>
+            </Button>
+          </Tooltip>
+          {openMenu === "shape" && (
+            <div className="absolute top-full left-0 mt-1 w-44 bg-card border border-border rounded-lg shadow-lg z-50">
+              <button
+                type="button"
+                onClick={() => addShape("rect")}
+                className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+              >
+                <Square className="w-4 h-4" /> {t("cover.shape.rect")}
+              </button>
+              <button
+                type="button"
+                onClick={() => addShape("ellipse")}
+                className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+              >
+                <Circle className="w-4 h-4" /> {t("cover.shape.ellipse")}
+              </button>
+              <button
+                type="button"
+                onClick={() => addShape("line")}
+                className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+              >
+                <Minus className="w-4 h-4" /> {t("cover.shape.line")}
+              </button>
+            </div>
+          )}
+        </div>
 
-      <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
+        <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
-      {/* History */}
-      <Tooltip content={t("cover.undo")} shortcut="cover.undo">
-        <Button variant="ghost" size="sm" onClick={() => undo()} aria-label={t("cover.undo")}>
-          <Undo2 className="w-4 h-4" />
-        </Button>
-      </Tooltip>
-      <Tooltip content={t("cover.redo")} shortcut="cover.redo">
-        <Button variant="ghost" size="sm" onClick={() => redo()} aria-label={t("cover.redo")}>
-          <Redo2 className="w-4 h-4" />
-        </Button>
-      </Tooltip>
+        {/* History */}
+        <Tooltip content={t("cover.undo")} shortcut="cover.undo">
+          <Button variant="ghost" size="sm" onClick={() => undo()} aria-label={t("cover.undo")}>
+            <Undo2 className="w-4 h-4" />
+          </Button>
+        </Tooltip>
+        <Tooltip content={t("cover.redo")} shortcut="cover.redo">
+          <Button variant="ghost" size="sm" onClick={() => redo()} aria-label={t("cover.redo")}>
+            <Redo2 className="w-4 h-4" />
+          </Button>
+        </Tooltip>
 
-      <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
+        <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
-      {/* Selection actions */}
-      <Tooltip content={t("cover.duplicate")} shortcut="cover.duplicate">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => duplicateSelected()}
-          disabled={!selectedId}
-          aria-label={t("cover.duplicate")}
-        >
-          <Copy className="w-4 h-4" />
-        </Button>
-      </Tooltip>
-      <Tooltip content={t("common.delete")} shortcut="cover.delete">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => selectedId && removeLayer(selectedId)}
-          disabled={!selectedId}
-          aria-label={t("common.delete")}
-          className="text-destructive hover:text-destructive"
-        >
-          <TrashIcon className="w-4 h-4" />
-        </Button>
-      </Tooltip>
-
-      <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
-
-      {/* Align selected to canvas */}
-      {alignButtons.map(({ edge, Icon, label }) => (
-        <Tooltip key={edge} content={label}>
+        {/* Selection actions */}
+        <Tooltip content={t("cover.duplicate")} shortcut="cover.duplicate">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => alignSelected(edge)}
+            onClick={() => duplicateSelected()}
             disabled={!selectedId}
-            aria-label={label}
-            className="hidden md:inline-flex"
+            aria-label={t("cover.duplicate")}
           >
-            <Icon className="w-4 h-4" />
+            <Copy className="w-4 h-4" />
           </Button>
         </Tooltip>
-      ))}
+        <Tooltip content={t("common.delete")} shortcut="cover.delete">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => selectedId && removeLayer(selectedId)}
+            disabled={!selectedId}
+            aria-label={t("common.delete")}
+            className="text-destructive hover:text-destructive"
+          >
+            <TrashIcon className="w-4 h-4" />
+          </Button>
+        </Tooltip>
 
-      <div className="w-px h-6 bg-border mx-1 sm:mx-2 hidden md:block" />
+        <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
-      {/* Layout aid toggles */}
-      <Tooltip content={t("cover.toggleOverlays")}>
-        <Button
-          variant={overlays ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setOverlays(!overlays)}
-          aria-label={t("cover.toggleOverlays")}
-        >
-          <Ruler className="w-4 h-4" />
-        </Button>
-      </Tooltip>
-      <Tooltip content={t("cover.toggleSnapping")}>
-        <Button
-          variant={snapping ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setSnapping(!snapping)}
-          aria-label={t("cover.toggleSnapping")}
-        >
-          <Magnet className="w-4 h-4" />
-        </Button>
-      </Tooltip>
-
-      <div className="flex-1 min-w-2" />
-
-      {/* Export */}
-      <div className="relative">
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => toggleMenu("export")}
-          className="gap-1 sm:gap-2 text-xs sm:text-sm"
-        >
-          <ExportIcon className="w-4 h-4" />
-          <span className="hidden sm:inline">{t("cover.export")}</span>
-        </Button>
-        {openMenu === "export" && (
-          <div className="absolute top-full right-0 mt-1 w-40 bg-card border border-border rounded-lg shadow-lg z-50">
-            <button
-              type="button"
-              onClick={() => {
-                onExport("png");
-                closeMenu();
-              }}
-              className="w-full px-4 py-2 text-left hover:bg-muted"
+        {/* Align selected to canvas */}
+        {alignButtons.map(({ edge, Icon, label }) => (
+          <Tooltip key={edge} content={label}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => alignSelected(edge)}
+              disabled={!selectedId}
+              aria-label={label}
+              className="hidden md:inline-flex"
             >
-              {t("cover.pngExport")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onExport("jpeg");
-                closeMenu();
-              }}
-              className="w-full px-4 py-2 text-left hover:bg-muted"
-            >
-              {t("cover.jpgExport")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onExport("pdf");
-                closeMenu();
-              }}
-              className="w-full px-4 py-2 text-left hover:bg-muted"
-            >
-              {t("cover.pdfExport")}
-            </button>
-          </div>
-        )}
+              <Icon className="w-4 h-4" />
+            </Button>
+          </Tooltip>
+        ))}
+
+        <div className="w-px h-6 bg-border mx-1 sm:mx-2 hidden md:block" />
+
+        {/* Layout aid toggles */}
+        <Tooltip content={t("cover.toggleOverlays")}>
+          <Button
+            variant={overlays ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setOverlays(!overlays)}
+            aria-label={t("cover.toggleOverlays")}
+          >
+            <Ruler className="w-4 h-4" />
+          </Button>
+        </Tooltip>
+        <Tooltip content={t("cover.toggleSnapping")}>
+          <Button
+            variant={snapping ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setSnapping(!snapping)}
+            aria-label={t("cover.toggleSnapping")}
+          >
+            <Magnet className="w-4 h-4" />
+          </Button>
+        </Tooltip>
+
+        <div className="flex-1 min-w-2" />
+
+        {/* Export */}
+        <div className="relative">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => toggleMenu("export")}
+            className="gap-1 sm:gap-2 text-xs sm:text-sm"
+          >
+            <ExportIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("cover.export")}</span>
+          </Button>
+          {openMenu === "export" && (
+            <div className="absolute top-full right-0 mt-1 w-40 bg-card border border-border rounded-lg shadow-lg z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  onExport("png");
+                  closeMenu();
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-muted"
+              >
+                {t("cover.pngExport")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onExport("jpeg");
+                  closeMenu();
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-muted"
+              >
+                {t("cover.jpgExport")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onExport("pdf");
+                  closeMenu();
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-muted"
+              >
+                {t("cover.pdfExport")}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </TooltipGroup>
   );
 }

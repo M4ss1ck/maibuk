@@ -50,16 +50,10 @@ export function Select<T extends string | number>({
       >
         <SelectValue>
           {({ selectedText, isPlaceholder }) => (
-            <span className="min-w-0 flex-1 truncate">
-              {isPlaceholder ? "" : selectedText}
-            </span>
+            <span className="min-w-0 flex-1 truncate">{isPlaceholder ? "" : selectedText}</span>
           )}
         </SelectValue>
-        {endAdornment && (
-          <span className="shrink-0 text-muted-foreground">
-            {endAdornment}
-          </span>
-        )}
+        {endAdornment && <span className="shrink-0 text-muted-foreground">{endAdornment}</span>}
         <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
           <ChevronIcon className="h-4 w-4 text-muted-foreground" />
         </span>
@@ -77,9 +71,7 @@ export function Select<T extends string | number>({
               className="relative cursor-pointer select-none py-1.5 px-3 text-sm text-foreground data-focused:bg-muted data-selected:bg-primary/10 data-selected:text-primary"
             >
               {({ isSelected }) => (
-                <span
-                  className={`block truncate ${isSelected ? "font-medium" : "font-normal"}`}
-                >
+                <span className={`block truncate ${isSelected ? "font-medium" : "font-normal"}`}>
                   {option.label}
                 </span>
               )}

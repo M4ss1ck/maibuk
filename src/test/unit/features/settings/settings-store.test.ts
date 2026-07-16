@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-  DEFAULT_METRICS_SETTINGS,
-  PASTE_CLEANUP_PRESETS,
-} from "@/features/settings/types";
+import { DEFAULT_METRICS_SETTINGS, PASTE_CLEANUP_PRESETS } from "@/features/settings/types";
 import {
   ALL_GROUP_IDS,
   DEFAULT_TOOLBAR_CONFIG,
@@ -786,40 +783,26 @@ describe("toolbarConfig actions", () => {
   });
 
   it("initializes to the default config", () => {
-    expect(useSettingsStore.getState().toolbarConfig).toEqual(
-      DEFAULT_TOOLBAR_CONFIG,
-    );
+    expect(useSettingsStore.getState().toolbarConfig).toEqual(DEFAULT_TOOLBAR_CONFIG);
   });
 
   it("transferToolbarEntry moves a group to End and updates live", () => {
     const firstGroupIndex = useSettingsStore
       .getState()
-      .toolbarConfig.start.findIndex(
-        (entry) => entry.kind === "group" && entry.id === "history",
-      );
+      .toolbarConfig.start.findIndex((entry) => entry.kind === "group" && entry.id === "history");
     useSettingsStore.getState().transferToolbarEntry("start", firstGroupIndex);
     const config = useSettingsStore.getState().toolbarConfig;
-    expect(
-      config.end.some(
-        (entry) => entry.kind === "group" && entry.id === "history",
-      ),
-    ).toBe(true);
-    expect(
-      config.start.some(
-        (entry) => entry.kind === "group" && entry.id === "history",
-      ),
-    ).toBe(false);
+    expect(config.end.some((entry) => entry.kind === "group" && entry.id === "history")).toBe(true);
+    expect(config.start.some((entry) => entry.kind === "group" && entry.id === "history")).toBe(
+      false
+    );
   });
 
   it("setToolbarGroupFloatingVisible is a no-op for ineligible groups", () => {
-    useSettingsStore
-      .getState()
-      .setToolbarGroupFloatingVisible("history", true);
+    useSettingsStore.getState().setToolbarGroupFloatingVisible("history", true);
     const historyEntry = useSettingsStore
       .getState()
-      .toolbarConfig.start.find(
-        (entry) => entry.kind === "group" && entry.id === "history",
-      );
+      .toolbarConfig.start.find((entry) => entry.kind === "group" && entry.id === "history");
     expect(historyEntry).toMatchObject({ floatingVisible: false });
     expect(FLOATING_ELIGIBLE_IDS.has("history")).toBe(false);
   });
@@ -829,11 +812,9 @@ describe("toolbarConfig actions", () => {
     useSettingsStore.getState().addToolbarDivider("end");
     useSettingsStore.getState().resetToolbarConfig();
     const config = useSettingsStore.getState().toolbarConfig;
-    const semanticLayout = config.start.map((entry) =>
-      entry.kind === "divider" ? "D" : entry.id,
-    );
+    const semanticLayout = config.start.map((entry) => (entry.kind === "divider" ? "D" : entry.id));
     const defaultLayout = DEFAULT_TOOLBAR_CONFIG.start.map((entry) =>
-      entry.kind === "divider" ? "D" : entry.id,
+      entry.kind === "divider" ? "D" : entry.id
     );
     const resetDividerIds = config.start
       .filter((entry) => entry.kind === "divider")
@@ -859,7 +840,7 @@ describe("toolbarConfig actions", () => {
           },
         },
         version: 0,
-      }),
+      })
     );
     await useSettingsStore.persist.rehydrate();
     const config = useSettingsStore.getState().toolbarConfig;

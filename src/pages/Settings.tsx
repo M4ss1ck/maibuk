@@ -198,7 +198,9 @@ export function Settings() {
     <div className="h-full overflow-auto relative">
       <AsciiFieldBackground color={primaryColor} />
       <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background">
-        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">{t("settings.title")}</h1>
+        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">
+          {t("settings.title")}
+        </h1>
 
         {/* Appearance Settings */}
         <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">

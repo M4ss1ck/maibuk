@@ -20,10 +20,7 @@ import {
 
 const groupIds = (entries: ToolbarEntry[]) =>
   entries
-    .filter(
-      (e): e is Extract<ToolbarEntry, { kind: "group" }> =>
-        e.kind === "group",
-    )
+    .filter((e): e is Extract<ToolbarEntry, { kind: "group" }> => e.kind === "group")
     .map((e) => e.id);
 
 describe("DEFAULT_TOOLBAR_CONFIG", () => {
@@ -46,23 +43,52 @@ describe("DEFAULT_TOOLBAR_CONFIG", () => {
   });
   it("has the exact semantic divider boundaries and is deeply frozen", () => {
     expect(
-      DEFAULT_TOOLBAR_CONFIG.start.map((entry) =>
-        entry.kind === "divider" ? "D" : entry.id,
-      ),
+      DEFAULT_TOOLBAR_CONFIG.start.map((entry) => (entry.kind === "divider" ? "D" : entry.id))
     ).toEqual([
-      "history", "D", "font", "D", "basic-marks", "D", "headings", "D",
-      "find", "D", "line-height", "D", "highlight", "script", "text-color",
-      "link-code", "D", "lists", "blockquote", "D", "indent", "D", "align",
-      "D", "clear-formatting", "D", "text-case", "D", "table", "image",
-      "scene-break", "footnote", "D", "horizontal-rule", "spellcheck",
-      "dictionary", "html-view", "D", "export",
+      "history",
+      "D",
+      "font",
+      "D",
+      "basic-marks",
+      "D",
+      "headings",
+      "D",
+      "find",
+      "D",
+      "line-height",
+      "D",
+      "highlight",
+      "script",
+      "text-color",
+      "link-code",
+      "D",
+      "lists",
+      "blockquote",
+      "D",
+      "indent",
+      "D",
+      "align",
+      "D",
+      "clear-formatting",
+      "D",
+      "text-case",
+      "D",
+      "table",
+      "image",
+      "scene-break",
+      "footnote",
+      "D",
+      "horizontal-rule",
+      "spellcheck",
+      "dictionary",
+      "html-view",
+      "D",
+      "export",
     ]);
     expect(Object.isFrozen(DEFAULT_TOOLBAR_CONFIG)).toBe(true);
     expect(Object.isFrozen(DEFAULT_TOOLBAR_CONFIG.start)).toBe(true);
     expect(Object.isFrozen(DEFAULT_TOOLBAR_CONFIG.end)).toBe(true);
-    expect(
-      DEFAULT_TOOLBAR_CONFIG.start.every((entry) => Object.isFrozen(entry)),
-    ).toBe(true);
+    expect(DEFAULT_TOOLBAR_CONFIG.start.every((entry) => Object.isFrozen(entry))).toBe(true);
   });
 });
 
@@ -70,17 +96,9 @@ describe("normalizeToolbarConfig", () => {
   it("returns a deep clone of the default for null/garbage input", () => {
     for (const bad of [null, undefined, 42, "x", {}, { start: 1, end: 2 }]) {
       const result = normalizeToolbarConfig(bad);
-      expect(groupIds([...result.start, ...result.end]).sort()).toEqual(
-        [...ALL_GROUP_IDS].sort(),
-      );
-      expect(
-        result.start.map((entry) =>
-          entry.kind === "divider" ? "D" : entry.id,
-        ),
-      ).toEqual(
-        DEFAULT_TOOLBAR_CONFIG.start.map((entry) =>
-          entry.kind === "divider" ? "D" : entry.id,
-        ),
+      expect(groupIds([...result.start, ...result.end]).sort()).toEqual([...ALL_GROUP_IDS].sort());
+      expect(result.start.map((entry) => (entry.kind === "divider" ? "D" : entry.id))).toEqual(
+        DEFAULT_TOOLBAR_CONFIG.start.map((entry) => (entry.kind === "divider" ? "D" : entry.id))
       );
       expect(result.start).not.toBe(DEFAULT_TOOLBAR_CONFIG.start);
       expect(result.start[0]).not.toBe(DEFAULT_TOOLBAR_CONFIG.start[0]);
@@ -115,9 +133,7 @@ describe("normalizeToolbarConfig", () => {
     expect(ids.filter((id) => id === "basic-marks")).toHaveLength(1);
     expect(ids).not.toContain("not-a-real-group");
     expect(ids.sort()).toEqual([...ALL_GROUP_IDS].sort());
-    const marks = result.start.find(
-      (e) => e.kind === "group" && e.id === "basic-marks",
-    );
+    const marks = result.start.find((e) => e.kind === "group" && e.id === "basic-marks");
     expect(marks).toMatchObject({
       toolbarVisible: true,
       floatingVisible: true,
@@ -142,9 +158,9 @@ describe("normalizeToolbarConfig", () => {
       .map((e) => e.id);
     expect(new Set(dividerIds).size).toBe(dividerIds.length);
     expect(result.start[0]).toEqual({ kind: "divider", id: "d1" });
-    expect(
-      result.start.find((e) => e.kind === "group" && e.id === "history"),
-    ).toMatchObject({ toolbarVisible: false });
+    expect(result.start.find((e) => e.kind === "group" && e.id === "history")).toMatchObject({
+      toolbarVisible: false,
+    });
   });
   it("drops blank divider ids and defaults malformed group flags", () => {
     const result = normalizeToolbarConfig({
@@ -162,9 +178,7 @@ describe("normalizeToolbarConfig", () => {
     });
     expect(result.start.some((entry) => entry.kind === "divider")).toBe(false);
     expect(
-      result.start.find(
-        (entry) => entry.kind === "group" && entry.id === "basic-marks",
-      ),
+      result.start.find((entry) => entry.kind === "group" && entry.id === "basic-marks")
     ).toMatchObject({ toolbarVisible: true, floatingVisible: true });
   });
 });
@@ -214,11 +228,7 @@ describe("mutation helpers are immutable", () => {
     const withDivider = addDivider(DEFAULT_TOOLBAR_CONFIG, "end");
     const added = withDivider.end.find((e) => e.kind === "divider")!;
     expect(added.kind).toBe("divider");
-    const removed = removeDivider(
-      withDivider,
-      "end",
-      (added as { id: string }).id,
-    );
+    const removed = removeDivider(withDivider, "end", (added as { id: string }).id);
     expect(removed.end.some((e) => e.kind === "divider")).toBe(false);
   });
   it("moveEntry supports down and returns the same ref out of range", () => {
@@ -229,10 +239,7 @@ describe("mutation helpers are immutable", () => {
       ],
       end: [],
     };
-    expect(groupIds(moveEntry(before, "start", 0, "down").start)).toEqual([
-      "font",
-      "history",
-    ]);
+    expect(groupIds(moveEntry(before, "start", 0, "down").start)).toEqual(["font", "history"]);
     expect(moveEntry(before, "start", 2, "down")).toBe(before);
     expect(moveEntry(before, "start", -1, "up")).toBe(before);
   });
@@ -242,9 +249,7 @@ describe("mutation helpers are immutable", () => {
         { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
         { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
       ],
-      end: [
-        { kind: "group", id: "find", toolbarVisible: true, floatingVisible: false },
-      ],
+      end: [{ kind: "group", id: "find", toolbarVisible: true, floatingVisible: false }],
     };
     expect(groupIds(moveEntryTo(before, "start", 0, "start", 99).start)).toEqual([
       "font",
@@ -256,35 +261,21 @@ describe("mutation helpers are immutable", () => {
     expect(moveEntryTo(before, "start", 99, "end", 0)).toBe(before);
   });
   it("sets toolbar and eligible floating visibility and no-ops for ineligible floating groups", () => {
-    const toolbarHidden = setGroupToolbarVisible(
-      DEFAULT_TOOLBAR_CONFIG,
-      "history",
-      false,
-    );
+    const toolbarHidden = setGroupToolbarVisible(DEFAULT_TOOLBAR_CONFIG, "history", false);
     expect(
-      toolbarHidden.start.find(
-        (entry) => entry.kind === "group" && entry.id === "history",
-      ),
+      toolbarHidden.start.find((entry) => entry.kind === "group" && entry.id === "history")
     ).toMatchObject({ toolbarVisible: false });
-    const floatingHidden = setGroupFloatingVisible(
-      DEFAULT_TOOLBAR_CONFIG,
-      "basic-marks",
-      false,
-    );
+    const floatingHidden = setGroupFloatingVisible(DEFAULT_TOOLBAR_CONFIG, "basic-marks", false);
     expect(
-      floatingHidden.start.find(
-        (entry) => entry.kind === "group" && entry.id === "basic-marks",
-      ),
+      floatingHidden.start.find((entry) => entry.kind === "group" && entry.id === "basic-marks")
     ).toMatchObject({ floatingVisible: false });
-    expect(
-      setGroupFloatingVisible(DEFAULT_TOOLBAR_CONFIG, "history", true),
-    ).toBe(DEFAULT_TOOLBAR_CONFIG);
+    expect(setGroupFloatingVisible(DEFAULT_TOOLBAR_CONFIG, "history", true)).toBe(
+      DEFAULT_TOOLBAR_CONFIG
+    );
   });
   it("inserts dividers at clamped positions and remove-missing is a no-op", () => {
     const before: ToolbarConfig = {
-      start: [
-        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
-      ],
+      start: [{ kind: "group", id: "history", toolbarVisible: true, floatingVisible: false }],
       end: [],
     };
     expect(addDivider(before, "start", -10).start[0].kind).toBe("divider");
@@ -292,8 +283,9 @@ describe("mutation helpers are immutable", () => {
     expect(removeDivider(before, "start", "missing")).toBe(before);
   });
   it("generates unique divider ids", () => {
-    const ids = Array.from({ length: 20 }, () =>
-      (addDivider({ start: [], end: [] }, "start").start[0] as { id: string }).id,
+    const ids = Array.from(
+      { length: 20 },
+      () => (addDivider({ start: [], end: [] }, "start").start[0] as { id: string }).id
     );
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -301,11 +293,7 @@ describe("mutation helpers are immutable", () => {
 
 describe("floating derivation & orphan suppression", () => {
   it("deriveFloatingGroupIds returns Start-then-End order, eligible + visible only, ignoring dividers", () => {
-    const config = setGroupFloatingVisible(
-      DEFAULT_TOOLBAR_CONFIG,
-      "headings",
-      false,
-    );
+    const config = setGroupFloatingVisible(DEFAULT_TOOLBAR_CONFIG, "headings", false);
     const ids = deriveFloatingGroupIds(config);
     expect(ids).not.toContain("headings");
     expect(ids).toContain("basic-marks");
@@ -351,22 +339,16 @@ describe("resetToolbarConfig", () => {
               id: entry.id,
               toolbarVisible: entry.toolbarVisible,
               floatingVisible: entry.floatingVisible,
-            },
+            }
       );
     const dividerIds = (config: ToolbarConfig) =>
-      config.start
-        .filter((entry) => entry.kind === "divider")
-        .map((entry) => entry.id);
+      config.start.filter((entry) => entry.kind === "divider").map((entry) => entry.id);
 
     expect(layout(firstReset)).toEqual(layout(DEFAULT_TOOLBAR_CONFIG));
     expect(firstReset.end).toEqual([]);
     expect(firstReset).not.toBe(DEFAULT_TOOLBAR_CONFIG);
-    expect(dividerIds(firstReset)).not.toEqual(
-      dividerIds(DEFAULT_TOOLBAR_CONFIG),
-    );
+    expect(dividerIds(firstReset)).not.toEqual(dividerIds(DEFAULT_TOOLBAR_CONFIG));
     expect(dividerIds(secondReset)).not.toEqual(dividerIds(firstReset));
-    expect(new Set(dividerIds(firstReset)).size).toBe(
-      dividerIds(firstReset).length,
-    );
+    expect(new Set(dividerIds(firstReset)).size).toBe(dividerIds(firstReset).length);
   });
 });

@@ -9,8 +9,13 @@ import { useSettingsStore } from "@/features/settings/store";
 import { makeToolbarEditor } from "@/test/support/toolbar-editor";
 
 vi.mock("@tiptap/react", () => ({
-  useEditorState: ({ editor, selector }: { editor: unknown; selector: (value: { editor: unknown }) => unknown }) =>
-    selector({ editor }),
+  useEditorState: ({
+    editor,
+    selector,
+  }: {
+    editor: unknown;
+    selector: (value: { editor: unknown }) => unknown;
+  }) => selector({ editor }),
 }));
 
 vi.mock("react-i18next", async (importOriginal) => ({
@@ -23,12 +28,7 @@ beforeEach(() => {
 });
 
 it("renders floating-eligible visible groups in Start-then-End order", () => {
-  render(
-    <FloatingFormattingGroups
-      editor={makeToolbarEditor()}
-      onLinkClick={vi.fn()}
-    />,
-  );
+  render(<FloatingFormattingGroups editor={makeToolbarEditor()} onLinkClick={vi.fn()} />);
   expect(screen.getByLabelText("editor.bold")).toBeInTheDocument();
   expect(screen.getByLabelText("editor.heading1")).toBeInTheDocument();
   expect(screen.getByLabelText("editor.highlight")).toBeInTheDocument();
@@ -38,20 +38,12 @@ it("renders floating-eligible visible groups in Start-then-End order", () => {
 
 it("returns null when every floating group is disabled", () => {
   let config = DEFAULT_TOOLBAR_CONFIG;
-  for (const id of [
-    "basic-marks",
-    "headings",
-    "highlight",
-    "link-code",
-  ] as const) {
+  for (const id of ["basic-marks", "headings", "highlight", "link-code"] as const) {
     config = setGroupFloatingVisible(config, id, false);
   }
   useSettingsStore.setState({ toolbarConfig: config });
   const { container } = render(
-    <FloatingFormattingGroups
-      editor={makeToolbarEditor()}
-      onLinkClick={vi.fn()}
-    />,
+    <FloatingFormattingGroups editor={makeToolbarEditor()} onLinkClick={vi.fn()} />
   );
   expect(container).toBeEmptyDOMElement();
 });

@@ -74,10 +74,9 @@ describe("useModalScope", () => {
   });
 
   it("registers on mount and unregisters on unmount when isOpen is true", () => {
-    const { unmount } = renderHook(
-      ({ open }: { open: boolean }) => useModalScope(open),
-      { initialProps: { open: true } }
-    );
+    const { unmount } = renderHook(({ open }: { open: boolean }) => useModalScope(open), {
+      initialProps: { open: true },
+    });
 
     expect(useModalStore.getState().openCount).toBe(1);
     expect(useModalStore.getState().modalIds).toHaveLength(1);
@@ -96,10 +95,9 @@ describe("useModalScope", () => {
   });
 
   it("unregisters when isOpen transitions from true to false", () => {
-    const { rerender } = renderHook(
-      ({ open }: { open: boolean }) => useModalScope(open),
-      { initialProps: { open: true } }
-    );
+    const { rerender } = renderHook(({ open }: { open: boolean }) => useModalScope(open), {
+      initialProps: { open: true },
+    });
 
     expect(useModalStore.getState().openCount).toBe(1);
 
@@ -110,10 +108,9 @@ describe("useModalScope", () => {
   });
 
   it("does not double-register on re-render with same isOpen", () => {
-    const { rerender } = renderHook(
-      ({ open }: { open: boolean }) => useModalScope(open),
-      { initialProps: { open: true } }
-    );
+    const { rerender } = renderHook(({ open }: { open: boolean }) => useModalScope(open), {
+      initialProps: { open: true },
+    });
 
     expect(useModalStore.getState().openCount).toBe(1);
 

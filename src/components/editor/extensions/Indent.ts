@@ -10,7 +10,11 @@ export interface IndentOptions {
 const TABLE_NODE_TYPES = new Set(["tableCell", "tableHeader"]);
 const CODE_NODE_TYPES = new Set(["codeBlock"]);
 
-function isInTableOrCode(editor: { state: { selection: { $from: { node: (depth: number) => { type: { name: string } }; depth: number } } } }): boolean {
+function isInTableOrCode(editor: {
+  state: {
+    selection: { $from: { node: (depth: number) => { type: { name: string } }; depth: number } };
+  };
+}): boolean {
   const { $from } = editor.state.selection;
   for (let d = $from.depth; d > 0; d--) {
     const name = $from.node(d).type.name;

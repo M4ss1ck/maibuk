@@ -9,8 +9,13 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useModalStore } from "@/components/ui/modal-store";
 
 vi.mock("@tiptap/react", () => ({
-  useEditorState: ({ editor, selector }: { editor: unknown; selector: (value: { editor: unknown }) => unknown }) =>
-    selector({ editor }),
+  useEditorState: ({
+    editor,
+    selector,
+  }: {
+    editor: unknown;
+    selector: (value: { editor: unknown }) => unknown;
+  }) => selector({ editor }),
 }));
 
 vi.mock("react-i18next", async (importOriginal) => ({
@@ -66,7 +71,7 @@ describe("SelectionToolbar", () => {
   it("mounts the styled bubble when floating groups are configured", () => {
     const { editor, listeners } = makeEditor();
     const { container } = render(
-      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />,
+      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
     );
     act(() => listeners.get("selectionUpdate")?.());
     expect(container.querySelector(".selection-toolbar-enter")).not.toBeNull();
@@ -74,18 +79,13 @@ describe("SelectionToolbar", () => {
 
   it("does not mount the styled bubble when every floating group is disabled", () => {
     let config = DEFAULT_TOOLBAR_CONFIG;
-    for (const id of [
-      "basic-marks",
-      "headings",
-      "highlight",
-      "link-code",
-    ] as const) {
+    for (const id of ["basic-marks", "headings", "highlight", "link-code"] as const) {
       config = setGroupFloatingVisible(config, id, false);
     }
     useSettingsStore.setState({ toolbarConfig: config });
     const { editor, listeners } = makeEditor();
     const { container } = render(
-      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />,
+      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
     );
     act(() => listeners.get("selectionUpdate")?.());
     expect(container.querySelector(".selection-toolbar-enter")).toBeNull();
@@ -96,7 +96,7 @@ describe("SelectionToolbar modal hiding", () => {
   it("hides the visible toolbar while any modal is open and reappears after the final close", () => {
     const { editor, listeners } = makeEditor();
     const { container } = render(
-      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />,
+      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
     );
     act(() => listeners.get("selectionUpdate")?.());
 
@@ -119,7 +119,7 @@ describe("SelectionToolbar modal hiding", () => {
   it("stays hidden while nested modals are still open", () => {
     const { editor, listeners } = makeEditor();
     const { container } = render(
-      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />,
+      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
     );
     act(() => listeners.get("selectionUpdate")?.());
 

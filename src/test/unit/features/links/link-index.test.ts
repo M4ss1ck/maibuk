@@ -7,9 +7,7 @@ let testDb: DatabaseAdapter;
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
 
-const { reindexSource, getBacklinksForNote } = await import(
-  "@/features/links/link-index"
-);
+const { reindexSource, getBacklinksForNote } = await import("@/features/links/link-index");
 
 describe("link-index", () => {
   beforeEach(async () => {

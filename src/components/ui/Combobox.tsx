@@ -35,9 +35,7 @@ export function Combobox({
   const filteredOptions =
     query === ""
       ? options
-      : options.filter((option) =>
-          option.toLowerCase().includes(query.toLowerCase()),
-        );
+      : options.filter((option) => option.toLowerCase().includes(query.toLowerCase()));
 
   const isCustomValue = query !== "" && !options.includes(query);
 
@@ -102,10 +100,7 @@ export function Combobox({
           )}
           {filteredOptions.map((option, index) =>
             option === "divider" ? (
-              <Separator
-                key={`divider-${index}`}
-                className="my-1 border-t border-border"
-              />
+              <Separator key={`divider-${index}`} className="my-1 border-t border-border" />
             ) : (
               <ListBoxItem
                 key={option}
@@ -115,7 +110,7 @@ export function Combobox({
               >
                 {option}
               </ListBoxItem>
-            ),
+            )
           )}
         </ListBox>
       </Popover>

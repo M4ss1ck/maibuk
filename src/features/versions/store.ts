@@ -3,7 +3,12 @@ import { getDatabase } from "@/lib/db";
 import { serializeBook, applyBookSnapshot } from "@/features/sync/serializer";
 import { computeChecksum } from "@/lib/checksum";
 import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
-import type { BookVersion, CreateVersionInput, RestoreOptions, VersionTrigger } from "@/features/versions/types";
+import type {
+  BookVersion,
+  CreateVersionInput,
+  RestoreOptions,
+  VersionTrigger,
+} from "@/features/versions/types";
 import type { BookSnapshot } from "@/features/sync/types";
 
 export const DEFAULT_VERSIONS_PAGE_SIZE = 10;

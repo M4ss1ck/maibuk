@@ -46,9 +46,11 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { version?: string }) => {
       if (key === "settings.updateAvailable") return `Update ${options?.version}`;
-      return translations[i18nState.language as keyof typeof translations][
-        key as keyof (typeof translations)["en"]
-      ] ?? key;
+      return (
+        translations[i18nState.language as keyof typeof translations][
+          key as keyof (typeof translations)["en"]
+        ] ?? key
+      );
     },
     i18n: { language: i18nState.language, resolvedLanguage: i18nState.language },
   }),
@@ -174,9 +176,7 @@ describe("Layout", () => {
     expect(screen.getByTestId("current-route")).toHaveTextContent("/");
 
     await user.click(getNavigationLink("Settings"));
-    await waitFor(() =>
-      expect(screen.getByTestId("current-route")).toHaveTextContent("/settings")
-    );
+    await waitFor(() => expect(screen.getByTestId("current-route")).toHaveTextContent("/settings"));
   });
 
   it("keeps selection off so a single click navigates instead of selecting", () => {

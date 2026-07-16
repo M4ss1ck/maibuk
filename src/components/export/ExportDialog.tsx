@@ -179,294 +179,285 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
       panelClassName="bg-background rounded-t-xl sm:rounded-lg shadow-xl max-w-md w-full sm:mx-4 p-4 sm:p-6 border border-border max-h-[90vh] overflow-auto"
       titleClassName="text-lg sm:text-xl font-semibold text-foreground mb-4"
     >
-          {/* Book info */}
-          <div className="mb-6 p-3 bg-info-bg rounded-lg border border-border">
-            <p className="font-medium text-foreground">{book.title}</p>
-            <p className="text-sm text-muted-foreground">
-              {t("common.by")} {book.authorName}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("export.chapter", { count: exportableChapters.length })}
-            </p>
-          </div>
+      {/* Book info */}
+      <div className="mb-6 p-3 bg-info-bg rounded-lg border border-border">
+        <p className="font-medium text-foreground">{book.title}</p>
+        <p className="text-sm text-muted-foreground">
+          {t("common.by")} {book.authorName}
+        </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {t("export.chapter", { count: exportableChapters.length })}
+        </p>
+      </div>
 
-          {/* Format selector */}
-          <div className="mb-6">
-            <label
-              htmlFor="export-format"
-              className="block text-sm font-medium text-foreground mb-2"
-            >
-              {t("export.format")}
-            </label>
-            <div className="flex gap-2" id="export-format">
-              <button
-                type="button"
-                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
-                  format === "epub"
-                    ? "bg-accent text-accent-foreground border-accent"
-                    : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
-                }`}
-                onClick={() => setFormat("epub")}
-              >
-                {t("export.epub")}
-              </button>
-              <button
-                type="button"
-                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
-                  format === "pdf"
-                    ? "bg-accent text-accent-foreground border-accent"
-                    : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
-                }`}
-                onClick={() => setFormat("pdf")}
-              >
-                {t("export.pdf")}
-              </button>
+      {/* Format selector */}
+      <div className="mb-6">
+        <label htmlFor="export-format" className="block text-sm font-medium text-foreground mb-2">
+          {t("export.format")}
+        </label>
+        <div className="flex gap-2" id="export-format">
+          <button
+            type="button"
+            className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
+              format === "epub"
+                ? "bg-accent text-accent-foreground border-accent"
+                : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+            }`}
+            onClick={() => setFormat("epub")}
+          >
+            {t("export.epub")}
+          </button>
+          <button
+            type="button"
+            className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
+              format === "pdf"
+                ? "bg-accent text-accent-foreground border-accent"
+                : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+            }`}
+            onClick={() => setFormat("pdf")}
+          >
+            {t("export.pdf")}
+          </button>
+        </div>
+      </div>
+
+      {/* Export options */}
+      <div className="space-y-4 mb-6">
+        {format === "epub" ? (
+          <>
+            <div className="flex items-center justify-between">
+              <label htmlFor="include-toc" className="text-sm text-foreground">
+                {t("export.includeTOC")}
+              </label>
+              <Switch
+                id="include-toc"
+                checked={epubOptions.includeTableOfContents}
+                onChange={(checked) =>
+                  setEpubOptions((prev) => ({
+                    ...prev,
+                    includeTableOfContents: checked,
+                  }))
+                }
+              />
             </div>
-          </div>
 
-          {/* Export options */}
-          <div className="space-y-4 mb-6">
-            {format === "epub" ? (
-              <>
+            <div className="flex items-center justify-between">
+              <label htmlFor="number-chapters" className="text-sm text-foreground">
+                {t("export.numberedTOC")}
+              </label>
+              <Switch
+                id="number-chapters"
+                checked={epubOptions.numberChapters}
+                onChange={(checked) =>
+                  setEpubOptions((prev) => ({
+                    ...prev,
+                    numberChapters: checked,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label htmlFor="prepend-chapter-titles" className="text-sm text-foreground">
+                {t("export.prependChapterTitles")}
+              </label>
+              <Switch
+                id="prepend-chapter-titles"
+                checked={epubOptions.prependChapterTitles}
+                onChange={(checked) =>
+                  setEpubOptions((prev) => ({
+                    ...prev,
+                    prependChapterTitles: checked,
+                  }))
+                }
+              />
+            </div>
+
+            {hasProjectEpubData && (
+              <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+                <h3 className="text-sm font-medium text-foreground">
+                  {t("export.projectEpubOptions")}
+                </h3>
                 <div className="flex items-center justify-between">
-                  <label htmlFor="include-toc" className="text-sm text-foreground">
-                    {t("export.includeTOC")}
+                  <label htmlFor="project-use-maibuk-styles" className="text-sm text-foreground">
+                    {t("export.useMaibukStyles")}
                   </label>
                   <Switch
-                    id="include-toc"
-                    checked={epubOptions.includeTableOfContents}
+                    id="project-use-maibuk-styles"
+                    checked={projectEpubOptions.useMaibukStyles}
                     onChange={(checked) =>
-                      setEpubOptions((prev) => ({
+                      setProjectEpubOptions((prev) => ({
                         ...prev,
-                        includeTableOfContents: checked,
+                        useMaibukStyles: checked,
                       }))
                     }
                   />
                 </div>
-
                 <div className="flex items-center justify-between">
-                  <label htmlFor="number-chapters" className="text-sm text-foreground">
-                    {t("export.numberedTOC")}
+                  <label
+                    htmlFor="project-include-imported-styles"
+                    className="text-sm text-foreground"
+                  >
+                    {t("export.includeImportedStyles")}
                   </label>
                   <Switch
-                    id="number-chapters"
-                    checked={epubOptions.numberChapters}
+                    id="project-include-imported-styles"
+                    checked={projectEpubOptions.includeImportedStyles}
                     onChange={(checked) =>
-                      setEpubOptions((prev) => ({
+                      setProjectEpubOptions((prev) => ({
                         ...prev,
-                        numberChapters: checked,
+                        includeImportedStyles: checked,
                       }))
                     }
                   />
                 </div>
-
                 <div className="flex items-center justify-between">
-                  <label htmlFor="prepend-chapter-titles" className="text-sm text-foreground">
-                    {t("export.prependChapterTitles")}
+                  <label htmlFor="project-generate-maibuk-toc" className="text-sm text-foreground">
+                    {t("export.generateMaibukToc")}
                   </label>
                   <Switch
-                    id="prepend-chapter-titles"
-                    checked={epubOptions.prependChapterTitles}
+                    id="project-generate-maibuk-toc"
+                    checked={projectEpubOptions.generateMaibukToc}
                     onChange={(checked) =>
-                      setEpubOptions((prev) => ({
+                      setProjectEpubOptions((prev) => ({
                         ...prev,
-                        prependChapterTitles: checked,
+                        generateMaibukToc: checked,
                       }))
                     }
                   />
                 </div>
-
-                {hasProjectEpubData && (
-                  <div className="rounded-lg border border-border bg-card p-3 space-y-3">
-                    <h3 className="text-sm font-medium text-foreground">
-                      {t("export.projectEpubOptions")}
-                    </h3>
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="project-use-maibuk-styles"
-                        className="text-sm text-foreground"
-                      >
-                        {t("export.useMaibukStyles")}
-                      </label>
-                      <Switch
-                        id="project-use-maibuk-styles"
-                        checked={projectEpubOptions.useMaibukStyles}
-                        onChange={(checked) =>
-                          setProjectEpubOptions((prev) => ({
-                            ...prev,
-                            useMaibukStyles: checked,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="project-include-imported-styles"
-                        className="text-sm text-foreground"
-                      >
-                        {t("export.includeImportedStyles")}
-                      </label>
-                      <Switch
-                        id="project-include-imported-styles"
-                        checked={projectEpubOptions.includeImportedStyles}
-                        onChange={(checked) =>
-                          setProjectEpubOptions((prev) => ({
-                            ...prev,
-                            includeImportedStyles: checked,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="project-generate-maibuk-toc"
-                        className="text-sm text-foreground"
-                      >
-                        {t("export.generateMaibukToc")}
-                      </label>
-                      <Switch
-                        id="project-generate-maibuk-toc"
-                        checked={projectEpubOptions.generateMaibukToc}
-                        onChange={(checked) =>
-                          setProjectEpubOptions((prev) => ({
-                            ...prev,
-                            generateMaibukToc: checked,
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              // PDF Options
-              <>
-                <div className="flex items-center justify-between">
-                  <label htmlFor="include-toc" className="text-sm text-foreground">
-                    {t("export.includeTOC")}
-                  </label>
-                  <Switch
-                    id="include-toc"
-                    checked={pdfOptions.includeTableOfContents}
-                    onChange={(checked) =>
-                      setPdfOptions((prev) => ({
-                        ...prev,
-                        includeTableOfContents: checked,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label htmlFor="number-chapters" className="text-sm text-foreground">
-                    {t("export.numberChapters")}
-                  </label>
-                  <Switch
-                    id="number-chapters"
-                    checked={pdfOptions.numberChapters}
-                    onChange={(checked) =>
-                      setPdfOptions((prev) => ({
-                        ...prev,
-                        numberChapters: checked,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label htmlFor="include-page-numbers" className="text-sm text-foreground">
-                    {t("export.includePageNumbers")}
-                  </label>
-                  <Switch
-                    id="include-page-numbers"
-                    checked={pdfOptions.includePageNumbers}
-                    onChange={(checked) =>
-                      setPdfOptions((prev) => ({
-                        ...prev,
-                        includePageNumbers: checked,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label htmlFor="page-size" className="text-sm text-foreground">
-                    {t("export.pageSize")}
-                  </label>
-                  <Select
-                    id="page-size"
-                    ariaLabel={t("export.pageSize")}
-                    value={pdfOptions.pageSize}
-                    onChange={(value) =>
-                      setPdfOptions((prev) => ({
-                        ...prev,
-                        pageSize: value,
-                      }))
-                    }
-                    options={pageSizeOptions}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label htmlFor="margin-presets" className="text-sm text-foreground">
-                    {t("export.marginPreset")}
-                  </label>
-                  <Select
-                    id="margin-presets"
-                    ariaLabel={t("export.marginPreset")}
-                    value={pdfOptions.margins}
-                    onChange={(value) =>
-                      setPdfOptions((prev) => ({
-                        ...prev,
-                        margins: value,
-                      }))
-                    }
-                    options={marginOptions}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Progress / Status */}
-          {progress.status !== "idle" && (
-            <div
-              className={`mb-4 p-3 rounded-md text-sm ${
-                progress.status === "error"
-                  ? "bg-feedback-error-bg text-feedback-error-text"
-                  : progress.status === "complete"
-                    ? "bg-feedback-success-bg text-feedback-success-text"
-                    : "bg-feedback-progress-bg text-feedback-progress-text"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                {(progress.status === "preparing" ||
-                  progress.status === "generating" ||
-                  progress.status === "saving") && <SpinnerIcon className="h-4 w-4" />}
-                {progress.status === "complete" && <CheckIcon className="h-4 w-4" />}
-                {progress.status === "error" && <XIcon className="h-4 w-4" />}
-                <span>{progress.message}</span>
               </div>
+            )}
+          </>
+        ) : (
+          // PDF Options
+          <>
+            <div className="flex items-center justify-between">
+              <label htmlFor="include-toc" className="text-sm text-foreground">
+                {t("export.includeTOC")}
+              </label>
+              <Switch
+                id="include-toc"
+                checked={pdfOptions.includeTableOfContents}
+                onChange={(checked) =>
+                  setPdfOptions((prev) => ({
+                    ...prev,
+                    includeTableOfContents: checked,
+                  }))
+                }
+              />
             </div>
-          )}
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3">
-            <Button variant="ghost" onClick={handleClose} disabled={isExporting}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleExport}
-              disabled={isExporting || exportableChapters.length === 0}
-            >
-              {isExporting
-                ? t("export.exporting")
-                : format === "epub"
-                  ? t("export.exportEpub")
-                  : t("export.exportPdf")}
-            </Button>
+            <div className="flex items-center justify-between">
+              <label htmlFor="number-chapters" className="text-sm text-foreground">
+                {t("export.numberChapters")}
+              </label>
+              <Switch
+                id="number-chapters"
+                checked={pdfOptions.numberChapters}
+                onChange={(checked) =>
+                  setPdfOptions((prev) => ({
+                    ...prev,
+                    numberChapters: checked,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label htmlFor="include-page-numbers" className="text-sm text-foreground">
+                {t("export.includePageNumbers")}
+              </label>
+              <Switch
+                id="include-page-numbers"
+                checked={pdfOptions.includePageNumbers}
+                onChange={(checked) =>
+                  setPdfOptions((prev) => ({
+                    ...prev,
+                    includePageNumbers: checked,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label htmlFor="page-size" className="text-sm text-foreground">
+                {t("export.pageSize")}
+              </label>
+              <Select
+                id="page-size"
+                ariaLabel={t("export.pageSize")}
+                value={pdfOptions.pageSize}
+                onChange={(value) =>
+                  setPdfOptions((prev) => ({
+                    ...prev,
+                    pageSize: value,
+                  }))
+                }
+                options={pageSizeOptions}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label htmlFor="margin-presets" className="text-sm text-foreground">
+                {t("export.marginPreset")}
+              </label>
+              <Select
+                id="margin-presets"
+                ariaLabel={t("export.marginPreset")}
+                value={pdfOptions.margins}
+                onChange={(value) =>
+                  setPdfOptions((prev) => ({
+                    ...prev,
+                    margins: value,
+                  }))
+                }
+                options={marginOptions}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Progress / Status */}
+      {progress.status !== "idle" && (
+        <div
+          className={`mb-4 p-3 rounded-md text-sm ${
+            progress.status === "error"
+              ? "bg-feedback-error-bg text-feedback-error-text"
+              : progress.status === "complete"
+                ? "bg-feedback-success-bg text-feedback-success-text"
+                : "bg-feedback-progress-bg text-feedback-progress-text"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {(progress.status === "preparing" ||
+              progress.status === "generating" ||
+              progress.status === "saving") && <SpinnerIcon className="h-4 w-4" />}
+            {progress.status === "complete" && <CheckIcon className="h-4 w-4" />}
+            {progress.status === "error" && <XIcon className="h-4 w-4" />}
+            <span>{progress.message}</span>
           </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex justify-end gap-3">
+        <Button variant="ghost" onClick={handleClose} disabled={isExporting}>
+          {t("common.cancel")}
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleExport}
+          disabled={isExporting || exportableChapters.length === 0}
+        >
+          {isExporting
+            ? t("export.exporting")
+            : format === "epub"
+              ? t("export.exportEpub")
+              : t("export.exportPdf")}
+        </Button>
+      </div>
     </Modal>
   );
 }

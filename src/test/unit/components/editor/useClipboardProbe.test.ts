@@ -19,10 +19,7 @@ vi.mock("../../../../components/editor/paste-cleanup", () => ({
 }));
 
 import { readClipboardSnapshot } from "@/components/editor/clipboard";
-import {
-  fallbackPaste,
-  pasteWithoutFormatting,
-} from "@/components/editor/useClipboardProbe";
+import { fallbackPaste, pasteWithoutFormatting } from "@/components/editor/useClipboardProbe";
 
 function buildEditor() {
   const run = vi.fn();

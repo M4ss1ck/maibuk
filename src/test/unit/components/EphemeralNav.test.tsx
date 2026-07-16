@@ -27,8 +27,7 @@ const settingsState = {
 };
 
 vi.mock("@/features/settings/store", () => ({
-  useSettingsStore: (selector: (s: typeof settingsState) => unknown) =>
-    selector(settingsState),
+  useSettingsStore: (selector: (s: typeof settingsState) => unknown) => selector(settingsState),
 }));
 
 vi.mock("@/components/ThemeToggle", () => ({ ThemeToggle: () => null }));

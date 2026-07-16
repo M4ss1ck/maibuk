@@ -6,7 +6,7 @@ import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 describe("KeyboardShortcut", () => {
   it("renders each key in a combination as its own chip", () => {
     const { container } = render(
-      <KeyboardShortcut shortcut={{ groups: [["Ctrl", "S"]], isSequence: false }} />,
+      <KeyboardShortcut shortcut={{ groups: [["Ctrl", "S"]], isSequence: false }} />
     );
 
     expect(container.querySelectorAll("kbd")).toHaveLength(2);
@@ -15,31 +15,20 @@ describe("KeyboardShortcut", () => {
   });
 
   it("renders sequence groups as adjacent chips without a separator", () => {
-    render(
-      <KeyboardShortcut
-        shortcut={{ groups: [["G"], ["N"]], isSequence: true }}
-      />,
-    );
+    render(<KeyboardShortcut shortcut={{ groups: [["G"], ["N"]], isSequence: true }} />);
 
     expect(screen.queryByText("→")).not.toBeInTheDocument();
   });
 
   it("does not add arrows between alternative groups", () => {
-    render(
-      <KeyboardShortcut
-        shortcut={{ groups: [["↑/↓"], ["j/k"]], isSequence: false }}
-      />,
-    );
+    render(<KeyboardShortcut shortcut={{ groups: [["↑/↓"], ["j/k"]], isSequence: false }} />);
 
     expect(screen.queryByText("→")).not.toBeInTheDocument();
   });
 
   it("applies the shortcut root and always-visible classes", () => {
     const { container } = render(
-      <KeyboardShortcut
-        shortcut={{ groups: [["?"]], isSequence: false }}
-        alwaysVisible
-      />,
+      <KeyboardShortcut shortcut={{ groups: [["?"]], isSequence: false }} alwaysVisible />
     );
 
     expect(container.firstChild).toHaveClass("kbd-shortcut", "kbd-shortcut-always");

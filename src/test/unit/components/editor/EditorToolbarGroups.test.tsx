@@ -8,8 +8,13 @@ import { makeToolbarEditor } from "@/test/support/toolbar-editor";
 import { ALL_GROUP_IDS } from "@/features/settings/toolbar-config";
 
 vi.mock("@tiptap/react", () => ({
-  useEditorState: ({ editor, selector }: { editor: unknown; selector: (value: { editor: unknown }) => unknown }) =>
-    selector({ editor }),
+  useEditorState: ({
+    editor,
+    selector,
+  }: {
+    editor: unknown;
+    selector: (value: { editor: unknown }) => unknown;
+  }) => selector({ editor }),
 }));
 
 vi.mock("react-i18next", async (importOriginal) => ({
@@ -37,7 +42,7 @@ describe("EditorToolbarGroups", () => {
         editor={makeToolbarEditor()}
         groupIds={["basic-marks", "export"]}
         callbacks={callbacks}
-      />,
+      />
     );
     expect(screen.getByLabelText("editor.bold")).toBeInTheDocument();
     expect(screen.queryByLabelText("editor.undo")).not.toBeInTheDocument();
@@ -52,7 +57,7 @@ describe("EditorToolbarGroups", () => {
         editor={makeToolbarEditor()}
         groupIds={["lists"]}
         callbacks={callbacks}
-      />,
+      />
     );
     expect(screen.getByLabelText("editor.taskList")).toBeDisabled();
   });
@@ -63,7 +68,7 @@ describe("EditorToolbarGroups", () => {
         editor={makeToolbarEditor()}
         groupIds={["table"]}
         callbacks={callbacks}
-      />,
+      />
     );
     expect(screen.getByLabelText("editor.insertTable")).toBeInTheDocument();
   });
@@ -75,15 +80,11 @@ describe("EditorToolbarGroups", () => {
         groupIds={["table"]}
         callbacks={callbacks}
         wrapItems
-      />,
+      />
     );
 
-    expect(container.querySelector('[data-group-id="table"]')).toHaveClass(
-      "contents",
-    );
-    expect(screen.getByLabelText("editor.insertTable").parentElement).toHaveClass(
-      "contents",
-    );
+    expect(container.querySelector('[data-group-id="table"]')).toHaveClass("contents");
+    expect(screen.getByLabelText("editor.insertTable").parentElement).toHaveClass("contents");
   });
 
   it("wraps each requested group in a measurable boundary", () => {
@@ -92,7 +93,7 @@ describe("EditorToolbarGroups", () => {
         editor={makeToolbarEditor()}
         groupIds={["history", "font"]}
         callbacks={callbacks}
-      />,
+      />
     );
     expect(container.querySelectorAll("[data-group-id]")).toHaveLength(2);
   });
@@ -103,11 +104,9 @@ describe("EditorToolbarGroups", () => {
         editor={makeToolbarEditor({ taskList: true })}
         groupIds={[...ALL_GROUP_IDS]}
         callbacks={callbacks}
-      />,
+      />
     );
-    expect(container.querySelectorAll("[data-group-id]")).toHaveLength(
-      ALL_GROUP_IDS.length,
-    );
+    expect(container.querySelectorAll("[data-group-id]")).toHaveLength(ALL_GROUP_IDS.length);
   });
 
   it("shows the strikethrough shortcut and markdown hint in its tooltip", () => {
@@ -118,7 +117,7 @@ describe("EditorToolbarGroups", () => {
           editor={makeToolbarEditor()}
           groupIds={["basic-marks"]}
           callbacks={callbacks}
-        />,
+        />
       );
 
       fireEvent.mouseEnter(screen.getByLabelText("editor.strikethrough"));
@@ -126,9 +125,7 @@ describe("EditorToolbarGroups", () => {
 
       const tooltip = screen.getByRole("tooltip");
       expect(tooltip.querySelectorAll("kbd")).toHaveLength(3);
-      expect(tooltip.querySelector("code")).toHaveTextContent(
-        "editor.markdownHints.strikethrough",
-      );
+      expect(tooltip.querySelector("code")).toHaveTextContent("editor.markdownHints.strikethrough");
     } finally {
       act(() => vi.runOnlyPendingTimers());
       vi.useRealTimers();
@@ -143,7 +140,7 @@ describe("EditorToolbarGroups", () => {
           editor={makeToolbarEditor()}
           groupIds={["highlight"]}
           callbacks={callbacks}
-        />,
+        />
       );
 
       fireEvent.mouseEnter(screen.getByLabelText("editor.highlight"));
@@ -151,9 +148,7 @@ describe("EditorToolbarGroups", () => {
 
       const tooltip = screen.getByRole("tooltip");
       expect(tooltip.querySelectorAll("kbd")).toHaveLength(3);
-      expect(tooltip.querySelector("code")).toHaveTextContent(
-        "editor.markdownHints.highlight",
-      );
+      expect(tooltip.querySelector("code")).toHaveTextContent("editor.markdownHints.highlight");
     } finally {
       act(() => vi.runOnlyPendingTimers());
       vi.useRealTimers();

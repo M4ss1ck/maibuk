@@ -131,9 +131,7 @@ let dividerCounter = 0;
 
 export function makeDividerId(): string {
   const uuid =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `${Date.now()}`;
+    typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
   return `divider-${uuid}-${dividerCounter++}`;
 }
 
@@ -146,7 +144,7 @@ function makeDefaultConfig(): ToolbarConfig {
           id: token,
           toolbarVisible: true,
           floatingVisible: FLOATING_ELIGIBLE_IDS.has(token),
-        },
+        }
   );
   return { start, end: [] };
 }
@@ -159,9 +157,7 @@ function freezeToolbarConfig(config: ToolbarConfig): ToolbarConfig {
   return Object.freeze(config);
 }
 
-export const DEFAULT_TOOLBAR_CONFIG: ToolbarConfig = freezeToolbarConfig(
-  makeDefaultConfig(),
-);
+export const DEFAULT_TOOLBAR_CONFIG: ToolbarConfig = freezeToolbarConfig(makeDefaultConfig());
 
 export function cloneToolbarConfig(config: ToolbarConfig): ToolbarConfig {
   return {
@@ -212,15 +208,10 @@ export function normalizeToolbarConfig(value: unknown): ToolbarConfig {
         result.push({
           kind: "group",
           id: id as ToolbarGroupId,
-          toolbarVisible:
-            typeof entry.toolbarVisible === "boolean"
-              ? entry.toolbarVisible
-              : true,
+          toolbarVisible: typeof entry.toolbarVisible === "boolean" ? entry.toolbarVisible : true,
           floatingVisible:
             FLOATING_ELIGIBLE_IDS.has(id as ToolbarGroupId) &&
-            (typeof entry.floatingVisible === "boolean"
-              ? entry.floatingVisible
-              : true),
+            (typeof entry.floatingVisible === "boolean" ? entry.floatingVisible : true),
         });
       }
     }
@@ -239,17 +230,14 @@ export function normalizeToolbarConfig(value: unknown): ToolbarConfig {
   return { start, end };
 }
 
-function laneOf(
-  config: ToolbarConfig,
-  section: ToolbarSection,
-): ToolbarEntry[] {
+function laneOf(config: ToolbarConfig, section: ToolbarSection): ToolbarEntry[] {
   return section === "start" ? config.start : config.end;
 }
 
 function withLane(
   config: ToolbarConfig,
   section: ToolbarSection,
-  lane: ToolbarEntry[],
+  lane: ToolbarEntry[]
 ): ToolbarConfig {
   return section === "start"
     ? { start: lane, end: config.end }
@@ -260,16 +248,11 @@ export function moveEntry(
   config: ToolbarConfig,
   section: ToolbarSection,
   index: number,
-  direction: "up" | "down",
+  direction: "up" | "down"
 ): ToolbarConfig {
   const lane = laneOf(config, section);
   const target = direction === "up" ? index - 1 : index + 1;
-  if (
-    index < 0 ||
-    index >= lane.length ||
-    target < 0 ||
-    target >= lane.length
-  ) {
+  if (index < 0 || index >= lane.length || target < 0 || target >= lane.length) {
     return config;
   }
   const next = lane.map((entry) => ({ ...entry }));
@@ -283,7 +266,7 @@ export function moveEntryTo(
   from: ToolbarSection,
   index: number,
   to: ToolbarSection,
-  toIndex: number,
+  toIndex: number
 ): ToolbarConfig {
   const fromLane = laneOf(config, from);
   if (index < 0 || index >= fromLane.length) return config;
@@ -303,7 +286,7 @@ export function moveEntryTo(
 export function transferEntry(
   config: ToolbarConfig,
   from: ToolbarSection,
-  index: number,
+  index: number
 ): ToolbarConfig {
   const to: ToolbarSection = from === "start" ? "end" : "start";
   return moveEntryTo(config, from, index, to, laneOf(config, to).length);
@@ -312,13 +295,11 @@ export function transferEntry(
 function mapGroups(
   config: ToolbarConfig,
   id: ToolbarGroupId,
-  patch: Partial<ToolbarGroupPreference>,
+  patch: Partial<ToolbarGroupPreference>
 ): ToolbarConfig {
   const apply = (lane: ToolbarEntry[]) =>
     lane.map((entry) =>
-      entry.kind === "group" && entry.id === id
-        ? { ...entry, ...patch }
-        : entry,
+      entry.kind === "group" && entry.id === id ? { ...entry, ...patch } : entry
     );
   return { start: apply(config.start), end: apply(config.end) };
 }
@@ -326,7 +307,7 @@ function mapGroups(
 export function setGroupToolbarVisible(
   config: ToolbarConfig,
   id: ToolbarGroupId,
-  visible: boolean,
+  visible: boolean
 ): ToolbarConfig {
   return mapGroups(config, id, { toolbarVisible: visible });
 }
@@ -334,7 +315,7 @@ export function setGroupToolbarVisible(
 export function setGroupFloatingVisible(
   config: ToolbarConfig,
   id: ToolbarGroupId,
-  visible: boolean,
+  visible: boolean
 ): ToolbarConfig {
   if (!FLOATING_ELIGIBLE_IDS.has(id)) return config;
   return mapGroups(config, id, { floatingVisible: visible });
@@ -343,13 +324,10 @@ export function setGroupFloatingVisible(
 export function addDivider(
   config: ToolbarConfig,
   section: ToolbarSection,
-  index?: number,
+  index?: number
 ): ToolbarConfig {
   const lane = laneOf(config, section).map((entry) => ({ ...entry }));
-  const at =
-    index === undefined
-      ? lane.length
-      : Math.max(0, Math.min(index, lane.length));
+  const at = index === undefined ? lane.length : Math.max(0, Math.min(index, lane.length));
   lane.splice(at, 0, { kind: "divider", id: makeDividerId() });
   return withLane(config, section, lane);
 }
@@ -357,32 +335,24 @@ export function addDivider(
 export function removeDivider(
   config: ToolbarConfig,
   section: ToolbarSection,
-  dividerId: string,
+  dividerId: string
 ): ToolbarConfig {
   const lane = laneOf(config, section);
-  const next = lane.filter(
-    (entry) => !(entry.kind === "divider" && entry.id === dividerId),
-  );
+  const next = lane.filter((entry) => !(entry.kind === "divider" && entry.id === dividerId));
   if (next.length === lane.length) return config;
   return withLane(config, section, next);
 }
 
-export function deriveFloatingGroupIds(
-  config: ToolbarConfig,
-): ToolbarGroupId[] {
+export function deriveFloatingGroupIds(config: ToolbarConfig): ToolbarGroupId[] {
   return [...config.start, ...config.end]
     .filter(
       (entry): entry is ToolbarGroupPreference =>
-        entry.kind === "group" &&
-        entry.floatingVisible &&
-        FLOATING_ELIGIBLE_IDS.has(entry.id),
+        entry.kind === "group" && entry.floatingVisible && FLOATING_ELIGIBLE_IDS.has(entry.id)
     )
     .map((entry) => entry.id);
 }
 
-export function suppressOrphanDividers(
-  entries: ToolbarEntry[],
-): ToolbarEntry[] {
+export function suppressOrphanDividers(entries: ToolbarEntry[]): ToolbarEntry[] {
   const result: ToolbarEntry[] = [];
   for (const entry of entries) {
     if (entry.kind === "divider") {

@@ -13,8 +13,16 @@ import {
 import { spellCheckService } from "@/lib/spellcheck";
 import { looksLikeMarkdown, markdownToEditorHtml } from "@/features/markdown";
 import { Divider } from "@/components/editor/ToolbarButton";
-import { adjustPosition, clampPosition, getWordAtPosition } from "@/components/editor/editor-context-menu-utils";
-import { fallbackPaste, pasteWithoutFormatting, useClipboardProbe } from "@/components/editor/useClipboardProbe";
+import {
+  adjustPosition,
+  clampPosition,
+  getWordAtPosition,
+} from "@/components/editor/editor-context-menu-utils";
+import {
+  fallbackPaste,
+  pasteWithoutFormatting,
+  useClipboardProbe,
+} from "@/components/editor/useClipboardProbe";
 
 interface EditorContextMenuProps {
   editor: Editor;

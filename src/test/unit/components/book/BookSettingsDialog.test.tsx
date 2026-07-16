@@ -80,14 +80,10 @@ describe("BookSettingsDialog modal registration", () => {
     trigger.focus();
 
     await user.keyboard(" ");
-    expect(
-      screen.getByRole("button", { name: "books.deleteBook" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "books.deleteBook" })).toBeInTheDocument();
 
     await user.keyboard(" ");
-    expect(
-      screen.queryByRole("button", { name: "books.deleteBook" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "books.deleteBook" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 });

@@ -5,13 +5,13 @@ export function makeToolbarEditor(options?: { taskList?: boolean }): Editor {
     {},
     {
       get: () => () => chain,
-    },
+    }
   );
   const can = new Proxy(
     {},
     {
       get: () => () => false,
-    },
+    }
   );
 
   return {

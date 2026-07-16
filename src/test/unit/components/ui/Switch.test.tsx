@@ -63,28 +63,14 @@ describe("Switch", () => {
 
   describe("label", () => {
     it("renders a screen-reader label when provided", () => {
-      render(
-        <Switch
-          checked={false}
-          onChange={() => {}}
-          label="Enable notifications"
-        />,
-      );
-      expect(
-        screen.getByRole("switch"),
-      ).toHaveAccessibleName("Enable notifications");
+      render(<Switch checked={false} onChange={() => {}} label="Enable notifications" />);
+      expect(screen.getByRole("switch")).toHaveAccessibleName("Enable notifications");
     });
   });
 
   describe("className", () => {
     it("appends custom className to the switch button label", () => {
-      render(
-        <Switch
-          checked={false}
-          onChange={() => {}}
-          className="my-switch"
-        />,
-      );
+      render(<Switch checked={false} onChange={() => {}} className="my-switch" />);
       const input = screen.getByRole("switch");
       const label = input.closest("label");
       expect(label).not.toBeNull();
@@ -97,13 +83,7 @@ describe("Switch", () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
 
-      render(
-        <Switch
-          checked={false}
-          onChange={onChange}
-          disabled={true}
-        />,
-      );
+      render(<Switch checked={false} onChange={onChange} disabled={true} />);
 
       await user.click(screen.getByRole("switch"));
 

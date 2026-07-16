@@ -21,8 +21,11 @@ function makeEditor(headings: { level: number; text: string }[]): Editor {
   return {
     state: {
       doc: {
-        forEach: (cb: (node: unknown, offset: number) => void) =>
-          nodes.forEach((node, index) => cb(node, index)),
+        forEach: (cb: (node: unknown, offset: number) => void) => {
+          nodes.forEach((node, index) => {
+            cb(node, index);
+          });
+        },
       },
       selection: { from: 0 },
     },

@@ -120,8 +120,9 @@ export function WidthControl() {
           type="button"
           onClick={() => (showMenu ? setShowMenu(false) : handleShowMenu())}
           aria-label={t("editor.contentWidth")}
-          className={`px-2 py-1 rounded transition-colors ${showMenu ? "bg-primary text-white" : "hover:bg-muted"
-            }`}
+          className={`px-2 py-1 rounded transition-colors ${
+            showMenu ? "bg-primary text-white" : "hover:bg-muted"
+          }`}
         >
           <MoveHorizontal className="w-4 h-4" />
         </button>
@@ -146,8 +147,8 @@ export function WidthControl() {
                     style={
                       weight > 0
                         ? {
-                          color: `color-mix(in srgb, var(--color-foreground) ${weight * 100}%, var(--color-muted-foreground))`,
-                        }
+                            color: `color-mix(in srgb, var(--color-foreground) ${weight * 100}%, var(--color-muted-foreground))`,
+                          }
                         : undefined
                     }
                   >

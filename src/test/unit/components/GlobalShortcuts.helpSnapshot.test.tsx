@@ -56,7 +56,11 @@ vi.mock("@/features/notes", () => ({
 vi.mock("@/features/sync/crypto", () => ({ getPassphrase: () => null }));
 
 const mockShortcutItems = [
-  { id: "global.gotoProjects", label: "Go to Projects", formatted: { groups: [["g", "p"]], isSequence: true } },
+  {
+    id: "global.gotoProjects",
+    label: "Go to Projects",
+    formatted: { groups: [["g", "p"]], isSequence: true },
+  },
   { id: "global.showHelp", label: "Show Help", formatted: { groups: [["?"]], isSequence: false } },
 ];
 
@@ -76,9 +80,7 @@ import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 function triggerHelpShortcut() {
   const calls = mockUseShortcuts.mock.calls;
   const configs = calls[calls.length - 1]?.[0] as ShortcutConfig[];
-  const helpShortcut = configs.find(
-    (c) => c.keys && c.keys.includes("?")
-  );
+  const helpShortcut = configs.find((c) => c.keys && c.keys.includes("?"));
   if (!helpShortcut) throw new Error("Help shortcut not registered");
   helpShortcut.onTrigger();
 }

@@ -59,7 +59,13 @@ export function BookSidePanel({
   );
 
   return (
-    <aside className="notes-panel relative" style={{ width: `${width}px`, minWidth: `${width}px` }} data-focus-pane="book-side-panel" tabIndex={-1} aria-label={t("panes.bookSidePanel")}>
+    <aside
+      className="notes-panel relative"
+      style={{ width: `${width}px`, minWidth: `${width}px` }}
+      data-focus-pane="book-side-panel"
+      tabIndex={-1}
+      aria-label={t("panes.bookSidePanel")}
+    >
       <Tooltip content={t("bookSidePanel.resize")}>
         <div
           onMouseDown={onResizeStart}

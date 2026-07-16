@@ -5,19 +5,14 @@ import userEvent from "@testing-library/user-event";
 import { buildChapter } from "@/test/support/fixtures";
 import type { Chapter } from "@/features/chapters/types";
 
-const {
-  storeState,
-  i18nState,
-  markdownStore,
-  mockSetChapterListView,
-  mockSetShowChapterOutline,
-} = vi.hoisted(() => ({
-  storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
-  i18nState: { language: "en" },
-  markdownStore: { callback: null as ((m: string, s: string) => void) | null },
-  mockSetChapterListView: vi.fn(),
-  mockSetShowChapterOutline: vi.fn(),
-}));
+const { storeState, i18nState, markdownStore, mockSetChapterListView, mockSetShowChapterOutline } =
+  vi.hoisted(() => ({
+    storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
+    i18nState: { language: "en" },
+    markdownStore: { callback: null as ((m: string, s: string) => void) | null },
+    mockSetChapterListView: vi.fn(),
+    mockSetShowChapterOutline: vi.fn(),
+  }));
 
 // Markdown drop: the mock returns an onDrop handler so the test can dispatch a file drop
 
@@ -154,20 +149,14 @@ function DeleteHarness({
   );
 }
 
-async function tabToControl(
-  user: ReturnType<typeof userEvent.setup>,
-  control: HTMLElement
-) {
+async function tabToControl(user: ReturnType<typeof userEvent.setup>, control: HTMLElement) {
   for (let index = 0; index < 10 && document.activeElement !== control; index++) {
     await user.tab();
   }
   expect(control).toHaveFocus();
 }
 
-async function arrowToDropTarget(
-  user: ReturnType<typeof userEvent.setup>,
-  accessibleName: string
-) {
+async function arrowToDropTarget(user: ReturnType<typeof userEvent.setup>, accessibleName: string) {
   for (
     let index = 0;
     index < 10 && document.activeElement?.getAttribute("aria-label") !== accessibleName;
@@ -523,7 +512,9 @@ describe("ChapterList", () => {
       await user.click(screen.getByRole("button", { name: "chapters.addChapter" }));
       const input = screen.getByPlaceholderText("chapters.chapterTitlePlaceholder");
       await user.type(input, "Temp{Escape}");
-      expect(screen.queryByPlaceholderText("chapters.chapterTitlePlaceholder")).not.toBeInTheDocument();
+      expect(
+        screen.queryByPlaceholderText("chapters.chapterTitlePlaceholder")
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -691,8 +682,12 @@ describe("ChapterList", () => {
     it("does not show outline toggle on inactive chapters", () => {
       renderCL({ editor: { state: {} }, currentChapterId: defaultChapters[0].id });
       const rows = screen.getAllByRole("row");
-      expect(within(rows[0]).queryByRole("button", { name: "toc.showOutline" })).toBeInTheDocument();
-      expect(within(rows[1]).queryByRole("button", { name: "toc.showOutline" })).not.toBeInTheDocument();
+      expect(
+        within(rows[0]).queryByRole("button", { name: "toc.showOutline" })
+      ).toBeInTheDocument();
+      expect(
+        within(rows[1]).queryByRole("button", { name: "toc.showOutline" })
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -702,7 +697,12 @@ describe("ChapterList", () => {
       const onImportMarkdown = vi.fn();
       const onReorder = vi.fn();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
-      renderCL({ chapters, currentChapterId: chapters[0].id, onImportMarkdown, onReorderChapters: onReorder });
+      renderCL({
+        chapters,
+        currentChapterId: chapters[0].id,
+        onImportMarkdown,
+        onReorderChapters: onReorder,
+      });
 
       const scrollRegion = document.querySelector(".overflow-auto");
       expect(scrollRegion).toBeInTheDocument();
@@ -830,5 +830,4 @@ describe("ChapterList", () => {
       expect(onReorder).not.toHaveBeenCalled();
     });
   });
-
 });

@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
@@ -42,23 +36,17 @@ export function Layout() {
       toggle: () => setIsMobileMenuOpen((open) => !open),
       setOpen: setIsMobileMenuOpen,
     }),
-    [isMobileMenuOpen],
+    [isMobileMenuOpen]
   );
-  const { modalProps: mobileModalProps, underlayProps: mobileUnderlayProps } =
-    useModalOverlay(
-      { isDismissable: true },
-      mobileMenuState,
-      mobileDialogRef,
-    );
+  const { modalProps: mobileModalProps, underlayProps: mobileUnderlayProps } = useModalOverlay(
+    { isDismissable: true },
+    mobileMenuState,
+    mobileDialogRef
+  );
 
-  if (
-    isMobileMenuOpen &&
-    !wasMobileMenuOpenRef.current &&
-    typeof document !== "undefined"
-  ) {
+  if (isMobileMenuOpen && !wasMobileMenuOpenRef.current && typeof document !== "undefined") {
     const activeElement = document.activeElement;
-    mobileMenuRestoreFocusRef.current =
-      activeElement instanceof HTMLElement ? activeElement : null;
+    mobileMenuRestoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
   }
   wasMobileMenuOpenRef.current = isMobileMenuOpen;
 
@@ -245,15 +233,8 @@ export function Layout() {
             className="fixed inset-0 z-50 flex bg-black/50 md:hidden"
           >
             <FocusScope contain autoFocus>
-              <div
-                {...mobileModalProps}
-                ref={mobileDialogRef}
-                className="contents"
-              >
-                <Dialog
-                  aria-label={t("nav.primary")}
-                  className="contents outline-none"
-                >
+              <div {...mobileModalProps} ref={mobileDialogRef} className="contents">
+                <Dialog aria-label={t("nav.primary")} className="contents outline-none">
                   <aside
                     style={{ width: `${mainSidebarWidth}px` }}
                     className="h-full border-r border-border flex flex-col bg-background transition duration-300 ease-in-out"
@@ -281,7 +262,12 @@ export function Layout() {
         />
       </aside>
 
-      <main data-focus-pane="main-content" tabIndex={-1} aria-label={t("panes.mainContent")} className="flex-1 overflow-hidden pt-14 md:pt-0">
+      <main
+        data-focus-pane="main-content"
+        tabIndex={-1}
+        aria-label={t("panes.mainContent")}
+        className="flex-1 overflow-hidden pt-14 md:pt-0"
+      >
         <Outlet />
       </main>
     </div>

@@ -49,12 +49,7 @@ export function useActiveShortcuts(): ShortcutItem[] {
     }
 
     if (location.pathname === "/") {
-      ids.push(
-        "home.newBook",
-        "home.jumpBooks",
-        "home.moveSelection",
-        "home.openSelected",
-      );
+      ids.push("home.newBook", "home.jumpBooks", "home.moveSelection", "home.openSelected");
     }
 
     if (/^\/book\/[^/]+$/.test(location.pathname)) {
@@ -68,7 +63,7 @@ export function useActiveShortcuts(): ShortcutItem[] {
         "editor.zoomIn",
         "editor.zoomOut",
         "editor.zoomReset",
-        "editor.toolbarSettings",
+        "editor.toolbarSettings"
       );
     }
 
@@ -82,7 +77,7 @@ export function useActiveShortcuts(): ShortcutItem[] {
         "canvas.zoomIn",
         "canvas.zoomOut",
         "canvas.fitView",
-        "canvas.lock",
+        "canvas.lock"
       );
     }
 

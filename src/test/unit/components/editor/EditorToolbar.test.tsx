@@ -48,11 +48,21 @@ vi.mock("@/components/editor/toolbar/ResponsiveEditorToolbar", () => ({
         {utilityCluster}
         {fixedUtilities}
       </div>
-      <button type="button" onClick={callbacks.openFindReplace}>find callback</button>
-      <button type="button" onClick={callbacks.openImageDialog}>image callback</button>
-      <button type="button" onClick={callbacks.openFootnote}>footnote callback</button>
-      <button type="button" onClick={callbacks.openLinkDialog}>link callback</button>
-      <button type="button" onClick={callbacks.openHtmlPanel}>html callback</button>
+      <button type="button" onClick={callbacks.openFindReplace}>
+        find callback
+      </button>
+      <button type="button" onClick={callbacks.openImageDialog}>
+        image callback
+      </button>
+      <button type="button" onClick={callbacks.openFootnote}>
+        footnote callback
+      </button>
+      <button type="button" onClick={callbacks.openLinkDialog}>
+        link callback
+      </button>
+      <button type="button" onClick={callbacks.openHtmlPanel}>
+        html callback
+      </button>
     </div>
   ),
 }));
@@ -65,30 +75,35 @@ vi.mock("@/components/editor/WidthControl", () => ({
 }));
 
 vi.mock("@/components/editor/FindReplace", () => ({
-  FindReplace: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div>find dialog open</div> : null,
+  FindReplace: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>find dialog open</div> : null),
 }));
 vi.mock("@/components/editor/ImageInsertDialog", () => ({
-  ImageInsertDialog: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div>image dialog open</div> : null,
+  ImageInsertDialog: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div>image dialog open</div> : null,
 }));
 vi.mock("@/components/editor/FootnoteDialog", () => ({
-  FootnoteDialog: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div>footnote dialog open</div> : null,
+  FootnoteDialog: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div>footnote dialog open</div> : null,
 }));
 vi.mock("@/components/editor/LinkDialog", () => ({
-  LinkDialog: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div>link dialog open</div> : null,
+  LinkDialog: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>link dialog open</div> : null),
 }));
 vi.mock("@/components/editor/HtmlViewPanel", () => ({
-  HtmlViewPanel: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div>html panel open</div> : null,
+  HtmlViewPanel: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>html panel open</div> : null),
 }));
 vi.mock("@/components/editor/DictionaryDialog", () => ({ DictionaryDialog: () => null }));
 vi.mock("@/components/ShortcutsHelpDialog", () => ({ ShortcutsHelpDialog: () => null }));
 vi.mock("@/components/editor/EditorContextMenu", () => ({ EditorContextMenu: () => null }));
 vi.mock("@/components/editor/toolbar/ToolbarSettingsDialog", () => ({
-  ToolbarSettingsDialog: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => isOpen ? (
-    <div>
-      toolbar settings open
-      <button type="button" onClick={onClose}>close settings</button>
-    </div>
-  ) : null,
+  ToolbarSettingsDialog: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
+    isOpen ? (
+      <div>
+        toolbar settings open
+        <button type="button" onClick={onClose}>
+          close settings
+        </button>
+      </div>
+    ) : null,
 }));
 
 function makeEditor() {
@@ -125,7 +140,7 @@ describe("EditorToolbar", () => {
     renderToolbar();
     const cluster = screen.getByTestId("utility-order");
     const controls = Array.from(cluster.querySelectorAll("button")).map(
-      (button) => button.getAttribute("aria-label") ?? button.textContent,
+      (button) => button.getAttribute("aria-label") ?? button.textContent
     );
 
     expect(controls).toEqual([

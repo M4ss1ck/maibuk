@@ -1,10 +1,4 @@
-import {
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, Heading } from "react-aria-components";
 import { useTranslation } from "react-i18next";
@@ -47,8 +41,7 @@ export function Modal({
 
   if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
     const activeElement = document.activeElement;
-    restoreFocusRef.current =
-      activeElement instanceof HTMLElement ? activeElement : null;
+    restoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
   }
   wasOpenRef.current = isOpen;
 
@@ -64,12 +57,12 @@ export function Modal({
         if (!open) onClose();
       },
     }),
-    [isOpen, onClose],
+    [isOpen, onClose]
   );
   const { modalProps, underlayProps } = useModalOverlay(
     { isDismissable: true, isKeyboardDismissDisabled: true },
     state,
-    modalRef,
+    modalRef
   );
 
   const restoreFocus = () => {
@@ -121,53 +114,41 @@ export function Modal({
           >
             <Dialog
               className={
-                unstyled
-                  ? "contents outline-none"
-                  : "flex min-h-0 flex-1 flex-col outline-none"
+                unstyled ? "contents outline-none" : "flex min-h-0 flex-1 flex-col outline-none"
               }
             >
               {unstyled ? (
                 <>
-                  <Heading
-                    slot="title"
-                    level={2}
-                    className={titleClassName ?? "sr-only"}
-                  >
+                  <Heading slot="title" level={2} className={titleClassName ?? "sr-only"}>
                     {title}
                   </Heading>
                   {children}
                 </>
               ) : (
                 <>
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
-            <Heading
-              slot="title"
-              level={2}
-              className="text-base sm:text-lg font-semibold"
-            >
-              {title}
-            </Heading>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 hover:bg-muted rounded-lg transition-colors"
-              aria-label={t("common.close")}
-            >
-              <CloseIcon className="w-5 h-5" />
-            </button>
-          </div>
+                  <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
+                    <Heading slot="title" level={2} className="text-base sm:text-lg font-semibold">
+                      {title}
+                    </Heading>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="p-1 hover:bg-muted rounded-lg transition-colors"
+                      aria-label={t("common.close")}
+                    >
+                      <CloseIcon className="w-5 h-5" />
+                    </button>
+                  </div>
 
-          <div
-            className={`px-4 sm:px-6 py-4 flex-1 min-h-0 ${contentClassName}`}
-          >
-            {children}
-          </div>
+                  <div className={`px-4 sm:px-6 py-4 flex-1 min-h-0 ${contentClassName}`}>
+                    {children}
+                  </div>
 
-          {footer && (
-            <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-border bg-muted/30 shrink-0">
-              {footer}
-            </div>
-          )}
+                  {footer && (
+                    <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-border bg-muted/30 shrink-0">
+                      {footer}
+                    </div>
+                  )}
                 </>
               )}
             </Dialog>
