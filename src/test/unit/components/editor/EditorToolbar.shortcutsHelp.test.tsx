@@ -48,7 +48,9 @@ vi.mock("@/components/editor/FootnoteDialog", () => ({ FootnoteDialog: () => nul
 vi.mock("@/components/editor/LinkDialog", () => ({ LinkDialog: () => null }));
 vi.mock("@/components/editor/HtmlViewPanel", () => ({ HtmlViewPanel: () => null }));
 vi.mock("@/components/editor/DictionaryDialog", () => ({ DictionaryDialog: () => null }));
-vi.mock("@/components/editor/DictionaryPromptDialog", () => ({ DictionaryPromptDialog: () => null }));
+vi.mock("@/components/editor/DictionaryPromptDialog", () => ({
+  DictionaryPromptDialog: () => null,
+}));
 vi.mock("@/components/editor/EditorContextMenu", () => ({ EditorContextMenu: () => null }));
 vi.mock("@/components/editor/toolbar/ToolbarSettingsDialog", () => ({
   ToolbarSettingsDialog: () => null,
