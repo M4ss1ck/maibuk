@@ -18,6 +18,10 @@ export const SHORTCUTS = {
     labelKey: "shortcuts.gotoCanvas",
     sequence: ["g", "c"],
   },
+  "global.gotoEphemeral": {
+    labelKey: "shortcuts.gotoEphemeral",
+    sequence: ["g", "e"],
+  },
   "global.gotoMetrics": {
     labelKey: "shortcuts.gotoMetrics",
     sequence: ["g", "m"],

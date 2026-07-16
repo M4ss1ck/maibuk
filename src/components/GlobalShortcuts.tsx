@@ -97,6 +97,14 @@ export function GlobalShortcuts() {
       },
     },
     {
+      sequence: SHORTCUTS["global.gotoEphemeral"].sequence,
+      onTrigger: () => {
+        if (location.pathname !== "/ephemeral") {
+          navigate("/ephemeral");
+        }
+      },
+    },
+    {
       sequence: SHORTCUTS["global.toggleTheme"].sequence,
       onTrigger: () => {
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;

@@ -976,6 +976,7 @@
     "gotoMetrics": "Go to Metrics",
     "gotoNotes": "Go to Notes",
     "gotoCanvas": "Go to Canvas",
+    "gotoEphemeral": "Go to Ephemeral",
     "toggleTheme": "Cycle theme",
     "toggleShortcutHints": "Toggle shortcut hints",
     "toggleAlwaysOnTop": "Toggle always on top",

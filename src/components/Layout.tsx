@@ -10,7 +10,7 @@ import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BarChart3, Menu, NotebookPen, Workflow } from "lucide-react";
+import { BarChart3, Feather, Menu, NotebookPen, Workflow } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { KeyboardShortcut } from "@/components/ui";
@@ -92,6 +92,12 @@ export function Layout() {
       label: t("common.canvas"),
       icon: <Workflow className="w-5 h-5 shrink-0" />,
       shortcut: SHORTCUTS["global.gotoCanvas"],
+    },
+    {
+      id: "/ephemeral",
+      label: t("common.ephemeral"),
+      icon: <Feather className="w-5 h-5 shrink-0" />,
+      shortcut: SHORTCUTS["global.gotoEphemeral"],
     },
     {
       id: "/metrics",
