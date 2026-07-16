@@ -43,6 +43,26 @@ it("excludes the toolbar settings shortcut on a non-book route", () => {
   ).toBe(false);
 });
 
+it("includes the localized Ephemeral shortcut between Canvas and Metrics", () => {
+  const { result } = renderHook(() => useActiveShortcuts(), {
+    wrapper: wrapperFor("/settings"),
+  });
+
+  const ids = result.current.map((item) => item.id);
+  const canvasIndex = ids.indexOf("global.gotoCanvas");
+  const ephemeralIndex = ids.indexOf("global.gotoEphemeral");
+  const metricsIndex = ids.indexOf("global.gotoMetrics");
+  const ephemeral = result.current[ephemeralIndex];
+
+  expect(ephemeralIndex).toBe(canvasIndex + 1);
+  expect(metricsIndex).toBe(ephemeralIndex + 1);
+  expect(ephemeral).toMatchObject({
+    id: "global.gotoEphemeral",
+    label: "shortcuts.gotoEphemeral",
+    formatted: { groups: [["G"], ["E"]], isSequence: true },
+  });
+});
+
 it("returns empty list while any modal is open", () => {
   useModalStore.setState({ modalIds: ["modal-1"], openCount: 1 });
 

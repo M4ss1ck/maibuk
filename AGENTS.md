@@ -36,6 +36,7 @@
 | `/`                   | `Home`          | Sidebar layout (`Layout`) |
 | `/settings`           | `Settings`      | Sidebar layout (`Layout`) |
 | `/canvas`             | `CanvasGallery` | Sidebar layout (`Layout`) |
+| `/ephemeral`          | `Ephemeral`     | Sidebar layout (`Layout`) |
 | `/canvas/:canvasId`   | `Canvas`        | Full-page (no sidebar)    |
 | `/book/:bookId`       | `BookEditor`    | Full-page (no sidebar)    |
 | `/book/:bookId/cover` | `CoverDesigner` | Full-page (no sidebar)    |
@@ -117,6 +118,7 @@ src/
 │   ├── chapters/        # store.ts, types.ts
 │   ├── canvas/          # versioned docs, store, React Flow adapter, custom nodes
 │   ├── covers/          # types.ts
+│   ├── ephemeral/       # memory-only scratch buffer store
 │   ├── export/          # generators, sanitizers, styles, types
 │   ├── metrics/         # writing metrics types, classifier, repo, settings, session tracking
 │   ├── notes/           # store.ts, types.ts

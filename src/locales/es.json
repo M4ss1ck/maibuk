@@ -37,6 +37,7 @@
     "metrics": "Métricas",
     "notes": "Notas",
     "canvas": "Lienzos",
+    "ephemeral": "Efímero",
     "copied": "¡Copiado!",
     "paste": "Pegar",
     "copy": "Copiar",
@@ -220,6 +221,11 @@
     "collapseHeading": "Contraer encabezado",
     "expandHeading": "Expandir encabezado",
     "backlinks": "Enlazado desde"
+  },
+  "ephemeral": {
+    "placeholder": "Escribe algo que no necesites guardar...",
+    "clear": "Vaciar",
+    "createNote": "Crear nota"
   },
   "canvas": {
     "title": "Lienzos",
@@ -970,6 +976,7 @@
     "gotoMetrics": "Ir a Métricas",
     "gotoNotes": "Ir a Notas",
     "gotoCanvas": "Ir a Lienzos",
+    "gotoEphemeral": "Ir a Efímero",
     "toggleTheme": "Cambiar tema",
     "toggleShortcutHints": "Alternar atajos visuales",
     "toggleAlwaysOnTop": "Alternar siempre visible",

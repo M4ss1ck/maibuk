@@ -35,6 +35,7 @@ export function useActiveShortcuts(): ShortcutItem[] {
       "global.gotoProjects",
       "global.gotoNotes",
       "global.gotoCanvas",
+      "global.gotoEphemeral",
       "global.gotoMetrics",
       "global.gotoSettings",
       "global.toggleTheme",
