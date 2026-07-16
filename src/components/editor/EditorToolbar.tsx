@@ -16,6 +16,7 @@ import { Tooltip, TooltipGroup } from "@/components/ui";
 import { ZoomControl } from "@/components/editor/ZoomControl";
 import { WidthControl } from "@/components/editor/WidthControl";
 import { DictionaryDialog } from "@/components/editor/DictionaryDialog";
+import { DictionaryPromptDialog } from "@/components/editor/DictionaryPromptDialog";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
@@ -63,6 +64,7 @@ export function EditorToolbar({
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showHtmlPanel, setShowHtmlPanel] = useState(false);
   const [showDictionaryDialog, setShowDictionaryDialog] = useState(false);
+  const [showDictionaryPrompt, setShowDictionaryPrompt] = useState(false);
   const [dictionaryWord, setDictionaryWord] = useState("");
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showToolbarSettings, setShowToolbarSettings] = useState(false);
@@ -76,6 +78,7 @@ export function EditorToolbar({
   const bookSidePanelTab = useSettingsStore((state) => state.bookSidePanelTab);
   const setBookSidePanelTab = useSettingsStore((state) => state.setBookSidePanelTab);
   const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
+  const setDictionaryOpenInBrowser = useSettingsStore((state) => state.setDictionaryOpenInBrowser);
 
   // Track editor focus with a delayed blur so toolbar clicks still read it as focused
   const editorWasFocusedRef = useRef(false);
@@ -145,16 +148,19 @@ export function EditorToolbar({
   const handleOpenDictionary = () => {
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to, " ").trim();
-    if (!selectedText) return;
+    if (!selectedText) {
+      setShowDictionaryPrompt(true);
+      return;
+    }
     const word = selectedText.split(/\s+/)[0];
     if (!word) return;
     handleLookupWord(word);
   };
 
   const handleLookupWord = useCallback(
-    (word: string) => {
+    (word: string, language: Language = spellCheckLanguage) => {
       if (dictionaryOpenInBrowser) {
-        const url = `https://${spellCheckLanguage}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
+        const url = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
         openExternal(url);
         return;
       }
@@ -211,6 +217,11 @@ export function EditorToolbar({
       keys: matchKeys("editor.findReplace"),
       allowInInput: true,
       onTrigger: openFindReplace,
+    },
+    {
+      keys: matchKeys("editor.dictionary"),
+      allowInInput: true,
+      onTrigger: handleOpenDictionary,
     },
     {
       keys: matchKeys("editor.toolbarSettings"),
@@ -343,6 +354,14 @@ export function EditorToolbar({
           word={dictionaryWord}
           language={spellCheckLanguage}
           onClose={() => setShowDictionaryDialog(false)}
+        />
+        <DictionaryPromptDialog
+          isOpen={showDictionaryPrompt}
+          defaultLanguage={spellCheckLanguage}
+          openInBrowser={dictionaryOpenInBrowser}
+          onOpenInBrowserChange={setDictionaryOpenInBrowser}
+          onClose={() => setShowDictionaryPrompt(false)}
+          onSubmit={(word, language) => handleLookupWord(word, language)}
         />
         <ShortcutsHelpDialog
           isOpen={showShortcutsHelp}

@@ -19,7 +19,10 @@ vi.mock("react-i18next", async (importOriginal) => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock("@/hooks", () => ({ useActiveShortcuts: () => [] }));
+vi.mock("@/hooks", () => ({
+  useActiveShortcuts: () => [],
+  useModalScope: () => "mock-modal-id",
+}));
 
 vi.mock("@/lib/shortcuts", () => ({
   useShortcuts: (bindings: ShortcutBinding[]) => {
