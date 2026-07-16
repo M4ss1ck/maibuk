@@ -130,6 +130,7 @@ export const SHORTCUTS = {
   "editor.insertLink": { labelKey: "editor.insertLink", keys: ["Ctrl+K"] },
   "editor.undo": { labelKey: "editor.undo", keys: ["Ctrl+Z"] },
   "editor.redo": { labelKey: "editor.redo", keys: ["Ctrl+Shift+Z"] },
+  "editor.dictionary": { labelKey: "editor.dictionary", keys: ["Ctrl+Shift+D"] },
   "editor.findReplace": {
     labelKey: "editor.findReplace",
     keys: ["Ctrl+F"],

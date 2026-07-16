@@ -583,7 +583,12 @@
   "dictionary": {
     "title": "Diccionario",
     "noDefinition": "No se encontró definición",
-    "viewOnWiktionary": "Ver en Wiktionary"
+    "viewOnWiktionary": "Ver en Wiktionary",
+    "promptTitle": "Buscar una palabra",
+    "wordLabel": "Palabra",
+    "wordPlaceholder": "Escribe una palabra",
+    "languageLabel": "Idioma",
+    "lookUp": "Buscar"
   },
   "export": {
     "title": "Exportar Libro",
