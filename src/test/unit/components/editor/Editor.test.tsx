@@ -242,6 +242,62 @@ describe("Editor", () => {
     });
   });
 
+  // Regression: the store's echo is asynchronous and debounced. The normalized
+  // echo of an EARLIER keystroke can land in the `content` prop AFTER the user
+  // has already typed more. That stale echo differs from the editor's current
+  // (newer) document even with heading ids stripped, so the sync effect fired
+  // setContentSilently — clobbering the freshly typed characters and jerking the
+  // caret. This is the case the original heading-id fix did not cover.
+  it("does not re-apply a STALE echo that lags behind newer typing", async () => {
+    let editor: TiptapEditor | null = null;
+    const emitted: string[] = [];
+
+    const { rerender } = render(
+      <Editor
+        content={"<h2>Chapter Title</h2><p>Body</p>"}
+        onUpdate={(html) => emitted.push(html)}
+        onWordCountChange={vi.fn()}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(editor).not.toBeNull();
+    });
+
+    mockSetContentSilently.mockClear();
+
+    // The user types "A" (store would debounce-save this snapshot), then quickly
+    // types "B" before the async save round-trips.
+    editor!.chain().focus("end").insertContent("A").run();
+    const afterA = emitted[emitted.length - 1];
+    editor!.chain().focus("end").insertContent("B").run();
+
+    // Now the debounced+async save of the "A" snapshot finally resolves and the
+    // store feeds its normalized (heading-id-stamped) form back down as `content`
+    // — but the editor already contains "...AB".
+    const staleEcho = assignHeadingIds(afterA).html;
+    rerender(
+      <Editor
+        content={staleEcho}
+        onUpdate={(html) => emitted.push(html)}
+        onWordCountChange={vi.fn()}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+
+    // The stale echo is the editor's own earlier output, not an external change,
+    // so it must NOT reset the document (which would drop "B" and jump the caret).
+    await waitFor(() => {
+      expect(editor!.getHTML()).toContain("AB");
+    });
+    expect(mockSetContentSilently).not.toHaveBeenCalled();
+  });
+
   it("passes bookId and internalTargets to EditorToolbar", async () => {
     render(<Editor content={"<p>Chapter</p>\n"} onUpdate={vi.fn()} bookId="b1" chapterId="c1" />);
 
