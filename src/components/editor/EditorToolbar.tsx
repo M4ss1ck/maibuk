@@ -21,7 +21,7 @@ import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
-import { useActiveShortcuts } from "@/hooks";
+import { useActiveShortcuts, type ShortcutItem } from "@/hooks";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Language } from "@/features/settings/types";
@@ -69,6 +69,13 @@ export function EditorToolbar({
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showToolbarSettings, setShowToolbarSettings] = useState(false);
   const shortcuts = useActiveShortcuts();
+  // Snapshot the active shortcuts before opening the help dialog: useActiveShortcuts
+  // returns [] while any modal is open, and the help dialog is itself a modal.
+  const helpSnapshotRef = useRef<ShortcutItem[]>([]);
+  const openShortcutsHelp = useCallback(() => {
+    helpSnapshotRef.current = shortcuts;
+    setShowShortcutsHelp(true);
+  }, [shortcuts]);
   const [isToolbarExpanded, setIsToolbarExpanded] = [
     useSettingsStore((state) => state.toolbarExpanded),
     useSettingsStore((state) => state.setToolbarExpanded),
@@ -264,10 +271,7 @@ export function EditorToolbar({
           callbacks={callbacks}
           utilityCluster={
             <>
-              <ToolbarButton
-                onClick={() => setShowShortcutsHelp(true)}
-                label={t("shortcuts.title")}
-              >
+              <ToolbarButton onClick={openShortcutsHelp} label={t("shortcuts.title")}>
                 <span className="w-4 h-4 flex items-center justify-center font-bold">?</span>
               </ToolbarButton>
               <Divider />
@@ -367,7 +371,7 @@ export function EditorToolbar({
           isOpen={showShortcutsHelp}
           onClose={() => setShowShortcutsHelp(false)}
           title={t("shortcuts.title")}
-          shortcuts={shortcuts}
+          shortcuts={helpSnapshotRef.current}
         />
         <ToolbarSettingsDialog
           isOpen={showToolbarSettings}
