@@ -37,7 +37,7 @@ async function buildCatalog(locale: "en" | "es"): Promise<SymbolsCatalog> {
       label,
       code: [...glyph].length === 1 ? formatCodePoint(glyph.codePointAt(0) as number) : null,
       category: emojiGroupNames[group],
-      search: `${nameEn}|${nameEs}|${kwEn}|${kwEs}`.toLowerCase(),
+      search: `${label}|${nameEn}|${nameEs}|${kwEn}|${kwEs}`.toLowerCase(),
     });
   }
 

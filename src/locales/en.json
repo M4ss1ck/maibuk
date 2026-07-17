@@ -601,6 +601,7 @@
     "recent": "Recently used",
     "grid": "Symbols",
     "noResults": "No symbols found",
+    "resultLimit": "Showing the first {{count}} matches. Refine your search or choose a category.",
     "loading": "Loading symbols…",
     "loadError": "Failed to load symbols"
   },

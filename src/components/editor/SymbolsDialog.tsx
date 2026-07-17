@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GridLayout, ListBox, ListBoxItem, Size, Virtualizer } from "react-aria-components";
 import type { Editor } from "@tiptap/react";
@@ -18,6 +18,7 @@ import type { SymbolEntry } from "@/features/symbols/types";
 
 const ALL = "__all__";
 const HEX_QUERY = /^(u\+)?[0-9a-f]{2,6}$/i;
+const MAX_SYMBOL_RESULTS = 500;
 
 interface SymbolsDialogProps {
   editor: Editor;
@@ -32,6 +33,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>(ALL);
   const [focusedEntry, setFocusedEntry] = useState<SymbolEntry | null>(null);
+  const deferredQuery = useDeferredValue(query);
   const recentGlyphs = useSymbolsStore((state) => state.recentGlyphs);
   const addRecentGlyph = useSymbolsStore((state) => state.addRecentGlyph);
 
@@ -57,16 +59,19 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
     return entriesForCategory(catalog, activeCategory);
   }, [catalog, category]);
 
-  const results = useMemo(() => {
-    if (!catalog) return [];
-    const matches = searchSymbols(pool, query, null);
-    const q = query.trim();
+  const { results, hasMoreResults } = useMemo(() => {
+    if (!catalog) return { results: [], hasMoreResults: false };
+    const matches = searchSymbols(pool, deferredQuery, null, MAX_SYMBOL_RESULTS + 1);
+    const q = deferredQuery.trim();
     if (HEX_QUERY.test(q) && matches.length === 0) {
       const found = lookupByCodePoint(catalog, Number.parseInt(q.replace(/^u\+/i, ""), 16));
-      if (found) return [found];
+      if (found) return { results: [found], hasMoreResults: false };
     }
-    return matches;
-  }, [catalog, pool, query]);
+    return {
+      results: matches.slice(0, MAX_SYMBOL_RESULTS),
+      hasMoreResults: matches.length > MAX_SYMBOL_RESULTS,
+    };
+  }, [catalog, pool, deferredQuery]);
 
   const entryByGlyph = useMemo(() => {
     const map = new Map<string, SymbolEntry>();
@@ -169,6 +174,11 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                 );
               })}
             </ListBox>
+          )}
+          {hasMoreResults && (
+            <p className="text-xs text-muted-foreground shrink-0">
+              {t("symbols.resultLimit", { count: MAX_SYMBOL_RESULTS })}
+            </p>
           )}
           {results.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("symbols.noResults")}</p>

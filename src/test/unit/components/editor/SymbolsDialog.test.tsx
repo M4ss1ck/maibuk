@@ -7,7 +7,8 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SymbolEntry } from "@/features/symbols/types";
 import { useSymbolsStore } from "@/features/symbols/store";
 
-const { i18nState } = vi.hoisted(() => ({
+const { catalogState, i18nState } = vi.hoisted(() => ({
+  catalogState: { entryCount: null as number | null },
   i18nState: { language: "en" as "en" | "es" },
 }));
 
@@ -50,9 +51,17 @@ const spanishCatalog = {
 };
 
 vi.mock("@/features/symbols/load", () => ({
-  loadSymbolsCatalog: vi.fn(async (language: string) =>
-    language === "es" ? spanishCatalog : catalog
-  ),
+  loadSymbolsCatalog: vi.fn(async (language: string) => {
+    if (catalogState.entryCount !== null) {
+      return {
+        ...catalog,
+        entries: Array.from({ length: catalogState.entryCount }, (_, index) =>
+          entry(String.fromCodePoint(0x1000 + index), `SYMBOL ${index}`, null, "Large")
+        ),
+      };
+    }
+    return language === "es" ? spanishCatalog : catalog;
+  }),
   entriesForCategory: (c: typeof catalog, category: string | null) =>
     category === null ? c.entries : c.entries.filter((e) => e.category === category),
   lookupByCodePoint: (_c: typeof catalog, cp: number) =>
@@ -103,6 +112,7 @@ function makeInsertSpyEditor(): { editor: Editor; inserted: string[] } {
 
 describe("SymbolsDialog", () => {
   beforeEach(() => {
+    catalogState.entryCount = null;
     i18nState.language = "en";
     vi.mocked(loadSymbolsCatalog).mockClear();
     useSymbolsStore.setState({ recentGlyphs: [] });
@@ -119,6 +129,15 @@ describe("SymbolsDialog", () => {
       expect(screen.getByRole("option", { name: /DAGGER/ })).toBeInTheDocument();
       expect(screen.queryByRole("option", { name: /EM DASH/ })).not.toBeInTheDocument();
     });
+  });
+
+  it("limits broad result sets before handing them to the grid", async () => {
+    catalogState.entryCount = 501;
+    const { editor } = makeInsertSpyEditor();
+
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+
+    expect(await screen.findByText("symbols.resultLimit")).toBeInTheDocument();
   });
 
   it("filters by category using only the keyboard", async () => {

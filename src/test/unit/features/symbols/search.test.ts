@@ -56,4 +56,21 @@ describe("searchSymbols", () => {
   it("respects the category filter while searching", () => {
     expect(searchSymbols(all, "dash", "Smileys & Emotion")).toEqual([]);
   });
+
+  it("caps broad result sets without changing ranking", () => {
+    const manySubstringMatches = Array.from({ length: 20 }, (_, index) =>
+      entry({ glyph: String(index), label: `SYMBOL ${index}`, search: `symbol ${index}|dash` })
+    );
+    const exactMatch = entry({ glyph: "x", label: "DASH", search: "dash" });
+
+    expect(searchSymbols([...manySubstringMatches, exactMatch], "dash", null, 5)).toEqual([
+      exactMatch,
+      ...manySubstringMatches.slice(0, 4),
+    ]);
+  });
+
+  it("caps empty-query browsing without copying an already-small pool", () => {
+    expect(searchSymbols(all, "", null, 2)).toEqual(all.slice(0, 2));
+    expect(searchSymbols(all, "", null, 10)).toBe(all);
+  });
 });

@@ -601,6 +601,7 @@
     "recent": "Usados recientemente",
     "grid": "Símbolos",
     "noResults": "No se encontraron símbolos",
+    "resultLimit": "Se muestran las primeras {{count}} coincidencias. Refina la búsqueda o elige una categoría.",
     "loading": "Cargando símbolos…",
     "loadError": "No se pudieron cargar los símbolos"
   },
