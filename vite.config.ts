@@ -89,6 +89,7 @@ export default defineConfig(() => ({
         "src/components/editor/toolbar/useToolbarOverflow.ts",
         "src/components/editor/extensions/scene-break-utils.ts",
         "src/components/editor/extensions/SceneBreak.ts",
+        "src/components/editor/extensions/AutoClose.ts",
         "src/features/export/pdf-content-renderer.tsx",
         // Phase 7: Version control
         "src/features/versions/store.ts",

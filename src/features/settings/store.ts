@@ -122,6 +122,7 @@ interface SettingsStore extends Settings {
   setEditorPagePadding: (value: number | Partial<EditorPagePadding>) => void;
   resetEditorPagePadding: () => void;
   setEditorShowBorder: (show: boolean) => void;
+  setEditorAutoClose: (enabled: boolean) => void;
   setPasteCleanupPreset: (preset: PasteCleanupPreset) => void;
   setPasteCleanupOption: <K extends PasteStructuralOptionKey>(
     key: K,
@@ -193,6 +194,7 @@ const defaultSettings: Settings = {
     left: DEFAULT_EDITOR_PAGE_PADDING,
   },
   editorShowBorder: false,
+  editorAutoClose: false,
   pasteCleanup: {
     preset: "keepAll",
     options: { ...PASTE_CLEANUP_PRESETS.keepAll },
@@ -444,6 +446,7 @@ export const useSettingsStore = create<SettingsStore>()(
           },
         }),
       setEditorShowBorder: (editorShowBorder) => set({ editorShowBorder }),
+      setEditorAutoClose: (editorAutoClose) => set({ editorAutoClose }),
       setPasteCleanupPreset: (preset) =>
         set((state) => ({
           pasteCleanup: {

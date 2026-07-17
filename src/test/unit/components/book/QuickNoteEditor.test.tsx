@@ -1,6 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QuickNoteEditor } from "@/components/book/QuickNoteEditor";
+import { useSettingsStore } from "@/features/settings/store";
+
+// jsdom does not implement elementFromPoint, which ProseMirror calls during
+// mousedown handling. Polyfill it to avoid uncaught exceptions.
+if (typeof document.elementFromPoint === "undefined") {
+  document.elementFromPoint = () => null;
+}
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -15,6 +23,10 @@ vi.mock("../../../../components/editor/extensions/SpellCheck", async () => {
 });
 
 describe("QuickNoteEditor", () => {
+  beforeEach(() => {
+    useSettingsStore.setState({ editorAutoClose: true });
+  });
+
   it("renders a writing canvas with the formatting toolbar hidden by default", async () => {
     const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);
 
@@ -49,5 +61,20 @@ describe("QuickNoteEditor", () => {
     expect(screen.getByRole("button", { name: "editor.heading1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "editor.heading3" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "editor.taskList" })).toBeInTheDocument();
+  });
+
+  it("autocloses pairs when the editor setting is enabled", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);
+    const editor = (await waitFor(() => {
+      const el = container.querySelector("[contenteditable='true']");
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    })) as HTMLElement;
+
+    await user.click(editor);
+    await user.type(editor, "(");
+
+    expect(editor).toHaveTextContent("()");
   });
 });

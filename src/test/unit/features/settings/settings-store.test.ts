@@ -62,6 +62,7 @@ describe("useSettingsStore", () => {
       toolbarConfig: DEFAULT_TOOLBAR_CONFIG,
       editorContentWidth: 720,
       editorShowBorder: false,
+      editorAutoClose: false,
       editorPagePadding: {
         top: 32,
         right: 32,
@@ -113,6 +114,7 @@ describe("useSettingsStore", () => {
       expect(state.metrics).toEqual(DEFAULT_METRICS_SETTINGS);
       expect(state.lastPath).toBeNull();
       expect(state.lastNoteId).toBeNull();
+      expect(state.editorAutoClose).toBe(false);
     });
   });
 
@@ -646,6 +648,7 @@ describe("editor content width settings", () => {
     useSettingsStore.setState({
       editorContentWidth: 720,
       editorShowBorder: false,
+      editorAutoClose: false,
     } as any);
   });
 
@@ -663,6 +666,11 @@ describe("editor content width settings", () => {
   it("toggles editorShowBorder", () => {
     useSettingsStore.getState().setEditorShowBorder(true);
     expect(useSettingsStore.getState().editorShowBorder).toBe(true);
+  });
+
+  it("toggles editorAutoClose", () => {
+    useSettingsStore.getState().setEditorAutoClose(true);
+    expect(useSettingsStore.getState().editorAutoClose).toBe(true);
   });
 });
 

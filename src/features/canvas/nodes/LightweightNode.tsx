@@ -27,6 +27,7 @@ function ActiveNodeEditor({
   const updateTextNode = useCanvasStore((state) => state.updateTextNode);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
+  const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
   const overlayOpen = useRef(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const editor = useEditor({
@@ -34,6 +35,7 @@ function ActiveNodeEditor({
       onMarkdownPaste: setPendingMarkdownPaste,
       footnoteStartIndex: 1,
       spellCheck: { enabled: spellCheckEnabled, language },
+      autoClose: editorAutoClose,
     }),
     content: node.html,
     editable: true,

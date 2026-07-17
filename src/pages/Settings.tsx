@@ -76,6 +76,8 @@ export function Settings() {
     setShowInlineFootnotes,
     setShowNotesChapter,
     setHideKeyboardHints,
+    editorAutoClose,
+    setEditorAutoClose,
   } = useSettings();
 
   const { apiUrl, setApiUrl, authStatus, userEmail, logout } = useSyncStore();
@@ -561,6 +563,20 @@ export function Settings() {
                 checked={hideKeyboardHints}
                 onChange={setHideKeyboardHints}
                 label={t("settings.toggleHideKeyboardHints")}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div>
+                <p className="font-medium">{t("settings.editorAutoClose")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.editorAutoCloseDescription")}
+                </p>
+              </div>
+              <Switch
+                checked={editorAutoClose}
+                onChange={setEditorAutoClose}
+                label={t("settings.toggleEditorAutoClose")}
               />
             </div>
 

@@ -85,6 +85,7 @@ vi.mock("../../../../features/settings/store", () => ({
         spellCheckEnabled: false,
         language: "en",
         editorShowBorder: false,
+        editorAutoClose: true,
         metrics: { enabled: { writing: false } },
         promptMarkdownOnPaste: true,
       }),
@@ -93,6 +94,7 @@ vi.mock("../../../../features/settings/store", () => ({
         spellCheckEnabled: false,
         language: "en",
         editorShowBorder: false,
+        editorAutoClose: true,
         metrics: { enabled: { writing: false } },
         promptMarkdownOnPaste: true,
       }),
@@ -168,6 +170,25 @@ describe("Editor", () => {
   beforeEach(() => {
     mockSetContentSilently.mockClear();
     capturedToolbarProps.length = 0;
+  });
+
+  it("installs autoclose when the editor setting is enabled", async () => {
+    let editorInstance: TiptapEditor | null = null;
+    render(
+      <Editor
+        content=""
+        onUpdate={vi.fn()}
+        placeholder=""
+        onEditorReady={(instance) => {
+          editorInstance = instance;
+        }}
+      />
+    );
+
+    await waitFor(() => expect(editorInstance).not.toBeNull());
+    expect(
+      editorInstance!.extensionManager.extensions.map((extension) => extension.name)
+    ).toContain("autoClose");
   });
 
   it("does not re-apply initial content after the editor is created", async () => {
