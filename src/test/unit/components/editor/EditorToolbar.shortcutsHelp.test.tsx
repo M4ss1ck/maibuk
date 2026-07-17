@@ -51,6 +51,7 @@ vi.mock("@/components/editor/DictionaryDialog", () => ({ DictionaryDialog: () =>
 vi.mock("@/components/editor/DictionaryPromptDialog", () => ({
   DictionaryPromptDialog: () => null,
 }));
+vi.mock("@/components/editor/SymbolsDialog", () => ({ SymbolsDialog: () => null }));
 vi.mock("@/components/editor/EditorContextMenu", () => ({ EditorContextMenu: () => null }));
 vi.mock("@/components/editor/toolbar/ToolbarSettingsDialog", () => ({
   ToolbarSettingsDialog: () => null,

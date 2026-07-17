@@ -9,8 +9,17 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
 
-const entry = (glyph: string, label: string, code: string | null, category: string): SymbolEntry => ({
-  glyph, label, code, category, search: label.toLowerCase(),
+const entry = (
+  glyph: string,
+  label: string,
+  code: string | null,
+  category: string
+): SymbolEntry => ({
+  glyph,
+  label,
+  code,
+  category,
+  search: label.toLowerCase(),
 });
 const catalog = {
   categories: ["Smileys & Emotion", "General Punctuation"],
@@ -29,7 +38,13 @@ vi.mock("@/features/symbols/load", () => ({
     category === null ? c.entries : c.entries.filter((e) => e.category === category),
   lookupByCodePoint: (_c: typeof catalog, cp: number) =>
     cp === 0x4e2d
-      ? { glyph: "\u4E2D", label: "CJK UNIFIED IDEOGRAPH-4E2D", code: "U+4E2D", category: "CJK", search: "cjk unified" }
+      ? {
+          glyph: "\u4E2D",
+          label: "CJK UNIFIED IDEOGRAPH-4E2D",
+          code: "U+4E2D",
+          category: "CJK",
+          search: "cjk unified",
+        }
       : null,
 }));
 
@@ -40,7 +55,17 @@ beforeAll(() => {
     clientWidth: { configurable: true, get: () => 800 },
     clientHeight: { configurable: true, get: () => 400 },
   });
-  (Element.prototype as any).getBoundingClientRect = () => ({ width: 800, height: 400, top: 0, left: 0, bottom: 400, right: 800, x: 0, y: 0, toJSON: () => ({}) });
+  (Element.prototype as any).getBoundingClientRect = () => ({
+    width: 800,
+    height: 400,
+    top: 0,
+    left: 0,
+    bottom: 400,
+    right: 800,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
 });
 
 function makeInsertSpyEditor(): { editor: Editor; inserted: string[] } {

@@ -95,6 +95,10 @@ vi.mock("@/components/editor/HtmlViewPanel", () => ({
   HtmlViewPanel: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>html panel open</div> : null),
 }));
 vi.mock("@/components/editor/DictionaryDialog", () => ({ DictionaryDialog: () => null }));
+vi.mock("@/components/editor/DictionaryPromptDialog", () => ({
+  DictionaryPromptDialog: () => null,
+}));
+vi.mock("@/components/editor/SymbolsDialog", () => ({ SymbolsDialog: () => null }));
 vi.mock("@/components/ShortcutsHelpDialog", () => ({ ShortcutsHelpDialog: () => null }));
 vi.mock("@/components/editor/EditorContextMenu", () => ({ EditorContextMenu: () => null }));
 vi.mock("@/components/editor/toolbar/ToolbarSettingsDialog", () => ({

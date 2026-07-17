@@ -29,6 +29,7 @@ import {
   ListOrdered,
   MessageSquareText,
   Minus,
+  Omega,
   Quote,
   Redo2,
   RemoveFormatting,
@@ -73,6 +74,7 @@ export interface ToolbarGroupCallbacks {
   openFootnote: () => void;
   openLinkDialog: () => void;
   openDictionary: () => void;
+  openSymbols: () => void;
   openHtmlPanel: () => void;
   onExportMarkdown?: () => void;
   onExportPdf?: () => void;
@@ -559,6 +561,16 @@ export function EditorToolbarGroups({
             shortcut="editor.dictionary"
           >
             <BookOpen className={icon} />
+          </ToolbarButton>
+        );
+      case "symbols":
+        return (
+          <ToolbarButton
+            onClick={callbacks.openSymbols}
+            label={t("editor.symbols")}
+            shortcut="editor.insertSymbol"
+          >
+            <Omega className={icon} />
           </ToolbarButton>
         );
       case "html-view":

@@ -31,6 +31,7 @@ export function FloatingFormattingGroups({ editor, onLinkClick }: FloatingFormat
           openFootnote: () => {},
           openLinkDialog: onLinkClick,
           openDictionary: () => {},
+          openSymbols: () => {},
           openHtmlPanel: () => {},
         }}
       />
