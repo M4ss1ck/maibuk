@@ -109,7 +109,6 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   const insert = (entry: SymbolEntry) => {
     editor.chain().focus().insertContent(entry.glyph).run();
     addRecentGlyph(entry.glyph);
-    onClose();
   };
 
   const focusOption = (list: HTMLDivElement | null, index = 0) => {

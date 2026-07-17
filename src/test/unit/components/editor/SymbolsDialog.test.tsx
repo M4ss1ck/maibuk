@@ -213,7 +213,7 @@ describe("SymbolsDialog", () => {
     );
   });
 
-  it("inserts on Enter via keyboard grid navigation, records recents, and closes", async () => {
+  it("inserts on Enter via keyboard grid navigation, records recents, and stays open", async () => {
     const user = userEvent.setup();
     const { editor, inserted } = makeInsertSpyEditor();
     const onClose = vi.fn();
@@ -228,7 +228,8 @@ describe("SymbolsDialog", () => {
     await user.keyboard("{Enter}");
     expect(inserted).toHaveLength(1);
     expect(inserted).toEqual(["\u2013"]);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(useSymbolsStore.getState().recentGlyphs).toEqual(inserted);
   });
 
@@ -247,7 +248,7 @@ describe("SymbolsDialog", () => {
     expect(search).toHaveFocus();
   });
 
-  it("inserts an emoji and closes when its glyph is clicked once", async () => {
+  it("inserts an emoji and stays open when its glyph is clicked once", async () => {
     const user = userEvent.setup();
     const { editor, inserted } = makeInsertSpyEditor();
     const onClose = vi.fn();
@@ -258,7 +259,8 @@ describe("SymbolsDialog", () => {
 
     expect(inserted).toEqual(["\uD83D\uDE00"]);
     expect(useSymbolsStore.getState().recentGlyphs).toEqual(["\uD83D\uDE00"]);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("inserts into a real TipTap editor", async () => {
