@@ -142,6 +142,8 @@ export default defineConfig(() => ({
         "src/features/symbols/store.ts",
         "src/features/symbols/load.ts",
         "src/components/editor/SymbolsDialog.tsx",
+        "src/components/editor/SymbolSuggestion.tsx",
+        "src/components/editor/extensions/SymbolAutocomplete.ts",
         "scripts/symbols-data/transform.ts",
       ],
       exclude: ["src/**/*.d.ts"],
