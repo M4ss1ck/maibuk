@@ -1,11 +1,4 @@
-import {
-  type KeyboardEvent,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type KeyboardEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GridLayout, ListBox, ListBoxItem, Size, Virtualizer } from "react-aria-components";
 import type { Editor } from "@tiptap/react";
@@ -150,10 +143,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
     if (event.key !== "ArrowUp") return;
     const options = resultListRef.current?.querySelectorAll<HTMLElement>("[role=option]");
     const index = options ? [...options].indexOf(document.activeElement as HTMLElement) : -1;
-    const columnCount = Math.max(
-      1,
-      Math.floor((resultListRef.current?.clientWidth ?? 0) / 40)
-    );
+    const columnCount = Math.max(1, Math.floor((resultListRef.current?.clientWidth ?? 0) / 40));
     if (index < 0 || index >= columnCount) return;
 
     event.preventDefault();
@@ -199,10 +189,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
       title={t("symbols.title")}
       size="wide"
       footer={
-        <span
-          role="status"
-          className="block min-h-5 w-full truncate text-sm text-muted-foreground"
-        >
+        <span role="status" className="block min-h-5 w-full truncate text-sm text-muted-foreground">
           {focusedEntry
             ? `${focusedEntry.label}${focusedEntry.code ? ` \u00b7 ${focusedEntry.code}` : ""}`
             : "\u00a0"}
