@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ListBox, ListBoxItem, Size, Virtualizer } from "react-aria-components";
-import { GridLayout } from "react-aria-components/Virtualizer";
+import { GridLayout, ListBox, ListBoxItem, Size, Virtualizer } from "react-aria-components";
 import type { Editor } from "@tiptap/react";
 import type { Key, Selection } from "react-aria-components";
 import { Input } from "@/components/ui/Input";
@@ -64,6 +63,12 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
     if (catalog) for (const e of catalog.entries) map.set(e.glyph, e);
     return map;
   }, [catalog]);
+
+  const resolveGlyph = (glyph: string): SymbolEntry | null =>
+    entryByGlyph.get(glyph) ??
+    (catalog && [...glyph].length === 1
+      ? lookupByCodePoint(catalog, glyph.codePointAt(0) as number)
+      : null);
 
   const insert = (entry: SymbolEntry) => {
     editor.chain().focus().insertContent(entry.glyph).run();
@@ -133,12 +138,12 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
               orientation="horizontal"
               className="flex flex-wrap gap-1 shrink-0"
               onAction={(key) => {
-                const entry = entryByGlyph.get(String(key));
+                const entry = resolveGlyph(String(key));
                 if (entry) insert(entry);
               }}
             >
               {recentGlyphs.map((glyph) => {
-                const entry = entryByGlyph.get(glyph);
+                const entry = resolveGlyph(glyph);
                 return (
                   <ListBoxItem
                     key={glyph}

@@ -27,7 +27,10 @@ vi.mock("@/features/symbols/load", () => ({
   loadSymbolsCatalog: vi.fn(async () => catalog),
   entriesForCategory: (c: typeof catalog, category: string | null) =>
     category === null ? c.entries : c.entries.filter((e) => e.category === category),
-  lookupByCodePoint: () => null,
+  lookupByCodePoint: (_c: typeof catalog, cp: number) =>
+    cp === 0x4e2d
+      ? { glyph: "\u4E2D", label: "CJK UNIFIED IDEOGRAPH-4E2D", code: "U+4E2D", category: "CJK", search: "cjk unified" }
+      : null,
 }));
 
 import { SymbolsDialog } from "@/components/editor/SymbolsDialog";
@@ -123,5 +126,18 @@ describe("SymbolsDialog", () => {
     await user.tab();
     await user.keyboard("{ArrowRight}");
     await waitFor(() => expect(screen.getByText(/U\+20/)).toBeInTheDocument());
+  });
+
+  it("resolves recents from range-backed categories by code point lookup", async () => {
+    const rangeGlyph = "\u4E2D";
+    useSymbolsStore.setState({ recentGlyphs: [rangeGlyph] });
+    const user = userEvent.setup();
+    const { editor, inserted } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    await screen.findByRole("listbox", { name: /recent/i });
+    const recentOption = screen.getByRole("option", { name: /CJK UNIFIED/ });
+    expect(recentOption).toBeInTheDocument();
+    await user.click(recentOption);
+    expect(inserted).toEqual([rangeGlyph]);
   });
 });
