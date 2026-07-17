@@ -28,6 +28,7 @@ interface SymbolsDialogProps {
 export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   const { t, i18n } = useTranslation();
   const [catalog, setCatalog] = useState<SymbolsCatalog | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>(ALL);
   const [focusedEntry, setFocusedEntry] = useState<SymbolEntry | null>(null);
@@ -37,18 +38,25 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
+    setLoadError(false);
     loadSymbolsCatalog(i18n.language).then((loaded) => {
       if (!cancelled) setCatalog(loaded);
+    }).catch(() => {
+      if (!cancelled) setLoadError(true);
     });
     return () => {
       cancelled = true;
     };
   }, [isOpen, i18n.language]);
 
-  const results = useMemo(() => {
+  const pool = useMemo(() => {
     if (!catalog) return [];
     const activeCategory = category === ALL ? null : category;
-    const pool = entriesForCategory(catalog, activeCategory);
+    return entriesForCategory(catalog, activeCategory);
+  }, [catalog, category]);
+
+  const results = useMemo(() => {
+    if (!catalog) return [];
     const matches = searchSymbols(pool, query, null);
     const q = query.trim();
     if (HEX_QUERY.test(q) && matches.length === 0) {
@@ -56,7 +64,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
       if (found) return [found];
     }
     return matches;
-  }, [catalog, query, category]);
+  }, [catalog, pool, query]);
 
   const entryByGlyph = useMemo(() => {
     const map = new Map<string, SymbolEntry>();
@@ -110,7 +118,9 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
       }
     >
       {!catalog ? (
-        <p className="text-sm text-muted-foreground">{t("symbols.loading")}</p>
+        <p className="text-sm text-muted-foreground">
+          {loadError ? t("symbols.loadError") : t("symbols.loading")}
+        </p>
       ) : (
         <div className="flex flex-col gap-3 h-[60vh]">
           <div className="flex gap-2">

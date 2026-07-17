@@ -601,7 +601,8 @@
     "recent": "Recently used",
     "grid": "Symbols",
     "noResults": "No symbols found",
-    "loading": "Loading symbols…"
+    "loading": "Loading symbols…",
+    "loadError": "Failed to load symbols"
   },
   "export": {
     "title": "Export Book",

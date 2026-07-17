@@ -48,6 +48,7 @@ vi.mock("@/features/symbols/load", () => ({
       : null,
 }));
 
+import { loadSymbolsCatalog } from "@/features/symbols/load";
 import { SymbolsDialog } from "@/components/editor/SymbolsDialog";
 
 beforeAll(() => {
@@ -164,5 +165,13 @@ describe("SymbolsDialog", () => {
     expect(recentOption).toBeInTheDocument();
     await user.click(recentOption);
     expect(inserted).toEqual([rangeGlyph]);
+  });
+
+  it("shows an error message when the symbol catalog fails to load", async () => {
+    vi.mocked(loadSymbolsCatalog).mockRejectedValueOnce(new Error("Load failed"));
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    await screen.findByText("symbols.loadError");
+    expect(screen.queryByText("symbols.loading")).not.toBeInTheDocument();
   });
 });
