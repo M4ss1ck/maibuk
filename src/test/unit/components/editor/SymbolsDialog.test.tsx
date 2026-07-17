@@ -14,7 +14,7 @@ const { catalogState, i18nState } = vi.hoisted(() => ({
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string) => (key === "symbols.allCategories" ? "all categories" : key),
     i18n: { language: i18nState.language },
   }),
 }));
@@ -32,12 +32,12 @@ const entry = (
   search: label.toLowerCase(),
 });
 const catalog = {
-  categories: ["Smileys & Emotion", "General Punctuation"],
+  categories: ["smileys & emotion", "general punctuation", "CJK Symbols and Punctuation"],
   entries: [
-    entry("\u2014", "EM DASH", "U+2014", "General Punctuation"),
-    entry("\u2013", "EN DASH", "U+2013", "General Punctuation"),
-    entry("\u2020", "DAGGER", "U+2020", "General Punctuation"),
-    entry("\uD83D\uDE00", "grinning face", "U+1F600", "Smileys & Emotion"),
+    entry("\u2014", "EM DASH", "U+2014", "general punctuation"),
+    entry("\u2013", "EN DASH", "U+2013", "general punctuation"),
+    entry("\u2020", "DAGGER", "U+2020", "general punctuation"),
+    entry("\uD83D\uDE00", "grinning face", "U+1F600", "smileys & emotion"),
   ],
   rangesByCategory: new Map(),
 };
@@ -167,6 +167,39 @@ describe("SymbolsDialog", () => {
       expect(screen.getByRole("option", { name: /grinning face/ })).toBeInTheDocument();
       expect(screen.queryByRole("option", { name: /EM DASH/ })).not.toBeInTheDocument();
     });
+  });
+
+  it("widens and title-cases the category dropdown", async () => {
+    const user = userEvent.setup();
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    const category = await screen.findByRole("button", { name: /category/i });
+
+    expect(category.closest(".w-72")).toHaveClass("max-w-[55%]");
+    await user.click(category);
+
+    expect(screen.getByRole("option", { name: "Smileys & Emotion" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "General Punctuation" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "CJK Symbols And Punctuation" })).toBeInTheDocument();
+  });
+
+  it("shows the full selected category label on hover and focus", async () => {
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    const category = await screen.findByRole("button", { name: /category/i });
+    const tooltipTarget = category.closest(".w-72") as HTMLElement;
+
+    fireEvent.mouseEnter(tooltipTarget);
+    const hoverTooltip = await screen.findByRole("tooltip", { hidden: true });
+    expect(hoverTooltip).toHaveTextContent("All Categories");
+
+    fireEvent.mouseLeave(tooltipTarget);
+    await waitFor(() => expect(screen.queryByRole("tooltip", { hidden: true })).toBeNull());
+    category.focus();
+
+    expect(await screen.findByRole("tooltip", { hidden: true })).toHaveTextContent(
+      "All Categories"
+    );
   });
 
   it("inserts on Enter via keyboard grid navigation, records recents, stays open", async () => {

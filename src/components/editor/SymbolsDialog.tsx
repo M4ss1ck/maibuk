@@ -31,6 +31,13 @@ function symbolTooltip(entry: SymbolEntry): string {
   return entry.code ? `${entry.label} \u00b7 ${entry.code}` : entry.label;
 }
 
+function titleCaseCategory(label: string, locale: string): string {
+  return label.replace(
+    /(^|[\s&/-])(\p{L})/gu,
+    (_, separator: string, letter: string) => `${separator}${letter.toLocaleUpperCase(locale)}`
+  );
+}
+
 export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   const { t, i18n } = useTranslation();
   const [catalog, setCatalog] = useState<SymbolsCatalog | null>(null);
@@ -108,11 +115,19 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
 
   const categoryOptions = useMemo(
     () => [
-      { value: ALL, label: t("symbols.allCategories") },
-      ...(catalog?.categories.map((c) => ({ value: c, label: c })) ?? []),
+      {
+        value: ALL,
+        label: titleCaseCategory(t("symbols.allCategories"), i18n.language),
+      },
+      ...(catalog?.categories.map((value) => ({
+        value,
+        label: titleCaseCategory(value, i18n.language),
+      })) ?? []),
     ],
-    [catalog, t]
+    [catalog, i18n.language, t]
   );
+  const selectedCategoryLabel =
+    categoryOptions.find((option) => option.value === category)?.label ?? category;
 
   return (
     <Modal
@@ -136,22 +151,28 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
       ) : (
         <div className="flex flex-col gap-3 h-[60vh]">
           <div className="flex gap-2">
-            <Input
-              type="search"
-              role="searchbox"
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("symbols.searchPlaceholder")}
-              aria-label={t("symbols.searchLabel")}
-              className="flex-1"
-            />
-            <Select
-              value={category}
-              onChange={setCategory}
-              options={categoryOptions}
-              ariaLabel={t("symbols.category")}
-            />
+            <div className="min-w-0 flex-1">
+              <Input
+                type="search"
+                role="searchbox"
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("symbols.searchPlaceholder")}
+                aria-label={t("symbols.searchLabel")}
+              />
+            </div>
+            <Tooltip content={selectedCategoryLabel} side="bottom">
+              <div className="w-72 max-w-[55%] shrink-0">
+                <Select
+                  value={category}
+                  onChange={setCategory}
+                  options={categoryOptions}
+                  ariaLabel={t("symbols.category")}
+                  className="w-full"
+                />
+              </div>
+            </Tooltip>
           </div>
           {recentGlyphs.length > 0 && (
             <ListBox
