@@ -248,7 +248,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                       if (entry) insert(entry);
                     }}
                     onFocus={() => setFocusedEntry(entry)}
-                    className="w-9 h-9 flex items-center justify-center text-lg rounded border border-border data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary hover:bg-muted cursor-pointer"
+                    className="w-9 h-9 flex items-center justify-center text-lg rounded border border-border data-focus-visible:ring-2 data-focus-visible:ring-primary hover:bg-muted cursor-pointer"
                   >
                     {entry ? (
                       <Tooltip content={symbolTooltip(entry)} side="bottom">
@@ -287,7 +287,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                     aria-label={entry.label}
                     onAction={() => insert(entry)}
                     onFocus={() => setFocusedEntry(entry)}
-                    className="flex items-center justify-center text-lg rounded data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary hover:bg-muted cursor-pointer"
+                    className="flex items-center justify-center text-lg rounded data-focus-visible:ring-2 data-focus-visible:ring-primary hover:bg-muted cursor-pointer"
                   >
                     <Tooltip content={symbolTooltip(entry)} side="bottom">
                       <span className="flex h-full w-full items-center justify-center">
