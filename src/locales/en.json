@@ -398,6 +398,7 @@
     "spellCheck": "Spell Check",
     "spellCheckLanguage": "Spell check language",
     "dictionary": "Dictionary",
+    "symbols": "Symbols",
     "addToDictionary": "Add to Dictionary",
     "noSuggestions": "No suggestions",
     "viewHtml": "View HTML",
@@ -536,6 +537,7 @@
       "horizontalRule": "Horizontal rule",
       "spellcheck": "Spell check",
       "dictionary": "Dictionary",
+      "symbols": "Symbols",
       "htmlView": "View HTML",
       "export": "Export"
     },
@@ -589,6 +591,17 @@
     "wordPlaceholder": "Enter a word",
     "languageLabel": "Language",
     "lookUp": "Look up"
+  },
+  "symbols": {
+    "title": "Insert symbol",
+    "searchPlaceholder": "Search by name, character, or code point…",
+    "searchLabel": "Search symbols",
+    "category": "Category",
+    "allCategories": "All",
+    "recent": "Recently used",
+    "grid": "Symbols",
+    "noResults": "No symbols found",
+    "loading": "Loading symbols…"
   },
   "export": {
     "title": "Export Book",
@@ -999,6 +1012,7 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "zoomReset": "Reset zoom",
+    "insertSymbol": "Insert symbol",
     "deleteSelection": "Delete selected object",
     "cyclePanes": "Cycle through panes"
   },

@@ -398,6 +398,7 @@
     "spellCheck": "Corrector ortográfico",
     "spellCheckLanguage": "Idioma del corrector ortográfico",
     "dictionary": "Diccionario",
+    "symbols": "Símbolos",
     "addToDictionary": "Agregar al diccionario",
     "noSuggestions": "Sin sugerencias",
     "viewHtml": "Ver HTML",
@@ -536,6 +537,7 @@
       "horizontalRule": "Línea horizontal",
       "spellcheck": "Corrección ortográfica",
       "dictionary": "Diccionario",
+      "symbols": "Símbolos",
       "htmlView": "Ver HTML",
       "export": "Exportar"
     },
@@ -589,6 +591,17 @@
     "wordPlaceholder": "Escribe una palabra",
     "languageLabel": "Idioma",
     "lookUp": "Buscar"
+  },
+  "symbols": {
+    "title": "Insertar símbolo",
+    "searchPlaceholder": "Buscar por nombre, carácter o punto de código…",
+    "searchLabel": "Buscar símbolos",
+    "category": "Categoría",
+    "allCategories": "Todos",
+    "recent": "Usados recientemente",
+    "grid": "Símbolos",
+    "noResults": "No se encontraron símbolos",
+    "loading": "Cargando símbolos…"
   },
   "export": {
     "title": "Exportar Libro",
@@ -999,6 +1012,7 @@
     "zoomIn": "Acercar",
     "zoomOut": "Alejar",
     "zoomReset": "Restablecer zoom",
+    "insertSymbol": "Insertar símbolo",
     "deleteSelection": "Eliminar objeto seleccionado",
     "cyclePanes": "Navegar entre paneles"
   },

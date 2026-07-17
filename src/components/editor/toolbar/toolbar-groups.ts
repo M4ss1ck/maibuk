@@ -14,6 +14,7 @@ import {
   List,
   MessageSquareText,
   Minus,
+  Omega,
   Quote,
   RemoveFormatting,
   Rows3,
@@ -65,6 +66,7 @@ const ICONS: Record<ToolbarGroupId, LucideIcon> = {
   "horizontal-rule": Minus,
   spellcheck: SpellCheck,
   dictionary: BookOpen,
+  symbols: Omega,
   "html-view": Code2,
   export: FileDown,
 };
@@ -94,6 +96,7 @@ const LABEL_SUFFIX: Record<ToolbarGroupId, string> = {
   "horizontal-rule": "horizontalRule",
   spellcheck: "spellcheck",
   dictionary: "dictionary",
+  symbols: "symbols",
   "html-view": "htmlView",
   export: "export",
 };
