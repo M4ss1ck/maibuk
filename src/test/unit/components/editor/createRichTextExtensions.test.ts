@@ -20,6 +20,7 @@ describe("createRichTextExtensions", () => {
         "link",
         "pasteHandler",
         "copyHandler",
+        "symbolAutocomplete",
         "footnote",
         "spellCheck",
       ])

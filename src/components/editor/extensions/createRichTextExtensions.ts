@@ -27,6 +27,7 @@ import { SmartItalic } from "@/components/editor/extensions/SmartItalic";
 import { SpellCheck } from "@/components/editor/extensions/SpellCheck";
 import { Footnote } from "@/components/editor/extensions/Footnote";
 import { HeadingId } from "@/components/editor/extensions/HeadingId";
+import { SymbolAutocomplete } from "@/components/editor/extensions/SymbolAutocomplete";
 import type { Language } from "@/features/settings/types";
 
 export interface RichTextExtensionsOptions {
@@ -84,6 +85,7 @@ export function createRichTextExtensions({
     Indent,
     PasteHandler.configure({ onMarkdownPaste: onMarkdownPaste ?? null }),
     CopyHandler,
+    SymbolAutocomplete,
     Footnote.configure({ startIndex: footnoteStartIndex }),
     ...(spellCheck ? [SpellCheck.configure(spellCheck)] : []),
   ];

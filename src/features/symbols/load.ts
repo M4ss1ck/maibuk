@@ -8,6 +8,17 @@ export interface SymbolsCatalog {
 }
 
 const cache = new Map<string, Promise<SymbolsCatalog>>();
+const emojiCache = new Map<string, Promise<SymbolEntry[]>>();
+
+export function loadEmojiSymbols(locale: string): Promise<SymbolEntry[]> {
+  const key = locale.startsWith("es") ? "es" : "en";
+  let promise = emojiCache.get(key);
+  if (!promise) {
+    promise = buildEmojiSymbols(key);
+    emojiCache.set(key, promise);
+  }
+  return promise;
+}
 
 export function loadSymbolsCatalog(locale: string): Promise<SymbolsCatalog> {
   const key = locale.startsWith("es") ? "es" : "en";
@@ -20,26 +31,13 @@ export function loadSymbolsCatalog(locale: string): Promise<SymbolsCatalog> {
 }
 
 async function buildCatalog(locale: "en" | "es"): Promise<SymbolsCatalog> {
-  const [charsModule, emojiModule] = await Promise.all([
+  const [charsModule, emojiEntries] = await Promise.all([
     import("./data/characters.json"),
-    import("./data/emoji.json"),
+    loadEmojiSymbols(locale),
   ]);
   const charsData = charsModule.default as unknown as CharactersData;
-  const emojiData = emojiModule.default as unknown as EmojiData;
-
-  const entries: SymbolEntry[] = [];
-  const emojiGroupNames = emojiData.groups.map(([en, es]) => (locale === "es" ? es : en));
-
-  for (const [glyph, nameEn, nameEs, kwEn, kwEs, group] of emojiData.emoji) {
-    const label = locale === "es" ? nameEs : nameEn;
-    entries.push({
-      glyph,
-      label,
-      code: [...glyph].length === 1 ? formatCodePoint(glyph.codePointAt(0) as number) : null,
-      category: emojiGroupNames[group],
-      search: `${label}|${nameEn}|${nameEs}|${kwEn}|${kwEs}`.toLowerCase(),
-    });
-  }
+  const entries = [...emojiEntries];
+  const emojiGroupNames = [...new Set(emojiEntries.map((entry) => entry.category))];
 
   const blocksWithChars = new Set<number>();
   for (const [cp, name, block] of charsData.chars) {
@@ -69,6 +67,23 @@ async function buildCatalog(locale: "en" | "es"): Promise<SymbolsCatalog> {
   ];
 
   return { categories, entries, rangesByCategory };
+}
+
+async function buildEmojiSymbols(locale: "en" | "es"): Promise<SymbolEntry[]> {
+  const emojiModule = await import("./data/emoji.json");
+  const emojiData = emojiModule.default as unknown as EmojiData;
+  const groupNames = emojiData.groups.map(([en, es]) => (locale === "es" ? es : en));
+
+  return emojiData.emoji.map(([glyph, nameEn, nameEs, kwEn, kwEs, group]) => {
+    const label = locale === "es" ? nameEs : nameEn;
+    return {
+      glyph,
+      label,
+      code: [...glyph].length === 1 ? formatCodePoint(glyph.codePointAt(0) as number) : null,
+      category: groupNames[group],
+      search: `${label}|${nameEn}|${nameEs}|${kwEn}|${kwEs}`.toLowerCase(),
+    };
+  });
 }
 
 export function entriesForCategory(

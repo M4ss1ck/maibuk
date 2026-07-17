@@ -259,6 +259,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `diffSnapshots()`                                                  | `src/features/versions/compare.ts`         |
 | `useCanvasStore` / `parseCanvasDoc()` / `toFlowNodes()` (text nodes carry an optional persisted `width`) | `src/features/canvas/`                     |
 | `createRichTextExtensions()` (canonical rich-text schema shared by the main editor, Quick Note, and canvas) | `src/components/editor/extensions/createRichTextExtensions.ts` |
+| `loadEmojiSymbols()` (lazy, localized emoji/symbol autocomplete catalog) | `src/features/symbols/load.ts` |
 | `MarkdownPasteDialog` / `plainTextToEditorHtml()` (shared markdown-paste prompt + plain-text conversion) | `src/components/editor/MarkdownPasteDialog.tsx` / `plain-text-html.ts` |
 | `TableSizePicker` (reusable 5×5 table-dimension picker)            | `src/components/editor/TableSizePicker.tsx` |
 | `useReadingPositionStore` / `useReadingPosition()`                 | `src/features/reading-position/`           |

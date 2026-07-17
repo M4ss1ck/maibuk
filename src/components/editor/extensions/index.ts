@@ -9,4 +9,5 @@ export { CopyHandler } from "@/components/editor/extensions/CopyHandler";
 export { CodeBlockWithCopy } from "@/components/editor/extensions/CodeBlock";
 export { CustomCode } from "@/components/editor/extensions/CustomCode";
 export { HeadingId } from "@/components/editor/extensions/HeadingId";
+export { SymbolAutocomplete } from "@/components/editor/extensions/SymbolAutocomplete";
 export { Wikilink } from "@/components/editor/extensions/Wikilink";

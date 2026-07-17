@@ -14,7 +14,12 @@ vi.mock("@/features/symbols/data/emoji.json", () => ({
   },
 }));
 
-import { entriesForCategory, loadSymbolsCatalog, lookupByCodePoint } from "@/features/symbols/load";
+import {
+  entriesForCategory,
+  loadEmojiSymbols,
+  loadSymbolsCatalog,
+  lookupByCodePoint,
+} from "@/features/symbols/load";
 
 describe("loadSymbolsCatalog", () => {
   it("lists emoji groups (localized) before blocks", async () => {
@@ -40,6 +45,15 @@ describe("loadSymbolsCatalog", () => {
   it("uses English emoji labels under the en locale", async () => {
     const en = await loadSymbolsCatalog("en");
     expect(en.entries.find((e) => e.glyph === "😀")?.label).toBe("grinning face");
+  });
+});
+
+describe("loadEmojiSymbols", () => {
+  it("builds the small emoji and symbol subset without character entries", async () => {
+    const entries = await loadEmojiSymbols("en");
+
+    expect(entries.map((entry) => entry.glyph)).toEqual(["😀"]);
+    expect(entries[0]?.search).toContain("smile");
   });
 });
 
