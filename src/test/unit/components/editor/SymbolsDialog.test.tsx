@@ -247,16 +247,17 @@ describe("SymbolsDialog", () => {
     expect(search).toHaveFocus();
   });
 
-  it("inserts and closes on a single click", async () => {
+  it("inserts an emoji and closes when its glyph is clicked once", async () => {
     const user = userEvent.setup();
     const { editor, inserted } = makeInsertSpyEditor();
     const onClose = vi.fn();
     render(<SymbolsDialog editor={editor} isOpen onClose={onClose} />);
 
-    await user.click(await screen.findByRole("option", { name: /DAGGER/ }));
+    const emoji = await screen.findByRole("option", { name: /grinning face/ });
+    await user.click(within(emoji).getByText("\uD83D\uDE00"));
 
-    expect(inserted).toEqual(["\u2020"]);
-    expect(useSymbolsStore.getState().recentGlyphs).toEqual(["\u2020"]);
+    expect(inserted).toEqual(["\uD83D\uDE00"]);
+    expect(useSymbolsStore.getState().recentGlyphs).toEqual(["\uD83D\uDE00"]);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -389,15 +390,18 @@ describe("SymbolsDialog", () => {
     });
   });
 
-  it("shows name and code point of the focused glyph in the footer", async () => {
+  it("keeps the footer mounted and shows the focused glyph details in it", async () => {
     const user = userEvent.setup();
     const { editor } = makeInsertSpyEditor();
     render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
     await screen.findByRole("option", { name: /EM DASH/ });
+    const footer = screen.getByRole("status");
+    expect(footer).toHaveTextContent("");
     await user.tab();
     await user.tab();
     await user.keyboard("{ArrowRight}");
-    await waitFor(() => expect(screen.getByText(/U\+20/)).toBeInTheDocument());
+    await waitFor(() => expect(footer).toHaveTextContent("EN DASH · U+2013"));
+    expect(screen.getByRole("status")).toBe(footer);
   });
 
   it("resolves recents from range-backed categories by code point lookup", async () => {

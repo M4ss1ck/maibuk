@@ -9,7 +9,6 @@ import {
 import { useTranslation } from "react-i18next";
 import { GridLayout, ListBox, ListBoxItem, Size, Virtualizer } from "react-aria-components";
 import type { Editor } from "@tiptap/react";
-import type { Key, Selection } from "react-aria-components";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
@@ -171,17 +170,6 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
     }
   };
 
-  const handleGridAction = (key: Key) => {
-    const entry = results.find((e) => e.glyph === String(key));
-    if (entry) insert(entry);
-  };
-
-  const handleSelectionChange = (selection: Selection) => {
-    if (selection === "all") return;
-    const key = [...selection][0];
-    setFocusedEntry(results.find((e) => e.glyph === String(key)) ?? null);
-  };
-
   const categoryOptions = useMemo(
     () => [
       {
@@ -205,12 +193,14 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
       title={t("symbols.title")}
       size="wide"
       footer={
-        focusedEntry ? (
-          <span className="text-sm text-muted-foreground truncate">
-            {focusedEntry.label}
-            {focusedEntry.code ? ` \u00b7 ${focusedEntry.code}` : ""}
-          </span>
-        ) : null
+        <span
+          role="status"
+          className="block min-h-5 w-full truncate text-sm text-muted-foreground"
+        >
+          {focusedEntry
+            ? `${focusedEntry.label}${focusedEntry.code ? ` \u00b7 ${focusedEntry.code}` : ""}`
+            : "\u00a0"}
+        </span>
       }
     >
       {!catalog ? (
@@ -252,10 +242,6 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
               layout="grid"
               orientation="horizontal"
               className="flex flex-wrap gap-1 shrink-0"
-              onAction={(key) => {
-                const entry = resolveGlyph(String(key));
-                if (entry) insert(entry);
-              }}
             >
               {recentGlyphs.map((glyph) => {
                 const entry = resolveGlyph(glyph);
@@ -265,6 +251,10 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                     id={glyph}
                     textValue={entry?.label ?? glyph}
                     aria-label={entry?.label ?? glyph}
+                    onAction={() => {
+                      if (entry) insert(entry);
+                    }}
+                    onFocus={() => setFocusedEntry(entry)}
                     className="w-9 h-9 flex items-center justify-center text-lg rounded border border-border data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary hover:bg-muted cursor-pointer"
                   >
                     {entry ? (
@@ -294,11 +284,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                 ref={resultListRef}
                 aria-label={t("symbols.grid")}
                 layout="grid"
-                selectionMode="single"
-                selectionBehavior="replace"
                 items={results}
-                onAction={handleGridAction}
-                onSelectionChange={handleSelectionChange}
                 className="flex-1 overflow-auto outline-none"
               >
                 {(entry: SymbolEntry) => (
@@ -306,7 +292,9 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                     id={entry.glyph}
                     textValue={entry.label}
                     aria-label={entry.label}
-                    className="flex items-center justify-center text-lg rounded data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary data-[selected]:bg-primary/15 hover:bg-muted cursor-pointer"
+                    onAction={() => insert(entry)}
+                    onFocus={() => setFocusedEntry(entry)}
+                    className="flex items-center justify-center text-lg rounded data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary hover:bg-muted cursor-pointer"
                   >
                     <Tooltip content={symbolTooltip(entry)} side="bottom">
                       <span className="flex h-full w-full items-center justify-center">
