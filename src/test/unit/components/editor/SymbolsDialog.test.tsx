@@ -1,12 +1,21 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import StarterKit from "@tiptap/starter-kit";
+import { Editor } from "@tiptap/react";
+import { useState } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Editor } from "@tiptap/react";
 import type { SymbolEntry } from "@/features/symbols/types";
 import { useSymbolsStore } from "@/features/symbols/store";
 
+const { i18nState } = vi.hoisted(() => ({
+  i18nState: { language: "en" as "en" | "es" },
+}));
+
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: i18nState.language },
+  }),
 }));
 
 const entry = (
@@ -31,9 +40,19 @@ const catalog = {
   ],
   rangesByCategory: new Map(),
 };
+const spanishCatalog = {
+  ...catalog,
+  entries: catalog.entries.map((item) =>
+    item.glyph === "\uD83D\uDE00"
+      ? { ...item, label: "cara sonriente", search: "cara sonriente sonrisa" }
+      : item
+  ),
+};
 
 vi.mock("@/features/symbols/load", () => ({
-  loadSymbolsCatalog: vi.fn(async () => catalog),
+  loadSymbolsCatalog: vi.fn(async (language: string) =>
+    language === "es" ? spanishCatalog : catalog
+  ),
   entriesForCategory: (c: typeof catalog, category: string | null) =>
     category === null ? c.entries : c.entries.filter((e) => e.category === category),
   lookupByCodePoint: (_c: typeof catalog, cp: number) =>
@@ -84,6 +103,8 @@ function makeInsertSpyEditor(): { editor: Editor; inserted: string[] } {
 
 describe("SymbolsDialog", () => {
   beforeEach(() => {
+    i18nState.language = "en";
+    vi.mocked(loadSymbolsCatalog).mockClear();
     useSymbolsStore.setState({ recentGlyphs: [] });
   });
 
@@ -100,13 +121,18 @@ describe("SymbolsDialog", () => {
     });
   });
 
-  it("filters by category via the dropdown", async () => {
+  it("filters by category using only the keyboard", async () => {
     const user = userEvent.setup();
     const { editor } = makeInsertSpyEditor();
     render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
-    await screen.findByRole("searchbox");
-    await user.click(screen.getByRole("button", { name: /category/i }));
-    await user.click(await screen.findByRole("option", { name: "Smileys & Emotion" }));
+    const search = await screen.findByRole("searchbox");
+    await waitFor(() => expect(search).toHaveFocus());
+    const category = screen.getByRole("button", { name: /category/i });
+    await user.tab();
+    expect(category).toHaveFocus();
+    await user.keyboard(" ");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.keyboard("{ArrowDown}{Enter}");
     await waitFor(() => {
       expect(screen.getByRole("option", { name: /grinning face/ })).toBeInTheDocument();
       expect(screen.queryByRole("option", { name: /EM DASH/ })).not.toBeInTheDocument();
@@ -121,18 +147,28 @@ describe("SymbolsDialog", () => {
     await screen.findByRole("option", { name: /EM DASH/ });
     await user.tab(); // search -> category
     await user.tab(); // category -> grid (no recents yet)
-    await user.keyboard("{ArrowRight}{Enter}");
+    const firstFocusedOption = document.activeElement;
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).not.toBe(firstFocusedOption);
+    expect(document.activeElement).toBe(screen.getByRole("option", { name: /EN DASH/ }));
+    await user.keyboard("{Enter}");
     expect(inserted).toHaveLength(1);
+    expect(inserted).toEqual(["\u2013"]);
     expect(onClose).not.toHaveBeenCalled();
     expect(useSymbolsStore.getState().recentGlyphs).toEqual(inserted);
   });
 
-  it("inserts on click", async () => {
+  it("inserts into a real TipTap editor", async () => {
     const user = userEvent.setup();
-    const { editor, inserted } = makeInsertSpyEditor();
-    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
-    await user.click(await screen.findByRole("option", { name: /DAGGER/ }));
-    expect(inserted).toEqual(["\u2020"]);
+    const editor = new Editor({ extensions: [StarterKit], content: "<p>Hello</p>" });
+    try {
+      render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+      await user.click(await screen.findByRole("option", { name: /DAGGER/ }));
+      expect(editor.getText()).toContain("\u2020");
+      expect(editor.getHTML()).toContain("\u2020");
+    } finally {
+      editor.destroy();
+    }
   });
 
   it("shows a recents row once glyphs were used", async () => {
@@ -141,6 +177,84 @@ describe("SymbolsDialog", () => {
     render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
     const recents = await screen.findByRole("listbox", { name: /recent/i });
     expect(recents).toBeInTheDocument();
+  });
+
+  it("navigates and activates recents using only the keyboard", async () => {
+    useSymbolsStore.setState({ recentGlyphs: ["\u2020", "\u2014"] });
+    const user = userEvent.setup();
+    const { editor, inserted } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    const recents = await screen.findByRole("listbox", { name: /recent/i });
+    const recentOptions = within(recents).getAllByRole("option");
+    recentOptions.forEach((option, index) => {
+      option.getBoundingClientRect = () => ({
+        width: 36,
+        height: 36,
+        top: 0,
+        left: index * 40,
+        bottom: 36,
+        right: index * 40 + 36,
+        x: index * 40,
+        y: 0,
+        toJSON: () => ({}),
+      });
+    });
+
+    await user.tab(); // search -> category
+    await user.tab(); // category -> recents
+    await user.keyboard("{Home}");
+    const firstFocusedRecent = document.activeElement;
+    expect(firstFocusedRecent).toBe(recentOptions[0]);
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).not.toBe(firstFocusedRecent);
+    expect(document.activeElement).toBe(recentOptions[1]);
+    await user.keyboard("{Enter}");
+
+    expect(inserted).toEqual(["\u2014"]);
+  });
+
+  it("closes on Escape and restores focus to its keyboard trigger", async () => {
+    const user = userEvent.setup();
+    const { editor } = makeInsertSpyEditor();
+
+    function Harness() {
+      const [isOpen, setIsOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setIsOpen(true)}>
+            Open symbols
+          </button>
+          <SymbolsDialog editor={editor} isOpen={isOpen} onClose={() => setIsOpen(false)} />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: "Open symbols" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("dialog");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+  });
+
+  it("searches localized Spanish names at dialog level", async () => {
+    i18nState.language = "es";
+    const user = userEvent.setup();
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    const search = await screen.findByRole("searchbox");
+    await user.type(search, "sonrisa");
+
+    await waitFor(() => {
+      expect(loadSymbolsCatalog).toHaveBeenCalledWith("es");
+      expect(screen.getByRole("option", { name: "cara sonriente" })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /EM DASH/ })).not.toBeInTheDocument();
+    });
   });
 
   it("shows name and code point of the focused glyph in the footer", async () => {

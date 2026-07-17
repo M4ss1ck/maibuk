@@ -39,11 +39,13 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
     if (!isOpen) return;
     let cancelled = false;
     setLoadError(false);
-    loadSymbolsCatalog(i18n.language).then((loaded) => {
-      if (!cancelled) setCatalog(loaded);
-    }).catch(() => {
-      if (!cancelled) setLoadError(true);
-    });
+    loadSymbolsCatalog(i18n.language)
+      .then((loaded) => {
+        if (!cancelled) setCatalog(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      });
     return () => {
       cancelled = true;
     };
