@@ -97,10 +97,13 @@ beforeAll(() => {
   });
 });
 
-function makeInsertSpyEditor(): { editor: Editor; inserted: string[] } {
+function makeInsertSpyEditor(onFocus?: () => void): { editor: Editor; inserted: string[] } {
   const inserted: string[] = [];
   const chain = {
-    focus: () => chain,
+    focus: () => {
+      onFocus?.();
+      return chain;
+    },
     insertContent: (value: string) => {
       inserted.push(value);
       return chain;
@@ -348,14 +351,23 @@ describe("SymbolsDialog", () => {
     expect(firstRecent).toHaveFocus();
   });
 
-  it("closes on Escape and restores focus to its keyboard trigger", async () => {
+  it("closes on Escape and restores focus to the editor", async () => {
     const user = userEvent.setup();
-    const { editor } = makeInsertSpyEditor();
+    let editorElement: HTMLInputElement | null = null;
+    const { editor } = makeInsertSpyEditor(() => editorElement?.focus());
 
     function Harness() {
       const [isOpen, setIsOpen] = useState(false);
       return (
         <>
+          <input
+            ref={(element) => {
+              editorElement = element;
+            }}
+            type="text"
+            aria-label="Editor"
+            tabIndex={-1}
+          />
           <button type="button" onClick={() => setIsOpen(true)}>
             Open symbols
           </button>
@@ -365,6 +377,7 @@ describe("SymbolsDialog", () => {
     }
 
     render(<Harness />);
+    const editorTarget = screen.getByRole("textbox", { name: "Editor" });
     const trigger = screen.getByRole("button", { name: "Open symbols" });
     trigger.focus();
     await user.keyboard("{Enter}");
@@ -373,7 +386,7 @@ describe("SymbolsDialog", () => {
 
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(trigger).toHaveFocus();
+      expect(editorTarget).toHaveFocus();
     });
   });
 

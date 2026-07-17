@@ -54,9 +54,16 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const recentListRef = useRef<HTMLDivElement>(null);
   const resultListRef = useRef<HTMLDivElement>(null);
+  const wasOpenRef = useRef(isOpen);
   const deferredQuery = useDeferredValue(query);
   const recentGlyphs = useSymbolsStore((state) => state.recentGlyphs);
   const addRecentGlyph = useSymbolsStore((state) => state.addRecentGlyph);
+
+  useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+    if (wasOpen && !isOpen) editor.chain().focus().run();
+  }, [editor, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
