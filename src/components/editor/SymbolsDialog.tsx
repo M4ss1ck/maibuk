@@ -6,6 +6,7 @@ import type { Key, Selection } from "react-aria-components";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
+import { Tooltip } from "@/components/ui/Tooltip";
 import {
   entriesForCategory,
   loadSymbolsCatalog,
@@ -24,6 +25,10 @@ interface SymbolsDialogProps {
   editor: Editor;
   isOpen: boolean;
   onClose: () => void;
+}
+
+function symbolTooltip(entry: SymbolEntry): string {
+  return entry.code ? `${entry.label} \u00b7 ${entry.code}` : entry.label;
 }
 
 export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
@@ -169,7 +174,15 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                     aria-label={entry?.label ?? glyph}
                     className="w-9 h-9 flex items-center justify-center text-lg rounded border border-border data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary hover:bg-muted cursor-pointer"
                   >
-                    {glyph}
+                    {entry ? (
+                      <Tooltip content={symbolTooltip(entry)} side="bottom">
+                        <span className="flex h-full w-full items-center justify-center">
+                          {glyph}
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      glyph
+                    )}
                   </ListBoxItem>
                 );
               })}
@@ -201,7 +214,11 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                     aria-label={entry.label}
                     className="flex items-center justify-center text-lg rounded data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary data-[selected]:bg-primary/15 hover:bg-muted cursor-pointer"
                   >
-                    {entry.glyph}
+                    <Tooltip content={symbolTooltip(entry)} side="bottom">
+                      <span className="flex h-full w-full items-center justify-center">
+                        {entry.glyph}
+                      </span>
+                    </Tooltip>
                   </ListBoxItem>
                 )}
               </ListBox>

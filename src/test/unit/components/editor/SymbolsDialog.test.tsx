@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import StarterKit from "@tiptap/starter-kit";
 import { Editor } from "@tiptap/react";
@@ -131,6 +131,17 @@ describe("SymbolsDialog", () => {
     });
   });
 
+  it("shows the symbol name and code point when a grid glyph is hovered", async () => {
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    const option = await screen.findByRole("option", { name: /EM DASH/ });
+
+    fireEvent.mouseEnter(within(option).getByText("\u2014"));
+
+    const tooltip = await screen.findByText("EM DASH \u00b7 U+2014");
+    await waitFor(() => expect(tooltip).toBeVisible());
+  });
+
   it("limits broad result sets before handing them to the grid", async () => {
     catalogState.entryCount = 501;
     const { editor } = makeInsertSpyEditor();
@@ -196,6 +207,18 @@ describe("SymbolsDialog", () => {
     render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
     const recents = await screen.findByRole("listbox", { name: /recent/i });
     expect(recents).toBeInTheDocument();
+  });
+
+  it("shows the symbol name and code point when a recent glyph is hovered", async () => {
+    useSymbolsStore.setState({ recentGlyphs: ["\u2020"] });
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    const recents = await screen.findByRole("listbox", { name: /recent/i });
+
+    fireEvent.mouseEnter(within(recents).getByText("\u2020"));
+
+    const tooltip = await screen.findByText("DAGGER \u00b7 U+2020");
+    await waitFor(() => expect(tooltip).toBeVisible());
   });
 
   it("navigates and activates recents using only the keyboard", async () => {
