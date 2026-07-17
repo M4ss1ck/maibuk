@@ -183,6 +183,17 @@ describe("SymbolsDialog", () => {
     expect(screen.getByRole("option", { name: "CJK Symbols And Punctuation" })).toBeInTheDocument();
   });
 
+  it("keeps the search field and category dropdown the same height", async () => {
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+
+    const search = await screen.findByRole("searchbox");
+    const category = screen.getByRole("button", { name: /category/i });
+
+    expect(search).toHaveClass("h-10");
+    expect(category.parentElement).toHaveClass("[&>button]:h-10");
+  });
+
   it("shows the full selected category label on hover and focus", async () => {
     const { editor } = makeInsertSpyEditor();
     render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
@@ -202,7 +213,7 @@ describe("SymbolsDialog", () => {
     );
   });
 
-  it("inserts on Enter via keyboard grid navigation, records recents, stays open", async () => {
+  it("inserts on Enter via keyboard grid navigation, records recents, and closes", async () => {
     const user = userEvent.setup();
     const { editor, inserted } = makeInsertSpyEditor();
     const onClose = vi.fn();
@@ -217,8 +228,36 @@ describe("SymbolsDialog", () => {
     await user.keyboard("{Enter}");
     expect(inserted).toHaveLength(1);
     expect(inserted).toEqual(["\u2013"]);
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(useSymbolsStore.getState().recentGlyphs).toEqual(inserted);
+  });
+
+  it("moves from search to results and back using vertical arrows", async () => {
+    const user = userEvent.setup();
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    const search = await screen.findByRole("searchbox");
+    const firstResult = screen.getByRole("option", { name: /EM DASH/ });
+
+    await waitFor(() => expect(search).toHaveFocus());
+    await user.keyboard("{ArrowDown}");
+    expect(firstResult).toHaveFocus();
+
+    await user.keyboard("{ArrowUp}");
+    expect(search).toHaveFocus();
+  });
+
+  it("inserts and closes on a single click", async () => {
+    const user = userEvent.setup();
+    const { editor, inserted } = makeInsertSpyEditor();
+    const onClose = vi.fn();
+    render(<SymbolsDialog editor={editor} isOpen onClose={onClose} />);
+
+    await user.click(await screen.findByRole("option", { name: /DAGGER/ }));
+
+    expect(inserted).toEqual(["\u2020"]);
+    expect(useSymbolsStore.getState().recentGlyphs).toEqual(["\u2020"]);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("inserts into a real TipTap editor", async () => {
@@ -286,6 +325,24 @@ describe("SymbolsDialog", () => {
     await user.keyboard("{Enter}");
 
     expect(inserted).toEqual(["\u2014"]);
+  });
+
+  it("moves between recents and search results using vertical arrows", async () => {
+    useSymbolsStore.setState({ recentGlyphs: ["\u2020", "\u2014"] });
+    const user = userEvent.setup();
+    const { editor } = makeInsertSpyEditor();
+    render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
+    const recents = await screen.findByRole("listbox", { name: /recent/i });
+    const firstRecent = within(recents).getAllByRole("option")[0];
+    const results = screen.getByRole("listbox", { name: "symbols.grid" });
+    const firstResult = within(results).getByRole("option", { name: /EM DASH/ });
+
+    firstRecent.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(firstResult).toHaveFocus();
+
+    await user.keyboard("{ArrowUp}");
+    expect(firstRecent).toHaveFocus();
   });
 
   it("closes on Escape and restores focus to its keyboard trigger", async () => {

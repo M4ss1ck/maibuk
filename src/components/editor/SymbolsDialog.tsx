@@ -1,4 +1,11 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  type KeyboardEvent,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { GridLayout, ListBox, ListBoxItem, Size, Virtualizer } from "react-aria-components";
 import type { Editor } from "@tiptap/react";
@@ -45,6 +52,9 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>(ALL);
   const [focusedEntry, setFocusedEntry] = useState<SymbolEntry | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const recentListRef = useRef<HTMLDivElement>(null);
+  const resultListRef = useRef<HTMLDivElement>(null);
   const deferredQuery = useDeferredValue(query);
   const recentGlyphs = useSymbolsStore((state) => state.recentGlyphs);
   const addRecentGlyph = useSymbolsStore((state) => state.addRecentGlyph);
@@ -100,6 +110,65 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   const insert = (entry: SymbolEntry) => {
     editor.chain().focus().insertContent(entry.glyph).run();
     addRecentGlyph(entry.glyph);
+    onClose();
+  };
+
+  const focusOption = (list: HTMLDivElement | null, index = 0) => {
+    const options = list?.querySelectorAll<HTMLElement>("[role=option]");
+    options?.[Math.min(index, options.length - 1)]?.focus();
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "ArrowDown" || results.length === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    focusOption(resultListRef.current);
+  };
+
+  const handleRecentKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      searchRef.current?.focus();
+      return;
+    }
+    if (event.key !== "ArrowDown" || results.length === 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const options = recentListRef.current?.querySelectorAll<HTMLElement>("[role=option]");
+    const index = options ? [...options].indexOf(document.activeElement as HTMLElement) : 0;
+    focusOption(resultListRef.current, Math.max(index, 0));
+  };
+
+  const handleResultKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "ArrowUp") return;
+    const options = resultListRef.current?.querySelectorAll<HTMLElement>("[role=option]");
+    const index = options ? [...options].indexOf(document.activeElement as HTMLElement) : -1;
+    const columnCount = Math.max(
+      1,
+      Math.floor((resultListRef.current?.clientWidth ?? 0) / 40)
+    );
+    if (index < 0 || index >= columnCount) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (recentGlyphs.length > 0) {
+      focusOption(recentListRef.current, Math.min(index, recentGlyphs.length - 1));
+    } else {
+      searchRef.current?.focus();
+    }
+  };
+
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as Node;
+    if (target === searchRef.current) {
+      handleSearchKeyDown(event);
+    } else if (recentListRef.current?.contains(target)) {
+      handleRecentKeyDown(event);
+    } else if (resultListRef.current?.contains(target)) {
+      handleResultKeyDown(event);
+    }
   };
 
   const handleGridAction = (key: Key) => {
@@ -149,10 +218,11 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
           {loadError ? t("symbols.loadError") : t("symbols.loading")}
         </p>
       ) : (
-        <div className="flex flex-col gap-3 h-[60vh]">
+        <div className="flex flex-col gap-3 h-[60vh]" onKeyDownCapture={handleDialogKeyDown}>
           <div className="flex gap-2">
             <div className="min-w-0 flex-1">
               <Input
+                ref={searchRef}
                 type="search"
                 role="searchbox"
                 autoFocus
@@ -160,6 +230,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t("symbols.searchPlaceholder")}
                 aria-label={t("symbols.searchLabel")}
+                className="h-10 text-sm"
               />
             </div>
             <Tooltip content={selectedCategoryLabel} side="bottom">
@@ -169,13 +240,14 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                   onChange={setCategory}
                   options={categoryOptions}
                   ariaLabel={t("symbols.category")}
-                  className="w-full"
+                  className="w-full [&>button]:h-10"
                 />
               </div>
             </Tooltip>
           </div>
           {recentGlyphs.length > 0 && (
             <ListBox
+              ref={recentListRef}
               aria-label={t("symbols.recent")}
               layout="grid"
               orientation="horizontal"
@@ -219,6 +291,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
           ) : (
             <Virtualizer layout={GridLayout} layoutOptions={{ minItemSize: new Size(40, 40) }}>
               <ListBox
+                ref={resultListRef}
                 aria-label={t("symbols.grid")}
                 layout="grid"
                 selectionMode="single"
