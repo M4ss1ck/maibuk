@@ -22,6 +22,7 @@ export function CanvasCard({
   const { t, i18n } = useTranslation();
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(canvas.title);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const saveRename = () => {
     if (draft !== canvas.title) onRename(draft);
@@ -78,27 +79,61 @@ export function CanvasCard({
           {metadata}
         </button>
       )}
-      <div className="mt-2 flex justify-end gap-1 border-t border-border pt-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={canvas.pinned ? t("canvas.unpinCanvas") : t("canvas.pinCanvas")}
-          onClick={onTogglePinned}
-        >
-          {canvas.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={t("canvas.renameCanvas")}
-          onClick={() => setRenaming(true)}
-        >
-          <Pencil className="size-4" />
-        </Button>
-        <Button variant="ghost" size="sm" aria-label={t("canvas.deleteCanvas")} onClick={onDelete}>
-          <Trash2 className="size-4" />
-        </Button>
-      </div>
+      {confirmingDelete ? (
+        <div className="mt-2 border-t border-border pt-2">
+          <p className="mb-2 text-xs text-muted-foreground">
+            {t("canvas.deleteCanvasConfirm")}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              className="flex-1"
+              onClick={() => {
+                setConfirmingDelete(false);
+                onDelete();
+              }}
+            >
+              {t("canvas.deleteCanvas")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-1"
+              onClick={() => setConfirmingDelete(false)}
+            >
+              {t("common.cancel")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 flex justify-end gap-1 border-t border-border pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={canvas.pinned ? t("canvas.unpinCanvas") : t("canvas.pinCanvas")}
+            onClick={onTogglePinned}
+          >
+            {canvas.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={t("canvas.renameCanvas")}
+            onClick={() => setRenaming(true)}
+          >
+            <Pencil className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={t("canvas.deleteCanvas")}
+            onClick={() => setConfirmingDelete(true)}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </div>
+      )}
     </article>
   );
 }

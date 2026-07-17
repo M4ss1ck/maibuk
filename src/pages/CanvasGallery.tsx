@@ -90,9 +90,7 @@ export function CanvasGallery() {
               onOpen={() => navigate(`/canvas/${canvas.id}`)}
               onRename={(title) => void renameCanvas(canvas.id, title)}
               onTogglePinned={() => void updateCanvas(canvas.id, { pinned: !canvas.pinned })}
-              onDelete={() => {
-                if (window.confirm(t("canvas.deleteCanvasConfirm"))) void deleteCanvas(canvas.id);
-              }}
+              onDelete={() => void deleteCanvas(canvas.id)}
             />
           ))}
         </div>
