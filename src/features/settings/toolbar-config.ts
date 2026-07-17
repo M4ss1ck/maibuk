@@ -22,6 +22,7 @@ export type ToolbarGroupId =
   | "horizontal-rule"
   | "spellcheck"
   | "dictionary"
+  | "symbols"
   | "html-view"
   | "export";
 
@@ -71,6 +72,7 @@ export const ALL_GROUP_IDS = [
   "horizontal-rule",
   "spellcheck",
   "dictionary",
+  "symbols",
   "html-view",
   "export",
 ] as const satisfies readonly ToolbarGroupId[];
@@ -122,6 +124,7 @@ const DEFAULT_START_LAYOUT: (ToolbarGroupId | "D")[] = [
   "horizontal-rule",
   "spellcheck",
   "dictionary",
+  "symbols",
   "html-view",
   "D",
   "export",

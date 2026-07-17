@@ -64,12 +64,13 @@ export function useActiveShortcuts(): ShortcutItem[] {
         "editor.zoomOut",
         "editor.zoomReset",
         "editor.toolbarSettings",
-        "editor.dictionary"
+        "editor.dictionary",
+        "editor.insertSymbol"
       );
     }
 
     if (location.pathname === "/ephemeral") {
-      ids.push("editor.dictionary");
+      ids.push("editor.dictionary", "editor.insertSymbol");
     }
 
     if (/^\/canvas\/[^/]+$/.test(location.pathname)) {

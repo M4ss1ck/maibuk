@@ -17,6 +17,7 @@ import { ZoomControl } from "@/components/editor/ZoomControl";
 import { WidthControl } from "@/components/editor/WidthControl";
 import { DictionaryDialog } from "@/components/editor/DictionaryDialog";
 import { DictionaryPromptDialog } from "@/components/editor/DictionaryPromptDialog";
+import { SymbolsDialog } from "@/components/editor/SymbolsDialog";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
@@ -66,6 +67,7 @@ export function EditorToolbar({
   const [showDictionaryDialog, setShowDictionaryDialog] = useState(false);
   const [showDictionaryPrompt, setShowDictionaryPrompt] = useState(false);
   const [dictionaryWord, setDictionaryWord] = useState("");
+  const [showSymbolsDialog, setShowSymbolsDialog] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showToolbarSettings, setShowToolbarSettings] = useState(false);
   const shortcuts = useActiveShortcuts();
@@ -231,6 +233,11 @@ export function EditorToolbar({
       onTrigger: handleOpenDictionary,
     },
     {
+      keys: matchKeys("editor.insertSymbol"),
+      allowInInput: true,
+      onTrigger: () => setShowSymbolsDialog(true),
+    },
+    {
       keys: matchKeys("editor.toolbarSettings"),
       allowInInput: true,
       onTrigger: () => setShowToolbarSettings(true),
@@ -257,6 +264,7 @@ export function EditorToolbar({
     },
     openLinkDialog: () => setShowLinkDialog(true),
     openDictionary: handleOpenDictionary,
+    openSymbols: () => setShowSymbolsDialog(true),
     openHtmlPanel: () => setShowHtmlPanel(true),
     onExportMarkdown,
     onExportPdf,
@@ -366,6 +374,11 @@ export function EditorToolbar({
           onOpenInBrowserChange={setDictionaryOpenInBrowser}
           onClose={() => setShowDictionaryPrompt(false)}
           onSubmit={(word, language) => handleLookupWord(word, language)}
+        />
+        <SymbolsDialog
+          editor={editor}
+          isOpen={showSymbolsDialog}
+          onClose={() => setShowSymbolsDialog(false)}
         />
         <ShortcutsHelpDialog
           isOpen={showShortcutsHelp}

@@ -81,6 +81,7 @@ describe("DEFAULT_TOOLBAR_CONFIG", () => {
       "horizontal-rule",
       "spellcheck",
       "dictionary",
+      "symbols",
       "html-view",
       "D",
       "export",
@@ -350,5 +351,32 @@ describe("resetToolbarConfig", () => {
     expect(dividerIds(firstReset)).not.toEqual(dividerIds(DEFAULT_TOOLBAR_CONFIG));
     expect(dividerIds(secondReset)).not.toEqual(dividerIds(firstReset));
     expect(new Set(dividerIds(firstReset)).size).toBe(dividerIds(firstReset).length);
+  });
+});
+
+describe("normalizeToolbarConfig with a pre-symbols persisted config", () => {
+  it("appends the new symbols group at the end of start, preserving user order", () => {
+    const legacy = {
+      start: ALL_GROUP_IDS.filter((id) => id !== "symbols")
+        .slice()
+        .reverse()
+        .map((id) => ({
+          kind: "group" as const,
+          id,
+          toolbarVisible: true,
+          floatingVisible: false,
+        })),
+      end: [],
+    };
+    const normalized = normalizeToolbarConfig(legacy);
+    const ids = groupIds(normalized.start);
+    expect(ids[ids.length - 1]).toBe("symbols");
+    expect(ids.slice(0, -1)).toEqual(
+      ALL_GROUP_IDS.filter((id) => id !== "symbols")
+        .slice()
+        .reverse()
+    );
+    const symbols = normalized.start.find((e) => e.kind === "group" && e.id === "symbols");
+    expect(symbols).toMatchObject({ toolbarVisible: true });
   });
 });

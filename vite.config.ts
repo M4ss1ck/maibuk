@@ -136,6 +136,13 @@ export default defineConfig(() => ({
         "src/components/editor/extensions/createRichTextExtensions.ts",
         "src/components/editor/plain-text-html.ts",
         "src/features/canvas/nodes/staticRichText.ts",
+        // Symbols
+        "src/features/symbols/names.ts",
+        "src/features/symbols/search.ts",
+        "src/features/symbols/store.ts",
+        "src/features/symbols/load.ts",
+        "src/components/editor/SymbolsDialog.tsx",
+        "scripts/symbols-data/transform.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

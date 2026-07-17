@@ -50,6 +50,7 @@ const callbacks: ToolbarGroupCallbacks = {
   openFootnote: () => {},
   openLinkDialog: () => {},
   openDictionary: () => {},
+  openSymbols: () => {},
   openHtmlPanel: () => {},
 };
 

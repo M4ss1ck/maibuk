@@ -32,6 +32,7 @@ const callbacks: ToolbarGroupCallbacks = {
   openFootnote: vi.fn(),
   openLinkDialog: vi.fn(),
   openDictionary: vi.fn(),
+  openSymbols: vi.fn(),
   openHtmlPanel: vi.fn(),
 };
 

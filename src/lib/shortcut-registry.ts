@@ -131,6 +131,10 @@ export const SHORTCUTS = {
   "editor.undo": { labelKey: "editor.undo", keys: ["Ctrl+Z"] },
   "editor.redo": { labelKey: "editor.redo", keys: ["Ctrl+Shift+Z"] },
   "editor.dictionary": { labelKey: "editor.dictionary", keys: ["Ctrl+Shift+D"] },
+  "editor.insertSymbol": {
+    labelKey: "shortcuts.insertSymbol",
+    keys: ["Ctrl+Shift+O"],
+  },
   "editor.findReplace": {
     labelKey: "editor.findReplace",
     keys: ["Ctrl+F"],
