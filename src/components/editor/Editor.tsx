@@ -32,6 +32,7 @@ import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { buildDropHtml } from "@/components/editor/file-drop-html";
 import { textDropExtension } from "@/features/markdown/dropped-file";
 import { readDroppedWebFiles } from "@/hooks/useTextFileDrop";
+import { useEditorFileDrop } from "@/components/editor/useEditorFileDrop";
 
 /**
  * How many recent editor emissions to retain for stale-echo detection. The
@@ -262,6 +263,8 @@ export function Editor({
     onEditorReady?.(editor ?? null);
     return () => onEditorReady?.(null);
   }, [editor, onEditorReady]);
+
+  useEditorFileDrop(editor, editable);
 
   // Update content when it changes externally (e.g., switching chapters)
   useEffect(() => {
