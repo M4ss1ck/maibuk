@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef, type Key } from "react";
+import { useCallback, useState, useEffect, useRef, type Key } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
+import type { DropItem } from "react-aria-components/useDragAndDrop";
+import { DropIndicator } from "react-aria-components";
 import type { Chapter, ChapterType } from "@/features/chapters/types";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { Select } from "@/components/ui/Select";
@@ -9,8 +11,10 @@ import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
-import { useTextFileDrop } from "@/hooks/useTextFileDrop";
-import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
+import { readDroppedWebFiles, useTextFileDrop } from "@/hooks/useTextFileDrop";
+import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
+import { dropTargetFromPoint } from "@/lib/drop-target";
+import type { ListDropTarget } from "@/lib/drop-target";
 import { Tooltip } from "@/components/ui";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
@@ -25,10 +29,22 @@ interface ChapterListProps {
   onUpdateChapter: (id: string, title: string, type: ChapterType) => void;
   onDeleteChapter: (id: string) => void;
   onReorderChapters: (chapterIds: string[]) => void;
-  onImportFiles?: (files: DroppedTextFile[]) => void;
+  onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void;
 }
 
 const CHAPTER_DND_TYPE = "chapter";
+
+/** Reads supported text files out of react-aria drop items, preserving order. */
+export async function readChapterDropItems(
+  items: DropItem[],
+): Promise<DroppedTextFile[]> {
+  const files: File[] = [];
+  for (const item of items) {
+    if (item.kind !== "file") continue;
+    files.push(await item.getFile());
+  }
+  return readDroppedWebFiles(files);
+}
 
 export function ChapterList({
   chapters,
@@ -48,8 +64,42 @@ export function ChapterList({
   const setShowChapterOutline = useSettingsStore((state) => state.setShowChapterOutline);
   const isCompactView = chapterListView === "compact";
   const listContainerRef = useRef<HTMLDivElement>(null);
-  const { isDraggingFile, dropHandlers } = useTextFileDrop(listContainerRef, {
-    onImport: (files) => onImportFiles?.(files),
+  const onImportFilesRef = useRef(onImportFiles);
+  onImportFilesRef.current = onImportFiles;
+  const [fileDropLine, setFileDropLine] = useState<number | null>(null);
+
+  const resolveFileDropTarget = useCallback(
+    (point: DropPoint | null): ListDropTarget | null => {
+      const container = listContainerRef.current;
+      if (!point || !container) return null;
+      return dropTargetFromPoint(container, point.y, "[data-key]", "data-key");
+    },
+    [],
+  );
+
+  const { isDraggingFile } = useTextFileDrop(listContainerRef, {
+    disableWeb: true,
+    onImport: (files, point) => {
+      setFileDropLine(null);
+      onImportFilesRef.current?.(files, resolveFileDropTarget(point));
+    },
+    onDragMove: (point) => {
+      const container = listContainerRef.current;
+      const target = point ? resolveFileDropTarget(point) : null;
+      if (!container || !target) {
+        setFileDropLine(null);
+        return;
+      }
+      const row = container.querySelector<HTMLElement>(`[data-key="${target.id}"]`);
+      if (!row) {
+        setFileDropLine(null);
+        return;
+      }
+      const rowRect = row.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const edge = target.placement === "before" ? rowRect.top : rowRect.bottom;
+      setFileDropLine(edge - containerRect.top + container.scrollTop);
+    },
   });
 
   const toggleChapterListView = () => {
@@ -121,8 +171,38 @@ export function ChapterList({
 
       onReorderChapters(reordered.map((c) => c.id));
     },
-    getDropOperation: (_target, types, allowedOperations) =>
-      types.has(CHAPTER_DND_TYPE) && allowedOperations.includes("move") ? "move" : "cancel",
+    getDropOperation: (_target, types, allowedOperations) => {
+      if (types.has(CHAPTER_DND_TYPE)) {
+        return allowedOperations.includes("move") ? "move" : "cancel";
+      }
+      return onImportFilesRef.current ? "copy" : "cancel";
+    },
+    onInsert: (e) => {
+      void (async () => {
+        const files = await readChapterDropItems([...e.items]);
+        if (files.length === 0) return;
+        onImportFilesRef.current?.(files, {
+          id: String(e.target.key),
+          placement: e.target.dropPosition === "after" ? "after" : "before",
+        });
+      })();
+    },
+    onRootDrop: (e) => {
+      void (async () => {
+        const files = await readChapterDropItems([...e.items]);
+        if (files.length > 0) onImportFilesRef.current?.(files, null);
+      })();
+    },
+    renderDropIndicator: (target) => (
+      <DropIndicator
+        target={target}
+        className={({ isDropTarget }) =>
+          isDropTarget
+            ? "mx-2 my-1 block h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
+            : "h-0"
+        }
+      />
+    ),
   });
 
   const handleCreate = () => {
@@ -264,9 +344,15 @@ export function ChapterList({
       {/* Chapter list */}
       <div
         ref={listContainerRef}
-        className={`flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
-        {...(onImportFiles ? dropHandlers : {})}
+        className={`relative flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
       >
+        {fileDropLine !== null && (
+          <div
+            data-testid="chapter-file-drop-line"
+            className="pointer-events-none absolute left-2 right-2 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
+            style={{ top: `${fileDropLine}px` }}
+          />
+        )}
         <GridList
           aria-label={t("chapters.title")}
           keyboardNavigationBehavior="tab"
@@ -289,7 +375,7 @@ export function ChapterList({
           disallowEmptySelection
           onAction={activateChapter}
           dragAndDropHooks={dragAndDropHooks}
-          className="p-2 space-y-1"
+          className="p-2 space-y-1 data-[drop-target]:ring-2 data-[drop-target]:ring-inset data-[drop-target]:ring-primary"
           renderEmptyState={() => (
             <div className="text-center py-8 text-muted-foreground text-sm">
               <p>{t("chapters.noChapters")}</p>

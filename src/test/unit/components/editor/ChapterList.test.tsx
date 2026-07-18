@@ -4,21 +4,16 @@ import { render, screen, within, fireEvent, waitFor } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { buildChapter } from "@/test/support/fixtures";
 import type { Chapter } from "@/features/chapters/types";
+import type { DropItem } from "react-aria-components/useDragAndDrop";
 
-const { storeState, i18nState, markdownStore, mockSetChapterListView, mockSetShowChapterOutline } =
-  vi.hoisted(() => ({
+const { storeState, i18nState, mockSetChapterListView, mockSetShowChapterOutline } = vi.hoisted(
+  () => ({
     storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
     i18nState: { language: "en" },
-    markdownStore: {
-      callback: null as
-        | ((files: Array<{ text: string; stem: string; extension: string }>) => void)
-        | null,
-    },
     mockSetChapterListView: vi.fn(),
     mockSetShowChapterOutline: vi.fn(),
-  }));
-
-// Markdown drop: the mock returns an onDrop handler so the test can dispatch a file drop
+  }),
+);
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -26,40 +21,16 @@ vi.mock("react-i18next", () => ({
       i18nState.language === "es" && key === "chapters.reorder" ? "Reordenar" : key,
     i18n: { language: i18nState.language, resolvedLanguage: i18nState.language },
   }),
+  initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-vi.mock("@/hooks/useTextFileDrop", () => ({
-  useTextFileDrop: (
-    _ref: unknown,
-    options: {
-      onImport: (files: Array<{ text: string; stem: string; extension: string }>) => void;
-    },
-  ) => {
-    markdownStore.callback = options.onImport;
-    return {
-      isDraggingFile: false,
-      dropHandlers: {
-        onDragOver: vi.fn(),
-        onDragLeave: vi.fn(),
-        onDrop: (e: Event) => {
-          const dt = (e as unknown as Record<string, unknown>).dataTransfer;
-          if (!dt) return;
-          const files = (dt as Record<string, unknown>).files as File[] | undefined;
-          if (!files || files.length === 0) return;
-          const file = files[0];
-          if (!file.name.endsWith(".md")) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const text = typeof reader.result === "string" ? reader.result : "";
-            const stem = file.name.replace(/\.md$/i, "");
-            markdownStore.callback?.([{ text, stem, extension: ".md" }]);
-          };
-          reader.readAsText(file);
-        },
-      },
-    };
-  },
-}));
+vi.mock("@/hooks/useTextFileDrop", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/hooks/useTextFileDrop")>();
+  return {
+    ...actual,
+    useTextFileDrop: () => ({ isDraggingFile: false, dropHandlers: {} }),
+  };
+});
 
 vi.mock("@/components/editor/ChapterOutline", () => ({
   ChapterOutline: () => <div data-testid="chapter-outline" />,
@@ -77,7 +48,17 @@ vi.mock("@/features/settings/store", () => ({
   },
 }));
 
-import { ChapterList } from "@/components/editor/ChapterList";
+import { ChapterList, readChapterDropItems } from "@/components/editor/ChapterList";
+
+function fileDropItem(name: string, text: string): DropItem {
+  return {
+    kind: "file",
+    name,
+    type: "",
+    getText: async () => text,
+    getFile: async () => new File([text], name),
+  } as DropItem;
+}
 
 function buildChapters(count: number): Chapter[] {
   return Array.from({ length: count }, (_, i) =>
@@ -268,7 +249,6 @@ describe("ChapterList", () => {
     storeState.chapterListView = "normal";
     storeState.showChapterOutline = false;
     i18nState.language = "en";
-    markdownStore.callback = null;
   });
 
   // ---------------------------------------------------------------------------
@@ -702,42 +682,14 @@ describe("ChapterList", () => {
 
   // ---------------------------------------------------------------------------
   describe("external markdown file drop", () => {
-    it("drop emits onImportFiles with batched content and stem", async () => {
-      const onImportFiles = vi.fn();
-      const onReorder = vi.fn();
-      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
-      renderCL({
-        chapters,
-        currentChapterId: chapters[0].id,
-        onImportFiles,
-        onReorderChapters: onReorder,
-      });
-
-      const scrollRegion = document.querySelector(".overflow-auto");
-      expect(scrollRegion).toBeInTheDocument();
-
-      const file = new File(["# markdown content"], "myfile.md", { type: "text/markdown" });
-      const dt = {
-        items: [{ kind: "file", type: file.type, getAsFile: () => file }],
-        files: [file],
-        types: ["Files"],
-        dropEffect: "none",
-        effectAllowed: "all",
-        getData: vi.fn(() => ""),
-        setData: vi.fn(),
-        clearData: vi.fn(),
-      };
-
-      const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
-      Object.defineProperties(dropEvent, { dataTransfer: { value: dt } });
-      fireEvent(scrollRegion!, dropEvent);
-
-      await vi.waitFor(() => {
-        expect(onImportFiles).toHaveBeenCalledWith([
-          { text: "# markdown content", stem: "myfile", extension: ".md" },
-        ]);
-      });
-      expect(onReorder).not.toHaveBeenCalled();
+    it("reads supported file drop items in order and skips others", async () => {
+      const items = [
+        fileDropItem("one.md", "# One"),
+        fileDropItem("skip.png", "binary"),
+        fileDropItem("two.txt", "plain"),
+      ];
+      const files = await readChapterDropItems(items);
+      expect(files.map((file) => file.stem)).toEqual(["one", "two"]);
     });
 
     it("renders the grid when onImportFiles is provided", () => {

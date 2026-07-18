@@ -25,6 +25,7 @@ import {
   saveMarkdownFile,
 } from "@/features/markdown";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
+import type { ListDropTarget } from "@/lib/drop-target";
 import { useTranslation } from "react-i18next";
 import {
   BackIcon,
@@ -443,27 +444,46 @@ export function BookEditor() {
   );
 
   const handleImportFiles = useCallback(
-    async (files: DroppedTextFile[]) => {
+    async (files: DroppedTextFile[], target: ListDropTarget | null) => {
       if (!bookId) return;
       try {
-        let lastChapter: Chapter | null = null;
+        const created: Chapter[] = [];
         for (const file of files) {
           const title = file.stem.trim() || "Untitled";
           const html = droppedTextToEditorHtml(file.text, file.extension);
           const newChapter = await createChapter({ bookId, title });
           await updateChapter(newChapter.id, { content: html });
-          lastChapter = { ...newChapter, content: html };
+          created.push({ ...newChapter, content: html });
         }
-        if (lastChapter) {
-          setCurrentChapter(lastChapter);
-          updateBook(bookId, { lastChapterId: lastChapter.id });
+        if (created.length === 0) return;
+
+        if (target) {
+          // Fresh order from the store (createChapter appended the new ones).
+          const createdIds = new Set(created.map((c) => c.id));
+          const ids = useChapterStore
+            .getState()
+            .chapters.filter((c) => !createdIds.has(c.id))
+            .map((c) => c.id);
+          const targetIndex = ids.indexOf(target.id);
+          const insertAt =
+            targetIndex === -1
+              ? ids.length
+              : target.placement === "after"
+                ? targetIndex + 1
+                : targetIndex;
+          ids.splice(insertAt, 0, ...created.map((c) => c.id));
+          await reorderChapters(bookId, ids);
         }
+
+        const lastChapter = created[created.length - 1];
+        setCurrentChapter(lastChapter);
+        updateBook(bookId, { lastChapterId: lastChapter.id });
       } catch (error) {
         console.error("File import failed:", error);
         toast.error(t("editor.importMarkdownFailed"));
       }
     },
-    [bookId, createChapter, updateChapter, setCurrentChapter, updateBook, t]
+    [bookId, createChapter, updateChapter, reorderChapters, setCurrentChapter, updateBook, t]
   );
 
   const handleDeleteChapter = useCallback(
