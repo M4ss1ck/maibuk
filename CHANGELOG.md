@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.19] - 2026-07-17
+
+### Added
+- Opt-in autoclose pairs for brackets and quotes in the editor
+- Colon-triggered emoji autocomplete in the editor
+- Symbols dialog (Ctrl+Shift+O) with search, recents, and tooltips for inserting Unicode and emoji
+- Manual dictionary lookup (Ctrl+Shift+D), with a prompt when no text is selected
+
+### Fixed
+- Confirm canvas deletion with an in-app dialog instead of an unreliable browser prompt
+- Editor toolbar shortcut help now correctly lists available shortcuts when opened
+
 ## [0.4.18] - 2026-07-16
 
 ### Added
