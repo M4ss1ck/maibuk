@@ -119,6 +119,7 @@ export function Editor({
   const settingsLanguage = useSettingsStore((state) => state.language);
   const activeSpellCheckLanguage = spellCheckLanguage ?? settingsLanguage;
   const editorShowBorder = useSettingsStore((state) => state.editorShowBorder);
+  const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const [scrollContainerEl, setScrollContainerEl] = useState<HTMLDivElement | null>(null);
@@ -184,6 +185,7 @@ export function Editor({
         onMarkdownPaste: handleMarkdownPaste,
         footnoteStartIndex,
         spellCheck: { enabled: spellCheckEnabled, language: activeSpellCheckLanguage },
+        autoClose: editorAutoClose,
       }),
       Placeholder.configure({
         placeholder,

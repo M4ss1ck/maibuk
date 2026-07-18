@@ -183,6 +183,7 @@ export interface Settings {
   editorContentWidth: number;
   editorPagePadding: EditorPagePadding;
   editorShowBorder: boolean;
+  editorAutoClose: boolean;
   chapterListView: ChapterListView;
   showChapterOutline: boolean;
   notesListView: NotesListViewMode;

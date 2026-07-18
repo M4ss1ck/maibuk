@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Book } from "@/features/books/types";
@@ -404,6 +405,7 @@ beforeEach(() => {
     error: null,
   } as never);
   useSettingsStore.setState({
+    editorAutoClose: false,
     mainSidebarWidth: 280,
     notesSidebarWidth: 280,
     lastNoteId: null,
@@ -524,6 +526,26 @@ describe("Settings page", () => {
     });
     expect(container.querySelector("h1")).toHaveTextContent("settings.title");
     await expectNoAxeViolations(container);
+  });
+
+  it("enables autoclose from the keyboard", async () => {
+    const user = userEvent.setup();
+    const { Settings } = await import("@/pages/Settings");
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Routes>
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const toggle = await screen.findByRole("switch", {
+      name: "settings.toggleEditorAutoClose",
+    });
+    toggle.focus();
+    await user.keyboard(" ");
+
+    expect(useSettingsStore.getState().editorAutoClose).toBe(true);
   });
 });
 

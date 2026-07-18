@@ -30,12 +30,14 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
+  const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
 
   const editor = useEditor({
     extensions: [
       ...createRichTextExtensions({
         onMarkdownPaste: setPendingMarkdownPaste,
         spellCheck: { enabled: spellCheckEnabled, language },
+        autoClose: editorAutoClose,
       }),
       TaskList,
       TaskItem.configure({ nested: true }),

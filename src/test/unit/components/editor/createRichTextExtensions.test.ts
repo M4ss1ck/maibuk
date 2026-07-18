@@ -39,4 +39,14 @@ describe("createRichTextExtensions", () => {
     const pasteHandler = extensions.find((extension) => extension.name === "pasteHandler");
     expect(pasteHandler?.options.onMarkdownPaste).toBe(onMarkdownPaste);
   });
+
+  it("omits autoclose by default", () => {
+    const names = createRichTextExtensions().map((extension) => extension.name);
+    expect(names).not.toContain("autoClose");
+  });
+
+  it("includes autoclose only when enabled", () => {
+    const names = createRichTextExtensions({ autoClose: true }).map((extension) => extension.name);
+    expect(names).toContain("autoClose");
+  });
 });
