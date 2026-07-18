@@ -4,6 +4,7 @@ import { useEditorState, type Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import {
   AlignCenter,
+  AlignJustify,
   AlignLeft,
   AlignRight,
   Baseline,
@@ -94,7 +95,7 @@ export function ToolbarGroupBoundary({
 }: ToolbarGroupBoundaryProps) {
   return (
     <span
-      className={wrapItems ? "contents" : "inline-flex flex-shrink-0 items-center gap-0.5 sm:gap-1"}
+      className={wrapItems ? "contents" : "inline-flex shrink-0 items-center gap-0.5 sm:gap-1"}
       {...rest}
     >
       {children}
@@ -153,6 +154,7 @@ export function EditorToolbarGroups({
         isAlignLeft: currentEditor.isActive({ textAlign: "left" }),
         isAlignCenter: currentEditor.isActive({ textAlign: "center" }),
         isAlignRight: currentEditor.isActive({ textAlign: "right" }),
+        isAlignJustify: currentEditor.isActive({ textAlign: "justify" }),
         hasSelection: !currentEditor.state.selection.empty,
         canUndo: currentEditor.can().undo(),
         canRedo: currentEditor.can().redo(),
@@ -496,6 +498,14 @@ export function EditorToolbarGroups({
               shortcut="editor.alignRight"
             >
               <AlignRight className={icon} />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+              isActive={editorState.isAlignJustify}
+              label={t("editor.alignJustify")}
+              shortcut="editor.alignJustify"
+            >
+              <AlignJustify className={icon} />
             </ToolbarButton>
           </>
         );

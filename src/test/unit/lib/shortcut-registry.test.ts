@@ -94,6 +94,7 @@ describe("shortcut registry", () => {
     ["editor.alignLeft", [["Ctrl", "Shift", "L"]]],
     ["editor.alignCenter", [["Ctrl", "Shift", "E"]]],
     ["editor.alignRight", [["Ctrl", "Shift", "R"]]],
+    ["editor.alignJustify", [["Ctrl", "Shift", "J"]]],
   ] as const)("formats the %s formatting shortcut", (id, groups) => {
     expect(formatKeys(SHORTCUTS[id], false).groups).toEqual(groups);
   });

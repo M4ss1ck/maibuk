@@ -127,6 +127,10 @@ export const SHORTCUTS = {
     labelKey: "editor.alignRight",
     keys: ["Ctrl+Shift+R"],
   },
+  "editor.alignJustify": {
+    labelKey: "editor.alignJustify",
+    keys: ["Ctrl+Shift+J"],
+  },
   "editor.insertLink": { labelKey: "editor.insertLink", keys: ["Ctrl+K"] },
   "editor.undo": { labelKey: "editor.undo", keys: ["Ctrl+Z"] },
   "editor.redo": { labelKey: "editor.redo", keys: ["Ctrl+Shift+Z"] },

@@ -81,9 +81,7 @@ export function CanvasCard({
       )}
       {confirmingDelete ? (
         <div className="mt-2 border-t border-border pt-2">
-          <p className="mb-2 text-xs text-muted-foreground">
-            {t("canvas.deleteCanvasConfirm")}
-          </p>
+          <p className="mb-2 text-xs text-muted-foreground">{t("canvas.deleteCanvasConfirm")}</p>
           <div className="flex gap-2">
             <Button
               variant="destructive"

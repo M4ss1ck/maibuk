@@ -70,9 +70,7 @@ export function createRichTextExtensions({
     // When autoclose is on, AutoClose owns double quotes (inserting curly pairs),
     // so Typography's double-quote rules are disabled to avoid the two racing on
     // dead-key/composition input. All other Typography rules stay active.
-    Typography.configure(
-      autoClose ? { openDoubleQuote: false, closeDoubleQuote: false } : {},
-    ),
+    Typography.configure(autoClose ? { openDoubleQuote: false, closeDoubleQuote: false } : {}),
     TextStyle,
     FontFamily,
     FontSize,

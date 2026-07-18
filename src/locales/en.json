@@ -364,6 +364,7 @@
     "alignLeft": "Align Left",
     "alignCenter": "Align Center",
     "alignRight": "Align Right",
+    "alignJustify": "Justify",
     "removeFormatting": "Remove Formatting",
     "sceneBreak": "Scene Break (* * *)",
     "sceneBreakOptions": "Scene break options",
