@@ -81,6 +81,7 @@ export function NoteListItem({
   return (
     <div
       data-note-row
+      data-drop-id={note.id}
       draggable={draggable && !isEditing ? true : undefined}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
