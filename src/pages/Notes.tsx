@@ -8,7 +8,8 @@ import { NotesList, NoteEditor, EmptyNotes } from "@/components/notes";
 import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage } from "@/features/settings/types";
 import { useShortcuts } from "@/lib/shortcuts";
-import { markdownToEditorHtml, titleFromMarkdown } from "@/features/markdown";
+import { droppedTextToEditorHtml } from "@/features/markdown";
+import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 
 export function Notes() {
   const { t } = useTranslation();
@@ -120,12 +121,19 @@ export function Notes() {
     void updateNote({ id: noteId, bookId, language: getBookLanguage(bookId) });
   };
 
-  const handleImportMarkdown = async (markdown: string, filenameStem: string) => {
-    const title = titleFromMarkdown(markdown, filenameStem);
-    const content = markdownToEditorHtml(markdown);
-    const note = await createNote({ title, content, language: "en" });
-    setCurrentNote(note);
-    setLastNoteId(note.id);
+  const handleImportFiles = async (files: DroppedTextFile[]) => {
+    let lastNote: Note | null = null;
+    for (const file of files) {
+      lastNote = await createNote({
+        title: file.stem.trim() || "Untitled",
+        content: droppedTextToEditorHtml(file.text, file.extension),
+        language: "en",
+      });
+    }
+    if (lastNote) {
+      setCurrentNote(lastNote);
+      setLastNoteId(lastNote.id);
+    }
   };
 
   const handleDuplicateNote = async (note: Note) => {
@@ -191,7 +199,7 @@ export function Notes() {
           onDeleteNote={handleDelete}
           onDuplicateNote={handleDuplicateNote}
           onRenameNote={(id, title) => updateNote({ id, title })}
-          onImportMarkdown={handleImportMarkdown}
+          onImportFiles={handleImportFiles}
         />
         <div
           onMouseDown={handleResizeStart}

@@ -9,7 +9,11 @@ const { storeState, i18nState, markdownStore, mockSetChapterListView, mockSetSho
   vi.hoisted(() => ({
     storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
     i18nState: { language: "en" },
-    markdownStore: { callback: null as ((m: string, s: string) => void) | null },
+    markdownStore: {
+      callback: null as
+        | ((files: Array<{ text: string; stem: string; extension: string }>) => void)
+        | null,
+    },
     mockSetChapterListView: vi.fn(),
     mockSetShowChapterOutline: vi.fn(),
   }));
@@ -24,9 +28,14 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/hooks/useMarkdownFileDrop", () => ({
-  useMarkdownFileDrop: (_ref: unknown, onImport: (m: string, s: string) => void) => {
-    markdownStore.callback = onImport;
+vi.mock("@/hooks/useTextFileDrop", () => ({
+  useTextFileDrop: (
+    _ref: unknown,
+    options: {
+      onImport: (files: Array<{ text: string; stem: string; extension: string }>) => void;
+    },
+  ) => {
+    markdownStore.callback = options.onImport;
     return {
       isDraggingFile: false,
       dropHandlers: {
@@ -43,7 +52,7 @@ vi.mock("@/hooks/useMarkdownFileDrop", () => ({
           reader.onload = () => {
             const text = typeof reader.result === "string" ? reader.result : "";
             const stem = file.name.replace(/\.md$/i, "");
-            markdownStore.callback?.(text, stem);
+            markdownStore.callback?.([{ text, stem, extension: ".md" }]);
           };
           reader.readAsText(file);
         },
@@ -693,14 +702,14 @@ describe("ChapterList", () => {
 
   // ---------------------------------------------------------------------------
   describe("external markdown file drop", () => {
-    it("drop emits onImportMarkdown with content and stem", async () => {
-      const onImportMarkdown = vi.fn();
+    it("drop emits onImportFiles with batched content and stem", async () => {
+      const onImportFiles = vi.fn();
       const onReorder = vi.fn();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({
         chapters,
         currentChapterId: chapters[0].id,
-        onImportMarkdown,
+        onImportFiles,
         onReorderChapters: onReorder,
       });
 
@@ -724,13 +733,15 @@ describe("ChapterList", () => {
       fireEvent(scrollRegion!, dropEvent);
 
       await vi.waitFor(() => {
-        expect(onImportMarkdown).toHaveBeenCalledWith("# markdown content", "myfile");
+        expect(onImportFiles).toHaveBeenCalledWith([
+          { text: "# markdown content", stem: "myfile", extension: ".md" },
+        ]);
       });
       expect(onReorder).not.toHaveBeenCalled();
     });
 
-    it("renders the grid when onImportMarkdown is provided", () => {
-      renderCL({ onImportMarkdown: vi.fn() });
+    it("renders the grid when onImportFiles is provided", () => {
+      renderCL({ onImportFiles: vi.fn() });
       expect(screen.getByRole("grid")).toBeInTheDocument();
     });
   });

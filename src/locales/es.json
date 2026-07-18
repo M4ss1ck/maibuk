@@ -4,6 +4,10 @@
     "title": "Maibuk",
     "description": "Una aplicación de escritura multiplataforma para autores"
   },
+  "dropImport": {
+    "readFailed": "No se pudo leer \"{{name}}\"",
+    "noSupportedFiles": "No hay archivos de texto compatibles (.md, .markdown, .txt)"
+  },
   "common": {
     "save": "Guardar",
     "cancel": "Cancelar",

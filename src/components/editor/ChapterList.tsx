@@ -9,7 +9,8 @@ import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
-import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
+import { useTextFileDrop } from "@/hooks/useTextFileDrop";
+import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import { Tooltip } from "@/components/ui";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
@@ -24,7 +25,7 @@ interface ChapterListProps {
   onUpdateChapter: (id: string, title: string, type: ChapterType) => void;
   onDeleteChapter: (id: string) => void;
   onReorderChapters: (chapterIds: string[]) => void;
-  onImportMarkdown?: (markdown: string, filenameStem: string) => void;
+  onImportFiles?: (files: DroppedTextFile[]) => void;
 }
 
 const CHAPTER_DND_TYPE = "chapter";
@@ -38,7 +39,7 @@ export function ChapterList({
   onUpdateChapter,
   onDeleteChapter,
   onReorderChapters,
-  onImportMarkdown,
+  onImportFiles,
 }: ChapterListProps) {
   const { t, i18n } = useTranslation();
   const chapterListView = useSettingsStore((state) => state.chapterListView);
@@ -47,10 +48,9 @@ export function ChapterList({
   const setShowChapterOutline = useSettingsStore((state) => state.setShowChapterOutline);
   const isCompactView = chapterListView === "compact";
   const listContainerRef = useRef<HTMLDivElement>(null);
-  const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
-    listContainerRef,
-    onImportMarkdown ?? (() => {})
-  );
+  const { isDraggingFile, dropHandlers } = useTextFileDrop(listContainerRef, {
+    onImport: (files) => onImportFiles?.(files),
+  });
 
   const toggleChapterListView = () => {
     setChapterListView(isCompactView ? "normal" : "compact");
@@ -265,7 +265,7 @@ export function ChapterList({
       <div
         ref={listContainerRef}
         className={`flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
-        {...(onImportMarkdown ? dropHandlers : {})}
+        {...(onImportFiles ? dropHandlers : {})}
       >
         <GridList
           aria-label={t("chapters.title")}

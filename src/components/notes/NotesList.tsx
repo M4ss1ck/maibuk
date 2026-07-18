@@ -25,7 +25,8 @@ import { AddIcon } from "@/components/icons/AddIcon";
 import { ResponsiveToggleGroup, Tooltip } from "@/components/ui";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { NoteListItem } from "@/components/notes/NoteListItem";
-import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
+import { useTextFileDrop } from "@/hooks/useTextFileDrop";
+import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 import { useSettingsStore } from "@/features/settings/store";
 import { tagColor } from "@/components/notes/tagColor";
@@ -62,7 +63,7 @@ interface NotesListProps {
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: NoteWithBook) => void;
   onRenameNote?: (id: string, title: string) => void;
-  onImportMarkdown?: (markdown: string, filenameStem: string) => void;
+  onImportFiles?: (files: DroppedTextFile[]) => void;
 }
 
 export function NotesList({
@@ -76,15 +77,14 @@ export function NotesList({
   onDeleteNote,
   onDuplicateNote,
   onRenameNote,
-  onImportMarkdown,
+  onImportFiles,
 }: NotesListProps) {
   const { t } = useTranslation();
   const listContainerRef = useRef<HTMLDivElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
-  const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
-    listContainerRef,
-    onImportMarkdown ?? (() => {})
-  );
+  const { isDraggingFile, dropHandlers } = useTextFileDrop(listContainerRef, {
+    onImport: (files) => onImportFiles?.(files),
+  });
   const autoScroll = useDragAutoScroll(listContainerRef);
   const [search, setSearch] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -570,7 +570,7 @@ export function NotesList({
       <div
         ref={listContainerRef}
         className={`flex-1 overflow-auto transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
-        {...(onImportMarkdown ? dropHandlers : {})}
+        {...(onImportFiles ? dropHandlers : {})}
       >
         {filtered.length === 0 &&
         (viewMode !== "tree" || treeGroupMode !== "book" || books.length === 0) ? (

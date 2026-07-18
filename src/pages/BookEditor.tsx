@@ -20,11 +20,11 @@ import {
 } from "@/features/export";
 import {
   editorHtmlToMarkdown,
+  droppedTextToEditorHtml,
   markdownFilename,
-  markdownToEditorHtml,
   saveMarkdownFile,
-  titleFromMarkdown,
 } from "@/features/markdown";
+import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import { useTranslation } from "react-i18next";
 import {
   BackIcon,
@@ -442,18 +442,24 @@ export function BookEditor() {
     [bookId, createChapter, setCurrentChapter, updateBook]
   );
 
-  const handleImportMarkdown = useCallback(
-    async (markdown: string, filenameStem: string) => {
+  const handleImportFiles = useCallback(
+    async (files: DroppedTextFile[]) => {
       if (!bookId) return;
       try {
-        const title = titleFromMarkdown(markdown, filenameStem);
-        const html = markdownToEditorHtml(markdown);
-        const newChapter = await createChapter({ bookId, title });
-        await updateChapter(newChapter.id, { content: html });
-        setCurrentChapter({ ...newChapter, content: html });
-        updateBook(bookId, { lastChapterId: newChapter.id });
+        let lastChapter: Chapter | null = null;
+        for (const file of files) {
+          const title = file.stem.trim() || "Untitled";
+          const html = droppedTextToEditorHtml(file.text, file.extension);
+          const newChapter = await createChapter({ bookId, title });
+          await updateChapter(newChapter.id, { content: html });
+          lastChapter = { ...newChapter, content: html };
+        }
+        if (lastChapter) {
+          setCurrentChapter(lastChapter);
+          updateBook(bookId, { lastChapterId: lastChapter.id });
+        }
       } catch (error) {
-        console.error("Markdown import failed:", error);
+        console.error("File import failed:", error);
         toast.error(t("editor.importMarkdownFailed"));
       }
     },
@@ -731,7 +737,7 @@ export function BookEditor() {
               onUpdateChapter={handleUpdateChapter}
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
-              onImportMarkdown={handleImportMarkdown}
+              onImportFiles={handleImportFiles}
             />
           </div>
 
@@ -755,7 +761,7 @@ export function BookEditor() {
               onUpdateChapter={handleUpdateChapter}
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
-              onImportMarkdown={handleImportMarkdown}
+              onImportFiles={handleImportFiles}
             />
             {showSidebar && (
               <div
