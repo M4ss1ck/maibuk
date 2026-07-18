@@ -3,6 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesGallery } from "@/pages/NotesGallery";
 
+vi.mock("../../../lib/platform", () => ({
+  IS_TAURI: false,
+  getFileSystem: vi.fn(),
+}));
+
 const { mockNavigate, noteState, bookState, settingsState } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   noteState: {
@@ -73,6 +78,7 @@ describe("NotesGallery", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     settingsState.setLastNoteId.mockClear();
+    noteState.createNote.mockClear();
     noteState.notes = [
       { id: "n1", title: "First", bookId: "book-1", tags: [], content: "" },
       { id: "n2", title: "Second", bookId: null, tags: [], content: "" },
@@ -130,6 +136,38 @@ describe("NotesGallery", () => {
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith("/notes/n3");
+    });
+  });
+
+  it("creates dropped notes at the beginning while preserving drop order", async () => {
+    noteState.notes = [
+      { id: "n1", title: "First", bookId: null, tags: [], content: "", order: 0 },
+      { id: "n2", title: "Second", bookId: null, tags: [], content: "", order: 1 },
+      { id: "n3", title: "Third", bookId: null, tags: [], content: "", order: 2 },
+    ];
+    const { container } = render(<NotesGallery />);
+    const dropzone = container.firstElementChild as HTMLElement;
+    const files = [new File(["# A"], "a.md"), new File(["plain"], "b.txt")];
+
+    fireEvent.drop(dropzone, {
+      clientX: 10,
+      clientY: 20,
+      dataTransfer: {
+        files,
+        items: files.map((file) => ({ kind: "file", type: file.type })),
+        dropEffect: "",
+      },
+    });
+
+    await waitFor(() => {
+      expect(noteState.createNote).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ title: "a", order: -2 }),
+      );
+      expect(noteState.createNote).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ title: "b", order: -1 }),
+      );
     });
   });
 
