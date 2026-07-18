@@ -364,6 +364,7 @@
     "alignLeft": "Alinear a la Izquierda",
     "alignCenter": "Centrar",
     "alignRight": "Alinear a la Derecha",
+    "alignJustify": "Justificar",
     "removeFormatting": "Quitar Formato",
     "sceneBreak": "Salto de Escena (* * *)",
     "sceneBreakOptions": "Opciones de salto de escena",

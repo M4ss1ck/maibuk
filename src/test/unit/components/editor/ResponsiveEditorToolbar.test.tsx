@@ -156,7 +156,7 @@ it("collapsed: Start group boundaries remain non-wrapping measurable units", () 
   const { getByTestId } = renderToolbar();
   const historyGroup = getByTestId("toolbar-start-lane").querySelector('[data-group-id="history"]');
 
-  expect(historyGroup).toHaveClass("inline-flex", "flex-shrink-0");
+  expect(historyGroup).toHaveClass("inline-flex", "shrink-0");
   expect(historyGroup).not.toHaveClass("contents");
 });
 
