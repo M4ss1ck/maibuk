@@ -29,6 +29,9 @@ import { assignHeadingIds } from "@/features/links/heading-ids";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { setContentSilently } from "@/features/metrics/programmatic";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
+import { buildDropHtml } from "@/components/editor/file-drop-html";
+import { textDropExtension } from "@/features/markdown/dropped-file";
+import { readDroppedWebFiles } from "@/hooks/useTextFileDrop";
 
 /**
  * How many recent editor emissions to retain for stale-echo detection. The
@@ -179,6 +182,7 @@ export function Editor({
   // one of these recent emissions — the signal that it is the editor's own
   // output rather than a genuine external change.
   const recentEmittedRef = useRef<string[]>([]);
+  const editorInstanceRef = useRef<TiptapEditor | null>(null);
   const editor = useEditor({
     extensions: [
       ...createRichTextExtensions({
@@ -217,6 +221,25 @@ export function Editor({
         }
         return false;
       },
+      handleDrop: (view, event, _slice, moved) => {
+        if (moved || !editable) return false;
+        const all = Array.from(event.dataTransfer?.files ?? []);
+        const supported = all.filter((file) => textDropExtension(file.name) !== null);
+        if (supported.length === 0) return false;
+
+        event.preventDefault();
+        const coords = { left: event.clientX, top: event.clientY };
+        void (async () => {
+          const files = await readDroppedWebFiles(all);
+          const html = buildDropHtml(files);
+          if (!html) return;
+          const editorInstance = editorInstanceRef.current;
+          if (!editorInstance) return;
+          const pos = view.posAtCoords(coords)?.pos ?? editorInstance.state.selection.to;
+          editorInstance.chain().focus().insertContentAt(pos, html).run();
+        })();
+        return true;
+      },
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
@@ -232,6 +255,7 @@ export function Editor({
       }
     },
   });
+  editorInstanceRef.current = editor;
 
   // Expose the editor instance to parents (e.g. the table-of-contents panel)
   useEffect(() => {
