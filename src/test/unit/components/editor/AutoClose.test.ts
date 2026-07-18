@@ -22,15 +22,16 @@ function type(editor: Editor, text: string) {
 
 describe("AutoClose", () => {
   it.each([
-    ["(", ")"],
-    ["[", "]"],
-    ["{", "}"],
-    ['"', '"'],
-    ["`", "`"],
-  ])("inserts %s%s with the caret between", (open, close) => {
+    // [typed key, expected open glyph, expected close glyph]
+    ["(", "(", ")"],
+    ["[", "[", "]"],
+    ["{", "{", "}"],
+    ['"', "“", "”"],
+    ["`", "`", "`"],
+  ])("inserts a pair for %s with the caret between", (typed, open, close) => {
     const editor = makeEditor();
 
-    expect(type(editor, open)).toBe(true);
+    expect(type(editor, typed)).toBe(true);
 
     expect(editor.getText()).toBe(open + close);
     expect(editor.state.selection.from).toBe(2);
@@ -45,6 +46,17 @@ describe("AutoClose", () => {
     expect(type(editor, close)).toBe(true);
 
     expect(editor.getText()).toBe(close);
+    expect(editor.state.selection.from).toBe(2);
+    editor.destroy();
+  });
+
+  it("steps over an existing curly closing quote", () => {
+    const editor = makeEditor("<p>”</p>");
+    editor.commands.setTextSelection(1);
+
+    expect(type(editor, '"')).toBe(true);
+
+    expect(editor.getText()).toBe("”");
     expect(editor.state.selection.from).toBe(2);
     editor.destroy();
   });
@@ -72,7 +84,7 @@ describe("AutoClose", () => {
     editor.destroy();
   });
 
-  it("keeps autoclosing quotes straight when typography is installed", () => {
+  it("autocloses a curly quote pair even when typography is installed", () => {
     const editor = new Editor({
       extensions: [StarterKit, Typography, AutoClose],
       content: "<p></p>",
@@ -80,7 +92,7 @@ describe("AutoClose", () => {
 
     expect(type(editor, '"')).toBe(true);
 
-    expect(editor.getText()).toBe('""');
+    expect(editor.getText()).toBe("“”");
     editor.destroy();
   });
 
@@ -140,7 +152,7 @@ describe("AutoClose", () => {
     const prevented = !el.dispatchEvent(event);
 
     expect(prevented).toBe(true);
-    expect(editor.getText()).toBe('""');
+    expect(editor.getText()).toBe("“”");
     expect(editor.state.selection.from).toBe(2);
     expect(editor.state.selection.empty).toBe(true);
     editor.destroy();
@@ -165,6 +177,24 @@ describe("AutoClose", () => {
     expect(prevented).toBe(false);
     // The editor document should be unchanged — autoclose must not engage.
     expect(editor.getText()).toBe("");
+    editor.destroy();
+  });
+
+  it("upgrades a composed double quote into a curly pair", async () => {
+    const editor = makeEditor();
+    const el = editor.view.dom as HTMLElement;
+
+    el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: '"' }));
+
+    // ProseMirror reconciles the browser-committed straight opener after compositionend.
+    editor.view.dispatch(editor.state.tr.insertText('"', 1, 1));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(editor.getText()).toBe("“”");
+    expect(editor.state.selection.from).toBe(2);
+    expect(editor.state.selection.empty).toBe(true);
     editor.destroy();
   });
 
