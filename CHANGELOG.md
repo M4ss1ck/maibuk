@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.20] - 2026-07-18
+
+### Added
+- Drag-and-drop import for Markdown files to create notes and chapters, with positional insertion indicators and real-time feedback
+- Justify text alignment button in the editor toolbar with Ctrl+Shift+J shortcut
+
+### Fixed
+- Long chapter titles overflowing horizontally and hiding action buttons
+- Duplicate file drop indicators in the editor
+- Drag-and-drop reordering not working after clearing the chapter list
+- Chapter action buttons shrinking titles when overlaying
+
 ## [0.4.19] - 2026-07-17
 
 ### Added
