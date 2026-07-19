@@ -30,6 +30,7 @@ const {
     files: [] as DroppedTextFile[],
     target: null as ListDropTarget | null,
     promise: null as Promise<void> | null,
+    promises: [] as Promise<void>[],
   },
 }));
 
@@ -159,6 +160,7 @@ vi.mock("../../../components/editor", () => ({
         type="button"
         onClick={() => {
           importControl.promise = props.onImportFiles(importControl.files, importControl.target);
+          importControl.promises.push(importControl.promise);
         }}
       >
         import files
@@ -194,6 +196,7 @@ describe("BookEditor file-drop imports", () => {
     importControl.files = [];
     importControl.target = null;
     importControl.promise = null;
+    importControl.promises = [];
     mockCreateChapter.mockReset();
     mockUpdateChapter.mockReset();
     mockReorderChapters.mockReset();
@@ -321,5 +324,286 @@ describe("BookEditor file-drop imports", () => {
     expect(mockToastError).toHaveBeenCalledWith("editor.importMarkdownFailed");
     expect(consoleError).toHaveBeenCalledWith("File import failed:", error);
     consoleError.mockRestore();
+  });
+
+  it("serializes overlapping imports through persistence before starting the next batch", async () => {
+    const firstUpdate = deferred();
+    const secondUpdate = deferred();
+    const firstReorder = deferred();
+    const secondReorder = deferred();
+    mockUpdateChapter
+      .mockImplementationOnce(() => firstUpdate.promise)
+      .mockImplementationOnce(() => secondUpdate.promise);
+    mockReorderChapters
+      .mockImplementationOnce(async (_bookId: string, ids: string[]) => {
+        await firstReorder.promise;
+        chapterState.chapters = ids.map((id, order) => ({
+          ...chapterState.chapters.find((chapter) => chapter.id === id)!,
+          order,
+        }));
+      })
+      .mockImplementationOnce(async (_bookId: string, ids: string[]) => {
+        await secondReorder.promise;
+        chapterState.chapters = ids.map((id, order) => ({
+          ...chapterState.chapters.find((chapter) => chapter.id === id)!,
+          order,
+        }));
+      });
+
+    const { rerender } = render(<BookEditor />);
+    importControl.files = [{ stem: "Alpha", extension: ".md", text: "Alpha body" }];
+    importControl.target = { id: "chapter-1", placement: "after" };
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+
+    importControl.files = [{ stem: "Beta", extension: ".md", text: "Beta body" }];
+    importControl.target = { id: "chapter-2", placement: "before" };
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+    rerender(<BookEditor />);
+
+    expect(importControl.promises).toHaveLength(2);
+    let secondSettled = false;
+    void importControl.promises[1].then(() => {
+      secondSettled = true;
+    });
+    expect(mockCreateChapter).toHaveBeenCalledTimes(1);
+    expect(mockUpdateChapter).toHaveBeenCalledTimes(1);
+    expect(mockReorderChapters).not.toHaveBeenCalled();
+    expect(secondSettled).toBe(false);
+    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+
+    secondUpdate.resolve();
+    firstUpdate.resolve();
+    await flush();
+    rerender(<BookEditor />);
+    expect(mockReorderChapters).toHaveBeenCalledTimes(1);
+    expect(mockCreateChapter).toHaveBeenCalledTimes(1);
+    expect(secondSettled).toBe(false);
+    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+
+    firstReorder.resolve();
+    await flush();
+    await flush();
+    rerender(<BookEditor />);
+    expect(mockCreateChapter).toHaveBeenCalledTimes(2);
+    expect(mockUpdateChapter).toHaveBeenCalledTimes(2);
+    expect(mockReorderChapters).toHaveBeenCalledTimes(2);
+    expect(secondSettled).toBe(false);
+    expect(displayedTitles()).toEqual([
+      "First|Alpha|Second",
+      "First|Alpha|Second",
+    ]);
+
+    secondReorder.resolve();
+    await act(async () => {
+      await Promise.all(importControl.promises);
+    });
+    rerender(<BookEditor />);
+    expect(secondSettled).toBe(true);
+    expect(displayedTitles()).toEqual([
+      "First|Alpha|Beta|Second",
+      "First|Alpha|Beta|Second",
+    ]);
+  });
+
+  it("keeps the import and next queued batch pending through book metadata persistence", async () => {
+    const firstMetadataUpdate = deferred();
+    mockUpdateChapter.mockResolvedValue(undefined);
+    mockUpdateBook
+      .mockImplementationOnce(() => firstMetadataUpdate.promise)
+      .mockResolvedValueOnce(undefined);
+
+    render(<BookEditor />);
+    importControl.files = [{ stem: "Alpha", extension: ".md", text: "Alpha body" }];
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+    await flush();
+    expect(mockUpdateBook).toHaveBeenCalledTimes(1);
+
+    importControl.files = [{ stem: "Beta", extension: ".md", text: "Beta body" }];
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+
+    let firstSettled = false;
+    let secondSettled = false;
+    void importControl.promises[0].then(() => {
+      firstSettled = true;
+    });
+    void importControl.promises[1].then(() => {
+      secondSettled = true;
+    });
+    await flush();
+    expect(firstSettled).toBe(false);
+    expect(secondSettled).toBe(false);
+    expect(mockCreateChapter).toHaveBeenCalledTimes(1);
+
+    firstMetadataUpdate.resolve();
+    await act(async () => {
+      await Promise.all(importControl.promises);
+    });
+
+    expect(firstSettled).toBe(true);
+    expect(secondSettled).toBe(true);
+    expect(mockCreateChapter).toHaveBeenCalledTimes(2);
+    expect(mockUpdateBook).toHaveBeenCalledTimes(2);
+  });
+
+  it("catches metadata persistence failure and continues the next queued import", async () => {
+    const firstMetadataUpdate = deferred();
+    const error = new Error("metadata update failed");
+    mockUpdateChapter.mockResolvedValue(undefined);
+    mockUpdateBook
+      .mockImplementationOnce(() => firstMetadataUpdate.promise)
+      .mockResolvedValueOnce(undefined);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(<BookEditor />);
+    importControl.files = [{ stem: "Alpha", extension: ".md", text: "Alpha body" }];
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+    await flush();
+
+    importControl.files = [{ stem: "Beta", extension: ".md", text: "Beta body" }];
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+    expect(mockCreateChapter).toHaveBeenCalledTimes(1);
+
+    firstMetadataUpdate.reject(error);
+    await act(async () => {
+      await Promise.all(importControl.promises);
+    });
+
+    expect(mockToastError).toHaveBeenCalledWith("editor.importMarkdownFailed");
+    expect(consoleError).toHaveBeenCalledWith("File import failed:", error);
+    expect(mockCreateChapter).toHaveBeenCalledTimes(2);
+    expect(mockUpdateBook).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+
+  it("continues queued imports after an earlier batch fails", async () => {
+    const firstUpdate = deferred();
+    mockUpdateChapter
+      .mockImplementationOnce(() => firstUpdate.promise)
+      .mockResolvedValueOnce(undefined);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(<BookEditor />);
+    importControl.files = [{ stem: "Failed", extension: ".md", text: "Failed body" }];
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+
+    importControl.files = [{ stem: "Next", extension: ".md", text: "Next body" }];
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+    expect(mockCreateChapter).toHaveBeenCalledTimes(1);
+
+    firstUpdate.reject(new Error("first batch failed"));
+    await act(async () => {
+      await Promise.all(importControl.promises);
+    });
+
+    expect(mockCreateChapter).toHaveBeenCalledTimes(2);
+    expect(mockUpdateChapter).toHaveBeenCalledTimes(2);
+    expect(mockToastError).toHaveBeenCalledTimes(1);
+    expect(displayedTitles()).toEqual([
+      "First|Second|Failed|Next",
+      "First|Second|Failed|Next",
+    ]);
+    consoleError.mockRestore();
+  });
+
+  it("abandons a queued batch when its book is no longer loaded", async () => {
+    const firstUpdate = deferred();
+    mockUpdateChapter
+      .mockImplementationOnce(() => firstUpdate.promise)
+      .mockResolvedValueOnce(undefined);
+
+    render(<BookEditor />);
+    importControl.files = [{ stem: "First import", extension: ".md", text: "First body" }];
+    importControl.target = { id: "chapter-1", placement: "after" };
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+
+    importControl.files = [{ stem: "Stale import", extension: ".md", text: "Stale body" }];
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+    expect(mockCreateChapter).toHaveBeenCalledTimes(1);
+
+    chapterState.currentBookId = "book-2";
+    chapterState.chapters = [
+      { ...buildChapter("other-chapter", "Other book chapter", 0), bookId: "book-2" },
+    ];
+    firstUpdate.resolve();
+    await act(async () => {
+      await Promise.all(importControl.promises);
+    });
+
+    expect(mockCreateChapter).toHaveBeenCalledTimes(1);
+    expect(mockUpdateChapter).toHaveBeenCalledTimes(1);
+    expect(mockReorderChapters).not.toHaveBeenCalled();
+    expect(mockSetCurrentChapter).not.toHaveBeenCalled();
+    expect(mockUpdateBook).not.toHaveBeenCalled();
+  });
+
+  it("finishes content persistence when navigation happens during chapter creation", async () => {
+    const create = deferred<Chapter>();
+    const imported = buildChapter("imported-after-navigation", "Import", 2);
+    mockCreateChapter.mockImplementationOnce(() => create.promise);
+    mockUpdateChapter.mockResolvedValue(undefined);
+
+    render(<BookEditor />);
+    importControl.files = [{ stem: "Import", extension: ".md", text: "Import body" }];
+    importControl.target = { id: "chapter-1", placement: "after" };
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+    expect(mockCreateChapter).toHaveBeenCalledTimes(1);
+
+    chapterState.currentBookId = "book-2";
+    chapterState.chapters = [
+      { ...buildChapter("other-chapter", "Other book chapter", 0), bookId: "book-2" },
+    ];
+    create.resolve(imported);
+    await act(async () => {
+      await importControl.promise;
+    });
+
+    expect(mockUpdateChapter).toHaveBeenCalledWith(imported.id, {
+      content: "<p>Import body</p>",
+    });
+    expect(mockReorderChapters).not.toHaveBeenCalled();
+    expect(mockSetCurrentChapter).not.toHaveBeenCalled();
+    expect(mockUpdateBook).not.toHaveBeenCalled();
+  });
+
+  it("does not select or update the old book when navigation happens during reorder", async () => {
+    const reorder = deferred();
+    mockUpdateChapter.mockResolvedValue(undefined);
+    mockReorderChapters.mockImplementation(() => reorder.promise);
+
+    const { rerender } = render(<BookEditor />);
+    importControl.files = [{ stem: "Import", extension: ".md", text: "Import body" }];
+    importControl.target = { id: "chapter-1", placement: "after" };
+    fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
+    await flush();
+    await flush();
+    expect(mockReorderChapters).toHaveBeenCalledTimes(1);
+
+    chapterState.currentBookId = "book-2";
+    chapterState.chapters = [
+      { ...buildChapter("other-chapter", "Other book chapter", 0), bookId: "book-2" },
+    ];
+    reorder.resolve();
+    await act(async () => {
+      await importControl.promise;
+    });
+    rerender(<BookEditor />);
+
+    expect(mockSetCurrentChapter).not.toHaveBeenCalled();
+    expect(mockUpdateBook).not.toHaveBeenCalled();
+    expect(displayedTitles()).toEqual([
+      "Other book chapter",
+      "Other book chapter",
+    ]);
   });
 });

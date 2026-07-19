@@ -134,6 +134,7 @@ export function BookEditor() {
 
   const chapterPaneRef = useRef<HTMLDivElement | null>(null);
   const mobilePaneRef = useRef<HTMLDivElement | null>(null);
+  const importQueueRef = useRef<Promise<void>>(Promise.resolve());
   const focusModeRef = useRef(focusMode);
   const showSidebarRef = useRef(showSidebar);
   useEffect(() => {
@@ -450,51 +451,71 @@ export function BookEditor() {
   );
 
   const handleImportFiles = useCallback(
-    async (files: DroppedTextFile[], target: ListDropTarget | null) => {
-      if (!bookId || files.length === 0) return;
-      setPreImportChapterIds(chapters.map((chapter) => chapter.id));
-      try {
-        const created: Chapter[] = [];
-        for (const file of files) {
-          const title = file.stem.trim() || "Untitled";
-          const html = droppedTextToEditorHtml(file.text, file.extension);
-          const newChapter = await createChapter({ bookId, title });
-          await updateChapter(newChapter.id, { content: html });
-          created.push({ ...newChapter, content: html });
-        }
-        if (created.length === 0) return;
+    (files: DroppedTextFile[], target: ListDropTarget | null) => {
+      if (!bookId || files.length === 0) return Promise.resolve();
 
-        if (target) {
-          // Fresh order from the store (createChapter appended the new ones).
-          const createdIds = new Set(created.map((c) => c.id));
-          const ids = useChapterStore
-            .getState()
-            .chapters.filter((c) => !createdIds.has(c.id))
-            .map((c) => c.id);
-          const targetIndex = ids.indexOf(target.id);
-          const insertAt =
-            targetIndex === -1
-              ? ids.length
-              : target.placement === "after"
-                ? targetIndex + 1
-                : targetIndex;
-          ids.splice(insertAt, 0, ...created.map((c) => c.id));
-          await reorderChapters(bookId, ids);
-        }
+      const runImport = async () => {
+        const isActiveBook = () => useChapterStore.getState().currentBookId === bookId;
+        const abandonIfStale = () => {
+          if (isActiveBook()) return false;
+          setPreImportChapterIds(null);
+          return true;
+        };
 
-        const lastChapter = created[created.length - 1];
-        setCurrentChapter(lastChapter);
-        updateBook(bookId, { lastChapterId: lastChapter.id });
-        setPreImportChapterIds(null);
-      } catch (error) {
-        setPreImportChapterIds(null);
-        console.error("File import failed:", error);
-        toast.error(t("editor.importMarkdownFailed"));
-      }
+        if (abandonIfStale()) return;
+        setPreImportChapterIds(
+          useChapterStore.getState().chapters.map((chapter) => chapter.id)
+        );
+        try {
+          const created: Chapter[] = [];
+          for (const file of files) {
+            const title = file.stem.trim() || "Untitled";
+            const html = droppedTextToEditorHtml(file.text, file.extension);
+            const newChapter = await createChapter({ bookId, title });
+            await updateChapter(newChapter.id, { content: html });
+            if (abandonIfStale()) return;
+            created.push({ ...newChapter, content: html });
+          }
+          if (created.length === 0) return;
+
+          if (target) {
+            if (abandonIfStale()) return;
+            // Fresh order from the store (createChapter appended the new ones).
+            const createdIds = new Set(created.map((c) => c.id));
+            const ids = useChapterStore
+              .getState()
+              .chapters.filter((c) => !createdIds.has(c.id))
+              .map((c) => c.id);
+            const targetIndex = ids.indexOf(target.id);
+            const insertAt =
+              targetIndex === -1
+                ? ids.length
+                : target.placement === "after"
+                  ? targetIndex + 1
+                  : targetIndex;
+            ids.splice(insertAt, 0, ...created.map((c) => c.id));
+            await reorderChapters(bookId, ids);
+            if (abandonIfStale()) return;
+          }
+
+          if (abandonIfStale()) return;
+          const lastChapter = created[created.length - 1];
+          setCurrentChapter(lastChapter);
+          await updateBook(bookId, { lastChapterId: lastChapter.id });
+          setPreImportChapterIds(null);
+        } catch (error) {
+          setPreImportChapterIds(null);
+          console.error("File import failed:", error);
+          toast.error(t("editor.importMarkdownFailed"));
+        }
+      };
+
+      const queuedImport = importQueueRef.current.then(runImport, runImport);
+      importQueueRef.current = queuedImport.catch(() => {});
+      return queuedImport;
     },
     [
       bookId,
-      chapters,
       createChapter,
       updateChapter,
       reorderChapters,

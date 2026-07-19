@@ -16,6 +16,8 @@ import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { Tooltip } from "@/components/ui";
+import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
+import { toast } from "@/components/ui/Toast";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop } from "react-aria-components/useDragAndDrop";
@@ -29,7 +31,10 @@ interface ChapterListProps {
   onUpdateChapter: (id: string, title: string, type: ChapterType) => void;
   onDeleteChapter: (id: string) => void;
   onReorderChapters: (chapterIds: string[]) => void;
-  onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void;
+  onImportFiles?: (
+    files: DroppedTextFile[],
+    target: ListDropTarget | null,
+  ) => void | Promise<void>;
 }
 
 const CHAPTER_DND_TYPE = "chapter";
@@ -76,10 +81,10 @@ export function ChapterList({
     [],
   );
 
-  const { isDraggingFile } = useTextFileDrop(listContainerRef, {
-    disableWeb: true,
-    onImport: (files, point) => {
-      onImportFilesRef.current?.(files, resolveFileDropTarget(point));
+  const { isDraggingFile, isImportingFiles, dropHandlers } = useTextFileDrop(listContainerRef, {
+    disableWeb: chapters.length > 0,
+    onImport: async (files, point) => {
+      await onImportFilesRef.current?.(files, resolveFileDropTarget(point));
     },
   });
 
@@ -122,6 +127,7 @@ export function ChapterList({
   const chaptersRef = useRef(chapters);
   chaptersRef.current = chapters;
   const activatedKeysRef = useRef(new Set<Key>());
+  const [activeReactAriaImports, setActiveReactAriaImports] = useState(0);
 
   const activateChapter = (key: Key) => {
     if (activatedKeysRef.current.has(key)) return;
@@ -160,18 +166,34 @@ export function ChapterList({
     },
     onInsert: (e) => {
       void (async () => {
-        const files = await readChapterDropItems([...e.items]);
-        if (files.length === 0) return;
-        onImportFilesRef.current?.(files, {
-          id: String(e.target.key),
-          placement: e.target.dropPosition === "after" ? "after" : "before",
-        });
+        setActiveReactAriaImports((active) => active + 1);
+        try {
+          const files = await readChapterDropItems([...e.items]);
+          if (files.length === 0) return;
+          await onImportFilesRef.current?.(files, {
+            id: String(e.target.key),
+            placement: e.target.dropPosition === "after" ? "after" : "before",
+          });
+        } catch (error) {
+          console.error("Failed to import dropped files:", error);
+          toast.error(t("dropImport.importFailed"));
+        } finally {
+          setActiveReactAriaImports((active) => Math.max(0, active - 1));
+        }
       })();
     },
     onRootDrop: (e) => {
       void (async () => {
-        const files = await readChapterDropItems([...e.items]);
-        if (files.length > 0) onImportFilesRef.current?.(files, null);
+        setActiveReactAriaImports((active) => active + 1);
+        try {
+          const files = await readChapterDropItems([...e.items]);
+          if (files.length > 0) await onImportFilesRef.current?.(files, null);
+        } catch (error) {
+          console.error("Failed to import dropped files:", error);
+          toast.error(t("dropImport.importFailed"));
+        } finally {
+          setActiveReactAriaImports((active) => Math.max(0, active - 1));
+        }
       })();
     },
     renderDropIndicator: (target) => (
@@ -326,8 +348,11 @@ export function ChapterList({
       <div
         ref={listContainerRef}
         className={`relative flex-1 overflow-y-auto overflow-x-hidden ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        {...(chapters.length === 0 ? dropHandlers : {})}
       >
+        {(isImportingFiles || activeReactAriaImports > 0) && <FileDropImportStatus />}
         <GridList
+          key={chapters.length === 0 ? "empty" : "populated"}
           aria-label={t("chapters.title")}
           keyboardNavigationBehavior="tab"
           items={chapters}
@@ -348,7 +373,7 @@ export function ChapterList({
           selectionBehavior="replace"
           disallowEmptySelection
           onAction={activateChapter}
-          dragAndDropHooks={dragAndDropHooks}
+          {...(chapters.length > 0 ? { dragAndDropHooks } : {})}
           className="p-2 space-y-1 data-[drop-target]:ring-2 data-[drop-target]:ring-inset data-[drop-target]:ring-primary"
           renderEmptyState={() => (
             <div className="text-center py-8 text-muted-foreground text-sm">

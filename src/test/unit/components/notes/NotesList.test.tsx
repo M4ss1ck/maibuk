@@ -893,6 +893,72 @@ describe("NotesList", () => {
     );
   });
 
+  it("imports a supported file batch into an empty list without a target", async () => {
+    const onImportFiles = vi.fn();
+    render(
+      <NotesList
+        notes={[]}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const file = new File(["# First"], "first.md");
+    const dataTransfer = {
+      files: [file],
+      items: [{ kind: "file", type: file.type }],
+      dropEffect: "",
+    } as unknown as DataTransfer;
+    const container = document.querySelector(".overflow-auto");
+    if (!container) throw new Error("Expected list container to exist");
+
+    dropAt(container, dataTransfer, 20);
+
+    await waitFor(() =>
+      expect(onImportFiles).toHaveBeenCalledWith(
+        [{ text: "# First", stem: "first", extension: ".md" }],
+        null,
+      ),
+    );
+  });
+
+  it("shows import status until note persistence resolves", async () => {
+    let resolveImport: (() => void) | undefined;
+    const onImportFiles = vi.fn(
+      () => new Promise<void>((resolve) => {
+        resolveImport = resolve;
+      }),
+    );
+    render(
+      <NotesList
+        notes={[]}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const file = new File(["draft"], "draft.txt");
+    const dataTransfer = {
+      files: [file],
+      items: [{ kind: "file", type: file.type }],
+      dropEffect: "",
+    } as unknown as DataTransfer;
+    const container = document.querySelector(".overflow-auto");
+    if (!container) throw new Error("Expected list container to exist");
+
+    dropAt(container, dataTransfer, 20);
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    await waitFor(() => expect(onImportFiles).toHaveBeenCalledOnce());
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    resolveImport?.();
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+  });
+
   it("keeps internal reorder separate from file import", () => {
     const onImportFiles = vi.fn();
     const onReorderNotes = vi.fn();

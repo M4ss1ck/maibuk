@@ -11,6 +11,7 @@ const {
   i18nState,
   mockSetChapterListView,
   mockSetShowChapterOutline,
+  mockToastError,
   textFileDropOptions,
 } = vi.hoisted(
   () => ({
@@ -18,9 +19,14 @@ const {
     i18nState: { language: "en" },
     mockSetChapterListView: vi.fn(),
     mockSetShowChapterOutline: vi.fn(),
+    mockToastError: vi.fn(),
     textFileDropOptions: { current: null as Record<string, unknown> | null },
   }),
 );
+
+vi.mock("@/components/ui/Toast", () => ({
+  toast: { error: mockToastError },
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -37,7 +43,22 @@ vi.mock("@/hooks/useTextFileDrop", async (importOriginal) => {
     ...actual,
     useTextFileDrop: (_ref: unknown, options: Record<string, unknown>) => {
       textFileDropOptions.current = options;
-      return { isDraggingFile: false, dropHandlers: {} };
+      return {
+        isDraggingFile: false,
+        isImportingFiles: false,
+        dropHandlers: {
+          onDrop: (event: { preventDefault: () => void }) => {
+            event.preventDefault();
+            return (options.onImport as (
+              files: Array<{ text: string; stem: string; extension: string }>,
+              point: { x: number; y: number },
+            ) => void)(
+              [{ text: "# Empty import", stem: "empty-import", extension: ".md" }],
+              { x: 10, y: 20 },
+            );
+          },
+        },
+      };
     },
   };
 });
@@ -728,6 +749,19 @@ describe("ChapterList", () => {
       expect(screen.getByRole("grid")).toBeInTheDocument();
     });
 
+    it("imports a web file at the root when the chapter list is empty", () => {
+      const onImportFiles = vi.fn();
+      renderCL({ chapters: [], currentChapterId: null, onImportFiles });
+
+      expect(textFileDropOptions.current).toMatchObject({ disableWeb: false });
+      fireEvent.drop(screen.getByRole("grid").parentElement as HTMLElement);
+
+      expect(onImportFiles).toHaveBeenCalledWith(
+        [{ text: "# Empty import", stem: "empty-import", extension: ".md" }],
+        null,
+      );
+    });
+
     it("uses native drop coordinates without rendering a second insertion line", () => {
       const onImportFiles = vi.fn();
       renderCL({ onImportFiles });
@@ -786,6 +820,87 @@ describe("ChapterList", () => {
         });
       },
     );
+
+    it("shows import status until a React Aria file import finishes persisting", async () => {
+      let finishImport: (() => void) | undefined;
+      const onImportFiles = vi.fn(
+        () => new Promise<void>((resolve) => {
+          finishImport = resolve;
+        }),
+      );
+      renderCL({ onImportFiles });
+      const { grid } = mockGridLayout();
+      const dataTransfer = createFileDataTransfer(
+        new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+      );
+
+      dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
+      dispatchDragEvent(grid, "dragover", dataTransfer, 55);
+      dispatchDragEvent(grid, "drop", dataTransfer, 55);
+
+      expect(await screen.findByRole("status")).toHaveTextContent("dropImport.importing");
+      await waitFor(() => expect(onImportFiles).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole("status")).toBeInTheDocument();
+
+      await act(async () => finishImport?.());
+      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+    });
+
+    it("consumes a rejected React Aria import and clears its status with feedback", async () => {
+      const error = new Error("persistence failed");
+      let rejectImport: ((reason: Error) => void) | undefined;
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      const onImportFiles = vi.fn(
+        () => new Promise<void>((_resolve, reject) => {
+          rejectImport = reject;
+        }),
+      );
+      renderCL({ onImportFiles });
+      const { grid } = mockGridLayout();
+      const dataTransfer = createFileDataTransfer(
+        new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+      );
+
+      dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
+      dispatchDragEvent(grid, "dragover", dataTransfer, 55);
+      dispatchDragEvent(grid, "drop", dataTransfer, 55);
+
+      expect(await screen.findByRole("status")).toBeInTheDocument();
+      await waitFor(() => expect(onImportFiles).toHaveBeenCalledTimes(1));
+      await act(async () => rejectImport?.(error));
+      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+      expect(consoleError).toHaveBeenCalledWith("Failed to import dropped files:", error);
+      expect(mockToastError).toHaveBeenCalledWith("dropImport.importFailed");
+      consoleError.mockRestore();
+    });
+
+    it("keeps import status visible until overlapping React Aria imports both finish", async () => {
+      const resolvers: Array<() => void> = [];
+      const onImportFiles = vi.fn(
+        () => new Promise<void>((resolve) => resolvers.push(resolve)),
+      );
+      renderCL({ onImportFiles });
+      const { grid } = mockGridLayout();
+
+      for (const [index, name] of ["first.md", "second.md"].entries()) {
+        const dataTransfer = createFileDataTransfer(
+          new File([`# ${name}`], name, { type: "text/markdown" }),
+        );
+        dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
+        dispatchDragEvent(grid, "dragover", dataTransfer, 55);
+        dispatchDragEvent(grid, "drop", dataTransfer, 55);
+        await waitFor(() => expect(onImportFiles).toHaveBeenCalledTimes(index + 1));
+      }
+
+      expect(onImportFiles).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("status")).toBeInTheDocument();
+
+      await act(async () => resolvers[1]());
+      expect(screen.getByRole("status")).toBeInTheDocument();
+
+      await act(async () => resolvers[0]());
+      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -807,6 +922,32 @@ describe("ChapterList", () => {
   describe("empty state", () => {
     it("shows empty message when no chapters", () => {
       renderCL({ chapters: [] });
+      expect(screen.getByText("chapters.noChapters")).toBeInTheDocument();
+    });
+
+    it("remounts the real GridList when crossing the empty boundary", () => {
+      const props = makeProps({ chapters: [], currentChapterId: null });
+      const view = render(<ChapterList {...props} />);
+
+      expect(screen.getByRole("grid")).toBeInTheDocument();
+      expect(screen.getByText("chapters.noChapters")).toBeInTheDocument();
+
+      expect(() =>
+        view.rerender(
+          <ChapterList
+            {...props}
+            chapters={[defaultChapters[0]]}
+            currentChapterId={defaultChapters[0].id}
+          />,
+        ),
+      ).not.toThrow();
+      expect(screen.getByRole("grid")).toBeInTheDocument();
+      expect(screen.getByRole("row", { name: defaultChapters[0].title })).toBeInTheDocument();
+
+      expect(() =>
+        view.rerender(<ChapterList {...props} chapters={[]} currentChapterId={null} />),
+      ).not.toThrow();
+      expect(screen.getByRole("grid")).toBeInTheDocument();
       expect(screen.getByText("chapters.noChapters")).toBeInTheDocument();
     });
   });

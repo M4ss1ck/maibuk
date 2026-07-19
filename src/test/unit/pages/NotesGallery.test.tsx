@@ -78,7 +78,8 @@ describe("NotesGallery", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     settingsState.setLastNoteId.mockClear();
-    noteState.createNote.mockClear();
+    noteState.createNote.mockReset();
+    noteState.createNote.mockResolvedValue({ id: "n3" });
     noteState.notes = [
       { id: "n1", title: "First", bookId: "book-1", tags: [], content: "" },
       { id: "n2", title: "Second", bookId: null, tags: [], content: "" },
@@ -169,6 +170,63 @@ describe("NotesGallery", () => {
         expect.objectContaining({ title: "b", order: -1 }),
       );
     });
+  });
+
+  it("creates dropped notes when the gallery is empty", async () => {
+    noteState.notes = [];
+    const { container } = render(<NotesGallery />);
+    const dropzone = container.firstElementChild as HTMLElement;
+    const files = [new File(["# A"], "a.md"), new File(["plain"], "b.txt")];
+
+    fireEvent.drop(dropzone, {
+      clientX: 10,
+      clientY: 20,
+      dataTransfer: {
+        files,
+        items: files.map((file) => ({ kind: "file", type: file.type })),
+        dropEffect: "",
+      },
+    });
+
+    await waitFor(() => {
+      expect(noteState.createNote).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ title: "a", order: -2 }),
+      );
+      expect(noteState.createNote).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ title: "b", order: -1 }),
+      );
+    });
+  });
+
+  it("shows import status until dropped-note persistence resolves", async () => {
+    noteState.notes = [];
+    let resolveCreate: ((note: { id: string }) => void) | undefined;
+    noteState.createNote.mockImplementation(
+      () => new Promise<{ id: string }>((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const { container } = render(<NotesGallery />);
+    const dropzone = container.firstElementChild as HTMLElement;
+    const file = new File(["draft"], "draft.txt");
+
+    fireEvent.drop(dropzone, {
+      clientX: 10,
+      clientY: 20,
+      dataTransfer: {
+        files: [file],
+        items: [{ kind: "file", type: file.type }],
+        dropEffect: "",
+      },
+    });
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    await waitFor(() => expect(noteState.createNote).toHaveBeenCalledOnce());
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    resolveCreate?.({ id: "imported" });
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
   it("focuses search with Ctrl+F and opens filters when search is already focused", async () => {

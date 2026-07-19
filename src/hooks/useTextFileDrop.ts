@@ -39,7 +39,7 @@ export interface DropPoint {
 }
 
 export interface TextFileDropOptions {
-  onImport: (files: DroppedTextFile[], point: DropPoint) => void;
+  onImport: (files: DroppedTextFile[], point: DropPoint) => void | Promise<void>;
   onDragMove?: (point: DropPoint | null) => void;
   disableWeb?: boolean;
 }
@@ -49,10 +49,22 @@ export function useTextFileDrop(
   { onImport, onDragMove, disableWeb = false }: TextFileDropOptions,
 ) {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [isImportingFiles, setIsImportingFiles] = useState(false);
+  const activeImportsRef = useRef(0);
   const onImportRef = useRef(onImport);
   onImportRef.current = onImport;
   const onDragMoveRef = useRef(onDragMove);
   onDragMoveRef.current = onDragMove;
+
+  const beginImport = useCallback(() => {
+    activeImportsRef.current += 1;
+    setIsImportingFiles(true);
+  }, []);
+
+  const finishImport = useCallback(() => {
+    activeImportsRef.current = Math.max(0, activeImportsRef.current - 1);
+    setIsImportingFiles(activeImportsRef.current > 0);
+  }, []);
 
   const isInsideContainer = useCallback(
     (clientX: number, clientY: number) => {
@@ -102,9 +114,23 @@ export function useTextFileDrop(
             };
             if (!isInsideContainer(point.x, point.y)) return;
 
+            const hasSupportedPath = payload.paths.some(
+              (path) => textDropExtension(path) !== null,
+            );
+            if (hasSupportedPath) beginImport();
+
             void (async () => {
-              const files = await readDroppedTauriPaths(payload.paths);
-              if (files.length > 0) onImportRef.current(files, point);
+              try {
+                const files = await readDroppedTauriPaths(payload.paths);
+                if (files.length > 0) {
+                  await onImportRef.current(files, point);
+                }
+              } catch (error) {
+                console.error("Failed to import dropped files:", error);
+                toast.error(i18n.t("dropImport.importFailed"));
+              } finally {
+                if (hasSupportedPath) finishImport();
+              }
             })();
             return;
           }
@@ -123,7 +149,7 @@ export function useTextFileDrop(
       cancelled = true;
       unlisten?.();
     };
-  }, [isInsideContainer]);
+  }, [beginImport, finishImport, isInsideContainer]);
 
   const hasFile = (event: DragEvent) =>
     Array.from(event.dataTransfer.items).some((item) => item.kind === "file");
@@ -159,16 +185,33 @@ export function useTextFileDrop(
       setIsDraggingFile(false);
       onDragMoveRef.current?.(null);
       const point = { x: event.clientX, y: event.clientY };
+      const hasSupportedFile = all.some(
+        (file) => textDropExtension(file.name) !== null,
+      );
+      if (hasSupportedFile) beginImport();
 
       void (async () => {
-        const files = await readDroppedWebFiles(all);
-        if (files.length > 0) onImportRef.current(files, point);
+        try {
+          const files = await readDroppedWebFiles(all);
+          if (files.length > 0) {
+            await onImportRef.current(files, point);
+          }
+        } catch (error) {
+          console.error("Failed to import dropped files:", error);
+          toast.error(i18n.t("dropImport.importFailed"));
+        } finally {
+          if (hasSupportedFile) finishImport();
+        }
       })();
     },
-    [disableWeb],
+    [beginImport, disableWeb, finishImport],
   );
 
-  return { isDraggingFile, dropHandlers: { onDragOver, onDragLeave, onDrop } };
+  return {
+    isDraggingFile,
+    isImportingFiles,
+    dropHandlers: { onDragOver, onDragLeave, onDrop },
+  };
 }
 
 /** Reads browser File objects in order; toasts per read failure and when a

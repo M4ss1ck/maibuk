@@ -20,6 +20,7 @@ import { filterNotes, sortNotesBy } from "@/components/notes/notes-list-model";
 import { Button } from "@/components/ui/Button";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { AddIcon, MaibukLogo } from "@/components/icons";
 import { useShortcuts } from "@/lib/shortcuts";
 import { droppedTextToEditorHtml } from "@/features/markdown";
@@ -60,7 +61,7 @@ export function NotesGallery() {
     }
   };
 
-  const { isDraggingFile, dropHandlers } = useTextFileDrop(galleryDropRef, {
+  const { isDraggingFile, isImportingFiles, dropHandlers } = useTextFileDrop(galleryDropRef, {
     onImport: handleImportFiles,
   });
 
@@ -189,6 +190,7 @@ export function NotesGallery() {
       {...dropHandlers}
       className={`p-4 sm:p-8 overflow-auto h-full transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
     >
+      {isImportingFiles && <FileDropImportStatus />}
       <div className="mb-6 grid gap-4 sm:mb-8 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="row-start-1">
           <h1 data-route-heading className="text-xl font-semibold tracking-tight sm:text-2xl">

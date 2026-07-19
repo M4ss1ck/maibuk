@@ -22,7 +22,7 @@ import {
 import type { Book } from "@/features/books/types";
 import type { ReorderNoteItem } from "@/features/notes";
 import { AddIcon } from "@/components/icons/AddIcon";
-import { ResponsiveToggleGroup, Tooltip } from "@/components/ui";
+import { FileDropImportStatus, ResponsiveToggleGroup, Tooltip } from "@/components/ui";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { NoteListItem } from "@/components/notes/NoteListItem";
 import { useTextFileDrop } from "@/hooks/useTextFileDrop";
@@ -66,7 +66,10 @@ interface NotesListProps {
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: NoteWithBook) => void;
   onRenameNote?: (id: string, title: string) => void;
-  onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void;
+  onImportFiles?: (
+    files: DroppedTextFile[],
+    target: ListDropTarget | null,
+  ) => void | Promise<void>;
 }
 
 export function NotesList({
@@ -166,10 +169,10 @@ export function NotesList({
     [viewMode],
   );
 
-  const { isDraggingFile, dropHandlers } = useTextFileDrop(listContainerRef, {
-    onImport: (files, point) => {
+  const { isDraggingFile, isImportingFiles, dropHandlers } = useTextFileDrop(listContainerRef, {
+    onImport: async (files, point) => {
       setDropTarget(null);
-      onImportFiles?.(files, resolveFileDropTarget(point));
+      await onImportFiles?.(files, resolveFileDropTarget(point));
     },
     onDragMove: (point) => {
       const target = resolveFileDropTarget(point);
@@ -614,6 +617,7 @@ export function NotesList({
         className={`flex-1 overflow-auto transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
         {...(onImportFiles ? dropHandlers : {})}
       >
+        {isImportingFiles && <FileDropImportStatus />}
         {filtered.length === 0 &&
         (viewMode !== "tree" || treeGroupMode !== "book" || books.length === 0) ? (
           <div className="text-center py-8 px-4 text-muted-foreground text-sm">

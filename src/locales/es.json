@@ -5,6 +5,8 @@
     "description": "Una aplicación de escritura multiplataforma para autores"
   },
   "dropImport": {
+    "importFailed": "No se pudieron importar los archivos",
+    "importing": "Importando archivos…",
     "readFailed": "No se pudo leer \"{{name}}\"",
     "noSupportedFiles": "No hay archivos de texto compatibles (.md, .markdown, .txt)"
   },

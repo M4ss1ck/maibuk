@@ -264,6 +264,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `TableSizePicker` (reusable 5×5 table-dimension picker)            | `src/components/editor/TableSizePicker.tsx` |
 | `useReadingPositionStore` / `useReadingPosition()`                 | `src/features/reading-position/`           |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
+| `FileDropImportStatus` (localized file-import progress overlay)    | `src/components/ui/FileDropImportStatus.tsx` |
 | `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |
 | `ResponsiveToggleGroup` (measured segmented toggle; labels collapse to icons only when full labels do not fit) | `src/components/ui/ResponsiveToggleGroup.tsx` |
 | `MultiSelectCombobox` (multi-select chips, checkbox dropdown, optional custom values) | `src/components/ui/MultiSelectCombobox.tsx` |

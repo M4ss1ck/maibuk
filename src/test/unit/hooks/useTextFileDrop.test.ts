@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DragEvent } from "react";
 
 vi.mock("../../../lib/platform", () => ({
@@ -36,6 +36,121 @@ function containerRef() {
 }
 
 describe("useTextFileDrop()", () => {
+  beforeEach(() => {
+    toastError.mockClear();
+  });
+
+  it("stays importing until async persistence finishes", async () => {
+    let finishImport: (() => void) | undefined;
+    const persistence = new Promise<void>((resolve) => {
+      finishImport = resolve;
+    });
+    const onImport = vi.fn(() => persistence);
+    const { result } = renderHook(() =>
+      useTextFileDrop(containerRef(), { onImport }),
+    );
+
+    act(() => {
+      result.current.dropHandlers.onDrop(
+        dragEvent([new File(["# Slow"], "slow.md")]),
+      );
+    });
+
+    expect(result.current.isImportingFiles).toBe(true);
+    await waitFor(() => expect(onImport).toHaveBeenCalledOnce());
+    expect(result.current.isImportingFiles).toBe(true);
+
+    await act(async () => {
+      finishImport?.();
+      await persistence;
+    });
+
+    expect(result.current.isImportingFiles).toBe(false);
+  });
+
+  it("stays importing until overlapping drops both finish", async () => {
+    let finishFirst: (() => void) | undefined;
+    let finishSecond: (() => void) | undefined;
+    const first = new Promise<void>((resolve) => {
+      finishFirst = resolve;
+    });
+    const second = new Promise<void>((resolve) => {
+      finishSecond = resolve;
+    });
+    const onImport = vi
+      .fn<() => Promise<void>>()
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second);
+    const { result } = renderHook(() =>
+      useTextFileDrop(containerRef(), { onImport }),
+    );
+
+    act(() => {
+      result.current.dropHandlers.onDrop(
+        dragEvent([new File(["first"], "first.md")]),
+      );
+      result.current.dropHandlers.onDrop(
+        dragEvent([new File(["second"], "second.md")]),
+      );
+    });
+
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(2));
+    expect(result.current.isImportingFiles).toBe(true);
+
+    await act(async () => {
+      finishSecond?.();
+      await second;
+    });
+    expect(result.current.isImportingFiles).toBe(true);
+
+    await act(async () => {
+      finishFirst?.();
+      await first;
+    });
+    expect(result.current.isImportingFiles).toBe(false);
+  });
+
+  it("toasts a general error and resets when persistence rejects", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onImport = vi.fn().mockRejectedValue(new Error("database failed"));
+    const { result } = renderHook(() =>
+      useTextFileDrop(containerRef(), { onImport }),
+    );
+
+    act(() => {
+      result.current.dropHandlers.onDrop(
+        dragEvent([new File(["content"], "chapter.md")]),
+      );
+    });
+
+    expect(result.current.isImportingFiles).toBe(true);
+    await waitFor(() => expect(result.current.isImportingFiles).toBe(false));
+    expect(toastError).toHaveBeenCalledWith("Could not import dropped files");
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("preserves the per-file toast and resets when reading a file fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const file = new File(["content"], "broken.md");
+    vi.spyOn(file, "text").mockRejectedValue(new Error("read failed"));
+    const onImport = vi.fn();
+    const { result } = renderHook(() =>
+      useTextFileDrop(containerRef(), { onImport }),
+    );
+
+    act(() => {
+      result.current.dropHandlers.onDrop(dragEvent([file]));
+    });
+
+    expect(result.current.isImportingFiles).toBe(true);
+    await waitFor(() => expect(result.current.isImportingFiles).toBe(false));
+    expect(toastError).toHaveBeenCalledWith('Could not read "broken.md"');
+    expect(toastError).not.toHaveBeenCalledWith("Could not import dropped files");
+    expect(onImport).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it("reads all supported dropped files in order, batched, with the drop point", async () => {
     const onImport = vi.fn();
     const { result } = renderHook(() =>
@@ -76,6 +191,7 @@ describe("useTextFileDrop()", () => {
     });
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(result.current.isImportingFiles).toBe(false);
     expect(onImport).not.toHaveBeenCalled();
   });
 
