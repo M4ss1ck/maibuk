@@ -36,6 +36,7 @@ export interface RichTextExtensionsOptions {
   footnoteStartIndex?: number;
   spellCheck?: { enabled: boolean; language: Language };
   autoClose?: boolean;
+  dropcursor?: boolean;
 }
 
 /**
@@ -49,6 +50,7 @@ export function createRichTextExtensions({
   footnoteStartIndex = 1,
   spellCheck,
   autoClose = false,
+  dropcursor = true,
 }: RichTextExtensionsOptions = {}): Extensions {
   return [
     StarterKit.configure({
@@ -58,6 +60,7 @@ export function createRichTextExtensions({
       codeBlock: false,
       italic: false,
       code: false,
+      dropcursor: dropcursor ? {} : false,
     }),
     CodeBlockWithCopy,
     CustomCode,

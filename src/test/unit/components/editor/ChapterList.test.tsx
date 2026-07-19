@@ -1,17 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
-import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { buildChapter } from "@/test/support/fixtures";
 import type { Chapter } from "@/features/chapters/types";
 import type { DropItem } from "react-aria-components/useDragAndDrop";
 
-const { storeState, i18nState, mockSetChapterListView, mockSetShowChapterOutline } = vi.hoisted(
+const {
+  storeState,
+  i18nState,
+  mockSetChapterListView,
+  mockSetShowChapterOutline,
+  textFileDropOptions,
+} = vi.hoisted(
   () => ({
     storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
     i18nState: { language: "en" },
     mockSetChapterListView: vi.fn(),
     mockSetShowChapterOutline: vi.fn(),
+    textFileDropOptions: { current: null as Record<string, unknown> | null },
   }),
 );
 
@@ -28,7 +35,10 @@ vi.mock("@/hooks/useTextFileDrop", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/hooks/useTextFileDrop")>();
   return {
     ...actual,
-    useTextFileDrop: () => ({ isDraggingFile: false, dropHandlers: {} }),
+    useTextFileDrop: (_ref: unknown, options: Record<string, unknown>) => {
+      textFileDropOptions.current = options;
+      return { isDraggingFile: false, dropHandlers: {} };
+    },
   };
 });
 
@@ -204,6 +214,26 @@ function createDataTransfer(): DataTransfer {
   } as DataTransfer;
 }
 
+function createFileDataTransfer(file: File): DataTransfer {
+  const item = {
+    kind: "file",
+    type: file.type,
+    getAsFile: () => file,
+  } as DataTransferItem;
+
+  return {
+    dropEffect: "none",
+    effectAllowed: "all",
+    files: [file] as unknown as FileList,
+    items: [item] as unknown as DataTransferItemList,
+    types: ["Files"],
+    clearData() {},
+    getData: () => "",
+    setData() {},
+    setDragImage() {},
+  } as DataTransfer;
+}
+
 function mockRect(element: HTMLElement, top: number, bottom: number) {
   vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
     top,
@@ -249,6 +279,7 @@ describe("ChapterList", () => {
     storeState.chapterListView = "normal";
     storeState.showChapterOutline = false;
     i18nState.language = "en";
+    textFileDropOptions.current = null;
   });
 
   // ---------------------------------------------------------------------------
@@ -696,6 +727,65 @@ describe("ChapterList", () => {
       renderCL({ onImportFiles: vi.fn() });
       expect(screen.getByRole("grid")).toBeInTheDocument();
     });
+
+    it("uses native drop coordinates without rendering a second insertion line", () => {
+      const onImportFiles = vi.fn();
+      renderCL({ onImportFiles });
+      const grid = screen.getByRole("grid");
+      const rows = screen.getAllByRole("row");
+      mockRect(grid.parentElement as HTMLElement, 0, 140);
+      rows.forEach((row, index) => {
+        mockRect(row, index * 50, index * 50 + 40);
+      });
+
+      expect(textFileDropOptions.current).toMatchObject({ disableWeb: true });
+      expect(textFileDropOptions.current).not.toHaveProperty("onDragMove");
+      expect(screen.queryByTestId("chapter-file-drop-line")).not.toBeInTheDocument();
+
+      const files = [{ text: "# Imported", stem: "imported", extension: ".md" }];
+      act(() => {
+        const onImport = textFileDropOptions.current?.onImport as
+          | ((droppedFiles: typeof files, point: { x: number; y: number }) => void)
+          | undefined;
+        onImport?.(files, { x: 10, y: 75 });
+      });
+
+      expect(onImportFiles).toHaveBeenCalledWith(files, { id: "ch-2", placement: "after" });
+    });
+
+    it.each([
+      { clientY: 55, placement: "before" as const },
+      { clientY: 85, placement: "after" as const },
+    ])(
+      "renders one React Aria divider and imports $placement the hovered row",
+      async ({ clientY, placement }) => {
+        const onImportFiles = vi.fn();
+        renderCL({ onImportFiles });
+        const { grid } = mockGridLayout();
+        const dataTransfer = createFileDataTransfer(
+          new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+        );
+
+        dispatchDragEvent(grid, "dragenter", dataTransfer, clientY);
+        dispatchDragEvent(grid, "dragover", dataTransfer, clientY);
+
+        await waitFor(() => {
+          const indicators = document.querySelectorAll("[data-drop-target]");
+          expect(indicators).toHaveLength(1);
+          expect(indicators[0]).toHaveClass("h-0.5", "bg-primary");
+        });
+        expect(screen.queryByTestId("chapter-file-drop-line")).not.toBeInTheDocument();
+
+        dispatchDragEvent(grid, "drop", dataTransfer, clientY);
+
+        await waitFor(() => {
+          expect(onImportFiles).toHaveBeenCalledWith(
+            [expect.objectContaining({ text: "# Imported", stem: "imported" })],
+            { id: "ch-2", placement },
+          );
+        });
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------

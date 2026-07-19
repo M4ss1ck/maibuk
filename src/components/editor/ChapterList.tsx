@@ -66,7 +66,6 @@ export function ChapterList({
   const listContainerRef = useRef<HTMLDivElement>(null);
   const onImportFilesRef = useRef(onImportFiles);
   onImportFilesRef.current = onImportFiles;
-  const [fileDropLine, setFileDropLine] = useState<number | null>(null);
 
   const resolveFileDropTarget = useCallback(
     (point: DropPoint | null): ListDropTarget | null => {
@@ -80,25 +79,7 @@ export function ChapterList({
   const { isDraggingFile } = useTextFileDrop(listContainerRef, {
     disableWeb: true,
     onImport: (files, point) => {
-      setFileDropLine(null);
       onImportFilesRef.current?.(files, resolveFileDropTarget(point));
-    },
-    onDragMove: (point) => {
-      const container = listContainerRef.current;
-      const target = point ? resolveFileDropTarget(point) : null;
-      if (!container || !target) {
-        setFileDropLine(null);
-        return;
-      }
-      const row = container.querySelector<HTMLElement>(`[data-key="${target.id}"]`);
-      if (!row) {
-        setFileDropLine(null);
-        return;
-      }
-      const rowRect = row.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      const edge = target.placement === "before" ? rowRect.top : rowRect.bottom;
-      setFileDropLine(edge - containerRect.top + container.scrollTop);
     },
   });
 
@@ -346,13 +327,6 @@ export function ChapterList({
         ref={listContainerRef}
         className={`relative flex-1 overflow-y-auto overflow-x-hidden ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
       >
-        {fileDropLine !== null && (
-          <div
-            data-testid="chapter-file-drop-line"
-            className="pointer-events-none absolute left-2 right-2 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
-            style={{ top: `${fileDropLine}px` }}
-          />
-        )}
         <GridList
           aria-label={t("chapters.title")}
           keyboardNavigationBehavior="tab"

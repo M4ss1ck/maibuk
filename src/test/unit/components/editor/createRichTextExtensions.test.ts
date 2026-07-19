@@ -33,6 +33,20 @@ describe("createRichTextExtensions", () => {
     expect(names).not.toContain("spellCheck");
   });
 
+  it("leaves the StarterKit drop cursor enabled by default", () => {
+    const starterKit = createRichTextExtensions().find(
+      (extension) => extension.name === "starterKit"
+    );
+    expect(starterKit?.options.dropcursor).toEqual({});
+  });
+
+  it("disables the StarterKit drop cursor when requested", () => {
+    const starterKit = createRichTextExtensions({ dropcursor: false }).find(
+      (extension) => extension.name === "starterKit"
+    );
+    expect(starterKit?.options.dropcursor).toBe(false);
+  });
+
   it("configures the paste handler with the provided markdown callback", () => {
     const onMarkdownPaste = vi.fn();
     const extensions = createRichTextExtensions({ onMarkdownPaste });

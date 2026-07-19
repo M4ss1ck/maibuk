@@ -115,6 +115,7 @@ export function BookEditor() {
   const [showVersionPanel, setShowVersionPanel] = useState(false);
   const [showSaveVersionDialog, setShowSaveVersionDialog] = useState(false);
   const [saveVersionName, setSaveVersionName] = useState("");
+  const [preImportChapterIds, setPreImportChapterIds] = useState<string[] | null>(null);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
@@ -171,6 +172,11 @@ export function BookEditor() {
     () => allNotes.filter((note) => note.bookId === bookId),
     [allNotes, bookId]
   );
+  const displayedChapters = useMemo(() => {
+    if (preImportChapterIds === null) return chapters;
+    const visibleIds = new Set(preImportChapterIds);
+    return chapters.filter((chapter) => visibleIds.has(chapter.id));
+  }, [chapters, preImportChapterIds]);
 
   useEffect(() => {
     if (showNotesChapter && bookSidePanelTab === "notes") void loadNotes();
@@ -445,7 +451,8 @@ export function BookEditor() {
 
   const handleImportFiles = useCallback(
     async (files: DroppedTextFile[], target: ListDropTarget | null) => {
-      if (!bookId) return;
+      if (!bookId || files.length === 0) return;
+      setPreImportChapterIds(chapters.map((chapter) => chapter.id));
       try {
         const created: Chapter[] = [];
         for (const file of files) {
@@ -478,12 +485,23 @@ export function BookEditor() {
         const lastChapter = created[created.length - 1];
         setCurrentChapter(lastChapter);
         updateBook(bookId, { lastChapterId: lastChapter.id });
+        setPreImportChapterIds(null);
       } catch (error) {
+        setPreImportChapterIds(null);
         console.error("File import failed:", error);
         toast.error(t("editor.importMarkdownFailed"));
       }
     },
-    [bookId, createChapter, updateChapter, reorderChapters, setCurrentChapter, updateBook, t]
+    [
+      bookId,
+      chapters,
+      createChapter,
+      updateChapter,
+      reorderChapters,
+      setCurrentChapter,
+      updateBook,
+      t,
+    ]
   );
 
   const handleDeleteChapter = useCallback(
@@ -746,7 +764,7 @@ export function BookEditor() {
               <CloseIcon className="w-5 h-5" />
             </button>
             <ChapterList
-              chapters={chapters}
+              chapters={displayedChapters}
               currentChapterId={currentChapter?.id ?? null}
               editor={tocEditor}
               onSelectChapter={(chapter) => {
@@ -773,7 +791,7 @@ export function BookEditor() {
             }}
           >
             <ChapterList
-              chapters={chapters}
+              chapters={displayedChapters}
               currentChapterId={currentChapter?.id ?? null}
               editor={tocEditor}
               onSelectChapter={handleSelectChapter}

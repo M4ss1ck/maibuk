@@ -33,6 +33,7 @@ import { buildDropHtml } from "@/components/editor/file-drop-html";
 import { textDropExtension } from "@/features/markdown/dropped-file";
 import { readDroppedWebFiles } from "@/hooks/useTextFileDrop";
 import { useEditorFileDrop } from "@/components/editor/useEditorFileDrop";
+import { IS_TAURI } from "@/lib/platform";
 
 /**
  * How many recent editor emissions to retain for stale-echo detection. The
@@ -191,6 +192,7 @@ export function Editor({
         footnoteStartIndex,
         spellCheck: { enabled: spellCheckEnabled, language: activeSpellCheckLanguage },
         autoClose: editorAutoClose,
+        dropcursor: !IS_TAURI,
       }),
       Placeholder.configure({
         placeholder,
