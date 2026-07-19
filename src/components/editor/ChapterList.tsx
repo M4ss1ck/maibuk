@@ -344,7 +344,7 @@ export function ChapterList({
       {/* Chapter list */}
       <div
         ref={listContainerRef}
-        className={`relative flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        className={`relative flex-1 overflow-y-auto overflow-x-hidden ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
       >
         {fileDropLine !== null && (
           <div
@@ -469,7 +469,7 @@ export function ChapterList({
                           <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
                         </AriaButton>
 
-                        <div className={`flex-1 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}>
+                        <div className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}>
                           {/* Title line: icon, title, inline edit/delete actions */}
                           <div className="flex min-w-0 items-center gap-2">
                             <ChapterIcon
