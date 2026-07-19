@@ -478,6 +478,21 @@ describe("ChapterList", () => {
 
   // ---------------------------------------------------------------------------
   describe("Tab navigation to nested controls", () => {
+    it("lets the title use the action area until the overlay is revealed", () => {
+      const chapters = [
+        buildChapter({ id: "ch-1", title: "A very long chapter title", order: 1 }),
+      ];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      const title = screen.getByText("A very long chapter title");
+      const actions = screen.getByRole("button", { name: "chapters.editChapter" }).parentElement;
+
+      expect(title).toHaveClass("w-full", "truncate");
+      expect(title.parentElement).toHaveClass("flex-1", "relative");
+      expect(actions).toHaveClass("absolute", "rounded-md", "opacity-0", "transition-opacity");
+      expect(actions).not.toHaveClass("pl-3");
+    });
+
     it("Tab reaches drag handle, edit, delete, and outline controls", async () => {
       const user = userEvent.setup();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
@@ -674,13 +689,15 @@ describe("ChapterList", () => {
       renderCL();
       const activeRow = screen.getAllByRole("row")[0];
       expect(activeRow).toHaveClass("bg-primary/10", "border-l-2", "border-primary");
-      expect(screen.getByText("Chapter 1").parentElement?.parentElement).toHaveClass("p-3");
+      expect(
+        screen.getByText("Chapter 1").parentElement?.parentElement?.parentElement,
+      ).toHaveClass("p-3");
     });
 
     it("preserves compact density", () => {
       storeState.chapterListView = "compact";
       renderCL();
-      expect(screen.getByText("Chapter 1").parentElement?.parentElement).toHaveClass(
+      expect(screen.getByText("Chapter 1").parentElement?.parentElement?.parentElement).toHaveClass(
         "px-2",
         "py-1.5"
       );

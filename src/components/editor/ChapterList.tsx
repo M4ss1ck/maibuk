@@ -413,8 +413,8 @@ export function ChapterList({
                 <div
                   className={
                     isActive && showChapterOutline
-                      ? "sticky top-0 z-10 rounded backdrop-blur-sm"
-                      : ""
+                      ? "sticky top-0 z-10 rounded bg-inherit backdrop-blur-sm"
+                      : "bg-inherit"
                   }
                 >
                   {/* Edit form overlay */}
@@ -470,44 +470,46 @@ export function ChapterList({
 
                         <div className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}>
                           {/* Title line: icon, title, inline edit/delete actions */}
-                          <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex min-w-0 items-center gap-2 bg-inherit">
                             <ChapterIcon
                               className={`shrink-0 text-muted-foreground ${
                                 isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
                               }`}
                             />
-                            <span
-                              className={`flex-1 min-w-0 truncate font-medium ${
-                                isCompactView ? "text-xs" : "text-sm"
-                              }`}
-                            >
-                              {chapter.title}
-                            </span>
+                            <span className="relative min-w-0 flex-1 bg-inherit">
+                              <span
+                                className={`block w-full truncate font-medium ${
+                                  isCompactView ? "text-xs" : "text-sm"
+                                }`}
+                              >
+                                {chapter.title}
+                              </span>
 
-                            {/* Edit/Delete - revealed on hover and focus */}
-                            <span className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                              <Tooltip content={t("chapters.editChapter")}>
-                                <AriaButton
-                                  onPress={() => startEditing(chapter)}
-                                  className="p-1 hover:bg-muted rounded transition-colors"
-                                  aria-label={t("chapters.editChapter")}
-                                >
-                                  <EditIcon className="w-4 h-4 text-foreground" />
-                                </AriaButton>
-                              </Tooltip>
-                              <Tooltip content={t("chapters.deleteChapter")}>
-                                <AriaButton
-                                  ref={(element) => {
-                                    if (element) deleteButtonRefs.current.set(chapter.id, element);
-                                    else deleteButtonRefs.current.delete(chapter.id);
-                                  }}
-                                  onPress={() => setDeleteConfirmId(chapter.id)}
-                                  className="p-1 hover:bg-destructive/10 rounded transition-colors"
-                                  aria-label={t("chapters.deleteChapter")}
-                                >
-                                  <DeleteIcon className="w-4 h-4 text-destructive" />
-                                </AriaButton>
-                              </Tooltip>
+                              {/* Edit/Delete overlay the full-width title without causing hover reflow. */}
+                              <span className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                                <Tooltip content={t("chapters.editChapter")}>
+                                  <AriaButton
+                                    onPress={() => startEditing(chapter)}
+                                    className="p-1 hover:bg-muted rounded transition-colors"
+                                    aria-label={t("chapters.editChapter")}
+                                  >
+                                    <EditIcon className="w-4 h-4 text-foreground" />
+                                  </AriaButton>
+                                </Tooltip>
+                                <Tooltip content={t("chapters.deleteChapter")}>
+                                  <AriaButton
+                                    ref={(element) => {
+                                      if (element) deleteButtonRefs.current.set(chapter.id, element);
+                                      else deleteButtonRefs.current.delete(chapter.id);
+                                    }}
+                                    onPress={() => setDeleteConfirmId(chapter.id)}
+                                    className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                                    aria-label={t("chapters.deleteChapter")}
+                                  >
+                                    <DeleteIcon className="w-4 h-4 text-destructive" />
+                                  </AriaButton>
+                                </Tooltip>
+                              </span>
                             </span>
 
                             {/* Compact view has no metadata line: keep the toggle here */}
