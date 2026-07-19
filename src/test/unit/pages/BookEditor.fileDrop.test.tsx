@@ -212,7 +212,7 @@ describe("BookEditor file-drop imports", () => {
     });
   });
 
-  it("keeps positional imports hidden until their final persisted order is ready", async () => {
+  it("reveals positional imports as each chapter is created in its final list position", async () => {
     const firstUpdate = deferred();
     const secondUpdate = deferred();
     const reorder = deferred();
@@ -242,7 +242,7 @@ describe("BookEditor file-drop imports", () => {
       "Second",
       "Alpha",
     ]);
-    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+    expect(displayedTitles()).toEqual(["First|Alpha|Second", "First|Alpha|Second"]);
 
     firstUpdate.resolve();
     await flush();
@@ -253,7 +253,10 @@ describe("BookEditor file-drop imports", () => {
       "Alpha",
       "Beta",
     ]);
-    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+    expect(displayedTitles()).toEqual([
+      "First|Alpha|Beta|Second",
+      "First|Alpha|Beta|Second",
+    ]);
 
     secondUpdate.resolve();
     await flush();
@@ -264,7 +267,10 @@ describe("BookEditor file-drop imports", () => {
       "imported-2",
       "chapter-2",
     ]);
-    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+    expect(displayedTitles()).toEqual([
+      "First|Alpha|Beta|Second",
+      "First|Alpha|Beta|Second",
+    ]);
 
     reorder.resolve();
     await act(async () => {
@@ -277,7 +283,7 @@ describe("BookEditor file-drop imports", () => {
     ]);
   });
 
-  it("keeps append imports hidden through content population, then reveals them appended", async () => {
+  it("reveals append imports while their content is still being populated", async () => {
     const update = deferred();
     mockUpdateChapter.mockImplementation(() => update.promise);
     importControl.files = [
@@ -288,7 +294,7 @@ describe("BookEditor file-drop imports", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
     await flush();
     rerender(<BookEditor />);
-    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+    expect(displayedTitles()).toEqual(["First|Second|Append", "First|Second|Append"]);
 
     update.resolve();
     await act(async () => {
@@ -299,7 +305,7 @@ describe("BookEditor file-drop imports", () => {
     expect(displayedTitles()).toEqual(["First|Second|Append", "First|Second|Append"]);
   });
 
-  it("clears the snapshot after failure so the persisted chapter list is not frozen", async () => {
+  it("keeps a created chapter visible after its content import fails", async () => {
     const error = new Error("content update failed");
     const update = deferred();
     mockUpdateChapter.mockImplementation(() => update.promise);
@@ -312,7 +318,7 @@ describe("BookEditor file-drop imports", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
     await flush();
     rerender(<BookEditor />);
-    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+    expect(displayedTitles()).toEqual(["First|Second|Failed", "First|Second|Failed"]);
 
     update.reject(error);
     await act(async () => {
@@ -371,7 +377,7 @@ describe("BookEditor file-drop imports", () => {
     expect(mockUpdateChapter).toHaveBeenCalledTimes(1);
     expect(mockReorderChapters).not.toHaveBeenCalled();
     expect(secondSettled).toBe(false);
-    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+    expect(displayedTitles()).toEqual(["First|Alpha|Second", "First|Alpha|Second"]);
 
     secondUpdate.resolve();
     firstUpdate.resolve();
@@ -380,7 +386,7 @@ describe("BookEditor file-drop imports", () => {
     expect(mockReorderChapters).toHaveBeenCalledTimes(1);
     expect(mockCreateChapter).toHaveBeenCalledTimes(1);
     expect(secondSettled).toBe(false);
-    expect(displayedTitles()).toEqual(["First|Second", "First|Second"]);
+    expect(displayedTitles()).toEqual(["First|Alpha|Second", "First|Alpha|Second"]);
 
     firstReorder.resolve();
     await flush();
@@ -391,8 +397,8 @@ describe("BookEditor file-drop imports", () => {
     expect(mockReorderChapters).toHaveBeenCalledTimes(2);
     expect(secondSettled).toBe(false);
     expect(displayedTitles()).toEqual([
-      "First|Alpha|Second",
-      "First|Alpha|Second",
+      "First|Alpha|Beta|Second",
+      "First|Alpha|Beta|Second",
     ]);
 
     secondReorder.resolve();

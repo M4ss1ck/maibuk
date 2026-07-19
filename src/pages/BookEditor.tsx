@@ -115,7 +115,10 @@ export function BookEditor() {
   const [showVersionPanel, setShowVersionPanel] = useState(false);
   const [showSaveVersionDialog, setShowSaveVersionDialog] = useState(false);
   const [saveVersionName, setSaveVersionName] = useState("");
-  const [preImportChapterIds, setPreImportChapterIds] = useState<string[] | null>(null);
+  const [chapterImportPreview, setChapterImportPreview] = useState<{
+    existingIds: string[];
+    target: ListDropTarget | null;
+  } | null>(null);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
@@ -174,10 +177,24 @@ export function BookEditor() {
     [allNotes, bookId]
   );
   const displayedChapters = useMemo(() => {
-    if (preImportChapterIds === null) return chapters;
-    const visibleIds = new Set(preImportChapterIds);
-    return chapters.filter((chapter) => visibleIds.has(chapter.id));
-  }, [chapters, preImportChapterIds]);
+    if (chapterImportPreview === null) return chapters;
+
+    const existingIds = new Set(chapterImportPreview.existingIds);
+    const existingChapters = chapters.filter((chapter) => existingIds.has(chapter.id));
+    const importedChapters = chapters.filter((chapter) => !existingIds.has(chapter.id));
+    const targetIndex = chapterImportPreview.target
+      ? existingChapters.findIndex((chapter) => chapter.id === chapterImportPreview.target?.id)
+      : -1;
+    const insertAt =
+      targetIndex === -1
+        ? existingChapters.length
+        : chapterImportPreview.target?.placement === "after"
+          ? targetIndex + 1
+          : targetIndex;
+
+    existingChapters.splice(insertAt, 0, ...importedChapters);
+    return existingChapters;
+  }, [chapters, chapterImportPreview]);
 
   useEffect(() => {
     if (showNotesChapter && bookSidePanelTab === "notes") void loadNotes();
@@ -458,14 +475,15 @@ export function BookEditor() {
         const isActiveBook = () => useChapterStore.getState().currentBookId === bookId;
         const abandonIfStale = () => {
           if (isActiveBook()) return false;
-          setPreImportChapterIds(null);
+          setChapterImportPreview(null);
           return true;
         };
 
         if (abandonIfStale()) return;
-        setPreImportChapterIds(
-          useChapterStore.getState().chapters.map((chapter) => chapter.id)
-        );
+        setChapterImportPreview({
+          existingIds: useChapterStore.getState().chapters.map((chapter) => chapter.id),
+          target,
+        });
         try {
           const created: Chapter[] = [];
           for (const file of files) {
@@ -502,9 +520,9 @@ export function BookEditor() {
           const lastChapter = created[created.length - 1];
           setCurrentChapter(lastChapter);
           await updateBook(bookId, { lastChapterId: lastChapter.id });
-          setPreImportChapterIds(null);
+          setChapterImportPreview(null);
         } catch (error) {
-          setPreImportChapterIds(null);
+          setChapterImportPreview(null);
           console.error("File import failed:", error);
           toast.error(t("editor.importMarkdownFailed"));
         }
