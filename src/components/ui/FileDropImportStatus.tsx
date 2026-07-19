@@ -7,7 +7,7 @@ export function FileDropImportStatus() {
   return (
     <div className="pointer-events-none sticky top-0 z-10 flex h-0 justify-center overflow-visible">
       <div
-        className="mt-3 flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-foreground shadow-lg"
+        className="mt-3 flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm text-foreground shadow-lg min-h-8"
         role="status"
         aria-live="polite"
       >
