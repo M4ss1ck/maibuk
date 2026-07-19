@@ -6,6 +6,12 @@ import { useSettingsStore } from "@/features/settings/store";
 import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
 
+vi.mock("../../../../lib/platform", () => ({
+  IS_TAURI: false,
+  getFileSystem: vi.fn(),
+  getOS: vi.fn(async () => ({ locale: vi.fn(async () => "en") })),
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, params?: { count?: number }) => {
@@ -86,8 +92,7 @@ function buildBook(overrides: Partial<Book>): Book {
 }
 
 function setRowRect(row: Element, rect: Pick<DOMRect, "top" | "bottom" | "height">) {
-  void row;
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+  row.getBoundingClientRect = () => ({
     top: rect.top,
     bottom: rect.bottom,
     left: 0,
@@ -97,12 +102,21 @@ function setRowRect(row: Element, rect: Pick<DOMRect, "top" | "bottom" | "height
     x: 0,
     y: rect.top,
     toJSON: () => ({}),
-  } as DOMRect);
+  }) as DOMRect;
 }
 
 function dragOverAt(target: Element, dataTransfer: DataTransfer, clientY: number) {
   const event = createEvent.dragOver(target, { dataTransfer });
   Object.defineProperty(event, "clientY", { value: clientY });
+  fireEvent(target, event);
+}
+
+function dropAt(target: Element, dataTransfer: DataTransfer, clientY: number) {
+  const event = createEvent.drop(target, { dataTransfer });
+  Object.defineProperties(event, {
+    clientX: { value: 5 },
+    clientY: { value: clientY },
+  });
   fireEvent(target, event);
 }
 
@@ -807,6 +821,179 @@ describe("NotesList", () => {
     dragOverAt(activeTarget, dataTransfer, 130);
 
     expect(screen.getByTestId("note-drop-indicator-after-a")).toBeInTheDocument();
+  });
+
+  it("shows the insertion indicator for a file drag over a note row", () => {
+    const notes = [
+      buildNote({ id: "a", title: "Alpha", order: 0 }),
+      buildNote({ id: "b", title: "Bravo", order: 1 }),
+    ];
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onImportFiles={vi.fn()}
+      />,
+    );
+    const target = screen.getByText("Bravo").closest("[data-note-row]");
+    if (!target) throw new Error("Expected note row to exist");
+    setRowRect(target, { top: 100, bottom: 140, height: 40 });
+    const file = new File(["# Bravo"], "bravo.md");
+    const dataTransfer = {
+      files: [file],
+      items: [{ kind: "file", type: file.type }],
+      dropEffect: "",
+    } as unknown as DataTransfer;
+
+    const container = document.querySelector(".overflow-auto");
+    if (!container) throw new Error("Expected list container to exist");
+    dragOverAt(container, dataTransfer, 110);
+
+    expect(screen.getByTestId("note-drop-indicator-before-b")).toBeInTheDocument();
+  });
+
+  it("imports a file batch at the indicated note position", async () => {
+    const onImportFiles = vi.fn();
+    const notes = [
+      buildNote({ id: "a", title: "Alpha", order: 0 }),
+      buildNote({ id: "b", title: "Bravo", order: 1 }),
+    ];
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const target = screen.getByText("Bravo").closest("[data-note-row]");
+    if (!target) throw new Error("Expected note row to exist");
+    setRowRect(target, { top: 100, bottom: 140, height: 40 });
+    const file = new File(["# Bravo"], "bravo.md");
+    const dataTransfer = {
+      files: [file],
+      items: [{ kind: "file", type: file.type }],
+      dropEffect: "",
+    } as unknown as DataTransfer;
+
+    const container = document.querySelector(".overflow-auto");
+    if (!container) throw new Error("Expected list container to exist");
+    dropAt(container, dataTransfer, 110);
+
+    await waitFor(() =>
+      expect(onImportFiles).toHaveBeenCalledWith(
+        [{ text: "# Bravo", stem: "bravo", extension: ".md" }],
+        { id: "b", placement: "before" },
+      ),
+    );
+  });
+
+  it("imports a supported file batch into an empty list without a target", async () => {
+    const onImportFiles = vi.fn();
+    render(
+      <NotesList
+        notes={[]}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const file = new File(["# First"], "first.md");
+    const dataTransfer = {
+      files: [file],
+      items: [{ kind: "file", type: file.type }],
+      dropEffect: "",
+    } as unknown as DataTransfer;
+    const container = document.querySelector(".overflow-auto");
+    if (!container) throw new Error("Expected list container to exist");
+
+    dropAt(container, dataTransfer, 20);
+
+    await waitFor(() =>
+      expect(onImportFiles).toHaveBeenCalledWith(
+        [{ text: "# First", stem: "first", extension: ".md" }],
+        null,
+      ),
+    );
+  });
+
+  it("shows import status until note persistence resolves", async () => {
+    let resolveImport: (() => void) | undefined;
+    const onImportFiles = vi.fn(
+      () => new Promise<void>((resolve) => {
+        resolveImport = resolve;
+      }),
+    );
+    render(
+      <NotesList
+        notes={[]}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const file = new File(["draft"], "draft.txt");
+    const dataTransfer = {
+      files: [file],
+      items: [{ kind: "file", type: file.type }],
+      dropEffect: "",
+    } as unknown as DataTransfer;
+    const container = document.querySelector(".overflow-auto");
+    if (!container) throw new Error("Expected list container to exist");
+
+    dropAt(container, dataTransfer, 20);
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    await waitFor(() => expect(onImportFiles).toHaveBeenCalledOnce());
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    resolveImport?.();
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+  });
+
+  it("keeps internal reorder separate from file import", () => {
+    const onImportFiles = vi.fn();
+    const onReorderNotes = vi.fn();
+    const notes = [
+      buildNote({ id: "a", title: "Alpha", order: 0 }),
+      buildNote({ id: "b", title: "Bravo", order: 1 }),
+    ];
+    render(
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={onReorderNotes}
+        onImportFiles={onImportFiles}
+      />,
+    );
+    const source = screen.getByText("Alpha").closest("[data-note-row]");
+    const target = screen.getByText("Bravo").closest("[data-note-row]");
+    if (!source || !target) throw new Error("Expected note rows to exist");
+    const dataTransfer = {
+      files: [],
+      items: [],
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn(),
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(source, { dataTransfer });
+    setRowRect(target, { top: 100, bottom: 140, height: 40 });
+    dragOverAt(target, dataTransfer, 110);
+    fireEvent.drop(target, { dataTransfer });
+
+    expect(onReorderNotes).toHaveBeenCalled();
+    expect(onImportFiles).not.toHaveBeenCalled();
   });
 
   it("unpins a pinned note when dropped on the all-notes section", () => {

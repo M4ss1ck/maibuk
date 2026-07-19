@@ -2,13 +2,15 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useNoteStore } from "@/features/notes";
-import type { Note, UpdateNoteInput } from "@/features/notes";
+import type { Note, ReorderNoteItem, UpdateNoteInput } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
 import { NotesList, NoteEditor, EmptyNotes } from "@/components/notes";
 import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage } from "@/features/settings/types";
 import { useShortcuts } from "@/lib/shortcuts";
-import { markdownToEditorHtml, titleFromMarkdown } from "@/features/markdown";
+import { droppedTextToEditorHtml } from "@/features/markdown";
+import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
+import type { ListDropTarget } from "@/lib/drop-target";
 
 export function Notes() {
   const { t } = useTranslation();
@@ -120,12 +122,51 @@ export function Notes() {
     void updateNote({ id: noteId, bookId, language: getBookLanguage(bookId) });
   };
 
-  const handleImportMarkdown = async (markdown: string, filenameStem: string) => {
-    const title = titleFromMarkdown(markdown, filenameStem);
-    const content = markdownToEditorHtml(markdown);
-    const note = await createNote({ title, content, language: "en" });
-    setCurrentNote(note);
-    setLastNoteId(note.id);
+  const handleImportFiles = async (
+    files: DroppedTextFile[],
+    target: ListDropTarget | null,
+  ) => {
+    const created: Note[] = [];
+    for (const file of files) {
+      created.push(
+        await createNote({
+          title: file.stem.trim() || "Untitled",
+          content: droppedTextToEditorHtml(file.text, file.extension),
+          language: "en",
+        }),
+      );
+    }
+    if (created.length === 0) return;
+
+    if (target) {
+      // Splice the new ids in at the drop position. `notes` from the store is
+      // already pinned-first + order-sorted; new notes are unpinned, so the
+      // store's sort clamps an inside-pinned target below the pinned block.
+      const existing = useNoteStore
+        .getState()
+        .notes.filter((note) => !created.some((c) => c.id === note.id));
+      const items: ReorderNoteItem[] = existing.map((note) => ({
+        id: note.id,
+        pinned: note.pinned,
+      }));
+      const targetIndex = items.findIndex((item) => item.id === target.id);
+      const insertAt =
+        targetIndex === -1
+          ? items.length
+          : target.placement === "after"
+            ? targetIndex + 1
+            : targetIndex;
+      items.splice(
+        insertAt,
+        0,
+        ...created.map((note) => ({ id: note.id, pinned: false })),
+      );
+      await reorderNotes(items);
+    }
+
+    const lastNote = created[created.length - 1];
+    setCurrentNote(lastNote);
+    setLastNoteId(lastNote.id);
   };
 
   const handleDuplicateNote = async (note: Note) => {
@@ -191,7 +232,7 @@ export function Notes() {
           onDeleteNote={handleDelete}
           onDuplicateNote={handleDuplicateNote}
           onRenameNote={(id, title) => updateNote({ id, title })}
-          onImportMarkdown={handleImportMarkdown}
+          onImportFiles={handleImportFiles}
         />
         <div
           onMouseDown={handleResizeStart}

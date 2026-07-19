@@ -4,6 +4,12 @@
     "title": "Maibuk",
     "description": "A cross-platform writing app for authors"
   },
+  "dropImport": {
+    "importFailed": "Could not import dropped files",
+    "importing": "Importing files…",
+    "readFailed": "Could not read \"{{name}}\"",
+    "noSupportedFiles": "No supported text files (.md, .markdown, .txt)"
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",

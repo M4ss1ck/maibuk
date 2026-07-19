@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef, type Key } from "react";
+import { useCallback, useState, useEffect, useRef, type Key } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
+import type { DropItem } from "react-aria-components/useDragAndDrop";
+import { DropIndicator } from "react-aria-components";
 import type { Chapter, ChapterType } from "@/features/chapters/types";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { Select } from "@/components/ui/Select";
@@ -9,8 +11,13 @@ import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
-import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
+import { readDroppedWebFiles, useTextFileDrop } from "@/hooks/useTextFileDrop";
+import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
+import { dropTargetFromPoint } from "@/lib/drop-target";
+import type { ListDropTarget } from "@/lib/drop-target";
 import { Tooltip } from "@/components/ui";
+import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
+import { toast } from "@/components/ui/Toast";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop } from "react-aria-components/useDragAndDrop";
@@ -24,10 +31,25 @@ interface ChapterListProps {
   onUpdateChapter: (id: string, title: string, type: ChapterType) => void;
   onDeleteChapter: (id: string) => void;
   onReorderChapters: (chapterIds: string[]) => void;
-  onImportMarkdown?: (markdown: string, filenameStem: string) => void;
+  onImportFiles?: (
+    files: DroppedTextFile[],
+    target: ListDropTarget | null,
+  ) => void | Promise<void>;
 }
 
 const CHAPTER_DND_TYPE = "chapter";
+
+/** Reads supported text files out of react-aria drop items, preserving order. */
+export async function readChapterDropItems(
+  items: DropItem[],
+): Promise<DroppedTextFile[]> {
+  const files: File[] = [];
+  for (const item of items) {
+    if (item.kind !== "file") continue;
+    files.push(await item.getFile());
+  }
+  return readDroppedWebFiles(files);
+}
 
 export function ChapterList({
   chapters,
@@ -38,7 +60,7 @@ export function ChapterList({
   onUpdateChapter,
   onDeleteChapter,
   onReorderChapters,
-  onImportMarkdown,
+  onImportFiles,
 }: ChapterListProps) {
   const { t, i18n } = useTranslation();
   const chapterListView = useSettingsStore((state) => state.chapterListView);
@@ -47,10 +69,24 @@ export function ChapterList({
   const setShowChapterOutline = useSettingsStore((state) => state.setShowChapterOutline);
   const isCompactView = chapterListView === "compact";
   const listContainerRef = useRef<HTMLDivElement>(null);
-  const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
-    listContainerRef,
-    onImportMarkdown ?? (() => {})
+  const onImportFilesRef = useRef(onImportFiles);
+  onImportFilesRef.current = onImportFiles;
+
+  const resolveFileDropTarget = useCallback(
+    (point: DropPoint | null): ListDropTarget | null => {
+      const container = listContainerRef.current;
+      if (!point || !container) return null;
+      return dropTargetFromPoint(container, point.y, "[data-key]", "data-key");
+    },
+    [],
   );
+
+  const { isDraggingFile, isImportingFiles, dropHandlers } = useTextFileDrop(listContainerRef, {
+    disableWeb: chapters.length > 0,
+    onImport: async (files, point) => {
+      await onImportFilesRef.current?.(files, resolveFileDropTarget(point));
+    },
+  });
 
   const toggleChapterListView = () => {
     setChapterListView(isCompactView ? "normal" : "compact");
@@ -91,6 +127,7 @@ export function ChapterList({
   const chaptersRef = useRef(chapters);
   chaptersRef.current = chapters;
   const activatedKeysRef = useRef(new Set<Key>());
+  const [activeReactAriaImports, setActiveReactAriaImports] = useState(0);
 
   const activateChapter = (key: Key) => {
     if (activatedKeysRef.current.has(key)) return;
@@ -121,8 +158,54 @@ export function ChapterList({
 
       onReorderChapters(reordered.map((c) => c.id));
     },
-    getDropOperation: (_target, types, allowedOperations) =>
-      types.has(CHAPTER_DND_TYPE) && allowedOperations.includes("move") ? "move" : "cancel",
+    getDropOperation: (_target, types, allowedOperations) => {
+      if (types.has(CHAPTER_DND_TYPE)) {
+        return allowedOperations.includes("move") ? "move" : "cancel";
+      }
+      return onImportFilesRef.current ? "copy" : "cancel";
+    },
+    onInsert: (e) => {
+      void (async () => {
+        setActiveReactAriaImports((active) => active + 1);
+        try {
+          const files = await readChapterDropItems([...e.items]);
+          if (files.length === 0) return;
+          await onImportFilesRef.current?.(files, {
+            id: String(e.target.key),
+            placement: e.target.dropPosition === "after" ? "after" : "before",
+          });
+        } catch (error) {
+          console.error("Failed to import dropped files:", error);
+          toast.error(t("dropImport.importFailed"));
+        } finally {
+          setActiveReactAriaImports((active) => Math.max(0, active - 1));
+        }
+      })();
+    },
+    onRootDrop: (e) => {
+      void (async () => {
+        setActiveReactAriaImports((active) => active + 1);
+        try {
+          const files = await readChapterDropItems([...e.items]);
+          if (files.length > 0) await onImportFilesRef.current?.(files, null);
+        } catch (error) {
+          console.error("Failed to import dropped files:", error);
+          toast.error(t("dropImport.importFailed"));
+        } finally {
+          setActiveReactAriaImports((active) => Math.max(0, active - 1));
+        }
+      })();
+    },
+    renderDropIndicator: (target) => (
+      <DropIndicator
+        target={target}
+        className={({ isDropTarget }) =>
+          isDropTarget
+            ? "mx-2 my-1 block h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
+            : "h-0"
+        }
+      />
+    ),
   });
 
   const handleCreate = () => {
@@ -264,10 +347,12 @@ export function ChapterList({
       {/* Chapter list */}
       <div
         ref={listContainerRef}
-        className={`flex-1 overflow-auto ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
-        {...(onImportMarkdown ? dropHandlers : {})}
+        className={`relative flex-1 overflow-y-auto overflow-x-hidden ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        {...(chapters.length === 0 ? dropHandlers : {})}
       >
+        {(isImportingFiles || activeReactAriaImports > 0) && <FileDropImportStatus />}
         <GridList
+          key={chapters.length === 0 ? "empty" : "populated"}
           aria-label={t("chapters.title")}
           keyboardNavigationBehavior="tab"
           items={chapters}
@@ -288,8 +373,8 @@ export function ChapterList({
           selectionBehavior="replace"
           disallowEmptySelection
           onAction={activateChapter}
-          dragAndDropHooks={dragAndDropHooks}
-          className="p-2 space-y-1"
+          {...(chapters.length > 0 ? { dragAndDropHooks } : {})}
+          className="p-2 space-y-1 data-[drop-target]:ring-2 data-[drop-target]:ring-inset data-[drop-target]:ring-primary"
           renderEmptyState={() => (
             <div className="text-center py-8 text-muted-foreground text-sm">
               <p>{t("chapters.noChapters")}</p>
@@ -328,8 +413,8 @@ export function ChapterList({
                 <div
                   className={
                     isActive && showChapterOutline
-                      ? "sticky top-0 z-10 rounded backdrop-blur-sm"
-                      : ""
+                      ? "sticky top-0 z-10 rounded bg-inherit backdrop-blur-sm"
+                      : "bg-inherit"
                   }
                 >
                   {/* Edit form overlay */}
@@ -383,46 +468,48 @@ export function ChapterList({
                           <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
                         </AriaButton>
 
-                        <div className={`flex-1 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}>
+                        <div className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}>
                           {/* Title line: icon, title, inline edit/delete actions */}
-                          <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex min-w-0 items-center gap-2 bg-inherit">
                             <ChapterIcon
                               className={`shrink-0 text-muted-foreground ${
                                 isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
                               }`}
                             />
-                            <span
-                              className={`flex-1 min-w-0 truncate font-medium ${
-                                isCompactView ? "text-xs" : "text-sm"
-                              }`}
-                            >
-                              {chapter.title}
-                            </span>
+                            <span className="relative min-w-0 flex-1 bg-inherit">
+                              <span
+                                className={`block w-full truncate font-medium ${
+                                  isCompactView ? "text-xs" : "text-sm"
+                                }`}
+                              >
+                                {chapter.title}
+                              </span>
 
-                            {/* Edit/Delete - revealed on hover and focus */}
-                            <span className="flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                              <Tooltip content={t("chapters.editChapter")}>
-                                <AriaButton
-                                  onPress={() => startEditing(chapter)}
-                                  className="p-1 hover:bg-muted rounded transition-colors"
-                                  aria-label={t("chapters.editChapter")}
-                                >
-                                  <EditIcon className="w-4 h-4 text-foreground" />
-                                </AriaButton>
-                              </Tooltip>
-                              <Tooltip content={t("chapters.deleteChapter")}>
-                                <AriaButton
-                                  ref={(element) => {
-                                    if (element) deleteButtonRefs.current.set(chapter.id, element);
-                                    else deleteButtonRefs.current.delete(chapter.id);
-                                  }}
-                                  onPress={() => setDeleteConfirmId(chapter.id)}
-                                  className="p-1 hover:bg-destructive/10 rounded transition-colors"
-                                  aria-label={t("chapters.deleteChapter")}
-                                >
-                                  <DeleteIcon className="w-4 h-4 text-destructive" />
-                                </AriaButton>
-                              </Tooltip>
+                              {/* Edit/Delete overlay the full-width title without causing hover reflow. */}
+                              <span className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                                <Tooltip content={t("chapters.editChapter")}>
+                                  <AriaButton
+                                    onPress={() => startEditing(chapter)}
+                                    className="p-1 hover:bg-muted rounded transition-colors"
+                                    aria-label={t("chapters.editChapter")}
+                                  >
+                                    <EditIcon className="w-4 h-4 text-foreground" />
+                                  </AriaButton>
+                                </Tooltip>
+                                <Tooltip content={t("chapters.deleteChapter")}>
+                                  <AriaButton
+                                    ref={(element) => {
+                                      if (element) deleteButtonRefs.current.set(chapter.id, element);
+                                      else deleteButtonRefs.current.delete(chapter.id);
+                                    }}
+                                    onPress={() => setDeleteConfirmId(chapter.id)}
+                                    className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                                    aria-label={t("chapters.deleteChapter")}
+                                  >
+                                    <DeleteIcon className="w-4 h-4 text-destructive" />
+                                  </AriaButton>
+                                </Tooltip>
+                              </span>
                             </span>
 
                             {/* Compact view has no metadata line: keep the toggle here */}

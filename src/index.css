@@ -1521,3 +1521,9 @@ option {
   -webkit-appearance: none;
   margin: 0;
 }
+/* Insertion caret shown while a file drag hovers the editor (Tauri builds). */
+.file-drop-caret {
+  border-left: 2px solid var(--color-primary);
+  margin-left: -1px;
+  pointer-events: none;
+}

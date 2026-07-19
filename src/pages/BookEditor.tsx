@@ -20,11 +20,12 @@ import {
 } from "@/features/export";
 import {
   editorHtmlToMarkdown,
+  droppedTextToEditorHtml,
   markdownFilename,
-  markdownToEditorHtml,
   saveMarkdownFile,
-  titleFromMarkdown,
 } from "@/features/markdown";
+import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
+import type { ListDropTarget } from "@/lib/drop-target";
 import { useTranslation } from "react-i18next";
 import {
   BackIcon,
@@ -114,6 +115,10 @@ export function BookEditor() {
   const [showVersionPanel, setShowVersionPanel] = useState(false);
   const [showSaveVersionDialog, setShowSaveVersionDialog] = useState(false);
   const [saveVersionName, setSaveVersionName] = useState("");
+  const [chapterImportPreview, setChapterImportPreview] = useState<{
+    existingIds: string[];
+    target: ListDropTarget | null;
+  } | null>(null);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
@@ -132,6 +137,7 @@ export function BookEditor() {
 
   const chapterPaneRef = useRef<HTMLDivElement | null>(null);
   const mobilePaneRef = useRef<HTMLDivElement | null>(null);
+  const importQueueRef = useRef<Promise<void>>(Promise.resolve());
   const focusModeRef = useRef(focusMode);
   const showSidebarRef = useRef(showSidebar);
   useEffect(() => {
@@ -170,6 +176,25 @@ export function BookEditor() {
     () => allNotes.filter((note) => note.bookId === bookId),
     [allNotes, bookId]
   );
+  const displayedChapters = useMemo(() => {
+    if (chapterImportPreview === null) return chapters;
+
+    const existingIds = new Set(chapterImportPreview.existingIds);
+    const existingChapters = chapters.filter((chapter) => existingIds.has(chapter.id));
+    const importedChapters = chapters.filter((chapter) => !existingIds.has(chapter.id));
+    const targetIndex = chapterImportPreview.target
+      ? existingChapters.findIndex((chapter) => chapter.id === chapterImportPreview.target?.id)
+      : -1;
+    const insertAt =
+      targetIndex === -1
+        ? existingChapters.length
+        : chapterImportPreview.target?.placement === "after"
+          ? targetIndex + 1
+          : targetIndex;
+
+    existingChapters.splice(insertAt, 0, ...importedChapters);
+    return existingChapters;
+  }, [chapters, chapterImportPreview]);
 
   useEffect(() => {
     if (showNotesChapter && bookSidePanelTab === "notes") void loadNotes();
@@ -442,22 +467,80 @@ export function BookEditor() {
     [bookId, createChapter, setCurrentChapter, updateBook]
   );
 
-  const handleImportMarkdown = useCallback(
-    async (markdown: string, filenameStem: string) => {
-      if (!bookId) return;
-      try {
-        const title = titleFromMarkdown(markdown, filenameStem);
-        const html = markdownToEditorHtml(markdown);
-        const newChapter = await createChapter({ bookId, title });
-        await updateChapter(newChapter.id, { content: html });
-        setCurrentChapter({ ...newChapter, content: html });
-        updateBook(bookId, { lastChapterId: newChapter.id });
-      } catch (error) {
-        console.error("Markdown import failed:", error);
-        toast.error(t("editor.importMarkdownFailed"));
-      }
+  const handleImportFiles = useCallback(
+    (files: DroppedTextFile[], target: ListDropTarget | null) => {
+      if (!bookId || files.length === 0) return Promise.resolve();
+
+      const runImport = async () => {
+        const isActiveBook = () => useChapterStore.getState().currentBookId === bookId;
+        const abandonIfStale = () => {
+          if (isActiveBook()) return false;
+          setChapterImportPreview(null);
+          return true;
+        };
+
+        if (abandonIfStale()) return;
+        setChapterImportPreview({
+          existingIds: useChapterStore.getState().chapters.map((chapter) => chapter.id),
+          target,
+        });
+        try {
+          const created: Chapter[] = [];
+          for (const file of files) {
+            const title = file.stem.trim() || "Untitled";
+            const html = droppedTextToEditorHtml(file.text, file.extension);
+            const newChapter = await createChapter({ bookId, title });
+            await updateChapter(newChapter.id, { content: html });
+            if (abandonIfStale()) return;
+            created.push({ ...newChapter, content: html });
+          }
+          if (created.length === 0) return;
+
+          if (target) {
+            if (abandonIfStale()) return;
+            // Fresh order from the store (createChapter appended the new ones).
+            const createdIds = new Set(created.map((c) => c.id));
+            const ids = useChapterStore
+              .getState()
+              .chapters.filter((c) => !createdIds.has(c.id))
+              .map((c) => c.id);
+            const targetIndex = ids.indexOf(target.id);
+            const insertAt =
+              targetIndex === -1
+                ? ids.length
+                : target.placement === "after"
+                  ? targetIndex + 1
+                  : targetIndex;
+            ids.splice(insertAt, 0, ...created.map((c) => c.id));
+            await reorderChapters(bookId, ids);
+            if (abandonIfStale()) return;
+          }
+
+          if (abandonIfStale()) return;
+          const lastChapter = created[created.length - 1];
+          setCurrentChapter(lastChapter);
+          await updateBook(bookId, { lastChapterId: lastChapter.id });
+          setChapterImportPreview(null);
+        } catch (error) {
+          setChapterImportPreview(null);
+          console.error("File import failed:", error);
+          toast.error(t("editor.importMarkdownFailed"));
+        }
+      };
+
+      const queuedImport = importQueueRef.current.then(runImport, runImport);
+      importQueueRef.current = queuedImport.catch(() => {});
+      return queuedImport;
     },
-    [bookId, createChapter, updateChapter, setCurrentChapter, updateBook, t]
+    [
+      bookId,
+      createChapter,
+      updateChapter,
+      reorderChapters,
+      setCurrentChapter,
+      updateBook,
+      t,
+    ]
   );
 
   const handleDeleteChapter = useCallback(
@@ -720,7 +803,7 @@ export function BookEditor() {
               <CloseIcon className="w-5 h-5" />
             </button>
             <ChapterList
-              chapters={chapters}
+              chapters={displayedChapters}
               currentChapterId={currentChapter?.id ?? null}
               editor={tocEditor}
               onSelectChapter={(chapter) => {
@@ -731,7 +814,7 @@ export function BookEditor() {
               onUpdateChapter={handleUpdateChapter}
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
-              onImportMarkdown={handleImportMarkdown}
+              onImportFiles={handleImportFiles}
             />
           </div>
 
@@ -747,7 +830,7 @@ export function BookEditor() {
             }}
           >
             <ChapterList
-              chapters={chapters}
+              chapters={displayedChapters}
               currentChapterId={currentChapter?.id ?? null}
               editor={tocEditor}
               onSelectChapter={handleSelectChapter}
@@ -755,7 +838,7 @@ export function BookEditor() {
               onUpdateChapter={handleUpdateChapter}
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
-              onImportMarkdown={handleImportMarkdown}
+              onImportFiles={handleImportFiles}
             />
             {showSidebar && (
               <div

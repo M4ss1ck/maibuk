@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Collection } from "react-aria-components/Collection";
@@ -22,10 +22,14 @@ import {
 import type { Book } from "@/features/books/types";
 import type { ReorderNoteItem } from "@/features/notes";
 import { AddIcon } from "@/components/icons/AddIcon";
-import { ResponsiveToggleGroup, Tooltip } from "@/components/ui";
+import { FileDropImportStatus, ResponsiveToggleGroup, Tooltip } from "@/components/ui";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { NoteListItem } from "@/components/notes/NoteListItem";
-import { useMarkdownFileDrop } from "@/hooks/useMarkdownFileDrop";
+import { useTextFileDrop } from "@/hooks/useTextFileDrop";
+import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
+import type { DropPoint } from "@/hooks/useTextFileDrop";
+import { dropTargetFromPoint } from "@/lib/drop-target";
+import type { ListDropTarget } from "@/lib/drop-target";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 import { useSettingsStore } from "@/features/settings/store";
 import { tagColor } from "@/components/notes/tagColor";
@@ -62,7 +66,10 @@ interface NotesListProps {
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: NoteWithBook) => void;
   onRenameNote?: (id: string, title: string) => void;
-  onImportMarkdown?: (markdown: string, filenameStem: string) => void;
+  onImportFiles?: (
+    files: DroppedTextFile[],
+    target: ListDropTarget | null,
+  ) => void | Promise<void>;
 }
 
 export function NotesList({
@@ -76,15 +83,11 @@ export function NotesList({
   onDeleteNote,
   onDuplicateNote,
   onRenameNote,
-  onImportMarkdown,
+  onImportFiles,
 }: NotesListProps) {
   const { t } = useTranslation();
   const listContainerRef = useRef<HTMLDivElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
-  const { isDraggingFile, dropHandlers } = useMarkdownFileDrop(
-    listContainerRef,
-    onImportMarkdown ?? (() => {})
-  );
   const autoScroll = useDragAutoScroll(listContainerRef);
   const [search, setSearch] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -147,8 +150,46 @@ export function NotesList({
   const query = search.trim().toLowerCase();
   const filtered = filterNotes(notes, query);
   const listSections = buildListNoteSections(notes, query);
+  const listSectionsRef = useRef(listSections);
+  listSectionsRef.current = listSections;
   const pinnedCount = notes.filter((note) => note.pinned).length;
   const isSearchActive = query.length > 0;
+
+  const resolveFileDropTarget = useCallback(
+    (point: DropPoint | null): ListDropTarget | null => {
+      const container = listContainerRef.current;
+      if (!point || !container || viewMode !== "list") return null;
+      return dropTargetFromPoint(
+        container,
+        point.y,
+        "[data-drop-id]",
+        "data-drop-id",
+      );
+    },
+    [viewMode],
+  );
+
+  const { isDraggingFile, isImportingFiles, dropHandlers } = useTextFileDrop(listContainerRef, {
+    onImport: async (files, point) => {
+      setDropTarget(null);
+      await onImportFiles?.(files, resolveFileDropTarget(point));
+    },
+    onDragMove: (point) => {
+      const target = resolveFileDropTarget(point);
+      if (!target) {
+        setDropTarget(null);
+        return;
+      }
+      const sectionId = listSectionsRef.current.find((section) =>
+        section.notes.some((note) => note.id === target.id),
+      )?.id;
+      setDropTarget(
+        sectionId
+          ? { sectionId, targetId: target.id, placement: target.placement }
+          : null,
+      );
+    },
+  });
 
   const activateNote = (note: NoteWithBook) => {
     if (activatedNoteIdsRef.current.has(note.id)) return;
@@ -171,15 +212,17 @@ export function NotesList({
   };
 
   const handleSectionDragOver = (e: DragEvent<HTMLElement>, sectionId: NoteSection["id"]) => {
+    if (!draggedId) return;
     handleDragOver(e);
-    if (!draggedId || isSearchActive) return;
+    if (isSearchActive) return;
     setDropTarget({ sectionId, targetId: null, placement: "after" });
   };
 
   const handleNoteDragOver = (e: DragEvent<HTMLDivElement>, note: NoteWithBook) => {
+    if (!draggedId) return;
     e.stopPropagation();
     handleDragOver(e);
-    if (!draggedId || draggedId === note.id || isSearchActive) return;
+    if (draggedId === note.id || isSearchActive) return;
 
     const sectionId = listSections.find((section) =>
       section.notes.some((sectionNote) => sectionNote.id === note.id)
@@ -192,10 +235,11 @@ export function NotesList({
   };
 
   const handleDrop = (e: DragEvent<HTMLDivElement>, targetId: string) => {
+    if (!draggedId) return;
     e.preventDefault();
     e.stopPropagation();
     autoScroll.stop();
-    if (!draggedId || draggedId === targetId || isSearchActive) return;
+    if (draggedId === targetId || isSearchActive) return;
 
     const draggedNote = notes.find((note) => note.id === draggedId);
     if (!draggedNote) return;
@@ -237,10 +281,11 @@ export function NotesList({
   };
 
   const handleSectionDrop = (e: DragEvent<HTMLElement>, targetSectionId: NoteSection["id"]) => {
+    if (!draggedId) return;
     e.preventDefault();
     e.stopPropagation();
     autoScroll.stop();
-    if (!draggedId || isSearchActive) return;
+    if (isSearchActive) return;
 
     const draggedNote = notes.find((note) => note.id === draggedId);
     if (!draggedNote) return;
@@ -570,8 +615,9 @@ export function NotesList({
       <div
         ref={listContainerRef}
         className={`flex-1 overflow-auto transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
-        {...(onImportMarkdown ? dropHandlers : {})}
+        {...(onImportFiles ? dropHandlers : {})}
       >
+        {isImportingFiles && <FileDropImportStatus />}
         {filtered.length === 0 &&
         (viewMode !== "tree" || treeGroupMode !== "book" || books.length === 0) ? (
           <div className="text-center py-8 px-4 text-muted-foreground text-sm">

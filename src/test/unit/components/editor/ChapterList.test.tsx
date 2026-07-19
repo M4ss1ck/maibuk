@@ -1,20 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
-import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { buildChapter } from "@/test/support/fixtures";
 import type { Chapter } from "@/features/chapters/types";
+import type { DropItem } from "react-aria-components/useDragAndDrop";
 
-const { storeState, i18nState, markdownStore, mockSetChapterListView, mockSetShowChapterOutline } =
-  vi.hoisted(() => ({
+const {
+  storeState,
+  i18nState,
+  mockSetChapterListView,
+  mockSetShowChapterOutline,
+  mockToastError,
+  textFileDropOptions,
+} = vi.hoisted(
+  () => ({
     storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
     i18nState: { language: "en" },
-    markdownStore: { callback: null as ((m: string, s: string) => void) | null },
     mockSetChapterListView: vi.fn(),
     mockSetShowChapterOutline: vi.fn(),
-  }));
+    mockToastError: vi.fn(),
+    textFileDropOptions: { current: null as Record<string, unknown> | null },
+  }),
+);
 
-// Markdown drop: the mock returns an onDrop handler so the test can dispatch a file drop
+vi.mock("@/components/ui/Toast", () => ({
+  toast: { error: mockToastError },
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -22,35 +34,34 @@ vi.mock("react-i18next", () => ({
       i18nState.language === "es" && key === "chapters.reorder" ? "Reordenar" : key,
     i18n: { language: i18nState.language, resolvedLanguage: i18nState.language },
   }),
+  initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-vi.mock("@/hooks/useMarkdownFileDrop", () => ({
-  useMarkdownFileDrop: (_ref: unknown, onImport: (m: string, s: string) => void) => {
-    markdownStore.callback = onImport;
-    return {
-      isDraggingFile: false,
-      dropHandlers: {
-        onDragOver: vi.fn(),
-        onDragLeave: vi.fn(),
-        onDrop: (e: Event) => {
-          const dt = (e as unknown as Record<string, unknown>).dataTransfer;
-          if (!dt) return;
-          const files = (dt as Record<string, unknown>).files as File[] | undefined;
-          if (!files || files.length === 0) return;
-          const file = files[0];
-          if (!file.name.endsWith(".md")) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const text = typeof reader.result === "string" ? reader.result : "";
-            const stem = file.name.replace(/\.md$/i, "");
-            markdownStore.callback?.(text, stem);
-          };
-          reader.readAsText(file);
+vi.mock("@/hooks/useTextFileDrop", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/hooks/useTextFileDrop")>();
+  return {
+    ...actual,
+    useTextFileDrop: (_ref: unknown, options: Record<string, unknown>) => {
+      textFileDropOptions.current = options;
+      return {
+        isDraggingFile: false,
+        isImportingFiles: false,
+        dropHandlers: {
+          onDrop: (event: { preventDefault: () => void }) => {
+            event.preventDefault();
+            return (options.onImport as (
+              files: Array<{ text: string; stem: string; extension: string }>,
+              point: { x: number; y: number },
+            ) => void)(
+              [{ text: "# Empty import", stem: "empty-import", extension: ".md" }],
+              { x: 10, y: 20 },
+            );
+          },
         },
-      },
-    };
-  },
-}));
+      };
+    },
+  };
+});
 
 vi.mock("@/components/editor/ChapterOutline", () => ({
   ChapterOutline: () => <div data-testid="chapter-outline" />,
@@ -68,7 +79,17 @@ vi.mock("@/features/settings/store", () => ({
   },
 }));
 
-import { ChapterList } from "@/components/editor/ChapterList";
+import { ChapterList, readChapterDropItems } from "@/components/editor/ChapterList";
+
+function fileDropItem(name: string, text: string): DropItem {
+  return {
+    kind: "file",
+    name,
+    type: "",
+    getText: async () => text,
+    getFile: async () => new File([text], name),
+  } as DropItem;
+}
 
 function buildChapters(count: number): Chapter[] {
   return Array.from({ length: count }, (_, i) =>
@@ -214,6 +235,26 @@ function createDataTransfer(): DataTransfer {
   } as DataTransfer;
 }
 
+function createFileDataTransfer(file: File): DataTransfer {
+  const item = {
+    kind: "file",
+    type: file.type,
+    getAsFile: () => file,
+  } as DataTransferItem;
+
+  return {
+    dropEffect: "none",
+    effectAllowed: "all",
+    files: [file] as unknown as FileList,
+    items: [item] as unknown as DataTransferItemList,
+    types: ["Files"],
+    clearData() {},
+    getData: () => "",
+    setData() {},
+    setDragImage() {},
+  } as DataTransfer;
+}
+
 function mockRect(element: HTMLElement, top: number, bottom: number) {
   vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
     top,
@@ -259,7 +300,7 @@ describe("ChapterList", () => {
     storeState.chapterListView = "normal";
     storeState.showChapterOutline = false;
     i18nState.language = "en";
-    markdownStore.callback = null;
+    textFileDropOptions.current = null;
   });
 
   // ---------------------------------------------------------------------------
@@ -437,6 +478,21 @@ describe("ChapterList", () => {
 
   // ---------------------------------------------------------------------------
   describe("Tab navigation to nested controls", () => {
+    it("lets the title use the action area until the overlay is revealed", () => {
+      const chapters = [
+        buildChapter({ id: "ch-1", title: "A very long chapter title", order: 1 }),
+      ];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      const title = screen.getByText("A very long chapter title");
+      const actions = screen.getByRole("button", { name: "chapters.editChapter" }).parentElement;
+
+      expect(title).toHaveClass("w-full", "truncate");
+      expect(title.parentElement).toHaveClass("flex-1", "relative");
+      expect(actions).toHaveClass("absolute", "rounded-md", "opacity-0", "transition-opacity");
+      expect(actions).not.toHaveClass("pl-3");
+    });
+
     it("Tab reaches drag handle, edit, delete, and outline controls", async () => {
       const user = userEvent.setup();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
@@ -633,13 +689,15 @@ describe("ChapterList", () => {
       renderCL();
       const activeRow = screen.getAllByRole("row")[0];
       expect(activeRow).toHaveClass("bg-primary/10", "border-l-2", "border-primary");
-      expect(screen.getByText("Chapter 1").parentElement?.parentElement).toHaveClass("p-3");
+      expect(
+        screen.getByText("Chapter 1").parentElement?.parentElement?.parentElement,
+      ).toHaveClass("p-3");
     });
 
     it("preserves compact density", () => {
       storeState.chapterListView = "compact";
       renderCL();
-      expect(screen.getByText("Chapter 1").parentElement?.parentElement).toHaveClass(
+      expect(screen.getByText("Chapter 1").parentElement?.parentElement?.parentElement).toHaveClass(
         "px-2",
         "py-1.5"
       );
@@ -693,45 +751,172 @@ describe("ChapterList", () => {
 
   // ---------------------------------------------------------------------------
   describe("external markdown file drop", () => {
-    it("drop emits onImportMarkdown with content and stem", async () => {
-      const onImportMarkdown = vi.fn();
-      const onReorder = vi.fn();
-      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
-      renderCL({
-        chapters,
-        currentChapterId: chapters[0].id,
-        onImportMarkdown,
-        onReorderChapters: onReorder,
-      });
-
-      const scrollRegion = document.querySelector(".overflow-auto");
-      expect(scrollRegion).toBeInTheDocument();
-
-      const file = new File(["# markdown content"], "myfile.md", { type: "text/markdown" });
-      const dt = {
-        items: [{ kind: "file", type: file.type, getAsFile: () => file }],
-        files: [file],
-        types: ["Files"],
-        dropEffect: "none",
-        effectAllowed: "all",
-        getData: vi.fn(() => ""),
-        setData: vi.fn(),
-        clearData: vi.fn(),
-      };
-
-      const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
-      Object.defineProperties(dropEvent, { dataTransfer: { value: dt } });
-      fireEvent(scrollRegion!, dropEvent);
-
-      await vi.waitFor(() => {
-        expect(onImportMarkdown).toHaveBeenCalledWith("# markdown content", "myfile");
-      });
-      expect(onReorder).not.toHaveBeenCalled();
+    it("reads supported file drop items in order and skips others", async () => {
+      const items = [
+        fileDropItem("one.md", "# One"),
+        fileDropItem("skip.png", "binary"),
+        fileDropItem("two.txt", "plain"),
+      ];
+      const files = await readChapterDropItems(items);
+      expect(files.map((file) => file.stem)).toEqual(["one", "two"]);
     });
 
-    it("renders the grid when onImportMarkdown is provided", () => {
-      renderCL({ onImportMarkdown: vi.fn() });
+    it("renders the grid when onImportFiles is provided", () => {
+      renderCL({ onImportFiles: vi.fn() });
       expect(screen.getByRole("grid")).toBeInTheDocument();
+    });
+
+    it("imports a web file at the root when the chapter list is empty", () => {
+      const onImportFiles = vi.fn();
+      renderCL({ chapters: [], currentChapterId: null, onImportFiles });
+
+      expect(textFileDropOptions.current).toMatchObject({ disableWeb: false });
+      fireEvent.drop(screen.getByRole("grid").parentElement as HTMLElement);
+
+      expect(onImportFiles).toHaveBeenCalledWith(
+        [{ text: "# Empty import", stem: "empty-import", extension: ".md" }],
+        null,
+      );
+    });
+
+    it("uses native drop coordinates without rendering a second insertion line", () => {
+      const onImportFiles = vi.fn();
+      renderCL({ onImportFiles });
+      const grid = screen.getByRole("grid");
+      const rows = screen.getAllByRole("row");
+      mockRect(grid.parentElement as HTMLElement, 0, 140);
+      rows.forEach((row, index) => {
+        mockRect(row, index * 50, index * 50 + 40);
+      });
+
+      expect(textFileDropOptions.current).toMatchObject({ disableWeb: true });
+      expect(textFileDropOptions.current).not.toHaveProperty("onDragMove");
+      expect(screen.queryByTestId("chapter-file-drop-line")).not.toBeInTheDocument();
+
+      const files = [{ text: "# Imported", stem: "imported", extension: ".md" }];
+      act(() => {
+        const onImport = textFileDropOptions.current?.onImport as
+          | ((droppedFiles: typeof files, point: { x: number; y: number }) => void)
+          | undefined;
+        onImport?.(files, { x: 10, y: 75 });
+      });
+
+      expect(onImportFiles).toHaveBeenCalledWith(files, { id: "ch-2", placement: "after" });
+    });
+
+    it.each([
+      { clientY: 55, placement: "before" as const },
+      { clientY: 85, placement: "after" as const },
+    ])(
+      "renders one React Aria divider and imports $placement the hovered row",
+      async ({ clientY, placement }) => {
+        const onImportFiles = vi.fn();
+        renderCL({ onImportFiles });
+        const { grid } = mockGridLayout();
+        const dataTransfer = createFileDataTransfer(
+          new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+        );
+
+        dispatchDragEvent(grid, "dragenter", dataTransfer, clientY);
+        dispatchDragEvent(grid, "dragover", dataTransfer, clientY);
+
+        await waitFor(() => {
+          const indicators = document.querySelectorAll("[data-drop-target]");
+          expect(indicators).toHaveLength(1);
+          expect(indicators[0]).toHaveClass("h-0.5", "bg-primary");
+        });
+        expect(screen.queryByTestId("chapter-file-drop-line")).not.toBeInTheDocument();
+
+        dispatchDragEvent(grid, "drop", dataTransfer, clientY);
+
+        await waitFor(() => {
+          expect(onImportFiles).toHaveBeenCalledWith(
+            [expect.objectContaining({ text: "# Imported", stem: "imported" })],
+            { id: "ch-2", placement },
+          );
+        });
+      },
+    );
+
+    it("shows import status until a React Aria file import finishes persisting", async () => {
+      let finishImport: (() => void) | undefined;
+      const onImportFiles = vi.fn(
+        () => new Promise<void>((resolve) => {
+          finishImport = resolve;
+        }),
+      );
+      renderCL({ onImportFiles });
+      const { grid } = mockGridLayout();
+      const dataTransfer = createFileDataTransfer(
+        new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+      );
+
+      dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
+      dispatchDragEvent(grid, "dragover", dataTransfer, 55);
+      dispatchDragEvent(grid, "drop", dataTransfer, 55);
+
+      expect(await screen.findByRole("status")).toHaveTextContent("dropImport.importing");
+      await waitFor(() => expect(onImportFiles).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole("status")).toBeInTheDocument();
+
+      await act(async () => finishImport?.());
+      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+    });
+
+    it("consumes a rejected React Aria import and clears its status with feedback", async () => {
+      const error = new Error("persistence failed");
+      let rejectImport: ((reason: Error) => void) | undefined;
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      const onImportFiles = vi.fn(
+        () => new Promise<void>((_resolve, reject) => {
+          rejectImport = reject;
+        }),
+      );
+      renderCL({ onImportFiles });
+      const { grid } = mockGridLayout();
+      const dataTransfer = createFileDataTransfer(
+        new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+      );
+
+      dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
+      dispatchDragEvent(grid, "dragover", dataTransfer, 55);
+      dispatchDragEvent(grid, "drop", dataTransfer, 55);
+
+      expect(await screen.findByRole("status")).toBeInTheDocument();
+      await waitFor(() => expect(onImportFiles).toHaveBeenCalledTimes(1));
+      await act(async () => rejectImport?.(error));
+      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+      expect(consoleError).toHaveBeenCalledWith("Failed to import dropped files:", error);
+      expect(mockToastError).toHaveBeenCalledWith("dropImport.importFailed");
+      consoleError.mockRestore();
+    });
+
+    it("keeps import status visible until overlapping React Aria imports both finish", async () => {
+      const resolvers: Array<() => void> = [];
+      const onImportFiles = vi.fn(
+        () => new Promise<void>((resolve) => resolvers.push(resolve)),
+      );
+      renderCL({ onImportFiles });
+      const { grid } = mockGridLayout();
+
+      for (const [index, name] of ["first.md", "second.md"].entries()) {
+        const dataTransfer = createFileDataTransfer(
+          new File([`# ${name}`], name, { type: "text/markdown" }),
+        );
+        dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
+        dispatchDragEvent(grid, "dragover", dataTransfer, 55);
+        dispatchDragEvent(grid, "drop", dataTransfer, 55);
+        await waitFor(() => expect(onImportFiles).toHaveBeenCalledTimes(index + 1));
+      }
+
+      expect(onImportFiles).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("status")).toBeInTheDocument();
+
+      await act(async () => resolvers[1]());
+      expect(screen.getByRole("status")).toBeInTheDocument();
+
+      await act(async () => resolvers[0]());
+      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
     });
   });
 
@@ -754,6 +939,32 @@ describe("ChapterList", () => {
   describe("empty state", () => {
     it("shows empty message when no chapters", () => {
       renderCL({ chapters: [] });
+      expect(screen.getByText("chapters.noChapters")).toBeInTheDocument();
+    });
+
+    it("remounts the real GridList when crossing the empty boundary", () => {
+      const props = makeProps({ chapters: [], currentChapterId: null });
+      const view = render(<ChapterList {...props} />);
+
+      expect(screen.getByRole("grid")).toBeInTheDocument();
+      expect(screen.getByText("chapters.noChapters")).toBeInTheDocument();
+
+      expect(() =>
+        view.rerender(
+          <ChapterList
+            {...props}
+            chapters={[defaultChapters[0]]}
+            currentChapterId={defaultChapters[0].id}
+          />,
+        ),
+      ).not.toThrow();
+      expect(screen.getByRole("grid")).toBeInTheDocument();
+      expect(screen.getByRole("row", { name: defaultChapters[0].title })).toBeInTheDocument();
+
+      expect(() =>
+        view.rerender(<ChapterList {...props} chapters={[]} currentChapterId={null} />),
+      ).not.toThrow();
+      expect(screen.getByRole("grid")).toBeInTheDocument();
       expect(screen.getByText("chapters.noChapters")).toBeInTheDocument();
     });
   });

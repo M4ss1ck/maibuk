@@ -144,13 +144,27 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
       updatedAt: new Date(),
     };
 
-    set((state) => ({ chapters: [...state.chapters, newChapter] }));
+    set((state) =>
+      state.currentBookId === null || state.currentBookId === input.bookId
+        ? { chapters: [...state.chapters, newChapter] }
+        : {}
+    );
     return newChapter;
   },
 
   updateChapter: async (id: string, input: UpdateChapterInput) => {
     const db = await getDatabase();
     const now = Math.floor(Date.now() / 1000);
+    let sourceBookId =
+      get().chapters.find((chapter) => chapter.id === id)?.bookId ??
+      (get().currentChapter?.id === id ? get().currentChapter?.bookId : undefined);
+    if (input.content !== undefined && sourceBookId === undefined) {
+      const rows = await db.select<{ book_id: string }[]>(
+        "SELECT book_id FROM chapters WHERE id = ?",
+        [id]
+      );
+      sourceBookId = rows[0]?.book_id;
+    }
 
     const updates: string[] = ["updated_at = ?"];
     const values: unknown[] = [now];
@@ -222,15 +236,10 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
     }));
 
     if (input.content !== undefined) {
-      const bookId =
-        get().chapters.find((c) => c.id === id)?.bookId ??
-        get().currentChapter?.bookId ??
-        get().currentBookId ??
-        undefined;
       await reindexSource({
         sourceType: "chapter",
         sourceId: id,
-        sourceBookId: bookId,
+        sourceBookId,
         contentHtml: input.content,
       }).catch(() => {});
     }

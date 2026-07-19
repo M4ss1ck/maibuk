@@ -135,6 +135,61 @@ describe("useChapterStore", () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].title).toBe("Persisted");
     });
+
+    it("does not append a chapter after navigation switches to another book", async () => {
+      await seedBook(testDb, "book-2");
+      const originalExecute = testDb.execute.bind(testDb);
+      let releaseInsert!: () => void;
+      let markInsertStarted!: () => void;
+      const insertGate = new Promise<void>((resolve) => {
+        releaseInsert = resolve;
+      });
+      const insertStarted = new Promise<void>((resolve) => {
+        markInsertStarted = resolve;
+      });
+      vi.spyOn(testDb, "execute").mockImplementation(async (sql, params) => {
+        if (sql.includes("INSERT INTO chapters")) {
+          markInsertStarted();
+          await insertGate;
+        }
+        return originalExecute(sql, params);
+      });
+
+      const createPromise = useChapterStore.getState().createChapter({
+        bookId: "book-1",
+        title: "Old book chapter",
+      });
+      await insertStarted;
+
+      const bookTwoChapter = {
+        id: "book-2-chapter",
+        bookId: "book-2",
+        title: "Current book chapter",
+        content: null,
+        order: 0,
+        chapterType: "chapter" as const,
+        wordCount: 0,
+        status: "draft" as const,
+        isIncludedInExport: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      useChapterStore.setState({
+        currentBookId: "book-2",
+        chapters: [bookTwoChapter],
+      });
+      releaseInsert();
+
+      const created = await createPromise;
+
+      expect(created.bookId).toBe("book-1");
+      expect(useChapterStore.getState().chapters).toEqual([bookTwoChapter]);
+      const rows = await testDb.select<{ book_id: string }[]>(
+        "SELECT book_id FROM chapters WHERE id = ?",
+        [created.id]
+      );
+      expect(rows).toEqual([{ book_id: "book-1" }]);
+    });
   });
 
   describe("loadChapters()", () => {
@@ -292,6 +347,41 @@ describe("useChapterStore", () => {
       );
       expect(rows[0].title).toBe("After");
       expect(rows[0].synopsis).toBe("A summary");
+    });
+
+    it("reindexes an unloaded chapter with its persisted book while another book is active", async () => {
+      await seedBook(testDb, "book-2");
+      await seedChapter(testDb, "unloaded-book-1-chapter", "book-1", 0);
+      const bookTwoChapter = {
+        id: "book-2-chapter",
+        bookId: "book-2",
+        title: "Current book chapter",
+        content: null,
+        order: 0,
+        chapterType: "chapter" as const,
+        wordCount: 0,
+        status: "draft" as const,
+        isIncludedInExport: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      useChapterStore.setState({
+        currentBookId: "book-2",
+        chapters: [bookTwoChapter],
+        currentChapter: bookTwoChapter,
+      });
+
+      await useChapterStore.getState().updateChapter("unloaded-book-1-chapter", {
+        content: '<p><a href="maibuk://note/note-1">Linked note</a></p>',
+      });
+
+      const links = await testDb.select<{ source_book_id: string }[]>(
+        "SELECT source_book_id FROM links WHERE source_id = ?",
+        ["unloaded-book-1-chapter"]
+      );
+      expect(links).toEqual([{ source_book_id: "book-1" }]);
+      expect(useChapterStore.getState().chapters).toEqual([bookTwoChapter]);
+      expect(useChapterStore.getState().currentChapter).toBe(bookTwoChapter);
     });
   });
 
