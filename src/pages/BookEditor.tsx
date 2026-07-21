@@ -55,7 +55,7 @@ import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { HistoryMenuButton } from "@/components/versions/HistoryMenuButton";
 import { useShortcuts } from "@/lib/shortcuts";
 import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
-import { IS_TAURI, isMac } from "@/lib/platform";
+import { IS_DESKTOP, isMac } from "@/lib/platform";
 import { useAutoCheckpoint } from "@/features/versions/useAutoCheckpoint";
 import { useVersionStore } from "@/features/versions/store";
 import { Modal } from "@/components/ui/Modal";
@@ -1015,7 +1015,7 @@ export function BookEditor() {
                 {/** Theme toggle */}
                 <ThemeToggle variant="dropdown" />
 
-                {IS_TAURI && (
+                {IS_DESKTOP && (
                   <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
                     <button
                       type="button"
@@ -1132,7 +1132,7 @@ export function BookEditor() {
                         <History className="w-4 h-4" />
                         {t("versions.showHistory")}
                       </button>
-                      {IS_TAURI && (
+                      {IS_DESKTOP && (
                         <button
                           type="button"
                           onClick={() => {

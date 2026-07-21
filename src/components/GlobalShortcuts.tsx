@@ -8,7 +8,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { useNoteStore } from "@/features/notes";
 import { getPassphrase } from "@/features/sync/crypto";
-import { IS_TAURI } from "@/lib/platform";
+import { IS_DESKTOP } from "@/lib/platform";
 import { useActiveShortcuts, type ShortcutItem } from "@/hooks";
 import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
 
@@ -120,7 +120,7 @@ export function GlobalShortcuts() {
     {
       keys: matchKeys("global.toggleAlwaysOnTop"),
       allowInInput: true,
-      enabled: IS_TAURI,
+      enabled: IS_DESKTOP,
       onTrigger: () => {
         setAlwaysOnTop(!alwaysOnTop);
       },

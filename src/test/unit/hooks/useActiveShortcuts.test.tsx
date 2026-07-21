@@ -1,10 +1,22 @@
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useActiveShortcuts } from "@/hooks/useActiveShortcuts";
 import { useModalStore } from "@/components/ui/modal-store";
+
+const { platformState } = vi.hoisted(() => ({
+  platformState: { isDesktop: true },
+}));
+
+vi.mock("@/lib/platform", () => ({
+  get IS_DESKTOP() {
+    return platformState.isDesktop;
+  },
+  IS_TAURI: true,
+  isMac: () => false,
+}));
 
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
@@ -107,4 +119,22 @@ it("returns shortcuts again after all modals close", () => {
 
   expect(result.current.length).toBeGreaterThan(0);
   expect(result.current.some((item) => item.id === "editor.toolbarSettings")).toBe(true);
+});
+
+describe("always-on-top shortcut gating", () => {
+  beforeEach(() => {
+    platformState.isDesktop = true;
+  });
+
+  it("includes always-on-top in shortcut help on desktop", () => {
+    platformState.isDesktop = true;
+    const { result } = renderHook(() => useActiveShortcuts(), { wrapper: wrapperFor("/settings") });
+    expect(result.current.some((item) => item.id === "global.toggleAlwaysOnTop")).toBe(true);
+  });
+
+  it("omits always-on-top from Android shortcut help", () => {
+    platformState.isDesktop = false;
+    const { result } = renderHook(() => useActiveShortcuts(), { wrapper: wrapperFor("/settings") });
+    expect(result.current.some((item) => item.id === "global.toggleAlwaysOnTop")).toBe(false);
+  });
 });

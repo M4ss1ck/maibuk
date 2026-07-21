@@ -38,7 +38,7 @@ vi.mock("react-router-dom", () => ({
 }));
 
 vi.mock("../../../lib/shortcuts", () => ({ useShortcuts: vi.fn() }));
-vi.mock("../../../lib/platform", () => ({ IS_TAURI: true, isMac: () => false }));
+vi.mock("../../../lib/platform", () => ({ IS_TAURI: true, IS_DESKTOP: true, isMac: () => false }));
 vi.mock("../../../hooks/useAutoSave", () => ({
   useDebouncedCallback: (callback: (...args: unknown[]) => void) => callback,
 }));

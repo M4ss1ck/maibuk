@@ -10,7 +10,7 @@ import { Tooltip } from "@/components/ui";
 import { useEphemeralStore } from "@/features/ephemeral";
 import { useNoteStore } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
-import { IS_TAURI } from "@/lib/platform";
+import { IS_DESKTOP } from "@/lib/platform";
 
 export function Ephemeral() {
   const { t } = useTranslation();
@@ -78,7 +78,7 @@ export function Ephemeral() {
 
         <ThemeToggle variant="dropdown" />
 
-        {IS_TAURI && (
+        {IS_DESKTOP && (
           <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
             <button
               type="button"

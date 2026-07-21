@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import type { Note, UpdateNoteInput } from "@/features/notes";
 
-const { noteI18nState } = vi.hoisted(() => ({
+const { noteI18nState, platformState, mockNoteSetAlwaysOnTop } = vi.hoisted(() => ({
   noteI18nState: { language: "en" as "en" | "es" },
+  platformState: { isDesktop: false },
+  mockNoteSetAlwaysOnTop: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -31,7 +33,7 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("../../../../features/settings/store", () => ({
   useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ alwaysOnTop: false, setAlwaysOnTop: vi.fn() }),
+    selector({ alwaysOnTop: false, setAlwaysOnTop: mockNoteSetAlwaysOnTop }),
 }));
 
 vi.mock("../../../../components/ThemeToggle", () => ({
@@ -39,7 +41,11 @@ vi.mock("../../../../components/ThemeToggle", () => ({
 }));
 
 vi.mock("../../../../lib/platform", () => ({
-  IS_TAURI: false,
+  get IS_DESKTOP() {
+    return platformState.isDesktop;
+  },
+  IS_TAURI: true,
+  isMac: () => false,
   createDatabase: vi.fn(() =>
     Promise.resolve({
       execute: vi.fn(() => Promise.resolve({ rowsAffected: 0 })),
@@ -110,6 +116,8 @@ describe("NoteEditor", () => {
   beforeEach(() => {
     noteI18nState.language = "en";
     noteNavigateMock.mockClear();
+    mockNoteSetAlwaysOnTop.mockReset();
+    platformState.isDesktop = false;
   });
 
   it("debounces and saves full payload after content changes", async () => {
@@ -216,5 +224,38 @@ describe("NoteEditor", () => {
     );
 
     expect(screen.getAllByRole("button", { name: "Volver" })).toHaveLength(2);
+  });
+
+  it("hides the always-on-top pin button on Android (non-desktop)", () => {
+    platformState.isDesktop = false;
+    render(
+      <NoteEditor
+        note={buildNote({})}
+        onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+        onBack={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "settings.alwaysOnTop" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("toggles always-on-top via keyboard on desktop", async () => {
+    platformState.isDesktop = true;
+    const user = userEvent.setup();
+    render(
+      <NoteEditor
+        note={buildNote({})}
+        onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+        onBack={vi.fn()}
+      />
+    );
+
+    const pinButton = screen.getByRole("button", { name: "settings.alwaysOnTop" });
+    pinButton.focus();
+    await user.keyboard(" ");
+
+    expect(mockNoteSetAlwaysOnTop).toHaveBeenCalledWith(true);
   });
 });

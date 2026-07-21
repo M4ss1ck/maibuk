@@ -8,6 +8,7 @@ import type { Note } from "@/features/notes";
 
 vi.mock("../../../../lib/platform", () => ({
   IS_TAURI: false,
+  IS_DESKTOP: false,
   getFileSystem: vi.fn(),
   getOS: vi.fn(async () => ({ locale: vi.fn(async () => "en") })),
 }));

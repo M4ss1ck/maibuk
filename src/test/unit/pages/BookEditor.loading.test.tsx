@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockBookState, mockChapterState, mockLoadBook, mockLoadChapters, mockSetCurrentChapter } =
+const { mockBookState, mockChapterState, mockLoadBook, mockLoadChapters, mockSetCurrentChapter, platformState } =
   vi.hoisted(() => ({
+    platformState: { isDesktop: true },
     mockBookState: {
       currentBook: {
         id: "book-1",
@@ -74,6 +76,9 @@ vi.mock("../../../lib/shortcuts", () => ({
 }));
 
 vi.mock("../../../lib/platform", () => ({
+  get IS_DESKTOP() {
+    return platformState.isDesktop;
+  },
   IS_TAURI: true,
   isMac: () => false,
 }));
@@ -250,5 +255,28 @@ describe("BookEditor loading state", () => {
 
     expect(screen.getByText("editor.noChapter")).toBeInTheDocument();
     expect(screen.queryByText("editor.loadingEditor")).not.toBeInTheDocument();
+  });
+
+  it("omits the always-on-top button from the desktop toolbar on Android", () => {
+    platformState.isDesktop = false;
+    render(<BookEditor />);
+
+    expect(
+      screen.queryByRole("button", { name: "settings.alwaysOnTop" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("omits the always-on-top button from the mobile more menu on Android", async () => {
+    platformState.isDesktop = false;
+    const user = userEvent.setup();
+    render(<BookEditor />);
+
+    const moreButton = screen.getByRole("button", { name: "common.more" });
+    moreButton.focus();
+    await user.keyboard("{Enter}");
+
+    expect(
+      screen.queryByRole("button", { name: "settings.alwaysOnTop" })
+    ).not.toBeInTheDocument();
   });
 });

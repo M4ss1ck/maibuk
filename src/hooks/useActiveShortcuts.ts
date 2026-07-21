@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
-import { IS_TAURI } from "@/lib/platform";
+import { IS_DESKTOP } from "@/lib/platform";
 import {
   SHORTCUTS,
   formatKeys,
@@ -44,7 +44,7 @@ export function useActiveShortcuts(): ShortcutItem[] {
       "global.showHelp",
     ];
 
-    if (IS_TAURI) {
+    if (IS_DESKTOP) {
       ids.push("global.toggleAlwaysOnTop");
     }
 

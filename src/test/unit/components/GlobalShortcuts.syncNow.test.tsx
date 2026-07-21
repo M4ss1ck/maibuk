@@ -29,6 +29,7 @@ vi.mock("../../../lib/shortcuts", () => ({
 
 vi.mock("../../../lib/platform", () => ({
   IS_TAURI: false,
+  IS_DESKTOP: false,
   isMac: () => false,
 }));
 

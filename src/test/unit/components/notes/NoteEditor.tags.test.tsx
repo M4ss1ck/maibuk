@@ -70,6 +70,7 @@ vi.mock("../../../../components/ThemeToggle", () => ({
 
 vi.mock("../../../../lib/platform", () => ({
   IS_TAURI: false,
+  IS_DESKTOP: false,
   createDatabase: vi.fn(() =>
     Promise.resolve({
       execute: vi.fn(() => Promise.resolve({ rowsAffected: 0 })),

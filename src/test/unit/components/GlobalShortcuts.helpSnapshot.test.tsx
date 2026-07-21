@@ -7,8 +7,9 @@ interface ShortcutConfig {
   onTrigger: () => void;
 }
 
-const { mockUseShortcuts } = vi.hoisted(() => ({
+const { mockUseShortcuts, platformState } = vi.hoisted(() => ({
   mockUseShortcuts: vi.fn(),
+  platformState: { isDesktop: true },
 }));
 
 let capturedShortcuts: unknown[] = [];
@@ -28,7 +29,10 @@ vi.mock("@/lib/shortcuts", () => ({
 }));
 
 vi.mock("@/lib/platform", () => ({
-  IS_TAURI: false,
+  get IS_DESKTOP() {
+    return platformState.isDesktop;
+  },
+  IS_TAURI: true,
   isMac: () => false,
 }));
 
@@ -89,6 +93,8 @@ describe("GlobalShortcuts help snapshot", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedShortcuts = [];
+    platformState.isDesktop = true;
+    settingsState.setAlwaysOnTop.mockReset();
   });
 
   it("snapshots the pre-open active shortcuts and passes them to the help dialog", async () => {
@@ -100,5 +106,45 @@ describe("GlobalShortcuts help snapshot", () => {
 
     expect(capturedShortcuts).toEqual(mockShortcutItems);
     expect(capturedShortcuts.length).toBeGreaterThan(0);
+  });
+
+  it("toggles always-on-top via shortcut only when on desktop", () => {
+    platformState.isDesktop = true;
+    render(<GlobalShortcuts />);
+
+    const calls = mockUseShortcuts.mock.calls;
+    const configs = calls[calls.length - 1]?.[0] as Array<{
+      keys?: string[];
+      enabled?: boolean;
+      onTrigger: () => void;
+    }>;
+    const aotShortcut = configs.find(
+      (c) => c.keys && c.keys.some((k) => k.toLowerCase().includes("shift+p"))
+    );
+    if (!aotShortcut) throw new Error("Always-on-top shortcut not registered");
+
+    aotShortcut.onTrigger();
+    expect(settingsState.setAlwaysOnTop).toHaveBeenCalledWith(true);
+  });
+
+  it("does not register the always-on-top shortcut on Android", () => {
+    platformState.isDesktop = false;
+    render(<GlobalShortcuts />);
+
+    const calls = mockUseShortcuts.mock.calls;
+    const configs = calls[calls.length - 1]?.[0] as Array<{
+      keys?: string[];
+      enabled?: boolean;
+      onTrigger: () => void;
+    }>;
+    const aotShortcut = configs.find(
+      (c) => c.keys && c.keys.some((k) => k.toLowerCase().includes("shift+p"))
+    );
+
+    // On Android the shortcut should either not be registered or be disabled
+    if (aotShortcut) {
+      expect(aotShortcut.enabled).toBe(false);
+    }
+    // else: not registered at all, which is also acceptable
   });
 });
