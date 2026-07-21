@@ -12,6 +12,7 @@ const isWeb = buildTarget === "web";
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
+  envPrefix: ["VITE_", "TAURI_ENV_"],
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
