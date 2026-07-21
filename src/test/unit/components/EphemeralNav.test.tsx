@@ -38,7 +38,7 @@ vi.mock("@/features/theme", () => ({
   getCycledTheme: vi.fn(),
 }));
 
-vi.mock("@/lib/platform", () => ({ IS_TAURI: false, isMac: () => false }));
+vi.mock("@/lib/platform", () => ({ IS_TAURI: false, IS_DESKTOP: false, isMac: () => false }));
 vi.mock("@/features/sync/store", () => ({
   useSyncStore: { getState: () => ({ authStatus: "logged-out", syncStatus: "idle" }) },
 }));
