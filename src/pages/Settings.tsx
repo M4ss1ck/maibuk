@@ -22,6 +22,7 @@ import { exportDatabase, importDatabase, resetDatabase } from "@/lib/db";
 import {
   getFileSystem,
   IS_TAURI,
+  IS_DESKTOP,
   isMac,
   getDialog,
   getWebDialog,
@@ -305,7 +306,7 @@ export function Settings() {
         </section>
 
         {/* Window Settings */}
-        {IS_TAURI && !isMac() && (
+        {IS_DESKTOP && !isMac() && (
           <section className="mb-6 sm:mb-8">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t("settings.window")}
@@ -360,6 +361,7 @@ export function Settings() {
               />
             </div>
 
+            {IS_DESKTOP && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>
                 <p className="font-medium">{t("settings.alwaysOnTop")}</p>
@@ -371,9 +373,9 @@ export function Settings() {
                 checked={alwaysOnTop}
                 onChange={setAlwaysOnTop}
                 label={t("settings.toggleAlwaysOnTop")}
-                disabled={!IS_TAURI}
               />
             </div>
+            )}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
               <div>

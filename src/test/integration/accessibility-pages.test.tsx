@@ -11,6 +11,7 @@ import { expectNoAxeViolations } from "@/test/support/accessibility";
 
 const txs = vi.hoisted(() => ({
   isMac: false,
+  isDesktop: true,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -28,6 +29,9 @@ vi.mock("@/features/version", () => ({
 vi.mock("@/lib/platform", () => ({
   IS_WEB: false,
   IS_TAURI: true,
+  get IS_DESKTOP() {
+    return txs.isDesktop;
+  },
   isMac: () => txs.isMac,
   getOS: vi.fn().mockResolvedValue({ platform: "linux" }),
   getDialog: vi.fn().mockResolvedValue({
@@ -48,6 +52,7 @@ vi.mock("@/lib/platform", () => ({
   }),
   createBackup: vi.fn().mockResolvedValue(undefined),
   setWindowAlwaysOnTop: vi.fn(),
+  isLaunchOnStartupEnabled: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock("@/lib/platform/detect", () => ({
@@ -384,6 +389,7 @@ function makeCanvas(overrides: Partial<CanvasType> = {}): CanvasType {
 
 beforeEach(() => {
   txs.isMac = false;
+  txs.isDesktop = true;
   localStorage.clear();
   useBookStore.setState({
     books: [],
@@ -546,6 +552,20 @@ describe("Settings page", () => {
     await user.keyboard(" ");
 
     expect(useSettingsStore.getState().editorAutoClose).toBe(true);
+  });
+
+  it("hides desktop window settings on Android", async () => {
+    txs.isDesktop = false;
+    const { Settings } = await import("@/pages/Settings");
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Routes><Route path="/settings" element={<Settings />} /></Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByText("settings.launchOnStartup")).not.toBeInTheDocument();
+    expect(screen.queryByText("settings.closeToTray")).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "settings.toggleAlwaysOnTop" })).not.toBeInTheDocument();
   });
 });
 
