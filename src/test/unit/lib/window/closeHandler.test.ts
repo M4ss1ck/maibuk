@@ -4,6 +4,14 @@ const mockHide = vi.fn().mockResolvedValue(undefined);
 const mockExit = vi.fn().mockResolvedValue(undefined);
 let captured: ((e: { preventDefault: () => void }) => Promise<void>) | null = null;
 
+const { platformState } = vi.hoisted(() => ({ platformState: { isDesktop: true } }));
+
+vi.mock("@/lib/platform", () => ({
+  get IS_DESKTOP() {
+    return platformState.isDesktop;
+  },
+}));
+
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     hide: mockHide,
@@ -33,6 +41,7 @@ describe("installWindowCloseHandler", () => {
     mockHide.mockClear();
     mockExit.mockClear();
     captured = null;
+    platformState.isDesktop = true;
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
     // Reset the module-level install guard so each test installs fresh.
     vi.resetModules();
@@ -64,5 +73,11 @@ describe("installWindowCloseHandler", () => {
 
     expect(mockExit).toHaveBeenCalledWith(0);
     expect(mockHide).not.toHaveBeenCalled();
+  });
+
+  it("does not install on Android", async () => {
+    platformState.isDesktop = false;
+    await installFresh();
+    expect(captured).toBeNull();
   });
 });

@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSetAlwaysOnTop = vi.fn().mockResolvedValue(undefined);
 let captured: ((e: { payload: boolean }) => void) | null = null;
 
+const { platformState } = vi.hoisted(() => ({ platformState: { isDesktop: true } }));
+
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     onFocusChanged: vi.fn(async (cb: (e: { payload: boolean }) => void) => {
@@ -13,7 +15,9 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 vi.mock("../../../../lib/platform", () => ({
-  IS_TAURI: true,
+  get IS_DESKTOP() {
+    return platformState.isDesktop;
+  },
   setWindowAlwaysOnTop: mockSetAlwaysOnTop,
 }));
 
@@ -26,6 +30,7 @@ describe("installAlwaysOnTopReapply", () => {
   beforeEach(() => {
     mockSetAlwaysOnTop.mockClear();
     captured = null;
+    platformState.isDesktop = true;
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
     // Reset the module-level install guard so each test installs fresh.
     vi.resetModules();
@@ -66,5 +71,11 @@ describe("installAlwaysOnTopReapply", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(mockSetAlwaysOnTop).not.toHaveBeenCalled();
+  });
+
+  it("does not install on Android", async () => {
+    platformState.isDesktop = false;
+    await installFresh();
+    expect(captured).toBeNull();
   });
 });

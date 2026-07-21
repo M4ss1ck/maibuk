@@ -21,6 +21,7 @@ import { runDailyBackupOnce } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
+import { IS_DESKTOP } from "@/lib/platform";
 
 function isEmbedPath(pathname: string): boolean {
   return pathname === "/embed";
@@ -33,6 +34,7 @@ function App() {
   useEffect(() => {
     if (embedMode) return;
     void runDailyBackupOnce();
+    if (!IS_DESKTOP) return;
     void installWindowCloseHandler();
     void installAlwaysOnTopReapply();
     installTraySyncIndicator();

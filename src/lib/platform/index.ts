@@ -83,7 +83,7 @@ export async function openExternal(url: string): Promise<void> {
 
 // Toggle main window "always on top" on supported desktop builds.
 export async function setWindowAlwaysOnTop(enabled: boolean): Promise<void> {
-  if (!IS_TAURI || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!IS_DESKTOP || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
     return;
   }
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -93,7 +93,7 @@ export async function setWindowAlwaysOnTop(enabled: boolean): Promise<void> {
 // Swap the tray icon while a sync is running. No-op on web and on
 // platforms without a tray (the Rust command handles that).
 export async function setTraySyncing(syncing: boolean): Promise<void> {
-  if (!IS_TAURI || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!IS_DESKTOP || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
     return;
   }
   const { invoke } = await import("@tauri-apps/api/core");
@@ -102,7 +102,7 @@ export async function setTraySyncing(syncing: boolean): Promise<void> {
 
 // Launch the app at login (hidden in the tray). No-op on web.
 export async function setLaunchOnStartup(enabled: boolean): Promise<void> {
-  if (!IS_TAURI || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!IS_DESKTOP || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
     return;
   }
   const { enable, disable } = await import("@tauri-apps/plugin-autostart");
@@ -115,7 +115,7 @@ export async function setLaunchOnStartup(enabled: boolean): Promise<void> {
 
 // Whether the OS autostart entry is currently registered. False on web.
 export async function isLaunchOnStartupEnabled(): Promise<boolean> {
-  if (!IS_TAURI || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!IS_DESKTOP || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
     return false;
   }
   const { isEnabled } = await import("@tauri-apps/plugin-autostart");

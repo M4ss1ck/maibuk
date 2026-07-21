@@ -1,5 +1,5 @@
 import { useSyncStore } from "@/features/sync/store";
-import { setTraySyncing } from "@/lib/platform";
+import { IS_DESKTOP, setTraySyncing } from "@/lib/platform";
 
 let installed = false;
 
@@ -7,7 +7,7 @@ let installed = false;
 // app startup; a failed icon swap must never surface into the sync flow, so
 // bridge errors are swallowed.
 export function installTraySyncIndicator(): void {
-  if (installed) return;
+  if (!IS_DESKTOP || installed) return;
   installed = true;
   useSyncStore.subscribe((state, prevState) => {
     const isSyncing = state.syncStatus === "syncing";

@@ -1,4 +1,4 @@
-import { IS_TAURI } from "@/lib/platform";
+import { IS_DESKTOP } from "@/lib/platform";
 import { useSettingsStore } from "@/features/settings/store";
 import { metricsService } from "@/lib/metrics/MetricsService";
 
@@ -10,7 +10,7 @@ let unlisten: (() => void) | null = null;
 // tray; otherwise metrics are flushed best-effort and the process exits.
 export async function installWindowCloseHandler(): Promise<void> {
   if (
-    !IS_TAURI ||
+    !IS_DESKTOP ||
     unlisten ||
     typeof window === "undefined" ||
     !("__TAURI_INTERNALS__" in window)

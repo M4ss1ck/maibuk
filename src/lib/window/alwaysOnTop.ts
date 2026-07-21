@@ -1,4 +1,4 @@
-import { IS_TAURI, setWindowAlwaysOnTop } from "@/lib/platform";
+import { IS_DESKTOP, setWindowAlwaysOnTop } from "@/lib/platform";
 import { useSettingsStore } from "@/features/settings/store";
 
 let unlisten: (() => void) | null = null;
@@ -12,7 +12,7 @@ let unlisten: (() => void) | null = null;
 // as enabled. Installed once at startup.
 export async function installAlwaysOnTopReapply(): Promise<void> {
   if (
-    !IS_TAURI ||
+    !IS_DESKTOP ||
     unlisten ||
     typeof window === "undefined" ||
     !("__TAURI_INTERNALS__" in window)
