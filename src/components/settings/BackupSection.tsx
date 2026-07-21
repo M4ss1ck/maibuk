@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { createBackup, getDialog, IS_TAURI } from "@/lib/platform";
+import { createBackup, getDialog, IS_DESKTOP } from "@/lib/platform";
 import { BackupService } from "@/features/backup/backup-service";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -224,7 +224,7 @@ export function BackupSection() {
         />
       </div>
 
-      {IS_TAURI && (
+      {IS_DESKTOP && (
         <div className="flex items-end gap-3">
           <Input
             label={t("backup.directoryLabel")}

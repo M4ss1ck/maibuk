@@ -1,10 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BackupSection } from "@/components/settings/BackupSection";
 import { useSettingsStore } from "@/features/settings/store";
 import type { BackupAdapter } from "@/lib/platform/types";
 
-const { mockAdapter, mockTranslate } = vi.hoisted(() => ({
+const { mockAdapter, mockTranslate, platformState, getDialog } = vi.hoisted(() => ({
   mockAdapter: {
     saveBackup: vi.fn(),
     listBackups: vi.fn().mockResolvedValue([]),
@@ -30,13 +31,18 @@ const { mockAdapter, mockTranslate } = vi.hoisted(() => ({
     if (key.startsWith("backup.trigger.")) return key.replace("backup.trigger.", "");
     return key;
   }),
+  platformState: { isDesktop: true },
+  getDialog: vi.fn().mockResolvedValue({ open: vi.fn().mockResolvedValue(null) }),
 }));
 
 vi.mock("../../../../lib/platform", () => ({
   createBackup: vi.fn().mockResolvedValue(mockAdapter),
-  getDialog: vi.fn(),
+  getDialog,
   getOS: vi.fn().mockResolvedValue({ locale: vi.fn().mockResolvedValue("en-US") }),
-  IS_TAURI: false,
+  IS_TAURI: true,
+  get IS_DESKTOP() {
+    return platformState.isDesktop;
+  },
 }));
 
 vi.mock("../../../../i18n", () => ({
@@ -79,5 +85,31 @@ describe("BackupSection", () => {
       .find((button) => button.textContent === "1/ 3");
 
     expect(pageSelector).toBeInTheDocument();
+  });
+
+  it("hides custom backup directory controls on Android", async () => {
+    platformState.isDesktop = false;
+    render(<BackupSection />);
+    await screen.findByRole("button", { name: "backup.createBackup" });
+
+    expect(screen.queryByLabelText("backup.directoryLabel")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "backup.chooseDirectory" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "backup.createBackup" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the directory picker from the keyboard on desktop", async () => {
+    platformState.isDesktop = true;
+    const user = userEvent.setup();
+    render(<BackupSection />);
+    const choose = await screen.findByRole("button", {
+      name: "backup.chooseDirectory",
+    });
+    choose.focus();
+    await user.keyboard("{Enter}");
+    expect(getDialog).toHaveBeenCalledOnce();
   });
 });
