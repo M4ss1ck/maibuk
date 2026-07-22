@@ -28,6 +28,14 @@ describe("WebBackupAdapter", () => {
       expect(list[0].createdAt).toBeInstanceOf(Date);
     });
 
+    it("saves and lists a close backup with its trigger", async () => {
+      await adapter.saveBackup("maibuk-backup-close-2026-03-15T14-30-00.sql", "sql");
+
+      await expect(adapter.listBackups()).resolves.toEqual([
+        expect.objectContaining({ trigger: "close" }),
+      ]);
+    });
+
     it("lists multiple backups sorted newest first", async () => {
       await adapter.saveBackup("maibuk-backup-daily-2026-03-15T14-30-00.sql", "sql1");
       // Small delay to ensure different timestamps

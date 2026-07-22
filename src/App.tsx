@@ -21,6 +21,7 @@ import { runDailyBackupOnce } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
 import { installAndroidBackHandler } from "@/lib/window/androidBack";
+import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
 
@@ -37,6 +38,7 @@ function App() {
     void runDailyBackupOnce();
     if (IS_ANDROID) {
       void installAndroidBackHandler();
+      void installAndroidLifecycleHandler();
     }
     if (!IS_DESKTOP) return;
     void installWindowCloseHandler();

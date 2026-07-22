@@ -1118,6 +1118,7 @@
       "pre-sync": "Pre-sincronización",
       "pre-restore": "Pre-restauración",
       "manual": "Manual",
+      "close": "Al cerrar",
       "unknown": "Desconocido"
     }
   }

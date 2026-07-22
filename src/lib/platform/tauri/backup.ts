@@ -18,9 +18,9 @@ interface BackupMeta {
 }
 
 const BACKUP_FILENAME_PATTERN =
-  /^maibuk-backup-(daily|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/;
+  /^maibuk-backup-(daily|pre-sync|pre-restore|manual|close)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/;
 const BACKUP_TIMESTAMP_PATTERN =
-  /^maibuk-backup-(?:daily|pre-sync|pre-restore|manual)-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})\.sql$/;
+  /^maibuk-backup-(?:daily|pre-sync|pre-restore|manual|close)-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})\.sql$/;
 
 function ensureSafeFilename(filename: string): string {
   if (!BACKUP_FILENAME_PATTERN.test(filename)) {
@@ -36,7 +36,7 @@ function isManagedSqlFile(name: string | undefined): name is string {
 function isManagedMetaFile(name: string | undefined): name is string {
   return (
     typeof name === "string" &&
-    /^maibuk-backup-(daily|pre-sync|pre-restore|manual)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.meta\.json$/.test(
+    /^maibuk-backup-(daily|pre-sync|pre-restore|manual|close)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.meta\.json$/.test(
       name
     )
   );

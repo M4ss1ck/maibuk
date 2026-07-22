@@ -1118,6 +1118,7 @@
       "pre-sync": "Pre-sync",
       "pre-restore": "Pre-restore",
       "manual": "Manual",
+      "close": "On close",
       "unknown": "Unknown"
     }
   }
