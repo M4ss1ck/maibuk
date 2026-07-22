@@ -25,6 +25,7 @@
     "dialog:default",
     "dialog:allow-save",
     "os:default",
+    "process:allow-exit",
     "clipboard-manager:allow-read-text"
   ]
 }

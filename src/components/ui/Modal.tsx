@@ -39,6 +39,8 @@ export function Modal({
   const modalRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
     const activeElement = document.activeElement;
@@ -81,10 +83,10 @@ export function Modal({
   useEffect(() => {
     if (!isOpen) return;
     return registerBackDismiss(() => {
-      onClose();
+      onCloseRef.current();
       return true;
     });
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
