@@ -1,5 +1,6 @@
 import { ButtonHTMLAttributes, forwardRef } from "react";
 import { useTranslation } from "react-i18next";
+import { Toolbar } from "react-aria-components/Toolbar";
 import {
   FilePlus2,
   Link2,
@@ -88,7 +89,11 @@ export function CanvasToolPanel({
 
   return (
     <TooltipGroup>
-      <div className="flex w-11 md:w-9 flex-col gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-lg backdrop-blur">
+      <Toolbar
+        orientation="vertical"
+        aria-label={t("canvas.tools")}
+        className="flex w-11 md:w-9 flex-col gap-1 rounded-lg border border-border bg-card/95 p-1 shadow-lg backdrop-blur"
+      >
         <ToolbarGroup>
           {tools.map(({ mode, icon: Icon, label, shortcutId }) => (
             <Tooltip key={mode} content={label} shortcut={shortcutId}>
@@ -164,7 +169,7 @@ export function CanvasToolPanel({
             </ToolbarButton>
           </Tooltip>
         </ToolbarGroup>
-      </div>
+      </Toolbar>
     </TooltipGroup>
   );
 }

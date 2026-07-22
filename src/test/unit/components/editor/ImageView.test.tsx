@@ -52,9 +52,9 @@ function createProps(overrides: Partial<NodeViewProps> = {}): NodeViewProps {
   } as unknown as NodeViewProps;
 }
 
-function renderImage(props = createProps()) {
+function renderImage(props = createProps(), contentRootClass = "editor-content") {
   const result = render(
-    <div className="editor-content">
+    <div className={contentRootClass}>
       <ImageView {...props} />
     </div>
   );
@@ -90,7 +90,10 @@ describe("ImageView", () => {
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
       this: HTMLElement
     ) {
-      const width = this.classList.contains("editor-content") ? 1000 : 500;
+      const width =
+        this.classList.contains("editor-content") || this.classList.contains("ProseMirror")
+          ? 1000
+          : 500;
       return { x: 0, y: 0, width, height: 100, top: 0, right: width, bottom: 100, left: 0, toJSON: () => ({}) };
     });
   });
@@ -134,6 +137,18 @@ describe("ImageView", () => {
     expect(document.body.style.userSelect).toBe("");
   });
 
+  it("resizes against a ProseMirror content root without jumping toward full width", () => {
+    const { props } = renderImage(createProps(), "ProseMirror");
+    const handle = southeastHandle();
+    installPointerCapture(handle);
+
+    fireEvent.pointerDown(handle, { pointerId: 10, pointerType: "touch", clientX: 0 });
+    fireEvent.pointerMove(document, { pointerId: 10, pointerType: "touch", clientX: 50 });
+    fireEvent.pointerUp(document, { pointerId: 10, pointerType: "touch", clientX: 50 });
+
+    expect(props.updateAttributes).toHaveBeenCalledWith({ width: "60%" });
+  });
+
   it.each(["pointerCancel", "lostPointerCapture"] as const)(
     "cleans an interrupted resize after %s without committing it",
     (eventName) => {
@@ -157,6 +172,8 @@ describe("ImageView", () => {
   );
 
   it("cleans an active resize when unmounted", () => {
+    document.body.style.cursor = "crosshair";
+    document.body.style.userSelect = "text";
     const { props, unmount } = renderImage();
     const handle = southeastHandle();
     installPointerCapture(handle);
@@ -169,8 +186,39 @@ describe("ImageView", () => {
     fireEvent.pointerUp(document, { pointerId: 9, pointerType: "touch", clientX: 50 });
 
     expect(props.updateAttributes).not.toHaveBeenCalled();
-    expect(document.body.style.cursor).toBe("");
-    expect(document.body.style.userSelect).toBe("");
+    expect(document.body.style.cursor).toBe("crosshair");
+    expect(document.body.style.userSelect).toBe("text");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  });
+
+  it("cancels an overlapping instance and restores the original global body styles", () => {
+    document.body.style.cursor = "crosshair";
+    document.body.style.userSelect = "text";
+    const firstProps = createProps();
+    const secondProps = createProps();
+    render(
+      <div className="editor-content">
+        <ImageView {...firstProps} />
+        <ImageView {...secondProps} />
+      </div>
+    );
+    const handles = document.querySelectorAll<HTMLElement>(".image-resize-handle.se");
+    installPointerCapture(handles[0]);
+    installPointerCapture(handles[1]);
+
+    fireEvent.pointerDown(handles[0], { pointerId: 11, pointerType: "touch", clientX: 0 });
+    fireEvent.pointerMove(document, { pointerId: 11, pointerType: "touch", clientX: 50 });
+    fireEvent.pointerDown(handles[1], { pointerId: 12, pointerType: "touch", clientX: 0 });
+    fireEvent.pointerUp(document, { pointerId: 11, pointerType: "touch", clientX: 50 });
+    fireEvent.pointerCancel(document, { pointerId: 12, pointerType: "touch" });
+
+    expect(firstProps.updateAttributes).not.toHaveBeenCalled();
+    expect(secondProps.updateAttributes).not.toHaveBeenCalled();
+    expect(document.body.style.cursor).toBe("crosshair");
+    expect(document.body.style.userSelect).toBe("text");
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
   });
 
   it("changes image width with the localized keyboard controls", async () => {
@@ -188,10 +236,30 @@ describe("ImageView", () => {
     expect(props.updateAttributes).toHaveBeenNthCalledWith(2, { width: "60%" });
   });
 
+  it("moves toolbar focus horizontally and activates the focused alignment", async () => {
+    const user = userEvent.setup();
+    const { props } = renderImage();
+    const left = screen.getByRole("button", { name: "editor.alignLeft" });
+    const center = screen.getByRole("button", { name: "editor.alignCenter" });
+    const right = screen.getByRole("button", { name: "editor.alignRight" });
+
+    center.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(right).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(props.updateAttributes).toHaveBeenLastCalledWith({ alignment: "right" });
+
+    await user.keyboard("{ArrowLeft}");
+    expect(center).toHaveFocus();
+    await user.keyboard(" ");
+    expect(props.updateAttributes).toHaveBeenLastCalledWith({ alignment: "center" });
+    expect(left).not.toHaveFocus();
+  });
+
   it.each([
-    ["10%", "editor.decreaseImageWidth", "10%"],
-    ["100%", "editor.increaseImageWidth", "100%"],
-  ])("bounds a %s image when using %s", async (width, label, expected) => {
+    ["10%", "editor.decreaseImageWidth"],
+    ["100%", "editor.increaseImageWidth"],
+  ])("disables %s-bound updates from %s", async (width, label) => {
     const user = userEvent.setup();
     const props = createProps({
       node: {
@@ -202,9 +270,33 @@ describe("ImageView", () => {
     renderImage(props);
 
     const button = screen.getByRole("button", { name: label });
+    expect(button).toBeDisabled();
     button.focus();
     await user.keyboard("{Enter}");
 
-    expect(props.updateAttributes).toHaveBeenCalledWith({ width: expected });
+    expect(props.updateAttributes).not.toHaveBeenCalled();
   });
+
+  it.each([null, "auto", "malformed", 42])(
+    "normalizes a %s persisted width before a keyboard change",
+    async (width) => {
+      const user = userEvent.setup();
+      const props = createProps({
+        node: {
+          attrs: { src: "data:image/png;base64,test", width, alignment: "center" },
+          textContent: "",
+        } as unknown as NodeViewProps["node"],
+      });
+      renderImage(props);
+
+      const decrease = screen.getByRole("button", { name: "editor.decreaseImageWidth" });
+      const increase = screen.getByRole("button", { name: "editor.increaseImageWidth" });
+      expect(decrease).toBeEnabled();
+      expect(increase).toBeDisabled();
+      decrease.focus();
+      await user.keyboard("{Enter}");
+
+      expect(props.updateAttributes).toHaveBeenCalledWith({ width: "90%" });
+    }
+  );
 });

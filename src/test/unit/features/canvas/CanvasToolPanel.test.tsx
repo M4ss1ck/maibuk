@@ -63,4 +63,22 @@ describe("CanvasToolPanel", () => {
     expect(selectButton).toHaveClass("size-9", "md:size-7");
     expect(selectButton.parentElement?.parentElement).toHaveClass("w-11", "md:w-9");
   });
+
+  it("moves focus vertically and activates the focused canvas tool", async () => {
+    const user = userEvent.setup();
+    render(<CanvasToolPanel {...callbacks()} />);
+    const select = screen.getByRole("button", { name: "canvas.toolSelect" });
+    const pen = screen.getByRole("button", { name: "canvas.toolPen" });
+
+    select.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(pen).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(useCanvasStore.getState().toolMode).toBe("pen");
+
+    await user.keyboard("{ArrowUp}");
+    expect(select).toHaveFocus();
+    await user.keyboard(" ");
+    expect(useCanvasStore.getState().toolMode).toBe("select");
+  });
 });

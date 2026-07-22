@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { NodeViewWrapper, NodeViewContent } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
+import { Toolbar } from "react-aria-components/Toolbar";
 import { AlignLeft, AlignCenter, AlignRight, Minus, Plus, Trash2 } from "lucide-react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { Button, Tooltip } from "@/components/ui";
@@ -22,6 +23,17 @@ interface ResizeSession {
   onLostPointerCapture: (event: PointerEvent) => void;
 }
 
+let activeResize: { owner: symbol; cancel: () => void } | null = null;
+
+function normalizeImageWidth(value: unknown): number {
+  if (typeof value !== "string") return MAX_WIDTH_PERCENT;
+  const match = value.match(/^\s*(\d+(?:\.\d+)?)%\s*$/);
+  if (!match) return MAX_WIDTH_PERCENT;
+  const width = Number(match[1]);
+  if (!Number.isFinite(width)) return MAX_WIDTH_PERCENT;
+  return Math.min(Math.max(width, MIN_WIDTH_PERCENT), MAX_WIDTH_PERCENT);
+}
+
 export function ImageView({
   node,
   editor,
@@ -35,6 +47,7 @@ export function ImageView({
   const [resizingWidth, setResizingWidth] = useState<string | null>(null);
   const resizingWidthRef = useRef<string | null>(null);
   const resizeSessionRef = useRef<ResizeSession | null>(null);
+  const resizeOwnerRef = useRef(Symbol("image-resize"));
   const updateAttributesRef = useRef(updateAttributes);
 
   // Keep ref in sync for use in event handlers
@@ -109,6 +122,9 @@ export function ImageView({
     const session = resizeSessionRef.current;
     if (!session) return;
     resizeSessionRef.current = null;
+    if (activeResize?.owner === resizeOwnerRef.current) {
+      activeResize = null;
+    }
 
     document.removeEventListener("pointermove", session.onPointerMove);
     document.removeEventListener("pointerup", session.onPointerUp);
@@ -139,8 +155,14 @@ export function ImageView({
       const figureEl = containerRef.current;
       if (!figureEl) return;
 
-      const parentEl = figureEl.closest(".editor-content") || figureEl.parentElement;
+      const directParent = figureEl.parentElement;
+      const fallbackParent =
+        directParent?.tagName === "FIGURE" ? directParent.parentElement : directParent;
+      const parentEl =
+        figureEl.closest(".editor-content, .ProseMirror") || fallbackParent;
       if (!parentEl) return;
+
+      activeResize?.cancel();
 
       const containerWidth = parentEl.getBoundingClientRect().width;
       const startWidth = figureEl.getBoundingClientRect().width;
@@ -188,6 +210,10 @@ export function ImageView({
       document.addEventListener("pointerup", onPointerUp);
       document.addEventListener("pointercancel", onPointerCancel);
       target.addEventListener("lostpointercapture", onLostPointerCapture);
+      activeResize = {
+        owner: resizeOwnerRef.current,
+        cancel: () => finishResize(false),
+      };
     },
     [finishResize]
   );
@@ -208,16 +234,17 @@ export function ImageView({
     [editor, getPos]
   );
 
+  const currentWidth = normalizeImageWidth(node.attrs.width);
   const changeWidth = useCallback(
     (delta: number) => {
-      const currentWidth = Number.parseFloat(String(node.attrs.width || MAX_WIDTH_PERCENT));
       const nextWidth = Math.min(
         Math.max(currentWidth + delta, MIN_WIDTH_PERCENT),
         MAX_WIDTH_PERCENT
       );
+      if (nextWidth === currentWidth) return;
       updateAttributes({ width: `${nextWidth}%` });
     },
-    [node.attrs.width, updateAttributes]
+    [currentWidth, updateAttributes]
   );
 
   const alignment = node.attrs.alignment || "center";
@@ -234,7 +261,12 @@ export function ImageView({
     >
       {/* Floating toolbar on selection */}
       {selected && (
-        <div className="image-floating-toolbar" contentEditable={false}>
+        <div contentEditable={false}>
+          <Toolbar
+            className="image-floating-toolbar"
+            orientation="horizontal"
+            aria-label={t("editor.toolbar")}
+          >
           <Tooltip content={t("editor.alignLeft")}>
             <button
               onClick={() => updateAttributes({ alignment: "left" })}
@@ -272,6 +304,7 @@ export function ImageView({
               size="sm"
               onClick={() => changeWidth(-WIDTH_STEP_PERCENT)}
               aria-label={t("editor.decreaseImageWidth")}
+              disabled={currentWidth <= MIN_WIDTH_PERCENT}
               type="button"
             >
               <Minus className="w-4 h-4" />
@@ -283,6 +316,7 @@ export function ImageView({
               size="sm"
               onClick={() => changeWidth(WIDTH_STEP_PERCENT)}
               aria-label={t("editor.increaseImageWidth")}
+              disabled={currentWidth >= MAX_WIDTH_PERCENT}
               type="button"
             >
               <Plus className="w-4 h-4" />
@@ -294,6 +328,7 @@ export function ImageView({
               <Trash2 className="w-4 h-4" />
             </button>
           </Tooltip>
+          </Toolbar>
         </div>
       )}
 

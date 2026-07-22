@@ -1017,6 +1017,14 @@ option {
   touch-action: none;
 }
 
+@media (pointer: coarse) {
+  .image-resize-handle::before {
+    position: absolute;
+    inset: -7px;
+    content: "";
+  }
+}
+
 .image-resize-handle.nw {
   top: -5px;
   left: -5px;
