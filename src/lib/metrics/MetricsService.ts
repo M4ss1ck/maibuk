@@ -1,4 +1,5 @@
 import { getDatabase } from "@/lib/db";
+import { IS_ANDROID } from "@/lib/platform";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { getOrCreateDeviceId } from "@/features/metrics/device-id";
 import {
@@ -336,7 +337,7 @@ export class MetricsService {
       };
       window.addEventListener("beforeunload", this.beforeUnloadHandler);
     }
-    if (!this.visibilityHandler && typeof document !== "undefined") {
+    if (!IS_ANDROID && !this.visibilityHandler && typeof document !== "undefined") {
       this.visibilityHandler = () => {
         if (document.visibilityState === "hidden") {
           this.endSessionInternal(new Date());

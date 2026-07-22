@@ -73,6 +73,7 @@ export default defineConfig(() => ({
         "src/features/backup/backup-service.ts",
         "src/features/backup/generate-sql-dump.ts",
         "src/features/backup/lifecycle.ts",
+        "src/lib/window/androidLifecycle.ts",
         "src/lib/db/sql-parser.ts",
         "src/lib/db/index.ts",
         "src/lib/platform/tauri/backup.ts",

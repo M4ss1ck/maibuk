@@ -219,6 +219,17 @@ describe("BackupService", () => {
       expect(list.length).toBe(2);
     });
 
+    it("treats close backups as unprotected prune candidates", async () => {
+      await mockAdapter.saveBackup("maibuk-backup-close-2026-03-15T10-00-00.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", "sql");
+
+      await service.pruneBackups(1);
+
+      const list = await mockAdapter.listBackups();
+      expect(list).toHaveLength(1);
+      expect(list[0].trigger).toBe("pre-sync");
+    });
+
     it("preserves at least 2 pre-sync and 2 pre-restore backups", async () => {
       await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-00.sql", "sql");
       await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", "sql");

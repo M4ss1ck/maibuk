@@ -63,6 +63,28 @@ describe("backup lifecycle", () => {
     expect(mockPruneBackups).toHaveBeenCalledWith(12);
   });
 
+  it("swallows a background backup creation failure without pruning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockCreateBackup.mockRejectedValueOnce(new Error("create failed"));
+
+    await expect(runBackgroundBackup()).resolves.toBeUndefined();
+
+    expect(mockPruneBackups).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith("Failed to create background backup:", expect.any(Error));
+    warn.mockRestore();
+  });
+
+  it("swallows a background backup prune failure after creating the backup", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockPruneBackups.mockRejectedValueOnce(new Error("prune failed"));
+
+    await expect(runBackgroundBackup()).resolves.toBeUndefined();
+
+    expect(mockCreateBackup).toHaveBeenCalledWith("close");
+    expect(warn).toHaveBeenCalledWith("Failed to create background backup:", expect.any(Error));
+    warn.mockRestore();
+  });
+
   it("skips daily backup if one already exists for today", async () => {
     mockHasBackupForToday.mockResolvedValue(true);
 

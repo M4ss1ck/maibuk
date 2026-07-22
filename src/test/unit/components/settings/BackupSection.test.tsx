@@ -87,6 +87,30 @@ describe("BackupSection", () => {
     expect(pageSelector).toBeInTheDocument();
   });
 
+  it("renders a close backup with its localized trigger", async () => {
+    platformState.isDesktop = true;
+    mockAdapter.listBackupsPage.mockResolvedValueOnce({
+      entries: [
+        {
+          filename: "maibuk-backup-close-2026-03-15T14-30-00.sql",
+          trigger: "close",
+          createdAt: new Date("2026-03-15T14:30:00.000Z"),
+          sizeBytes: 1024,
+          checksum: "hash",
+        },
+      ],
+      totalCount: 1,
+      totalSizeBytes: 1024,
+      page: 1,
+      pageSize: 10,
+    });
+
+    render(<BackupSection />);
+
+    expect(await screen.findByText("close")).toBeInTheDocument();
+    expect(mockTranslate).toHaveBeenCalledWith("backup.trigger.close");
+  });
+
   it("hides custom backup directory controls on Android", async () => {
     platformState.isDesktop = false;
     render(<BackupSection />);
