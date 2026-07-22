@@ -356,6 +356,26 @@ describe("Modal", () => {
       );
       expect(document.querySelector(".custom-scroll")).not.toBeNull();
     });
+
+    it("adds safe-area clearance without replacing custom panel padding", () => {
+      render(
+        <Modal
+          isOpen={true}
+          onClose={() => {}}
+          title="Custom Panel"
+          panelClassName="custom-panel p-8"
+        >
+          <p>Content</p>
+        </Modal>
+      );
+
+      const panel = document.querySelector(".custom-panel");
+      expect(panel).toHaveClass("p-8");
+      expect(panel?.lastElementChild).toHaveClass(
+        "h-[env(safe-area-inset-bottom)]",
+        "shrink-0"
+      );
+    });
   });
 
   describe("focus management", () => {
