@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
@@ -65,6 +65,7 @@ import { Layout } from "@/components/Layout";
 import { APP_VERSION, DOWNLOAD_PAGE } from "@/constants";
 import { useThemeStore } from "@/features/theme/store";
 import { useSettingsStore } from "@/features/settings/store";
+import { runTopBackDismiss } from "@/lib/platform/backDismiss";
 
 function RouteFixture() {
   const { pathname } = useLocation();
@@ -235,6 +236,24 @@ describe("Layout", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
+  });
+
+  it("closes the mobile drawer through the back-dismiss registry and restores focus", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+    const trigger = screen.getByRole("button", { name: "Open navigation menu" });
+
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("dialog", { name: "Primary navigation" })).toBeInTheDocument();
+
+    act(() => {
+      expect(runTopBackDismiss()).toBe(true);
+    });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+    expect(runTopBackDismiss()).toBe(false);
   });
 
   it("localizes the mobile drawer open and close accessible names", async () => {
