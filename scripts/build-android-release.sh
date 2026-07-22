@@ -7,10 +7,14 @@ SIGNING_DIR="$HOME/.config/maibuk/android-signing"
 KEYSTORE="$SIGNING_DIR/android-release.jks"
 CREDENTIALS="$SIGNING_DIR/credentials.env"
 ALIAS=maibuk
-UNSIGNED_APK="$ROOT_DIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk"
-ALIGNED_APK="$ROOT_DIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk"
-SIGNED_APK="$ROOT_DIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+APK_DIR="$ROOT_DIR/src-tauri/gen/android/app/build/outputs/apk"
 JNI_LIBS_DIR="$ROOT_DIR/src-tauri/gen/android/app/src/main/jniLibs"
+
+# tauri's --split-per-abi builds the per-arch product flavors, so each ABI lands
+# in its own APK carrying only its own native libraries. This roughly halves the
+# download compared to a combined universal APK. Each entry maps the flavor
+# (Gradle product flavor / output subdir) to the ABI its APK must contain.
+FLAVOR_ABIS=("arm64:arm64-v8a" "x86_64:x86_64")
 
 fail() {
   printf 'Android release build failed: %s\n' "$1" >&2
@@ -62,23 +66,38 @@ source "$CREDENTIALS"
 [[ -n "$MAIBUK_ANDROID_KEYSTORE_PASSWORD" ]] || fail "keystore password is empty"
 
 rm -rf "$JNI_LIBS_DIR"
-pnpm tauri android build --apk true --aab false --target aarch64 x86_64
-[[ -f "$UNSIGNED_APK" ]] || fail "unsigned APK not found at $UNSIGNED_APK"
+pnpm tauri android build --apk true --aab false --split-per-abi --target aarch64 x86_64
 
-"$ZIPALIGN" -f -p 4 "$UNSIGNED_APK" "$ALIGNED_APK"
-"$APKSIGNER" sign \
-  --ks "$MAIBUK_ANDROID_KEYSTORE" \
-  --ks-key-alias "$MAIBUK_ANDROID_KEY_ALIAS" \
-  --ks-pass "pass:$MAIBUK_ANDROID_KEYSTORE_PASSWORD" \
-  --key-pass "pass:$MAIBUK_ANDROID_KEYSTORE_PASSWORD" \
-  --out "$SIGNED_APK" \
-  "$ALIGNED_APK"
-"$APKSIGNER" verify --verbose "$SIGNED_APK"
-rm -f "$ALIGNED_APK"
+SIGNED_APKS=()
+for pair in "${FLAVOR_ABIS[@]}"; do
+  flavor="${pair%%:*}"
+  abi="${pair##*:}"
+  release_dir="$APK_DIR/$flavor/release"
+  unsigned_apk="$release_dir/app-$flavor-release-unsigned.apk"
+  [[ -f "$unsigned_apk" ]] || fail "unsigned $abi APK not found at $unsigned_apk"
+  aligned_apk="$release_dir/maibuk-$abi-aligned.apk"
+  signed_apk="$release_dir/maibuk-$abi.apk"
 
-BADGING=$("$AAPT" dump badging "$SIGNED_APK")
-[[ "$BADGING" == *"native-code: 'x86_64' 'arm64-v8a'"* || "$BADGING" == *"native-code: 'arm64-v8a' 'x86_64'"* ]] \
-  || fail "signed APK does not contain both arm64-v8a and x86_64"
+  "$ZIPALIGN" -f -p 4 "$unsigned_apk" "$aligned_apk"
+  "$APKSIGNER" sign \
+    --ks "$MAIBUK_ANDROID_KEYSTORE" \
+    --ks-key-alias "$MAIBUK_ANDROID_KEY_ALIAS" \
+    --ks-pass "pass:$MAIBUK_ANDROID_KEYSTORE_PASSWORD" \
+    --key-pass "pass:$MAIBUK_ANDROID_KEYSTORE_PASSWORD" \
+    --out "$signed_apk" \
+    "$aligned_apk"
+  "$APKSIGNER" verify --verbose "$signed_apk"
+  rm -f "$aligned_apk"
 
-printf 'Signed Android release APK: %s\n' "$SIGNED_APK"
-printf 'Back up %s and %s before distributing this APK.\n' "$KEYSTORE" "$CREDENTIALS"
+  # aapt prints every packaged ABI on one line, e.g. native-code: 'arm64-v8a'.
+  # Require exactly this ABI and nothing else so a build never ships extra libs.
+  NATIVE_CODE=$("$AAPT" dump badging "$signed_apk" | grep '^native-code:' || true)
+  [[ "$NATIVE_CODE" == "native-code: '$abi'" ]] \
+    || fail "signed APK for $abi has unexpected native code: ${NATIVE_CODE:-none}"
+
+  SIGNED_APKS+=("$signed_apk")
+done
+
+printf 'Signed Android release APKs:\n'
+printf '  %s\n' "${SIGNED_APKS[@]}"
+printf 'Back up %s and %s before distributing these APKs.\n' "$KEYSTORE" "$CREDENTIALS"

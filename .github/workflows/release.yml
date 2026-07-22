@@ -209,7 +209,7 @@ jobs:
           prerelease: false
           args: --target x86_64-pc-windows-gnu
 
-  # Build signed universal Android APK (arm64-v8a + x86_64)
+  # Build signed per-ABI Android APKs (separate arm64-v8a and x86_64)
   build-android:
     needs: [prepare, quality]
     permissions:
@@ -282,18 +282,20 @@ jobs:
       - name: Build signed Android APK
         run: pnpm build:android
 
-      - name: Rename APK to release filename
+      - name: Rename APKs to release filenames
         id: apk
         run: |
-          SRC="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
-          DEST="maibuk_${{ needs.prepare.outputs.version }}_android.apk"
-          cp "$SRC" "$DEST"
-          echo "path=$DEST" >> "$GITHUB_OUTPUT"
+          APK_DIR="src-tauri/gen/android/app/build/outputs/apk"
+          VERSION="${{ needs.prepare.outputs.version }}"
+          cp "$APK_DIR/arm64/release/maibuk-arm64-v8a.apk" "maibuk_${VERSION}_android_arm64-v8a.apk"
+          cp "$APK_DIR/x86_64/release/maibuk-x86_64.apk" "maibuk_${VERSION}_android_x86_64.apk"
 
-      - name: Upload Android APK to release
+      - name: Upload Android APKs to release
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ steps.apk.outputs.path }}
+          files: |
+            maibuk_${{ needs.prepare.outputs.version }}_android_arm64-v8a.apk
+            maibuk_${{ needs.prepare.outputs.version }}_android_x86_64.apk
           tag_name: v${{ needs.prepare.outputs.version }}
           draft: true
           body: ${{ needs.prepare.outputs.changelog }}
