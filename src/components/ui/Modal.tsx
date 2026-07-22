@@ -120,7 +120,7 @@ export function Modal({
             ref={modalRef}
             className={
               panelClassName ??
-              `relative bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full ${sizeClass} sm:mx-4 max-h-[90vh] overflow-hidden flex flex-col modal-panel-enter`
+              `relative bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full ${sizeClass} sm:mx-4 max-h-[90vh] overflow-hidden flex flex-col modal-panel-enter pb-[env(safe-area-inset-bottom)]`
             }
           >
             <Dialog
