@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { CloseIcon } from "@/components/icons";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useModalScope } from "@/hooks";
+import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 interface ModalProps {
   isOpen: boolean;
@@ -76,6 +77,14 @@ export function Modal({
   }, [isOpen]);
 
   useLayoutEffect(() => restoreFocus, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    return registerBackDismiss(() => {
+      onClose();
+      return true;
+    });
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (!isOpen) return;

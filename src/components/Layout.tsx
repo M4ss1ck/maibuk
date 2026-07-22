@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
@@ -11,6 +11,7 @@ import { KeyboardShortcut } from "@/components/ui";
 import { APP_VERSION, DOWNLOAD_PAGE } from "@/constants";
 import { useSettingsStore } from "@/features/settings/store";
 import { useVersionCheck } from "@/features/version";
+import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { formatKeys, SHORTCUTS } from "@/lib/shortcut-registry";
 
 export function Layout() {
@@ -61,6 +62,14 @@ export function Layout() {
   }, [isMobileMenuOpen]);
 
   useLayoutEffect(() => restoreMobileMenuFocus, []);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    return registerBackDismiss(() => {
+      setIsMobileMenuOpen(false);
+      return true;
+    });
+  }, [isMobileMenuOpen, setIsMobileMenuOpen]);
 
   const navigationItems = [
     {
