@@ -19,9 +19,10 @@ import { ToastViewport } from "@/components/ui";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { runDailyBackupOnce } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
+import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
+import { installAndroidBackHandler } from "@/lib/window/androidBack";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
-import { IS_DESKTOP } from "@/lib/platform";
 
 function isEmbedPath(pathname: string): boolean {
   return pathname === "/embed";
@@ -34,6 +35,9 @@ function App() {
   useEffect(() => {
     if (embedMode) return;
     void runDailyBackupOnce();
+    if (IS_ANDROID) {
+      void installAndroidBackHandler();
+    }
     if (!IS_DESKTOP) return;
     void installWindowCloseHandler();
     void installAlwaysOnTopReapply();
