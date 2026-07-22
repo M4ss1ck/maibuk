@@ -371,6 +371,8 @@
     "alignCenter": "Align Center",
     "alignRight": "Align Right",
     "alignJustify": "Justify",
+    "decreaseImageWidth": "Decrease image width",
+    "increaseImageWidth": "Increase image width",
     "removeFormatting": "Remove Formatting",
     "sceneBreak": "Scene Break (* * *)",
     "sceneBreakOptions": "Scene break options",

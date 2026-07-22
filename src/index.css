@@ -1014,6 +1014,7 @@ option {
   border: 2px solid white;
   border-radius: 2px;
   z-index: 5;
+  touch-action: none;
 }
 
 .image-resize-handle.nw {

@@ -371,6 +371,8 @@
     "alignCenter": "Centrar",
     "alignRight": "Alinear a la Derecha",
     "alignJustify": "Justificar",
+    "decreaseImageWidth": "Reducir ancho de la imagen",
+    "increaseImageWidth": "Aumentar ancho de la imagen",
     "removeFormatting": "Quitar Formato",
     "sceneBreak": "Salto de Escena (* * *)",
     "sceneBreakOptions": "Opciones de salto de escena",
