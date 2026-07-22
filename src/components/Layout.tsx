@@ -208,8 +208,8 @@ export function Layout() {
   );
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-background border-b border-border flex items-center px-4 z-40">
+    <div className="flex h-dvh bg-background text-foreground">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] bg-background border-b border-border flex items-center z-40">
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen(true)}
@@ -237,7 +237,7 @@ export function Layout() {
                 <Dialog aria-label={t("nav.primary")} className="contents outline-none">
                   <aside
                     style={{ width: `${mainSidebarWidth}px` }}
-                    className="h-full border-r border-border flex flex-col bg-background transition duration-300 ease-in-out"
+                    className="h-full border-r border-border flex flex-col bg-background transition duration-300 ease-in-out pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
                   >
                     {sidebarContent(true)}
                   </aside>
@@ -266,7 +266,7 @@ export function Layout() {
         data-focus-pane="main-content"
         tabIndex={-1}
         aria-label={t("panes.mainContent")}
-        className="flex-1 overflow-hidden pt-14 md:pt-0"
+        className="flex-1 overflow-hidden pt-[calc(3.5rem+env(safe-area-inset-top))] md:pt-0"
       >
         <Outlet />
       </main>
