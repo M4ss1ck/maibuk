@@ -9,7 +9,7 @@ import { useCoverStore } from "@/features/covers/store";
 import { createDefaultScene, createTextLayer } from "@/features/covers/scene/defaults";
 import { loadScene } from "@/features/covers/scene/migrate";
 import { dataUrlToBytes, exportScene, exportScenePdf } from "@/features/covers/export";
-import { Button } from "@/components/ui/Button";
+import { Button, Modal } from "@/components/ui";
 import { BackIcon } from "@/components/icons";
 import { useShortcuts } from "@/lib/shortcuts";
 import { matchKeys } from "@/lib/shortcut-registry";
@@ -24,6 +24,8 @@ export function CoverDesigner() {
   const { currentBook, loadBook, updateBook } = useBookStore();
   const dirty = useCoverStore((s) => s.dirty);
   const [isSaving, setIsSaving] = useState(false);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [propsOpen, setPropsOpen] = useState(false);
   const coverLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -188,6 +190,24 @@ export function CoverDesigner() {
           <p className="text-xs text-muted-foreground truncate">{currentBook.title}</p>
         </div>
         <Button
+          variant="ghost"
+          size="sm"
+          className="md:hidden"
+          onClick={() => setLayersOpen(true)}
+          aria-label={t("cover.layers.title")}
+        >
+          {t("cover.layers.title")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="lg:hidden"
+          onClick={() => setPropsOpen(true)}
+          aria-label={t("cover.props.title")}
+        >
+          {t("cover.props.title")}
+        </Button>
+        <Button
           variant="secondary"
           size="sm"
           onClick={handleSave}
@@ -215,6 +235,25 @@ export function CoverDesigner() {
           <PropertiesPanel />
         </div>
       </main>
+
+      <Modal
+        isOpen={layersOpen}
+        onClose={() => setLayersOpen(false)}
+        title={t("cover.layers.title")}
+      >
+        <div data-testid="cover-layers-sheet">
+          <LayersPanel />
+        </div>
+      </Modal>
+      <Modal
+        isOpen={propsOpen}
+        onClose={() => setPropsOpen(false)}
+        title={t("cover.props.title")}
+      >
+        <div data-testid="cover-properties-sheet">
+          <PropertiesPanel />
+        </div>
+      </Modal>
     </div>
   );
 }
