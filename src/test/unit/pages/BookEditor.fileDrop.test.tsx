@@ -258,10 +258,7 @@ describe("BookEditor file-drop imports", () => {
       "Alpha",
       "Beta",
     ]);
-    expect(displayedTitles()).toEqual([
-      "First|Alpha|Beta|Second",
-      "First|Alpha|Beta|Second",
-    ]);
+    expect(displayedTitles()).toEqual(["First|Alpha|Beta|Second", "First|Alpha|Beta|Second"]);
 
     secondUpdate.resolve();
     await flush();
@@ -272,28 +269,20 @@ describe("BookEditor file-drop imports", () => {
       "imported-2",
       "chapter-2",
     ]);
-    expect(displayedTitles()).toEqual([
-      "First|Alpha|Beta|Second",
-      "First|Alpha|Beta|Second",
-    ]);
+    expect(displayedTitles()).toEqual(["First|Alpha|Beta|Second", "First|Alpha|Beta|Second"]);
 
     reorder.resolve();
     await act(async () => {
       await importControl.promise;
     });
     rerender(<BookEditor />);
-    expect(displayedTitles()).toEqual([
-      "First|Alpha|Beta|Second",
-      "First|Alpha|Beta|Second",
-    ]);
+    expect(displayedTitles()).toEqual(["First|Alpha|Beta|Second", "First|Alpha|Beta|Second"]);
   });
 
   it("reveals append imports while their content is still being populated", async () => {
     const update = deferred();
     mockUpdateChapter.mockImplementation(() => update.promise);
-    importControl.files = [
-      { stem: "Append", extension: ".md", text: "Append body" },
-    ];
+    importControl.files = [{ stem: "Append", extension: ".md", text: "Append body" }];
 
     const { rerender } = render(<BookEditor />);
     fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
@@ -315,9 +304,7 @@ describe("BookEditor file-drop imports", () => {
     const update = deferred();
     mockUpdateChapter.mockImplementation(() => update.promise);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    importControl.files = [
-      { stem: "Failed", extension: ".md", text: "Failed body" },
-    ];
+    importControl.files = [{ stem: "Failed", extension: ".md", text: "Failed body" }];
 
     const { rerender } = render(<BookEditor />);
     fireEvent.click(screen.getAllByRole("button", { name: "import files" })[0]);
@@ -401,10 +388,7 @@ describe("BookEditor file-drop imports", () => {
     expect(mockUpdateChapter).toHaveBeenCalledTimes(2);
     expect(mockReorderChapters).toHaveBeenCalledTimes(2);
     expect(secondSettled).toBe(false);
-    expect(displayedTitles()).toEqual([
-      "First|Alpha|Beta|Second",
-      "First|Alpha|Beta|Second",
-    ]);
+    expect(displayedTitles()).toEqual(["First|Alpha|Beta|Second", "First|Alpha|Beta|Second"]);
 
     secondReorder.resolve();
     await act(async () => {
@@ -412,10 +396,7 @@ describe("BookEditor file-drop imports", () => {
     });
     rerender(<BookEditor />);
     expect(secondSettled).toBe(true);
-    expect(displayedTitles()).toEqual([
-      "First|Alpha|Beta|Second",
-      "First|Alpha|Beta|Second",
-    ]);
+    expect(displayedTitles()).toEqual(["First|Alpha|Beta|Second", "First|Alpha|Beta|Second"]);
   });
 
   it("keeps the import and next queued batch pending through book metadata persistence", async () => {
@@ -517,10 +498,7 @@ describe("BookEditor file-drop imports", () => {
     expect(mockCreateChapter).toHaveBeenCalledTimes(2);
     expect(mockUpdateChapter).toHaveBeenCalledTimes(2);
     expect(mockToastError).toHaveBeenCalledTimes(1);
-    expect(displayedTitles()).toEqual([
-      "First|Second|Failed|Next",
-      "First|Second|Failed|Next",
-    ]);
+    expect(displayedTitles()).toEqual(["First|Second|Failed|Next", "First|Second|Failed|Next"]);
     consoleError.mockRestore();
   });
 
@@ -612,9 +590,6 @@ describe("BookEditor file-drop imports", () => {
 
     expect(mockSetCurrentChapter).not.toHaveBeenCalled();
     expect(mockUpdateBook).not.toHaveBeenCalled();
-    expect(displayedTitles()).toEqual([
-      "Other book chapter",
-      "Other book chapter",
-    ]);
+    expect(displayedTitles()).toEqual(["Other book chapter", "Other book chapter"]);
   });
 });

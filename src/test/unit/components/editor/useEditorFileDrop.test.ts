@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@tiptap/pm/state";
 import { schema } from "@tiptap/pm/schema-basic";
-import {
-  createFileDropCaretPlugin,
-  fileDropCaretKey,
-} from "@/components/editor/useEditorFileDrop";
+import { createFileDropCaretPlugin, fileDropCaretKey } from "@/components/editor/useEditorFileDrop";
 
 describe("file drop caret plugin", () => {
   it("stores the caret position from meta and clears it with null", () => {

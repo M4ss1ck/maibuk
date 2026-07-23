@@ -2,61 +2,67 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockBookState, mockChapterState, mockLoadBook, mockLoadChapters, mockSetCurrentChapter, platformState } =
-  vi.hoisted(() => ({
-    platformState: { isDesktop: true },
-    mockBookState: {
-      currentBook: {
-        id: "book-1",
-        title: "Draft",
-        authorName: "Author",
-        language: "en",
-        wordCount: 0,
-        status: "draft",
-        createdAt: new Date("2026-01-01T00:00:00Z"),
-        updatedAt: new Date("2026-01-01T00:00:00Z"),
-      } as null | {
-        id: string;
-        title: string;
-        authorName: string;
-        language: string;
-        wordCount: number;
-        status: string;
-        createdAt: Date;
-        updatedAt: Date;
-      },
-      isLoading: false,
+const {
+  mockBookState,
+  mockChapterState,
+  mockLoadBook,
+  mockLoadChapters,
+  mockSetCurrentChapter,
+  platformState,
+} = vi.hoisted(() => ({
+  platformState: { isDesktop: true },
+  mockBookState: {
+    currentBook: {
+      id: "book-1",
+      title: "Draft",
+      authorName: "Author",
+      language: "en",
+      wordCount: 0,
+      status: "draft",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+    } as null | {
+      id: string;
+      title: string;
+      authorName: string;
+      language: string;
+      wordCount: number;
+      status: string;
+      createdAt: Date;
+      updatedAt: Date;
     },
-    mockChapterState: {
-      chapters: [] as Array<{
-        id: string;
-        bookId: string;
-        title: string;
-        content: string;
-        order: number;
-        wordCount: number;
-        chapterType: string;
-        createdAt: Date;
-        updatedAt: Date;
-      }>,
-      currentBookId: "book-1" as string | null,
-      currentChapter: null as null | {
-        id: string;
-        bookId: string;
-        title: string;
-        content: string;
-        order: number;
-        wordCount: number;
-        chapterType: string;
-        createdAt: Date;
-        updatedAt: Date;
-      },
-      isLoading: false,
+    isLoading: false,
+  },
+  mockChapterState: {
+    chapters: [] as Array<{
+      id: string;
+      bookId: string;
+      title: string;
+      content: string;
+      order: number;
+      wordCount: number;
+      chapterType: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }>,
+    currentBookId: "book-1" as string | null,
+    currentChapter: null as null | {
+      id: string;
+      bookId: string;
+      title: string;
+      content: string;
+      order: number;
+      wordCount: number;
+      chapterType: string;
+      createdAt: Date;
+      updatedAt: Date;
     },
-    mockLoadBook: vi.fn(),
-    mockLoadChapters: vi.fn(),
-    mockSetCurrentChapter: vi.fn(),
-  }));
+    isLoading: false,
+  },
+  mockLoadBook: vi.fn(),
+  mockLoadChapters: vi.fn(),
+  mockSetCurrentChapter: vi.fn(),
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -264,9 +270,7 @@ describe("BookEditor loading state", () => {
     platformState.isDesktop = false;
     render(<BookEditor />);
 
-    expect(
-      screen.queryByRole("button", { name: "settings.alwaysOnTop" })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "settings.alwaysOnTop" })).not.toBeInTheDocument();
   });
 
   it("omits the always-on-top button from the mobile more menu on Android", async () => {
@@ -278,8 +282,6 @@ describe("BookEditor loading state", () => {
     moreButton.focus();
     await user.keyboard("{Enter}");
 
-    expect(
-      screen.queryByRole("button", { name: "settings.alwaysOnTop" })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "settings.alwaysOnTop" })).not.toBeInTheDocument();
   });
 });

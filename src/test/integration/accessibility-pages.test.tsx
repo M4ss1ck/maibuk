@@ -562,13 +562,17 @@ describe("Settings page", () => {
     const { Settings } = await import("@/pages/Settings");
     render(
       <MemoryRouter initialEntries={["/settings"]}>
-        <Routes><Route path="/settings" element={<Settings />} /></Routes>
+        <Routes>
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
       </MemoryRouter>
     );
 
     expect(screen.queryByText("settings.launchOnStartup")).not.toBeInTheDocument();
     expect(screen.queryByText("settings.closeToTray")).not.toBeInTheDocument();
-    expect(screen.queryByRole("switch", { name: "settings.toggleAlwaysOnTop" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "settings.toggleAlwaysOnTop" })
+    ).not.toBeInTheDocument();
   });
 });
 

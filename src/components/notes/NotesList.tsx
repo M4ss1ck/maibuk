@@ -66,10 +66,7 @@ interface NotesListProps {
   onDeleteNote?: (id: string) => void;
   onDuplicateNote?: (note: NoteWithBook) => void;
   onRenameNote?: (id: string, title: string) => void;
-  onImportFiles?: (
-    files: DroppedTextFile[],
-    target: ListDropTarget | null,
-  ) => void | Promise<void>;
+  onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
 }
 
 export function NotesList({
@@ -159,14 +156,9 @@ export function NotesList({
     (point: DropPoint | null): ListDropTarget | null => {
       const container = listContainerRef.current;
       if (!point || !container || viewMode !== "list") return null;
-      return dropTargetFromPoint(
-        container,
-        point.y,
-        "[data-drop-id]",
-        "data-drop-id",
-      );
+      return dropTargetFromPoint(container, point.y, "[data-drop-id]", "data-drop-id");
     },
-    [viewMode],
+    [viewMode]
   );
 
   const { isDraggingFile, isImportingFiles, dropHandlers } = useTextFileDrop(listContainerRef, {
@@ -181,12 +173,10 @@ export function NotesList({
         return;
       }
       const sectionId = listSectionsRef.current.find((section) =>
-        section.notes.some((note) => note.id === target.id),
+        section.notes.some((note) => note.id === target.id)
       )?.id;
       setDropTarget(
-        sectionId
-          ? { sectionId, targetId: target.id, placement: target.placement }
-          : null,
+        sectionId ? { sectionId, targetId: target.id, placement: target.placement } : null
       );
     },
   });

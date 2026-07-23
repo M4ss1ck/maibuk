@@ -239,9 +239,7 @@ describe("NoteEditor", () => {
       />
     );
 
-    expect(
-      screen.queryByRole("button", { name: "settings.alwaysOnTop" })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "settings.alwaysOnTop" })).not.toBeInTheDocument();
   });
 
   it("toggles always-on-top via keyboard on desktop", async () => {

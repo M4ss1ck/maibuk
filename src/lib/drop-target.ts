@@ -14,7 +14,7 @@ export function dropTargetFromPoint(
   container: HTMLElement,
   clientY: number,
   selector: string,
-  idAttribute: string,
+  idAttribute: string
 ): ListDropTarget | null {
   const rows = Array.from(container.querySelectorAll<HTMLElement>(selector));
   let nearest: HTMLElement | null = null;
@@ -30,8 +30,7 @@ export function dropTargetFromPoint(
         placement: clientY < rect.top + rect.height / 2 ? "before" : "after",
       };
     }
-    const distance =
-      clientY < rect.top ? rect.top - clientY : clientY - rect.bottom;
+    const distance = clientY < rect.top ? rect.top - clientY : clientY - rect.bottom;
     if (distance < nearestDistance && row.getAttribute(idAttribute)) {
       nearestDistance = distance;
       nearest = row;
@@ -42,7 +41,6 @@ export function dropTargetFromPoint(
   const id = nearest.getAttribute(idAttribute) as string;
   return {
     id,
-    placement:
-      clientY < nearest.getBoundingClientRect().top ? "before" : "after",
+    placement: clientY < nearest.getBoundingClientRect().top ? "before" : "after",
   };
 }

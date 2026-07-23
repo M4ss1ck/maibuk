@@ -39,10 +39,7 @@ export function createFileDropCaretPlugin(): Plugin<number | null> {
   });
 }
 
-export function useEditorFileDrop(
-  editor: TiptapEditor | null,
-  enabled: boolean,
-): void {
+export function useEditorFileDrop(editor: TiptapEditor | null, enabled: boolean): void {
   useEffect(() => {
     if (!IS_TAURI || !editor || !enabled) return;
 
@@ -57,8 +54,7 @@ export function useEditorFileDrop(
     const posAt = (x: number, y: number): number | null => {
       const view = editor.view;
       const rect = view.dom.getBoundingClientRect();
-      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom)
-        return null;
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null;
       return view.posAtCoords({ left: x, top: y })?.pos ?? null;
     };
 
@@ -79,10 +75,7 @@ export function useEditorFileDrop(
           }
 
           if (payload.type === "drop") {
-            const pos = posAt(
-              payload.position.x / dpr,
-              payload.position.y / dpr,
-            );
+            const pos = posAt(payload.position.x / dpr, payload.position.y / dpr);
             setCaret(null);
             if (pos === null) return;
             void (async () => {

@@ -178,9 +178,7 @@ describe("BackupService", () => {
   });
 
   it("parses the close trigger from a managed filename", () => {
-    expect(parseTriggerFromFilename("maibuk-backup-close-2026-03-15T14-30-00.sql")).toBe(
-      "close"
-    );
+    expect(parseTriggerFromFilename("maibuk-backup-close-2026-03-15T14-30-00.sql")).toBe("close");
   });
 
   describe("deleteByTrigger", () => {

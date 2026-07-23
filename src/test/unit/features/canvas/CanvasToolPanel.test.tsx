@@ -37,15 +37,27 @@ describe("CanvasToolPanel", () => {
     render(<CanvasToolPanel {...handlers} />);
 
     const actions = [
-      ["canvas.toolSelect", "{Enter}", () => expect(useCanvasStore.getState().toolMode).toBe("select")],
+      [
+        "canvas.toolSelect",
+        "{Enter}",
+        () => expect(useCanvasStore.getState().toolMode).toBe("select"),
+      ],
       ["canvas.toolPen", " ", () => expect(useCanvasStore.getState().toolMode).toBe("pen")],
-      ["canvas.toolEraser", "{Enter}", () => expect(useCanvasStore.getState().toolMode).toBe("eraser")],
+      [
+        "canvas.toolEraser",
+        "{Enter}",
+        () => expect(useCanvasStore.getState().toolMode).toBe("eraser"),
+      ],
       ["canvas.addTextNode", " ", () => expect(handlers.onAddText).toHaveBeenCalledOnce()],
       ["canvas.addNoteRef", "{Enter}", () => expect(handlers.onAddNoteRef).toHaveBeenCalledOnce()],
       ["canvas.zoomIn", " ", () => expect(handlers.onZoomIn).toHaveBeenCalledOnce()],
       ["canvas.zoomOut", "{Enter}", () => expect(handlers.onZoomOut).toHaveBeenCalledOnce()],
       ["canvas.fitView", " ", () => expect(handlers.onFitView).toHaveBeenCalledOnce()],
-      ["canvas.lockInteractivity", "{Enter}", () => expect(useCanvasStore.getState().interactivityLocked).toBe(true)],
+      [
+        "canvas.lockInteractivity",
+        "{Enter}",
+        () => expect(useCanvasStore.getState().interactivityLocked).toBe(true),
+      ],
     ] as const;
 
     for (const [label, key, assertOutcome] of actions) {

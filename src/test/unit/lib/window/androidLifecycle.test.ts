@@ -107,10 +107,7 @@ describe("android background lifecycle", () => {
     await expect(handleBackground(1000)).resolves.toBeUndefined();
 
     expect(runBackgroundBackup).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      "Failed to flush background metrics:",
-      expect.any(Error)
-    );
+    expect(warn).toHaveBeenCalledWith("Failed to flush background metrics:", expect.any(Error));
     warn.mockRestore();
   });
 

@@ -371,10 +371,7 @@ describe("Modal", () => {
 
       const panel = document.querySelector(".custom-panel");
       expect(panel).toHaveClass("p-8");
-      expect(panel?.lastElementChild).toHaveClass(
-        "h-[env(safe-area-inset-bottom)]",
-        "shrink-0"
-      );
+      expect(panel?.lastElementChild).toHaveClass("h-[env(safe-area-inset-bottom)]", "shrink-0");
     });
   });
 

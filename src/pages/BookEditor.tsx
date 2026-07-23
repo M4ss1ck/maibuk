@@ -532,15 +532,7 @@ export function BookEditor() {
       importQueueRef.current = queuedImport.catch(() => {});
       return queuedImport;
     },
-    [
-      bookId,
-      createChapter,
-      updateChapter,
-      reorderChapters,
-      setCurrentChapter,
-      updateBook,
-      t,
-    ]
+    [bookId, createChapter, updateChapter, reorderChapters, setCurrentChapter, updateBook, t]
   );
 
   const handleDeleteChapter = useCallback(

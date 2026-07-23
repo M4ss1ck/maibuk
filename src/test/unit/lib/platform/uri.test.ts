@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  isContentUri,
-  displayNameFromPath,
-  extensionFromPath,
-} from "@/lib/platform/uri";
+import { isContentUri, displayNameFromPath, extensionFromPath } from "@/lib/platform/uri";
 
 describe("uri helpers", () => {
   it("detects Android content and file URIs", () => {
@@ -14,15 +10,9 @@ describe("uri helpers", () => {
   });
 
   it("derives display names from real paths and falls back for content URIs", () => {
-    expect(displayNameFromPath("/home/user/book.epub", "import")).toBe(
-      "book.epub",
-    );
-    expect(displayNameFromPath("C:\\Users\\book.epub", "import")).toBe(
-      "book.epub",
-    );
-    expect(displayNameFromPath("content://xyz/doc/9af3", "Imported file")).toBe(
-      "Imported file",
-    );
+    expect(displayNameFromPath("/home/user/book.epub", "import")).toBe("book.epub");
+    expect(displayNameFromPath("C:\\Users\\book.epub", "import")).toBe("book.epub");
+    expect(displayNameFromPath("content://xyz/doc/9af3", "Imported file")).toBe("Imported file");
   });
 
   it("derives extensions from real paths and falls back for content URIs", () => {

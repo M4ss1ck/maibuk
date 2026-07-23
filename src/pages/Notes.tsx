@@ -122,10 +122,7 @@ export function Notes() {
     void updateNote({ id: noteId, bookId, language: getBookLanguage(bookId) });
   };
 
-  const handleImportFiles = async (
-    files: DroppedTextFile[],
-    target: ListDropTarget | null,
-  ) => {
+  const handleImportFiles = async (files: DroppedTextFile[], target: ListDropTarget | null) => {
     const created: Note[] = [];
     for (const file of files) {
       created.push(
@@ -133,7 +130,7 @@ export function Notes() {
           title: file.stem.trim() || "Untitled",
           content: droppedTextToEditorHtml(file.text, file.extension),
           language: "en",
-        }),
+        })
       );
     }
     if (created.length === 0) return;
@@ -156,11 +153,7 @@ export function Notes() {
           : target.placement === "after"
             ? targetIndex + 1
             : targetIndex;
-      items.splice(
-        insertAt,
-        0,
-        ...created.map((note) => ({ id: note.id, pinned: false })),
-      );
+      items.splice(insertAt, 0, ...created.map((note) => ({ id: note.id, pinned: false })));
       await reorderNotes(items);
     }
 

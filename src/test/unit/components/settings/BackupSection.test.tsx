@@ -118,11 +118,9 @@ describe("BackupSection", () => {
 
     expect(screen.queryByLabelText("backup.directoryLabel")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "backup.chooseDirectory" }),
+      screen.queryByRole("button", { name: "backup.chooseDirectory" })
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "backup.createBackup" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "backup.createBackup" })).toBeInTheDocument();
   });
 
   it("opens the directory picker from the keyboard on desktop", async () => {

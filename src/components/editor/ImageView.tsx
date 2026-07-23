@@ -158,8 +158,7 @@ export function ImageView({
       const directParent = figureEl.parentElement;
       const fallbackParent =
         directParent?.tagName === "FIGURE" ? directParent.parentElement : directParent;
-      const parentEl =
-        figureEl.closest(".editor-content, .ProseMirror") || fallbackParent;
+      const parentEl = figureEl.closest(".editor-content, .ProseMirror") || fallbackParent;
       if (!parentEl) return;
 
       activeResize?.cancel();
@@ -267,67 +266,67 @@ export function ImageView({
             orientation="horizontal"
             aria-label={t("editor.toolbar")}
           >
-          <Tooltip content={t("editor.alignLeft")}>
-            <button
-              onClick={() => updateAttributes({ alignment: "left" })}
-              className={alignment === "left" ? "active" : ""}
-              aria-label={t("editor.alignLeft")}
-              type="button"
-            >
-              <AlignLeft className="w-4 h-4" />
-            </button>
-          </Tooltip>
-          <Tooltip content={t("editor.alignCenter")}>
-            <button
-              onClick={() => updateAttributes({ alignment: "center" })}
-              className={alignment === "center" ? "active" : ""}
-              aria-label={t("editor.alignCenter")}
-              type="button"
-            >
-              <AlignCenter className="w-4 h-4" />
-            </button>
-          </Tooltip>
-          <Tooltip content={t("editor.alignRight")}>
-            <button
-              onClick={() => updateAttributes({ alignment: "right" })}
-              className={alignment === "right" ? "active" : ""}
-              aria-label={t("editor.alignRight")}
-              type="button"
-            >
-              <AlignRight className="w-4 h-4" />
-            </button>
-          </Tooltip>
-          <div className="toolbar-divider" />
-          <Tooltip content={t("editor.decreaseImageWidth")}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => changeWidth(-WIDTH_STEP_PERCENT)}
-              aria-label={t("editor.decreaseImageWidth")}
-              disabled={currentWidth <= MIN_WIDTH_PERCENT}
-              type="button"
-            >
-              <Minus className="w-4 h-4" />
-            </Button>
-          </Tooltip>
-          <Tooltip content={t("editor.increaseImageWidth")}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => changeWidth(WIDTH_STEP_PERCENT)}
-              aria-label={t("editor.increaseImageWidth")}
-              disabled={currentWidth >= MAX_WIDTH_PERCENT}
-              type="button"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
-          </Tooltip>
-          <div className="toolbar-divider" />
-          <Tooltip content={t("common.delete")}>
-            <button onClick={() => deleteNode()} aria-label={t("common.delete")} type="button">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </Tooltip>
+            <Tooltip content={t("editor.alignLeft")}>
+              <button
+                onClick={() => updateAttributes({ alignment: "left" })}
+                className={alignment === "left" ? "active" : ""}
+                aria-label={t("editor.alignLeft")}
+                type="button"
+              >
+                <AlignLeft className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip content={t("editor.alignCenter")}>
+              <button
+                onClick={() => updateAttributes({ alignment: "center" })}
+                className={alignment === "center" ? "active" : ""}
+                aria-label={t("editor.alignCenter")}
+                type="button"
+              >
+                <AlignCenter className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip content={t("editor.alignRight")}>
+              <button
+                onClick={() => updateAttributes({ alignment: "right" })}
+                className={alignment === "right" ? "active" : ""}
+                aria-label={t("editor.alignRight")}
+                type="button"
+              >
+                <AlignRight className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <div className="toolbar-divider" />
+            <Tooltip content={t("editor.decreaseImageWidth")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => changeWidth(-WIDTH_STEP_PERCENT)}
+                aria-label={t("editor.decreaseImageWidth")}
+                disabled={currentWidth <= MIN_WIDTH_PERCENT}
+                type="button"
+              >
+                <Minus className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <Tooltip content={t("editor.increaseImageWidth")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => changeWidth(WIDTH_STEP_PERCENT)}
+                aria-label={t("editor.increaseImageWidth")}
+                disabled={currentWidth >= MAX_WIDTH_PERCENT}
+                type="button"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </Tooltip>
+            <div className="toolbar-divider" />
+            <Tooltip content={t("common.delete")}>
+              <button onClick={() => deleteNode()} aria-label={t("common.delete")} type="button">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </Toolbar>
         </div>
       )}

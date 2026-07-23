@@ -245,11 +245,7 @@ export function CoverDesigner() {
           <LayersPanel />
         </div>
       </Modal>
-      <Modal
-        isOpen={propsOpen}
-        onClose={() => setPropsOpen(false)}
-        title={t("cover.props.title")}
-      >
+      <Modal isOpen={propsOpen} onClose={() => setPropsOpen(false)} title={t("cover.props.title")}>
         <div data-testid="cover-properties-sheet">
           <PropertiesPanel />
         </div>

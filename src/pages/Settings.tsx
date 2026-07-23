@@ -362,19 +362,19 @@ export function Settings() {
             </div>
 
             {IS_DESKTOP && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
-              <div>
-                <p className="font-medium">{t("settings.alwaysOnTop")}</p>
-                <p className="text-sm text-muted-foreground">
-                  {t("settings.alwaysOnTopDescription")}
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+                <div>
+                  <p className="font-medium">{t("settings.alwaysOnTop")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("settings.alwaysOnTopDescription")}
+                  </p>
+                </div>
+                <Switch
+                  checked={alwaysOnTop}
+                  onChange={setAlwaysOnTop}
+                  label={t("settings.toggleAlwaysOnTop")}
+                />
               </div>
-              <Switch
-                checked={alwaysOnTop}
-                onChange={setAlwaysOnTop}
-                label={t("settings.toggleAlwaysOnTop")}
-              />
-            </div>
             )}
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">

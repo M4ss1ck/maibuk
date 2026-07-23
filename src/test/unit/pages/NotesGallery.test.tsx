@@ -164,11 +164,11 @@ describe("NotesGallery", () => {
     await waitFor(() => {
       expect(noteState.createNote).toHaveBeenNthCalledWith(
         1,
-        expect.objectContaining({ title: "a", order: -2 }),
+        expect.objectContaining({ title: "a", order: -2 })
       );
       expect(noteState.createNote).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({ title: "b", order: -1 }),
+        expect.objectContaining({ title: "b", order: -1 })
       );
     });
   });
@@ -192,11 +192,11 @@ describe("NotesGallery", () => {
     await waitFor(() => {
       expect(noteState.createNote).toHaveBeenNthCalledWith(
         1,
-        expect.objectContaining({ title: "a", order: -2 }),
+        expect.objectContaining({ title: "a", order: -2 })
       );
       expect(noteState.createNote).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({ title: "b", order: -1 }),
+        expect.objectContaining({ title: "b", order: -1 })
       );
     });
   });
@@ -205,9 +205,10 @@ describe("NotesGallery", () => {
     noteState.notes = [];
     let resolveCreate: ((note: { id: string }) => void) | undefined;
     noteState.createNote.mockImplementation(
-      () => new Promise<{ id: string }>((resolve) => {
-        resolveCreate = resolve;
-      }),
+      () =>
+        new Promise<{ id: string }>((resolve) => {
+          resolveCreate = resolve;
+        })
     );
     const { container } = render(<NotesGallery />);
     const dropzone = container.firstElementChild as HTMLElement;
