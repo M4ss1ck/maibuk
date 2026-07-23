@@ -7,6 +7,7 @@ import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
 
 vi.mock("../../../../lib/platform", () => ({
+  IS_ANDROID: false,
   IS_TAURI: false,
   IS_DESKTOP: false,
   getFileSystem: vi.fn(),

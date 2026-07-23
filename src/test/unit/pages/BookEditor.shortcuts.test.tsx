@@ -52,6 +52,7 @@ vi.mock("../../../lib/shortcuts", () => ({
 }));
 
 vi.mock("../../../lib/platform", () => ({
+  IS_ANDROID: false,
   IS_TAURI: false,
   IS_DESKTOP: false,
   isMac: mockIsMac,

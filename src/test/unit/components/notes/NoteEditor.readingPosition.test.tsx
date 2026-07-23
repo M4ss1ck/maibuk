@@ -44,7 +44,11 @@ vi.mock("../../../../hooks/useAutoSave", () => ({
 }));
 
 vi.mock("../../../../lib/shortcuts", () => ({ useShortcuts: vi.fn() }));
-vi.mock("../../../../lib/platform", () => ({ IS_TAURI: false, IS_DESKTOP: false }));
+vi.mock("../../../../lib/platform", () => ({
+  IS_ANDROID: false,
+  IS_TAURI: false,
+  IS_DESKTOP: false,
+}));
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),

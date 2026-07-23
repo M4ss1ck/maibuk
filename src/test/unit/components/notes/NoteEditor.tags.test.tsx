@@ -69,6 +69,7 @@ vi.mock("../../../../components/ThemeToggle", () => ({
 }));
 
 vi.mock("../../../../lib/platform", () => ({
+  IS_ANDROID: false,
   IS_TAURI: false,
   IS_DESKTOP: false,
   createDatabase: vi.fn(() =>

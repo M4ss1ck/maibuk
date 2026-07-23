@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesGallery } from "@/pages/NotesGallery";
 
 vi.mock("../../../lib/platform", () => ({
+  IS_ANDROID: false,
   IS_TAURI: false,
   getFileSystem: vi.fn(),
 }));

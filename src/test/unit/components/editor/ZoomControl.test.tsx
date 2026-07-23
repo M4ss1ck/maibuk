@@ -11,6 +11,7 @@ vi.mock("../../../../i18n", () => ({
 }));
 
 vi.mock("../../../../lib/platform", () => ({
+  IS_ANDROID: false,
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),
 }));
 

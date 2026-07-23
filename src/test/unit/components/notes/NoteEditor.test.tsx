@@ -41,6 +41,9 @@ vi.mock("../../../../components/ThemeToggle", () => ({
 }));
 
 vi.mock("../../../../lib/platform", () => ({
+  get IS_ANDROID() {
+    return !platformState.isDesktop;
+  },
   get IS_DESKTOP() {
     return platformState.isDesktop;
   },

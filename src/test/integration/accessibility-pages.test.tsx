@@ -29,6 +29,9 @@ vi.mock("@/features/version", () => ({
 vi.mock("@/lib/platform", () => ({
   IS_WEB: false,
   IS_TAURI: true,
+  get IS_ANDROID() {
+    return !txs.isDesktop;
+  },
   get IS_DESKTOP() {
     return txs.isDesktop;
   },
