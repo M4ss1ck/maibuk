@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { AddIcon, MaibukLogo } from "@/components/icons";
 import { Download, FileUp } from "lucide-react";
 import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "@/lib/platform";
+import { displayNameFromPath } from "@/lib/platform/uri";
 import { DOWNLOAD_PAGE } from "@/constants";
 import { KeyboardShortcut } from "@/components/ui";
 import { isModKey, isTypingTarget } from "@/lib/keyboard";
@@ -154,7 +155,10 @@ export function Home() {
         });
         if (path) {
           const fs = await getFileSystem();
-          file = { name: path.split("/").pop() ?? path, data: await fs.readFile(path) };
+          file = {
+            name: displayNameFromPath(path, t("import.importedFile")),
+            data: await fs.readFile(path),
+          };
         }
       }
 

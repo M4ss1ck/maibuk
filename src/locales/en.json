@@ -127,6 +127,7 @@
   "import": {
     "title": "Import EPUB",
     "action": "Import EPUB",
+    "importedFile": "Imported file",
     "importing": "Importing...",
     "scanning": "Scanning...",
     "chapters": "Chapters",
