@@ -59,6 +59,31 @@ describe("TauriBackupAdapter", () => {
     );
   });
 
+  it("saves and lists close backups", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    const filename = "maibuk-backup-close-2026-03-15T14-30-00.sql";
+
+    await adapter.saveBackup(filename, "sql");
+    expect(mockWriteTextFile).toHaveBeenCalledWith(`/safe/backups/${filename}`, "sql");
+    expect(mockWriteTextFile).toHaveBeenCalledWith(
+      `/safe/backups/${filename.replace(/\.sql$/, ".meta.json")}`,
+      expect.stringContaining('"trigger":"close"')
+    );
+
+    mockReadDir.mockResolvedValue([{ name: filename }]);
+    mockReadTextFile.mockResolvedValue(
+      JSON.stringify({
+        trigger: "close",
+        createdAt: "2026-03-15T14:30:00.000Z",
+        sizeBytes: 3,
+        checksum: "abcd",
+      })
+    );
+    await expect(adapter.listBackups()).resolves.toEqual([
+      expect.objectContaining({ filename, trigger: "close" }),
+    ]);
+  });
+
   it("verifies checksum before returning SQL content", async () => {
     const adapter = await createTauriBackup("/safe/backups");
     mockReadTextFile.mockImplementation(async (path: string) => {
@@ -185,5 +210,26 @@ describe("TauriBackupAdapter", () => {
       "maibuk-backup-manual-2026-03-15T14-30-02.sql",
     ]);
     expect(mockReadTextFile).toHaveBeenCalledTimes(5);
+  });
+
+  it("recognizes close timestamps when selecting a paginated result", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    const closeFilename = "maibuk-backup-close-2026-03-16T14-30-00.sql";
+    mockReadDir.mockResolvedValue([
+      { name: "maibuk-backup-manual-2026-03-15T14-30-00.sql" },
+      { name: closeFilename },
+    ]);
+    mockReadTextFile.mockResolvedValue(
+      JSON.stringify({
+        trigger: "close",
+        createdAt: "2026-03-16T14:30:00.000Z",
+        sizeBytes: 12,
+        checksum: "abcd",
+      })
+    );
+
+    const page = await adapter.listBackupsPage({ page: 1, pageSize: 1 });
+
+    expect(page.entries[0]).toEqual(expect.objectContaining({ filename: closeFilename }));
   });
 });

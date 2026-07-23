@@ -55,7 +55,7 @@ import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { HistoryMenuButton } from "@/components/versions/HistoryMenuButton";
 import { useShortcuts } from "@/lib/shortcuts";
 import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
-import { IS_TAURI, isMac } from "@/lib/platform";
+import { IS_DESKTOP, isMac } from "@/lib/platform";
 import { useAutoCheckpoint } from "@/features/versions/useAutoCheckpoint";
 import { useVersionStore } from "@/features/versions/store";
 import { Modal } from "@/components/ui/Modal";
@@ -532,15 +532,7 @@ export function BookEditor() {
       importQueueRef.current = queuedImport.catch(() => {});
       return queuedImport;
     },
-    [
-      bookId,
-      createChapter,
-      updateChapter,
-      reorderChapters,
-      setCurrentChapter,
-      updateBook,
-      t,
-    ]
+    [bookId, createChapter, updateChapter, reorderChapters, setCurrentChapter, updateBook, t]
   );
 
   const handleDeleteChapter = useCallback(
@@ -760,7 +752,7 @@ export function BookEditor() {
 
   if (isBookPreparing) {
     return (
-      <div className="flex items-center justify-center h-dvh bg-background">
+      <div className="flex items-center justify-center h-full bg-background">
         <div className="flex flex-col items-center gap-3">
           <MaibukLogo className="w-16 h-16 loading-entrance text-primary" />
           <p className="text-muted-foreground">{t("editor.loading")}</p>
@@ -770,7 +762,7 @@ export function BookEditor() {
   }
 
   return (
-    <div className={`flex h-dvh overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
+    <div className={`flex h-full overflow-hidden ${focusMode ? "focus-mode" : ""}`}>
       {/* Mobile chapter drawer overlay */}
       {showMobileChapters && !focusMode && (
         <div
@@ -789,6 +781,7 @@ export function BookEditor() {
             className={`
               md:hidden fixed z-50 w-72
               h-full transform transition-transform duration-300 ease-in-out
+              pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]
               ${showMobileChapters ? "translate-x-0" : "-translate-x-full"}
             `}
             tabIndex={-1}
@@ -1015,7 +1008,7 @@ export function BookEditor() {
                 {/** Theme toggle */}
                 <ThemeToggle variant="dropdown" />
 
-                {IS_TAURI && (
+                {IS_DESKTOP && (
                   <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
                     <button
                       type="button"
@@ -1132,7 +1125,7 @@ export function BookEditor() {
                         <History className="w-4 h-4" />
                         {t("versions.showHistory")}
                       </button>
-                      {IS_TAURI && (
+                      {IS_DESKTOP && (
                         <button
                           type="button"
                           onClick={() => {

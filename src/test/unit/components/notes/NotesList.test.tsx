@@ -7,7 +7,9 @@ import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
 
 vi.mock("../../../../lib/platform", () => ({
+  IS_ANDROID: false,
   IS_TAURI: false,
+  IS_DESKTOP: false,
   getFileSystem: vi.fn(),
   getOS: vi.fn(async () => ({ locale: vi.fn(async () => "en") })),
 }));
@@ -92,17 +94,18 @@ function buildBook(overrides: Partial<Book>): Book {
 }
 
 function setRowRect(row: Element, rect: Pick<DOMRect, "top" | "bottom" | "height">) {
-  row.getBoundingClientRect = () => ({
-    top: rect.top,
-    bottom: rect.bottom,
-    left: 0,
-    right: 100,
-    width: 100,
-    height: rect.height,
-    x: 0,
-    y: rect.top,
-    toJSON: () => ({}),
-  }) as DOMRect;
+  row.getBoundingClientRect = () =>
+    ({
+      top: rect.top,
+      bottom: rect.bottom,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: rect.height,
+      x: 0,
+      y: rect.top,
+      toJSON: () => ({}),
+    }) as DOMRect;
 }
 
 function dragOverAt(target: Element, dataTransfer: DataTransfer, clientY: number) {
@@ -836,7 +839,7 @@ describe("NotesList", () => {
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
         onImportFiles={vi.fn()}
-      />,
+      />
     );
     const target = screen.getByText("Bravo").closest("[data-note-row]");
     if (!target) throw new Error("Expected note row to exist");
@@ -869,7 +872,7 @@ describe("NotesList", () => {
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
         onImportFiles={onImportFiles}
-      />,
+      />
     );
     const target = screen.getByText("Bravo").closest("[data-note-row]");
     if (!target) throw new Error("Expected note row to exist");
@@ -888,8 +891,8 @@ describe("NotesList", () => {
     await waitFor(() =>
       expect(onImportFiles).toHaveBeenCalledWith(
         [{ text: "# Bravo", stem: "bravo", extension: ".md" }],
-        { id: "b", placement: "before" },
-      ),
+        { id: "b", placement: "before" }
+      )
     );
   });
 
@@ -903,7 +906,7 @@ describe("NotesList", () => {
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
         onImportFiles={onImportFiles}
-      />,
+      />
     );
     const file = new File(["# First"], "first.md");
     const dataTransfer = {
@@ -919,17 +922,18 @@ describe("NotesList", () => {
     await waitFor(() =>
       expect(onImportFiles).toHaveBeenCalledWith(
         [{ text: "# First", stem: "first", extension: ".md" }],
-        null,
-      ),
+        null
+      )
     );
   });
 
   it("shows import status until note persistence resolves", async () => {
     let resolveImport: (() => void) | undefined;
     const onImportFiles = vi.fn(
-      () => new Promise<void>((resolve) => {
-        resolveImport = resolve;
-      }),
+      () =>
+        new Promise<void>((resolve) => {
+          resolveImport = resolve;
+        })
     );
     render(
       <NotesList
@@ -939,7 +943,7 @@ describe("NotesList", () => {
         onCreateNote={vi.fn()}
         onReorderNotes={vi.fn()}
         onImportFiles={onImportFiles}
-      />,
+      />
     );
     const file = new File(["draft"], "draft.txt");
     const dataTransfer = {
@@ -974,7 +978,7 @@ describe("NotesList", () => {
         onCreateNote={vi.fn()}
         onReorderNotes={onReorderNotes}
         onImportFiles={onImportFiles}
-      />,
+      />
     );
     const source = screen.getByText("Alpha").closest("[data-note-row]");
     const target = screen.getByText("Bravo").closest("[data-note-row]");

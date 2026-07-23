@@ -127,6 +127,7 @@
   "import": {
     "title": "Import EPUB",
     "action": "Import EPUB",
+    "importedFile": "Imported file",
     "importing": "Importing...",
     "scanning": "Scanning...",
     "chapters": "Chapters",
@@ -371,6 +372,8 @@
     "alignCenter": "Align Center",
     "alignRight": "Align Right",
     "alignJustify": "Justify",
+    "decreaseImageWidth": "Decrease image width",
+    "increaseImageWidth": "Increase image width",
     "removeFormatting": "Remove Formatting",
     "sceneBreak": "Scene Break (* * *)",
     "sceneBreakOptions": "Scene break options",
@@ -1118,6 +1121,7 @@
       "pre-sync": "Pre-sync",
       "pre-restore": "Pre-restore",
       "manual": "Manual",
+      "close": "On close",
       "unknown": "Unknown"
     }
   }

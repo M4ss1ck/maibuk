@@ -32,9 +32,8 @@ vi.mock("../../../../features/backup/backup-service", () => ({
   },
 }));
 
-const { createDailyBackup, runDailyBackupOnce, resetBackupLifecycleForTests } = await import(
-  "@/features/backup/lifecycle"
-);
+const { createDailyBackup, runBackgroundBackup, runDailyBackupOnce, resetBackupLifecycleForTests } =
+  await import("@/features/backup/lifecycle");
 
 describe("backup lifecycle", () => {
   beforeEach(() => {
@@ -54,6 +53,36 @@ describe("backup lifecycle", () => {
     expect(mockHasBackupForToday).toHaveBeenCalledWith("daily");
     expect(mockCreateBackup).toHaveBeenCalledWith("daily");
     expect(mockPruneBackups).toHaveBeenCalledWith(12);
+  });
+
+  it("creates and prunes a close backup using persisted settings", async () => {
+    await runBackgroundBackup();
+
+    expect(mockCreateBackupAdapter).toHaveBeenCalledWith("/tmp/backups");
+    expect(mockCreateBackup).toHaveBeenCalledWith("close");
+    expect(mockPruneBackups).toHaveBeenCalledWith(12);
+  });
+
+  it("swallows a background backup creation failure without pruning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockCreateBackup.mockRejectedValueOnce(new Error("create failed"));
+
+    await expect(runBackgroundBackup()).resolves.toBeUndefined();
+
+    expect(mockPruneBackups).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith("Failed to create background backup:", expect.any(Error));
+    warn.mockRestore();
+  });
+
+  it("swallows a background backup prune failure after creating the backup", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockPruneBackups.mockRejectedValueOnce(new Error("prune failed"));
+
+    await expect(runBackgroundBackup()).resolves.toBeUndefined();
+
+    expect(mockCreateBackup).toHaveBeenCalledWith("close");
+    expect(warn).toHaveBeenCalledWith("Failed to create background backup:", expect.any(Error));
+    warn.mockRestore();
   });
 
   it("skips daily backup if one already exists for today", async () => {

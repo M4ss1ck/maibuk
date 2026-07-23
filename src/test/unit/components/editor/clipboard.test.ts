@@ -88,3 +88,53 @@ describe("readClipboardSnapshot - Tauri fallback", () => {
     expect(snap.hasImage).toBe(false);
   });
 });
+
+describe("clipboard image reads - Android guard", () => {
+  const readImage = vi.fn();
+
+  beforeEach(() => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    vi.stubGlobal("navigator", {
+      clipboard: { read: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+    vi.doMock("@tauri-apps/plugin-clipboard-manager", () => ({
+      readText: vi.fn().mockResolvedValue(""),
+      readImage,
+    }));
+  });
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    vi.unstubAllGlobals();
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  const mockPlatform = async (isAndroid: boolean) => {
+    const actual = await vi.importActual<typeof import("@/lib/platform")>("@/lib/platform");
+    vi.doMock("@/lib/platform", () => ({ ...actual, IS_TAURI: true, IS_ANDROID: isAndroid }));
+  };
+
+  it("skips the unsupported plugin image read on Android", async () => {
+    await mockPlatform(true);
+    const mod = await import("@/components/editor/clipboard");
+
+    const snap = await mod.readClipboardSnapshot();
+    expect(snap.hasImage).toBe(false);
+    expect(await mod.readClipboardImageDataUrl()).toBeNull();
+    expect(readImage).not.toHaveBeenCalled();
+  });
+
+  it("still reads plugin clipboard images off Android", async () => {
+    readImage.mockResolvedValue({
+      size: async () => ({ width: 1, height: 1 }),
+      rgba: async () => new Uint8Array([0, 0, 0, 255]),
+    });
+    await mockPlatform(false);
+    const mod = await import("@/components/editor/clipboard");
+
+    const snap = await mod.readClipboardSnapshot();
+    expect(snap.hasImage).toBe(true);
+    expect(readImage).toHaveBeenCalled();
+  });
+});

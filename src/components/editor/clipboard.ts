@@ -1,4 +1,4 @@
-import { IS_TAURI } from "@/lib/platform";
+import { IS_ANDROID, IS_TAURI } from "@/lib/platform";
 
 export interface ClipboardSnapshot {
   text: string;
@@ -72,11 +72,15 @@ async function readViaTauri(): Promise<ClipboardSnapshot> {
     } catch {
       // no text payload
     }
-    try {
-      await readImage();
-      hasImage = true;
-    } catch {
-      // no image payload
+    // The clipboard-manager image APIs are not implemented on Android; calling
+    // them there only produces noise, so text is the only plugin payload.
+    if (!IS_ANDROID) {
+      try {
+        await readImage();
+        hasImage = true;
+      } catch {
+        // no image payload
+      }
     }
   } catch {
     // plugin unavailable
@@ -116,7 +120,7 @@ export async function readClipboardImageDataUrl(): Promise<string | null> {
     }
   }
 
-  if (isTauriRuntime()) {
+  if (isTauriRuntime() && !IS_ANDROID) {
     try {
       const { readImage } = await import("@tauri-apps/plugin-clipboard-manager");
       const image = await readImage();

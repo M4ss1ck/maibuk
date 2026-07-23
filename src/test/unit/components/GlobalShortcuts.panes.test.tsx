@@ -11,7 +11,7 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock("@/lib/platform", () => ({ IS_TAURI: false, isMac: () => false }));
+vi.mock("@/lib/platform", () => ({ IS_TAURI: false, IS_DESKTOP: false, isMac: () => false }));
 
 const themeState = { theme: "light", setTheme: vi.fn() };
 vi.mock("@/features/theme", () => ({

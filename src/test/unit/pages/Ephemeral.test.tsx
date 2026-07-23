@@ -4,10 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Ephemeral } from "@/pages/Ephemeral";
 import { useEphemeralStore } from "@/features/ephemeral";
 
-const { mockNavigate, mockCreateNote, mockSetAlwaysOnTop } = vi.hoisted(() => ({
+const { mockNavigate, mockCreateNote, mockSetAlwaysOnTop, platformState } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockCreateNote: vi.fn(),
   mockSetAlwaysOnTop: vi.fn(),
+  platformState: { isDesktop: false },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -30,7 +31,16 @@ vi.mock("@/features/settings/store", () => ({
   ) => selector({ alwaysOnTop: false, setAlwaysOnTop: mockSetAlwaysOnTop }),
 }));
 
-vi.mock("@/lib/platform", () => ({ IS_TAURI: false }));
+vi.mock("@/lib/platform", () => ({
+  get IS_ANDROID() {
+    return !platformState.isDesktop;
+  },
+  get IS_DESKTOP() {
+    return platformState.isDesktop;
+  },
+  IS_TAURI: true,
+  isMac: () => false,
+}));
 
 // Stub the heavy TipTap editor with a textarea that mirrors its callbacks.
 vi.mock("@/components/editor", () => ({
@@ -60,6 +70,8 @@ describe("Ephemeral page", () => {
     useEphemeralStore.getState().reset();
     mockNavigate.mockReset();
     mockCreateNote.mockReset();
+    mockSetAlwaysOnTop.mockReset();
+    platformState.isDesktop = false;
   });
 
   it("disables Clear and Create note when empty", () => {
@@ -132,5 +144,23 @@ describe("Ephemeral page", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/notes/note-2");
     expect(useEphemeralStore.getState().content).toBe("");
     expect(useEphemeralStore.getState().wordCount).toBe(0);
+  });
+
+  it("hides the always-on-top pin button on Android (non-desktop)", () => {
+    platformState.isDesktop = false;
+    render(<Ephemeral />);
+    expect(screen.queryByRole("button", { name: "settings.alwaysOnTop" })).not.toBeInTheDocument();
+  });
+
+  it("toggles always-on-top via keyboard on desktop", async () => {
+    platformState.isDesktop = true;
+    const user = userEvent.setup();
+    render(<Ephemeral />);
+
+    const pinButton = screen.getByRole("button", { name: "settings.alwaysOnTop" });
+    pinButton.focus();
+    await user.keyboard(" ");
+
+    expect(mockSetAlwaysOnTop).toHaveBeenCalledWith(true);
   });
 });

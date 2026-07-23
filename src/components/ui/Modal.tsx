@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { CloseIcon } from "@/components/icons";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useModalScope } from "@/hooks";
+import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 interface ModalProps {
   isOpen: boolean;
@@ -38,6 +39,8 @@ export function Modal({
   const modalRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
     const activeElement = document.activeElement;
@@ -76,6 +79,14 @@ export function Modal({
   }, [isOpen]);
 
   useLayoutEffect(() => restoreFocus, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    return registerBackDismiss(() => {
+      onCloseRef.current();
+      return true;
+    });
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -152,6 +163,7 @@ export function Modal({
                 </>
               )}
             </Dialog>
+            <div className="h-[env(safe-area-inset-bottom)] shrink-0" aria-hidden="true" />
           </div>
         </div>
       </FocusScope>

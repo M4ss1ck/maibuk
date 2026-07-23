@@ -209,6 +209,100 @@ jobs:
           prerelease: false
           args: --target x86_64-pc-windows-gnu
 
+  # Build signed per-ABI Android APKs (separate arm64-v8a and x86_64)
+  build-android:
+    needs: [prepare, quality]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build-tools and NDK
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "build-tools;36.0.0" "platforms;android-36" "ndk;29.0.14206865"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Restore Android signing material
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ]; then
+            echo "::error::Android signing secrets are missing. Set ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS in repo secrets."
+            exit 1
+          fi
+          SIGNING_DIR="$HOME/.config/maibuk/android-signing"
+          KEYSTORE="$SIGNING_DIR/android-release.jks"
+          mkdir -p "$SIGNING_DIR"
+          chmod 700 "$SIGNING_DIR"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
+          {
+            printf 'MAIBUK_ANDROID_KEYSTORE=%q\n' "$KEYSTORE"
+            printf 'MAIBUK_ANDROID_KEY_ALIAS=%q\n' "$ANDROID_KEY_ALIAS"
+            printf 'MAIBUK_ANDROID_KEYSTORE_PASSWORD=%q\n' "$ANDROID_KEYSTORE_PASSWORD"
+          } > "$SIGNING_DIR/credentials.env"
+          chmod 600 "$KEYSTORE" "$SIGNING_DIR/credentials.env"
+
+      - name: Build signed Android APK
+        run: pnpm build:android
+
+      - name: Rename APKs to release filenames
+        id: apk
+        run: |
+          APK_DIR="src-tauri/gen/android/app/build/outputs/apk"
+          VERSION="${{ needs.prepare.outputs.version }}"
+          cp "$APK_DIR/arm64/release/maibuk-arm64-v8a.apk" "maibuk_${VERSION}_android_arm64-v8a.apk"
+          cp "$APK_DIR/x86_64/release/maibuk-x86_64.apk" "maibuk_${VERSION}_android_x86_64.apk"
+
+      - name: Upload Android APKs to release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            maibuk_${{ needs.prepare.outputs.version }}_android_arm64-v8a.apk
+            maibuk_${{ needs.prepare.outputs.version }}_android_x86_64.apk
+          tag_name: v${{ needs.prepare.outputs.version }}
+          draft: true
+          body: ${{ needs.prepare.outputs.changelog }}
+          generate_release_notes: ${{ needs.prepare.outputs.changelog == '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Build Arch Linux package using Docker
   build-arch:
     needs: [prepare, quality, build-linux]

@@ -31,7 +31,7 @@ import {
 } from "@/features/export";
 import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage, type Language } from "@/features/settings/types";
-import { IS_TAURI } from "@/lib/platform";
+import { IS_DESKTOP } from "@/lib/platform";
 import { useNavigate } from "react-router-dom";
 import { isInternalLink, parseLinkUri } from "@/features/links/link-uri";
 import { navigateToLinkTarget } from "@/features/links/navigate";
@@ -628,7 +628,7 @@ export function NoteEditor({
 
         <ThemeToggle variant="dropdown" />
 
-        {IS_TAURI && (
+        {IS_DESKTOP && (
           <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
             <button
               type="button"

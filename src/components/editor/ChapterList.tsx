@@ -31,18 +31,13 @@ interface ChapterListProps {
   onUpdateChapter: (id: string, title: string, type: ChapterType) => void;
   onDeleteChapter: (id: string) => void;
   onReorderChapters: (chapterIds: string[]) => void;
-  onImportFiles?: (
-    files: DroppedTextFile[],
-    target: ListDropTarget | null,
-  ) => void | Promise<void>;
+  onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
 }
 
 const CHAPTER_DND_TYPE = "chapter";
 
 /** Reads supported text files out of react-aria drop items, preserving order. */
-export async function readChapterDropItems(
-  items: DropItem[],
-): Promise<DroppedTextFile[]> {
+export async function readChapterDropItems(items: DropItem[]): Promise<DroppedTextFile[]> {
   const files: File[] = [];
   for (const item of items) {
     if (item.kind !== "file") continue;
@@ -72,14 +67,11 @@ export function ChapterList({
   const onImportFilesRef = useRef(onImportFiles);
   onImportFilesRef.current = onImportFiles;
 
-  const resolveFileDropTarget = useCallback(
-    (point: DropPoint | null): ListDropTarget | null => {
-      const container = listContainerRef.current;
-      if (!point || !container) return null;
-      return dropTargetFromPoint(container, point.y, "[data-key]", "data-key");
-    },
-    [],
-  );
+  const resolveFileDropTarget = useCallback((point: DropPoint | null): ListDropTarget | null => {
+    const container = listContainerRef.current;
+    if (!point || !container) return null;
+    return dropTargetFromPoint(container, point.y, "[data-key]", "data-key");
+  }, []);
 
   const { isDraggingFile, isImportingFiles, dropHandlers } = useTextFileDrop(listContainerRef, {
     disableWeb: chapters.length > 0,
@@ -499,7 +491,8 @@ export function ChapterList({
                                 <Tooltip content={t("chapters.deleteChapter")}>
                                   <AriaButton
                                     ref={(element) => {
-                                      if (element) deleteButtonRefs.current.set(chapter.id, element);
+                                      if (element)
+                                        deleteButtonRefs.current.set(chapter.id, element);
                                       else deleteButtonRefs.current.delete(chapter.id);
                                     }}
                                     onPress={() => setDeleteConfirmId(chapter.id)}

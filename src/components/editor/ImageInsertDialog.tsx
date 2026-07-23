@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { useTranslation } from "react-i18next";
 import { ImageIcon } from "@/components/icons";
 import { IS_WEB, getDialog, getFileSystem, getWebDialog } from "@/lib/platform";
+import { extensionFromPath } from "@/lib/platform/uri";
 
 interface ImageInsertDialogProps {
   editor: Editor;
@@ -84,7 +85,7 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
         if (selected) {
           const fs = await getFileSystem();
           const contents = await fs.readFile(selected);
-          const extension = selected.split(".").pop()?.toLowerCase() || "png";
+          const extension = extensionFromPath(selected, "png");
           const mimeType = extension === "svg" ? "image/svg+xml" : `image/${extension}`;
           const base64 = btoa(String.fromCharCode(...contents));
           const dataUrl = `data:${mimeType};base64,${base64}`;

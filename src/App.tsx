@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { FullPageScreen } from "@/components/FullPageScreen";
 import { Home } from "@/pages/Home";
 import { BookEditor } from "@/pages/BookEditor";
 import { CoverDesigner } from "@/pages/CoverDesigner";
@@ -19,6 +20,9 @@ import { ToastViewport } from "@/components/ui";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { runDailyBackupOnce } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
+import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
+import { installAndroidBackHandler } from "@/lib/window/androidBack";
+import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
 
@@ -33,6 +37,11 @@ function App() {
   useEffect(() => {
     if (embedMode) return;
     void runDailyBackupOnce();
+    if (IS_ANDROID) {
+      void installAndroidBackHandler();
+      void installAndroidLifecycleHandler();
+    }
+    if (!IS_DESKTOP) return;
     void installWindowCloseHandler();
     void installAlwaysOnTopReapply();
     installTraySyncIndicator();
@@ -61,10 +70,12 @@ function App() {
           <Route path="settings" element={<Settings />} />
         </Route>
         {/* Full-page editors without sidebar */}
-        <Route path="notes/:noteId" element={<Notes />} />
-        <Route path="canvas/:canvasId" element={<Canvas />} />
-        <Route path="book/:bookId" element={<BookEditor />} />
-        <Route path="book/:bookId/cover" element={<CoverDesigner />} />
+        <Route element={<FullPageScreen />}>
+          <Route path="notes/:noteId" element={<Notes />} />
+          <Route path="canvas/:canvasId" element={<Canvas />} />
+          <Route path="book/:bookId" element={<BookEditor />} />
+          <Route path="book/:bookId/cover" element={<CoverDesigner />} />
+        </Route>
       </Routes>
       <ToastViewport />
     </StartupRedirect>

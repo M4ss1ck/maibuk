@@ -1014,6 +1014,15 @@ option {
   border: 2px solid white;
   border-radius: 2px;
   z-index: 5;
+  touch-action: none;
+}
+
+@media (pointer: coarse) {
+  .image-resize-handle::before {
+    position: absolute;
+    inset: -7px;
+    content: "";
+  }
 }
 
 .image-resize-handle.nw {

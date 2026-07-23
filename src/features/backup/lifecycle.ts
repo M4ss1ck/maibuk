@@ -32,6 +32,18 @@ export async function createDailyBackup(): Promise<void> {
   }
 }
 
+// Best-effort backup when the mobile app is sent to the background. Uses the
+// same backup service as daily/pre-sync; failures are swallowed like daily.
+export async function runBackgroundBackup(): Promise<void> {
+  try {
+    const service = await createConfiguredBackupService();
+    await service.createBackup("close");
+    await service.pruneBackups(getRetention());
+  } catch (error) {
+    console.warn("Failed to create background backup:", error);
+  }
+}
+
 export async function runDailyBackupOnce(): Promise<void> {
   if (dailyBackupStarted) {
     return;

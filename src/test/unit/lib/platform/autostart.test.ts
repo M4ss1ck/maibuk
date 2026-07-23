@@ -12,6 +12,9 @@ describe("launch-on-startup platform helpers", () => {
     disable.mockClear();
     isEnabled.mockClear();
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    vi.stubEnv("VITE_BUILD_TARGET", "tauri");
+    vi.stubEnv("TAURI_ENV_PLATFORM", "linux");
+    vi.resetModules();
   });
 
   it("enables autostart when true", async () => {
@@ -30,5 +33,18 @@ describe("launch-on-startup platform helpers", () => {
   it("reads the current OS state", async () => {
     const { isLaunchOnStartupEnabled } = await import("@/lib/platform");
     await expect(isLaunchOnStartupEnabled()).resolves.toBe(true);
+  });
+
+  it("does not load or change autostart on Android", async () => {
+    vi.stubEnv("TAURI_ENV_PLATFORM", "android");
+    vi.resetModules();
+    const { setLaunchOnStartup, isLaunchOnStartupEnabled } = await import("@/lib/platform");
+
+    await setLaunchOnStartup(true);
+    await expect(isLaunchOnStartupEnabled()).resolves.toBe(false);
+
+    expect(enable).not.toHaveBeenCalled();
+    expect(disable).not.toHaveBeenCalled();
+    expect(isEnabled).not.toHaveBeenCalled();
   });
 });

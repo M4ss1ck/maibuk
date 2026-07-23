@@ -1,0 +1,10 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "Maibuk",
+        "visible": true
+      }
+    ]
+  }
+}

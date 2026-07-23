@@ -33,25 +33,16 @@ describe("textDropStem()", () => {
 
 describe("droppedTextToEditorHtml()", () => {
   it("converts markdown files through the markdown pipeline", () => {
-    expect(droppedTextToEditorHtml("# Title\n\nBody", ".md")).toBe(
-      "<h1>Title</h1>\n<p>Body</p>",
-    );
+    expect(droppedTextToEditorHtml("# Title\n\nBody", ".md")).toBe("<h1>Title</h1>\n<p>Body</p>");
   });
 
   it("converts markdown-looking .txt through the markdown pipeline", () => {
-    expect(droppedTextToEditorHtml("# Title\n\n- a\n- b", ".txt")).toContain(
-      "<h1>Title</h1>",
-    );
+    expect(droppedTextToEditorHtml("# Title\n\n- a\n- b", ".txt")).toContain("<h1>Title</h1>");
   });
 
   it("converts plain .txt into escaped paragraphs with <br> line breaks", () => {
-    const html = droppedTextToEditorHtml(
-      "one <b>raw</b>\ntwo\n\nthree & four",
-      ".txt",
-    );
-    expect(html).toBe(
-      "<p>one &lt;b&gt;raw&lt;/b&gt;<br>two</p><p>three &amp; four</p>",
-    );
+    const html = droppedTextToEditorHtml("one <b>raw</b>\ntwo\n\nthree & four", ".txt");
+    expect(html).toBe("<p>one &lt;b&gt;raw&lt;/b&gt;<br>two</p><p>three &amp; four</p>");
   });
 
   it("returns empty string for blank content", () => {

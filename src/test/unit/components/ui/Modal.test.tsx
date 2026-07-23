@@ -35,6 +35,7 @@ vi.mock("react-i18next", () => ({
 
 import { Modal } from "@/components/ui/Modal";
 import { useModalStore } from "@/components/ui/modal-store";
+import { runTopBackDismiss } from "@/lib/platform/backDismiss";
 
 describe("Modal modal scope registration", () => {
   beforeEach(() => {
@@ -229,6 +230,78 @@ describe("Modal", () => {
         expect(onClose).toHaveBeenCalledTimes(1);
       });
     });
+
+    it("keeps its LIFO position across rerenders with a new onClose", () => {
+      const olderFirst = vi.fn();
+      const olderLatest = vi.fn();
+      const newer = vi.fn();
+      const olderView = render(
+        <Modal isOpen={true} onClose={olderFirst} title="Older">
+          <p>Older content</p>
+        </Modal>
+      );
+      const newerView = render(
+        <Modal isOpen={true} onClose={newer} title="Newer">
+          <p>Newer content</p>
+        </Modal>
+      );
+
+      olderView.rerender(
+        <Modal isOpen={true} onClose={olderLatest} title="Older">
+          <p>Older content</p>
+        </Modal>
+      );
+
+      expect(runTopBackDismiss()).toBe(true);
+      expect(newer).toHaveBeenCalledOnce();
+      expect(olderLatest).not.toHaveBeenCalled();
+
+      newerView.unmount();
+      expect(runTopBackDismiss()).toBe(true);
+      expect(olderLatest).toHaveBeenCalledOnce();
+      expect(olderFirst).not.toHaveBeenCalled();
+    });
+
+    it("restores focus and unregisters after a hardware-style dismissal", async () => {
+      const firstOnDismiss = vi.fn();
+      const latestOnDismiss = vi.fn();
+
+      function Harness({ onDismiss }: { onDismiss: () => void }) {
+        const [open, setOpen] = useState(false);
+        return (
+          <div>
+            <button type="button" onClick={() => setOpen(true)}>
+              Open hardware modal
+            </button>
+            <Modal
+              isOpen={open}
+              onClose={() => {
+                onDismiss();
+                setOpen(false);
+              }}
+              title="Hardware modal"
+            >
+              <p>Content</p>
+            </Modal>
+          </div>
+        );
+      }
+
+      const user = userEvent.setup();
+      const view = render(<Harness onDismiss={firstOnDismiss} />);
+      const trigger = screen.getByRole("button", { name: "Open hardware modal" });
+      await user.click(trigger);
+      view.rerender(<Harness onDismiss={latestOnDismiss} />);
+
+      expect(runTopBackDismiss()).toBe(true);
+
+      await waitFor(() => {
+        expect(latestOnDismiss).toHaveBeenCalledOnce();
+        expect(document.activeElement).toBe(trigger);
+      });
+      expect(firstOnDismiss).not.toHaveBeenCalled();
+      expect(runTopBackDismiss()).toBe(false);
+    });
   });
 
   describe("footer", () => {
@@ -282,6 +355,23 @@ describe("Modal", () => {
         </Modal>
       );
       expect(document.querySelector(".custom-scroll")).not.toBeNull();
+    });
+
+    it("adds safe-area clearance without replacing custom panel padding", () => {
+      render(
+        <Modal
+          isOpen={true}
+          onClose={() => {}}
+          title="Custom Panel"
+          panelClassName="custom-panel p-8"
+        >
+          <p>Content</p>
+        </Modal>
+      );
+
+      const panel = document.querySelector(".custom-panel");
+      expect(panel).toHaveClass("p-8");
+      expect(panel?.lastElementChild).toHaveClass("h-[env(safe-area-inset-bottom)]", "shrink-0");
     });
   });
 

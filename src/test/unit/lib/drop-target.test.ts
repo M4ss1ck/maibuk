@@ -26,36 +26,26 @@ describe("dropTargetFromPoint()", () => {
   ]);
 
   it("targets the row under the pointer, placement by midpoint", () => {
-    expect(
-      dropTargetFromPoint(container, 10, "[data-drop-id]", "data-drop-id"),
-    ).toEqual({
+    expect(dropTargetFromPoint(container, 10, "[data-drop-id]", "data-drop-id")).toEqual({
       id: "a",
       placement: "before",
     });
-    expect(
-      dropTargetFromPoint(container, 35, "[data-drop-id]", "data-drop-id"),
-    ).toEqual({
+    expect(dropTargetFromPoint(container, 35, "[data-drop-id]", "data-drop-id")).toEqual({
       id: "a",
       placement: "after",
     });
-    expect(
-      dropTargetFromPoint(container, 100, "[data-drop-id]", "data-drop-id"),
-    ).toEqual({
+    expect(dropTargetFromPoint(container, 100, "[data-drop-id]", "data-drop-id")).toEqual({
       id: "c",
       placement: "after",
     });
   });
 
   it("falls back to the nearest row outside all spans", () => {
-    expect(
-      dropTargetFromPoint(container, 500, "[data-drop-id]", "data-drop-id"),
-    ).toEqual({
+    expect(dropTargetFromPoint(container, 500, "[data-drop-id]", "data-drop-id")).toEqual({
       id: "c",
       placement: "after",
     });
-    expect(
-      dropTargetFromPoint(container, -50, "[data-drop-id]", "data-drop-id"),
-    ).toEqual({
+    expect(dropTargetFromPoint(container, -50, "[data-drop-id]", "data-drop-id")).toEqual({
       id: "a",
       placement: "before",
     });
@@ -63,12 +53,7 @@ describe("dropTargetFromPoint()", () => {
 
   it("returns null when nothing matches the selector", () => {
     expect(
-      dropTargetFromPoint(
-        document.createElement("div"),
-        10,
-        "[data-drop-id]",
-        "data-drop-id",
-      ),
+      dropTargetFromPoint(document.createElement("div"), 10, "[data-drop-id]", "data-drop-id")
     ).toBeNull();
   });
 });

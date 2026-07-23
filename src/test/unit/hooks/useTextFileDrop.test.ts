@@ -46,14 +46,10 @@ describe("useTextFileDrop()", () => {
       finishImport = resolve;
     });
     const onImport = vi.fn(() => persistence);
-    const { result } = renderHook(() =>
-      useTextFileDrop(containerRef(), { onImport }),
-    );
+    const { result } = renderHook(() => useTextFileDrop(containerRef(), { onImport }));
 
     act(() => {
-      result.current.dropHandlers.onDrop(
-        dragEvent([new File(["# Slow"], "slow.md")]),
-      );
+      result.current.dropHandlers.onDrop(dragEvent([new File(["# Slow"], "slow.md")]));
     });
 
     expect(result.current.isImportingFiles).toBe(true);
@@ -81,17 +77,11 @@ describe("useTextFileDrop()", () => {
       .fn<() => Promise<void>>()
       .mockReturnValueOnce(first)
       .mockReturnValueOnce(second);
-    const { result } = renderHook(() =>
-      useTextFileDrop(containerRef(), { onImport }),
-    );
+    const { result } = renderHook(() => useTextFileDrop(containerRef(), { onImport }));
 
     act(() => {
-      result.current.dropHandlers.onDrop(
-        dragEvent([new File(["first"], "first.md")]),
-      );
-      result.current.dropHandlers.onDrop(
-        dragEvent([new File(["second"], "second.md")]),
-      );
+      result.current.dropHandlers.onDrop(dragEvent([new File(["first"], "first.md")]));
+      result.current.dropHandlers.onDrop(dragEvent([new File(["second"], "second.md")]));
     });
 
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(2));
@@ -113,14 +103,10 @@ describe("useTextFileDrop()", () => {
   it("toasts a general error and resets when persistence rejects", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const onImport = vi.fn().mockRejectedValue(new Error("database failed"));
-    const { result } = renderHook(() =>
-      useTextFileDrop(containerRef(), { onImport }),
-    );
+    const { result } = renderHook(() => useTextFileDrop(containerRef(), { onImport }));
 
     act(() => {
-      result.current.dropHandlers.onDrop(
-        dragEvent([new File(["content"], "chapter.md")]),
-      );
+      result.current.dropHandlers.onDrop(dragEvent([new File(["content"], "chapter.md")]));
     });
 
     expect(result.current.isImportingFiles).toBe(true);
@@ -135,9 +121,7 @@ describe("useTextFileDrop()", () => {
     const file = new File(["content"], "broken.md");
     vi.spyOn(file, "text").mockRejectedValue(new Error("read failed"));
     const onImport = vi.fn();
-    const { result } = renderHook(() =>
-      useTextFileDrop(containerRef(), { onImport }),
-    );
+    const { result } = renderHook(() => useTextFileDrop(containerRef(), { onImport }));
 
     act(() => {
       result.current.dropHandlers.onDrop(dragEvent([file]));
@@ -153,9 +137,7 @@ describe("useTextFileDrop()", () => {
 
   it("reads all supported dropped files in order, batched, with the drop point", async () => {
     const onImport = vi.fn();
-    const { result } = renderHook(() =>
-      useTextFileDrop(containerRef(), { onImport }),
-    );
+    const { result } = renderHook(() => useTextFileDrop(containerRef(), { onImport }));
 
     const files = [
       new File(["# One"], "one.md", { type: "text/markdown" }),
@@ -175,16 +157,14 @@ describe("useTextFileDrop()", () => {
           { text: "plain", stem: "two", extension: ".txt" },
           { text: "## Three", stem: "three", extension: ".markdown" },
         ],
-        { x: 11, y: 22 },
-      ),
+        { x: 11, y: 22 }
+      )
     );
   });
 
   it("toasts (and does not import) when files are dropped but none are supported", async () => {
     const onImport = vi.fn();
-    const { result } = renderHook(() =>
-      useTextFileDrop(containerRef(), { onImport }),
-    );
+    const { result } = renderHook(() => useTextFileDrop(containerRef(), { onImport }));
 
     act(() => {
       result.current.dropHandlers.onDrop(dragEvent([new File(["x"], "a.png")]));
@@ -198,13 +178,11 @@ describe("useTextFileDrop()", () => {
   it("reports drag position via onDragMove and clears it on leave", () => {
     const onDragMove = vi.fn();
     const { result } = renderHook(() =>
-      useTextFileDrop(containerRef(), { onImport: vi.fn(), onDragMove }),
+      useTextFileDrop(containerRef(), { onImport: vi.fn(), onDragMove })
     );
 
     act(() => {
-      result.current.dropHandlers.onDragOver(
-        dragEvent([new File(["x"], "a.md")], 3, 4),
-      );
+      result.current.dropHandlers.onDragOver(dragEvent([new File(["x"], "a.md")], 3, 4));
     });
     expect(result.current.isDraggingFile).toBe(true);
     expect(onDragMove).toHaveBeenCalledWith({ x: 3, y: 4 });
@@ -219,13 +197,11 @@ describe("useTextFileDrop()", () => {
   it("does nothing on web events when disableWeb is set", () => {
     const onImport = vi.fn();
     const { result } = renderHook(() =>
-      useTextFileDrop(containerRef(), { onImport, disableWeb: true }),
+      useTextFileDrop(containerRef(), { onImport, disableWeb: true })
     );
 
     act(() => {
-      result.current.dropHandlers.onDragOver(
-        dragEvent([new File(["x"], "a.md")]),
-      );
+      result.current.dropHandlers.onDragOver(dragEvent([new File(["x"], "a.md")]));
       result.current.dropHandlers.onDrop(dragEvent([new File(["x"], "a.md")]));
     });
 

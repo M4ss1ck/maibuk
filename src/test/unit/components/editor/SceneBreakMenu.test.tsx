@@ -18,6 +18,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../../../lib/platform", () => ({
+  IS_ANDROID: false,
   IS_WEB: true,
   getDialog: vi.fn(),
   getFileSystem: vi.fn(),

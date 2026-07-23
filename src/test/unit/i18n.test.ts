@@ -81,4 +81,9 @@ describe("locale key coverage", () => {
     expect(en.cover.paint.color).toBeTruthy();
     expect(es.cover.paint.color).toBeTruthy();
   });
+
+  it("defines the close backup trigger in both locales", () => {
+    expect(en.backup.trigger.close).toBeTruthy();
+    expect(es.backup.trigger.close).toBeTruthy();
+  });
 });

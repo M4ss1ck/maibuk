@@ -7,6 +7,7 @@ vi.mock("../../../../i18n", () => ({
 }));
 
 vi.mock("../../../../lib/platform", () => ({
+  IS_DESKTOP: true,
   setWindowAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
   isLaunchOnStartupEnabled: vi.fn().mockResolvedValue(false),
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),

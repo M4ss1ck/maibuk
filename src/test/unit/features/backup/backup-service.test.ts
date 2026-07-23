@@ -148,6 +148,18 @@ describe("BackupService", () => {
       );
     });
 
+    it("creates a close backup whose listed trigger is preserved", async () => {
+      await service.createBackup("close");
+
+      expect(mockAdapter.saveBackup).toHaveBeenCalledWith(
+        expect.stringMatching(/^maibuk-backup-close-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/),
+        "INSERT INTO books ..."
+      );
+      await expect(service.listBackups()).resolves.toEqual([
+        expect.objectContaining({ trigger: "close" }),
+      ]);
+    });
+
     it("throws BACKUP_EMPTY when dump contains no INSERT statements", async () => {
       mockGenerateSqlDump.mockResolvedValue(
         "-- Maibuk Database Export (SQL Dump)\n-- Exported at: 2026-03-15\n\n-- Books\n\n-- Chapters\n"
@@ -163,6 +175,10 @@ describe("BackupService", () => {
       await expect(service.createBackup("manual")).rejects.toThrow("BACKUP_EMPTY");
       expect(mockAdapter.saveBackup).not.toHaveBeenCalled();
     });
+  });
+
+  it("parses the close trigger from a managed filename", () => {
+    expect(parseTriggerFromFilename("maibuk-backup-close-2026-03-15T14-30-00.sql")).toBe("close");
   });
 
   describe("deleteByTrigger", () => {
@@ -199,6 +215,17 @@ describe("BackupService", () => {
 
       const list = await mockAdapter.listBackups();
       expect(list.length).toBe(2);
+    });
+
+    it("treats close backups as unprotected prune candidates", async () => {
+      await mockAdapter.saveBackup("maibuk-backup-close-2026-03-15T10-00-00.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", "sql");
+
+      await service.pruneBackups(1);
+
+      const list = await mockAdapter.listBackups();
+      expect(list).toHaveLength(1);
+      expect(list[0].trigger).toBe("pre-sync");
     });
 
     it("preserves at least 2 pre-sync and 2 pre-restore backups", async () => {

@@ -21,21 +21,14 @@ export function textDropStem(name: string): string {
   return ext ? name.slice(0, -ext.length) : name;
 }
 
-export function droppedTextToEditorHtml(
-  text: string,
-  extension: string,
-): string {
+export function droppedTextToEditorHtml(text: string, extension: string): string {
   if (!text.trim()) return "";
-  if (extension === ".txt" && !looksLikeMarkdown(text))
-    return plainTextToHtml(text);
+  if (extension === ".txt" && !looksLikeMarkdown(text)) return plainTextToHtml(text);
   return markdownToEditorHtml(text);
 }
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Blank-line-separated blocks become <p>; single newlines become <br>. */

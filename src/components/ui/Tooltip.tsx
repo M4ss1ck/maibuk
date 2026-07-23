@@ -21,6 +21,7 @@ import { cloneElement, useRef, useState, type ReactElement, type ReactNode, type
 
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { lowlight } from "@/lib/lowlight";
+import { IS_ANDROID } from "@/lib/platform";
 import { SHORTCUTS, formatKeys, type ShortcutId } from "@/lib/shortcut-registry";
 
 const OPEN_DELAY = 500;
@@ -103,7 +104,14 @@ export function Tooltip({
     initial: { opacity: 0, transform: "translateY(2px)" },
     open: { opacity: 1, transform: "translateY(0)" },
   });
-  const shortcutDefinition = shortcut ? SHORTCUTS[shortcut] : keys ? { keys, labelKey: "" } : null;
+  // Android has no physical keyboard, so shortcut chips are noise there.
+  const shortcutDefinition = IS_ANDROID
+    ? null
+    : shortcut
+      ? SHORTCUTS[shortcut]
+      : keys
+        ? { keys, labelKey: "" }
+        : null;
 
   const markdownHints = typeof markdown === "string" ? [markdown] : (markdown ?? []);
 

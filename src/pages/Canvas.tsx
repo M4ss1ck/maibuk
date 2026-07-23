@@ -364,12 +364,12 @@ function CanvasEditor() {
   );
 
   if (loadState === "loading" || loadState === "idle") {
-    return <div className="flex h-dvh items-center justify-center">{t("canvas.loading")}</div>;
+    return <div className="flex h-full items-center justify-center">{t("canvas.loading")}</div>;
   }
 
   if (loadState === "missing") {
     return (
-      <div className="flex h-dvh flex-col items-center justify-center gap-4">
+      <div className="flex h-full flex-col items-center justify-center gap-4">
         <p>{t("canvas.missingCanvas")}</p>
         <Button onClick={() => navigate("/canvas")}>{t("canvas.backToCanvasGallery")}</Button>
       </div>
@@ -378,7 +378,7 @@ function CanvasEditor() {
 
   if (docLoadError) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-background p-6">
+      <div className="flex h-full items-center justify-center bg-background p-6">
         <div className="max-w-lg rounded-lg border border-border bg-card p-6 text-center shadow-sm">
           <Network className="mx-auto mb-4 size-10 text-destructive" aria-hidden="true" />
           <h1 className="text-xl font-semibold">{t("canvas.corruptDocTitle")}</h1>
@@ -410,7 +410,7 @@ function CanvasEditor() {
     .sort((a, b) => a.order - b.order);
 
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-background text-foreground">
       <h1 data-route-heading className="sr-only">
         {current?.title || t("canvas.title")}
       </h1>

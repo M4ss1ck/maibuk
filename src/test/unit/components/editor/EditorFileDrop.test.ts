@@ -13,8 +13,6 @@ describe("buildDropHtml()", () => {
   });
 
   it("skips files that convert to nothing", () => {
-    expect(
-      buildDropHtml([{ text: "   ", stem: "empty", extension: ".txt" }]),
-    ).toBe("");
+    expect(buildDropHtml([{ text: "   ", stem: "empty", extension: ".txt" }])).toBe("");
   });
 });

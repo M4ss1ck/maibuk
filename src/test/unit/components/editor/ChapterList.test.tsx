@@ -13,16 +13,14 @@ const {
   mockSetShowChapterOutline,
   mockToastError,
   textFileDropOptions,
-} = vi.hoisted(
-  () => ({
-    storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
-    i18nState: { language: "en" },
-    mockSetChapterListView: vi.fn(),
-    mockSetShowChapterOutline: vi.fn(),
-    mockToastError: vi.fn(),
-    textFileDropOptions: { current: null as Record<string, unknown> | null },
-  }),
-);
+} = vi.hoisted(() => ({
+  storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
+  i18nState: { language: "en" },
+  mockSetChapterListView: vi.fn(),
+  mockSetShowChapterOutline: vi.fn(),
+  mockToastError: vi.fn(),
+  textFileDropOptions: { current: null as Record<string, unknown> | null },
+}));
 
 vi.mock("@/components/ui/Toast", () => ({
   toast: { error: mockToastError },
@@ -49,13 +47,15 @@ vi.mock("@/hooks/useTextFileDrop", async (importOriginal) => {
         dropHandlers: {
           onDrop: (event: { preventDefault: () => void }) => {
             event.preventDefault();
-            return (options.onImport as (
-              files: Array<{ text: string; stem: string; extension: string }>,
-              point: { x: number; y: number },
-            ) => void)(
-              [{ text: "# Empty import", stem: "empty-import", extension: ".md" }],
-              { x: 10, y: 20 },
-            );
+            return (
+              options.onImport as (
+                files: Array<{ text: string; stem: string; extension: string }>,
+                point: { x: number; y: number }
+              ) => void
+            )([{ text: "# Empty import", stem: "empty-import", extension: ".md" }], {
+              x: 10,
+              y: 20,
+            });
           },
         },
       };
@@ -479,9 +479,7 @@ describe("ChapterList", () => {
   // ---------------------------------------------------------------------------
   describe("Tab navigation to nested controls", () => {
     it("lets the title use the action area until the overlay is revealed", () => {
-      const chapters = [
-        buildChapter({ id: "ch-1", title: "A very long chapter title", order: 1 }),
-      ];
+      const chapters = [buildChapter({ id: "ch-1", title: "A very long chapter title", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id });
 
       const title = screen.getByText("A very long chapter title");
@@ -689,9 +687,9 @@ describe("ChapterList", () => {
       renderCL();
       const activeRow = screen.getAllByRole("row")[0];
       expect(activeRow).toHaveClass("bg-primary/10", "border-l-2", "border-primary");
-      expect(
-        screen.getByText("Chapter 1").parentElement?.parentElement?.parentElement,
-      ).toHaveClass("p-3");
+      expect(screen.getByText("Chapter 1").parentElement?.parentElement?.parentElement).toHaveClass(
+        "p-3"
+      );
     });
 
     it("preserves compact density", () => {
@@ -775,7 +773,7 @@ describe("ChapterList", () => {
 
       expect(onImportFiles).toHaveBeenCalledWith(
         [{ text: "# Empty import", stem: "empty-import", extension: ".md" }],
-        null,
+        null
       );
     });
 
@@ -807,48 +805,49 @@ describe("ChapterList", () => {
     it.each([
       { clientY: 55, placement: "before" as const },
       { clientY: 85, placement: "after" as const },
-    ])(
-      "renders one React Aria divider and imports $placement the hovered row",
-      async ({ clientY, placement }) => {
-        const onImportFiles = vi.fn();
-        renderCL({ onImportFiles });
-        const { grid } = mockGridLayout();
-        const dataTransfer = createFileDataTransfer(
-          new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+    ])("renders one React Aria divider and imports $placement the hovered row", async ({
+      clientY,
+      placement,
+    }) => {
+      const onImportFiles = vi.fn();
+      renderCL({ onImportFiles });
+      const { grid } = mockGridLayout();
+      const dataTransfer = createFileDataTransfer(
+        new File(["# Imported"], "imported.md", { type: "text/markdown" })
+      );
+
+      dispatchDragEvent(grid, "dragenter", dataTransfer, clientY);
+      dispatchDragEvent(grid, "dragover", dataTransfer, clientY);
+
+      await waitFor(() => {
+        const indicators = document.querySelectorAll("[data-drop-target]");
+        expect(indicators).toHaveLength(1);
+        expect(indicators[0]).toHaveClass("h-0.5", "bg-primary");
+      });
+      expect(screen.queryByTestId("chapter-file-drop-line")).not.toBeInTheDocument();
+
+      dispatchDragEvent(grid, "drop", dataTransfer, clientY);
+
+      await waitFor(() => {
+        expect(onImportFiles).toHaveBeenCalledWith(
+          [expect.objectContaining({ text: "# Imported", stem: "imported" })],
+          { id: "ch-2", placement }
         );
-
-        dispatchDragEvent(grid, "dragenter", dataTransfer, clientY);
-        dispatchDragEvent(grid, "dragover", dataTransfer, clientY);
-
-        await waitFor(() => {
-          const indicators = document.querySelectorAll("[data-drop-target]");
-          expect(indicators).toHaveLength(1);
-          expect(indicators[0]).toHaveClass("h-0.5", "bg-primary");
-        });
-        expect(screen.queryByTestId("chapter-file-drop-line")).not.toBeInTheDocument();
-
-        dispatchDragEvent(grid, "drop", dataTransfer, clientY);
-
-        await waitFor(() => {
-          expect(onImportFiles).toHaveBeenCalledWith(
-            [expect.objectContaining({ text: "# Imported", stem: "imported" })],
-            { id: "ch-2", placement },
-          );
-        });
-      },
-    );
+      });
+    });
 
     it("shows import status until a React Aria file import finishes persisting", async () => {
       let finishImport: (() => void) | undefined;
       const onImportFiles = vi.fn(
-        () => new Promise<void>((resolve) => {
-          finishImport = resolve;
-        }),
+        () =>
+          new Promise<void>((resolve) => {
+            finishImport = resolve;
+          })
       );
       renderCL({ onImportFiles });
       const { grid } = mockGridLayout();
       const dataTransfer = createFileDataTransfer(
-        new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+        new File(["# Imported"], "imported.md", { type: "text/markdown" })
       );
 
       dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
@@ -868,14 +867,15 @@ describe("ChapterList", () => {
       let rejectImport: ((reason: Error) => void) | undefined;
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
       const onImportFiles = vi.fn(
-        () => new Promise<void>((_resolve, reject) => {
-          rejectImport = reject;
-        }),
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectImport = reject;
+          })
       );
       renderCL({ onImportFiles });
       const { grid } = mockGridLayout();
       const dataTransfer = createFileDataTransfer(
-        new File(["# Imported"], "imported.md", { type: "text/markdown" }),
+        new File(["# Imported"], "imported.md", { type: "text/markdown" })
       );
 
       dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
@@ -893,15 +893,13 @@ describe("ChapterList", () => {
 
     it("keeps import status visible until overlapping React Aria imports both finish", async () => {
       const resolvers: Array<() => void> = [];
-      const onImportFiles = vi.fn(
-        () => new Promise<void>((resolve) => resolvers.push(resolve)),
-      );
+      const onImportFiles = vi.fn(() => new Promise<void>((resolve) => resolvers.push(resolve)));
       renderCL({ onImportFiles });
       const { grid } = mockGridLayout();
 
       for (const [index, name] of ["first.md", "second.md"].entries()) {
         const dataTransfer = createFileDataTransfer(
-          new File([`# ${name}`], name, { type: "text/markdown" }),
+          new File([`# ${name}`], name, { type: "text/markdown" })
         );
         dispatchDragEvent(grid, "dragenter", dataTransfer, 55);
         dispatchDragEvent(grid, "dragover", dataTransfer, 55);
@@ -955,14 +953,14 @@ describe("ChapterList", () => {
             {...props}
             chapters={[defaultChapters[0]]}
             currentChapterId={defaultChapters[0].id}
-          />,
-        ),
+          />
+        )
       ).not.toThrow();
       expect(screen.getByRole("grid")).toBeInTheDocument();
       expect(screen.getByRole("row", { name: defaultChapters[0].title })).toBeInTheDocument();
 
       expect(() =>
-        view.rerender(<ChapterList {...props} chapters={[]} currentChapterId={null} />),
+        view.rerender(<ChapterList {...props} chapters={[]} currentChapterId={null} />)
       ).not.toThrow();
       expect(screen.getByRole("grid")).toBeInTheDocument();
       expect(screen.getByText("chapters.noChapters")).toBeInTheDocument();

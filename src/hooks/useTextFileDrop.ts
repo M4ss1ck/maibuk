@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, RefObject } from "react";
 import { toast } from "@/components/ui/Toast";
-import {
-  textDropExtension,
-  textDropStem,
-} from "@/features/markdown/dropped-file";
+import { textDropExtension, textDropStem } from "@/features/markdown/dropped-file";
 import i18n from "@/i18n";
 import { IS_TAURI, getFileSystem } from "@/lib/platform";
 
@@ -46,7 +43,7 @@ export interface TextFileDropOptions {
 
 export function useTextFileDrop(
   containerRef: RefObject<HTMLElement | null>,
-  { onImport, onDragMove, disableWeb = false }: TextFileDropOptions,
+  { onImport, onDragMove, disableWeb = false }: TextFileDropOptions
 ) {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isImportingFiles, setIsImportingFiles] = useState(false);
@@ -78,7 +75,7 @@ export function useTextFileDrop(
         clientY <= rect.bottom
       );
     },
-    [containerRef],
+    [containerRef]
   );
 
   useEffect(() => {
@@ -114,9 +111,7 @@ export function useTextFileDrop(
             };
             if (!isInsideContainer(point.x, point.y)) return;
 
-            const hasSupportedPath = payload.paths.some(
-              (path) => textDropExtension(path) !== null,
-            );
+            const hasSupportedPath = payload.paths.some((path) => textDropExtension(path) !== null);
             if (hasSupportedPath) beginImport();
 
             void (async () => {
@@ -162,7 +157,7 @@ export function useTextFileDrop(
       setIsDraggingFile(true);
       onDragMoveRef.current?.({ x: event.clientX, y: event.clientY });
     },
-    [disableWeb],
+    [disableWeb]
   );
 
   const onDragLeave = useCallback(
@@ -172,7 +167,7 @@ export function useTextFileDrop(
       setIsDraggingFile(false);
       onDragMoveRef.current?.(null);
     },
-    [disableWeb],
+    [disableWeb]
   );
 
   const onDrop = useCallback(
@@ -185,9 +180,7 @@ export function useTextFileDrop(
       setIsDraggingFile(false);
       onDragMoveRef.current?.(null);
       const point = { x: event.clientX, y: event.clientY };
-      const hasSupportedFile = all.some(
-        (file) => textDropExtension(file.name) !== null,
-      );
+      const hasSupportedFile = all.some((file) => textDropExtension(file.name) !== null);
       if (hasSupportedFile) beginImport();
 
       void (async () => {
@@ -204,7 +197,7 @@ export function useTextFileDrop(
         }
       })();
     },
-    [beginImport, disableWeb, finishImport],
+    [beginImport, disableWeb, finishImport]
   );
 
   return {
@@ -216,9 +209,7 @@ export function useTextFileDrop(
 
 /** Reads browser File objects in order; toasts per read failure and when a
  * file-bearing drop contains nothing supported. */
-export async function readDroppedWebFiles(
-  all: File[],
-): Promise<DroppedTextFile[]> {
+export async function readDroppedWebFiles(all: File[]): Promise<DroppedTextFile[]> {
   const supported = all.filter((file) => textDropExtension(file.name) !== null);
   if (supported.length === 0) {
     if (all.length > 0) toast.error(i18n.t("dropImport.noSupportedFiles"));
@@ -242,9 +233,7 @@ export async function readDroppedWebFiles(
 }
 
 /** Reads Tauri file paths from disk in order; same toast rules as the web reader. */
-export async function readDroppedTauriPaths(
-  paths: string[],
-): Promise<DroppedTextFile[]> {
+export async function readDroppedTauriPaths(paths: string[]): Promise<DroppedTextFile[]> {
   const supported = paths.filter((path) => textDropExtension(path) !== null);
   if (supported.length === 0) {
     if (paths.length > 0) toast.error(i18n.t("dropImport.noSupportedFiles"));
