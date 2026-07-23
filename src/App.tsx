@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { FullPageScreen } from "@/components/FullPageScreen";
 import { Home } from "@/pages/Home";
 import { BookEditor } from "@/pages/BookEditor";
 import { CoverDesigner } from "@/pages/CoverDesigner";
@@ -69,10 +70,12 @@ function App() {
           <Route path="settings" element={<Settings />} />
         </Route>
         {/* Full-page editors without sidebar */}
-        <Route path="notes/:noteId" element={<Notes />} />
-        <Route path="canvas/:canvasId" element={<Canvas />} />
-        <Route path="book/:bookId" element={<BookEditor />} />
-        <Route path="book/:bookId/cover" element={<CoverDesigner />} />
+        <Route element={<FullPageScreen />}>
+          <Route path="notes/:noteId" element={<Notes />} />
+          <Route path="canvas/:canvasId" element={<Canvas />} />
+          <Route path="book/:bookId" element={<BookEditor />} />
+          <Route path="book/:bookId/cover" element={<CoverDesigner />} />
+        </Route>
       </Routes>
       <ToastViewport />
     </StartupRedirect>

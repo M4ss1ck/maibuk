@@ -45,7 +45,7 @@ export function Ephemeral() {
   };
 
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-background text-foreground">
       <h1 data-route-heading className="sr-only">
         {t("common.ephemeral")}
       </h1>

@@ -275,7 +275,7 @@ export function Layout() {
         data-focus-pane="main-content"
         tabIndex={-1}
         aria-label={t("panes.mainContent")}
-        className="flex-1 overflow-hidden pt-[calc(3.5rem+env(safe-area-inset-top))] md:pt-0"
+        className="flex-1 overflow-hidden pt-[calc(3.5rem+env(safe-area-inset-top))] md:pt-0 pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)]"
       >
         <Outlet />
       </main>

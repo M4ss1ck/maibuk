@@ -218,7 +218,8 @@ describe("BookEditor loading state", () => {
     const loadingSurface = logo?.parentElement?.parentElement;
     expect(logo).toBeInTheDocument();
     expect(logo?.classList.contains("loading-entrance")).toBe(true);
-    expect(loadingSurface).toHaveClass("h-dvh");
+    // h-full, not h-dvh: the page fills FullPageScreen's safe-area-padded box.
+    expect(loadingSurface).toHaveClass("h-full");
     expect(screen.getByText("editor.loading")).toBeInTheDocument();
   });
 

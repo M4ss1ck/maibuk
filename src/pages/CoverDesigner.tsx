@@ -177,7 +177,7 @@ export function CoverDesigner() {
   }
 
   return (
-    <div className="flex flex-col h-dvh">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="h-12 border-b border-border flex items-center px-2 sm:px-4 gap-2 sm:gap-4">
         <Button variant="ghost" size="sm" onClick={handleBack} aria-label={t("common.back")}>

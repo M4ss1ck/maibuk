@@ -206,7 +206,7 @@ export function Notes() {
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <section
         data-focus-pane="notes-sidebar"
         tabIndex={-1}
