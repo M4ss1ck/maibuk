@@ -4,7 +4,29 @@ import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { Tooltip } from "@/components/ui";
 import { useCanvasStore } from "@/features/canvas/store";
 
-const NODE_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
+const NODE_COLORS = [
+  "#7f1d1d",
+  "#ef4444",
+  "#92400e",
+  "#f59e0b",
+  "#065f46",
+  "#10b981",
+  "#1e3a8a",
+  "#3b82f6",
+  "#4c1d95",
+  "#8b5cf6",
+  "#831843",
+  "#ec4899",
+];
+
+const COLOR_PAIRS = [
+  { id: "slate", textColor: "#1e293b", backgroundColor: "#e2e8f0" },
+  { id: "rose", textColor: "#7f1d1d", backgroundColor: "#fee2e2" },
+  { id: "amber", textColor: "#451a03", backgroundColor: "#fef3c7" },
+  { id: "emerald", textColor: "#064e3b", backgroundColor: "#d1fae5" },
+  { id: "blue", textColor: "#1e3a8a", backgroundColor: "#dbeafe" },
+  { id: "violet", textColor: "#4c1d95", backgroundColor: "#ede9fe" },
+] as const;
 
 type ColorSwatchProps = {
   color: string;
@@ -47,12 +69,38 @@ export function NodeColorPanel() {
       </Tooltip>
       <Popover
         placement="bottom end"
-        className="z-50 w-60 rounded-lg border border-border bg-card/95 p-3 text-foreground shadow-lg backdrop-blur outline-none"
+        className="z-50 w-64 rounded-lg border border-border bg-card/95 p-3 text-foreground shadow-lg backdrop-blur outline-none"
       >
         <Dialog aria-label={t("canvas.nodeColors")} className="flex flex-col gap-3 outline-none">
           <fieldset className="flex flex-col gap-2">
+            <legend className="text-xs text-muted-foreground">{t("canvas.colorPairs")}</legend>
+            <div className="grid grid-cols-6 gap-1.5">
+              {COLOR_PAIRS.map((pair) => (
+                <Button
+                  key={pair.id}
+                  aria-label={`${t("canvas.colorPair")}: ${t(`canvas.colorPairNames.${pair.id}`)}`}
+                  aria-pressed={
+                    selectedNode.textColor === pair.textColor &&
+                    selectedNode.backgroundColor === pair.backgroundColor
+                  }
+                  onPress={() =>
+                    updateTextNode(selectedNodeId, {
+                      textColor: pair.textColor,
+                      backgroundColor: pair.backgroundColor,
+                    })
+                  }
+                  className="flex h-8 items-center justify-center rounded-lg border border-border text-xs font-semibold outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary"
+                  style={{ color: pair.textColor, backgroundColor: pair.backgroundColor }}
+                >
+                  Aa
+                </Button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-2">
             <legend className="text-xs text-muted-foreground">{t("canvas.textColor")}</legend>
-            <div className="flex items-center gap-1.5">
+            <div className="grid grid-cols-7 gap-1.5">
               <Button
                 aria-label={t("canvas.automaticTextColor")}
                 aria-pressed={!selectedNode.textColor}
@@ -74,13 +122,25 @@ export function NodeColorPanel() {
                 />
               ))}
             </div>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="color"
+                aria-label={t("canvas.customTextColor")}
+                value={selectedNode.textColor ?? "#1c1917"}
+                onChange={(event) =>
+                  updateTextNode(selectedNodeId, { textColor: event.currentTarget.value })
+                }
+                className="size-7 cursor-pointer rounded border border-border bg-transparent p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              {t("canvas.customColor")}
+            </label>
           </fieldset>
 
           <fieldset className="flex flex-col gap-2">
             <legend className="text-xs text-muted-foreground">
               {t("canvas.backgroundColor")}
             </legend>
-            <div className="flex items-center gap-1.5">
+            <div className="grid grid-cols-7 gap-1.5">
               <Button
                 aria-label={t("canvas.transparentBackground")}
                 aria-pressed={!selectedNode.backgroundColor}
@@ -99,6 +159,18 @@ export function NodeColorPanel() {
                 />
               ))}
             </div>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="color"
+                aria-label={t("canvas.customBackgroundColor")}
+                value={selectedNode.backgroundColor ?? "#ffffff"}
+                onChange={(event) =>
+                  updateTextNode(selectedNodeId, { backgroundColor: event.currentTarget.value })
+                }
+                className="size-7 cursor-pointer rounded border border-border bg-transparent p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              {t("canvas.customColor")}
+            </label>
           </fieldset>
         </Dialog>
       </Popover>
