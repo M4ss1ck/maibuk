@@ -137,9 +137,7 @@ export function NodeColorPanel() {
           </fieldset>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-xs text-muted-foreground">
-              {t("canvas.backgroundColor")}
-            </legend>
+            <legend className="text-xs text-muted-foreground">{t("canvas.backgroundColor")}</legend>
             <div className="grid grid-cols-7 gap-1.5">
               <Button
                 aria-label={t("canvas.transparentBackground")}

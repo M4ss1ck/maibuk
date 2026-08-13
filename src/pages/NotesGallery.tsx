@@ -42,14 +42,7 @@ export function NotesGallery() {
   const setSort = useSettingsStore((s) => s.setNotesSort);
   const notesFilters = useSettingsStore((s) => s.notesFilters);
   const setNotesFilters = useSettingsStore((s) => s.setNotesFilters);
-  const {
-    search,
-    showAdvanced,
-    tags: tagFilters,
-    excludeTags,
-    dateFrom,
-    dateTo,
-  } = notesFilters;
+  const { search, showAdvanced, tags: tagFilters, excludeTags, dateFrom, dateTo } = notesFilters;
   const setSearch = useCallback(
     (value: string) => setNotesFilters({ search: value }),
     [setNotesFilters]

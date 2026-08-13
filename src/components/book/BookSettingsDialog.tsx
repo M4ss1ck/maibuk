@@ -3,7 +3,12 @@ import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-co
 import { Button, Modal, Select } from "@/components/ui";
 import { useTranslation } from "react-i18next";
 import { TrashIcon, ChevronDownIcon } from "@/components/icons";
-import { BOOK_STATUSES, type Book, type BookStatus, type UpdateBookInput } from "@/features/books/types";
+import {
+  BOOK_STATUSES,
+  type Book,
+  type BookStatus,
+  type UpdateBookInput,
+} from "@/features/books/types";
 
 interface BookSettingsDialogProps {
   isOpen: boolean;

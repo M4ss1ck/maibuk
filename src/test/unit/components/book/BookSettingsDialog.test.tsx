@@ -92,9 +92,7 @@ describe("BookSettingsDialog modal registration", () => {
     await user.click(screen.getByRole("button", { name: "common.archived" }));
     await user.click(screen.getByRole("button", { name: "common.save" }));
 
-    expect(onUpdateBookInfo).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "archived" })
-    );
+    expect(onUpdateBookInfo).toHaveBeenCalledWith(expect.objectContaining({ status: "archived" }));
   });
 
   it("expands and collapses the danger zone with the keyboard", async () => {

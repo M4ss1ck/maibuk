@@ -460,10 +460,11 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const state = get();
     const node = state.doc.nodes.find((candidate) => candidate.id === id);
     if (!node || node.kind !== "text") return;
-    const textColor =
-      patch.textColor === undefined ? node.textColor : patch.textColor || undefined;
+    const textColor = patch.textColor === undefined ? node.textColor : patch.textColor || undefined;
     const backgroundColor =
-      patch.backgroundColor === undefined ? node.backgroundColor : patch.backgroundColor || undefined;
+      patch.backgroundColor === undefined
+        ? node.backgroundColor
+        : patch.backgroundColor || undefined;
     if (
       (patch.html === undefined || patch.html === node.html) &&
       (patch.textColor === undefined || textColor === node.textColor) &&
