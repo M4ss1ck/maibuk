@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { GridList } from "react-aria-components/GridList";
 import { Toolbar } from "react-aria-components/Toolbar";
 import { useBookStore } from "@/features/books/store";
-import { useBookViewStore } from "@/features/books/view-store";
+import { useSettingsStore } from "@/features/settings/store";
 import { BookCard } from "@/components/project/BookCard";
 import { BookStatusFilter } from "@/components/project/BookStatusFilter";
 import { countBooksByStatus, filterBooksByStatus } from "@/components/project/book-list-model";
@@ -40,8 +40,8 @@ export function Home() {
   const [isScanningEpub, setIsScanningEpub] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const statusFilter = useBookViewStore((state) => state.statusFilter);
-  const setStatusFilter = useBookViewStore((state) => state.setStatusFilter);
+  const statusFilter = useSettingsStore((state) => state.booksStatusFilter);
+  const setStatusFilter = useSettingsStore((state) => state.setBooksStatusFilter);
 
   const { books, isLoading, loadBooks, updateBook } = useBookStore();
   const statusCounts = useMemo(() => countBooksByStatus(books), [books]);

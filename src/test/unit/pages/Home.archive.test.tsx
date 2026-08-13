@@ -37,6 +37,7 @@ vi.mock("@/lib/platform", () => ({
 }));
 
 vi.mock("react-i18next", () => ({
+  initReactI18next: { type: "3rdParty", init: () => {} },
   useTranslation: () => ({
     t: (key: string, options?: { count?: number; title?: string }) =>
       ({
@@ -71,7 +72,7 @@ vi.mock("react-i18next", () => ({
 
 import { Home } from "@/pages/Home";
 import { DEFAULT_STATUS_FILTER } from "@/components/project/book-list-model";
-import { useBookViewStore } from "@/features/books/view-store";
+import { useSettingsStore } from "@/features/settings/store";
 
 const alpha = buildBook({ id: "alpha", title: "Alpha", status: "draft" });
 const beta = buildBook({ id: "beta", title: "Beta", status: "completed" });
@@ -88,7 +89,7 @@ describe("Home archiving", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     storeState.books = [alpha, beta, gamma];
-    useBookViewStore.setState({ statusFilter: DEFAULT_STATUS_FILTER });
+    useSettingsStore.setState({ booksStatusFilter: DEFAULT_STATUS_FILTER });
   });
 
   it("keeps the chosen filter when the page is left and reopened", async () => {

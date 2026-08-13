@@ -47,6 +47,8 @@ import {
   normalizeNotesFilters,
   type NotesFilters,
 } from "@/components/notes/notes-list-model";
+import { DEFAULT_STATUS_FILTER } from "@/components/project/book-list-model";
+import type { BookStatus } from "@/features/books/types";
 import { setLaunchOnStartup as applyLaunchOnStartup } from "@/lib/platform";
 import {
   DEFAULT_TOOLBAR_CONFIG,
@@ -114,6 +116,7 @@ interface SettingsStore extends Settings {
   setNotesListView: (view: NotesListViewMode) => void;
   setNotesSort: (sort: NotesSortOption) => void;
   setNotesFilters: (filters: Partial<NotesFilters>) => void;
+  setBooksStatusFilter: (statuses: BookStatus[]) => void;
   setCanvasSearch: (search: string) => void;
   setNotesTreeGroupMode: (mode: NotesTreeGroupMode) => void;
   toggleNotesGroupCollapsed: (key: string) => void;
@@ -187,6 +190,7 @@ const defaultSettings: Settings = {
   notesListView: "list",
   notesSort: DEFAULT_NOTES_SORT,
   notesFilters: DEFAULT_NOTES_FILTERS,
+  booksStatusFilter: DEFAULT_STATUS_FILTER,
   canvasSearch: "",
   notesTreeGroupMode: "book",
   notesCollapsedGroups: [],
@@ -394,6 +398,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setNotesSort: (notesSort) => set({ notesSort }),
       setNotesFilters: (filters) =>
         set((state) => ({ notesFilters: { ...state.notesFilters, ...filters } })),
+      setBooksStatusFilter: (booksStatusFilter) => set({ booksStatusFilter }),
       setCanvasSearch: (canvasSearch) => set({ canvasSearch }),
       setNotesTreeGroupMode: (notesTreeGroupMode) => set({ notesTreeGroupMode }),
       toggleNotesGroupCollapsed: (key) =>
