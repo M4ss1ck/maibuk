@@ -110,6 +110,13 @@ describe("Layout", () => {
     return link as HTMLAnchorElement;
   }
 
+  it("pins the app shell to the viewport so document scrolling cannot displace it", () => {
+    const { container } = renderLayout();
+
+    expect(container.firstElementChild).toHaveClass("fixed", "inset-0", "overflow-hidden");
+    expect(container.firstElementChild).not.toHaveClass("h-dvh");
+  });
+
   it("renders the app title and primary navigation links and brand is visible but not an h1", () => {
     renderLayout();
 

@@ -217,7 +217,7 @@ export function Layout() {
   );
 
   return (
-    <div className="flex h-dvh bg-background text-foreground">
+    <div className="fixed inset-0 flex overflow-hidden bg-background text-foreground">
       <div className="md:hidden fixed top-0 left-0 right-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] bg-background border-b border-border flex items-center z-40">
         <button
           type="button"
