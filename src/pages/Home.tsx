@@ -3,13 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { GridList } from "react-aria-components/GridList";
 import { Toolbar } from "react-aria-components/Toolbar";
 import { useBookStore } from "@/features/books/store";
+import { useBookViewStore } from "@/features/books/view-store";
 import { BookCard } from "@/components/project/BookCard";
 import { BookStatusFilter } from "@/components/project/BookStatusFilter";
-import {
-  countBooksByStatus,
-  DEFAULT_STATUS_FILTER,
-  filterBooksByStatus,
-} from "@/components/project/book-list-model";
+import { countBooksByStatus, filterBooksByStatus } from "@/components/project/book-list-model";
 import { NewBookDialog } from "@/components/project/NewBookDialog";
 import { EpubImportDialog } from "@/components/import";
 import { Button } from "@/components/ui/Button";
@@ -25,7 +22,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { scanEpubForImport } from "@/features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "@/features/import";
 import { formatKeys, SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
-import { BOOK_STATUSES, type Book, type BookStatus } from "@/features/books/types";
+import { BOOK_STATUSES, type Book } from "@/features/books/types";
 
 interface EpubImportState {
   bytes: Uint8Array;
@@ -43,7 +40,8 @@ export function Home() {
   const [isScanningEpub, setIsScanningEpub] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<BookStatus[]>(DEFAULT_STATUS_FILTER);
+  const statusFilter = useBookViewStore((state) => state.statusFilter);
+  const setStatusFilter = useBookViewStore((state) => state.setStatusFilter);
 
   const { books, isLoading, loadBooks, updateBook } = useBookStore();
   const statusCounts = useMemo(() => countBooksByStatus(books), [books]);
