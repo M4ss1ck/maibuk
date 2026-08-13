@@ -22,7 +22,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { scanEpubForImport } from "@/features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "@/features/import";
 import { formatKeys, SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
-import { BOOK_STATUSES, type Book } from "@/features/books/types";
+import { BOOK_STATUSES, type Book, type BookStatus } from "@/features/books/types";
 
 interface EpubImportState {
   bytes: Uint8Array;
@@ -152,14 +152,18 @@ export function Home() {
     navigate(`/book/${bookId}`);
   };
 
-  const handleArchiveToggle = useCallback(
-    async (book: Book) => {
-      const restoring = book.status === "archived";
-      await updateBook(book.id, { status: restoring ? "draft" : "archived" });
+  const handleStatusChange = useCallback(
+    async (book: Book, status: BookStatus) => {
+      await updateBook(book.id, { status });
       toast.success(
-        restoring
-          ? t("books.restoredToast", { title: book.title })
-          : t("books.archivedToast", { title: book.title })
+        status === "archived"
+          ? t("books.archivedToast", { title: book.title })
+          : book.status === "archived"
+            ? t("books.restoredToast", { title: book.title })
+            : t("books.statusChangedToast", {
+                title: book.title,
+                status: t(`common.${status}`),
+              })
       );
     },
     [t, updateBook]
@@ -324,7 +328,7 @@ export function Home() {
                 book={book}
                 index={visibleBooks.findIndex((candidate) => candidate.id === book.id)}
                 onPress={() => activateBook(book.id)}
-                onArchiveToggle={() => void handleArchiveToggle(book)}
+                onStatusChange={(status) => void handleStatusChange(book, status)}
               />
             )}
           </GridList>

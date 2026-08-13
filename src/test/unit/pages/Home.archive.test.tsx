@@ -39,7 +39,7 @@ vi.mock("@/lib/platform", () => ({
 vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
   useTranslation: () => ({
-    t: (key: string, options?: { count?: number; title?: string }) =>
+    t: (key: string, options?: { count?: number; title?: string; status?: string }) =>
       ({
         "books.title": "Books",
         "books.collectionLabel": "Book projects",
@@ -54,8 +54,8 @@ vi.mock("react-i18next", () => ({
         "books.filterByStatus": "Filter by status",
         "books.allStatuses": "All statuses",
         "books.statusCount": `${options?.count} statuses`,
-        "books.archiveBook": `Archive ${options?.title}`,
-        "books.restoreBook": `Restore ${options?.title}`,
+        "books.changeStatus": `Change status of ${options?.title}`,
+        "books.statusChangedToast": `Set "${options?.title}" to ${options?.status}`,
         "books.noMatches": "No books match this filter",
         "books.showAllStatuses": "Show all statuses",
         "books.filterAnnouncement": `Showing ${options?.count} books`,
@@ -124,19 +124,23 @@ describe("Home archiving", () => {
     screen.getAllByRole("row")[0].focus();
     await user.keyboard("{Tab}");
 
-    const archiveButton = screen.getByRole("button", { name: "Archive Alpha" });
-    expect(archiveButton).toHaveFocus();
+    const statusButton = screen.getByRole("button", { name: "Change status of Alpha" });
+    expect(statusButton).toHaveFocus();
 
     await user.keyboard("{Enter}");
+    await screen.findByRole("listbox");
+    await user.keyboard("{End}{Enter}");
+
     expect(mockUpdateBook).toHaveBeenCalledWith("alpha", { status: "archived" });
   });
 
   it("restores an archived book back to draft", async () => {
     const user = userEvent.setup();
+    useSettingsStore.setState({ booksStatusFilter: ["archived"] });
     render(<Home />);
-    await showArchived(user);
 
-    await user.click(screen.getByRole("button", { name: "Restore Gamma" }));
+    await user.click(screen.getByRole("button", { name: "Change status of Gamma" }));
+    await user.click(await screen.findByRole("option", { name: "Draft" }));
 
     expect(mockUpdateBook).toHaveBeenCalledWith("gamma", { status: "draft" });
   });
@@ -151,14 +155,25 @@ describe("Home archiving", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/book/alpha");
   });
 
-  it("does not open the book when the archive button is pressed", async () => {
+  it("does not open the book when a status is picked", async () => {
     const user = userEvent.setup();
     render(<Home />);
 
-    await user.click(screen.getByRole("button", { name: "Archive Alpha" }));
+    await user.click(screen.getByRole("button", { name: "Change status of Alpha" }));
+    await user.click(await screen.findByRole("option", { name: "Completed" }));
 
-    expect(mockUpdateBook).toHaveBeenCalledWith("alpha", { status: "archived" });
+    expect(mockUpdateBook).toHaveBeenCalledWith("alpha", { status: "completed" });
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("does not update a book when its current status is picked", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await user.click(screen.getByRole("button", { name: "Change status of Alpha" }));
+    await user.click(await screen.findByRole("option", { name: "Draft" }));
+
+    expect(mockUpdateBook).not.toHaveBeenCalled();
   });
 
   it("offers a way out when the filter matches nothing", async () => {
