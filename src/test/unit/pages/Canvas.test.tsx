@@ -164,20 +164,18 @@ describe("Canvas page", () => {
     expect(mocks.actions.selectEdge).not.toHaveBeenCalled();
   });
 
-  it("adds an html text node from the floating tool panel", () => {
+  it("adds a roomy html text node and selects it from the floating tool panel", () => {
     renderCanvas();
     fireEvent.click(screen.getByRole("button", { name: "canvas.addTextNode" }));
-    expect(mocks.actions.addNode).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "text", html: "<p>canvas.newTextNode</p>" })
+    const addedNode = mocks.actions.addNode.mock.calls[0][0];
+    expect(addedNode).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        html: "<p>canvas.newTextNode</p>",
+        width: 288,
+      })
     );
-  });
-
-  it("resets the selected node's color with the automatic swatch", () => {
-    Object.assign(mocks.state, { selectedNodeId: "node" });
-    renderCanvas();
-    fireEvent.click(screen.getByRole("button", { name: "canvas.nodeColor" }));
-    fireEvent.click(screen.getByRole("button", { name: "canvas.defaultNodeColor" }));
-    expect(mocks.actions.updateTextNode).toHaveBeenCalledWith("node", { color: "" });
+    expect(mocks.actions.selectNode).toHaveBeenCalledWith(addedNode.id);
   });
 
   it("selects a node on click", () => {

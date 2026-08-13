@@ -101,7 +101,7 @@ describe("canvas document serialization", () => {
 
   it("keeps valid text-node widths and drops invalid ones", () => {
     const result = normalizeParsedCanvasDoc({
-      schemaVersion: 2,
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
       nodes: [
         { id: "valid", kind: "text", html: "<p>a</p>", position: { x: 0, y: 0 }, width: 320 },
         { id: "small", kind: "text", html: "<p>b</p>", position: { x: 0, y: 0 }, width: 100 },
@@ -177,5 +177,35 @@ describe("canvas schema v1 -> v2 migration", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.doc.strokes.map((s) => s.id)).toEqual(["s1"]);
+  });
+});
+
+describe("canvas schema v2 -> v3 migration", () => {
+  it("renames the existing text color and keeps the background transparent", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: 2,
+      nodes: [
+        {
+          id: "a",
+          kind: "text",
+          html: "<p>Idea</p>",
+          color: "#ef4444",
+          position: { x: 1, y: 2 },
+        },
+      ],
+      edges: [],
+      strokes: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.migrated).toBe(true);
+      expect(result.doc.nodes[0]).toMatchObject({
+        textColor: "#ef4444",
+        backgroundColor: undefined,
+      });
+      expect(result.doc.nodes[0]).not.toHaveProperty("color");
+    }
   });
 });

@@ -40,6 +40,7 @@ import { useCanvasStore } from "@/features/canvas/store";
 import type { CanvasDoc } from "@/features/canvas/types";
 import { useNoteStore } from "@/features/notes";
 import { useThemeStore } from "@/features/theme";
+import { CANVAS_TEXT_NODE_DEFAULT_WIDTH } from "@/constants";
 import { useShortcuts } from "@/lib/shortcuts";
 
 const AUTOSAVE_DELAY = 800;
@@ -274,12 +275,15 @@ function CanvasEditor() {
   }, [reactFlow]);
 
   const handleAddTextNode = () => {
+    const id = crypto.randomUUID();
     addNode({
-      id: crypto.randomUUID(),
+      id,
       kind: "text",
       html: `<p>${t("canvas.newTextNode")}</p>`,
       position: viewportCenter(),
+      width: CANVAS_TEXT_NODE_DEFAULT_WIDTH,
     });
+    selectNode(id);
   };
 
   const handleConnect = useCallback(

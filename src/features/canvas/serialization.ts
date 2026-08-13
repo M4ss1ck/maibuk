@@ -119,7 +119,8 @@ function normalizeNode(node: CanvasNode): CanvasNode {
       kind: "text",
       position: { ...node.position },
       html: node.html,
-      color: normalizedOptionalString(node.color),
+      textColor: normalizedOptionalString(node.textColor),
+      backgroundColor: normalizedOptionalString(node.backgroundColor),
       width: normalizedOptionalWidth(node.width),
     };
   }
@@ -154,6 +155,15 @@ function migrateToCurrent(
       return node;
     });
     strokes = [];
+  }
+
+  if (fromVersion < 3) {
+    migrated = true;
+    nodes = nodes.map((node) => {
+      if (!isRecord(node) || node.kind !== "text") return node;
+      const { color, ...rest } = node;
+      return { ...rest, textColor: color };
+    });
   }
 
   return { value: { ...value, nodes, strokes }, migrated };
