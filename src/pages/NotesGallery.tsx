@@ -252,7 +252,7 @@ export function NotesGallery() {
 
         {notes.length > 0 && (
           <div className="@container row-start-3 rounded-lg border border-border bg-card p-3 shadow-sm sm:col-span-2 sm:row-start-2">
-            <div className="flex flex-col gap-3 lg:flex-row">
+            <div className="flex gap-3">
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -271,10 +271,13 @@ export function NotesGallery() {
                   variant={showAdvanced ? "secondary" : "ghost"}
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   aria-expanded={showAdvanced}
-                  className="h-11 flex-1 border border-border sm:flex-none"
+                  aria-label={t("notes.advancedFilters")}
+                  className="h-11 shrink-0 border border-border"
                 >
                   <SlidersHorizontal className="h-4 w-4" />
-                  <span>{t("notes.advancedFilters")}</span>
+                  {/* Narrow panels keep the icon beside the search box; the
+                      aria-label carries the name the hidden text gives up. */}
+                  <span className="hidden @sm:inline">{t("notes.advancedFilters")}</span>
                 </Button>
                 {hasFilters && (
                   <Tooltip content={t("notes.clearFilters")}>

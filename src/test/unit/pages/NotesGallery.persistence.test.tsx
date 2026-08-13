@@ -67,6 +67,14 @@ describe("NotesGallery filter persistence", () => {
     expect(screen.getByPlaceholderText("notes.search")).toHaveValue("Second");
   });
 
+  it("names the filters button even where its label is visually hidden", () => {
+    render(<NotesGallery />);
+
+    const filters = screen.getByRole("button", { name: "notes.advancedFilters" });
+    expect(filters.querySelector("span")).toHaveClass("hidden");
+    expect(filters).toHaveAccessibleName("notes.advancedFilters");
+  });
+
   it("hides notes carrying an excluded tag", () => {
     useSettingsStore.setState({
       notesFilters: { ...DEFAULT_NOTES_FILTERS, showAdvanced: true, excludeTags: ["archive"] },
