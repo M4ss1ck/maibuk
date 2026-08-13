@@ -14,7 +14,6 @@ import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/Coll
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import { useShortcuts } from "@/lib/shortcuts";
 import { matchKeys } from "@/lib/shortcut-registry";
-import { BackIcon } from "@/components/icons";
 import { TagEditor } from "@/components/notes/TagEditor";
 import { timeAgo } from "@/components/notes/timeAgo";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
@@ -209,7 +208,6 @@ const NotesTaskDndBehavior = Extension.create({
 interface NoteEditorProps {
   note: Note;
   onSave: (input: UpdateNoteInput) => Promise<void>;
-  onBack: () => void;
   onReturnToBook?: () => void;
   returnLabel?: string;
   suppressRestore?: boolean;
@@ -218,7 +216,6 @@ interface NoteEditorProps {
 export function NoteEditor({
   note,
   onSave,
-  onBack,
   onReturnToBook,
   returnLabel,
   suppressRestore = false,
@@ -552,15 +549,6 @@ export function NoteEditor({
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Header */}
       <div className="@container px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={onBack}
-          className="md:hidden shrink-0 p-1 hover:bg-muted rounded transition-colors"
-          aria-label={t("common.back")}
-        >
-          <BackIcon className="w-5 h-5" />
-        </button>
-
         <button
           type="button"
           onClick={onReturnToBook ?? (() => navigate("/notes"))}

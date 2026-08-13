@@ -243,10 +243,6 @@ export function Notes() {
             key={currentNote.id}
             note={currentNote}
             onSave={handleSave}
-            onBack={() => {
-              setCurrentNote(null);
-              setLastNoteId(null);
-            }}
             onReturnToBook={returnTarget ? () => navigate(returnTarget.to) : undefined}
             returnLabel={returnTarget?.label}
             suppressRestore={hasPendingHeadingScroll}
