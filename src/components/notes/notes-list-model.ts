@@ -9,6 +9,38 @@ export type NotesSortOption = "date-desc" | "date-asc" | "title-asc" | "title-de
 
 export const DEFAULT_NOTES_SORT: NotesSortOption = "date-desc";
 
+// The gallery's filter bar, persisted between visits alongside the sort order.
+export interface NotesFilters {
+  search: string;
+  tags: string[];
+  dateFrom: string;
+  dateTo: string;
+  showAdvanced: boolean;
+}
+
+export const DEFAULT_NOTES_FILTERS: NotesFilters = {
+  search: "",
+  tags: [],
+  dateFrom: "",
+  dateTo: "",
+  showAdvanced: false,
+};
+
+export function normalizeNotesFilters(value: unknown): NotesFilters {
+  const candidate = (value && typeof value === "object" ? value : {}) as Partial<
+    Record<keyof NotesFilters, unknown>
+  >;
+  const text = (field: unknown) => (typeof field === "string" ? field : "");
+
+  return {
+    search: text(candidate.search),
+    tags: Array.isArray(candidate.tags) ? candidate.tags.filter((tag) => typeof tag === "string") : [],
+    dateFrom: text(candidate.dateFrom),
+    dateTo: text(candidate.dateTo),
+    showAdvanced: candidate.showAdvanced === true,
+  };
+}
+
 export function sortNotesBy(notes: NoteWithBook[], option: NotesSortOption): NoteWithBook[] {
   const [field, direction] = option.split("-");
   const sign = direction === "asc" ? 1 : -1;

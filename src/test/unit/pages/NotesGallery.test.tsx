@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesGallery } from "@/pages/NotesGallery";
+import { useSettingsStore } from "@/features/settings/store";
+import { DEFAULT_NOTES_FILTERS } from "@/components/notes/notes-list-model";
 
 vi.mock("../../../lib/platform", () => ({
   IS_ANDROID: false,
@@ -49,9 +51,21 @@ vi.mock("../../../features/books/store", () => {
   return { useBookStore };
 });
 
-vi.mock("../../../features/settings/store", () => {
-  const useSettingsStore = (selector: (s: typeof settingsState) => unknown) =>
-    selector(settingsState);
+// A real store, not a static object: the gallery's filter bar now reads and
+// writes settings state, so the double has to re-render on change.
+vi.mock("../../../features/settings/store", async () => {
+  const { create } = await import("zustand");
+  const { DEFAULT_NOTES_FILTERS } = await import("../../../components/notes/notes-list-model");
+
+  const useSettingsStore = create(() => ({
+    ...settingsState,
+    notesFilters: DEFAULT_NOTES_FILTERS,
+    setNotesFilters: (filters: Record<string, unknown>) =>
+      useSettingsStore.setState((state) => ({
+        notesFilters: { ...state.notesFilters, ...filters },
+      })),
+  }));
+
   return { useSettingsStore };
 });
 
@@ -79,6 +93,7 @@ describe("NotesGallery", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     settingsState.setLastNoteId.mockClear();
+    useSettingsStore.setState({ notesFilters: DEFAULT_NOTES_FILTERS });
     noteState.createNote.mockReset();
     noteState.createNote.mockResolvedValue({ id: "n3" });
     noteState.notes = [

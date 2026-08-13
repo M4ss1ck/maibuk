@@ -38,11 +38,29 @@ export function NotesGallery() {
   const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
   const sort = useSettingsStore((s) => s.notesSort);
   const setSort = useSettingsStore((s) => s.setNotesSort);
-  const [search, setSearch] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [tagFilters, setTagFilters] = useState<string[]>([]);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const notesFilters = useSettingsStore((s) => s.notesFilters);
+  const setNotesFilters = useSettingsStore((s) => s.setNotesFilters);
+  const { search, showAdvanced, tags: tagFilters, dateFrom, dateTo } = notesFilters;
+  const setSearch = useCallback(
+    (value: string) => setNotesFilters({ search: value }),
+    [setNotesFilters]
+  );
+  const setShowAdvanced = useCallback(
+    (value: boolean) => setNotesFilters({ showAdvanced: value }),
+    [setNotesFilters]
+  );
+  const setTagFilters = useCallback(
+    (value: string[]) => setNotesFilters({ tags: value }),
+    [setNotesFilters]
+  );
+  const setDateFrom = useCallback(
+    (value: string) => setNotesFilters({ dateFrom: value }),
+    [setNotesFilters]
+  );
+  const setDateTo = useCallback(
+    (value: string) => setNotesFilters({ dateTo: value }),
+    [setNotesFilters]
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tagFilterInputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -227,7 +245,7 @@ export function NotesGallery() {
                 <Button
                   type="button"
                   variant={showAdvanced ? "secondary" : "ghost"}
-                  onClick={() => setShowAdvanced((current) => !current)}
+                  onClick={() => setShowAdvanced(!showAdvanced)}
                   aria-expanded={showAdvanced}
                   className="h-11 flex-1 border border-border sm:flex-none"
                 >
