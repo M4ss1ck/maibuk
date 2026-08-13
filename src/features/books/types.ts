@@ -1,3 +1,7 @@
+export const BOOK_STATUSES = ["draft", "in-progress", "completed", "archived"] as const;
+
+export type BookStatus = (typeof BOOK_STATUSES)[number];
+
 export interface Book {
   id: string;
   title: string;
@@ -10,7 +14,7 @@ export interface Book {
   coverData?: string;
   wordCount: number;
   targetWordCount?: number;
-  status: "draft" | "in-progress" | "completed";
+  status: BookStatus;
   createdAt: Date;
   updatedAt: Date;
   lastOpenedAt?: Date;
@@ -32,7 +36,7 @@ export interface UpdateBookInput {
   description?: string;
   genre?: string;
   language?: string;
-  status?: "draft" | "in-progress" | "completed";
+  status?: BookStatus;
   targetWordCount?: number;
   coverImagePath?: string;
   coverData?: string;

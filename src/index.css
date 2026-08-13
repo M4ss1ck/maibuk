@@ -23,6 +23,8 @@
   --color-status-progress-text: #2563eb;
   --color-status-complete-bg: #dcfce7;
   --color-status-complete-text: #16a34a;
+  --color-status-archived-bg: #ede9fe;
+  --color-status-archived-text: #7c3aed;
 
   /* Feedback banners */
   --color-info-bg: #dbeafe;
@@ -82,6 +84,8 @@
   --color-status-progress-text: #93c5fd;
   --color-status-complete-bg: rgba(22, 163, 74, 0.2);
   --color-status-complete-text: #86efac;
+  --color-status-archived-bg: rgba(124, 58, 237, 0.2);
+  --color-status-archived-text: #c4b5fd;
 
   /* Feedback banners */
   --color-info-bg: rgba(37, 99, 235, 0.15);

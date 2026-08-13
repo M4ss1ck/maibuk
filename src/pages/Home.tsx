@@ -1,24 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GridList } from "react-aria-components/GridList";
 import { Toolbar } from "react-aria-components/Toolbar";
 import { useBookStore } from "@/features/books/store";
 import { BookCard } from "@/components/project/BookCard";
+import { BookStatusFilter } from "@/components/project/BookStatusFilter";
+import {
+  countBooksByStatus,
+  DEFAULT_STATUS_FILTER,
+  filterBooksByStatus,
+} from "@/components/project/book-list-model";
 import { NewBookDialog } from "@/components/project/NewBookDialog";
 import { EpubImportDialog } from "@/components/import";
 import { Button } from "@/components/ui/Button";
 import { useTranslation } from "react-i18next";
 import { AddIcon, MaibukLogo } from "@/components/icons";
-import { Download, FileUp } from "lucide-react";
+import { Download, FileUp, ListFilter } from "lucide-react";
 import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "@/lib/platform";
 import { displayNameFromPath } from "@/lib/platform/uri";
 import { DOWNLOAD_PAGE } from "@/constants";
-import { KeyboardShortcut } from "@/components/ui";
+import { KeyboardShortcut, toast } from "@/components/ui";
 import { isModKey, isTypingTarget } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { scanEpubForImport } from "@/features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "@/features/import";
 import { formatKeys, SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
+import { BOOK_STATUSES, type Book, type BookStatus } from "@/features/books/types";
 
 interface EpubImportState {
   bytes: Uint8Array;
@@ -36,7 +43,14 @@ export function Home() {
   const [isScanningEpub, setIsScanningEpub] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const { books, isLoading, loadBooks } = useBookStore();
+  const [statusFilter, setStatusFilter] = useState<BookStatus[]>(DEFAULT_STATUS_FILTER);
+
+  const { books, isLoading, loadBooks, updateBook } = useBookStore();
+  const statusCounts = useMemo(() => countBooksByStatus(books), [books]);
+  const visibleBooks = useMemo(
+    () => filterBooksByStatus(books, statusFilter),
+    [books, statusFilter]
+  );
   const actionsRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const previousBookIdsRef = useRef<string[]>([]);
@@ -63,14 +77,14 @@ export function Home() {
   }, [loadBooks]);
 
   useEffect(() => {
-    if (focusedBookId && !books.some((book) => book.id === focusedBookId)) {
+    if (focusedBookId && !visibleBooks.some((book) => book.id === focusedBookId)) {
       const previousIndex = previousBookIdsRef.current.indexOf(focusedBookId);
-      const fallback = books[Math.min(Math.max(previousIndex, 0), books.length - 1)];
+      const fallback = visibleBooks[Math.min(Math.max(previousIndex, 0), visibleBooks.length - 1)];
       setFocusedBookId(fallback?.id ?? null);
       if (fallback) focusBook(fallback.id);
     }
-    previousBookIdsRef.current = books.map((book) => book.id);
-  }, [books, focusBook, focusedBookId]);
+    previousBookIdsRef.current = visibleBooks.map((book) => book.id);
+  }, [visibleBooks, focusBook, focusedBookId]);
 
   useShortcuts([
     {
@@ -83,16 +97,16 @@ export function Home() {
           actionsRef.current?.contains(activeElement);
         if (activeElement !== document.body && !isEnteringFromActions) return;
         const target =
-          books.find((book) => book.id === focusedBookId) ??
+          visibleBooks.find((book) => book.id === focusedBookId) ??
           (event.key === "ArrowUp" || event.key === "ArrowLeft"
-            ? books[books.length - 1]
-            : books[0]);
+            ? visibleBooks[visibleBooks.length - 1]
+            : visibleBooks[0]);
         if (!target) return;
         event.preventDefault();
         focusBook(target.id);
       },
       preventDefault: false,
-      enabled: !isNewBookOpen && books.length > 0,
+      enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
     {
       keys: matchKeys("home.newBook"),
@@ -106,37 +120,52 @@ export function Home() {
       keys: "j",
       onTrigger: () => {
         const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
-        const currentIndex = books.findIndex((book) => book.id === activeBookId);
-        const targetIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, books.length - 1);
-        const target = books[targetIndex];
+        const currentIndex = visibleBooks.findIndex((book) => book.id === activeBookId);
+        const targetIndex =
+          currentIndex < 0 ? 0 : Math.min(currentIndex + 1, visibleBooks.length - 1);
+        const target = visibleBooks[targetIndex];
         if (target) focusBook(target.id);
       },
-      enabled: !isNewBookOpen && books.length > 0,
+      enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
     {
       keys: "k",
       onTrigger: () => {
         const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
-        const currentIndex = books.findIndex((book) => book.id === activeBookId);
-        const targetIndex = currentIndex < 0 ? books.length - 1 : Math.max(currentIndex - 1, 0);
-        const target = books[targetIndex];
+        const currentIndex = visibleBooks.findIndex((book) => book.id === activeBookId);
+        const targetIndex =
+          currentIndex < 0 ? visibleBooks.length - 1 : Math.max(currentIndex - 1, 0);
+        const target = visibleBooks[targetIndex];
         if (target) focusBook(target.id);
       },
-      enabled: !isNewBookOpen && books.length > 0,
+      enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
     ...Array.from({ length: 9 }, (_, i) => ({
       keys: String(i + 1),
       onTrigger: () => {
-        const target = books[i];
+        const target = visibleBooks[i];
         if (target) focusBook(target.id);
       },
-      enabled: !isNewBookOpen && books.length > 0,
+      enabled: !isNewBookOpen && visibleBooks.length > 0,
     })),
   ]);
 
   const handleBookCreated = (bookId: string) => {
     navigate(`/book/${bookId}`);
   };
+
+  const handleArchiveToggle = useCallback(
+    async (book: Book) => {
+      const restoring = book.status === "archived";
+      await updateBook(book.id, { status: restoring ? "draft" : "archived" });
+      toast.success(
+        restoring
+          ? t("books.restoredToast", { title: book.title })
+          : t("books.archivedToast", { title: book.title })
+      );
+    },
+    [t, updateBook]
+  );
 
   const handleImportEpub = async () => {
     setImportError(null);
@@ -201,6 +230,13 @@ export function Home() {
           aria-label={t("books.actions")}
           className="flex items-center gap-2"
         >
+          {books.length > 0 && (
+            <BookStatusFilter
+              value={statusFilter}
+              counts={statusCounts}
+              onChange={setStatusFilter}
+            />
+          )}
           {IS_WEB && (
             <Button
               variant="secondary"
@@ -252,6 +288,22 @@ export function Home() {
             {t("books.noBooksButton")}
           </Button>
         </div>
+      ) : visibleBooks.length === 0 ? (
+        /* Every book is filtered out */
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-5 rounded-full bg-muted p-4 text-muted-foreground">
+            <ListFilter className="h-8 w-8" />
+          </div>
+          <h3 className="text-xl font-semibold tracking-tight">{t("books.noMatches")}</h3>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setStatusFilter([...BOOK_STATUSES])}
+            className="mt-5"
+          >
+            {t("books.showAllStatuses")}
+          </Button>
+        </div>
       ) : (
         /* Book grid */
         <div
@@ -263,7 +315,7 @@ export function Home() {
           <GridList
             ref={gridRef}
             aria-label={t("books.collectionLabel")}
-            items={books}
+            items={visibleBooks}
             layout="grid"
             selectionMode="none"
             onAction={(key) => activateBook(String(key))}
@@ -272,12 +324,19 @@ export function Home() {
             {(book) => (
               <BookCard
                 book={book}
-                index={books.findIndex((candidate) => candidate.id === book.id)}
+                index={visibleBooks.findIndex((candidate) => candidate.id === book.id)}
                 onPress={() => activateBook(book.id)}
+                onArchiveToggle={() => void handleArchiveToggle(book)}
               />
             )}
           </GridList>
         </div>
+      )}
+
+      {books.length > 0 && (
+        <p aria-live="polite" className="sr-only">
+          {t("books.filterAnnouncement", { count: visibleBooks.length })}
+        </p>
       )}
 
       {importError && (
