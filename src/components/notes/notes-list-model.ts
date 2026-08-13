@@ -9,6 +9,43 @@ export type NotesSortOption = "date-desc" | "date-asc" | "title-asc" | "title-de
 
 export const DEFAULT_NOTES_SORT: NotesSortOption = "date-desc";
 
+// The gallery's filter bar, persisted between visits alongside the sort order.
+export interface NotesFilters {
+  search: string;
+  tags: string[];
+  excludeTags: string[];
+  dateFrom: string;
+  dateTo: string;
+  showAdvanced: boolean;
+}
+
+export const DEFAULT_NOTES_FILTERS: NotesFilters = {
+  search: "",
+  tags: [],
+  excludeTags: [],
+  dateFrom: "",
+  dateTo: "",
+  showAdvanced: false,
+};
+
+export function normalizeNotesFilters(value: unknown): NotesFilters {
+  const candidate = (value && typeof value === "object" ? value : {}) as Partial<
+    Record<keyof NotesFilters, unknown>
+  >;
+  const text = (field: unknown) => (typeof field === "string" ? field : "");
+  const tagList = (field: unknown) =>
+    Array.isArray(field) ? field.filter((tag) => typeof tag === "string") : [];
+
+  return {
+    search: text(candidate.search),
+    tags: tagList(candidate.tags),
+    excludeTags: tagList(candidate.excludeTags),
+    dateFrom: text(candidate.dateFrom),
+    dateTo: text(candidate.dateTo),
+    showAdvanced: candidate.showAdvanced === true,
+  };
+}
+
 export function sortNotesBy(notes: NoteWithBook[], option: NotesSortOption): NoteWithBook[] {
   const [field, direction] = option.split("-");
   const sign = direction === "asc" ? 1 : -1;
@@ -55,6 +92,7 @@ export interface NoteFilterCriteria {
   query?: string;
   tag?: string;
   tags?: string[];
+  excludeTags?: string[];
   dateFrom?: string;
   dateTo?: string;
 }
@@ -110,10 +148,14 @@ export function filterNotes(
   const tags = (filters.tags ?? (filters.tag ? [filters.tag] : []))
     .map((tag) => tag.trim().toLowerCase())
     .filter(Boolean);
+  const excludeTags = (filters.excludeTags ?? [])
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean);
   const dateFrom = parseDateBoundary(filters.dateFrom, "start");
   const dateTo = parseDateBoundary(filters.dateTo, "end");
 
-  if (!query && tags.length === 0 && dateFrom === null && dateTo === null) return notes;
+  if (!query && tags.length === 0 && excludeTags.length === 0 && dateFrom === null && dateTo === null)
+    return notes;
 
   return notes.filter((note) => {
     if (query) {
@@ -121,9 +163,10 @@ export function filterNotes(
       if (!haystack.includes(query)) return false;
     }
 
-    if (tags.length > 0) {
+    if (tags.length > 0 || excludeTags.length > 0) {
       const noteTags = new Set(note.tags.map((noteTag) => noteTag.trim().toLowerCase()));
       if (!tags.every((tag) => noteTags.has(tag))) return false;
+      if (excludeTags.some((tag) => noteTags.has(tag))) return false;
     }
 
     const updatedTime = noteDate(note).getTime();

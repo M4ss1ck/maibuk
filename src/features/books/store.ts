@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
 import { recordTombstone } from "@/features/sync/tombstones";
-import type { Book, CreateBookInput, UpdateBookInput } from "@/features/books/types";
+import type { Book, BookStatus, CreateBookInput, UpdateBookInput } from "@/features/books/types";
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -20,7 +20,7 @@ function toBook(row: Record<string, unknown>): Book {
     coverData: row.cover_data as string | undefined,
     wordCount: row.word_count as number,
     targetWordCount: row.target_word_count as number | undefined,
-    status: row.status as "draft" | "in-progress" | "completed",
+    status: row.status as BookStatus,
     createdAt: new Date((row.created_at as number) * 1000),
     updatedAt: new Date((row.updated_at as number) * 1000),
     lastOpenedAt: row.last_opened_at ? new Date((row.last_opened_at as number) * 1000) : undefined,

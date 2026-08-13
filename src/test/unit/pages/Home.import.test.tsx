@@ -49,6 +49,7 @@ vi.mock("../../../features/import/epub-import-service", () => ({
 }));
 
 vi.mock("react-i18next", () => ({
+  initReactI18next: { type: "3rdParty", init: () => {} },
   useTranslation: () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {

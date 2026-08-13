@@ -17,7 +17,13 @@ describe("BookSettingsDialog modal registration", () => {
     useModalStore.setState({ modalIds: [], openCount: 0 });
   });
 
-  function Harness({ initialOpen = true }: { initialOpen?: boolean }) {
+  function Harness({
+    initialOpen = true,
+    onUpdateBookInfo = vi.fn(),
+  }: {
+    initialOpen?: boolean;
+    onUpdateBookInfo?: (input: { status?: string }) => void;
+  }) {
     const [open, setOpen] = useState(initialOpen);
     return (
       <div>
@@ -28,7 +34,7 @@ describe("BookSettingsDialog modal registration", () => {
           isOpen={open}
           onClose={() => setOpen(false)}
           book={buildBook()}
-          onUpdateBookInfo={vi.fn()}
+          onUpdateBookInfo={onUpdateBookInfo}
           onDelete={vi.fn()}
         />
       </div>
@@ -67,6 +73,28 @@ describe("BookSettingsDialog modal registration", () => {
     await user.keyboard("{Escape}");
 
     expect(useModalStore.getState().openCount).toBe(0);
+  });
+
+  it("offers archived alongside the other statuses", () => {
+    render(<Harness initialOpen />);
+
+    for (const status of ["draft", "in-progress", "completed", "archived"]) {
+      expect(screen.getByRole("button", { name: `common.${status}` })).toBeInTheDocument();
+    }
+  });
+
+  it("saves a book archived from the status selector", async () => {
+    const user = userEvent.setup();
+    const onUpdateBookInfo = vi.fn();
+
+    render(<Harness initialOpen onUpdateBookInfo={onUpdateBookInfo} />);
+
+    await user.click(screen.getByRole("button", { name: "common.archived" }));
+    await user.click(screen.getByRole("button", { name: "common.save" }));
+
+    expect(onUpdateBookInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "archived" })
+    );
   });
 
   it("expands and collapses the danger zone with the keyboard", async () => {

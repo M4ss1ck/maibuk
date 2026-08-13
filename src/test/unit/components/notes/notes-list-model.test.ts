@@ -89,6 +89,37 @@ describe("notes list model", () => {
     expect(filterNotes(notes, { tags: ["craft", "revision"] })).toEqual([notes[0]]);
   });
 
+  it("hides notes carrying any excluded tag", () => {
+    const notes = [
+      note({ id: "a", title: "Research", tags: ["craft", "archive"] }),
+      note({ id: "b", title: "Scene", tags: ["craft"] }),
+      note({ id: "c", title: "Draft", tags: [] }),
+    ];
+
+    expect(filterNotes(notes, { excludeTags: ["archive"] })).toEqual([notes[1], notes[2]]);
+  });
+
+  it("matches excluded tags case-insensitively", () => {
+    const notes = [note({ id: "a", title: "Research", tags: ["Archive"] })];
+
+    expect(filterNotes(notes, { excludeTags: ["archive"] })).toEqual([]);
+  });
+
+  it("treats an empty exclude list as no filter", () => {
+    const notes = [note({ id: "a", title: "Research", tags: ["craft"] })];
+
+    expect(filterNotes(notes, { excludeTags: [] })).toEqual(notes);
+  });
+
+  it("excludes tags even when the note also matches the included tags", () => {
+    const notes = [
+      note({ id: "a", title: "Research", tags: ["craft", "archive"] }),
+      note({ id: "b", title: "Scene", tags: ["craft"] }),
+    ];
+
+    expect(filterNotes(notes, { tags: ["craft"], excludeTags: ["archive"] })).toEqual([notes[1]]);
+  });
+
   it("filters notes by inclusive updated date range", () => {
     const notes = [
       note({

@@ -41,7 +41,14 @@ import {
   type MetricsCategory,
 } from "@/features/settings/types";
 import { normalizeMetrics } from "@/features/metrics/settings";
-import { DEFAULT_NOTES_SORT } from "@/components/notes/notes-list-model";
+import {
+  DEFAULT_NOTES_FILTERS,
+  DEFAULT_NOTES_SORT,
+  normalizeNotesFilters,
+  type NotesFilters,
+} from "@/components/notes/notes-list-model";
+import { DEFAULT_STATUS_FILTER } from "@/components/project/book-list-model";
+import type { BookStatus } from "@/features/books/types";
 import { setLaunchOnStartup as applyLaunchOnStartup } from "@/lib/platform";
 import {
   DEFAULT_TOOLBAR_CONFIG,
@@ -108,6 +115,9 @@ interface SettingsStore extends Settings {
   setShowChapterOutline: (enabled: boolean) => void;
   setNotesListView: (view: NotesListViewMode) => void;
   setNotesSort: (sort: NotesSortOption) => void;
+  setNotesFilters: (filters: Partial<NotesFilters>) => void;
+  setBooksStatusFilter: (statuses: BookStatus[]) => void;
+  setCanvasSearch: (search: string) => void;
   setNotesTreeGroupMode: (mode: NotesTreeGroupMode) => void;
   toggleNotesGroupCollapsed: (key: string) => void;
   toggleNotesEmptyGroupExpanded: (key: string) => void;
@@ -179,6 +189,9 @@ const defaultSettings: Settings = {
   showChapterOutline: true,
   notesListView: "list",
   notesSort: DEFAULT_NOTES_SORT,
+  notesFilters: DEFAULT_NOTES_FILTERS,
+  booksStatusFilter: DEFAULT_STATUS_FILTER,
+  canvasSearch: "",
   notesTreeGroupMode: "book",
   notesCollapsedGroups: [],
   notesExpandedEmptyGroups: [],
@@ -383,6 +396,10 @@ export const useSettingsStore = create<SettingsStore>()(
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setNotesListView: (notesListView) => set({ notesListView }),
       setNotesSort: (notesSort) => set({ notesSort }),
+      setNotesFilters: (filters) =>
+        set((state) => ({ notesFilters: { ...state.notesFilters, ...filters } })),
+      setBooksStatusFilter: (booksStatusFilter) => set({ booksStatusFilter }),
+      setCanvasSearch: (canvasSearch) => set({ canvasSearch }),
       setNotesTreeGroupMode: (notesTreeGroupMode) => set({ notesTreeGroupMode }),
       toggleNotesGroupCollapsed: (key) =>
         set((state) => ({
@@ -620,6 +637,7 @@ export const useSettingsStore = create<SettingsStore>()(
           lastSceneBreak: normalizeSceneBreak(persisted.lastSceneBreak),
           metrics: normalizeMetrics(persisted.metrics),
           toolbarConfig: normalizeToolbarConfig(persisted.toolbarConfig),
+          notesFilters: normalizeNotesFilters(persisted.notesFilters),
         };
       },
       onRehydrateStorage: () => {

@@ -36,6 +36,7 @@ vi.mock("react-router-dom", async () => {
   };
 });
 vi.mock("react-i18next", () => ({
+  initReactI18next: { type: "3rdParty", init: () => {} },
   useTranslation: () => ({
     i18n: { language: "en" },
     t: (key: string, values?: Record<string, unknown>) => {

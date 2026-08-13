@@ -2,7 +2,9 @@ import type { MetricsCategory, MetricsSettings } from "@/features/metrics/types"
 import { DEFAULT_METRICS_SETTINGS } from "@/features/metrics/settings";
 import type { SceneBreakDescriptor } from "@/components/editor/extensions/scene-break-utils";
 import type { ToolbarConfig } from "@/features/settings/toolbar-config";
+import type { BookStatus } from "@/features/books/types";
 import type {
+  NotesFilters,
   NotesListViewMode,
   NotesSortOption,
   NotesTreeGroupMode,
@@ -188,6 +190,9 @@ export interface Settings {
   showChapterOutline: boolean;
   notesListView: NotesListViewMode;
   notesSort: NotesSortOption;
+  notesFilters: NotesFilters;
+  booksStatusFilter: BookStatus[];
+  canvasSearch: string;
   notesTreeGroupMode: NotesTreeGroupMode;
   notesCollapsedGroups: string[];
   notesExpandedEmptyGroups: string[];

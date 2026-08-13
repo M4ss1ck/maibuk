@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Network, Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { CanvasCard } from "@/components/canvas/CanvasCard";
 import { Button } from "@/components/ui/Button";
 import { useCanvasStore } from "@/features/canvas/store";
+import { useSettingsStore } from "@/features/settings/store";
 
 export function CanvasGallery() {
   const { t } = useTranslation();
@@ -15,7 +16,8 @@ export function CanvasGallery() {
   const deleteCanvas = useCanvasStore((state) => state.deleteCanvas);
   const renameCanvas = useCanvasStore((state) => state.renameCanvas);
   const updateCanvas = useCanvasStore((state) => state.updateCanvas);
-  const [search, setSearch] = useState("");
+  const search = useSettingsStore((state) => state.canvasSearch);
+  const setSearch = useSettingsStore((state) => state.setCanvasSearch);
 
   useEffect(() => {
     void loadCanvases();

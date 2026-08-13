@@ -3,7 +3,7 @@ import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-co
 import { Button, Modal, Select } from "@/components/ui";
 import { useTranslation } from "react-i18next";
 import { TrashIcon, ChevronDownIcon } from "@/components/icons";
-import type { Book, UpdateBookInput } from "@/features/books/types";
+import { BOOK_STATUSES, type Book, type BookStatus, type UpdateBookInput } from "@/features/books/types";
 
 interface BookSettingsDialogProps {
   isOpen: boolean;
@@ -42,7 +42,7 @@ export function BookSettingsDialog({
   const [targetWordCount, setTargetWordCount] = useState<string>(
     book.targetWordCount?.toString() || ""
   );
-  const [status, setStatus] = useState<"draft" | "in-progress" | "completed">(book.status);
+  const [status, setStatus] = useState<BookStatus>(book.status);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const hasChanges =
@@ -237,12 +237,12 @@ export function BookSettingsDialog({
         <label htmlFor="book-status" className="block text-sm font-medium text-foreground mb-2">
           {t("bookSettings.status")}
         </label>
-        <div className="flex gap-2" id="book-status">
-          {(["draft", "in-progress", "completed"] as const).map((s) => (
+        <div className="flex flex-wrap gap-2" id="book-status">
+          {BOOK_STATUSES.map((s) => (
             <button
               key={s}
               type="button"
-              className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
+              className={`flex-1 whitespace-nowrap px-3 py-2 rounded-md text-sm font-medium transition-colors border-2 ${
                 status === s
                   ? "bg-accent text-accent-foreground border-accent"
                   : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
