@@ -164,7 +164,8 @@ describe("Canvas custom nodes", () => {
               id: "node",
               kind: "text",
               html: "<p>Idea</p>",
-              color: "#ef4444",
+              textColor: "#ef4444",
+              backgroundColor: "#f59e0b",
               position: { x: 0, y: 0 },
             },
             canvasId: "canvas",
@@ -185,6 +186,9 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByText("Idea").closest(".group")).not.toHaveStyle({ color: "#ef4444" });
     expect(screen.getByText("Idea").closest(".canvas-node-content")).toHaveStyle({
       color: "#ef4444",
+    });
+    expect(screen.getByText("Idea").closest(".group")).toHaveStyle({
+      backgroundColor: "#f59e0b",
     });
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("Duplicate extension names"));
     warn.mockRestore();

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { BackupAdapter, BackupEntry } from "@/lib/platform/types";
 import { parseTriggerFromFilename } from "@/features/backup/utils";
+import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
 
 const mockGenerateSqlDump = vi.hoisted(() => vi.fn());
 const mockCreateBackup = vi.hoisted(() => vi.fn());
@@ -476,7 +477,7 @@ describe("BackupService", () => {
       });
       const statement = `INSERT INTO "canvases" ("id", "title", "doc", "pinned", "order", "created_at", "updated_at", "content_updated_at") VALUES ('canvas-1', 'Map', '${doc}', 0, 0, 1, 1, 1)`;
       const normalizedDoc = JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
         nodes: [],
         edges: [],
         strokes: [],

@@ -59,7 +59,7 @@ function ActiveNodeEditor({
     <>
       <div
         className="canvas-node-content max-w-none"
-        style={node.color ? { color: node.color } : undefined}
+        style={node.textColor ? { color: node.textColor } : undefined}
       >
         <EditorContent
           editor={editor}
@@ -110,9 +110,10 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
 
   return (
     <div
-      className={`group relative min-w-24 transform-gpu ${node.width ? "w-full" : "max-w-72"} px-2 py-1 text-sm text-foreground ${
+      className={`group relative min-h-24 min-w-24 transform-gpu ${node.width ? "w-full" : "max-w-72"} rounded-lg px-3 py-2 text-sm text-foreground ${
         selected ? "ring-1 ring-primary/40" : ""
       }`}
+      style={node.backgroundColor ? { backgroundColor: node.backgroundColor } : undefined}
       onDoubleClick={() => !editorReadOnly && setEditing(true)}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" />
@@ -146,7 +147,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       ) : (
         <div
           className="canvas-node-content max-w-none"
-          style={node.color ? { color: node.color } : undefined}
+          style={node.textColor ? { color: node.textColor } : undefined}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
           dangerouslySetInnerHTML={{ __html: safeHtml }}
         />

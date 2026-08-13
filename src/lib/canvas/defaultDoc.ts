@@ -1,4 +1,4 @@
-export const CURRENT_CANVAS_SCHEMA_VERSION = 2;
+export const CURRENT_CANVAS_SCHEMA_VERSION = 3;
 
 export type DefaultCanvasDocData = {
   schemaVersion: number;

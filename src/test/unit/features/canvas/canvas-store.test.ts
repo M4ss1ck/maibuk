@@ -203,6 +203,28 @@ describe("useCanvasStore", () => {
     expect(node?.kind === "text" && node.html).toBe("<p>b</p>");
   });
 
+  it("updates and clears a text node's text and background colors", () => {
+    const store = useCanvasStore.getState();
+    store.addNode({
+      id: "t1",
+      kind: "text",
+      html: "<p>a</p>",
+      position: { x: 0, y: 0 },
+    });
+
+    store.updateTextNode("t1", { textColor: "#ef4444", backgroundColor: "#f59e0b" });
+    let node = useCanvasStore.getState().doc.nodes.find((candidate) => candidate.id === "t1");
+    expect(node).toMatchObject({ textColor: "#ef4444", backgroundColor: "#f59e0b" });
+
+    store.updateTextNode("t1", { textColor: "" });
+    node = useCanvasStore.getState().doc.nodes.find((candidate) => candidate.id === "t1");
+    expect(node).toMatchObject({ textColor: undefined, backgroundColor: "#f59e0b" });
+
+    store.updateTextNode("t1", { backgroundColor: "" });
+    node = useCanvasStore.getState().doc.nodes.find((candidate) => candidate.id === "t1");
+    expect(node).toMatchObject({ textColor: undefined, backgroundColor: undefined });
+  });
+
   it("erases strokes, nodes, and edges in a single undoable step", () => {
     useCanvasStore.setState({ loadState: "ready" });
     const store = useCanvasStore.getState();

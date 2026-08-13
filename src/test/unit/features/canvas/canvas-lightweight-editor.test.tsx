@@ -73,7 +73,7 @@ describe("LightweightNode editor lifecycle", () => {
     expect(mocks.useEditor).not.toHaveBeenCalled();
   });
 
-  it("scopes node color to a content container around the editor while editing", async () => {
+  it("scopes node colors to the node and content while editing", async () => {
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
       getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -87,7 +87,8 @@ describe("LightweightNode editor lifecycle", () => {
               id: "node",
               kind: "text",
               html: "<p>Idea</p>",
-              color: "#ef4444",
+              textColor: "#ef4444",
+              backgroundColor: "#f59e0b",
               position: { x: 0, y: 0 },
             },
             canvasId: "canvas",
@@ -114,6 +115,9 @@ describe("LightweightNode editor lifecycle", () => {
     const content = screen.getByTestId("editor-content").closest(".canvas-node-content");
     expect(content).not.toBeNull();
     expect(content).toHaveStyle({ color: "#ef4444" });
+    expect(screen.getByTestId("editor-content").closest(".group")).toHaveStyle({
+      backgroundColor: "#f59e0b",
+    });
     // The outer node group carries no inline color.
     expect(screen.getByTestId("editor-content").closest(".group")).not.toHaveStyle({
       color: "#ef4444",
