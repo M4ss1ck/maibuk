@@ -119,6 +119,7 @@ export function BookSettingsDialog({
       title={t("bookSettings.title")}
       unstyled
       panelClassName="bg-background rounded-lg shadow-xl max-w-md w-full mx-4 p-6 border border-border max-h-[90vh] overflow-y-auto"
+      panelStyle={{ maxHeight: "90dvh" }}
       titleClassName="text-xl font-semibold text-foreground mb-4"
     >
       {/* Book info */}
@@ -183,7 +184,7 @@ export function BookSettingsDialog({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="book-settings-genre-grid">
           <div>
             <label htmlFor="book-genre" className="block text-sm font-medium text-foreground mb-1">
               {t("books.genre")}

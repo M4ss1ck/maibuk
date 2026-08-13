@@ -16,7 +16,7 @@ export function StreakCard({ aggregate, isLoading }: StreakCardProps) {
   ] as const;
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="grid gap-3 @sm:grid-cols-2 @4xl:grid-cols-4">
       {items.map(([label, value]) => (
         <div key={label} className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">{t(label)}</p>

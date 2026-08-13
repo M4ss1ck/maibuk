@@ -94,6 +94,20 @@ describe("HistoryMenuButton", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
+  it("restores focus to the trigger button when Escape closes the menu", async () => {
+    const user = userEvent.setup();
+    renderButton();
+
+    const trigger = screen.getByRole("button", { name: "More" });
+    await user.click(trigger);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it("closes the menu when clicking outside", async () => {
     const user = userEvent.setup();
     renderButton();
@@ -142,14 +156,16 @@ describe("HistoryMenuButton", () => {
     expect(historyItem).toHaveFocus();
   });
 
-  it("closes the menu from a menu item with Escape", async () => {
+  it("closes the menu from a menu item with Escape and restores focus to the trigger", async () => {
     const user = userEvent.setup();
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "More" }));
+    const trigger = screen.getByRole("button", { name: "More" });
+    await user.click(trigger);
     screen.getByRole("menuitem", { name: /Save version/ }).focus();
     await user.keyboard("{Escape}");
 
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

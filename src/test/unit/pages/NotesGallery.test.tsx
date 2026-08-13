@@ -276,4 +276,28 @@ describe("NotesGallery", () => {
     });
     expect(screen.getByText("Research")).toBeInTheDocument();
   });
+
+  it("marks the gallery as a container and uses container variants for the card grid", () => {
+    const { container } = render(<NotesGallery />);
+
+    expect(container.firstElementChild).toHaveClass("@container");
+
+    const grid = screen.getByRole("grid");
+    expect(grid).toHaveClass("grid-cols-2", "@3xl:grid-cols-3", "@5xl:grid-cols-4");
+    expect(grid).not.toHaveClass("lg:grid-cols-3", "xl:grid-cols-4");
+  });
+
+  it("clamps the date picker popover to the viewport", async () => {
+    const user = userEvent.setup();
+    render(<NotesGallery />);
+
+    await user.click(screen.getByRole("button", { name: "notes.advancedFilters" }));
+    await user.click(screen.getByRole("button", { name: "notes.dateFrom" }));
+
+    const popover = screen
+      .getByRole("button", { name: "notes.previousMonth" })
+      .parentElement?.parentElement;
+    expect(popover).not.toBeNull();
+    expect(popover).toHaveClass("w-72", "max-w-[calc(100vw-2rem)]");
+  });
 });

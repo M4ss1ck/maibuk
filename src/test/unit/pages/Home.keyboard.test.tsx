@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildBook } from "@/test/support/fixtures";
@@ -220,5 +220,42 @@ describe("Home keyboard navigation", () => {
     expect(screen.getByText("No books")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Create a book/ })).toBeInTheDocument();
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
+
+  it("separates the page scroll owner from the responsive query container", () => {
+    const { container } = render(<Home />);
+
+    const scrollOwner = container.firstElementChild;
+    expect(scrollOwner).toHaveClass(
+      "h-full",
+      "min-h-0",
+      "overflow-x-hidden",
+      "overflow-y-auto"
+    );
+    expect(scrollOwner).not.toHaveClass("@container", "overflow-auto");
+
+    const queryContainer = scrollOwner?.firstElementChild;
+    expect(queryContainer).toHaveClass("@container", "min-h-full");
+    expect(queryContainer).not.toHaveClass("overflow-auto", "overflow-y-auto");
+  });
+
+  it("lays the book grid out with container variants instead of viewport ones", () => {
+    render(<Home />);
+
+    const grid = screen.getByRole("grid");
+    expect(grid).toHaveClass("grid-cols-2", "@3xl:grid-cols-3", "@5xl:grid-cols-4");
+    expect(grid).not.toHaveClass("lg:grid-cols-3", "xl:grid-cols-4");
+  });
+
+  it("keeps short localized labels so action names survive label collapse", () => {
+    render(<Home />);
+
+    const newBookButton = screen.getByRole("button", { name: /New Book/i });
+    expect(within(newBookButton).getByText("New Book")).toHaveClass("hidden", "@xl:inline");
+    expect(within(newBookButton).getByText("New")).toHaveClass("@xl:hidden");
+
+    const importButton = screen.getByRole("button", { name: /Import EPUB/i });
+    expect(within(importButton).getByText("Import EPUB")).toHaveClass("hidden", "@xl:inline");
+    expect(within(importButton).getByText("Import")).toHaveClass("@xl:hidden");
   });
 });

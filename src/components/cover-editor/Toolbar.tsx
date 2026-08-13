@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlignCenterHorizontal,
@@ -96,26 +96,44 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
   const [openMenu, setOpenMenu] = useState<MenuKey | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRefs = useRef<Partial<Record<MenuKey, HTMLButtonElement | null>>>({});
+  const openMenuRef = useRef<MenuKey | null>(null);
+  openMenuRef.current = openMenu;
 
   const toggleMenu = (key: MenuKey) => setOpenMenu((cur) => (cur === key ? null : key));
-  const closeMenu = () => setOpenMenu(null);
+  const closeMenu = useCallback((restoreFocus = false) => {
+    setOpenMenu(null);
+    if (restoreFocus) {
+      const key = openMenuRef.current;
+      if (key) triggerRefs.current[key]?.focus();
+    }
+  }, []);
 
-  // Dismiss any open dropdown on outside click or Escape.
+  const setTriggerRef =
+    (key: MenuKey) =>
+    (node: HTMLButtonElement | null) => {
+      triggerRefs.current[key] = node;
+    };
+
+  // Dismiss any open dropdown on outside pointer-down or Escape. Escape
+  // restores focus to the trigger; selection handlers do the same.
   useEffect(() => {
     if (openMenu === null) return;
     const onPointerDown = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) closeMenu();
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeMenu();
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      closeMenu(true);
     };
-    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [openMenu]);
+  }, [openMenu, closeMenu]);
 
   const applyTemplate = (templateId: string) => {
     replaceScene(
@@ -125,12 +143,12 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         presetId: scene.doc.presetId ?? "6x9",
       })
     );
-    closeMenu();
+    closeMenu(true);
   };
 
   const addShape = (shape: "rect" | "ellipse" | "line") => {
     addLayer(createShapeLayer({ shape, docWidth: scene.doc.width, docHeight: scene.doc.height }));
-    closeMenu();
+    closeMenu(true);
   };
 
   const currentPreset = PRESETS.find((p) => p.id === scene.doc.presetId) ?? PRESETS[0];
@@ -151,7 +169,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         docHeight: scene.doc.height,
       })
     );
-    closeMenu();
+    closeMenu(true);
   };
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -182,7 +200,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
       safeMargin: Math.round(p.width * 0.05),
       presetId: p.id,
     });
-    closeMenu();
+    closeMenu(true);
   };
 
   return (
@@ -194,9 +212,12 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         {/* Preset selector */}
         <div className="relative">
           <Button
+            ref={setTriggerRef("presets")}
             variant="ghost"
             size="sm"
             onClick={() => toggleMenu("presets")}
+            aria-expanded={openMenu === "presets"}
+            aria-haspopup="menu"
             className="gap-1 sm:gap-2 text-xs sm:text-sm"
           >
             <DimensionIcon className="w-4 h-4" />
@@ -223,9 +244,12 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         {/* Templates */}
         <div className="relative">
           <Button
+            ref={setTriggerRef("templates")}
             variant="ghost"
             size="sm"
             onClick={() => toggleMenu("templates")}
+            aria-expanded={openMenu === "templates"}
+            aria-haspopup="menu"
             className="gap-1 sm:gap-2 text-xs sm:text-sm"
           >
             <LayoutTemplate className="w-4 h-4" />
@@ -252,9 +276,12 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         {/* Add text */}
         <div className="relative">
           <Button
+            ref={setTriggerRef("text")}
             variant="ghost"
             size="sm"
             onClick={() => toggleMenu("text")}
+            aria-expanded={openMenu === "text"}
+            aria-haspopup="menu"
             className="gap-1 sm:gap-2 text-xs sm:text-sm"
           >
             <TextIcon className="w-4 h-4" />
@@ -313,9 +340,12 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         <div className="relative">
           <Tooltip content={t("cover.addShape")}>
             <Button
+              ref={setTriggerRef("shape")}
               variant="ghost"
               size="sm"
               onClick={() => toggleMenu("shape")}
+              aria-expanded={openMenu === "shape"}
+              aria-haspopup="menu"
               className="gap-1 sm:gap-2 text-xs sm:text-sm"
               aria-label={t("cover.addShape")}
             >
@@ -438,9 +468,12 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         {/* Export */}
         <div className="relative">
           <Button
+            ref={setTriggerRef("export")}
             variant="primary"
             size="sm"
             onClick={() => toggleMenu("export")}
+            aria-expanded={openMenu === "export"}
+            aria-haspopup="menu"
             className="gap-1 sm:gap-2 text-xs sm:text-sm"
           >
             <ExportIcon className="w-4 h-4" />
@@ -452,7 +485,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
                 type="button"
                 onClick={() => {
                   onExport("png");
-                  closeMenu();
+                  closeMenu(true);
                 }}
                 className="w-full px-4 py-2 text-left hover:bg-muted"
               >
@@ -462,7 +495,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
                 type="button"
                 onClick={() => {
                   onExport("jpeg");
-                  closeMenu();
+                  closeMenu(true);
                 }}
                 className="w-full px-4 py-2 text-left hover:bg-muted"
               >
@@ -472,7 +505,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
                 type="button"
                 onClick={() => {
                   onExport("pdf");
-                  closeMenu();
+                  closeMenu(true);
                 }}
                 className="w-full px-4 py-2 text-left hover:bg-muted"
               >

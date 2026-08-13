@@ -204,7 +204,7 @@ export function BackupSection() {
   if (loading && totalCount === 0 && backups.length === 0) return null;
 
   return (
-    <div className="space-y-4">
+    <div className="@container space-y-4">
       <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
         {t("backup.title")}
       </h3>
@@ -225,7 +225,7 @@ export function BackupSection() {
       </div>
 
       {IS_DESKTOP && (
-        <div className="flex items-end gap-3">
+        <div className="flex flex-col gap-3 @sm:flex-row @sm:items-end">
           <Input
             label={t("backup.directoryLabel")}
             value={backupDirectory ?? ""}
@@ -254,8 +254,8 @@ export function BackupSection() {
         <p className="text-sm text-muted-foreground">{t("backup.noBackups")}</p>
       ) : (
         <div className="space-y-3">
-          <div className="rounded-md border border-border overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-md border border-border overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
                   <th className="px-3 py-2 text-left font-medium text-foreground">

@@ -70,7 +70,7 @@ export function VersionCompare({ current, target }: VersionCompareProps) {
     diff.chapters.find((chapter) => chapter.chapterId === selectedChapterId) ?? diff.chapters[0];
 
   return (
-    <div className="flex flex-col gap-3 h-full min-h-0">
+    <div className="flex flex-col gap-3 h-full min-h-0 @container" data-testid="version-compare-root">
       <div className="flex items-center justify-between gap-3 shrink-0">
         <h3 className="min-w-0 truncate text-sm font-semibold text-foreground">
           {target.book.title}
@@ -96,8 +96,9 @@ export function VersionCompare({ current, target }: VersionCompareProps) {
       </div>
 
       <div
-        className={`grid min-h-0 flex-1 gap-3 ${
-          showChapterList ? "grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]" : "grid-cols-1"
+        data-testid="version-compare-grid"
+        className={`grid min-h-0 flex-1 grid-cols-1 gap-3 ${
+          showChapterList ? "@lg:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]" : ""
         }`}
       >
         {showChapterList && (

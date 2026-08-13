@@ -223,4 +223,17 @@ describe("NodeFormatBubble", () => {
 
     await waitFor(() => expect(bubble?.style.top).not.toBe(initialTop));
   });
+
+  it("caps its width to the bounds of a narrow viewport without hiding actions", async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 320, configurable: true });
+    const editor = buildEditor({ empty: true, isFocused: true });
+    render(<NodeFormatBubble editor={editor as never} />);
+
+    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
+    expect(bubble).not.toBeNull();
+    expect(bubble).toHaveStyle({ maxWidth: "304px" });
+    expect(bubble).toHaveClass("overflow-x-auto");
+    Object.defineProperty(window, "innerWidth", { value: originalWidth, configurable: true });
+  });
 });

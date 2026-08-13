@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Canvas, type FabricObject, IText } from "fabric";
 import { useCoverStore } from "@/features/covers/store";
 import { applyBackground, buildObject } from "@/components/cover-editor/render/toFabric";
@@ -8,6 +8,22 @@ import { collectFonts, ensureFontsLoaded } from "@/features/covers/scene/fonts";
 
 interface CanvasStageProps {
   className?: string;
+}
+
+const FIT_PADDING = 48;
+
+/** Scale that fits a doc inside the available container space (never upscales). */
+export function computeStageScale(
+  docWidth: number,
+  docHeight: number,
+  containerWidth: number,
+  containerHeight: number,
+  padding = FIT_PADDING
+): number {
+  const availW = containerWidth - padding;
+  const availH = containerHeight - padding;
+  if (availW <= 0 || availH <= 0) return 0;
+  return Math.min(availW / docWidth, availH / docHeight, 1);
 }
 
 function layerIdOf(obj: FabricObject | undefined | null): string | undefined {
@@ -149,15 +165,20 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
     };
   }, []);
 
-  // Resize/zoom-to-fit whenever the document size changes.
-  useEffect(() => {
+  // Resize/zoom-to-fit the Fabric canvas whenever the document size changes or
+  // the container resizes (viewport rotation, window resize, side panels
+  // appearing). The callback is stable so the observer never re-subscribes.
+  const refit = useCallback(() => {
     const canvas = fabricRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
-    const pad = 48;
-    const availW = container.clientWidth - pad;
-    const availH = container.clientHeight - pad;
-    const scale = Math.min(availW / scene.doc.width, availH / scene.doc.height, 1);
+    const scale = computeStageScale(
+      scene.doc.width,
+      scene.doc.height,
+      container.clientWidth,
+      container.clientHeight
+    );
+    if (scale <= 0) return;
     canvas.setZoom(scale);
     canvas.setDimensions({
       width: Math.round(scene.doc.width * scale),
@@ -165,6 +186,18 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
     });
     canvas.requestRenderAll();
   }, [scene.doc.width, scene.doc.height]);
+
+  useEffect(() => {
+    refit();
+  }, [refit]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(refit);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [refit]);
 
   // Rebuild all objects whenever the scene changes.
   useEffect(() => {

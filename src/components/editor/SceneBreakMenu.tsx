@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { Ellipsis, ImageIcon, X } from "lucide-react";
@@ -8,6 +8,7 @@ import { upsertSeparatorAsset } from "@/features/import/project-assets-repo";
 import { useSettingsStore } from "@/features/settings/store";
 import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "@/lib/platform";
 import { Input, Switch, Tooltip } from "@/components/ui";
+import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 import {
   BUILTIN_SCENE_BREAKS,
   resolveCustomSymbols,
@@ -34,6 +35,8 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
   const [count, setCount] = useState(3);
   const [spaced, setSpaced] = useState(true);
   const btnRef = useRef<HTMLDivElement>(null);
+  const optionsBtnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const lastSceneBreak = useSettingsStore((state) => state.lastSceneBreak);
   const presets = useSettingsStore((state) => state.sceneBreakPresets);
@@ -67,8 +70,26 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
       setOpen(false);
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        optionsBtnRef.current?.focus();
+      }
+    };
+
     document.addEventListener("mousedown", handleMouseDown);
-    return () => document.removeEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || !menuRef.current) return;
+    setPos((position) => adjustPosition(position, menuRef.current!.getBoundingClientRect()));
   }, [open]);
 
   const toggle = () => {
@@ -143,6 +164,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
       </Tooltip>
       <Tooltip content={t("editor.sceneBreakOptions")}>
         <button
+          ref={optionsBtnRef}
           type="button"
           onClick={toggle}
           aria-label={t("editor.sceneBreakOptions")}
@@ -157,8 +179,9 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
       {open &&
         createPortal(
           <div
-            className="scene-break-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 w-64"
-            style={{ top: pos.top, left: pos.left }}
+            ref={menuRef}
+            className="scene-break-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 w-64 max-h-[calc(100vh-1rem)] overflow-y-auto"
+            style={{ top: pos.top, left: pos.left, maxHeight: "calc(100dvh - 1rem)" }}
           >
             <p className="text-xs text-muted-foreground mb-1">{t("editor.sceneBreakBuiltIns")}</p>
             <div className="flex flex-col gap-1 mb-3">

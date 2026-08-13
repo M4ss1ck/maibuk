@@ -211,7 +211,7 @@ export function Notes() {
         data-focus-pane="notes-sidebar"
         tabIndex={-1}
         aria-label={t("panes.notesSidebar")}
-        className={`h-full relative shrink-0 ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
+        className={`h-full relative shrink-0 max-w-full ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
         style={{ width: `${notesSidebarWidth}px` }}
       >
         <NotesList
@@ -229,7 +229,7 @@ export function Notes() {
         />
         <div
           onMouseDown={handleResizeStart}
-          className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          className="hidden md:block absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
         />
       </section>
       <main
@@ -243,10 +243,6 @@ export function Notes() {
             key={currentNote.id}
             note={currentNote}
             onSave={handleSave}
-            onBack={() => {
-              setCurrentNote(null);
-              setLastNoteId(null);
-            }}
             onReturnToBook={returnTarget ? () => navigate(returnTarget.to) : undefined}
             returnLabel={returnTarget?.label}
             suppressRestore={hasPendingHeadingScroll}

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, Heading } from "react-aria-components";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,7 @@ interface ModalProps {
   size?: "md" | "wide";
   contentClassName?: string;
   panelClassName?: string;
+  panelStyle?: CSSProperties;
   titleClassName?: string;
   unstyled?: boolean;
 }
@@ -29,6 +30,7 @@ export function Modal({
   size = "md",
   contentClassName = "overflow-auto",
   panelClassName,
+  panelStyle,
   titleClassName,
   unstyled = false,
 }: ModalProps) {
@@ -118,6 +120,7 @@ export function Modal({
           <div
             {...modalProps}
             ref={modalRef}
+            style={panelClassName ? panelStyle : { maxHeight: "90dvh", ...panelStyle }}
             className={
               panelClassName ??
               `relative bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full ${sizeClass} sm:mx-4 max-h-[90vh] overflow-hidden flex flex-col modal-panel-enter`
@@ -156,7 +159,7 @@ export function Modal({
                   </div>
 
                   {footer && (
-                    <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-border bg-muted/30 shrink-0">
+                    <div className="flex flex-wrap items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-border bg-muted/30 shrink-0">
                       {footer}
                     </div>
                   )}

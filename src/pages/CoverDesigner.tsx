@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Layers, SlidersHorizontal } from "lucide-react";
 import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 import { CanvasStage, LayersPanel, PropertiesPanel, Toolbar } from "@/components/cover-editor";
 import type { ExportChoice } from "@/components/cover-editor/Toolbar";
@@ -196,7 +197,8 @@ export function CoverDesigner() {
           onClick={() => setLayersOpen(true)}
           aria-label={t("cover.layers.title")}
         >
-          {t("cover.layers.title")}
+          <Layers className="w-4 h-4" aria-hidden="true" />
+          <span className="hidden sm:inline">{t("cover.layers.title")}</span>
         </Button>
         <Button
           variant="ghost"
@@ -205,7 +207,8 @@ export function CoverDesigner() {
           onClick={() => setPropsOpen(true)}
           aria-label={t("cover.props.title")}
         >
-          {t("cover.props.title")}
+          <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+          <span className="hidden sm:inline">{t("cover.props.title")}</span>
         </Button>
         <Button
           variant="secondary"

@@ -127,7 +127,7 @@ describe("NoteEditor", () => {
     vi.useFakeTimers();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(<NoteEditor note={buildNote({ pinned: false })} onSave={onSave} onBack={vi.fn()} />);
+    render(<NoteEditor note={buildNote({ pinned: false })} onSave={onSave} />);
 
     expect(screen.queryByPlaceholderText("Note title")).not.toBeInTheDocument();
     expect(screen.getByText("Initial")).toBeInTheDocument();
@@ -152,7 +152,7 @@ describe("NoteEditor", () => {
   it("saves immediately when the manual save button is clicked", async () => {
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(<NoteEditor note={buildNote({ title: "Initial" })} onSave={onSave} onBack={vi.fn()} />);
+    render(<NoteEditor note={buildNote({ title: "Initial" })} onSave={onSave} />);
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Save status/ }));
@@ -166,7 +166,7 @@ describe("NoteEditor", () => {
   it("saves immediately when Ctrl+S is pressed", async () => {
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(<NoteEditor note={buildNote({ title: "Initial" })} onSave={onSave} onBack={vi.fn()} />);
+    render(<NoteEditor note={buildNote({ title: "Initial" })} onSave={onSave} />);
 
     await act(async () => {
       fireEvent.keyDown(window, { key: "s", ctrlKey: true });
@@ -184,7 +184,6 @@ describe("NoteEditor", () => {
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
-        onBack={vi.fn()}
         onReturnToBook={onReturnToBook}
         returnLabel="My Book"
       />
@@ -194,39 +193,33 @@ describe("NoteEditor", () => {
     expect(onReturnToBook).toHaveBeenCalled();
   });
 
-  it("activates the localized icon-only back button by keyboard", async () => {
+  it("exposes a single back action for a standalone note and navigates to /notes", async () => {
     const user = userEvent.setup();
     render(
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
-        onBack={vi.fn()}
       />
     );
 
     expect(screen.queryByText(/Back to/)).not.toBeInTheDocument();
 
-    const backButtons = screen.getAllByRole("button", { name: "Back" });
-    const backBtn = backButtons[backButtons.length - 1];
-    expect(backButtons).toHaveLength(2);
-    expect(backBtn).toBeInTheDocument();
-
-    backBtn.focus();
+    const backButton = screen.getByRole("button", { name: "Back" });
+    backButton.focus();
     await user.keyboard("{Enter}");
     expect(noteNavigateMock).toHaveBeenCalledWith("/notes");
   });
 
-  it("localizes the icon-only back button in Spanish", () => {
+  it("localizes the single back action in Spanish", () => {
     noteI18nState.language = "es";
     render(
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
-        onBack={vi.fn()}
       />
     );
 
-    expect(screen.getAllByRole("button", { name: "Volver" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Volver" })).toBeInTheDocument();
   });
 
   it("hides the always-on-top pin button on Android (non-desktop)", () => {
@@ -235,7 +228,6 @@ describe("NoteEditor", () => {
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
-        onBack={vi.fn()}
       />
     );
 
@@ -249,7 +241,6 @@ describe("NoteEditor", () => {
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
-        onBack={vi.fn()}
       />
     );
 

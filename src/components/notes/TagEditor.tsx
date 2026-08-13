@@ -30,7 +30,7 @@ export function TagEditor({ tags, allTags, onChange, onClose }: TagEditorProps) 
       onOpenChange={(isOpen) => {
         if (!isOpen) onClose?.();
       }}
-      className="w-64"
+      className="w-64 max-w-full"
       autoFocus
     />
   );

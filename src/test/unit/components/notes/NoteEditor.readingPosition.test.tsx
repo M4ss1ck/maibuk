@@ -100,7 +100,6 @@ describe("NoteEditor reading-position wiring", () => {
       <NoteEditor
         note={buildNote({ id: "n1" })}
         onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>()}
-        onBack={vi.fn()}
         suppressRestore={true}
       />
     );

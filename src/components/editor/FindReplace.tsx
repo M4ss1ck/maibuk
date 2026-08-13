@@ -313,11 +313,11 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
     <TooltipGroup>
       <div
         ref={panelRef}
-        className="absolute top-2 right-2 z-50 flex flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg"
+        className="absolute top-2 right-2 z-50 flex w-[min(28rem,calc(100%_-_1rem))] flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg"
       >
         {/* Find row */}
         <div className="flex items-center gap-1">
-          <div className="relative">
+          <div className="relative min-w-0 flex-1">
             <input
               ref={findInputRef}
               type="text"
@@ -325,7 +325,7 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={handleFindKeyDown}
-              className={`h-7 w-56 rounded border bg-background pr-[68px] pl-2 text-sm text-foreground outline-none focus:border-primary ${
+              className={`h-7 w-full rounded border bg-background pr-[68px] pl-2 text-sm text-foreground outline-none focus:border-primary ${
                 regexError ? "border-destructive" : "border-border"
               }`}
             />
@@ -391,7 +391,7 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
             value={replaceTerm}
             onChange={(e) => setReplaceTerm(e.target.value)}
             onKeyDown={handleReplaceKeyDown}
-            className="h-7 w-56 rounded border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary"
+            className="h-7 min-w-0 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary"
           />
           <IconButton onClick={replaceCurrent} disabled={!hasMatches} label={t("editor.replace")}>
             <Replace className="h-4 w-4" />

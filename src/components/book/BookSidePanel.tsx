@@ -1,3 +1,6 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FocusScope, Overlay, useModalOverlay } from "react-aria";
+import { Dialog } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import type { Chapter } from "@/features/chapters/types";
@@ -5,6 +8,8 @@ import type { Note } from "@/features/notes";
 import { FootnotesView } from "@/components/editor/FootnotesView";
 import { BookNotesView } from "@/components/book/BookNotesView";
 import { Tooltip } from "@/components/ui";
+import { useModalScope } from "@/hooks";
+import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 export type BookSidePanelTab = "footnotes" | "notes";
 
@@ -40,6 +45,72 @@ export function BookSidePanel({
   onOpenNote,
 }: BookSidePanelProps) {
   const { t } = useTranslation();
+  const mobilePanelRef = useRef<HTMLDivElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 768
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = (event: MediaQueryListEvent) => {
+      setIsMobile(event.matches);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
+    const activeElement = document.activeElement;
+    restoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
+  }
+  wasOpenRef.current = isOpen;
+
+  useModalScope(isMobile && isOpen);
+
+  const state = useMemo(
+    () => ({
+      isOpen: isMobile && isOpen,
+      open: () => undefined,
+      close: onClose,
+      toggle: () => {
+        if (isOpen) onClose();
+      },
+      setOpen: (open: boolean) => {
+        if (!open) onClose();
+      },
+    }),
+    [isMobile, isOpen, onClose]
+  );
+  const { modalProps, underlayProps } = useModalOverlay(
+    { isDismissable: true },
+    state,
+    mobilePanelRef
+  );
+
+  const restoreFocus = () => {
+    const target = restoreFocusRef.current;
+    restoreFocusRef.current = null;
+    if (!target?.isConnected || target === document.body) return;
+    if (document.activeElement?.closest?.('[role="dialog"]')) return;
+    target.focus();
+  };
+
+  useLayoutEffect(() => {
+    if (!isOpen) restoreFocus();
+  }, [isOpen]);
+
+  useLayoutEffect(() => restoreFocus, []);
+
+  useEffect(() => {
+    if (!isMobile || !isOpen) return;
+    return registerBackDismiss(() => {
+      onClose();
+      return true;
+    });
+  }, [isMobile, isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -58,20 +129,8 @@ export function BookSidePanel({
     </button>
   );
 
-  return (
-    <aside
-      className="notes-panel relative"
-      style={{ width: `${width}px`, minWidth: `${width}px` }}
-      data-focus-pane="book-side-panel"
-      tabIndex={-1}
-      aria-label={t("panes.bookSidePanel")}
-    >
-      <Tooltip content={t("bookSidePanel.resize")}>
-        <div
-          onMouseDown={onResizeStart}
-          className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
-        />
-      </Tooltip>
+  const content = (
+    <>
       <div className="notes-panel-header">
         <div className="flex items-center gap-1">
           {tab("footnotes", t("bookSidePanel.footnotes"))}
@@ -100,6 +159,51 @@ export function BookSidePanel({
       ) : (
         <BookNotesView notes={notes} onCreateNote={onCreateNote} onOpenNote={onOpenNote} />
       )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Overlay disableFocusManagement>
+        <div
+          {...underlayProps}
+          data-testid="book-side-panel-backdrop"
+          className="fixed inset-0 z-50 flex justify-end bg-black/50"
+        >
+          <FocusScope contain autoFocus>
+            <div {...modalProps} ref={mobilePanelRef} className="contents">
+              <Dialog aria-label={t("panes.bookSidePanel")} className="contents outline-none">
+                <aside
+                  className="h-full w-[min(400px,calc(100vw-1rem))] flex flex-col border-l border-border bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+                  data-focus-pane="book-side-panel"
+                  tabIndex={-1}
+                  aria-label={t("panes.bookSidePanel")}
+                >
+                  {content}
+                </aside>
+              </Dialog>
+            </div>
+          </FocusScope>
+        </div>
+      </Overlay>
+    );
+  }
+
+  return (
+    <aside
+      className="notes-panel relative"
+      style={{ width: `${width}px`, minWidth: `${width}px` }}
+      data-focus-pane="book-side-panel"
+      tabIndex={-1}
+      aria-label={t("panes.bookSidePanel")}
+    >
+      <Tooltip content={t("bookSidePanel.resize")}>
+        <div
+          onMouseDown={onResizeStart}
+          className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+        />
+      </Tooltip>
+      {content}
     </aside>
   );
 }

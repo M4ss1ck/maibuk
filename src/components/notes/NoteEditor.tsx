@@ -14,7 +14,6 @@ import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/Coll
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import { useShortcuts } from "@/lib/shortcuts";
 import { matchKeys } from "@/lib/shortcut-registry";
-import { BackIcon } from "@/components/icons";
 import { TagEditor } from "@/components/notes/TagEditor";
 import { timeAgo } from "@/components/notes/timeAgo";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
@@ -209,7 +208,6 @@ const NotesTaskDndBehavior = Extension.create({
 interface NoteEditorProps {
   note: Note;
   onSave: (input: UpdateNoteInput) => Promise<void>;
-  onBack: () => void;
   onReturnToBook?: () => void;
   returnLabel?: string;
   suppressRestore?: boolean;
@@ -218,7 +216,6 @@ interface NoteEditorProps {
 export function NoteEditor({
   note,
   onSave,
-  onBack,
   onReturnToBook,
   returnLabel,
   suppressRestore = false,
@@ -551,25 +548,16 @@ export function NoteEditor({
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Header */}
-      <div className="px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={onBack}
-          className="md:hidden p-1 hover:bg-muted rounded transition-colors"
-          aria-label={t("common.back")}
-        >
-          <BackIcon className="w-5 h-5" />
-        </button>
-
+      <div className="@container px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
         <button
           type="button"
           onClick={onReturnToBook ?? (() => navigate("/notes"))}
-          className="inline-flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="inline-flex min-w-0 items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label={onReturnToBook && returnLabel ? undefined : t("common.back")}
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-5 h-5 shrink-0" />
           {onReturnToBook && returnLabel ? (
-            <span className="max-w-40 truncate">
+            <span className="max-w-40 min-w-0 truncate">
               {t("notes.backToBook", { title: returnLabel ?? "" })}
             </span>
           ) : null}
@@ -602,7 +590,7 @@ export function NoteEditor({
                       </button>
                     </Tooltip>
                     {showTagEditor && (
-                      <div className="absolute left-0 top-full z-30 mt-2">
+                      <div className="fixed inset-x-3 top-16 z-30 md:absolute md:left-0 md:right-auto md:top-full md:mt-2">
                         <TagEditor
                           tags={note.tags}
                           allTags={allTags}
@@ -618,22 +606,28 @@ export function NoteEditor({
           </div>
         </div>
 
-        <SaveStatus status={saveStatus} onSave={() => void saveNow()} />
+        <div className="shrink-0">
+          <SaveStatus status={saveStatus} onSave={() => void saveNow()} />
+        </div>
 
-        <span className="text-xs text-muted-foreground">
+        <span className="hidden @2xl:inline shrink-0 text-xs text-muted-foreground">
           {wordCount.toLocaleString()} {t("common.words")}
         </span>
 
-        <SyncStatusButton />
+        <div className="shrink-0">
+          <SyncStatusButton />
+        </div>
 
-        <ThemeToggle variant="dropdown" />
+        <div className="shrink-0">
+          <ThemeToggle variant="dropdown" />
+        </div>
 
         {IS_DESKTOP && (
           <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
             <button
               type="button"
               onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-              className={`p-1 rounded transition-colors ${
+              className={`shrink-0 p-1 rounded transition-colors ${
                 alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
               }`}
               aria-label={t("settings.alwaysOnTop")}

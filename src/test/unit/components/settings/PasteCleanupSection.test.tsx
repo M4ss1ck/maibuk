@@ -129,4 +129,43 @@ describe("PasteCleanupSection — open from HTML view", () => {
 
     expect(screen.queryByDisplayValue("MsoNormal")).not.toBeInTheDocument();
   });
+
+  it("uses container variants for its preset and markdown rows", () => {
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <PasteCleanupSection />
+      </MemoryRouter>
+    );
+
+    const presetRow = screen.getByText("settings.pasteCleanup.preset.label").closest(".py-2");
+    expect(presetRow).not.toBeNull();
+    expect(presetRow).toHaveClass("flex-col", "@lg:flex-row", "@lg:items-center");
+    expect(presetRow).not.toHaveClass("sm:flex-row");
+
+    const promptRow = screen.getByRole("switch").closest(".py-2");
+    expect(promptRow).not.toBeNull();
+    expect(promptRow).toHaveClass("flex-col", "@lg:flex-row");
+    expect(promptRow).not.toHaveClass("sm:flex-row");
+  });
+
+  it("uses a container variant for the strip properties grid", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <PasteCleanupSection />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole("button", { name: "settings.pasteCleanup.advanced" }));
+
+    // The property text renders twice per row: the visible label and the
+    // switch's sr-only label. Both live in the same row, so either resolves
+    // to the same grid.
+    const grid = screen
+      .getAllByText("settings.pasteCleanup.property.background-color")[0]
+      .closest(".grid");
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveClass("grid-cols-1", "@lg:grid-cols-2");
+    expect(grid).not.toHaveClass("sm:grid-cols-2");
+  });
 });

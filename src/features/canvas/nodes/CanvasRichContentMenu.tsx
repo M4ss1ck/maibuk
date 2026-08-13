@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
@@ -13,6 +19,10 @@ interface CanvasRichContentMenuProps {
   onOverlayOpenChange?: (open: boolean) => void;
 }
 
+const MENU_WIDTH = 224; // w-56
+const MENU_FALLBACK_HEIGHT = 240;
+const VIEWPORT_PADDING = 8;
+
 /**
  * Compact "More" menu for canvas text nodes that exposes table, image, and
  * footnote insertion. The menu and its dialogs render through a document-body
@@ -26,10 +36,51 @@ export function CanvasRichContentMenu({ editor, onOverlayOpenChange }: CanvasRic
   const [footnoteOpen, setFootnoteOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     onOverlayOpenChange?.(menuOpen || imageOpen || footnoteOpen);
   }, [menuOpen, imageOpen, footnoteOpen, onOverlayOpenChange]);
+
+  // Keep the portal menu inside the viewport once it has a real size. The
+  // maximums are floored at the padding so a menu taller than the viewport
+  // clamps to the top edge instead of going negative.
+  useLayoutEffect(() => {
+    if (!menuOpen || !menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const width = rect.width || MENU_WIDTH;
+    const height = rect.height || MENU_FALLBACK_HEIGHT;
+    const maxTop = Math.max(VIEWPORT_PADDING, window.innerHeight - height - VIEWPORT_PADDING);
+    const maxLeft = Math.max(VIEWPORT_PADDING, window.innerWidth - width - VIEWPORT_PADDING);
+    setMenuPosition((prev) => ({
+      top: Math.min(Math.max(prev.top, VIEWPORT_PADDING), maxTop),
+      left: Math.min(Math.max(prev.left, VIEWPORT_PADDING), maxLeft),
+    }));
+  }, [menuOpen]);
+
+  // Close on outside pointer-down or Escape; Escape returns focus to the
+  // trigger. The keydown stopPropagation keeps the canvas-level Escape
+  // (clear selection) from firing while the menu is open.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      if (buttonRef.current?.contains(event.target as Node)) return;
+      setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setMenuOpen(false);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
 
   const keepEditorSelection = (event: ReactPointerEvent) => {
     event.preventDefault();
@@ -65,8 +116,13 @@ export function CanvasRichContentMenu({ editor, onOverlayOpenChange }: CanvasRic
       {menuOpen &&
         createPortal(
           <div
-            className="canvas-rich-content-menu fixed z-50 w-56 rounded-lg border border-border bg-card p-3 shadow-lg"
-            style={{ top: menuPosition.top, left: menuPosition.left }}
+            ref={menuRef}
+            className="canvas-rich-content-menu fixed z-50 max-h-[calc(100vh-1rem)] w-56 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg"
+            style={{
+              top: menuPosition.top,
+              left: menuPosition.left,
+              maxHeight: "calc(100dvh - 1rem)",
+            }}
             onPointerDown={keepEditorSelection}
           >
             <TableSizePicker

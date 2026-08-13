@@ -118,7 +118,7 @@ describe("NoteEditor tags", () => {
     const user = userEvent.setup();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(<NoteEditor note={buildNote({ tags: ["draft"] })} onSave={onSave} onBack={vi.fn()} />);
+    render(<NoteEditor note={buildNote({ tags: ["draft"] })} onSave={onSave} />);
 
     await user.click(screen.getByRole("button", { name: "Add tag" }));
     await user.type(screen.getByRole("combobox"), "rese");
@@ -141,7 +141,7 @@ describe("NoteEditor task bar tag editing", () => {
     const user = userEvent.setup();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
-    render(<NoteEditor note={buildNote({ tags: ["draft"] })} onSave={onSave} onBack={vi.fn()} />);
+    render(<NoteEditor note={buildNote({ tags: ["draft"] })} onSave={onSave} />);
 
     await user.click(screen.getByRole("button", { name: "Add tag" }));
     await user.type(screen.getByRole("combobox"), "research{Enter}");

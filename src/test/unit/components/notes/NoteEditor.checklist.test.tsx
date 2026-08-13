@@ -182,7 +182,6 @@ describe("NoteEditor extensions", () => {
       <NoteEditor
         note={buildNote({})}
         onSave={vi.fn().mockResolvedValue(undefined)}
-        onBack={vi.fn()}
       />
     );
 
@@ -232,7 +231,6 @@ describe("NoteEditor extensions", () => {
       <NoteEditor
         note={buildNote({ id: "note-1" })}
         onSave={vi.fn().mockResolvedValue(undefined)}
-        onBack={vi.fn()}
       />
     );
 
@@ -252,7 +250,6 @@ describe("NoteEditor extensions", () => {
       <NoteEditor
         note={buildNote({ id: "note-1" })}
         onSave={vi.fn().mockResolvedValue(undefined)}
-        onBack={vi.fn()}
       />
     );
 
@@ -266,7 +263,6 @@ describe("NoteEditor extensions", () => {
       <NoteEditor
         note={buildNote({ id: "note-1" })}
         onSave={vi.fn().mockResolvedValue(undefined)}
-        onBack={vi.fn()}
       />
     );
 

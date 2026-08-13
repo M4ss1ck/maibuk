@@ -76,7 +76,7 @@ export function Metrics() {
 
   return (
     <div className="h-full overflow-auto bg-background">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 p-6 md:p-8">
+      <div className="@container mx-auto flex max-w-7xl flex-col gap-6 p-6 md:p-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 data-route-heading className="text-3xl font-semibold tracking-normal">
@@ -106,7 +106,7 @@ export function Metrics() {
               </>
             )}
 
-            <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+            <div className="grid gap-4 @4xl:grid-cols-[1fr_1fr]">
               {enabled.engagement ? (
                 <WpmChart aggregate={dashboard} isLoading={eventsLoading} />
               ) : (

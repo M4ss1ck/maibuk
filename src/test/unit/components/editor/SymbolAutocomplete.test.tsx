@@ -180,4 +180,26 @@ describe("SymbolAutocomplete", () => {
     expect(screen.queryByRole("listbox", { name: "Symbols" })).not.toBeInTheDocument();
     expect(editor.getText()).toBe(":smile");
   });
+
+  it("clamps the caret-anchored popup into a narrow viewport", async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 320 });
+    try {
+      const user = userEvent.setup();
+      renderEditor([entry(0)]);
+
+      await user.click(screen.getByRole("textbox"));
+      await user.type(screen.getByRole("textbox"), ":smile");
+      const listbox = await screen.findByRole("listbox", { name: "Symbols" });
+
+      // TipTap's ReactRenderer wraps the list in a plain div; the caret
+      // container (which carries the clamped left offset) is one level up.
+      const container = listbox.parentElement?.parentElement as HTMLElement;
+      expect(parseFloat(container.style.left)).toBe(8);
+      expect(listbox).toHaveClass("max-w-[calc(100vw-1rem)]");
+      expect(parseFloat(container.style.left) + 304).toBeLessThanOrEqual(320);
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+    }
+  });
 });

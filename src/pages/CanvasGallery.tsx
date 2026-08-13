@@ -36,7 +36,7 @@ export function CanvasGallery() {
   };
 
   return (
-    <div className="h-full overflow-auto p-4 sm:p-8">
+    <div className="@container h-full overflow-auto p-4 sm:p-8">
       <div className="mb-6 flex flex-col gap-4 sm:mb-8">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -84,7 +84,7 @@ export function CanvasGallery() {
       ) : filteredCanvases.length === 0 ? (
         <p className="py-16 text-center text-muted-foreground">{t("canvas.noMatches")}</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 @sm:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
           {filteredCanvases.map((canvas) => (
             <CanvasCard
               key={canvas.id}

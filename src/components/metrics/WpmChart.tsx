@@ -24,7 +24,7 @@ export function WpmChart({ aggregate, isLoading }: WpmChartProps) {
   return (
     <section className="rounded-lg border border-border bg-card p-4">
       <h2 className="text-lg font-semibold">{t("metrics.wpm")}</h2>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 @sm:grid-cols-2">
         {rows.map((row) => (
           <div key={row.key}>
             <p className="text-sm text-muted-foreground">{t(row.key)}</p>

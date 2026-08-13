@@ -507,27 +507,37 @@ function CanvasEditor() {
           <CanvasDrawingLayer />
         </ReactFlow>
         <DrawingCaptureOverlay surfaceRef={surfaceRef} />
-        <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-2">
-          <CanvasToolPanel
-            onAddText={handleAddTextNode}
-            onAddNoteRef={() => setNotePickerOpen(true)}
-            onZoomIn={() => reactFlow.zoomIn()}
-            onZoomOut={() => reactFlow.zoomOut()}
-            onFitView={() => reactFlow.fitView()}
-          />
-          {toolMode === "pen" && <PenSettingsPanel />}
-          {selectedNode?.kind === "text" && <NodeColorPanel />}
+        {/* Right-side column bounded by the canvas edges: the tool stack scrolls
+            in short landscape heights while the edge inspector stays visible
+            below it (shrink-0), so the two never overlap. */}
+        <div className="absolute inset-y-4 right-4 z-20 flex flex-col items-end">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="flex flex-col items-end gap-2">
+              <CanvasToolPanel
+                onAddText={handleAddTextNode}
+                onAddNoteRef={() => setNotePickerOpen(true)}
+                onZoomIn={() => reactFlow.zoomIn()}
+                onZoomOut={() => reactFlow.zoomOut()}
+                onFitView={() => reactFlow.fitView()}
+              />
+              {toolMode === "pen" && <PenSettingsPanel />}
+              {selectedNode?.kind === "text" && <NodeColorPanel />}
+            </div>
+          </div>
+          {selectedEdge && (
+            <div className="mt-2 shrink-0">
+              <EdgeInspectorCard
+                edge={selectedEdge}
+                labelDraft={edgeLabelDraft}
+                onLabelChange={setEdgeLabelDraft}
+                onLabelCommit={() => updateEdge(selectedEdge.id, { label: edgeLabelDraft })}
+                onDirectedChange={(directed) => updateEdge(selectedEdge.id, { directed })}
+                onDelete={deleteSelection}
+                onClose={clearSelection}
+              />
+            </div>
+          )}
         </div>
-        {selectedEdge && (
-          <EdgeInspectorCard
-            edge={selectedEdge}
-            labelDraft={edgeLabelDraft}
-            onLabelChange={setEdgeLabelDraft}
-            onLabelCommit={() => updateEdge(selectedEdge.id, { label: edgeLabelDraft })}
-            onDirectedChange={(directed) => updateEdge(selectedEdge.id, { directed })}
-            onDelete={deleteSelection}
-          />
-        )}
       </main>
 
       <Modal

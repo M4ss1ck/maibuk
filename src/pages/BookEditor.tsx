@@ -1,5 +1,15 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
+import { FocusScope, useOverlay } from "react-aria";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import type { Chapter, ChapterType } from "@/features/chapters/types";
@@ -63,6 +73,9 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
 import { metricsService } from "@/lib/metrics/MetricsService";
+import { useModalScope } from "@/hooks";
+import { useModalStore } from "@/components/ui/modal-store";
+import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 const VersionPanel = lazy(() =>
   import("@/components/versions/VersionPanel").then((module) => ({
@@ -140,16 +153,114 @@ export function BookEditor() {
   const importQueueRef = useRef<Promise<void>>(Promise.resolve());
   const focusModeRef = useRef(focusMode);
   const showSidebarRef = useRef(showSidebar);
+  const showMobileMenuRef = useRef(showMobileMenu);
+  const showMobileChaptersRef = useRef(showMobileChapters);
   useEffect(() => {
     focusModeRef.current = focusMode;
   }, [focusMode]);
   useEffect(() => {
     showSidebarRef.current = showSidebar;
   }, [showSidebar]);
+  useEffect(() => {
+    showMobileMenuRef.current = showMobileMenu;
+  }, [showMobileMenu]);
+  useEffect(() => {
+    showMobileChaptersRef.current = showMobileChapters;
+  }, [showMobileChapters]);
+
+  const closeMobileChapters = useCallback(() => setShowMobileChapters(false), []);
+  const {
+    overlayProps: mobileChaptersOverlayProps,
+    underlayProps: mobileChaptersUnderlayProps,
+  } = useOverlay(
+    { isDismissable: true, isOpen: showMobileChapters, onClose: closeMobileChapters },
+    mobilePaneRef
+  );
+
+  useModalScope(showMobileChapters);
+
+  const chaptersRestoreFocusRef = useRef<HTMLElement | null>(null);
+  const wasChaptersOpenRef = useRef(false);
+  if (showMobileChapters && !wasChaptersOpenRef.current && typeof document !== "undefined") {
+    const activeElement = document.activeElement;
+    chaptersRestoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
+  }
+  wasChaptersOpenRef.current = showMobileChapters;
+
+  const restoreChaptersFocus = () => {
+    const target = chaptersRestoreFocusRef.current;
+    chaptersRestoreFocusRef.current = null;
+    if (!target?.isConnected || target === document.body) return;
+    if (document.activeElement?.closest?.('[role="dialog"]')) return;
+    target.focus();
+  };
+
+  useLayoutEffect(() => {
+    if (!showMobileChapters) restoreChaptersFocus();
+  }, [showMobileChapters]);
+
+  useLayoutEffect(() => restoreChaptersFocus, []);
+
+  useEffect(() => {
+    if (!showMobileChapters) return;
+    return registerBackDismiss(() => {
+      setShowMobileChapters(false);
+      return true;
+    });
+  }, [showMobileChapters]);
+
+  const mobileMenuRestoreFocusRef = useRef<HTMLElement | null>(null);
+  const wasMobileMenuOpenRef = useRef(false);
+  if (showMobileMenu && !wasMobileMenuOpenRef.current && typeof document !== "undefined") {
+    const activeElement = document.activeElement;
+    mobileMenuRestoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
+  }
+  wasMobileMenuOpenRef.current = showMobileMenu;
+
+  const restoreMobileMenuFocus = () => {
+    const target = mobileMenuRestoreFocusRef.current;
+    mobileMenuRestoreFocusRef.current = null;
+    if (!target?.isConnected || target === document.body) return;
+    if (document.activeElement?.closest?.('[role="dialog"]')) return;
+    target.focus();
+  };
+
+  useLayoutEffect(() => {
+    if (!showMobileMenu) restoreMobileMenuFocus();
+  }, [showMobileMenu]);
+
+  useLayoutEffect(() => restoreMobileMenuFocus, []);
+
+  const moreMenuModalId = useModalScope(showMobileMenu);
+
+  useEffect(() => {
+    if (!showMobileMenu) return;
+    return registerBackDismiss(() => {
+      setShowMobileMenu(false);
+      return true;
+    });
+  }, [showMobileMenu]);
+
+  useEffect(() => {
+    if (!showMobileMenu) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const modalIds = useModalStore.getState().modalIds;
+      if (event.key === "Escape" && modalIds[modalIds.length - 1] === moreMenuModalId) {
+        setShowMobileMenu(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showMobileMenu, moreMenuModalId]);
 
   const handleEditorEscape = useCallback(() => {
     if (focusModeRef.current) {
       setFocusMode(false);
+      return;
+    }
+    if (showMobileChaptersRef.current) return;
+    if (showMobileMenuRef.current) {
+      setShowMobileMenu(false);
       return;
     }
     const isMobile = window.innerWidth < 768;
@@ -766,9 +877,9 @@ export function BookEditor() {
       {/* Mobile chapter drawer overlay */}
       {showMobileChapters && !focusMode && (
         <div
+          {...mobileChaptersUnderlayProps}
           className="md:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setShowMobileChapters(false)}
-          onKeyDown={() => setShowMobileChapters(false)}
+          data-testid="mobile-chapters-backdrop"
         />
       )}
 
@@ -776,40 +887,49 @@ export function BookEditor() {
       {!focusMode && (
         <>
           {/* Mobile drawer */}
-          <div
-            ref={mobilePaneRef}
-            className={`
-              md:hidden fixed z-50 w-72
-              h-full transform transition-transform duration-300 ease-in-out
-              pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]
-              ${showMobileChapters ? "translate-x-0" : "-translate-x-full"}
-            `}
-            tabIndex={-1}
-            data-focus-pane="chapters"
-          >
-            <button
-              type="button"
-              onClick={() => setShowMobileChapters(false)}
-              className="absolute top-3 right-3 z-10 p-2 hover:bg-muted rounded-lg transition-colors"
-              aria-label={t("common.closeChapters")}
+          <FocusScope contain={showMobileChapters}>
+            <div
+              ref={mobilePaneRef}
+              {...(showMobileChapters ? mobileChaptersOverlayProps : {})}
+              role={showMobileChapters ? "dialog" : undefined}
+              aria-modal={showMobileChapters ? true : undefined}
+              aria-hidden={showMobileChapters ? undefined : true}
+              inert={!showMobileChapters}
+              aria-label={t("chapters.title")}
+              className={`
+                md:hidden fixed z-50 w-72 max-w-[calc(100vw-1rem)]
+                h-full transform transition-transform duration-300 ease-in-out
+                pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]
+                pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]
+                ${showMobileChapters ? "translate-x-0" : "-translate-x-full invisible"}
+              `}
+              tabIndex={-1}
+              data-focus-pane="chapters"
             >
-              <CloseIcon className="w-5 h-5" />
-            </button>
-            <ChapterList
-              chapters={displayedChapters}
-              currentChapterId={currentChapter?.id ?? null}
-              editor={tocEditor}
-              onSelectChapter={(chapter) => {
-                handleSelectChapter(chapter);
-                setShowMobileChapters(false);
-              }}
-              onCreateChapter={handleCreateChapter}
-              onUpdateChapter={handleUpdateChapter}
-              onDeleteChapter={handleDeleteChapter}
-              onReorderChapters={handleReorderChapters}
-              onImportFiles={handleImportFiles}
-            />
-          </div>
+              <button
+                type="button"
+                onClick={() => setShowMobileChapters(false)}
+                className="absolute top-3 right-3 z-10 p-2 hover:bg-muted rounded-lg transition-colors"
+                aria-label={t("common.closeChapters")}
+              >
+                <CloseIcon className="w-5 h-5" />
+              </button>
+              <ChapterList
+                chapters={displayedChapters}
+                currentChapterId={currentChapter?.id ?? null}
+                editor={tocEditor}
+                onSelectChapter={(chapter) => {
+                  handleSelectChapter(chapter);
+                  setShowMobileChapters(false);
+                }}
+                onCreateChapter={handleCreateChapter}
+                onUpdateChapter={handleUpdateChapter}
+                onDeleteChapter={handleDeleteChapter}
+                onReorderChapters={handleReorderChapters}
+                onImportFiles={handleImportFiles}
+              />
+            </div>
+          </FocusScope>
 
           {/* Desktop sidebar — width controlled by drag */}
           <div
@@ -845,7 +965,7 @@ export function BookEditor() {
 
       {/* Main editor area */}
       <main
-        className="flex-1 flex flex-col min-h-0 min-w-0"
+        className="flex-1 flex flex-col min-h-0 min-w-0 @container"
         data-focus-pane="editor-main"
         tabIndex={-1}
         aria-label={t("panes.editorMain")}
@@ -858,7 +978,13 @@ export function BookEditor() {
               <Tooltip content={t("chapters.title")}>
                 <button
                   type="button"
-                  onClick={() => setShowMobileChapters(true)}
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    setShowMobileChapters(true);
+                    requestAnimationFrame(() => {
+                      mobilePaneRef.current?.focus();
+                    });
+                  }}
                   className="md:hidden p-2 hover:bg-muted rounded transition-colors"
                   aria-label={t("chapters.title")}
                 >
@@ -928,7 +1054,7 @@ export function BookEditor() {
 
               {/* Sync */}
               <SyncStatusButton />
-              <div className="hidden md:block">
+              <div className="hidden @2xl:block">
                 <HistoryMenuButton
                   onOpenPanel={() => setShowVersionPanel(true)}
                   onSaveVersion={() => void handleSaveVersion()}
@@ -944,15 +1070,15 @@ export function BookEditor() {
                     setShowNotesChapter(true);
                   }}
                   disabled={showNotesChapter && bookSidePanelTab === "notes"}
-                  className="hidden md:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="hidden @2xl:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
                   aria-label={t("nav.bookNotes")}
                 >
                   <NotebookText className="w-5 h-5" />
                 </button>
               </Tooltip>
 
-              {/* Word count - hidden on mobile */}
-              <div className="hidden sm:block text-sm text-muted-foreground">
+              {/* Word count - hidden on narrow content */}
+              <div className="hidden @2xl:block text-sm text-muted-foreground">
                 {editorStats?.hasSelection ? (
                   <Tooltip content={t("editor.selectionStats")}>
                     <span>
@@ -968,7 +1094,7 @@ export function BookEditor() {
               </div>
 
               {/* Desktop action buttons */}
-              <div className="hidden md:flex items-center gap-1">
+              <div className="hidden @4xl:flex items-center gap-1">
                 {/* Export button */}
                 <Tooltip content={t("nav.exportBook")}>
                   <button
@@ -1037,11 +1163,14 @@ export function BookEditor() {
               </div>
 
               {/* Mobile more menu */}
-              <div className="md:hidden relative">
+              <div className="relative @4xl:hidden">
                 <Tooltip content={t("common.more")}>
                   <button
                     type="button"
-                    onClick={() => setShowMobileMenu(!showMobileMenu)}
+                    onClick={() => {
+                      setShowMobileChapters(false);
+                      setShowMobileMenu(!showMobileMenu);
+                    }}
                     className="p-2 hover:bg-muted rounded transition-colors"
                     aria-label={t("common.more")}
                   >

@@ -406,14 +406,18 @@ describe("BookEditor shortcuts", () => {
     expect(container.querySelectorAll("main")).toHaveLength(1);
   });
 
-  it("close-chapters button has English accessible name", () => {
+  it("close-chapters button has English accessible name", async () => {
+    const user = userEvent.setup();
     render(<BookEditor />);
+    await user.click(screen.getByRole("button", { name: "Chapters" }));
     expect(screen.getByRole("button", { name: "Close chapters" })).toBeInTheDocument();
   });
 
-  it("close-chapters button has Spanish accessible name", () => {
+  it("close-chapters button has Spanish accessible name", async () => {
+    const user = userEvent.setup();
     i18nState.language = "es";
     render(<BookEditor />);
+    await user.click(screen.getByRole("button", { name: "Capítulos" }));
     expect(screen.getByRole("button", { name: "Cerrar capítulos" })).toBeInTheDocument();
   });
 

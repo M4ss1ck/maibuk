@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Ephemeral } from "@/pages/Ephemeral";
@@ -162,5 +162,19 @@ describe("Ephemeral page", () => {
     await user.keyboard(" ");
 
     expect(mockSetAlwaysOnTop).toHaveBeenCalledWith(true);
+  });
+
+  it("preserves the localized accessible name when the create-note label collapses", () => {
+    useEphemeralStore.getState().setContent("<p>scratch</p>");
+    useEphemeralStore.getState().setWordCount(1);
+    render(<Ephemeral />);
+
+    const createNoteButton = screen.getByRole("button", { name: "ephemeral.createNote" });
+    expect(createNoteButton).toHaveAttribute("aria-label", "ephemeral.createNote");
+    expect(within(createNoteButton).getByText("ephemeral.createNote")).toHaveClass(
+      "hidden",
+      "@sm:inline"
+    );
+    expect(screen.getByText("1 common.words")).toHaveClass("truncate");
   });
 });

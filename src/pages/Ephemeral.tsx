@@ -49,7 +49,7 @@ export function Ephemeral() {
       <h1 data-route-heading className="sr-only">
         {t("common.ephemeral")}
       </h1>
-      <div className="px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
+      <div className="@container px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
         <Tooltip content={t("ephemeral.clear")}>
           <button
             type="button"
@@ -67,12 +67,13 @@ export function Ephemeral() {
           onClick={handleCreateNote}
           disabled={isEmpty}
           className="inline-flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          aria-label={t("ephemeral.createNote")}
         >
           <Feather className="h-5 w-5" />
-          <span>{t("ephemeral.createNote")}</span>
+          <span className="hidden @sm:inline">{t("ephemeral.createNote")}</span>
         </button>
 
-        <span className="ml-auto text-xs text-muted-foreground">
+        <span className="ml-auto min-w-0 truncate text-xs text-muted-foreground">
           {wordCount.toLocaleString()} {t("common.words")}
         </span>
 

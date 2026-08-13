@@ -60,4 +60,20 @@ describe("CanvasGallery search persistence", () => {
 
     expect(screen.getByPlaceholderText("canvas.searchPlaceholder")).toHaveValue("Beta");
   });
+
+  it("marks the gallery as a container and lays the canvas grid out with container variants", () => {
+    const { container } = render(<CanvasGallery />);
+
+    expect(container.firstElementChild).toHaveClass("@container");
+
+    const grid = screen.getByText("Alpha").closest(".grid");
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveClass(
+      "grid-cols-1",
+      "@sm:grid-cols-2",
+      "@3xl:grid-cols-3",
+      "@5xl:grid-cols-4"
+    );
+    expect(grid).not.toHaveClass("lg:grid-cols-3", "xl:grid-cols-4");
+  });
 });

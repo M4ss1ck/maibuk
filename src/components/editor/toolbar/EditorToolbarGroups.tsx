@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useEditorState, type Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
@@ -52,6 +52,7 @@ import { SceneBreakMenu } from "@/components/editor/SceneBreakMenu";
 import { TableMenu } from "@/components/editor/TableMenu";
 import { TextCaseMenu } from "@/components/editor/TextCaseMenu";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
+import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 import { Tooltip } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
 import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
@@ -639,6 +640,7 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const selected = LANGUAGE_OPTIONS.find((option) => option.value === value) ?? LANGUAGE_OPTIONS[0];
 
   const toggle = () => {
@@ -658,8 +660,27 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
       if (buttonRef.current?.contains(target) || isMenuTarget) return;
       setOpen(false);
     };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+
     document.addEventListener("mousedown", handleMouseDown);
-    return () => document.removeEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || !menuRef.current) return;
+    setPosition((current) => adjustPosition(current, menuRef.current!.getBoundingClientRect()));
   }, [open]);
 
   return (
@@ -681,8 +702,9 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
       {open &&
         createPortal(
           <div
-            className="spellcheck-language-menu-portal fixed z-50 min-w-32 rounded-lg border border-border bg-card py-1 shadow-lg"
-            style={{ top: position.top, left: position.left }}
+            ref={menuRef}
+            className="spellcheck-language-menu-portal fixed z-50 min-w-32 max-h-[calc(100vh-1rem)] overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg"
+            style={{ top: position.top, left: position.left, maxHeight: "calc(100dvh - 1rem)" }}
           >
             {LANGUAGE_OPTIONS.map((option) => (
               <button

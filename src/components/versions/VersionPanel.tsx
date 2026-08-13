@@ -268,7 +268,8 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
       ) : compare ? (
         <div
           data-testid="version-compare-layout"
-          className="flex h-[min(36rem,calc(90vh-9rem))] min-h-0 flex-col gap-3 overflow-hidden"
+          className="flex h-[min(36rem,calc(90vh-9rem))] max-h-144 min-h-0 flex-col gap-3 overflow-hidden"
+          style={{ height: "calc(90dvh - 9rem)" }}
         >
           <Button
             variant="ghost"
