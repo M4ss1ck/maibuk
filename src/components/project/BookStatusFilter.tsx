@@ -1,5 +1,12 @@
 import { useMemo } from "react";
-import { Button, Dialog, DialogTrigger, ListBox, ListBoxItem, Popover } from "react-aria-components";
+import {
+  Button,
+  Dialog,
+  DialogTrigger,
+  ListBox,
+  ListBoxItem,
+  Popover,
+} from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, ListFilter } from "lucide-react";
 import { BOOK_STATUSES, type BookStatus } from "@/features/books/types";
@@ -66,7 +73,9 @@ export function BookStatusFilter({ value, counts, onChange }: BookStatusFilterPr
                     <Check
                       className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "opacity-100" : "opacity-0"}`}
                     />
-                    <span className={`flex-1 truncate ${isSelected ? "font-medium" : "font-normal"}`}>
+                    <span
+                      className={`flex-1 truncate ${isSelected ? "font-medium" : "font-normal"}`}
+                    >
                       {option.label}
                     </span>
                     <span className="shrink-0 text-xs text-muted-foreground">

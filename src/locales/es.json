@@ -127,10 +127,10 @@
     "filterByStatus": "Filtrar por estado",
     "allStatuses": "Todos los estados",
     "statusCount": "{{count}} estados",
-    "archiveBook": "Archivar {{title}}",
-    "restoreBook": "Restaurar {{title}}",
+    "changeStatus": "Cambiar el estado de {{title}}",
     "archivedToast": "Se archivó \"{{title}}\"",
     "restoredToast": "Se restauró \"{{title}}\"",
+    "statusChangedToast": "Se cambió \"{{title}}\" a {{status}}",
     "noMatches": "Ningún libro coincide con este filtro",
     "showAllStatuses": "Mostrar todos los estados",
     "filterAnnouncement": "Mostrando {{count}} libros"

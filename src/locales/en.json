@@ -127,10 +127,10 @@
     "filterByStatus": "Filter by status",
     "allStatuses": "All statuses",
     "statusCount": "{{count}} statuses",
-    "archiveBook": "Archive {{title}}",
-    "restoreBook": "Restore {{title}}",
+    "changeStatus": "Change status of {{title}}",
     "archivedToast": "Archived \"{{title}}\"",
     "restoredToast": "Restored \"{{title}}\"",
+    "statusChangedToast": "Set \"{{title}}\" to {{status}}",
     "noMatches": "No books match this filter",
     "showAllStatuses": "Show all statuses",
     "filterAnnouncement": "Showing {{count}} books"

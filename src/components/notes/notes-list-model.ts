@@ -154,7 +154,13 @@ export function filterNotes(
   const dateFrom = parseDateBoundary(filters.dateFrom, "start");
   const dateTo = parseDateBoundary(filters.dateTo, "end");
 
-  if (!query && tags.length === 0 && excludeTags.length === 0 && dateFrom === null && dateTo === null)
+  if (
+    !query &&
+    tags.length === 0 &&
+    excludeTags.length === 0 &&
+    dateFrom === null &&
+    dateTo === null
+  )
     return notes;
 
   return notes.filter((note) => {
