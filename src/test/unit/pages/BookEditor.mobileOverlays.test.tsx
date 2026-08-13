@@ -1,6 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { runTopBackDismiss } from "@/lib/platform/backDismiss";
 
 const { mockNavigateFn, mockUpdateChapter } = vi.hoisted(() => ({
   mockNavigateFn: vi.fn(),
@@ -201,6 +202,7 @@ describe("BookEditor mobile overlays", () => {
     await waitFor(() => expect(panes[0]).toHaveFocus());
     expect(panes[0]).toHaveClass("translate-x-0");
     expect(screen.getByTestId("mobile-chapters-backdrop")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "chapters.title" })).toBeInTheDocument();
 
     const drawer = panes[0];
     await user.tab();
@@ -216,7 +218,7 @@ describe("BookEditor mobile overlays", () => {
 
   it("never keeps the More menu and the chapters drawer open together", async () => {
     const user = userEvent.setup();
-    render(<BookEditor />);
+    const { container } = render(<BookEditor />);
 
     const moreButton = screen.getByRole("button", { name: "common.more" });
     moreButton.focus();
@@ -228,6 +230,8 @@ describe("BookEditor mobile overlays", () => {
     expect(screen.queryByText("nav.exportBook")).not.toBeInTheDocument();
     expect(screen.getByTestId("mobile-chapters-backdrop")).toBeInTheDocument();
 
+    const panes = container.querySelectorAll<HTMLElement>('[data-focus-pane="chapters"]');
+    await waitFor(() => expect(panes[0]).toHaveFocus());
     await user.keyboard("{Escape}");
     await waitFor(() =>
       expect(screen.queryByTestId("mobile-chapters-backdrop")).not.toBeInTheDocument()
@@ -237,5 +241,68 @@ describe("BookEditor mobile overlays", () => {
     await user.keyboard("{Enter}");
     expect(screen.getByText("nav.exportBook")).toBeInTheDocument();
     expect(screen.queryByTestId("mobile-chapters-backdrop")).not.toBeInTheDocument();
+  });
+
+  it("dismisses the chapters drawer via the backdrop and restores focus to the trigger", async () => {
+    const user = userEvent.setup();
+    render(<BookEditor />);
+
+    const chaptersButton = screen.getByRole("button", { name: "chapters.title" });
+    chaptersButton.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByTestId("mobile-chapters-backdrop")).toBeInTheDocument());
+
+    await user.click(screen.getByTestId("mobile-chapters-backdrop"));
+
+    expect(screen.queryByTestId("mobile-chapters-backdrop")).not.toBeInTheDocument();
+    expect(chaptersButton).toHaveFocus();
+  });
+
+  it("closes the chapters drawer via the Android back handler and cleans up its dismisser", async () => {
+    const user = userEvent.setup();
+    render(<BookEditor />);
+
+    const chaptersButton = screen.getByRole("button", { name: "chapters.title" });
+    chaptersButton.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByTestId("mobile-chapters-backdrop")).toBeInTheDocument());
+
+    let handled = false;
+    act(() => {
+      handled = runTopBackDismiss();
+    });
+    expect(handled).toBe(true);
+    expect(screen.queryByTestId("mobile-chapters-backdrop")).not.toBeInTheDocument();
+
+    await waitFor(() => expect(runTopBackDismiss()).toBe(false));
+  });
+
+  it("keeps the closed drawer hidden and exposes it as a dialog only while open", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<BookEditor />);
+
+    const drawer = container.querySelector<HTMLElement>('[data-focus-pane="chapters"]');
+    expect(drawer).not.toBeNull();
+    expect(drawer).toHaveClass("invisible");
+    expect(drawer).toHaveAttribute("inert");
+    expect(drawer).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("dialog", { name: "chapters.title" })).not.toBeInTheDocument();
+
+    const chaptersButton = screen.getByRole("button", { name: "chapters.title" });
+    chaptersButton.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(drawer).toHaveFocus());
+
+    expect(drawer).not.toHaveClass("invisible");
+    expect(drawer).not.toHaveAttribute("inert");
+    expect(drawer).not.toHaveAttribute("aria-hidden");
+    expect(screen.getByRole("dialog", { name: "chapters.title" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(drawer).toHaveClass("invisible"));
+    expect(drawer).toHaveAttribute("inert");
+    expect(drawer).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("dialog", { name: "chapters.title" })).not.toBeInTheDocument();
+    expect(chaptersButton).toHaveFocus();
   });
 });

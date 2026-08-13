@@ -9,7 +9,7 @@ import {
   useRef,
   useMemo,
 } from "react";
-import { FocusScope, useModalOverlay } from "react-aria";
+import { FocusScope, useOverlay } from "react-aria";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import type { Chapter, ChapterType } from "@/features/chapters/types";
@@ -168,20 +168,14 @@ export function BookEditor() {
     showMobileChaptersRef.current = showMobileChapters;
   }, [showMobileChapters]);
 
-  const mobileChaptersState = useMemo(
-    () => ({
-      isOpen: showMobileChapters,
-      open: () => setShowMobileChapters(true),
-      close: () => setShowMobileChapters(false),
-      toggle: () => setShowMobileChapters((open) => !open),
-      setOpen: (open: boolean) => setShowMobileChapters(open),
-    }),
-    [showMobileChapters]
-  );
+  const closeMobileChapters = useCallback(() => setShowMobileChapters(false), []);
   const {
-    modalProps: mobileChaptersModalProps,
+    overlayProps: mobileChaptersOverlayProps,
     underlayProps: mobileChaptersUnderlayProps,
-  } = useModalOverlay({ isDismissable: true }, mobileChaptersState, mobilePaneRef);
+  } = useOverlay(
+    { isDismissable: true, isOpen: showMobileChapters, onClose: closeMobileChapters },
+    mobilePaneRef
+  );
 
   useModalScope(showMobileChapters);
 
@@ -896,7 +890,12 @@ export function BookEditor() {
           <FocusScope contain={showMobileChapters}>
             <div
               ref={mobilePaneRef}
-              {...(showMobileChapters ? mobileChaptersModalProps : {})}
+              {...(showMobileChapters ? mobileChaptersOverlayProps : {})}
+              role={showMobileChapters ? "dialog" : undefined}
+              aria-modal={showMobileChapters ? true : undefined}
+              aria-hidden={showMobileChapters ? undefined : true}
+              inert={!showMobileChapters}
+              aria-label={t("chapters.title")}
               className={`
                 md:hidden fixed z-50 w-72 max-w-[calc(100vw-1rem)]
                 h-full transform transition-transform duration-300 ease-in-out
