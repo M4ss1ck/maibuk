@@ -315,6 +315,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 - **Typography**: Three font families defined — `font-sans` (Inter), `font-serif` (Literata), `font-mono`
 - **Button variants**: `primary`, `secondary`, `ghost`, `destructive` — use the existing `Button` component, don't create ad-hoc button styles
 - **Border radius**: Consistently `rounded-lg` across the codebase
+- **Panel layout responds to its container, not the viewport**: content sits beside a resizable sidebar, so a viewport breakpoint (`md:`) does not describe the space a panel actually has. Mark the wrapper `@container` and use container variants (`@md:`, `@3xl:`) for anything laid out inside the main content area — see the notes filter panel in `src/pages/NotesGallery.tsx`. Viewport breakpoints stay correct for the outermost page shell
 - **Keyboard compatibility**: Any UI feature with interactive controls must meet the keyboard & accessibility completion requirements in section 2 and the test gate in section 6 — this is a definition-of-done item, not a styling preference
 
 ---

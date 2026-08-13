@@ -258,7 +258,7 @@ describe("NotesGallery", () => {
     fireEvent.keyDown(window, { key: "f", ctrlKey: true });
 
     await waitFor(() => {
-      expect(screen.getByRole("combobox")).toHaveFocus();
+      expect(screen.getByPlaceholderText("notes.anyTag")).toHaveFocus();
     });
     expect(screen.getByText("Work")).toBeInTheDocument();
   });
@@ -272,7 +272,7 @@ describe("NotesGallery", () => {
     fireEvent.keyDown(window, { key: "F", ctrlKey: true, shiftKey: true });
 
     await waitFor(() => {
-      expect(screen.getByRole("combobox")).toHaveFocus();
+      expect(screen.getByPlaceholderText("notes.anyTag")).toHaveFocus();
     });
     expect(screen.getByText("Research")).toBeInTheDocument();
   });

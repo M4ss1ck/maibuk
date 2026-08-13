@@ -6,6 +6,8 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  EyeOff,
+  Info,
   Search,
   SlidersHorizontal,
   Tags,
@@ -40,7 +42,14 @@ export function NotesGallery() {
   const setSort = useSettingsStore((s) => s.setNotesSort);
   const notesFilters = useSettingsStore((s) => s.notesFilters);
   const setNotesFilters = useSettingsStore((s) => s.setNotesFilters);
-  const { search, showAdvanced, tags: tagFilters, dateFrom, dateTo } = notesFilters;
+  const {
+    search,
+    showAdvanced,
+    tags: tagFilters,
+    excludeTags,
+    dateFrom,
+    dateTo,
+  } = notesFilters;
   const setSearch = useCallback(
     (value: string) => setNotesFilters({ search: value }),
     [setNotesFilters]
@@ -51,6 +60,10 @@ export function NotesGallery() {
   );
   const setTagFilters = useCallback(
     (value: string[]) => setNotesFilters({ tags: value }),
+    [setNotesFilters]
+  );
+  const setExcludeTags = useCallback(
+    (value: string[]) => setNotesFilters({ excludeTags: value }),
     [setNotesFilters]
   );
   const setDateFrom = useCallback(
@@ -106,21 +119,35 @@ export function NotesGallery() {
     return [...tags].sort((a, b) => a.localeCompare(b));
   }, [notes]);
 
+  // A tag can only mean one thing at a time, so each list drops what the other
+  // already claims rather than resolving a contradiction after the fact.
+  const includeTagOptions = useMemo(
+    () => tagOptions.filter((tag) => !excludeTags.includes(tag)),
+    [tagOptions, excludeTags]
+  );
+  const excludeTagOptions = useMemo(
+    () => tagOptions.filter((tag) => !tagFilters.includes(tag)),
+    [tagOptions, tagFilters]
+  );
+
   const filteredNotes = useMemo(
     () =>
       sortNotesBy(
         filterNotes(notes, {
           query: search,
           tags: tagFilters,
+          excludeTags,
           dateFrom,
           dateTo,
         }),
         sort
       ),
-    [notes, search, tagFilters, dateFrom, dateTo, sort]
+    [notes, search, tagFilters, excludeTags, dateFrom, dateTo, sort]
   );
 
-  const hasFilters = Boolean(search.trim() || tagFilters.length > 0 || dateFrom || dateTo);
+  const hasFilters = Boolean(
+    search.trim() || tagFilters.length > 0 || excludeTags.length > 0 || dateFrom || dateTo
+  );
 
   const openNote = useCallback(
     (id: string) => {
@@ -139,10 +166,7 @@ export function NotesGallery() {
   };
 
   const clearFilters = () => {
-    setSearch("");
-    setTagFilters([]);
-    setDateFrom("");
-    setDateTo("");
+    setNotesFilters({ search: "", tags: [], excludeTags: [], dateFrom: "", dateTo: "" });
   };
 
   const openAdvancedFilters = useCallback(() => {
@@ -227,7 +251,7 @@ export function NotesGallery() {
         </div>
 
         {notes.length > 0 && (
-          <div className="row-start-3 rounded-lg border border-border bg-card p-3 shadow-sm sm:col-span-2 sm:row-start-2">
+          <div className="@container row-start-3 rounded-lg border border-border bg-card p-3 shadow-sm sm:col-span-2 sm:row-start-2">
             <div className="flex flex-col gap-3 lg:flex-row">
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -269,19 +293,35 @@ export function NotesGallery() {
             </div>
 
             {showAdvanced && (
-              <div className="mt-3 grid gap-3 border-t border-border pt-3 md:grid-cols-[minmax(180px,1fr)_minmax(150px,0.7fr)_minmax(150px,0.7fr)]">
+              <div className="mt-3 grid gap-3 border-t border-border pt-3 @md:grid-cols-2 @3xl:grid-cols-[minmax(200px,1.2fr)_minmax(200px,1.2fr)_minmax(150px,0.8fr)_minmax(150px,0.8fr)]">
                 <div className="min-w-0">
                   <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <Tags className="h-3.5 w-3.5" />
                     {t("notes.tagFilter")}
+                    <FilterHelp label={t("notes.tagFilterHelp")} />
                   </span>
                   <MultiSelectCombobox
                     ref={tagFilterInputRef}
                     value={tagFilters}
                     onChange={setTagFilters}
-                    options={tagOptions}
+                    options={includeTagOptions}
                     placeholder={t("notes.anyTag")}
                     removeLabel={(tag) => t("notes.removeTag", { tag })}
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <EyeOff className="h-3.5 w-3.5" />
+                    {t("notes.excludeTagFilter")}
+                    <FilterHelp label={t("notes.excludeTagFilterHelp")} />
+                  </span>
+                  <MultiSelectCombobox
+                    value={excludeTags}
+                    onChange={setExcludeTags}
+                    options={excludeTagOptions}
+                    placeholder={t("notes.noExcludedTags")}
+                    removeLabel={(tag) => t("notes.removeExcludedTag", { tag })}
                   />
                 </div>
 
@@ -377,6 +417,25 @@ export function NotesGallery() {
         </GridList>
       )}
     </div>
+  );
+}
+
+/**
+ * The tag filters read alike but behave differently — one requires every tag,
+ * the other rejects any. The label carries the explanation so it reaches
+ * screen readers and keyboard users, not just hover.
+ */
+function FilterHelp({ label }: { label: string }) {
+  return (
+    <Tooltip content={label}>
+      <button
+        type="button"
+        aria-label={label}
+        className="inline-flex items-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </Tooltip>
   );
 }
 
