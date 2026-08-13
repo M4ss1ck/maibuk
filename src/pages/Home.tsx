@@ -222,15 +222,15 @@ export function Home() {
   }
 
   return (
-    <div className="p-4 sm:p-8 overflow-auto h-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold">
+    <div className="@container p-4 sm:p-8 overflow-auto h-full">
+      <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-4 mb-6 @xl:mb-8">
+        <h1 data-route-heading className="text-xl @xl:text-2xl font-semibold">
           {t("books.title")}
         </h1>
         <Toolbar
           ref={actionsRef}
           aria-label={t("books.actions")}
-          className="flex items-center gap-2"
+          className="flex flex-wrap items-center gap-2"
         >
           {books.length > 0 && (
             <BookStatusFilter
@@ -244,9 +244,10 @@ export function Home() {
               variant="secondary"
               onClick={() => window.open(DOWNLOAD_PAGE, "_blank")}
               className="text-sm"
+              aria-label={t("nav.downloadApp")}
             >
               <Download className="w-5 h-5" />
-              <span className="hidden sm:inline">{t("nav.downloadApp")}</span>
+              <span className="hidden @xl:inline">{t("nav.downloadApp")}</span>
             </Button>
           )}
           <Button
@@ -256,18 +257,18 @@ export function Home() {
             disabled={isScanningEpub}
           >
             <FileUp className="w-5 h-5" />
-            <span className="hidden sm:inline">
+            <span className="hidden @xl:inline">
               {isScanningEpub ? t("import.scanning") : t("books.importEpub")}
             </span>
-            <span className="sm:hidden">{t("books.importShort")}</span>
+            <span className="@xl:hidden">{t("books.importShort")}</span>
           </Button>
           <Button onClick={() => setIsNewBookOpen(true)} className="text-sm">
             <AddIcon className="w-5 h-5" />
-            <span className="hidden sm:inline">{t("books.newBook")}</span>
-            <span className="sm:hidden">{t("common.new")}</span>
+            <span className="hidden @xl:inline">{t("books.newBook")}</span>
+            <span className="@xl:hidden">{t("common.new")}</span>
             <KeyboardShortcut
               shortcut={formatKeys(SHORTCUTS["home.newBook"])}
-              className="hidden lg:inline-flex"
+              className="hidden @3xl:inline-flex"
             />
           </Button>
         </Toolbar>
@@ -321,7 +322,7 @@ export function Home() {
             layout="grid"
             selectionMode="none"
             onAction={(key) => activateBook(String(key))}
-            className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+            className="grid grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 gap-6"
           >
             {(book) => (
               <BookCard

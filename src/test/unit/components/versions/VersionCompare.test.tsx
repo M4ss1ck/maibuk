@@ -149,4 +149,34 @@ describe("VersionCompare", () => {
 
     expect(screen.getByRole("button", { name: /Chapter 2/ })).toBeInTheDocument();
   });
+
+  it("marks the layout as a container so the list/diff grid stacks when the modal content is narrow", () => {
+    renderCompare({
+      chapters: [
+        { chapterId: "chapter-1", title: "Chapter 1", status: "unchanged", html: null },
+      ],
+    });
+
+    expect(screen.getByTestId("version-compare-root")).toHaveClass("@container");
+
+    const grid = screen.getByTestId("version-compare-grid");
+    expect(grid).toHaveClass("grid-cols-1");
+    expect(grid).toHaveClass("@lg:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]");
+  });
+
+  it("keeps the grid single-column when the chapter list is hidden", async () => {
+    const user = userEvent.setup();
+    renderCompare({
+      chapters: [
+        { chapterId: "chapter-1", title: "Chapter 1", status: "unchanged", html: null },
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: "Hide chapter list" }));
+
+    expect(screen.getByTestId("version-compare-grid")).toHaveClass("grid-cols-1");
+    expect(screen.getByTestId("version-compare-grid")).not.toHaveClass(
+      "@lg:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]"
+    );
+  });
 });

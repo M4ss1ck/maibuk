@@ -231,6 +231,47 @@ describe("Canvas page", () => {
     expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { directed: true });
   });
 
+  it("dismisses the edge inspector from its close button", () => {
+    renderCanvas();
+    fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+    expect(mocks.actions.clearSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismisses the edge inspector on Escape while focus is inside it", () => {
+    renderCanvas();
+    fireEvent.keyDown(screen.getByLabelText("canvas.edgeLabel"), { key: "Escape" });
+    expect(mocks.actions.clearSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the floating tool column scrollable above the edge inspector", () => {
+    const { rerender } = renderCanvas();
+    const toolbar = screen.getByRole("toolbar", { name: "canvas.tools" });
+    const toolArea = toolbar.parentElement?.parentElement;
+    const column = toolArea?.parentElement;
+    expect(column?.className).toContain("inset-y-4");
+    expect(column?.className).toContain("flex-col");
+    expect(toolArea?.className).toContain("min-h-0");
+    expect(toolArea?.className).toContain("flex-1");
+    expect(toolArea?.className).toContain("overflow-y-auto");
+
+    const closeButton = screen.getByRole("button", { name: "common.close" });
+    const inspector = closeButton.parentElement?.parentElement;
+    expect(inspector?.className).toContain("w-56");
+    expect(inspector?.className).not.toContain("absolute");
+    expect(inspector?.parentElement?.className).toContain("shrink-0");
+    expect(inspector?.parentElement?.parentElement).toBe(column);
+
+    Object.assign(mocks.state, { selectedEdgeId: null });
+    rerender(
+      <MemoryRouter initialEntries={["/canvas/canvas-1"]}>
+        <Routes>
+          <Route path="/canvas/:canvasId" element={<Canvas />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.queryByRole("button", { name: "common.close" })).not.toBeInTheDocument();
+  });
+
   it("zooms and fits the view from the floating toolbar", () => {
     renderCanvas();
     fireEvent.click(screen.getByRole("button", { name: "canvas.zoomIn" }));

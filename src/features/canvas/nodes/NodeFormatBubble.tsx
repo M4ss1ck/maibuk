@@ -18,7 +18,7 @@ export function NodeFormatBubble({
   editor: Editor;
   onOverlayOpenChange?: (open: boolean) => void;
 }) {
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; maxWidth: number } | null>(null);
   const [toolbarElement, setToolbarElement] = useState<HTMLDivElement | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [menuOverlayOpen, setMenuOverlayOpen] = useState(false);
@@ -126,6 +126,9 @@ export function NodeFormatBubble({
     const toolbarWidth = toolbarElement?.offsetWidth || 320;
     const toolbarHeight = toolbarElement?.offsetHeight || 40;
     const gap = 8;
+    // Cap the bubble at the canvas bounds so it never spills past a narrow
+    // viewport; the toolbar scrolls horizontally inside the cap.
+    const maxWidth = Math.max(160, bounds.right - bounds.left - gap * 2);
     const centerX = (start.left + end.right) / 2;
     const left = Math.max(
       bounds.left + gap,
@@ -137,7 +140,7 @@ export function NodeFormatBubble({
         ? above
         : Math.min(end.bottom + gap, bounds.bottom - toolbarHeight - gap);
 
-    setPos({ top, left });
+    setPos({ top, left, maxWidth });
   }, [editor, editorFocused, menuOverlayOpen, toolbarElement]);
 
   useEffect(() => {
@@ -176,8 +179,8 @@ export function NodeFormatBubble({
         createPortal(
           <div
             ref={setToolbarElement}
-            className="fixed z-50 flex items-center gap-0.5 rounded-lg border border-border bg-card px-1.5 py-1 shadow-lg"
-            style={{ top: pos.top, left: pos.left }}
+            className="fixed z-50 flex items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-card px-1.5 py-1 shadow-lg"
+            style={{ top: pos.top, left: pos.left, maxWidth: pos.maxWidth }}
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();

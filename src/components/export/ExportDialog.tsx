@@ -177,6 +177,7 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
       title={t("export.title")}
       unstyled
       panelClassName="bg-background rounded-t-xl sm:rounded-lg shadow-xl max-w-md w-full sm:mx-4 p-4 sm:p-6 border border-border max-h-[90vh] overflow-auto"
+      panelStyle={{ maxHeight: "90dvh" }}
       titleClassName="text-lg sm:text-xl font-semibold text-foreground mb-4"
     >
       {/* Book info */}

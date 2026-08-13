@@ -223,12 +223,12 @@ export function NotesGallery() {
     <div
       ref={galleryDropRef}
       {...dropHandlers}
-      className={`p-4 sm:p-8 overflow-auto h-full transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+      className={`@container p-4 sm:p-8 overflow-auto h-full transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
     >
       {isImportingFiles && <FileDropImportStatus />}
-      <div className="mb-6 grid gap-4 sm:mb-8 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="mb-6 grid gap-4 @xl:mb-8 @xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="row-start-1">
-          <h1 data-route-heading className="text-xl font-semibold tracking-tight sm:text-2xl">
+          <h1 data-route-heading className="text-xl font-semibold tracking-tight @xl:text-2xl">
             {t("notes.title")}
           </h1>
           {notes.length > 0 && (
@@ -244,7 +244,7 @@ export function NotesGallery() {
         </div>
 
         {notes.length > 0 && (
-          <div className="@container row-start-3 rounded-lg border border-border bg-card p-3 shadow-sm sm:col-span-2 sm:row-start-2">
+          <div className="@container row-start-3 rounded-lg border border-border bg-card p-3 shadow-sm @xl:col-span-2 @xl:row-start-2">
             <div className="flex gap-3">
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -357,7 +357,7 @@ export function NotesGallery() {
           </div>
         )}
 
-        <div className="row-start-2 flex items-center gap-2 sm:col-start-2 sm:row-start-1 sm:ml-auto">
+        <div className="row-start-2 flex items-center gap-2 @xl:col-start-2 @xl:row-start-1 @xl:ml-auto">
           {notes.length > 0 && <NotesSortMenu value={sort} onChange={setSort} />}
           <Button onClick={handleCreateNote} className="text-sm">
             <AddIcon className="w-5 h-5" />
@@ -401,7 +401,7 @@ export function NotesGallery() {
           layout="grid"
           selectionMode="none"
           onAction={(key) => openNote(String(key))}
-          className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+          className="grid grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 gap-4"
         >
           {(note) => (
             <NoteCard
@@ -513,7 +513,7 @@ function DateFilter({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-lg border border-border bg-background p-3 shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-background p-3 shadow-lg">
           <div className="mb-3 flex items-center justify-between gap-2">
             <button
               type="button"

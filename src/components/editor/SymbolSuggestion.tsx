@@ -14,7 +14,7 @@ function SymbolSuggestionList({ items, selectedIndex, command }: SymbolSuggestio
     <div
       role="listbox"
       aria-label={i18n.t("symbols.grid")}
-      className="z-50 max-h-72 w-80 overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg"
+      className="z-50 max-h-72 w-80 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg"
     >
       {items.length === 0 ? (
         <div className="px-3 py-2 text-sm text-muted-foreground">{i18n.t("symbols.noResults")}</div>
@@ -65,8 +65,14 @@ export function createSymbolSuggestionRenderer(): SuggestionOptions<
       if (!container || !clientRect) return;
       const rect = clientRect();
       if (!rect) return;
+      const POPUP_WIDTH = 320; // w-80
+      const padding = 8;
+      const left = Math.min(
+        Math.max(rect.left + window.scrollX, padding + window.scrollX),
+        Math.max(padding, window.innerWidth - POPUP_WIDTH - padding) + window.scrollX
+      );
       container.style.position = "absolute";
-      container.style.left = `${rect.left + window.scrollX}px`;
+      container.style.left = `${left}px`;
       container.style.top = `${rect.bottom + window.scrollY}px`;
     };
 

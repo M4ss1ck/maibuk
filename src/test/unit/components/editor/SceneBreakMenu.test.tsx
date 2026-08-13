@@ -75,4 +75,49 @@ describe("SceneBreakMenu", () => {
       expect(mockGetWebDialog).toHaveBeenCalledOnce();
     });
   });
+
+  it("closes the menu on Escape and restores focus to the trigger", async () => {
+    const user = userEvent.setup();
+    render(<SceneBreakMenu editor={createEditorMock()} />);
+
+    const trigger = screen.getByRole("button", { name: "editor.sceneBreakOptions" });
+    await user.click(trigger);
+    expect(document.querySelector(".scene-break-menu-portal")).not.toBeNull();
+
+    await user.keyboard("{Escape}");
+
+    expect(document.querySelector(".scene-break-menu-portal")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("keeps the popup bounded to the viewport height with internal scrolling", async () => {
+    const user = userEvent.setup();
+    render(<SceneBreakMenu editor={createEditorMock()} />);
+
+    await user.click(screen.getByRole("button", { name: "editor.sceneBreakOptions" }));
+
+    const menu = document.querySelector(".scene-break-menu-portal") as HTMLElement;
+    expect(menu).not.toBeNull();
+    expect(menu).toHaveClass("max-h-[calc(100vh-1rem)]", "overflow-y-auto");
+    expect(menu.style.maxHeight).toBe("calc(100dvh - 1rem)");
+  });
+
+  it("stops Escape propagation so an outer window Escape handler is not invoked", async () => {
+    const user = userEvent.setup();
+    const outerEscapeSpy = vi.fn();
+    window.addEventListener("keydown", outerEscapeSpy);
+    try {
+      render(<SceneBreakMenu editor={createEditorMock()} />);
+
+      await user.click(screen.getByRole("button", { name: "editor.sceneBreakOptions" }));
+      expect(document.querySelector(".scene-break-menu-portal")).not.toBeNull();
+
+      await user.keyboard("{Escape}");
+
+      expect(document.querySelector(".scene-break-menu-portal")).toBeNull();
+      expect(outerEscapeSpy).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", outerEscapeSpy);
+    }
+  });
 });

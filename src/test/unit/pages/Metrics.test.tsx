@@ -163,4 +163,20 @@ describe("Metrics page", () => {
     expect(screen.queryByText("Edit ratio")).not.toBeInTheDocument();
     expect(mockGetAggregate).toHaveBeenCalled();
   });
+
+  it("uses container variants for the streak and chart grids", () => {
+    render(<Metrics />);
+
+    const streak = screen.getByText("Current streak").closest("section");
+    expect(streak).not.toBeNull();
+    expect(streak).toHaveClass("@sm:grid-cols-2", "@4xl:grid-cols-4");
+    expect(streak).not.toHaveClass("xl:grid-cols-4");
+
+    const wpmGrid = screen.getByText("Edit ratio").closest(".grid");
+    expect(wpmGrid).not.toBeNull();
+    expect(wpmGrid).toHaveClass("@sm:grid-cols-2");
+
+    const outerGrid = screen.getByRole("heading", { name: "Words per minute" }).closest(".grid");
+    expect(outerGrid).toHaveClass("@4xl:grid-cols-[1fr_1fr]");
+  });
 });

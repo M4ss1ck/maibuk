@@ -114,7 +114,7 @@ export function PasteCleanupSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+      <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
         <div>
           <p className="font-medium">{t("settings.pasteCleanup.preset.label")}</p>
           <p className="text-sm text-muted-foreground">
@@ -129,7 +129,7 @@ export function PasteCleanupSection() {
         />
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+      <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
         <div>
           <p className="font-medium">{t("settings.pasteCleanup.promptMarkdownLabel")}</p>
           <p className="text-sm text-muted-foreground">
@@ -174,7 +174,7 @@ export function PasteCleanupSection() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+              <div className="grid grid-cols-1 @lg:grid-cols-2 gap-x-6 gap-y-2">
                 {PASTE_STRIP_COMMON_PROPERTIES.map((property) => (
                   <div key={property} className="flex items-center justify-between gap-3">
                     <p className="text-sm">{t(`settings.pasteCleanup.property.${property}`)}</p>

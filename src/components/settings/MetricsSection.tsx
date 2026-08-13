@@ -97,7 +97,7 @@ export function MetricsSection() {
           return (
             <div
               key={category}
-              className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              className="flex flex-col gap-2 py-3 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4"
             >
               <div>
                 <p className="font-medium">{t(`settings.metrics.${category}.label`)}</p>
@@ -121,7 +121,7 @@ export function MetricsSection() {
           );
         })}
 
-        <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex flex-col gap-2 py-3 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4">
           <div>
             <p className="font-medium">{t("settings.metrics.sync.label")}</p>
             <p className="text-sm text-muted-foreground">

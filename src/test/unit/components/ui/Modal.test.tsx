@@ -327,6 +327,56 @@ describe("Modal", () => {
       );
       expect(document.querySelector(".bg-muted\\/30")).toBeNull();
     });
+
+    it("wraps footer actions so long localized labels stay reachable on narrow screens", () => {
+      render(
+        <Modal
+          isOpen={true}
+          onClose={() => {}}
+          title="Footer Test"
+          footer={<button type="button">Cancel</button>}
+        >
+          <p>Content</p>
+        </Modal>
+      );
+      const footer = document.querySelector(".bg-muted\\/30");
+      expect(footer).not.toBeNull();
+      expect(footer).toHaveClass("flex-wrap");
+    });
+  });
+
+  describe("narrow-screen panel sizing", () => {
+    it("caps the default panel with dynamic viewport height while keeping the vh fallback", () => {
+      render(
+        <Modal isOpen={true} onClose={() => {}} title="Sized">
+          <p>Content</p>
+        </Modal>
+      );
+
+      const panel = document.querySelector(".shadow-xl") as HTMLElement;
+      expect(panel).not.toBeNull();
+      expect(panel).toHaveClass("max-h-[90vh]");
+      expect(panel.style.maxHeight).toBe("90dvh");
+    });
+
+    it("lets an unstyled custom panel opt into the same dvh-aware cap", () => {
+      render(
+        <Modal
+          isOpen={true}
+          onClose={() => {}}
+          title="Custom Panel"
+          unstyled
+          panelClassName="max-h-[90vh]"
+          panelStyle={{ maxHeight: "90dvh" }}
+        >
+          <p>Content</p>
+        </Modal>
+      );
+
+      const panel = document.querySelector(".max-h-\\[90vh\\]") as HTMLElement;
+      expect(panel).not.toBeNull();
+      expect(panel.style.maxHeight).toBe("90dvh");
+    });
   });
 
   describe("content", () => {

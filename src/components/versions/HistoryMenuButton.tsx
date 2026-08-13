@@ -19,6 +19,7 @@ export function HistoryMenuButton({
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const saveItemRef = useRef<HTMLButtonElement>(null);
   const historyItemRef = useRef<HTMLButtonElement>(null);
 
@@ -37,7 +38,7 @@ export function HistoryMenuButton({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setMenuOpen(false);
+        closeMenuRestoreFocus();
       }
     };
 
@@ -48,6 +49,11 @@ export function HistoryMenuButton({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [menuOpen]);
+
+  const closeMenuRestoreFocus = () => {
+    setMenuOpen(false);
+    triggerRef.current?.focus();
+  };
 
   const focusMenuItem = (index: number) => {
     menuItems[index]?.current?.focus();
@@ -86,7 +92,7 @@ export function HistoryMenuButton({
         break;
       case "Escape":
         event.preventDefault();
-        setMenuOpen(false);
+        closeMenuRestoreFocus();
         break;
     }
   };
@@ -115,6 +121,7 @@ export function HistoryMenuButton({
         </button>
       </Tooltip>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setMenuOpen((open) => !open)}
         onKeyDown={handleButtonKeyDown}

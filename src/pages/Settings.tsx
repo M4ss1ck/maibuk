@@ -200,16 +200,16 @@ export function Settings() {
   return (
     <div className="h-full overflow-auto relative">
       <AsciiFieldBackground color={primaryColor} />
-      <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background">
-        <h1 data-route-heading className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">
+      <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background @container">
+        <h1 data-route-heading className="text-xl @lg:text-2xl font-semibold mb-6 @lg:mb-8">
           {t("settings.title")}
         </h1>
 
         {/* Appearance Settings */}
-        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
           <h2 className="text-lg text-primary font-medium mb-4">{t("settings.appearance")}</h2>
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.theme")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.themeDescription")}</p>
@@ -251,7 +251,7 @@ export function Settings() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.fontSize")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.fontSizeDescription")}</p>
@@ -264,7 +264,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.font")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.fontDescription")}</p>
@@ -277,7 +277,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.primaryColor")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -307,12 +307,12 @@ export function Settings() {
 
         {/* Window Settings */}
         {IS_DESKTOP && !isMac() && (
-          <section className="mb-6 sm:mb-8">
+          <section className="mb-6 @lg:mb-8">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t("settings.window")}
             </h2>
             <div className="divide-y divide-border">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+              <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
                 <div>
                   <p className="font-medium">{t("settings.launchOnStartup")}</p>
                   <p className="text-sm text-muted-foreground">
@@ -326,7 +326,7 @@ export function Settings() {
                 />
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+              <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
                 <div>
                   <p className="font-medium">{t("settings.closeToTray")}</p>
                   <p className="text-sm text-muted-foreground">
@@ -344,12 +344,12 @@ export function Settings() {
         )}
 
         {/* General Settings */}
-        <section className="mb-6 sm:mb-8">
+        <section className="mb-6 @lg:mb-8">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             {t("settings.general")}
           </h2>
           <div className="divide-y divide-border">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.autoSave")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.autoSaveDescription")}</p>
@@ -362,7 +362,7 @@ export function Settings() {
             </div>
 
             {IS_DESKTOP && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+              <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
                 <div>
                   <p className="font-medium">{t("settings.alwaysOnTop")}</p>
                   <p className="text-sm text-muted-foreground">
@@ -377,7 +377,7 @@ export function Settings() {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.language")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.languageDescription")}</p>
@@ -393,15 +393,15 @@ export function Settings() {
         </section>
 
         {/* Sync Settings */}
-        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
           <h2 className="text-lg text-primary font-medium mb-4">{t("sync.title")}</h2>
           <div className="divide-y divide-border">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+            <div className="flex flex-col @xl:flex-row @xl:items-center justify-between py-3 gap-2 @xl:gap-4">
               <div className="flex-1">
                 <p className="font-medium">{t("sync.serverUrl")}</p>
                 <p className="text-sm text-muted-foreground">{t("sync.serverUrlDescription")}</p>
               </div>
-              <div className="w-full sm:w-80">
+              <div className="w-full @xl:w-80">
                 <Input
                   type="text"
                   value={syncServerUrl}
@@ -418,7 +418,7 @@ export function Settings() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
               <div className="flex-1">
                 <p className="font-medium">{t("sync.accountStatus")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -461,7 +461,7 @@ export function Settings() {
         </section>
 
         {/* Metrics */}
-        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
           <MetricsSection />
         </section>
 
@@ -478,10 +478,10 @@ export function Settings() {
         {activeConflict && <ConflictDialog conflict={activeConflict} onResolve={resolveConflict} />}
 
         {/* Editor Settings */}
-        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
           <h2 className="text-lg text-primary font-medium mb-4">{t("settings.editor")}</h2>
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.spellCheck")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -495,7 +495,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.dictionaryOpenInBrowser")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -509,7 +509,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.customDictionary")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -526,7 +526,7 @@ export function Settings() {
               </Button>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.showInlineFootnotes")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -540,7 +540,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.showNotesChapter")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -554,7 +554,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.hideKeyboardHints")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -568,7 +568,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.editorAutoClose")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -593,12 +593,12 @@ export function Settings() {
         </section>
 
         {/* Export Settings */}
-        <section className="mb-6 sm:mb-8">
+        <section className="mb-6 @lg:mb-8">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             {t("settings.export")}
           </h2>
           <div className="divide-y divide-border">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 sm:gap-4">
+            <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
               <div>
                 <p className="font-medium">{t("settings.defaultFormat")}</p>
                 <p className="text-sm text-muted-foreground">
@@ -616,7 +616,7 @@ export function Settings() {
         </section>
 
         {/* Advanced Settings */}
-        <section className="mb-6 sm:mb-8 rounded-xl border border-border p-4 sm:p-5">
+        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
           <button
             type="button"
             onClick={() => setAdvancedOpen(!advancedOpen)}
@@ -630,7 +630,7 @@ export function Settings() {
 
           {advancedOpen && (
             <div className="mt-4 space-y-4 border-l-2 border-destructive/30 pl-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
                 <div>
                   <p className="font-medium">{t("settings.exportDatabase")}</p>
                   <p className="text-sm text-muted-foreground">
@@ -647,7 +647,7 @@ export function Settings() {
                 </Button>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
                 <div>
                   <p className="font-medium">{t("settings.importDatabase")}</p>
                   <p className="text-sm text-muted-foreground">
@@ -664,7 +664,7 @@ export function Settings() {
                 </Button>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-2 sm:gap-4">
+              <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
                 <div>
                   <p className="font-medium text-destructive">{t("settings.resetDatabase")}</p>
                   <p className="text-sm text-muted-foreground">

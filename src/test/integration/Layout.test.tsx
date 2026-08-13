@@ -256,6 +256,22 @@ describe("Layout", () => {
     expect(runTopBackDismiss()).toBe(false);
   });
 
+  it("caps the mobile drawer to the viewport while keeping the desktop width", async () => {
+    useSettingsStore.setState({ mainSidebarWidth: 480 });
+    const user = userEvent.setup();
+    const { container } = renderLayout();
+
+    await user.click(screen.getByRole("button", { name: "Open navigation menu" }));
+    const dialog = await screen.findByRole("dialog", { name: "Primary navigation" });
+    const mobileAside = dialog.querySelector("aside");
+    expect(mobileAside).not.toBeNull();
+    expect(mobileAside).toHaveStyle({ width: "480px", maxWidth: "100%" });
+
+    const desktopAside = container.querySelector('[data-focus-pane="nav-sidebar"]');
+    expect(desktopAside).toHaveStyle({ width: "480px" });
+    expect(desktopAside).not.toHaveStyle({ maxWidth: "100%" });
+  });
+
   it("localizes the mobile drawer open and close accessible names", async () => {
     const user = userEvent.setup();
     i18nState.language = "es";

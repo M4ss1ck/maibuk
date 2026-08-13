@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Minus, Plus } from "lucide-react";
 import { useSettingsStore } from "@/features/settings/store";
 import { EDITOR_ZOOM_MIN, EDITOR_ZOOM_MAX, EDITOR_ZOOM_STEP } from "@/features/settings/types";
 import { Tooltip } from "@/components/ui";
+import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 
 export function ZoomControl() {
   const { t } = useTranslation();
@@ -37,8 +38,27 @@ export function ZoomControl() {
         setShowMenu(false);
       }
     };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowMenu(false);
+        buttonRef.current?.focus();
+      }
+    };
+
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showMenu]);
+
+  useLayoutEffect(() => {
+    if (!showMenu || !menuRef.current) return;
+    setMenuPosition((position) => adjustPosition(position, menuRef.current!.getBoundingClientRect()));
   }, [showMenu]);
 
   return (
@@ -60,7 +80,7 @@ export function ZoomControl() {
         createPortal(
           <div
             ref={menuRef}
-            className="zoom-control-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 flex items-center gap-2"
+            className="zoom-control-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 flex flex-wrap items-center gap-2 max-w-[calc(100vw-1rem)]"
             style={{ top: menuPosition.top, left: menuPosition.left }}
           >
             <Tooltip content={t("editor.zoomOut")} shortcut="editor.zoomOut">

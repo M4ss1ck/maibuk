@@ -264,8 +264,9 @@ describe("VersionPanel", () => {
     const compareLayout = await screen.findByTestId("version-compare-layout");
     const compareBody = screen.getByTestId("version-compare-body");
 
-    expect(compareLayout).toHaveClass("overflow-hidden", "min-h-0");
+    expect(compareLayout).toHaveClass("overflow-hidden", "min-h-0", "max-h-144");
     expect(compareBody).toHaveClass("flex-1", "min-h-0", "overflow-hidden");
+    expect((compareLayout as HTMLElement).style.height).toBe("calc(90dvh - 9rem)");
   });
 
   it("opens compare from the focused row when Enter is pressed", async () => {

@@ -112,4 +112,19 @@ describe("BookSettingsDialog modal registration", () => {
     expect(screen.queryByRole("button", { name: "books.deleteBook" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it("caps the panel with dynamic viewport height while keeping the vh fallback", () => {
+    render(<Harness initialOpen />);
+
+    const panel = document.querySelector(".max-h-\\[90vh\\]") as HTMLElement;
+    expect(panel).not.toBeNull();
+    expect(panel.style.maxHeight).toBe("90dvh");
+  });
+
+  it("stacks the genre/language grid on narrow viewports so the Select cannot overflow", () => {
+    render(<Harness initialOpen />);
+
+    const grid = screen.getByTestId("book-settings-genre-grid");
+    expect(grid).toHaveClass("grid-cols-1", "sm:grid-cols-2");
+  });
 });

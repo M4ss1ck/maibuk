@@ -36,7 +36,7 @@ export const WikilinkList = forwardRef<WikilinkListHandle, WikilinkListProps>(
     }));
 
     return (
-      <div className="z-50 max-h-64 w-72 overflow-auto rounded-lg border border-border bg-background shadow-lg">
+      <div className="z-50 max-h-64 w-72 max-w-[calc(100vw-1rem)] overflow-auto rounded-lg border border-border bg-background shadow-lg">
         {items.length === 0 && (
           <div className="px-3 py-2 text-sm text-muted-foreground">No matches</div>
         )}
@@ -68,8 +68,14 @@ export function createWikilinkRenderer(): SuggestionOptions["render"] {
       if (!container || !clientRect) return;
       const rect = clientRect();
       if (!rect) return;
+      const POPUP_WIDTH = 288; // w-72
+      const padding = 8;
+      const left = Math.min(
+        Math.max(rect.left + window.scrollX, padding + window.scrollX),
+        Math.max(padding, window.innerWidth - POPUP_WIDTH - padding) + window.scrollX
+      );
       container.style.position = "absolute";
-      container.style.left = `${rect.left + window.scrollX}px`;
+      container.style.left = `${left}px`;
       container.style.top = `${rect.bottom + window.scrollY}px`;
     };
 

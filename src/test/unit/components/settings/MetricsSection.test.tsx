@@ -156,4 +156,19 @@ describe("MetricsSection", () => {
     expect(syncSwitch).toBeDisabled();
     expect(screen.getByText("Sign in to sync to enable metrics sharing")).toBeInTheDocument();
   });
+
+  it("uses container variants so rows respond to the settings panel width", () => {
+    render(<MetricsSection />);
+
+    const row = screen.getByRole("switch", { name: "Writing volume" }).closest(".py-3");
+    expect(row).not.toBeNull();
+    expect(row).toHaveClass(
+      "flex-col",
+      "@lg:flex-row",
+      "@lg:items-center",
+      "@lg:justify-between",
+      "@lg:gap-4"
+    );
+    expect(row).not.toHaveClass("sm:flex-row");
+  });
 });

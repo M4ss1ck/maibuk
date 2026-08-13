@@ -134,4 +134,22 @@ describe("BackupSection", () => {
     await user.keyboard("{Enter}");
     expect(getDialog).toHaveBeenCalledOnce();
   });
+
+  it("scrolls the backup table horizontally instead of clipping row actions", async () => {
+    render(<BackupSection />);
+
+    const table = await screen.findByRole("table");
+    expect(table).toHaveClass("min-w-[560px]");
+    expect(table.parentElement).toHaveClass("overflow-x-auto");
+  });
+
+  it("stacks the directory input and choose button on narrow containers", async () => {
+    platformState.isDesktop = true;
+    render(<BackupSection />);
+
+    const choose = await screen.findByRole("button", { name: "backup.chooseDirectory" });
+    const row = choose.parentElement;
+    expect(row).not.toBeNull();
+    expect(row).toHaveClass("flex-col", "@sm:flex-row");
+  });
 });

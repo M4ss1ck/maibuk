@@ -149,4 +149,25 @@ describe("CoverDesigner mobile panels", () => {
     expect(screen.queryByTestId("cover-properties-sheet")).not.toBeInTheDocument();
     expect(propertiesTrigger).toHaveFocus();
   });
+
+  it("keeps Back, Layers, Properties, and Save reachable at narrow widths", () => {
+    render(
+      <MemoryRouter initialEntries={["/book/book-1/cover"]}>
+        <Routes>
+          <Route path="/book/:bookId/cover" element={<CoverDesigner />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("button", { name: "common.back" })).toBeInTheDocument();
+    const layers = screen.getByRole("button", { name: "cover.layers.title" });
+    const properties = screen.getByRole("button", { name: "cover.props.title" });
+    expect(screen.getByRole("button", { name: "cover.saved" })).toBeInTheDocument();
+
+    // Labels collapse to icons below sm; localized accessible names remain.
+    expect(layers.querySelector("svg")).not.toBeNull();
+    expect(properties.querySelector("svg")).not.toBeNull();
+    expect(layers.querySelector("span")).toHaveClass("hidden", "sm:inline");
+    expect(properties.querySelector("span")).toHaveClass("hidden", "sm:inline");
+  });
 });

@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { TableSizePicker } from "@/components/editor/TableSizePicker";
 import { Tooltip, TooltipGroup } from "@/components/ui";
+import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 import {
   Table,
   Columns2,
@@ -31,6 +32,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
     left: 0,
   });
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const insertTable = (rows: number, cols: number, withHeaderRow: boolean) => {
     editor.chain().focus().insertTable({ rows, cols, withHeaderRow }).run();
@@ -51,8 +53,27 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
         setShowMenu(false);
       }
     };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowMenu(false);
+        buttonRef.current?.focus();
+      }
+    };
+
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showMenu]);
+
+  useLayoutEffect(() => {
+    if (!showMenu || !menuRef.current) return;
+    setMenuPosition((position) => adjustPosition(position, menuRef.current!.getBoundingClientRect()));
   }, [showMenu]);
 
   const handleShowMenu = () => {
@@ -175,8 +196,9 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
         !isInTable &&
         createPortal(
           <div
-            className="tiptap-table-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50"
-            style={{ top: menuPosition.top, left: menuPosition.left }}
+            ref={menuRef}
+            className="tiptap-table-menu-portal fixed bg-card border border-border rounded-lg shadow-lg p-3 z-50 max-h-[calc(100vh-1rem)] overflow-y-auto"
+            style={{ top: menuPosition.top, left: menuPosition.left, maxHeight: "calc(100dvh - 1rem)" }}
           >
             <TableSizePicker onSelect={insertTable} />
           </div>,
