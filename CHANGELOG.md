@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-13
+
+### Added
+- Add Android app with signed APK builds and mobile-specific support for full-page safe areas, hardware back handling, background data flushing, cover layer controls, and file/image handling
+- Add book archiving as a fourth status with gallery status filtering
+- Add persisted gallery filters and search across visits for notes, canvas, and books
+- Add exclude-tag note filter
+- Add accessible canvas text and background color controls with contrast-checked presets and custom colors
+- Add larger canvas text nodes that are selected on creation
+
+### Changed
+- Replace the book card archive button with a status dropdown to set draft, in-progress, completed, or archived directly from the gallery, with restored books returning to draft
+- Hide desktop-only settings and keyboard shortcut hints on mobile and Android
+- Improve mobile and Android responsive layouts and safe-area handling, including full-page editors and bottom bars
+
+### Fixed
+- Fix Android system bar overlap, duplicate page scrolling, and duplicate mobile back actions
+- Fix notes filter panel overflow and keep the filters button next to the search box on narrow panels
+- Improve Android image clipboard and content URI handling, touch resizing, and canvas toolbar touch targets
+
 ## [0.4.20] - 2026-07-18
 
 ### Added
