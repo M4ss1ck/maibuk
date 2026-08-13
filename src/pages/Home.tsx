@@ -222,7 +222,8 @@ export function Home() {
   }
 
   return (
-    <div className="@container p-4 sm:p-8 overflow-auto h-full">
+    <div className="h-full min-h-0 overflow-x-hidden overflow-y-auto">
+      <div className="@container min-h-full p-4 sm:p-8">
       <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-4 mb-6 @xl:mb-8">
         <h1 data-route-heading className="text-xl @xl:text-2xl font-semibold">
           {t("books.title")}
@@ -341,6 +342,7 @@ export function Home() {
           {t("books.filterAnnouncement", { count: visibleBooks.length })}
         </p>
       )}
+      </div>
 
       {importError && (
         <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md rounded-lg border border-destructive/30 bg-background px-4 py-3 text-sm text-destructive shadow-lg">

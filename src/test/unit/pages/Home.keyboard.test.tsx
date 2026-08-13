@@ -222,10 +222,21 @@ describe("Home keyboard navigation", () => {
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
   });
 
-  it("marks page content as a container so layout responds to content width", () => {
+  it("separates the page scroll owner from the responsive query container", () => {
     const { container } = render(<Home />);
 
-    expect(container.firstElementChild).toHaveClass("@container");
+    const scrollOwner = container.firstElementChild;
+    expect(scrollOwner).toHaveClass(
+      "h-full",
+      "min-h-0",
+      "overflow-x-hidden",
+      "overflow-y-auto"
+    );
+    expect(scrollOwner).not.toHaveClass("@container", "overflow-auto");
+
+    const queryContainer = scrollOwner?.firstElementChild;
+    expect(queryContainer).toHaveClass("@container", "min-h-full");
+    expect(queryContainer).not.toHaveClass("overflow-auto", "overflow-y-auto");
   });
 
   it("lays the book grid out with container variants instead of viewport ones", () => {
