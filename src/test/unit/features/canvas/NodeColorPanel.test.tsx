@@ -70,26 +70,49 @@ function contrastRatio(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+async function openPanel() {
+  const user = userEvent.setup();
+  render(<NodeColorPanel />);
+  const trigger = screen.getByRole("button", { name: "canvas.nodeColors" });
+  trigger.focus();
+  await user.keyboard("{Enter}");
+  return user;
+}
+
+async function activateInOrder(
+  user: ReturnType<typeof userEvent.setup>,
+  actions: Array<{ button: HTMLElement; patch: Record<string, string> }>
+) {
+  for (const { button, patch } of actions) {
+    while (document.activeElement !== button) await user.tab();
+    await user.keyboard(" ");
+    expect(mocks.updateTextNode).toHaveBeenLastCalledWith("node", patch);
+  }
+}
+
 describe("NodeColorPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("supports every text and background color action from the keyboard", async () => {
-    const user = userEvent.setup();
-    render(<NodeColorPanel />);
+  it("applies every accessible color pair from the keyboard", async () => {
+    const user = await openPanel();
 
-    const trigger = screen.getByRole("button", { name: "canvas.nodeColors" });
-    trigger.focus();
-    await user.keyboard("{Enter}");
-
-    const actions = [
-      ...COLOR_PAIRS.map((pair) => ({
+    await activateInOrder(
+      user,
+      COLOR_PAIRS.map((pair) => ({
         button: screen.getByRole("button", {
           name: `canvas.colorPair: canvas.colorPairNames.${pair.id}`,
         }),
         patch: { textColor: pair.textColor, backgroundColor: pair.backgroundColor },
-      })),
+      }))
+    );
+  });
+
+  it("applies every text color from the keyboard and accepts a custom color", async () => {
+    const user = await openPanel();
+
+    await activateInOrder(user, [
       {
         button: screen.getByRole("button", { name: "canvas.automaticTextColor" }),
         patch: { textColor: "" },
@@ -98,6 +121,18 @@ describe("NodeColorPanel", () => {
         button: screen.getByRole("button", { name: `canvas.textColor: ${color}` }),
         patch: { textColor: color },
       })),
+    ]);
+
+    const customTextColor = screen.getByLabelText("canvas.customTextColor");
+    while (document.activeElement !== customTextColor) await user.tab();
+    fireEvent.change(customTextColor, { target: { value: "#123456" } });
+    expect(mocks.updateTextNode).toHaveBeenLastCalledWith("node", { textColor: "#123456" });
+  });
+
+  it("applies every background color from the keyboard and accepts a custom color", async () => {
+    const user = await openPanel();
+
+    await activateInOrder(user, [
       {
         button: screen.getByRole("button", { name: "canvas.transparentBackground" }),
         patch: { backgroundColor: "" },
@@ -106,18 +141,7 @@ describe("NodeColorPanel", () => {
         button: screen.getByRole("button", { name: `canvas.backgroundColor: ${color}` }),
         patch: { backgroundColor: color },
       })),
-    ];
-
-    for (const { button, patch } of actions) {
-      while (document.activeElement !== button) await user.tab();
-      await user.keyboard(" ");
-      expect(mocks.updateTextNode).toHaveBeenLastCalledWith("node", patch);
-    }
-
-    const customTextColor = screen.getByLabelText("canvas.customTextColor");
-    while (document.activeElement !== customTextColor) await user.tab();
-    fireEvent.change(customTextColor, { target: { value: "#123456" } });
-    expect(mocks.updateTextNode).toHaveBeenLastCalledWith("node", { textColor: "#123456" });
+    ]);
 
     const customBackgroundColor = screen.getByLabelText("canvas.customBackgroundColor");
     while (document.activeElement !== customBackgroundColor) await user.tab();
