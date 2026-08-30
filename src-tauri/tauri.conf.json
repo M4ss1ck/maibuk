@@ -50,6 +50,12 @@
   "plugins": {
     "sql": {
       "preload": ["sqlite:maibuk.db"]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["maibuk"]
+      },
+      "mobile": [{ "scheme": ["maibuk"], "appLink": false }]
     }
   }
 }

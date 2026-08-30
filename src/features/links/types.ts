@@ -1,11 +1,10 @@
 export type LinkTargetType = "note" | "book" | "chapter" | "heading" | "noteHeading";
 
-export interface ParsedLink {
-  targetType: LinkTargetType;
-  targetId: string; // noteId | bookId | chapterId
-  headingId?: string;
-}
+export type ParsedLink =
+  | { targetType: "note"; targetId: string }
+  | { targetType: "noteHeading"; targetId: string; headingId: string }
+  | { targetType: "book"; targetId: string }
+  | { targetType: "chapter"; targetId: string }
+  | { targetType: "heading"; targetId: string; headingId: string };
 
-export interface ExtractedLink extends ParsedLink {
-  label: string;
-}
+export type ExtractedLink = ParsedLink & { label: string };

@@ -87,11 +87,6 @@ export function NodeFormatBubble({
     [notes]
   );
 
-  const resolveBookIdForChapter = useCallback(async (chapterId: string) => {
-    const chapter = await getChapterForLinking(chapterId);
-    return chapter?.bookId;
-  }, []);
-
   useEffect(() => {
     void loadBooks();
   }, [loadBooks]);
@@ -201,7 +196,7 @@ export function NodeFormatBubble({
         internalTargets={internalTargets}
         loadInternalTargetChildren={loadInternalTargetChildren}
       />
-      <LinkClickHandler editor={editor} resolveBookIdForChapter={resolveBookIdForChapter} />
+      <LinkClickHandler editor={editor} />
     </>
   );
 }

@@ -1156,5 +1156,10 @@
       "close": "On close",
       "unknown": "Unknown"
     }
+  },
+  "deepLink": {
+    "resourceGone": "The linked resource no longer exists.",
+    "headingGone": "The linked heading no longer exists.",
+    "genericError": "Couldn’t open the link."
   }
 }

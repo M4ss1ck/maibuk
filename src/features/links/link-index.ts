@@ -32,7 +32,7 @@ export async function reindexSource(args: ReindexSourceArgs): Promise<void> {
         args.sourceBookId ?? null,
         link.targetType,
         link.targetId,
-        link.headingId ?? null,
+        "headingId" in link ? link.headingId : null,
         link.label,
         now,
       ]

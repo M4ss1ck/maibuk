@@ -18,6 +18,7 @@ import { PathTracker } from "@/components/PathTracker";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { ToastViewport } from "@/components/ui";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
+import { DeepLinkHandler } from "@/components/DeepLinkHandler";
 import { runDailyBackupOnce } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
@@ -56,29 +57,32 @@ function App() {
   }
 
   return (
-    <StartupRedirect>
-      <PathTracker />
-      <RouteAnnouncer />
-      <GlobalShortcuts />
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="notes" element={<NotesGallery />} />
-          <Route path="canvas" element={<CanvasGallery />} />
-          <Route path="ephemeral" element={<Ephemeral />} />
-          <Route path="metrics" element={<Metrics />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-        {/* Full-page editors without sidebar */}
-        <Route element={<FullPageScreen />}>
-          <Route path="notes/:noteId" element={<Notes />} />
-          <Route path="canvas/:canvasId" element={<Canvas />} />
-          <Route path="book/:bookId" element={<BookEditor />} />
-          <Route path="book/:bookId/cover" element={<CoverDesigner />} />
-        </Route>
-      </Routes>
-      <ToastViewport />
-    </StartupRedirect>
+    <>
+      <DeepLinkHandler />
+      <StartupRedirect>
+        <PathTracker />
+        <RouteAnnouncer />
+        <GlobalShortcuts />
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Home />} />
+            <Route path="notes" element={<NotesGallery />} />
+            <Route path="canvas" element={<CanvasGallery />} />
+            <Route path="ephemeral" element={<Ephemeral />} />
+            <Route path="metrics" element={<Metrics />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+          {/* Full-page editors without sidebar */}
+          <Route element={<FullPageScreen />}>
+            <Route path="notes/:noteId" element={<Notes />} />
+            <Route path="canvas/:canvasId" element={<Canvas />} />
+            <Route path="book/:bookId" element={<BookEditor />} />
+            <Route path="book/:bookId/cover" element={<CoverDesigner />} />
+          </Route>
+        </Routes>
+        <ToastViewport />
+      </StartupRedirect>
+    </>
   );
 }
 

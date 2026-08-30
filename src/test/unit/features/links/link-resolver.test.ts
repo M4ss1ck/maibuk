@@ -24,6 +24,13 @@ describe("resolveLink", () => {
       bookId: "b1",
       exists: true,
     });
+    expect(resolveLink("maibuk://chapter/c1", undefined, data)).toMatchObject({
+      type: "chapter",
+      id: "c1",
+      bookId: "b1",
+      exists: true,
+    });
+    expect(resolveLink("maibuk://note-heading/n1/h-1", undefined, data)).toBeNull(); // no such heading stored, but parses
   });
 
   it("falls back to label when URI id is gone", () => {
@@ -46,5 +53,28 @@ describe("resolveLink", () => {
   it("returns null when nothing matches", () => {
     expect(resolveLink("maibuk://note/missing", "Ghost", data)).toBeNull();
     expect(resolveLink("Nonexistent", undefined, data)).toBeNull();
+  });
+
+  it("rejects old staged book/chapter URIs as malformed (parse returns null)", () => {
+    // These were the staged shapes that broke stored links; they must now be rejected
+    expect(resolveLink("maibuk://book/other/chapter/c1", undefined, data)).toBeNull();
+    expect(resolveLink("maibuk://book/b1/chapter/c1", undefined, data)).toBeNull();
+    expect(resolveLink("maibuk://book/b1/chapter/c1/heading/h-1", undefined, data)).toBeNull();
+    expect(resolveLink("maibuk://note/n1/heading/h-1", undefined, data)).toBeNull();
+  });
+
+  it("resolves encoded heading ids", () => {
+    const tricky = "a/b c";
+    const encoded = encodeURIComponent(tricky);
+    // Add a heading with tricky id to data
+    const data2: ResolverData = {
+      ...data,
+      headings: [...data.headings, { id: tricky, chapterId: "c1", text: "Tricky" }],
+    };
+    expect(resolveLink(`maibuk://heading/c1/${encoded}`, undefined, data2)).toMatchObject({
+      type: "heading",
+      id: "c1",
+      headingId: tricky,
+    });
   });
 });

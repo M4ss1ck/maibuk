@@ -1,44 +1,20 @@
 // src/features/links/navigate.ts
-import { parseLinkUri } from "@/features/links/link-uri";
+import { resolveLinkTarget, type LinkToastKey } from "@/features/links/resolve-target";
 
 type NavigateFn = (to: string, options?: { state?: unknown }) => void;
 
-export interface NavigateOptions {
-  // Maps a chapterId to its bookId (needed because chapter/heading URIs omit bookId).
-  bookIdForChapter?: (chapterId: string) => string | undefined;
-}
-
-export function navigateToLinkTarget(
+export async function navigateToLinkTarget(
   href: string,
   navigate: NavigateFn,
-  options: NavigateOptions = {}
-): void {
-  const parsed = parseLinkUri(href);
-  if (!parsed) return;
-
-  switch (parsed.targetType) {
-    case "note":
-      navigate(`/notes/${parsed.targetId}`);
-      return;
-    case "noteHeading":
-      navigate(`/notes/${parsed.targetId}`, {
-        state: { scrollToHeadingId: parsed.headingId },
-      });
-      return;
-    case "book":
-      navigate(`/book/${parsed.targetId}`, { state: {} });
-      return;
-    case "chapter":
-    case "heading": {
-      const bookId = options.bookIdForChapter?.(parsed.targetId);
-      if (!bookId) return;
-      navigate(`/book/${bookId}`, {
-        state: {
-          openChapterId: parsed.targetId,
-          scrollToHeadingId: parsed.headingId,
-        },
-      });
-      return;
-    }
+  onToast?: (key: LinkToastKey) => void
+): Promise<void> {
+  const outcome = await resolveLinkTarget(href);
+  if (!outcome) return;
+  if (outcome.toastKey && onToast) {
+    onToast(outcome.toastKey);
+  }
+  if (outcome.to) {
+    const maybe = outcome as { state?: { scrollToHeadingId?: string; openChapterId?: string } };
+    navigate(outcome.to, maybe.state ? { state: maybe.state } : undefined);
   }
 }

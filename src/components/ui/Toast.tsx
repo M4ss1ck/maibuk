@@ -52,8 +52,10 @@ function isFocusModeActive(): boolean {
   return document.querySelector(".focus-mode") !== null;
 }
 
-function showToast(input: ToastInput): void {
-  if (isFocusModeActive()) return;
+type InternalToastInput = ToastInput & { bypassFocusMode?: boolean };
+
+function showToast(input: InternalToastInput): void {
+  if (!input.bypassFocusMode && isFocusModeActive()) return;
   const id = createToastId();
   const toast: Toast = {
     id,
@@ -72,9 +74,13 @@ function showToast(input: ToastInput): void {
 export const toast = {
   success: (message: string, options: Omit<ToastInput, "message" | "variant"> = {}) =>
     showToast({ message, variant: "success", ...options }),
-  error: (message: string, options: Omit<ToastInput, "message" | "variant"> = {}) =>
+  error: (message: string, options: Omit<InternalToastInput, "message" | "variant"> = {}) =>
     showToast({ message, variant: "error", ...options }),
 };
+
+export function forceToastError(message: string): void {
+  showToast({ message, variant: "error", bypassFocusMode: true });
+}
 
 export function ToastViewport() {
   const toasts = useToastStore((state) => state.toasts);

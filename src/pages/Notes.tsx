@@ -65,25 +65,34 @@ export function Notes() {
   // Open the note named in the route. Fall back to the gallery if it is gone.
   useEffect(() => {
     if (!noteId) return;
-    const scrollToHeadingId = (location.state as { scrollToHeadingId?: string } | null)
-      ?.scrollToHeadingId;
     void loadNote(noteId).then(() => {
       if (!useNoteStore.getState().currentNote) {
         navigate("/notes", { replace: true });
         return;
       }
       setLastNoteId(noteId);
-      if (!scrollToHeadingId) return;
+    });
+  }, [noteId, loadNote, navigate, setLastNoteId]);
+
+  // Scroll to heading on navigation - handles repeated warm note-heading
+  // activations while already on that note (location.key changes)
+  useEffect(() => {
+    if (!noteId) return;
+    // Wait for the note to actually be loaded, or the heading is not in the DOM yet
+    // (cold deep link mounts this effect before loadNote resolves).
+    if (currentNote?.id !== noteId) return;
+    const scrollToHeadingId = (location.state as { scrollToHeadingId?: string } | null)
+      ?.scrollToHeadingId;
+    if (!scrollToHeadingId) return;
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          document.getElementById(scrollToHeadingId)?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
+        document.getElementById(scrollToHeadingId)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
         });
       });
     });
-  }, [noteId, loadNote, navigate, setLastNoteId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.key, currentNote?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useShortcuts([
     {

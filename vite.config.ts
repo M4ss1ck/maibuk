@@ -148,6 +148,12 @@ export default defineConfig(() => ({
         "src/components/editor/SymbolSuggestion.tsx",
         "src/components/editor/extensions/SymbolAutocomplete.ts",
         "scripts/symbols-data/transform.ts",
+        // Deep-link / strict link-uri
+        "src/features/links/link-uri.ts",
+        "src/features/links/navigate.ts",
+        "src/features/deep-link/resolve.ts",
+        "src/features/links/resolve-target.ts",
+        "src/features/deep-link/bridge.ts",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

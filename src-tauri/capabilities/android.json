@@ -26,6 +26,7 @@
     "dialog:allow-save",
     "os:default",
     "process:allow-exit",
-    "clipboard-manager:allow-read-text"
+    "clipboard-manager:allow-read-text",
+    "deep-link:default"
   ]
 }

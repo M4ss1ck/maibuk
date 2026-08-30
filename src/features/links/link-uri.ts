@@ -1,4 +1,4 @@
-import type { ExtractedLink, LinkTargetType, ParsedLink } from "@/features/links/types";
+import type { ExtractedLink, ParsedLink } from "@/features/links/types";
 
 const PREFIX = "maibuk://";
 
@@ -9,36 +9,54 @@ export function isInternalLink(href: string | null | undefined): boolean {
 export function formatLinkUri(link: ParsedLink): string {
   switch (link.targetType) {
     case "note":
-      return `${PREFIX}note/${link.targetId}`;
+      return `${PREFIX}note/${encodeURIComponent(link.targetId)}`;
     case "book":
-      return `${PREFIX}book/${link.targetId}`;
+      return `${PREFIX}book/${encodeURIComponent(link.targetId)}`;
     case "chapter":
-      return `${PREFIX}chapter/${link.targetId}`;
+      return `${PREFIX}chapter/${encodeURIComponent(link.targetId)}`;
     case "heading":
-      return `${PREFIX}heading/${link.targetId}/${link.headingId}`;
+      return `${PREFIX}heading/${encodeURIComponent(link.targetId)}/${encodeURIComponent(link.headingId)}`;
     case "noteHeading":
-      return `${PREFIX}note-heading/${link.targetId}/${link.headingId}`;
+      return `${PREFIX}note-heading/${encodeURIComponent(link.targetId)}/${encodeURIComponent(link.headingId)}`;
   }
 }
 
 export function parseLinkUri(href: string | null | undefined): ParsedLink | null {
   if (!isInternalLink(href)) return null;
-  const parts = (href as string)
-    .slice(PREFIX.length)
-    .split("/")
-    .filter((p) => p.length > 0);
-  const kind = parts[0] as LinkTargetType;
-  if (kind === "note" || kind === "book" || kind === "chapter") {
-    if (parts.length !== 2) return null;
-    return { targetType: kind, targetId: parts[1] };
-  }
-  if (kind === "heading") {
-    if (parts.length !== 3) return null;
-    return { targetType: "heading", targetId: parts[1], headingId: parts[2] };
-  }
-  if (parts[0] === "note-heading") {
-    if (parts.length !== 3) return null;
-    return { targetType: "noteHeading", targetId: parts[1], headingId: parts[2] };
+  const raw = (href as string).slice(PREFIX.length);
+  // Strict: no empty, no query/fragment, no repeated or trailing slash
+  if (raw.length === 0) return null;
+  if (raw.includes("?") || raw.includes("#")) return null;
+  if (raw.startsWith("/") || raw.endsWith("/")) return null;
+  if (raw.includes("//")) return null;
+  const parts = raw.split("/");
+  if (parts.some((part) => part.length === 0)) return null;
+  try {
+    if (parts.length === 2 && parts[0] === "note") {
+      return { targetType: "note", targetId: decodeURIComponent(parts[1]) };
+    }
+    if (parts.length === 2 && parts[0] === "book") {
+      return { targetType: "book", targetId: decodeURIComponent(parts[1]) };
+    }
+    if (parts.length === 2 && parts[0] === "chapter") {
+      return { targetType: "chapter", targetId: decodeURIComponent(parts[1]) };
+    }
+    if (parts.length === 3 && parts[0] === "heading") {
+      return {
+        targetType: "heading",
+        targetId: decodeURIComponent(parts[1]),
+        headingId: decodeURIComponent(parts[2]),
+      };
+    }
+    if (parts.length === 3 && parts[0] === "note-heading") {
+      return {
+        targetType: "noteHeading",
+        targetId: decodeURIComponent(parts[1]),
+        headingId: decodeURIComponent(parts[2]),
+      };
+    }
+  } catch {
+    return null;
   }
   return null;
 }

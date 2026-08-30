@@ -79,7 +79,6 @@ interface EditorProps {
   suppressRestore?: boolean;
   internalTargets?: InternalTarget[];
   loadInternalTargetChildren?: InternalTargetChildrenLoader;
-  resolveBookIdForChapter?: (chapterId: string) => string | undefined | Promise<string | undefined>;
   extraExtensions?: Extensions;
   headerContent?: React.ReactNode;
   onEditorReady?: (editor: TiptapEditor | null) => void;
@@ -108,7 +107,6 @@ export function Editor({
   suppressRestore = false,
   internalTargets: providedInternalTargets = [],
   loadInternalTargetChildren: providedLoadInternalTargetChildren,
-  resolveBookIdForChapter,
   extraExtensions,
   headerContent,
   onEditorReady,
@@ -418,7 +416,7 @@ export function Editor({
         </div>
       </div>
 
-      <LinkClickHandler editor={editor} resolveBookIdForChapter={resolveBookIdForChapter} />
+      <LinkClickHandler editor={editor} />
       <ImageContextMenu editor={editor} />
 
       {/* Floating selection toolbar — hidden when the context menu is open */}
