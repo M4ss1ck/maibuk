@@ -178,12 +178,7 @@ describe("NoteEditor extensions", () => {
   });
 
   it("passes task-list and collapsible-heading extensions to the shared Editor", () => {
-    render(
-      <NoteEditor
-        note={buildNote({})}
-        onSave={vi.fn().mockResolvedValue(undefined)}
-      />
-    );
+    render(<NoteEditor note={buildNote({})} onSave={vi.fn().mockResolvedValue(undefined)} />);
 
     const props = mockEditor.mock.calls[0]?.[0] as {
       extraExtensions?: unknown[];

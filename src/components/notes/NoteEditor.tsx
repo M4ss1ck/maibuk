@@ -32,7 +32,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage, type Language } from "@/features/settings/types";
 import { IS_DESKTOP } from "@/lib/platform";
 import { useNavigate } from "react-router-dom";
-import { isInternalLink, parseLinkUri } from "@/features/links/link-uri";
+import { isInternalLink } from "@/features/links/link-uri";
 import { navigateToLinkTarget } from "@/features/links/navigate";
 import { Wikilink } from "@/components/editor/extensions";
 import { createWikilinkRenderer } from "@/components/editor/WikilinkSuggestion";
@@ -319,11 +319,6 @@ export function NoteEditor({
     [note, notes]
   );
 
-  const resolveBookIdForChapter = useCallback(async (chapterId: string) => {
-    const chapter = await getChapterForLinking(chapterId);
-    return chapter?.bookId;
-  }, []);
-
   const saveNow = useCallback(
     async (extra: Partial<UpdateNoteInput> = {}) => {
       setSaveStatus("saving");
@@ -429,16 +424,7 @@ export function NoteEditor({
         const href = target.getAttribute("href");
         if (href && isInternalLink(href)) {
           event.preventDefault();
-          const parsed = parseLinkUri(href);
-          if (parsed?.targetType === "chapter" || parsed?.targetType === "heading") {
-            void getChapterForLinking(parsed.targetId).then((chapter) => {
-              navigateToLinkTarget(href, navigate, {
-                bookIdForChapter: () => chapter?.bookId,
-              });
-            });
-            return;
-          }
-          navigateToLinkTarget(href, navigate);
+          void navigateToLinkTarget(href, navigate);
         } else {
           const broken = (event.target as HTMLElement).closest("a.wikilink-broken");
           if (broken instanceof HTMLAnchorElement) {
@@ -655,7 +641,6 @@ export function NoteEditor({
         internalTargets={internalTargets}
         onEditorReady={handleEditorReady}
         loadInternalTargetChildren={loadInternalTargetChildren}
-        resolveBookIdForChapter={resolveBookIdForChapter}
       />
       <NoteBacklinks
         noteId={note.id}

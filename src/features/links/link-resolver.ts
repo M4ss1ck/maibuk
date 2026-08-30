@@ -120,7 +120,12 @@ export function resolveLink(
 ): ResolvedTarget | null {
   const parsed = parseLinkUri(hrefOrTitle);
   if (parsed) {
-    const byId = resolveById(parsed.targetType, parsed.targetId, parsed.headingId, data);
+    const byId = resolveById(
+      parsed.targetType,
+      parsed.targetId,
+      "headingId" in parsed ? parsed.headingId : undefined,
+      data
+    );
     if (byId) return byId;
     if (label) return resolveByTitle(label, data);
     return null;

@@ -83,7 +83,9 @@ describe("LinkDialog internal target picker", () => {
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
     fireEvent.click(screen.getByText("Chapter One"));
 
-    expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Chapter One</a>');
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="maibuk://chapter/c1">Chapter One</a>'
+    );
   });
 
   it("inserts a maibuk heading link when a heading is chosen", () => {
@@ -105,7 +107,9 @@ describe("LinkDialog internal target picker", () => {
     );
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
     fireEvent.click(screen.getByText("A Section"));
-    expect(setLink).toHaveBeenCalledWith({ href: "maibuk://heading/c1/h-1" });
+    expect(setLink).toHaveBeenCalledWith({
+      href: "maibuk://heading/c1/h-1",
+    });
   });
 
   it("shows and inserts note targets without a book id", () => {
@@ -276,7 +280,9 @@ describe("LinkDialog internal target picker", () => {
     fireEvent.click(screen.getByText("editor.linkInThisBook"));
     fireEvent.click(screen.getByText("Chapter One"));
 
-    expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Chapter One</a>');
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="maibuk://chapter/c1">Chapter One</a>'
+    );
   });
 
   it("uses custom display text when provided in internal mode", () => {
@@ -304,7 +310,9 @@ describe("LinkDialog internal target picker", () => {
 
     fireEvent.click(screen.getByText("Chapter One"));
 
-    expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Custom Label</a>');
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="maibuk://chapter/c1">Custom Label</a>'
+    );
   });
 
   it("preserves an existing internal href when editing display text", () => {
@@ -335,7 +343,9 @@ describe("LinkDialog internal target picker", () => {
 
     fireEvent.click(screen.getByText("common.update"));
 
-    expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Custom Label</a>');
+    expect(insertContent).toHaveBeenCalledWith(
+      '<a href="maibuk://chapter/c1">Custom Label</a>'
+    );
   });
 
   it("preserves existing marks when editing internal link display text", () => {
@@ -403,7 +413,10 @@ describe("LinkDialog internal target picker", () => {
       marks: [
         { type: "bold", attrs: {} },
         { type: "textStyle", attrs: { fontSize: "20px" } },
-        { type: "link", attrs: { href: "maibuk://chapter/c1" } },
+        {
+          type: "link",
+          attrs: { href: "maibuk://chapter/c1" },
+        },
       ],
     });
   });

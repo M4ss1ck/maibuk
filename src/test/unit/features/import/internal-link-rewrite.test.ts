@@ -37,6 +37,16 @@ describe("rewriteImportedInternalLinks", () => {
     );
   });
 
+  it("encodes arbitrary heading ids", () => {
+    const input = chapters.map((c) =>
+      c.chapterId === "c1" ? { ...c, content: '<a href="chap2.xhtml#a/b c">go</a>' } : c
+    );
+    const result = rewriteImportedInternalLinks(input);
+    expect(result.find((c) => c.chapterId === "c1")?.content).toContain(
+      `href="maibuk://heading/c2/${encodeURIComponent("a/b c")}"`
+    );
+  });
+
   it("leaves external links and unknown targets untouched", () => {
     const input = chapters.map((c) =>
       c.chapterId === "c1"

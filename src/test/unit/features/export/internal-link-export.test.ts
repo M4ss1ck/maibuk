@@ -27,6 +27,16 @@ describe("rewriteInternalLinksForExport", () => {
     expect(result).toContain('href="text/chapter1.xhtml"');
   });
 
+  it("rewrites encoded heading ids", () => {
+    const tricky = encodeURIComponent("a/b c");
+    const html = `<a href="maibuk://heading/c2/${tricky}">sec</a>`;
+    const result = rewriteInternalLinksForExport(html, {
+      chapterHref: hrefByChapter,
+      firstChapterHref: "text/chapter1.xhtml",
+    });
+    expect(result).toContain('href="text/chapter2.xhtml#a/b c"');
+  });
+
   it("leaves unknown targets and external links untouched", () => {
     const html = '<a href="maibuk://chapter/missing">x</a><a href="https://e.com">e</a>';
     const result = rewriteInternalLinksForExport(html, {

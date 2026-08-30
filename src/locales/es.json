@@ -1156,5 +1156,10 @@
       "close": "Al cerrar",
       "unknown": "Desconocido"
     }
+  },
+  "deepLink": {
+    "resourceGone": "El recurso enlazado ya no existe.",
+    "headingGone": "El encabezado enlazado ya no existe.",
+    "genericError": "No se pudo abrir el enlace."
   }
 }
