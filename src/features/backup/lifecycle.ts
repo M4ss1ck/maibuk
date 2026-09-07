@@ -7,6 +7,8 @@ let dailyBackupStarted = false;
 let pendingDailyBackupTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingDailyBackupIdleHandle: number | null = null;
 
+const CLOSE_BACKUP_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
 function getRetention(): number {
   return useSettingsStore.getState().backupRetention;
 }
@@ -36,9 +38,13 @@ export async function createDailyBackup(): Promise<void> {
 
 // Best-effort backup when the mobile app is sent to the background. Uses the
 // same backup service as daily/pre-sync; failures are swallowed like daily.
+// Skips the dump when a "close" backup already exists within the last 6 hours.
 export async function runBackgroundBackup(): Promise<void> {
   try {
     const service = await createConfiguredBackupService();
+    if (await service.hasRecentBackup("close", CLOSE_BACKUP_MIN_INTERVAL_MS)) {
+      return;
+    }
     await service.createBackup("close");
     await service.pruneBackups(getRetention());
   } catch (error) {
