@@ -4,6 +4,7 @@ const mockCreateBackupAdapter = vi.hoisted(() => vi.fn());
 const mockCreateBackup = vi.hoisted(() => vi.fn());
 const mockPruneBackups = vi.hoisted(() => vi.fn());
 const mockHasBackupForToday = vi.hoisted(() => vi.fn());
+const mockHasRecentBackup = vi.hoisted(() => vi.fn());
 const mockWaitForDatabaseReady = vi.hoisted(() => vi.fn());
 const mockSettingsState = vi.hoisted(() => ({
   backupRetention: 12,
@@ -34,6 +35,7 @@ vi.mock("../../../../features/backup/backup-service", () => ({
     createBackup = mockCreateBackup;
     pruneBackups = mockPruneBackups;
     hasBackupForToday = mockHasBackupForToday;
+    hasRecentBackup = mockHasRecentBackup;
   },
 }));
 
@@ -52,6 +54,7 @@ describe("backup lifecycle", () => {
     mockCreateBackup.mockResolvedValue("backup.sql");
     mockPruneBackups.mockResolvedValue(undefined);
     mockHasBackupForToday.mockResolvedValue(false);
+    mockHasRecentBackup.mockResolvedValue(false);
   });
 
   it("creates a daily backup using persisted settings", async () => {
@@ -67,6 +70,26 @@ describe("backup lifecycle", () => {
     await runBackgroundBackup();
 
     expect(mockCreateBackupAdapter).toHaveBeenCalledWith("/tmp/backups");
+    expect(mockCreateBackup).toHaveBeenCalledWith("close");
+    expect(mockPruneBackups).toHaveBeenCalledWith(12);
+  });
+
+  it("skips background backup when a recent close backup exists", async () => {
+    mockHasRecentBackup.mockResolvedValue(true);
+
+    await runBackgroundBackup();
+
+    expect(mockHasRecentBackup).toHaveBeenCalledWith("close", 21600000);
+    expect(mockCreateBackup).not.toHaveBeenCalled();
+    expect(mockPruneBackups).not.toHaveBeenCalled();
+  });
+
+  it("creates background backup when no recent close backup exists", async () => {
+    mockHasRecentBackup.mockResolvedValue(false);
+
+    await runBackgroundBackup();
+
+    expect(mockHasRecentBackup).toHaveBeenCalledWith("close", 21600000);
     expect(mockCreateBackup).toHaveBeenCalledWith("close");
     expect(mockPruneBackups).toHaveBeenCalledWith(12);
   });

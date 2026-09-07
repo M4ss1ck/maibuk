@@ -292,6 +292,42 @@ describe("BackupService", () => {
     });
   });
 
+  describe("hasRecentBackup", () => {
+    const WITHIN_MS = 6 * 60 * 60 * 1000;
+
+    function buildCloseEntry(createdAt: Date): BackupEntry {
+      return {
+        filename: "maibuk-backup-close-2026-03-15T10-00-00.sql",
+        trigger: "close",
+        createdAt,
+        sizeBytes: 3,
+        checksum: "hash:sql",
+      };
+    }
+
+    it("returns true when a matching backup is inside the window", async () => {
+      mockAdapter.listBackups = vi.fn(async () => [buildCloseEntry(new Date())]);
+
+      await expect(service.hasRecentBackup("close", WITHIN_MS)).resolves.toBe(true);
+    });
+
+    it("returns false when only an older matching backup exists", async () => {
+      mockAdapter.listBackups = vi.fn(async () => [
+        buildCloseEntry(new Date(Date.now() - WITHIN_MS - 1000)),
+      ]);
+
+      await expect(service.hasRecentBackup("close", WITHIN_MS)).resolves.toBe(false);
+    });
+
+    it("returns false when a recent backup has a different trigger", async () => {
+      mockAdapter.listBackups = vi.fn(async () => [
+        { ...buildCloseEntry(new Date()), trigger: "daily" as const },
+      ]);
+
+      await expect(service.hasRecentBackup("close", WITHIN_MS)).resolves.toBe(false);
+    });
+  });
+
   describe("restoreBackup", () => {
     it("creates a pre-restore backup before reading the target backup", async () => {
       const calls: string[] = [];

@@ -177,6 +177,13 @@ export class BackupService {
     );
   }
 
+  /** Returns true if a backup with the given trigger was created within the last `withinMs`. */
+  async hasRecentBackup(trigger: BackupEntry["trigger"], withinMs: number): Promise<boolean> {
+    const list = await this.adapter.listBackups();
+    const cutoff = Date.now() - withinMs;
+    return list.some((entry) => entry.trigger === trigger && entry.createdAt.getTime() >= cutoff);
+  }
+
   async listBackups(): Promise<BackupEntry[]> {
     return this.adapter.listBackups();
   }
