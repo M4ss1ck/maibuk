@@ -262,8 +262,9 @@ describe("syncBook — timestamp fix", () => {
     expect(mockPushBookBlob).toHaveBeenCalled();
   });
 
-  it("throws if called while already syncing (concurrency guard)", async () => {
-    // Set up a sync that blocks indefinitely on onConflict
+  it("serializes concurrent syncs in FIFO order instead of rejecting", async () => {
+    // First sync blocks on the conflict dialog; the second caller queues
+    // behind it and runs only after the first settles.
     let resolveConflict: ((choice: "push" | "pull" | "cancel") => void) | null = null;
     const blockedConflict = () =>
       new Promise<"push" | "pull" | "cancel">((resolve) => {
@@ -276,6 +277,7 @@ describe("syncBook — timestamp fix", () => {
     });
     mockListRemoteBooks.mockResolvedValue([
       { bookId: "book-1", checksum: "different", updatedAt: 5000 },
+      { bookId: "book-2", checksum: "different", updatedAt: 5000 },
     ]);
 
     // Start a sync that will block on the conflict dialog
@@ -284,13 +286,25 @@ describe("syncBook — timestamp fix", () => {
     // Allow the first sync to reach the onConflict call
     await new Promise((r) => setTimeout(r, 10));
 
-    // Second sync should throw immediately
-    await expect(syncBook("book-2", "pass", vi.fn())).rejects.toThrow("already in progress");
+    // Second sync queues instead of throwing
+    const secondOnConflict = vi.fn().mockResolvedValue("cancel");
+    const secondSync = syncBook("book-2", "pass", secondOnConflict);
+
+    // The queued operation waits its turn: only the first pre-sync backup
+    // ran while the first sync is still blocked.
+    await new Promise((r) => setTimeout(r, 10));
+    expect(mockBackupServiceCreateBackup).toHaveBeenCalledTimes(1);
 
     if (resolveConflict) {
       (resolveConflict as (choice: "push" | "pull" | "cancel") => void)("cancel");
     }
-    await expect(firstSync).resolves.toEqual({ outcome: "cancelled", action: "cancelled" });
+    const [firstResult, secondResult] = await Promise.all([firstSync, secondSync]);
+    expect(firstResult).toEqual({ outcome: "cancelled", action: "cancelled" });
+    expect(secondResult).toEqual({ outcome: "cancelled", action: "cancelled" });
+    // Each queued operation gets its own pre-sync backup and its own
+    // conflict callback delivery.
+    expect(mockBackupServiceCreateBackup).toHaveBeenCalledTimes(2);
+    expect(secondOnConflict).toHaveBeenCalled();
   });
 
   it("rethrows a spec-friendly error when the pre-sync backup fails", async () => {

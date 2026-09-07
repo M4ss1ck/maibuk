@@ -1,5 +1,6 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { Cloud, CloudOff, CloudUpload, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
 import { useSyncStore } from "@/features/sync/store";
 import { useBookStore } from "@/features/books/store";
@@ -29,14 +30,13 @@ export function SyncStatusButton() {
     activeConflict,
     resolveConflict,
   } = useSyncFlow();
-  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const handleClick = () => {
-    if (authStatus === "logged-out") {
+  const handleOpenChange = (isOpen: boolean) => {
+    if (isOpen && authStatus === "logged-out") {
       setShowAuthDialog(true);
-    } else {
-      setShowSyncPanel((prev) => !prev);
+      return;
     }
+    setShowSyncPanel(isOpen);
   };
 
   const renderIcon = () => {
@@ -86,29 +86,32 @@ export function SyncStatusButton() {
                       : "text-muted-foreground";
 
   return (
-    <div className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={handleClick}
-        className={`p-2 rounded transition-colors hover:bg-muted ${statusClass}`}
-        aria-label={t("sync.syncStatus")}
-      >
-        {renderIcon()}
-      </button>
+    <>
+      <DialogTrigger isOpen={showSyncPanel} onOpenChange={handleOpenChange}>
+        <Button
+          aria-label={t("sync.syncStatus")}
+          className={`p-2 rounded transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${statusClass}`}
+        >
+          {renderIcon()}
+        </Button>
 
-      {showSyncPanel && (
-        <SyncPanel
-          triggerRef={buttonRef}
-          onClose={() => setShowSyncPanel(false)}
-          onSync={async (options?: Partial<SyncOptions>) => {
-            const didSync = await syncAllWithSessionPassphrase(options);
-            if (!didSync) {
-              setShowSyncPanel(false);
-            }
-          }}
-        />
-      )}
+        <Popover
+          placement="bottom end"
+          className="z-50 mt-1 max-h-[calc(100dvh-1rem)] w-96 max-w-[calc(100vw-1rem)] overflow-auto rounded-xl border border-border bg-background shadow-xl focus:outline-none"
+        >
+          <Dialog aria-label={t("sync.syncStatus")} className="outline-none">
+            <SyncPanel
+              onClose={() => setShowSyncPanel(false)}
+              onSync={async (options?: Partial<SyncOptions>) => {
+                const didSync = await syncAllWithSessionPassphrase(options);
+                if (!didSync) {
+                  setShowSyncPanel(false);
+                }
+              }}
+            />
+          </Dialog>
+        </Popover>
+      </DialogTrigger>
 
       <AuthDialog isOpen={showAuthDialog} onClose={() => setShowAuthDialog(false)} />
 
@@ -128,6 +131,6 @@ export function SyncStatusButton() {
       />
 
       {activeConflict && <ConflictDialog conflict={activeConflict} onResolve={resolveConflict} />}
-    </div>
+    </>
   );
 }

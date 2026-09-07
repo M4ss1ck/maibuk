@@ -81,6 +81,7 @@ export default defineConfig(() => ({
         "src/features/sync/sync-engine.ts",
         "src/features/sync/client.ts",
         "src/features/sync/tombstones.ts",
+        "src/lib/async-queue.ts",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
         "src/components/editor/paste-cleanup.ts",
@@ -125,6 +126,10 @@ export default defineConfig(() => ({
         // Phase 11: Persistent accordion state
         "src/features/notes/store.ts",
         "src/features/sync/serializer.ts",
+        "src/features/sync/sync-codec.ts",
+        "src/features/sync/sync-codec-handlers.ts",
+        "src/lib/db/sql-export.ts",
+        "src/lib/db/sql-export-format.ts",
         "src/components/editor/extensions/CollapsibleHeading.ts",
         // Phase 12: Settings ASCII easter egg
         "src/components/settings/asciiBanner.helpers.ts",

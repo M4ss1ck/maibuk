@@ -1,11 +1,17 @@
 import { getDatabase } from "@/lib/db";
-import { encrypt, decrypt, computeChecksum, isSyncCryptoError } from "@/features/sync/crypto";
+import { isSyncCryptoError } from "@/features/sync/crypto";
+import {
+  parseJsonAsync,
+  computeChecksumAsync,
+  normalizeNoteSnapshotAsync,
+  encryptToBuffer,
+  decryptBufferToText,
+} from "@/features/sync/sync-codec";
 import {
   serializeBook,
   applyBookSnapshot,
   serializeNote,
   applyNoteSnapshot,
-  normalizeNoteSnapshotForSync,
 } from "@/features/sync/serializer";
 import {
   pushBookBlob,
@@ -48,8 +54,14 @@ import {
   markTombstonePushed,
 } from "@/features/sync/tombstones";
 import { ensureGenericCollectionMigration } from "@/features/sync/migration-reset";
+import { createAsyncQueue } from "@/lib/async-queue";
 
-let isSyncing = false;
+// FIFO serialization of all sync entrypoints (syncAllBooks, syncBook,
+// syncSingleNote). Concurrent callers queue instead of failing: each queued
+// operation runs to completion with its own passphrase, options, log and
+// conflict callback, including its own pre-sync backup. The chain always
+// advances, so a rejection or cancellation never blocks later requests.
+let syncQueue = createAsyncQueue();
 const PRE_SYNC_BACKUP_ERROR =
   "Could not create a safety backup. Sync aborted. Free up disk space and try again.";
 const DEFAULT_SYNC_OPTIONS: SyncOptions = {
@@ -59,18 +71,18 @@ const DEFAULT_SYNC_OPTIONS: SyncOptions = {
 };
 
 async function decryptSnapshot(data: Uint8Array, passphrase: string): Promise<BookSnapshot> {
-  const decrypted = await decrypt(data, passphrase);
+  const decrypted = await decryptBufferToText(data, passphrase);
   try {
-    return JSON.parse(decrypted) as BookSnapshot;
+    return await parseJsonAsync<BookSnapshot>(decrypted);
   } catch {
     throw new Error("Synced payload is invalid or corrupted");
   }
 }
 
 async function decryptNoteSnapshot(data: Uint8Array, passphrase: string): Promise<NoteSnapshot> {
-  const decrypted = await decrypt(data, passphrase);
+  const decrypted = await decryptBufferToText(data, passphrase);
   try {
-    return JSON.parse(decrypted) as NoteSnapshot;
+    return await parseJsonAsync<NoteSnapshot>(decrypted);
   } catch {
     throw new Error("Synced payload is invalid or corrupted");
   }
@@ -82,17 +94,13 @@ function assertOnline(): void {
   }
 }
 
-function toBlobPart(data: Uint8Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(data.byteLength);
-  new Uint8Array(buffer).set(data);
-  return buffer;
-}
-
 function resolveSyncOptions(options?: Partial<SyncOptions>): SyncOptions {
   return {
     ...DEFAULT_SYNC_OPTIONS,
     ...options,
-    confirmedDeletionIds: options?.confirmedDeletionIds ?? [],
+    // Copy at enqueue time so a caller mutating its array afterwards cannot
+    // affect the queued operation.
+    confirmedDeletionIds: [...(options?.confirmedDeletionIds ?? [])],
   };
 }
 
@@ -168,12 +176,6 @@ async function getNoteTitle(noteId: string): Promise<string> {
     noteId,
   ]);
   return rows[0]?.title ?? noteId;
-}
-
-function assertNotSyncing(): void {
-  if (isSyncing) {
-    throw new Error("A sync operation is already in progress");
-  }
 }
 
 async function createPreSyncBackupOrThrow(): Promise<void> {
@@ -284,7 +286,7 @@ async function syncBookInBatch(
 
   const json = await serializeBook(bookId);
   const bookTitle = await getBookTitle(bookId);
-  const localChecksum = await computeChecksum(json);
+  const localChecksum = await computeChecksumAsync(json);
   // Reuse the timestamp from syncAllBooks' GROUP BY query when available,
   // avoiding a redundant per-book MAX query.
   const localUpdatedAt = precomputedLocalUpdatedAt ?? (await getLocalUpdatedAt(bookId));
@@ -303,8 +305,8 @@ async function syncBookInBatch(
       });
       return "skipped";
     }
-    const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    const encrypted = await encryptToBuffer(json, passphrase);
+    await pushBookBlob(bookId, new Blob([encrypted]), localChecksum);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -344,8 +346,8 @@ async function syncBookInBatch(
   }
 
   if (options.direction === "push") {
-    const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
+    const encrypted = await encryptToBuffer(json, passphrase);
+    await pushBookBlob(bookId, new Blob([encrypted]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -359,8 +361,8 @@ async function syncBookInBatch(
   // Checksums differ — compare timestamps
   if (localUpdatedAt > remote.updatedAt) {
     // Local is strictly newer — push
-    const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
+    const encrypted = await encryptToBuffer(json, passphrase);
+    await pushBookBlob(bookId, new Blob([encrypted]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -394,8 +396,8 @@ async function syncBookInBatch(
   }
 
   if (choice === "push") {
-    const encrypted = await encrypt(json, passphrase);
-    await pushBookBlob(bookId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
+    const encrypted = await encryptToBuffer(json, passphrase);
+    await pushBookBlob(bookId, new Blob([encrypted]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -436,7 +438,7 @@ async function syncNoteInBatch(
 
   const json = await serializeNote(noteId);
   const noteTitle = await getNoteTitle(noteId);
-  const localChecksum = await computeChecksum(normalizeNoteSnapshotForSync(json));
+  const localChecksum = await computeChecksumAsync(await normalizeNoteSnapshotAsync(json));
 
   const remote = remoteNotes.find((r) => r.noteId === noteId);
 
@@ -451,8 +453,8 @@ async function syncNoteInBatch(
       });
       return "skipped";
     }
-    const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum);
+    const encrypted = await encryptToBuffer(json, passphrase);
+    await pushNoteBlob(noteId, new Blob([encrypted]), localChecksum);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -491,8 +493,8 @@ async function syncNoteInBatch(
   }
 
   if (options.direction === "push") {
-    const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
+    const encrypted = await encryptToBuffer(json, passphrase);
+    await pushNoteBlob(noteId, new Blob([encrypted]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -505,8 +507,8 @@ async function syncNoteInBatch(
 
   // Checksums differ — compare timestamps
   if (localUpdatedAt > remote.updatedAt) {
-    const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
+    const encrypted = await encryptToBuffer(json, passphrase);
+    await pushNoteBlob(noteId, new Blob([encrypted]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -541,8 +543,8 @@ async function syncNoteInBatch(
   }
 
   if (choice === "push") {
-    const encrypted = await encrypt(json, passphrase);
-    await pushNoteBlob(noteId, new Blob([toBlobPart(encrypted)]), localChecksum, remote.remoteId);
+    const encrypted = await encryptToBuffer(json, passphrase);
+    await pushNoteBlob(noteId, new Blob([encrypted]), localChecksum, remote.remoteId);
     emitLog(options, {
       level: "success",
       event: "push",
@@ -605,7 +607,7 @@ async function syncVersions(
       if (remoteIds.has(local.id)) continue;
 
       try {
-        const encrypted = await encrypt(local.snapshot, passphrase);
+        const encrypted = await encryptToBuffer(local.snapshot, passphrase);
         await pushVersionBlob(
           {
             versionId: local.id,
@@ -616,7 +618,7 @@ async function syncVersions(
             createdAt: local.created_at,
             wordCount: local.word_count,
           },
-          new Blob([toBlobPart(new Uint8Array(encrypted))])
+          new Blob([encrypted])
         );
 
         const now = Math.floor(Date.now() / 1000);
@@ -642,7 +644,7 @@ async function syncVersions(
         const blob = await pullVersionBlob(remote.remoteId);
         if (!blob) continue;
 
-        const decrypted = await decrypt(blob.data, passphrase);
+        const decrypted = await decryptBufferToText(blob.data, passphrase);
 
         await db.execute(
           `INSERT OR IGNORE INTO book_versions
@@ -770,40 +772,45 @@ export async function syncBook(
   onConflict: ConflictResolver,
   optionsInput?: Partial<SyncOptions>
 ): Promise<SingleSyncResult> {
-  assertNotSyncing();
-  isSyncing = true;
+  // Normalized here — at enqueue time — so each queued caller keeps its own
+  // options snapshot (including its own confirmedDeletionIds copy).
   const options = resolveSyncOptions({ scope: "books", ...optionsInput });
-  try {
-    await ensureGenericCollectionMigration();
-    await ensureAuth();
-    await createPreSyncBackupOrThrow();
-    emitLog(options, {
-      level: "success",
-      event: "backup",
-      message: "Created pre-sync safety backup",
-    });
+  return syncQueue.enqueue(() => syncBookInternal(bookId, passphrase, onConflict, options));
+}
 
-    const deletionResult = await processPendingDeletions(["book"], options);
-    if (deletionResult.pendingDeletions.length > 0) {
-      return {
-        outcome: "partial",
-        action: "skipped",
-        pendingDeletions: deletionResult.pendingDeletions,
-      };
-    }
+async function syncBookInternal(
+  bookId: string,
+  passphrase: string,
+  onConflict: ConflictResolver,
+  options: SyncOptions
+): Promise<SingleSyncResult> {
+  await ensureGenericCollectionMigration();
+  await ensureAuth();
+  await createPreSyncBackupOrThrow();
+  emitLog(options, {
+    level: "success",
+    event: "backup",
+    message: "Created pre-sync safety backup",
+  });
 
-    const action = await syncBookInBatch(bookId, passphrase, onConflict, options);
-    if (action !== "cancelled") {
-      await syncVersions(bookId, passphrase, options);
-    }
-    await syncMetrics(passphrase, options);
+  const deletionResult = await processPendingDeletions(["book"], options);
+  if (deletionResult.pendingDeletions.length > 0) {
     return {
-      outcome: action === "cancelled" ? "cancelled" : "success",
-      action,
+      outcome: "partial",
+      action: "skipped",
+      pendingDeletions: deletionResult.pendingDeletions,
     };
-  } finally {
-    isSyncing = false;
   }
+
+  const action = await syncBookInBatch(bookId, passphrase, onConflict, options);
+  if (action !== "cancelled") {
+    await syncVersions(bookId, passphrase, options);
+  }
+  await syncMetrics(passphrase, options);
+  return {
+    outcome: action === "cancelled" ? "cancelled" : "success",
+    action,
+  };
 }
 
 async function getNoteUpdatedAt(noteId: string): Promise<number> {
@@ -820,37 +827,42 @@ export async function syncSingleNote(
   onConflict: ConflictResolver,
   optionsInput?: Partial<SyncOptions>
 ): Promise<SingleSyncResult> {
-  assertNotSyncing();
-  isSyncing = true;
+  // Normalized here — at enqueue time — so each queued caller keeps its own
+  // options snapshot (including its own confirmedDeletionIds copy).
   const options = resolveSyncOptions({ scope: "notes", ...optionsInput });
-  try {
-    await ensureGenericCollectionMigration();
-    await ensureAuth();
-    await createPreSyncBackupOrThrow();
-    emitLog(options, {
-      level: "success",
-      event: "backup",
-      message: "Created pre-sync safety backup",
-    });
+  return syncQueue.enqueue(() => syncSingleNoteInternal(noteId, passphrase, onConflict, options));
+}
 
-    const remoteNotes = await listRemoteNotes();
-    const localUpdatedAt = await getNoteUpdatedAt(noteId);
-    const action = await syncNoteInBatch(
-      noteId,
-      passphrase,
-      onConflict,
-      options,
-      remoteNotes,
-      localUpdatedAt
-    );
-    await syncMetrics(passphrase, options);
-    return {
-      outcome: action === "cancelled" ? "cancelled" : "success",
-      action,
-    };
-  } finally {
-    isSyncing = false;
-  }
+async function syncSingleNoteInternal(
+  noteId: string,
+  passphrase: string,
+  onConflict: ConflictResolver,
+  options: SyncOptions
+): Promise<SingleSyncResult> {
+  await ensureGenericCollectionMigration();
+  await ensureAuth();
+  await createPreSyncBackupOrThrow();
+  emitLog(options, {
+    level: "success",
+    event: "backup",
+    message: "Created pre-sync safety backup",
+  });
+
+  const remoteNotes = await listRemoteNotes();
+  const localUpdatedAt = await getNoteUpdatedAt(noteId);
+  const action = await syncNoteInBatch(
+    noteId,
+    passphrase,
+    onConflict,
+    options,
+    remoteNotes,
+    localUpdatedAt
+  );
+  await syncMetrics(passphrase, options);
+  return {
+    outcome: action === "cancelled" ? "cancelled" : "success",
+    action,
+  };
 }
 
 interface BookTimestampRow {
@@ -863,14 +875,21 @@ export async function syncAllBooks(
   onConflict: ConflictResolver,
   optionsInput?: Partial<SyncOptions>
 ): Promise<BatchSyncResult> {
-  assertNotSyncing();
-  isSyncing = true;
+  // Normalized here — at enqueue time — so each queued caller keeps its own
+  // options snapshot (including its own confirmedDeletionIds copy).
   const options = resolveSyncOptions(optionsInput);
-  try {
-    await ensureGenericCollectionMigration();
-    await ensureAuth();
-    assertOnline();
-    const actions: SyncAction[] = [];
+  return syncQueue.enqueue(() => syncAllBooksInternal(passphrase, onConflict, options));
+}
+
+async function syncAllBooksInternal(
+  passphrase: string,
+  onConflict: ConflictResolver,
+  options: SyncOptions
+): Promise<BatchSyncResult> {
+  await ensureGenericCollectionMigration();
+  await ensureAuth();
+  assertOnline();
+  const actions: SyncAction[] = [];
 
     await createPreSyncBackupOrThrow();
     emitLog(options, {
@@ -980,11 +999,9 @@ export async function syncAllBooks(
     }
 
     return { outcome: "success", actions };
-  } finally {
-    isSyncing = false;
-  }
 }
 
 export function resetSyncEngineForTests(): void {
-  isSyncing = false;
+  // Drop any settled chain state so tests start from a clean queue.
+  syncQueue = createAsyncQueue();
 }

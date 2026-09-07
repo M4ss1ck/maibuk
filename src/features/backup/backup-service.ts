@@ -13,6 +13,22 @@ import { useNoteStore } from "@/features/notes/store";
 import { useCanvasStore } from "@/features/canvas/store";
 import { parseCanvasDoc, serializeCanvasDoc } from "@/features/canvas/serialization";
 import { generateSqlDump } from "@/features/backup/generate-sql-dump";
+import { dumpHasDataAsync } from "@/features/sync/sync-codec";
+import { createAsyncQueue } from "@/lib/async-queue";
+
+// Serializes expensive backup work (create/restore) and concurrent
+// delete/prune writes across ALL BackupService instances. Reads
+// (list/read/hasBackupForToday) stay unqueued. Queued bodies only touch the
+// adapter and private unlocked helpers — they never call another queued
+// method — so nested acquisition (and deadlock) is impossible. In
+// particular, restoreBackup's pre-backup → read → verify → write sequence
+// runs inside a single queue slot and cannot interleave with a concurrent
+// create or delete.
+let backupQueue = createAsyncQueue();
+
+export function resetBackupQueueForTests(): void {
+  backupQueue = createAsyncQueue();
+}
 
 function buildFilename(trigger: BackupEntry["trigger"]): string {
   const now = new Date();
@@ -111,12 +127,6 @@ function normalizeCanvasRestoreStatement(statement: string): string {
   return `${prefix}${rawColumns ?? ""}VALUES (${values.join(", ")})`;
 }
 
-const INSERT_PATTERN = /^INSERT\s/i;
-
-function dumpHasData(sql: string): boolean {
-  return parseSqlStatements(sql).some((s) => INSERT_PATTERN.test(s.trim()));
-}
-
 async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Promise<void> {
   // Delete existing data first, then insert from backup.
   // Each statement is auto-committed. If an INSERT fails, the database
@@ -148,11 +158,13 @@ export class BackupService {
   }
 
   async createBackup(trigger: BackupEntry["trigger"]): Promise<string> {
-    const sql = await generateSqlDump();
-    if (!dumpHasData(sql)) {
-      throw new Error("BACKUP_EMPTY");
-    }
-    return this.saveBackupSnapshot(trigger, sql);
+    return backupQueue.enqueue(async () => {
+      const sql = await generateSqlDump();
+      if (!(await dumpHasDataAsync(sql))) {
+        throw new Error("BACKUP_EMPTY");
+      }
+      return this.saveBackupSnapshot(trigger, sql);
+    });
   }
 
   /** Returns true if a backup with the given trigger already exists for today (UTC date). */
@@ -178,12 +190,16 @@ export class BackupService {
   }
 
   async deleteBackup(filename: string): Promise<void> {
-    return this.adapter.deleteBackup(filename);
+    return backupQueue.enqueue(() => this.adapter.deleteBackup(filename));
   }
 
   async restoreBackup(filename: string): Promise<void> {
+    return backupQueue.enqueue(() => this.restoreBackupInner(filename));
+  }
+
+  private async restoreBackupInner(filename: string): Promise<void> {
     const currentSql = await generateSqlDump();
-    if (dumpHasData(currentSql)) {
+    if (await dumpHasDataAsync(currentSql)) {
       await this.saveBackupSnapshot("pre-restore", currentSql);
     }
 
@@ -235,15 +251,21 @@ export class BackupService {
   }
 
   async deleteByTrigger(trigger: BackupEntry["trigger"]): Promise<void> {
-    const list = await this.adapter.listBackups();
-    for (const entry of list) {
-      if (entry.trigger === trigger) {
-        await this.adapter.deleteBackup(entry.filename);
+    return backupQueue.enqueue(async () => {
+      const list = await this.adapter.listBackups();
+      for (const entry of list) {
+        if (entry.trigger === trigger) {
+          await this.adapter.deleteBackup(entry.filename);
+        }
       }
-    }
+    });
   }
 
   async pruneBackups(maxCount: number): Promise<void> {
+    return backupQueue.enqueue(() => this.pruneBackupsInner(maxCount));
+  }
+
+  private async pruneBackupsInner(maxCount: number): Promise<void> {
     const list = await this.adapter.listBackups();
     if (list.length <= maxCount) return;
 

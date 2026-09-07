@@ -2,6 +2,8 @@ import { getDatabase } from "@/lib/db";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import { useNoteStore } from "@/features/notes/store";
+import { normalizeNoteSnapshotJson } from "@/features/sync/sync-codec-handlers";
+import { stringifySnapshotAsync } from "@/features/sync/sync-codec";
 import type { BookSnapshot, NoteSnapshot } from "@/features/sync/types";
 
 interface BookRow {
@@ -90,7 +92,7 @@ export async function serializeBook(bookId: string): Promise<string> {
     })),
   };
 
-  return JSON.stringify(snapshot);
+  return stringifySnapshotAsync(snapshot);
 }
 
 export async function applyBookSnapshot(snapshot: BookSnapshot): Promise<void> {
@@ -217,24 +219,11 @@ export async function serializeNote(noteId: string): Promise<string> {
     },
   };
 
-  return JSON.stringify(snapshot);
+  return stringifySnapshotAsync(snapshot);
 }
 
 export function normalizeNoteSnapshotForSync(json: string): string {
-  const snapshot = JSON.parse(json) as NoteSnapshot;
-  // contentUpdatedAt is derived from content (already in the checksum) and is
-  // absent from snapshots pushed by older clients. Drop the key entirely —
-  // rather than nulling it — so the checksum byte-matches a legacy snapshot and
-  // unchanged notes don't hit the conflict path on the first sync after upgrade.
-  const { contentUpdatedAt: _contentUpdatedAt, ...note } = snapshot.note;
-  return JSON.stringify({
-    ...snapshot,
-    note: {
-      language: "en",
-      ...note,
-      collapsedHeadings: null,
-    },
-  });
+  return normalizeNoteSnapshotJson(json);
 }
 
 export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {

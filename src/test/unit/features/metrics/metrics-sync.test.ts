@@ -34,10 +34,18 @@ vi.mock("../../../../features/sync/client", () => ({
   pushMetricsEventRow: mockPushEvent,
   pushMetricsTombstoneRow: mockPushTombstone,
 }));
-vi.mock("../../../../features/sync/crypto", () => ({
-  encrypt: mockEncrypt,
-  decrypt: mockDecrypt,
-}));
+vi.mock("../../../../features/sync/crypto", async (importOriginal) => {
+  // The codec fallback reaches the real base64 helpers through
+  // sync-codec-handlers' re-export — pass them through so mocked encrypt /
+  // decrypt round-trips keep working.
+  const actual = await importOriginal<typeof import("@/features/sync/crypto")>();
+  return {
+    encrypt: mockEncrypt,
+    decrypt: mockDecrypt,
+    uint8ArrayToBase64: actual.uint8ArrayToBase64,
+    base64ToUint8Array: actual.base64ToUint8Array,
+  };
+});
 
 let testDb: DatabaseAdapter;
 

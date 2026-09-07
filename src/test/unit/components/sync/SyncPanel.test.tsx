@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncPanel } from "@/components/sync/SyncPanel";
 import { useSyncStore } from "@/features/sync/store";
@@ -32,12 +31,26 @@ describe("SyncPanel", () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
 
-    render(<SyncPanel triggerRef={createRef()} onClose={onClose} onSync={vi.fn()} />);
+    render(<SyncPanel onClose={onClose} onSync={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /sync.scopeAll/ }));
     await user.click(screen.getByRole("option", { name: "sync.scopeNotes" }));
 
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /sync.scopeNotes/ })).toBeInTheDocument();
+  });
+
+  it("logs out and closes the panel", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const logout = vi.fn();
+    useSyncStore.setState({ logout });
+
+    render(<SyncPanel onClose={onClose} onSync={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "sync.logout" }));
+
+    expect(logout).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
   });
 });
