@@ -1,9 +1,11 @@
-import { createBackup as createBackupAdapter } from "@/lib/platform";
+import { createBackup as createBackupAdapter, IS_ANDROID } from "@/lib/platform";
 import { waitForDatabaseReady } from "@/lib/db";
 import { useSettingsStore } from "@/features/settings/store";
 import { BackupService } from "@/features/backup/backup-service";
 
 let dailyBackupStarted = false;
+let pendingDailyBackupTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingDailyBackupIdleHandle: number | null = null;
 
 function getRetention(): number {
   return useSettingsStore.getState().backupRetention;
@@ -56,4 +58,44 @@ export async function runDailyBackupOnce(): Promise<void> {
 
 export function resetBackupLifecycleForTests(): void {
   dailyBackupStarted = false;
+  try {
+    if (pendingDailyBackupTimer !== null) {
+      clearTimeout(pendingDailyBackupTimer);
+      pendingDailyBackupTimer = null;
+    }
+    if (pendingDailyBackupIdleHandle !== null) {
+      if (typeof cancelIdleCallback === "function") {
+        cancelIdleCallback(pendingDailyBackupIdleHandle);
+      }
+      pendingDailyBackupIdleHandle = null;
+    }
+  } catch {
+    pendingDailyBackupTimer = null;
+    pendingDailyBackupIdleHandle = null;
+  }
+}
+
+/**
+ * Schedule the daily backup without blocking app startup on Android.
+ * On other platforms it starts immediately, exactly as before.
+ */
+export function scheduleDailyBackup(): void {
+  try {
+    if (!IS_ANDROID) {
+      void runDailyBackupOnce();
+      return;
+    }
+    const run = (): void => {
+      pendingDailyBackupTimer = null;
+      pendingDailyBackupIdleHandle = null;
+      void runDailyBackupOnce();
+    };
+    if (typeof requestIdleCallback === "function") {
+      pendingDailyBackupIdleHandle = requestIdleCallback(run, { timeout: 30000 });
+    } else {
+      pendingDailyBackupTimer = setTimeout(run, 10000);
+    }
+  } catch {
+    // Never throw into the startup path.
+  }
 }

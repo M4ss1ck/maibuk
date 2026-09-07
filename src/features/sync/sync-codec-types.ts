@@ -11,7 +11,7 @@ export type CodecRequest =
   | { id: number; op: "encryptToBase64"; plaintext: string; passphrase: string }
   | { id: number; op: "decryptBase64"; base64: string; passphrase: string }
   | { id: number; op: "checksum"; text: string }
-  | { id: number; op: "dumpHasData"; sql: string };
+  | { id: number; op: "dumpHasData"; buffer: ArrayBuffer };
 
 // Worker -> Main thread. Successful binary results are transferred back as
 // owned ArrayBuffers; failures carry the error name/message (plus the

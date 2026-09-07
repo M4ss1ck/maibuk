@@ -70,7 +70,8 @@ async function handle(msg: CodecRequest): Promise<void> {
       return;
     }
     case "dumpHasData": {
-      respond({ id, ok: true, hasData: dumpHasDataSql(msg.sql) });
+      const sql = new TextDecoder().decode(new Uint8Array(msg.buffer));
+      respond({ id, ok: true, hasData: dumpHasDataSql(sql) });
       return;
     }
   }

@@ -14,12 +14,15 @@ const CREATED_AT_INDEX = "createdAt";
 
 interface StoredBackup {
   filename: string;
-  sql: string;
+  sql: Uint8Array;
   trigger: BackupEntry["trigger"];
   createdAt: string;
   sizeBytes: number;
   checksum: string;
 }
+
+/** Rows written before the dump was carried as bytes still store SQL text. */
+type LegacyStoredBackup = Omit<StoredBackup, "sql"> & { sql: Uint8Array | string };
 
 const STORAGE_FULL_MESSAGE =
   "Backup storage full. Delete old backups in Settings or reduce retention limit.";
@@ -72,14 +75,14 @@ async function withDB<T>(fn: (db: IDBDatabase) => Promise<T>): Promise<T> {
 }
 
 class WebBackupAdapter implements BackupAdapter {
-  async saveBackup(filename: string, sqlContent: string): Promise<void> {
+  async saveBackup(filename: string, sql: Uint8Array): Promise<void> {
     const entry: StoredBackup = {
       filename,
-      sql: sqlContent,
+      sql,
       trigger: parseTriggerFromFilename(filename),
       createdAt: new Date().toISOString(),
-      sizeBytes: new Blob([sqlContent]).size,
-      checksum: await computeChecksum(sqlContent),
+      sizeBytes: sql.length,
+      checksum: await computeChecksum(sql),
     };
 
     try {
@@ -199,12 +202,12 @@ class WebBackupAdapter implements BackupAdapter {
   }
 
   async readBackup(filename: string): Promise<string> {
-    const stored = await withDB<StoredBackup | undefined>(
+    const stored = await withDB<LegacyStoredBackup | undefined>(
       (db) =>
         new Promise((resolve, reject) => {
           const tx = db.transaction(STORE_NAME, "readonly");
           const request = tx.objectStore(STORE_NAME).get(filename);
-          request.onsuccess = () => resolve(request.result as StoredBackup | undefined);
+          request.onsuccess = () => resolve(request.result as LegacyStoredBackup | undefined);
           request.onerror = () => reject(request.error);
         })
     );
@@ -213,12 +216,15 @@ class WebBackupAdapter implements BackupAdapter {
       throw new Error(`Backup not found: ${filename}`);
     }
 
-    const checksum = await computeChecksum(stored.sql);
+    const sqlBytes =
+      typeof stored.sql === "string" ? new TextEncoder().encode(stored.sql) : stored.sql;
+    const sql = typeof stored.sql === "string" ? stored.sql : new TextDecoder().decode(stored.sql);
+    const checksum = await computeChecksum(sqlBytes);
     if (checksum !== stored.checksum) {
       throw new Error(`Backup checksum mismatch: ${filename}`);
     }
 
-    return stored.sql;
+    return sql;
   }
 
   async deleteBackup(filename: string): Promise<void> {

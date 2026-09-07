@@ -60,7 +60,7 @@ const { BackupService, resetBackupQueueForTests } = await import(
 );
 
 function createMockAdapter(): BackupAdapter {
-  const store = new Map<string, { sql: string; entry: BackupEntry }>();
+  const store = new Map<string, { sql: Uint8Array; entry: BackupEntry }>();
   let counter = 0; // Deterministic timestamps to avoid flaky sort ordering
   return {
     saveBackup: vi.fn(async (filename, sql) => {
@@ -71,7 +71,7 @@ function createMockAdapter(): BackupAdapter {
           trigger: parseTriggerFromFilename(filename),
           createdAt: new Date(Date.now() + counter++ * 1000),
           sizeBytes: sql.length,
-          checksum: `hash:${sql}`,
+          checksum: `hash:${new TextDecoder().decode(sql)}`,
         },
       });
     }),
@@ -97,7 +97,7 @@ function createMockAdapter(): BackupAdapter {
     readBackup: vi.fn(async (filename) => {
       const item = store.get(filename);
       if (!item) throw new Error("Not found");
-      return item.sql;
+      return new TextDecoder().decode(item.sql);
     }),
     deleteBackup: vi.fn(async (filename) => {
       store.delete(filename);
@@ -113,7 +113,7 @@ describe("BackupService concurrency — shared write queue", () => {
     vi.clearAllMocks();
     resetBackupQueueForTests();
     mockAdapter = createMockAdapter();
-    mockGenerateSqlDump.mockResolvedValue("INSERT INTO books ...");
+    mockGenerateSqlDump.mockResolvedValue(new TextEncoder().encode("INSERT INTO books ..."));
     mockDb = {
       execute: vi.fn().mockResolvedValue({ rowsAffected: 1 }),
     };
@@ -135,7 +135,7 @@ describe("BackupService concurrency — shared write queue", () => {
       maxActive = Math.max(maxActive, active);
       await new Promise((r) => setTimeout(r, 10));
       active -= 1;
-      return "INSERT INTO books ...";
+      return new TextEncoder().encode("INSERT INTO books ...");
     });
 
     // A background backup and a pre-sync backup racing from separate
@@ -150,19 +150,19 @@ describe("BackupService concurrency — shared write queue", () => {
 
   it("keeps restore pre-backup before read when racing a concurrent create", async () => {
     const target = "maibuk-backup-manual-2026-03-15T10-00-00.sql";
-    await mockAdapter.saveBackup(target, "TARGET SQL");
+    await mockAdapter.saveBackup(target, new TextEncoder().encode("TARGET SQL"));
     mockParseSqlStatements.mockImplementation((sql: string) => {
       if (sql === "TARGET SQL") return [`INSERT INTO "books" (id) VALUES ('x')`];
       return [sql];
     });
     mockGenerateSqlDump.mockImplementation(async () => {
       await new Promise((r) => setTimeout(r, 10));
-      return "INSERT INTO books ...";
+      return new TextEncoder().encode("INSERT INTO books ...");
     });
 
     const order: string[] = [];
     const rawSave = mockAdapter.saveBackup;
-    mockAdapter.saveBackup = vi.fn(async (filename: string, sql: string) => {
+    mockAdapter.saveBackup = vi.fn(async (filename: string, sql: Uint8Array) => {
       order.push(`save:${parseTriggerFromFilename(filename)}`);
       return rawSave(filename, sql);
     });
@@ -184,7 +184,7 @@ describe("BackupService concurrency — shared write queue", () => {
 
   it("leaves data untouched on restore failure and releases the queue", async () => {
     const target = "maibuk-backup-manual-2026-03-15T10-00-00.sql";
-    await mockAdapter.saveBackup(target, "TARGET SQL");
+    await mockAdapter.saveBackup(target, new TextEncoder().encode("TARGET SQL"));
     mockAdapter.readBackup = vi.fn(async () => {
       throw new Error("Backup checksum mismatch");
     });
@@ -200,9 +200,9 @@ describe("BackupService concurrency — shared write queue", () => {
   });
 
   it("completes concurrent delete, prune and create writes without deadlock", async () => {
-    await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", "sql");
-    await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", "sql");
-    await mockAdapter.saveBackup("maibuk-backup-manual-2026-03-15T10-00-02.sql", "sql");
+    await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
+    await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
+    await mockAdapter.saveBackup("maibuk-backup-manual-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
 
     const deleter = new BackupService(mockAdapter);
     const pruner = new BackupService(mockAdapter);

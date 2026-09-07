@@ -97,8 +97,7 @@ const SQL_WRITE_CHUNK_BYTES = 4 * 1024 * 1024;
 // Android's IPC bridge materialises each message as a single Java String, so a
 // whole-database dump written in one call overflows the 256MB heap cap. Writing
 // bounded chunks keeps every IPC message small regardless of database size.
-async function writeSqlInChunks(path: string, sqlContent: string): Promise<number> {
-  const bytes = new TextEncoder().encode(sqlContent);
+async function writeSqlInChunks(path: string, bytes: Uint8Array): Promise<number> {
   let offset = 0;
   do {
     const end = Math.min(offset + SQL_WRITE_CHUNK_BYTES, bytes.length);
@@ -111,7 +110,7 @@ async function writeSqlInChunks(path: string, sqlContent: string): Promise<numbe
 async function buildMetaFromSql(
   sqlPath: string,
   filename: string,
-  sqlContent: string,
+  sql: Uint8Array,
   sizeBytes: number
 ): Promise<BackupMeta> {
   const fileStat = await stat(sqlPath);
@@ -119,19 +118,19 @@ async function buildMetaFromSql(
     trigger: parseTriggerFromFilename(filename),
     createdAt: new Date(fileStat.mtime ?? Date.now()).toISOString(),
     sizeBytes,
-    checksum: await computeChecksum(sqlContent),
+    checksum: await computeChecksum(sql),
   };
 }
 
 class TauriBackupAdapter implements BackupAdapter {
   constructor(private backupDir: string) {}
 
-  async saveBackup(filename: string, sqlContent: string): Promise<void> {
+  async saveBackup(filename: string, sql: Uint8Array): Promise<void> {
     const safeFilename = ensureSafeFilename(filename);
     const sqlPath = `${this.backupDir}/${safeFilename}`;
-    const sizeBytes = await writeSqlInChunks(sqlPath, sqlContent);
+    const sizeBytes = await writeSqlInChunks(sqlPath, sql);
 
-    const meta = await buildMetaFromSql(sqlPath, safeFilename, sqlContent, sizeBytes);
+    const meta = await buildMetaFromSql(sqlPath, safeFilename, sql, sizeBytes);
     await writeTextFile(metaPath(sqlPath), JSON.stringify(meta));
   }
 
@@ -274,12 +273,8 @@ class TauriBackupAdapter implements BackupAdapter {
     try {
       meta = JSON.parse(await readTextFile(metaFilePath)) as BackupMeta;
     } catch {
-      meta = await buildMetaFromSql(
-        sqlPath,
-        safeFilename,
-        sqlContent,
-        new TextEncoder().encode(sqlContent).length
-      );
+      const sqlBytes = new TextEncoder().encode(sqlContent);
+      meta = await buildMetaFromSql(sqlPath, safeFilename, sqlBytes, sqlBytes.length);
       await writeTextFile(metaFilePath, JSON.stringify(meta));
     }
 

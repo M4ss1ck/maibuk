@@ -68,7 +68,7 @@ export interface BackupPage {
 }
 
 export interface BackupAdapter {
-  saveBackup(filename: string, sqlContent: string): Promise<void>;
+  saveBackup(filename: string, sql: Uint8Array): Promise<void>;
   listBackups(): Promise<BackupEntry[]>;
   listBackupsPage(options: BackupPageOptions): Promise<BackupPage>;
   readBackup(filename: string): Promise<string>;

@@ -20,7 +20,7 @@ import { ToastViewport } from "@/components/ui";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { DeepLinkHandler } from "@/components/DeepLinkHandler";
 import { AndroidBackNavigator } from "@/components/AndroidBackNavigator";
-import { runDailyBackupOnce } from "@/features/backup/lifecycle";
+import { scheduleDailyBackup } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
 import { installAndroidBackHandler } from "@/lib/window/androidBack";
@@ -38,7 +38,7 @@ function App() {
 
   useEffect(() => {
     if (embedMode) return;
-    void runDailyBackupOnce();
+    scheduleDailyBackup();
     if (IS_ANDROID) {
       void installAndroidBackHandler();
       void installAndroidLifecycleHandler();

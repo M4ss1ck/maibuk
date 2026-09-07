@@ -9,11 +9,12 @@ vi.mock("../../../../lib/db", () => ({
 const { generateSqlDump } = await import("@/features/backup/generate-sql-dump");
 
 describe("generateSqlDump", () => {
-  it("returns decoded string from exportDatabase", async () => {
+  it("returns exportDatabase bytes directly without decoding", async () => {
     const sqlText = "INSERT INTO books (id) VALUES ('test');";
-    mockExportDatabase.mockResolvedValue(new TextEncoder().encode(sqlText));
+    const bytes = new TextEncoder().encode(sqlText);
+    mockExportDatabase.mockResolvedValue(bytes);
 
     const result = await generateSqlDump();
-    expect(result).toBe(sqlText);
+    expect(result).toBe(bytes);
   });
 });

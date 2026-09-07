@@ -89,6 +89,7 @@ vi.mock("@/lib/metrics/MetricsService", () => ({
 
 vi.mock("@/features/backup/lifecycle", () => ({
   runDailyBackupOnce: vi.fn().mockResolvedValue(undefined),
+  scheduleDailyBackup: vi.fn(),
   createLaunchBackup: vi.fn().mockResolvedValue(undefined),
   createCloseBackup: vi.fn().mockResolvedValue(undefined),
 }));
