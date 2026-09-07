@@ -66,7 +66,7 @@ describe("TauriBackupAdapter", () => {
     const adapter = await createTauriBackup("/safe/backups");
     const filename = "maibuk-backup-close-2026-03-15T14-30-00.sql";
 
-    await adapter.saveBackup(filename, "sql");
+    await adapter.saveBackup(filename, new TextEncoder().encode("sql"));
     expect(mockWriteFile).toHaveBeenCalledTimes(1);
     expect(mockWriteFile).toHaveBeenCalledWith(
       `/safe/backups/${filename}`,
@@ -225,7 +225,7 @@ describe("TauriBackupAdapter", () => {
     const adapter = await createTauriBackup("/safe/backups");
     const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
     const chunkBytes = 4 * 1024 * 1024;
-    const dump = "a".repeat(chunkBytes + 10);
+    const dump = new TextEncoder().encode("a".repeat(chunkBytes + 10));
 
     await adapter.saveBackup(filename, dump);
 
@@ -240,23 +240,22 @@ describe("TauriBackupAdapter", () => {
     for (const [, , options] of calls.slice(1)) {
       expect(options?.append).toBe(true);
     }
-    const expected = new TextEncoder().encode(dump);
     const totalLength = calls.reduce((sum, [, bytes]) => sum + bytes.length, 0);
-    expect(totalLength).toBe(expected.length);
+    expect(totalLength).toBe(dump.length);
     const concatenated = new Uint8Array(totalLength);
     let offset = 0;
     for (const [, bytes] of calls) {
       concatenated.set(bytes, offset);
       offset += bytes.length;
     }
-    expect(new TextDecoder().decode(concatenated)).toBe(dump);
+    expect(new TextDecoder().decode(concatenated)).toBe("a".repeat(chunkBytes + 10));
   });
 
   it("writes a small dump with exactly one call and falsy append", async () => {
     const adapter = await createTauriBackup("/safe/backups");
     const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
 
-    await adapter.saveBackup(filename, "small");
+    await adapter.saveBackup(filename, new TextEncoder().encode("small"));
 
     expect(mockWriteFile).toHaveBeenCalledTimes(1);
     const [path, bytes, options] = mockWriteFile.mock.calls[0] as [
@@ -273,7 +272,7 @@ describe("TauriBackupAdapter", () => {
     const adapter = await createTauriBackup("/safe/backups");
     const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
 
-    await adapter.saveBackup(filename, "");
+    await adapter.saveBackup(filename, new Uint8Array(0));
 
     expect(mockWriteFile).toHaveBeenCalledTimes(1);
   });
@@ -281,14 +280,15 @@ describe("TauriBackupAdapter", () => {
   it("records meta sizeBytes as the UTF-8 byte length of the dump", async () => {
     const adapter = await createTauriBackup("/safe/backups");
     const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
-    const dump = "héllo 世界 🔥";
-    expect(new TextEncoder().encode(dump).length).not.toBe(dump.length);
+    const text = "héllo 世界 🔥";
+    const dump = new TextEncoder().encode(text);
+    expect(dump.length).not.toBe(text.length);
 
     await adapter.saveBackup(filename, dump);
 
     expect(mockWriteTextFile).toHaveBeenCalledWith(
       `/safe/backups/${filename.replace(/\.sql$/, ".meta.json")}`,
-      expect.stringContaining(`"sizeBytes":${new TextEncoder().encode(dump).length}`)
+      expect.stringContaining(`"sizeBytes":${dump.length}`)
     );
   });
 

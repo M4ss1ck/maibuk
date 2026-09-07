@@ -10,8 +10,13 @@ const mockSettingsState = vi.hoisted(() => ({
   backupDirectory: "/tmp/backups",
 }));
 
+const mockIsAndroid = vi.hoisted(() => ({ value: false }));
+
 vi.mock("../../../../lib/platform", () => ({
   createBackup: mockCreateBackupAdapter,
+  get IS_ANDROID() {
+    return mockIsAndroid.value;
+  },
 }));
 
 vi.mock("../../../../lib/db", () => ({
@@ -32,12 +37,15 @@ vi.mock("../../../../features/backup/backup-service", () => ({
   },
 }));
 
-const { createDailyBackup, runBackgroundBackup, runDailyBackupOnce, resetBackupLifecycleForTests } =
+const { createDailyBackup, runBackgroundBackup, runDailyBackupOnce, resetBackupLifecycleForTests, scheduleDailyBackup } =
   await import("@/features/backup/lifecycle");
 
 describe("backup lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    mockIsAndroid.value = false;
     resetBackupLifecycleForTests();
     mockWaitForDatabaseReady.mockResolvedValue(undefined);
     mockCreateBackupAdapter.mockResolvedValue({});
@@ -102,5 +110,52 @@ describe("backup lifecycle", () => {
     expect(mockWaitForDatabaseReady).toHaveBeenCalledTimes(1);
     expect(mockCreateBackup).toHaveBeenCalledTimes(1);
     expect(mockCreateBackup).toHaveBeenCalledWith("daily");
+  });
+
+  it("scheduleDailyBackup runs the backup immediately when not on Android", async () => {
+    mockIsAndroid.value = false;
+
+    scheduleDailyBackup();
+
+    await vi.waitFor(() => expect(mockCreateBackup).toHaveBeenCalledWith("daily"));
+    expect(mockWaitForDatabaseReady).toHaveBeenCalledTimes(1);
+  });
+
+  it("scheduleDailyBackup defers via requestIdleCallback on Android", async () => {
+    mockIsAndroid.value = true;
+    let captured: (deadline: unknown) => void = () => undefined;
+    const mockRequestIdleCallback = vi.fn((cb: (deadline: unknown) => void) => {
+      captured = cb;
+      return 1;
+    });
+    vi.stubGlobal("requestIdleCallback", mockRequestIdleCallback);
+
+    scheduleDailyBackup();
+
+    expect(mockRequestIdleCallback).toHaveBeenCalledTimes(1);
+    expect(mockRequestIdleCallback).toHaveBeenCalledWith(expect.any(Function), { timeout: 30000 });
+    expect(mockWaitForDatabaseReady).not.toHaveBeenCalled();
+    expect(mockCreateBackup).not.toHaveBeenCalled();
+
+    captured({ didTimeout: false, timeRemaining: () => 50 });
+
+    await vi.waitFor(() => expect(mockCreateBackup).toHaveBeenCalledWith("daily"));
+    expect(mockWaitForDatabaseReady).toHaveBeenCalledTimes(1);
+  });
+
+  it("scheduleDailyBackup falls back to setTimeout on Android without requestIdleCallback", async () => {
+    mockIsAndroid.value = true;
+    vi.stubGlobal("requestIdleCallback", undefined);
+    vi.useFakeTimers();
+
+    scheduleDailyBackup();
+
+    expect(mockWaitForDatabaseReady).not.toHaveBeenCalled();
+    expect(mockCreateBackup).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(10000);
+
+    expect(mockWaitForDatabaseReady).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mockCreateBackup).toHaveBeenCalledWith("daily"));
   });
 });

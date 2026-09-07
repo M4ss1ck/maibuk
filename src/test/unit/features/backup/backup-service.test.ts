@@ -64,7 +64,7 @@ vi.mock("../../../../features/canvas/store", () => ({
 const { BackupService } = await import("@/features/backup/backup-service");
 
 function createMockAdapter(): BackupAdapter {
-  const store = new Map<string, { sql: string; entry: BackupEntry }>();
+  const store = new Map<string, { sql: Uint8Array; entry: BackupEntry }>();
   let counter = 0; // Deterministic timestamps to avoid flaky sort ordering
   return {
     saveBackup: vi.fn(async (filename, sql) => {
@@ -75,7 +75,7 @@ function createMockAdapter(): BackupAdapter {
           trigger: parseTriggerFromFilename(filename),
           createdAt: new Date(Date.now() + counter++ * 1000),
           sizeBytes: sql.length,
-          checksum: `hash:${sql}`,
+          checksum: `hash:${new TextDecoder().decode(sql)}`,
         },
       });
     }),
@@ -101,7 +101,7 @@ function createMockAdapter(): BackupAdapter {
     readBackup: vi.fn(async (filename) => {
       const item = store.get(filename);
       if (!item) throw new Error("Not found");
-      return item.sql;
+      return new TextDecoder().decode(item.sql);
     }),
     deleteBackup: vi.fn(async (filename) => {
       store.delete(filename);
@@ -118,7 +118,7 @@ describe("BackupService", () => {
     vi.clearAllMocks();
     mockAdapter = createMockAdapter();
     mockCreateBackup.mockResolvedValue(mockAdapter);
-    mockGenerateSqlDump.mockResolvedValue("INSERT INTO books ...");
+    mockGenerateSqlDump.mockResolvedValue(new TextEncoder().encode("INSERT INTO books ..."));
     mockDb = {
       execute: vi.fn().mockResolvedValue({ rowsAffected: 1 }),
     };
@@ -145,7 +145,7 @@ describe("BackupService", () => {
       expect(mockGenerateSqlDump).toHaveBeenCalled();
       expect(mockAdapter.saveBackup).toHaveBeenCalledWith(
         expect.stringMatching(/^maibuk-backup-daily-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/),
-        "INSERT INTO books ..."
+        new TextEncoder().encode("INSERT INTO books ...")
       );
     });
 
@@ -154,7 +154,7 @@ describe("BackupService", () => {
 
       expect(mockAdapter.saveBackup).toHaveBeenCalledWith(
         expect.stringMatching(/^maibuk-backup-close-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.sql$/),
-        "INSERT INTO books ..."
+        new TextEncoder().encode("INSERT INTO books ...")
       );
       await expect(service.listBackups()).resolves.toEqual([
         expect.objectContaining({ trigger: "close" }),
@@ -163,7 +163,9 @@ describe("BackupService", () => {
 
     it("throws BACKUP_EMPTY when dump contains no INSERT statements", async () => {
       mockGenerateSqlDump.mockResolvedValue(
-        "-- Maibuk Database Export (SQL Dump)\n-- Exported at: 2026-03-15\n\n-- Books\n\n-- Chapters\n"
+        new TextEncoder().encode(
+          "-- Maibuk Database Export (SQL Dump)\n-- Exported at: 2026-03-15\n\n-- Books\n\n-- Chapters\n"
+        )
       );
 
       await expect(service.createBackup("daily")).rejects.toThrow("BACKUP_EMPTY");
@@ -171,7 +173,7 @@ describe("BackupService", () => {
     });
 
     it("throws BACKUP_EMPTY when dump is an empty string", async () => {
-      mockGenerateSqlDump.mockResolvedValue("");
+      mockGenerateSqlDump.mockResolvedValue(new Uint8Array(0));
 
       await expect(service.createBackup("manual")).rejects.toThrow("BACKUP_EMPTY");
       expect(mockAdapter.saveBackup).not.toHaveBeenCalled();
@@ -184,9 +186,9 @@ describe("BackupService", () => {
 
   describe("deleteByTrigger", () => {
     it("removes all backups matching the given trigger", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-00.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
 
       await service.deleteByTrigger("pre-sync");
 
@@ -196,7 +198,7 @@ describe("BackupService", () => {
     });
 
     it("does nothing when no backups match the trigger", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
 
       await service.deleteByTrigger("pre-sync");
 
@@ -208,9 +210,9 @@ describe("BackupService", () => {
   describe("pruneBackups", () => {
     it("deletes oldest backup when over limit", async () => {
       // Use deterministic filenames via direct adapter calls
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
 
       await service.pruneBackups(2);
 
@@ -219,8 +221,8 @@ describe("BackupService", () => {
     });
 
     it("treats close backups as unprotected prune candidates", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-close-2026-03-15T10-00-00.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-close-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
 
       await service.pruneBackups(1);
 
@@ -230,13 +232,13 @@ describe("BackupService", () => {
     });
 
     it("preserves at least 2 pre-sync and 2 pre-restore backups", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-00.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-pre-restore-2026-03-15T10-00-02.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-pre-restore-2026-03-15T10-00-03.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-04.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-05.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-06.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-pre-restore-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-pre-restore-2026-03-15T10-00-03.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-04.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-05.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-06.sql", new TextEncoder().encode("sql"));
 
       // Prune to 4 total — should delete daily backups, keep pre-sync and pre-restore
       await service.pruneBackups(4);
@@ -249,10 +251,10 @@ describe("BackupService", () => {
     });
 
     it("deletes from most-represented trigger type first", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", "sql");
-      await mockAdapter.saveBackup("maibuk-backup-manual-2026-03-15T10-00-03.sql", "sql");
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup("maibuk-backup-manual-2026-03-15T10-00-03.sql", new TextEncoder().encode("sql"));
 
       await service.pruneBackups(2);
 
@@ -269,7 +271,7 @@ describe("BackupService", () => {
     it("returns true when a backup with the trigger exists for today", async () => {
       const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "-");
       const filename = `maibuk-backup-daily-${todayStr}T10-00-00.sql`;
-      await mockAdapter.saveBackup(filename, "INSERT INTO books ...");
+      await mockAdapter.saveBackup(filename, new TextEncoder().encode("INSERT INTO books ..."));
 
       const result = await service.hasBackupForToday("daily");
       expect(result).toBe(true);
@@ -283,7 +285,7 @@ describe("BackupService", () => {
     it("returns false when today has a different trigger", async () => {
       const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "-");
       const filename = `maibuk-backup-manual-${todayStr}T10-00-00.sql`;
-      await mockAdapter.saveBackup(filename, "INSERT INTO books ...");
+      await mockAdapter.saveBackup(filename, new TextEncoder().encode("INSERT INTO books ..."));
 
       const result = await service.hasBackupForToday("daily");
       expect(result).toBe(false);
@@ -512,7 +514,9 @@ describe("BackupService", () => {
     it("skips pre-restore snapshot when current database is empty but still restores", async () => {
       // generateSqlDump returns comment-only dump (empty DB)
       mockGenerateSqlDump.mockResolvedValue(
-        "-- Maibuk Database Export\n-- Exported at: 2026-03-15\n\n-- Books\n\n-- Chapters\n"
+        new TextEncoder().encode(
+          "-- Maibuk Database Export\n-- Exported at: 2026-03-15\n\n-- Books\n\n-- Chapters\n"
+        )
       );
       mockChapterState.currentBookId = "book-1";
       mockAdapter.readBackup = vi.fn(async () => "restore sql");

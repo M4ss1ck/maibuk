@@ -151,7 +151,7 @@ async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Pr
 export class BackupService {
   constructor(private adapter: BackupAdapter) {}
 
-  private async saveBackupSnapshot(trigger: BackupEntry["trigger"], sql: string): Promise<string> {
+  private async saveBackupSnapshot(trigger: BackupEntry["trigger"], sql: Uint8Array): Promise<string> {
     const filename = buildFilename(trigger);
     await this.adapter.saveBackup(filename, sql);
     return filename;

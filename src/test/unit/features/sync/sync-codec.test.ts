@@ -98,7 +98,11 @@ class FakeWorker {
           this.emit({ id, ok: true, checksum: await computeChecksum(msg.text) });
           return;
         case "dumpHasData":
-          this.emit({ id, ok: true, hasData: dumpHasDataSql(msg.sql) });
+          this.emit({
+            id,
+            ok: true,
+            hasData: dumpHasDataSql(new TextDecoder().decode(new Uint8Array(msg.buffer))),
+          });
           return;
       }
     } catch (error) {
@@ -185,8 +189,12 @@ describe("sync codec service dispatch", () => {
 
   it("detects SQL dump data", async () => {
     useFakeWorker();
-    expect(await dumpHasDataAsync('INSERT INTO "books" ("id") VALUES (\'a\');')).toBe(true);
-    expect(await dumpHasDataAsync("-- empty export\n")).toBe(false);
+    expect(
+      await dumpHasDataAsync(
+        new TextEncoder().encode('INSERT INTO "books" ("id") VALUES (\'a\');')
+      )
+    ).toBe(true);
+    expect(await dumpHasDataAsync(new TextEncoder().encode("-- empty export\n"))).toBe(false);
   });
 
   it("never detaches the caller's buffer on decrypt", async () => {
@@ -205,6 +213,15 @@ describe("sync codec service dispatch", () => {
     await decryptBufferToText(owned, passphrase);
     const decryptCall = created[0].transfers;
     expect(decryptCall.some((list) => list.length > 0)).toBe(true);
+  });
+
+  it("transfers a copy of the dump bytes without detaching the caller's buffer", async () => {
+    useFakeWorker();
+    const sql = new TextEncoder().encode('INSERT INTO "books" ("id") VALUES (\'a\');');
+    const before = sql.buffer.byteLength;
+    expect(await dumpHasDataAsync(sql)).toBe(true);
+    expect(sql.buffer.byteLength).toBe(before);
+    expect(created[0].transfers.some((list) => list.length > 0)).toBe(true);
   });
 });
 
@@ -277,6 +294,8 @@ describe("sync codec fallback without Worker", () => {
       (error: unknown) =>
         error instanceof SyncCryptoError && error.code === "INVALID_PASSPHRASE"
     );
-    expect(await dumpHasDataAsync("INSERT INTO notes VALUES (1);")).toBe(true);
+    expect(
+      await dumpHasDataAsync(new TextEncoder().encode("INSERT INTO notes VALUES (1);"))
+    ).toBe(true);
   });
 });

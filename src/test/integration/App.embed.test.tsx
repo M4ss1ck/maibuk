@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { mockRunDailyBackupOnce } = vi.hoisted(() => ({
-  mockRunDailyBackupOnce: vi.fn(),
+const { mockScheduleDailyBackup } = vi.hoisted(() => ({
+  mockScheduleDailyBackup: vi.fn(),
 }));
 
 vi.mock("../../components/Layout", () => ({
@@ -49,14 +49,14 @@ vi.mock("../../components/ui", () => ({
 }));
 
 vi.mock("../../features/backup/lifecycle", () => ({
-  runDailyBackupOnce: mockRunDailyBackupOnce,
+  scheduleDailyBackup: mockScheduleDailyBackup,
 }));
 
 import App from "@/App";
 
 describe("App embed route behavior", () => {
   beforeEach(() => {
-    mockRunDailyBackupOnce.mockReset();
+    mockScheduleDailyBackup.mockReset();
   });
 
   it("keeps startup wrappers on regular routes", () => {
@@ -84,6 +84,6 @@ describe("App embed route behavior", () => {
     expect(screen.queryByTestId("global-shortcuts")).not.toBeInTheDocument();
     expect(screen.queryByTestId("toast-viewport")).not.toBeInTheDocument();
     expect(screen.getByText("embed-view")).toBeInTheDocument();
-    expect(mockRunDailyBackupOnce).not.toHaveBeenCalled();
+    expect(mockScheduleDailyBackup).not.toHaveBeenCalled();
   });
 });

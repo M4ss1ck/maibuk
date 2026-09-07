@@ -146,7 +146,11 @@ async function runFallback(request: FallbackRequest): Promise<SuccessResponse> {
     case "checksum":
       return { id, ok: true, checksum: await computeChecksum(request.text) };
     case "dumpHasData":
-      return { id, ok: true, hasData: dumpHasDataSql(request.sql) };
+      return {
+        id,
+        ok: true,
+        hasData: dumpHasDataSql(new TextDecoder().decode(new Uint8Array(request.buffer))),
+      };
   }
 }
 
@@ -257,7 +261,8 @@ export async function computeChecksumAsync(text: string): Promise<string> {
   return response.checksum;
 }
 
-export async function dumpHasDataAsync(sql: string): Promise<boolean> {
-  const response = await dispatch({ op: "dumpHasData", sql });
+export async function dumpHasDataAsync(sql: Uint8Array): Promise<boolean> {
+  const buffer = toOwnedBuffer(sql);
+  const response = await dispatch({ op: "dumpHasData", buffer }, [buffer]);
   return response.hasData === true;
 }

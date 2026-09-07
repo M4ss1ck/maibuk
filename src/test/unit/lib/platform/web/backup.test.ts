@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createWebBackup } from "@/lib/platform/web/backup";
+import { computeChecksum } from "@/lib/checksum";
 import type { BackupAdapter } from "@/lib/platform/types";
 
 describe("WebBackupAdapter", () => {
@@ -16,7 +17,7 @@ describe("WebBackupAdapter", () => {
     it("saves a backup and lists it", async () => {
       await adapter.saveBackup(
         "maibuk-backup-daily-2026-03-15T14-30-00.sql",
-        "INSERT INTO books ..."
+        new TextEncoder().encode("INSERT INTO books ...")
       );
 
       const list = await adapter.listBackups();
@@ -29,7 +30,10 @@ describe("WebBackupAdapter", () => {
     });
 
     it("saves and lists a close backup with its trigger", async () => {
-      await adapter.saveBackup("maibuk-backup-close-2026-03-15T14-30-00.sql", "sql");
+      await adapter.saveBackup(
+        "maibuk-backup-close-2026-03-15T14-30-00.sql",
+        new TextEncoder().encode("sql")
+      );
 
       await expect(adapter.listBackups()).resolves.toEqual([
         expect.objectContaining({ trigger: "close" }),
@@ -37,10 +41,16 @@ describe("WebBackupAdapter", () => {
     });
 
     it("lists multiple backups sorted newest first", async () => {
-      await adapter.saveBackup("maibuk-backup-daily-2026-03-15T14-30-00.sql", "sql1");
+      await adapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T14-30-00.sql",
+        new TextEncoder().encode("sql1")
+      );
       // Small delay to ensure different timestamps
       await new Promise((r) => setTimeout(r, 10));
-      await adapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T14-30-10.sql", "sql2");
+      await adapter.saveBackup(
+        "maibuk-backup-pre-sync-2026-03-15T14-30-10.sql",
+        new TextEncoder().encode("sql2")
+      );
 
       const list = await adapter.listBackups();
       expect(list).toHaveLength(2);
@@ -52,7 +62,7 @@ describe("WebBackupAdapter", () => {
       for (let index = 0; index < 12; index += 1) {
         await adapter.saveBackup(
           `maibuk-backup-manual-2026-03-15T14-30-${String(index).padStart(2, "0")}.sql`,
-          `sql-${index}`
+          new TextEncoder().encode(`sql-${index}`)
         );
         await new Promise((r) => setTimeout(r, 2));
       }
@@ -75,7 +85,10 @@ describe("WebBackupAdapter", () => {
   describe("readBackup", () => {
     it("reads saved backup content", async () => {
       const sql = "INSERT INTO books (id) VALUES ('test');";
-      await adapter.saveBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql", sql);
+      await adapter.saveBackup(
+        "maibuk-backup-manual-2026-03-15T14-30-00.sql",
+        new TextEncoder().encode(sql)
+      );
 
       const content = await adapter.readBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql");
       expect(content).toBe(sql);
@@ -87,7 +100,10 @@ describe("WebBackupAdapter", () => {
 
     it("rejects corrupted backup content", async () => {
       const sql = "INSERT INTO books (id) VALUES ('test');";
-      await adapter.saveBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql", sql);
+      await adapter.saveBackup(
+        "maibuk-backup-manual-2026-03-15T14-30-00.sql",
+        new TextEncoder().encode(sql)
+      );
 
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
         const request = indexedDB.open("maibuk-backups", 2);
@@ -116,11 +132,50 @@ describe("WebBackupAdapter", () => {
         adapter.readBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql")
       ).rejects.toThrow(/checksum/i);
     });
+
+    it("restores legacy backups already stored as strings", async () => {
+      const sql = "INSERT INTO books (id) VALUES ('legacy');";
+      await adapter.saveBackup(
+        "maibuk-backup-manual-2026-03-15T14-30-00.sql",
+        new TextEncoder().encode("placeholder")
+      );
+
+      const checksum = await computeChecksum(sql);
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("maibuk-backups", 2);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction("backups", "readwrite");
+        tx.objectStore("backups").put({
+          filename: "maibuk-backup-manual-2026-03-15T14-30-00.sql",
+          sql,
+          trigger: "manual",
+          createdAt: new Date().toISOString(),
+          sizeBytes: new TextEncoder().encode(sql).length,
+          checksum,
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+      });
+
+      await expect(
+        adapter.readBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql")
+      ).resolves.toBe(sql);
+    });
   });
 
   describe("deleteBackup", () => {
     it("deletes a backup", async () => {
-      await adapter.saveBackup("maibuk-backup-daily-2026-03-15T14-30-00.sql", "sql");
+      await adapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T14-30-00.sql",
+        new TextEncoder().encode("sql")
+      );
       await adapter.deleteBackup("maibuk-backup-daily-2026-03-15T14-30-00.sql");
 
       const list = await adapter.listBackups();
@@ -202,7 +257,10 @@ describe("WebBackupAdapter", () => {
       });
 
       await expect(
-        adapter.saveBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql", "sql")
+        adapter.saveBackup(
+          "maibuk-backup-manual-2026-03-15T14-30-00.sql",
+          new TextEncoder().encode("sql")
+        )
       ).rejects.toThrow(/storage full/i);
 
       openSpy.mockRestore();
