@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockReadTextFile = vi.hoisted(() => vi.fn());
 const mockWriteTextFile = vi.hoisted(() => vi.fn());
+const mockWriteFile = vi.hoisted(() => vi.fn());
 const mockReadDir = vi.hoisted(() => vi.fn());
 const mockRemove = vi.hoisted(() => vi.fn());
 const mockMkdir = vi.hoisted(() => vi.fn());
@@ -12,6 +13,7 @@ const mockJoin = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: mockReadTextFile,
   writeTextFile: mockWriteTextFile,
+  writeFile: mockWriteFile,
   readDir: mockReadDir,
   remove: mockRemove,
   mkdir: mockMkdir,
@@ -38,6 +40,7 @@ describe("TauriBackupAdapter", () => {
     mockMkdir.mockResolvedValue(undefined);
     mockRemove.mockResolvedValue(undefined);
     mockWriteTextFile.mockResolvedValue(undefined);
+    mockWriteFile.mockResolvedValue(undefined);
     mockStat.mockResolvedValue({ size: 12, mtime: "2026-03-15T14:30:00.000Z" });
   });
 
@@ -64,7 +67,13 @@ describe("TauriBackupAdapter", () => {
     const filename = "maibuk-backup-close-2026-03-15T14-30-00.sql";
 
     await adapter.saveBackup(filename, "sql");
-    expect(mockWriteTextFile).toHaveBeenCalledWith(`/safe/backups/${filename}`, "sql");
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      `/safe/backups/${filename}`,
+      new TextEncoder().encode("sql"),
+      { append: false }
+    );
+    expect(mockWriteTextFile).toHaveBeenCalledTimes(1);
     expect(mockWriteTextFile).toHaveBeenCalledWith(
       `/safe/backups/${filename.replace(/\.sql$/, ".meta.json")}`,
       expect.stringContaining('"trigger":"close"')
@@ -210,6 +219,77 @@ describe("TauriBackupAdapter", () => {
       "maibuk-backup-manual-2026-03-15T14-30-02.sql",
     ]);
     expect(mockReadTextFile).toHaveBeenCalledTimes(5);
+  });
+
+  it("writes a dump larger than one chunk with append on every call after the first", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
+    const chunkBytes = 4 * 1024 * 1024;
+    const dump = "a".repeat(chunkBytes + 10);
+
+    await adapter.saveBackup(filename, dump);
+
+    expect(mockWriteFile.mock.calls.length).toBeGreaterThan(1);
+    const calls = mockWriteFile.mock.calls as Array<
+      [string, Uint8Array, { append?: boolean }]
+    >;
+    for (const [path] of calls) {
+      expect(path).toBe(`/safe/backups/${filename}`);
+    }
+    expect(calls[0][2]?.append).toBeFalsy();
+    for (const [, , options] of calls.slice(1)) {
+      expect(options?.append).toBe(true);
+    }
+    const expected = new TextEncoder().encode(dump);
+    const totalLength = calls.reduce((sum, [, bytes]) => sum + bytes.length, 0);
+    expect(totalLength).toBe(expected.length);
+    const concatenated = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const [, bytes] of calls) {
+      concatenated.set(bytes, offset);
+      offset += bytes.length;
+    }
+    expect(new TextDecoder().decode(concatenated)).toBe(dump);
+  });
+
+  it("writes a small dump with exactly one call and falsy append", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
+
+    await adapter.saveBackup(filename, "small");
+
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
+    const [path, bytes, options] = mockWriteFile.mock.calls[0] as [
+      string,
+      Uint8Array,
+      { append?: boolean },
+    ];
+    expect(path).toBe(`/safe/backups/${filename}`);
+    expect(bytes).toEqual(new TextEncoder().encode("small"));
+    expect(options?.append).toBeFalsy();
+  });
+
+  it("still produces exactly one write call for an empty dump", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
+
+    await adapter.saveBackup(filename, "");
+
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("records meta sizeBytes as the UTF-8 byte length of the dump", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
+    const dump = "héllo 世界 🔥";
+    expect(new TextEncoder().encode(dump).length).not.toBe(dump.length);
+
+    await adapter.saveBackup(filename, dump);
+
+    expect(mockWriteTextFile).toHaveBeenCalledWith(
+      `/safe/backups/${filename.replace(/\.sql$/, ".meta.json")}`,
+      expect.stringContaining(`"sizeBytes":${new TextEncoder().encode(dump).length}`)
+    );
   });
 
   it("recognizes close timestamps when selecting a paginated result", async () => {
