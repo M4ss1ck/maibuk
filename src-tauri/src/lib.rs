@@ -1,3 +1,4 @@
+mod android_exit;
 mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -44,7 +45,7 @@ pub fn run() {
         ));
 
     builder
-        .invoke_handler(tauri::generate_handler![tray::set_tray_syncing])
+        .invoke_handler(tauri::generate_handler![tray::set_tray_syncing, android_exit::exit_app])
         .setup(|app| {
             #[cfg(desktop)]
             {
