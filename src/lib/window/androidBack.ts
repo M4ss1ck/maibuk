@@ -45,8 +45,15 @@ export async function installAndroidBackHandler(): Promise<void> {
         upNavigator(parent);
         return;
       }
-      const { exit } = await import("@tauri-apps/plugin-process");
-      await exit(0);
+      // Route through the activity's finish() because std::process::exit can
+      // abort in EGL teardown on Android; plugin-process exit stays as fallback.
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("exit_app");
+      } catch {
+        const { exit } = await import("@tauri-apps/plugin-process");
+        await exit(0);
+      }
     });
   } catch {
     // Not inside a Tauri Android webview; nothing to install.

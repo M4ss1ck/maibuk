@@ -3,10 +3,11 @@ import androidCapability from "../../../../../src-tauri/capabilities/android.jso
 
 type BackHandler = (payload: { canGoBack: boolean }) => void | Promise<void>;
 
-const { eventState, mockExit, mockOnBackButtonPress, mockRunTopBackDismiss, platformState } =
+const { eventState, mockExit, mockInvoke, mockOnBackButtonPress, mockRunTopBackDismiss, platformState } =
   vi.hoisted(() => ({
     eventState: { handler: null as BackHandler | null },
     mockExit: vi.fn().mockResolvedValue(undefined),
+    mockInvoke: vi.fn().mockResolvedValue(undefined),
     mockOnBackButtonPress: vi.fn(),
     mockRunTopBackDismiss: vi.fn(),
     platformState: { isAndroid: true },
@@ -26,6 +27,8 @@ vi.mock("@tauri-apps/api/app", () => ({
   onBackButtonPress: mockOnBackButtonPress,
 }));
 
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
+
 vi.mock("@tauri-apps/plugin-process", () => ({ exit: mockExit }));
 
 describe("installAndroidBackHandler", () => {
@@ -35,6 +38,8 @@ describe("installAndroidBackHandler", () => {
     eventState.handler = null;
     platformState.isAndroid = true;
     mockExit.mockClear();
+    mockInvoke.mockClear();
+    mockInvoke.mockResolvedValue(undefined);
     mockRunTopBackDismiss.mockReset();
     mockOnBackButtonPress.mockReset();
     mockOnBackButtonPress.mockImplementation(async (handler: BackHandler) => {
@@ -82,7 +87,7 @@ describe("installAndroidBackHandler", () => {
     await getHandler()({ canGoBack: false });
 
     expect(window.history.back).not.toHaveBeenCalled();
-    expect(mockExit).toHaveBeenCalledWith(0);
+    expect(mockInvoke).toHaveBeenCalledWith("exit_app");
   });
 
   it("navigates up from a notes child when history is skippable", async () => {
@@ -142,7 +147,7 @@ describe("installAndroidBackHandler", () => {
 
     expect(navigateTo).not.toHaveBeenCalled();
     expect(window.history.back).not.toHaveBeenCalled();
-    expect(mockExit).toHaveBeenCalledWith(0);
+    expect(mockInvoke).toHaveBeenCalledWith("exit_app");
   });
 
   it("exits on a deep route when no up-navigator is registered", async () => {
@@ -153,6 +158,17 @@ describe("installAndroidBackHandler", () => {
     await getHandler()({ canGoBack: false });
 
     expect(window.history.back).not.toHaveBeenCalled();
+    expect(mockInvoke).toHaveBeenCalledWith("exit_app");
+  });
+
+  it("falls back to process exit when the exit command fails", async () => {
+    mockRunTopBackDismiss.mockReturnValue(false);
+    mockInvoke.mockRejectedValueOnce(new Error("invoke failed"));
+    await installFresh();
+
+    await getHandler()({ canGoBack: false });
+
+    expect(mockInvoke).toHaveBeenCalledWith("exit_app");
     expect(mockExit).toHaveBeenCalledWith(0);
   });
 
