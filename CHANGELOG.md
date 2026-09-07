@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-09-07
+
+### Fixed
+- exit through the activity's finish() instead of process::exit (#155) (#158)
+- guard the close-trigger backup with a 6-hour interval (#154) (#157)
+- keep the daily backup off the startup path and stop copying the dump (#156)
+- stop the startup OOM crash and the Back-button app kill (#152)
+
 ## [0.5.1] - 2026-09-07
 
 ### Added
