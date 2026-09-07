@@ -1,4 +1,4 @@
-import { readTextFile, writeTextFile, readDir, remove, mkdir, stat } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, writeFile, readDir, remove, mkdir, stat } from "@tauri-apps/plugin-fs";
 import { appConfigDir, join } from "@tauri-apps/api/path";
 import type { DirEntry } from "@tauri-apps/plugin-fs";
 import type {
@@ -92,16 +92,33 @@ function metaPath(sqlPath: string): string {
   return sqlPath.replace(/\.sql$/, ".meta.json");
 }
 
+const SQL_WRITE_CHUNK_BYTES = 4 * 1024 * 1024;
+
+// Android's IPC bridge materialises each message as a single Java String, so a
+// whole-database dump written in one call overflows the 256MB heap cap. Writing
+// bounded chunks keeps every IPC message small regardless of database size.
+async function writeSqlInChunks(path: string, sqlContent: string): Promise<number> {
+  const bytes = new TextEncoder().encode(sqlContent);
+  let offset = 0;
+  do {
+    const end = Math.min(offset + SQL_WRITE_CHUNK_BYTES, bytes.length);
+    await writeFile(path, bytes.slice(offset, end), { append: offset > 0 });
+    offset = end;
+  } while (offset < bytes.length);
+  return bytes.length;
+}
+
 async function buildMetaFromSql(
   sqlPath: string,
   filename: string,
-  sqlContent: string
+  sqlContent: string,
+  sizeBytes: number
 ): Promise<BackupMeta> {
   const fileStat = await stat(sqlPath);
   return {
     trigger: parseTriggerFromFilename(filename),
     createdAt: new Date(fileStat.mtime ?? Date.now()).toISOString(),
-    sizeBytes: new Blob([sqlContent]).size,
+    sizeBytes,
     checksum: await computeChecksum(sqlContent),
   };
 }
@@ -112,9 +129,9 @@ class TauriBackupAdapter implements BackupAdapter {
   async saveBackup(filename: string, sqlContent: string): Promise<void> {
     const safeFilename = ensureSafeFilename(filename);
     const sqlPath = `${this.backupDir}/${safeFilename}`;
-    await writeTextFile(sqlPath, sqlContent);
+    const sizeBytes = await writeSqlInChunks(sqlPath, sqlContent);
 
-    const meta = await buildMetaFromSql(sqlPath, safeFilename, sqlContent);
+    const meta = await buildMetaFromSql(sqlPath, safeFilename, sqlContent, sizeBytes);
     await writeTextFile(metaPath(sqlPath), JSON.stringify(meta));
   }
 
@@ -257,7 +274,12 @@ class TauriBackupAdapter implements BackupAdapter {
     try {
       meta = JSON.parse(await readTextFile(metaFilePath)) as BackupMeta;
     } catch {
-      meta = await buildMetaFromSql(sqlPath, safeFilename, sqlContent);
+      meta = await buildMetaFromSql(
+        sqlPath,
+        safeFilename,
+        sqlContent,
+        new TextEncoder().encode(sqlContent).length
+      );
       await writeTextFile(metaFilePath, JSON.stringify(meta));
     }
 

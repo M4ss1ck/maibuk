@@ -19,6 +19,7 @@ import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { ToastViewport } from "@/components/ui";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { DeepLinkHandler } from "@/components/DeepLinkHandler";
+import { AndroidBackNavigator } from "@/components/AndroidBackNavigator";
 import { runDailyBackupOnce } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
@@ -59,6 +60,7 @@ function App() {
   return (
     <>
       <DeepLinkHandler />
+      <AndroidBackNavigator />
       <StartupRedirect>
         <PathTracker />
         <RouteAnnouncer />

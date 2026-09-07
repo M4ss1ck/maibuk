@@ -41,6 +41,7 @@ describe("installAndroidBackHandler", () => {
       eventState.handler = handler;
       return { unregister: vi.fn().mockResolvedValue(undefined) };
     });
+    window.history.replaceState({}, "", "/");
     vi.spyOn(window.history, "back").mockImplementation(() => {});
   });
 
@@ -84,6 +85,110 @@ describe("installAndroidBackHandler", () => {
     expect(mockExit).toHaveBeenCalledWith(0);
   });
 
+  it("navigates up from a notes child when history is skippable", async () => {
+    mockRunTopBackDismiss.mockReturnValue(false);
+    await installFresh();
+    const { registerBackUpNavigator } = await import("@/lib/window/androidBack");
+    const navigateTo = vi.fn();
+    registerBackUpNavigator(navigateTo);
+    window.history.replaceState({}, "", "/notes/abc");
+
+    await getHandler()({ canGoBack: false });
+
+    expect(navigateTo).toHaveBeenCalledWith("/notes");
+    expect(window.history.back).not.toHaveBeenCalled();
+    expect(mockExit).not.toHaveBeenCalled();
+  });
+
+  it("navigates up from a cover route when history is skippable", async () => {
+    mockRunTopBackDismiss.mockReturnValue(false);
+    await installFresh();
+    const { registerBackUpNavigator } = await import("@/lib/window/androidBack");
+    const navigateTo = vi.fn();
+    registerBackUpNavigator(navigateTo);
+    window.history.replaceState({}, "", "/book/b1/cover");
+
+    await getHandler()({ canGoBack: false });
+
+    expect(navigateTo).toHaveBeenCalledWith("/book/b1");
+    expect(window.history.back).not.toHaveBeenCalled();
+    expect(mockExit).not.toHaveBeenCalled();
+  });
+
+  it("navigates up from a book route to the home route", async () => {
+    mockRunTopBackDismiss.mockReturnValue(false);
+    await installFresh();
+    const { registerBackUpNavigator } = await import("@/lib/window/androidBack");
+    const navigateTo = vi.fn();
+    registerBackUpNavigator(navigateTo);
+    window.history.replaceState({}, "", "/book/b1");
+
+    await getHandler()({ canGoBack: false });
+
+    expect(navigateTo).toHaveBeenCalledWith("/");
+    expect(window.history.back).not.toHaveBeenCalled();
+    expect(mockExit).not.toHaveBeenCalled();
+  });
+
+  it("exits on a root route with no parent", async () => {
+    mockRunTopBackDismiss.mockReturnValue(false);
+    await installFresh();
+    const { registerBackUpNavigator } = await import("@/lib/window/androidBack");
+    const navigateTo = vi.fn();
+    registerBackUpNavigator(navigateTo);
+    window.history.replaceState({}, "", "/settings");
+
+    await getHandler()({ canGoBack: false });
+
+    expect(navigateTo).not.toHaveBeenCalled();
+    expect(window.history.back).not.toHaveBeenCalled();
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it("exits on a deep route when no up-navigator is registered", async () => {
+    mockRunTopBackDismiss.mockReturnValue(false);
+    await installFresh();
+    window.history.replaceState({}, "", "/notes/abc");
+
+    await getHandler()({ canGoBack: false });
+
+    expect(window.history.back).not.toHaveBeenCalled();
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it("short-circuits everything when the top dismisser handles Back", async () => {
+    mockRunTopBackDismiss.mockReturnValue(true);
+    await installFresh();
+    const { registerBackUpNavigator } = await import("@/lib/window/androidBack");
+    const navigateTo = vi.fn();
+    registerBackUpNavigator(navigateTo);
+    window.history.replaceState({}, "", "/notes/abc");
+
+    await getHandler()({ canGoBack: false });
+
+    expect(window.history.back).not.toHaveBeenCalled();
+    expect(navigateTo).not.toHaveBeenCalled();
+    expect(mockExit).not.toHaveBeenCalled();
+  });
+
+  it("only clears its own navigator on cleanup", async () => {
+    mockRunTopBackDismiss.mockReturnValue(false);
+    await installFresh();
+    const { registerBackUpNavigator } = await import("@/lib/window/androidBack");
+    const first = vi.fn();
+    const second = vi.fn();
+    const cleanupFirst = registerBackUpNavigator(first);
+    registerBackUpNavigator(second);
+    cleanupFirst();
+    window.history.replaceState({}, "", "/notes/abc");
+
+    await getHandler()({ canGoBack: false });
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith("/notes");
+    expect(mockExit).not.toHaveBeenCalled();
+  });
+
   it("registers only once when installation is requested concurrently", async () => {
     let resolveListener: ((listener: { unregister: () => Promise<void> }) => void) | undefined;
     mockOnBackButtonPress.mockImplementationOnce((handler: BackHandler) => {
@@ -111,6 +216,34 @@ describe("installAndroidBackHandler", () => {
     await installAndroidBackHandler();
 
     expect(mockOnBackButtonPress).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("parentRouteOf", () => {
+  async function loadParentRouteOf(): Promise<(path: string) => string | null> {
+    const { parentRouteOf } = await import("@/lib/window/androidBack");
+    return parentRouteOf;
+  }
+
+  it("maps a cover route to its book", async () => {
+    expect((await loadParentRouteOf())("/book/b1/cover")).toBe("/book/b1");
+  });
+
+  it("maps a book route to home", async () => {
+    expect((await loadParentRouteOf())("/book/b1")).toBe("/");
+  });
+
+  it("maps notes and canvas children to their galleries", async () => {
+    const parentRouteOf = await loadParentRouteOf();
+    expect(parentRouteOf("/notes/abc")).toBe("/notes");
+    expect(parentRouteOf("/canvas/abc")).toBe("/canvas");
+  });
+
+  it("returns null for root routes", async () => {
+    const parentRouteOf = await loadParentRouteOf();
+    expect(parentRouteOf("/")).toBeNull();
+    expect(parentRouteOf("/notes")).toBeNull();
+    expect(parentRouteOf("/settings")).toBeNull();
   });
 });
 
