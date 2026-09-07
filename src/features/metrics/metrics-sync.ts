@@ -1,5 +1,10 @@
 import { getDatabase } from "@/lib/db";
-import { decrypt, encrypt } from "@/features/sync/crypto";
+import {
+  stringifySnapshotAsync,
+  parseJsonAsync,
+  encryptToBase64Async,
+  decryptBase64ToText,
+} from "@/features/sync/sync-codec";
 import {
   applyRemoteEvent,
   applyRemoteTombstone,
@@ -85,7 +90,7 @@ export async function serializeMetricsBatch(): Promise<string> {
     updatedAt: Math.floor(Math.max(maxTimestamp, Date.now()) / 1000),
   };
 
-  return JSON.stringify(blob);
+  return stringifySnapshotAsync(blob);
 }
 
 export async function applyMetricsBatch(snapshot: MetricsSyncBlob): Promise<void> {
@@ -269,8 +274,8 @@ async function decodeRemoteEvent(
 ): Promise<MetricEvent | null> {
   let payload: MetricPayload;
   try {
-    const decrypted = await decrypt(base64ToUint8Array(remote.encrypted_payload), passphrase);
-    payload = JSON.parse(decrypted) as MetricPayload;
+    const decrypted = await decryptBase64ToText(remote.encrypted_payload, passphrase);
+    payload = await parseJsonAsync<MetricPayload>(decrypted);
   } catch {
     // Skip rows we can't decrypt — wrong passphrase or corrupted ciphertext.
     // They stay on the server; another device with the right key can still
@@ -291,25 +296,7 @@ async function decodeRemoteEvent(
 }
 
 async function encryptPayload(payload: MetricPayload, passphrase: string): Promise<string> {
-  const ciphertext = await encrypt(JSON.stringify(payload), passphrase);
-  return uint8ArrayToBase64(ciphertext);
-}
-
-function uint8ArrayToBase64(data: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < data.byteLength; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
-  return btoa(binary);
-}
-
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const data = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    data[i] = binary.charCodeAt(i);
-  }
-  return data;
+  return encryptToBase64Async(await stringifySnapshotAsync(payload), passphrase);
 }
 
 // Used by the one-time blob → rows migration. Decrypts any legacy

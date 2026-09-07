@@ -1,4 +1,3 @@
-import { useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -9,38 +8,13 @@ import { timeAgo } from "@/components/notes/timeAgo";
 import { Tooltip } from "@/components/ui";
 
 interface SyncPanelProps {
-  triggerRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onSync: (options?: Partial<SyncOptions>) => Promise<void>;
 }
 
-export function SyncPanel({ triggerRef, onClose, onSync }: SyncPanelProps) {
+export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
   const { t, i18n } = useTranslation();
-  const panelRef = useRef<HTMLDivElement>(null);
   const { userEmail, lastSyncedAt, syncError, logout } = useSyncStore();
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target;
-      if (!panelRef.current || !(target instanceof Node)) {
-        return;
-      }
-      if (panelRef.current.contains(target)) {
-        return;
-      }
-      if (triggerRef.current && target instanceof Node && triggerRef.current.contains(target)) {
-        return;
-      }
-      if (target instanceof Element && target.closest('[role="listbox"], [role="option"]')) {
-        return;
-      }
-
-      onClose();
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
 
   const handleLogout = () => {
     logout();
@@ -56,10 +30,7 @@ export function SyncPanel({ triggerRef, onClose, onSync }: SyncPanelProps) {
   };
 
   return (
-    <div
-      ref={panelRef}
-      className="absolute top-full right-0 mt-1 z-50 w-96 max-w-[calc(100vw-1rem)] bg-background border border-border rounded-xl shadow-xl overflow-hidden"
-    >
+    <div>
       <div className="px-4 py-3 border-b border-border">
         <p className="text-sm font-medium truncate">{userEmail}</p>
         <Tooltip content={formatLastSynced(true)}>

@@ -31,6 +31,56 @@ import { confirmTombstones } from "@/features/sync/tombstones";
 const STORAGE_KEY = "maibuk-sync";
 const MAX_SYNC_LOG_ENTRIES = 100;
 
+// Store-requested syncs run serialized in the engine, so several store
+// actions can be in flight at once. This count keeps syncStatus at
+// "syncing" until the last pending operation settles — an earlier
+// completion or error must not mark a still-running sync as done.
+let pendingSyncCount = 0;
+
+export function resetSyncStoreConcurrencyForTests(): void {
+  pendingSyncCount = 0;
+}
+
+type SyncStoreSetter = (partial: Partial<SyncStore>) => void;
+
+function beginStoreSync(set: SyncStoreSetter): void {
+  pendingSyncCount += 1;
+  set({ syncStatus: "syncing", syncError: null, pendingDeletions: [] });
+}
+
+function finishStoreSyncOutcome(
+  outcome: SyncOutcome,
+  pendingDeletions: SyncDeletionReviewItem[] | undefined,
+  set: SyncStoreSetter
+): void {
+  pendingSyncCount = Math.max(0, pendingSyncCount - 1);
+  set({ pendingDeletions: pendingDeletions ?? [] });
+  if (pendingSyncCount > 0) {
+    // More store-requested work is still running: record this operation's
+    // data truthfully but stay "syncing" until the last one settles.
+    if (outcome === "cancelled") {
+      set({ syncStatus: "syncing", syncError: null });
+    } else {
+      set({
+        syncStatus: "syncing",
+        syncError: null,
+        lastSyncedAt: Math.floor(Date.now() / 1000),
+      });
+    }
+    return;
+  }
+  applySyncOutcome(outcome, set);
+}
+
+function finishStoreSyncError(set: SyncStoreSetter, message: string): void {
+  pendingSyncCount = Math.max(0, pendingSyncCount - 1);
+  if (pendingSyncCount > 0) {
+    set({ syncStatus: "syncing", syncError: message });
+    return;
+  }
+  set({ syncStatus: "error", syncError: message });
+}
+
 interface SyncStore {
   authStatus: AuthStatus;
   userEmail: string | null;
@@ -201,7 +251,7 @@ export const useSyncStore = create<SyncStore>()(
       },
 
       syncAll: async (passphrase, onConflict, options) => {
-        set({ syncStatus: "syncing", syncError: null, pendingDeletions: [] });
+        beginStoreSync(set);
         try {
           const result = await syncAllBooks(passphrase, onConflict, {
             scope: "all",
@@ -214,17 +264,16 @@ export const useSyncStore = create<SyncStore>()(
               options?.onLog?.(entry);
             },
           });
-          set({ pendingDeletions: result.pendingDeletions ?? [] });
-          applySyncOutcome(result.outcome, set);
+          finishStoreSyncOutcome(result.outcome, result.pendingDeletions, set);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Sync failed";
-          set({ syncStatus: "error", syncError: message });
+          finishStoreSyncError(set, message);
           throw error;
         }
       },
 
       syncSingleBook: async (bookId, passphrase, onConflict, options) => {
-        set({ syncStatus: "syncing", syncError: null, pendingDeletions: [] });
+        beginStoreSync(set);
         try {
           const result = await syncBook(bookId, passphrase, onConflict, {
             scope: "books",
@@ -237,17 +286,16 @@ export const useSyncStore = create<SyncStore>()(
               options?.onLog?.(entry);
             },
           });
-          set({ pendingDeletions: result.pendingDeletions ?? [] });
-          applySyncOutcome(result.outcome, set);
+          finishStoreSyncOutcome(result.outcome, result.pendingDeletions, set);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Sync failed";
-          set({ syncStatus: "error", syncError: message });
+          finishStoreSyncError(set, message);
           throw error;
         }
       },
 
       syncSingleNote: async (noteId, passphrase, onConflict, options) => {
-        set({ syncStatus: "syncing", syncError: null, pendingDeletions: [] });
+        beginStoreSync(set);
         try {
           const result = await engineSyncSingleNote(noteId, passphrase, onConflict, {
             scope: "notes",
@@ -260,11 +308,10 @@ export const useSyncStore = create<SyncStore>()(
               options?.onLog?.(entry);
             },
           });
-          set({ pendingDeletions: result.pendingDeletions ?? [] });
-          applySyncOutcome(result.outcome, set);
+          finishStoreSyncOutcome(result.outcome, result.pendingDeletions, set);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Sync failed";
-          set({ syncStatus: "error", syncError: message });
+          finishStoreSyncError(set, message);
           throw error;
         }
       },

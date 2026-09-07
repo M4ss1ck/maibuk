@@ -1,31 +1,9 @@
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { parseSqlStatements } from "@/lib/db/sql-parser";
+import { exportSqlDump } from "@/lib/db/sql-export";
 
 const DB_STORAGE_KEY = "maibuk-database";
-
-function escapeSQL(value: unknown): string {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string") {
-    return `'${value.replace(/'/g, "''")}'`;
-  }
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
-
-function generateInsertStatements(tableName: string, rows: Record<string, unknown>[]): string {
-  if (rows.length === 0) return "";
-
-  const statements: string[] = [];
-  for (const row of rows) {
-    const columns = Object.keys(row);
-    const values = columns.map((col) => escapeSQL(row[col]));
-    statements.push(
-      `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
-    );
-  }
-  return statements.join("\n");
-}
 
 class WebDatabaseAdapter implements DatabaseAdapter {
   // Serializes IndexedDB writes so overlapping persists don't race on the same
@@ -61,47 +39,8 @@ class WebDatabaseAdapter implements DatabaseAdapter {
   }
 
   async exportData(): Promise<Uint8Array> {
-    // Generate SQL dump for consistency with Tauri export
-    const [books, chapters, bookVersions, notes, syncTombstones, coverTemplates, settings] =
-      await Promise.all([
-        this.select<Record<string, unknown>[]>("SELECT * FROM books"),
-        this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
-        this.select<Record<string, unknown>[]>("SELECT * FROM book_versions"),
-        this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
-        this.select<Record<string, unknown>[]>("SELECT * FROM sync_tombstones"),
-        this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
-        this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
-      ]);
-
-    const lines: string[] = [
-      "-- Maibuk Database Export (SQL Dump)",
-      `-- Exported at: ${new Date().toISOString()}`,
-      "-- Import this file into a SQLite database after creating the schema",
-      "",
-      "-- Books",
-      generateInsertStatements("books", books),
-      "",
-      "-- Chapters",
-      generateInsertStatements("chapters", chapters),
-      "",
-      "-- Book Versions",
-      generateInsertStatements("book_versions", bookVersions),
-      "",
-      "-- Notes",
-      generateInsertStatements("notes", notes),
-      "",
-      "-- Sync Tombstones",
-      generateInsertStatements("sync_tombstones", syncTombstones),
-      "",
-      "-- Cover Templates",
-      generateInsertStatements("cover_templates", coverTemplates),
-      "",
-      "-- Settings",
-      generateInsertStatements("settings", settings),
-    ];
-
-    const sqlDump = lines.join("\n");
-    return new TextEncoder().encode(sqlDump);
+    // Exported through the shared worker-backed dump helper.
+    return exportSqlDump(this);
   }
 
   async importData(sqlContent: string): Promise<void> {
