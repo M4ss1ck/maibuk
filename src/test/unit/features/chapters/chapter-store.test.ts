@@ -249,6 +249,31 @@ describe("useChapterStore", () => {
     });
   });
 
+  describe("local change signal", () => {
+    it("signals edits so automatic sync can schedule, but not a sync refresh", async () => {
+      const { onLocalChange } = await import("@/features/sync/local-changes");
+      const listener = vi.fn();
+      const off = onLocalChange(listener);
+      try {
+        const chapter = await useChapterStore.getState().createChapter({
+          bookId: "book-1",
+          title: "One",
+        });
+        await useChapterStore.getState().updateChapter(chapter.id, { content: "<p>Edit</p>" });
+        await useChapterStore.getState().reorderChapters("book-1", [chapter.id]);
+        await useChapterStore.getState().deleteChapter(chapter.id);
+        expect(listener).toHaveBeenCalledTimes(4);
+
+        listener.mockClear();
+        await useChapterStore.getState().loadChapters("book-1");
+        await useChapterStore.getState().refreshChapters("book-1");
+        expect(listener).not.toHaveBeenCalled();
+      } finally {
+        off();
+      }
+    });
+  });
+
   describe("refreshChapters()", () => {
     it("keeps the open chapter selected with its fresh row", async () => {
       await seedChapter(testDb, "ch-1", "book-1", 0, "<p>Old</p>");

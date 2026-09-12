@@ -16,6 +16,7 @@ const {
   mockSyncBook,
   mockSyncSingleNote,
   mockConfirmTombstones,
+  mockClearAllSyncBases,
 } = vi.hoisted(() => ({
   mockInitClient: vi.fn(),
   mockRestoreAuth: vi.fn(),
@@ -30,6 +31,7 @@ const {
   mockSyncBook: vi.fn(),
   mockSyncSingleNote: vi.fn(),
   mockConfirmTombstones: vi.fn(),
+  mockClearAllSyncBases: vi.fn(),
 }));
 
 vi.mock("../../../../features/sync/client", () => ({
@@ -58,6 +60,10 @@ vi.mock("../../../../features/sync/tombstones", () => ({
   confirmTombstones: mockConfirmTombstones,
 }));
 
+vi.mock("../../../../features/sync/sync-state", () => ({
+  clearAllSyncBases: mockClearAllSyncBases,
+}));
+
 const { useSyncStore } = await import("@/features/sync/store");
 
 function resetSyncStore() {
@@ -82,6 +88,7 @@ describe("useSyncStore", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    mockClearAllSyncBases.mockResolvedValue(undefined);
     resetSyncStore();
   });
 
@@ -563,7 +570,9 @@ describe("useSyncStore", () => {
       expect(state.authStatus).toBe("logged-in");
     });
 
-    it("triggers auto-sync when passphrase is available after successful refresh", async () => {
+    // The launch sync moved to installAutoSync (features/sync/auto-sync.ts),
+    // which reacts to authVerified turning true and honours the setting.
+    it("does not start a sync itself, even with a stored passphrase", async () => {
       useSyncStore.setState({
         authStatus: "logged-in",
         authToken: "old-token",
@@ -574,108 +583,12 @@ describe("useSyncStore", () => {
         email: "user@test.com",
         token: "new-token",
       });
-      mockSyncAllBooks.mockResolvedValue({ outcome: "success", actions: ["pushed"] });
 
       await useSyncStore.getState().verifyAuth();
 
-      expect(mockSyncAllBooks).toHaveBeenCalledWith(
-        "my-secret",
-        expect.any(Function),
-        expect.objectContaining({
-          scope: "all",
-          direction: "bidirectional",
-          onLog: expect.any(Function),
-        })
-      );
-      expect(useSyncStore.getState().syncStatus).toBe("success");
-    });
-
-    it("sets syncing status during auto-sync", async () => {
-      useSyncStore.setState({
-        authStatus: "logged-in",
-        authToken: "old-token",
-        apiUrl: "https://sync.example.com",
-        passphrase: "my-secret",
-      });
-      mockRefreshAuth.mockResolvedValue({
-        email: "user@test.com",
-        token: "new-token",
-      });
-      let capturedStatus: string | undefined;
-      mockSyncAllBooks.mockImplementation(async () => {
-        capturedStatus = useSyncStore.getState().syncStatus;
-        return { outcome: "success", actions: ["pushed"] };
-      });
-
-      await useSyncStore.getState().verifyAuth();
-
-      expect(capturedStatus).toBe("syncing");
-    });
-
-    it("does not auto-sync when no passphrase is stored", async () => {
-      useSyncStore.setState({
-        authStatus: "logged-in",
-        authToken: "old-token",
-        apiUrl: "https://sync.example.com",
-        passphrase: null,
-      });
-      mockRefreshAuth.mockResolvedValue({
-        email: "user@test.com",
-        token: "new-token",
-      });
-
-      await useSyncStore.getState().verifyAuth();
-
+      expect(useSyncStore.getState().authVerified).toBe(true);
       expect(mockSyncAllBooks).not.toHaveBeenCalled();
-    });
-
-    it("auto-sync cancels on conflict without error", async () => {
-      useSyncStore.setState({
-        authStatus: "logged-in",
-        authToken: "old-token",
-        apiUrl: "https://sync.example.com",
-        passphrase: "my-secret",
-      });
-      mockRefreshAuth.mockResolvedValue({
-        email: "user@test.com",
-        token: "new-token",
-      });
-      // Simulate conflict: the onConflict resolver should return "cancel"
-      mockSyncAllBooks.mockImplementation(
-        async (_pass: string, onConflict: (conflict: unknown) => Promise<string>) => {
-          const choice = await onConflict({
-            bookId: "b1",
-            bookTitle: "Book",
-            localUpdatedAt: 1,
-            remoteUpdatedAt: 2,
-          });
-          expect(choice).toBe("cancel");
-          return { outcome: "cancelled", actions: ["cancelled"] };
-        }
-      );
-
-      await useSyncStore.getState().verifyAuth();
-
-      expect(useSyncStore.getState().syncStatus).toBe("cancelled");
-    });
-
-    it("sets error status when auto-sync fails", async () => {
-      useSyncStore.setState({
-        authStatus: "logged-in",
-        authToken: "old-token",
-        apiUrl: "https://sync.example.com",
-        passphrase: "my-secret",
-      });
-      mockRefreshAuth.mockResolvedValue({
-        email: "user@test.com",
-        token: "new-token",
-      });
-      mockSyncAllBooks.mockRejectedValue(new Error("Network error"));
-
-      await useSyncStore.getState().verifyAuth();
-
-      expect(useSyncStore.getState().syncStatus).toBe("error");
-      expect(useSyncStore.getState().syncError).toBe("Network error");
+      expect(useSyncStore.getState().syncStatus).toBe("idle");
     });
 
     it("clears auth on 401 error", async () => {
@@ -934,6 +847,35 @@ describe("useSyncStore", () => {
 
       expect(useSyncStore.getState().authRefreshedAt).toBe(42_000);
       vi.restoreAllMocks();
+    });
+  });
+
+  describe("sync bases", () => {
+    beforeEach(() => {
+      mockClearAllSyncBases.mockResolvedValue(undefined);
+    });
+
+    it("forgets them on logout, so another account is compared afresh", () => {
+      useSyncStore.getState().logout();
+
+      expect(mockClearAllSyncBases).toHaveBeenCalledTimes(1);
+    });
+
+    it("forgets them when the server changes, but not when it stays the same", () => {
+      useSyncStore.setState({ apiUrl: "https://a.example.com" });
+
+      useSyncStore.getState().setApiUrl("https://a.example.com");
+      expect(mockClearAllSyncBases).not.toHaveBeenCalled();
+
+      useSyncStore.getState().setApiUrl("https://b.example.com");
+      expect(mockClearAllSyncBases).toHaveBeenCalledTimes(1);
+    });
+
+    it("never lets a failed clear break logout", () => {
+      mockClearAllSyncBases.mockRejectedValue(new Error("db closed"));
+
+      expect(() => useSyncStore.getState().logout()).not.toThrow();
+      expect(useSyncStore.getState().authStatus).toBe("logged-out");
     });
   });
 

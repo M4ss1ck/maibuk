@@ -257,6 +257,11 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `shouldRefreshAuth()` / `getTokenExpiryMs()` (auth token renewal policy) | `src/features/sync/auth-policy.ts` |
 | `installAuthKeepAlive()` (renews the sync session while the app runs) | `src/features/sync/auth-keep-alive.ts` |
 | `buildTestJwt(expiresAtMs)` (JWT-shaped test token)              | `src/test/support/jwt.ts`                  |
+| `decideSyncAction()` (pure three-way push/pull/conflict decision against the last-synced base) | `src/features/sync/sync-decision.ts` |
+| `getSyncBase()` / `setSyncBase()` / `clearAllSyncBases()` (per-device `sync_state` table, not backed up) | `src/features/sync/sync-state.ts` |
+| `installAutoSync()` / `runAutoSync()` (launch + idle-after-edit automatic sync, `autoSync` setting) | `src/features/sync/auto-sync.ts` |
+| `notifyLocalChange()` / `onLocalChange()` (dependency-free "user edited synced data" signal; call from store mutations) | `src/features/sync/local-changes.ts` |
+| `registerPendingEditsFlush()` / `flushPendingEdits()` (editors land debounced saves before a sync reads or pulls) | `src/features/sync/pending-edits.ts` |
 | `useVersionStore`                                                  | `src/features/versions/store.ts`           |
 | `useAutoCheckpoint`                                                | `src/features/versions/useAutoCheckpoint.ts` |
 | `sanitizeChapterHtml()`                                            | `src/features/versions/sanitize.ts`        |

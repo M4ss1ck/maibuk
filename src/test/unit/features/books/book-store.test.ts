@@ -128,6 +128,30 @@ describe("useBookStore", () => {
     });
   });
 
+  describe("local change signal", () => {
+    it("signals edits, but not opening a book, word counts, or a sync refresh", async () => {
+      const { onLocalChange } = await import("@/features/sync/local-changes");
+      const listener = vi.fn();
+      const off = onLocalChange(listener);
+      try {
+        const book = await useBookStore.getState().createBook({ title: "A", authorName: "Me" });
+        await useBookStore.getState().updateBook(book.id, { title: "B" });
+        expect(listener).toHaveBeenCalledTimes(2);
+
+        listener.mockClear();
+        await useBookStore.getState().loadBook(book.id);
+        await useBookStore.getState().updateWordCount(book.id, 10);
+        await useBookStore.getState().refreshBooks();
+        expect(listener).not.toHaveBeenCalled();
+
+        await useBookStore.getState().deleteBook(book.id);
+        expect(listener).toHaveBeenCalledTimes(1);
+      } finally {
+        off();
+      }
+    });
+  });
+
   describe("refreshBooks()", () => {
     it("refreshes the list and the open book without a loading state", async () => {
       const book = await useBookStore.getState().createBook({ title: "Old", authorName: "A" });

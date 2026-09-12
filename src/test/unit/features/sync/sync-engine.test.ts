@@ -1386,6 +1386,342 @@ describe("syncAllNotes — note sync parity with books", () => {
   });
 });
 
+describe("three-way sync against the last-synced base", () => {
+  const mockDb = {
+    select: vi.fn(),
+    execute: vi.fn(),
+  };
+  let bookBase: { local_checksum: string; remote_checksum: string } | null;
+  let noteBase: { local_checksum: string; remote_checksum: string } | null;
+  let localBookUpdatedAt: number;
+
+  const baseWrites = () =>
+    mockDb.execute.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO sync_state"));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSyncEngineForTests();
+    bookBase = null;
+    noteBase = null;
+    localBookUpdatedAt = 5000;
+    mockGetDatabase.mockResolvedValue(mockDb);
+    mockCreateBackupAdapter.mockResolvedValue({
+      saveBackup: vi.fn(),
+      listBackups: vi.fn().mockResolvedValue([]),
+      readBackup: vi.fn(),
+      deleteBackup: vi.fn(),
+    });
+    mockBackupServiceCreateBackup.mockResolvedValue("mock-backup.sql");
+    mockSerializeBook.mockResolvedValue('{"book":{"id":"book-1"},"chapters":[]}');
+    mockSerializeNote.mockResolvedValue('{"note":{"id":"note-1"}}');
+    mockComputeChecksum.mockResolvedValue("local-checksum");
+    mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    mockDecrypt.mockResolvedValue('{"book":{"id":"book-1"},"chapters":[]}');
+    mockPullBookBlob.mockResolvedValue({ data: new Uint8Array([1]), checksum: "" });
+    mockSyncStoreGetState.mockReturnValue({ authVerified: true });
+    mockUseSettingsStoreGetState.mockReturnValue({ metrics: { syncMetrics: false } });
+    mockCreateVersion.mockResolvedValue(null);
+    mockListRemoteVersions.mockResolvedValue([]);
+    mockListRemoteNotes.mockResolvedValue([]);
+    mockDb.select.mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (sql.includes("FROM sync_state")) {
+        const base = params?.[0] === "book" ? bookBase : noteBase;
+        return base ? [base] : [];
+      }
+      if (sql.includes("GROUP BY b.id")) return [{ id: "book-1", updated_at: localBookUpdatedAt }];
+      if (sql.includes("SELECT title FROM books")) return [{ title: "Novel" }];
+      if (sql.includes("FROM notes") && sql.includes("updated_at")) return [];
+      return [];
+    });
+    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
+  });
+
+  it("pulls a remote-only change without asking, even when the local timestamp is newer", async () => {
+    // Before base tracking this was a silent push (local newer) that overwrote
+    // the other device's edit.
+    localBookUpdatedAt = 9999;
+    bookBase = { local_checksum: "local-checksum", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v2", updatedAt: 1000 },
+    ]);
+    const onConflict = vi.fn();
+
+    const result = await syncAllBooks("pass", onConflict);
+
+    expect(onConflict).not.toHaveBeenCalled();
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(mockPullBookBlob).toHaveBeenCalledWith("book-1", "r1");
+    expect(mockApplyBookSnapshot).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ outcome: "success", actions: ["pulled"] });
+    expect(baseWrites()).toEqual([
+      [
+        expect.stringContaining("INSERT INTO sync_state"),
+        ["book", "book-1", "local-checksum", "remote-v2", expect.any(Number)],
+      ],
+    ]);
+  });
+
+  it("pushes a local-only change without asking, even when the remote timestamp is newer", async () => {
+    localBookUpdatedAt = 1000;
+    bookBase = { local_checksum: "older-local", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v1", updatedAt: 9999 },
+    ]);
+    const onConflict = vi.fn();
+
+    const result = await syncAllBooks("pass", onConflict);
+
+    expect(onConflict).not.toHaveBeenCalled();
+    expect(mockPushBookBlob).toHaveBeenCalledWith(
+      "book-1",
+      expect.anything(),
+      "local-checksum",
+      "r1"
+    );
+    expect(result.actions).toEqual(["pushed"]);
+    expect(baseWrites()[0][1]).toEqual([
+      "book",
+      "book-1",
+      "local-checksum",
+      "local-checksum",
+      expect.any(Number),
+    ]);
+  });
+
+  it("leaves an item alone when neither side moved since the base", async () => {
+    bookBase = { local_checksum: "local-checksum", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v1", updatedAt: 1 },
+    ]);
+
+    const result = await syncAllBooks("pass", vi.fn());
+
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(mockPullBookBlob).not.toHaveBeenCalled();
+    expect(result.actions).toEqual(["skipped"]);
+    expect(baseWrites()).toEqual([]);
+  });
+
+  it("asks when both sides changed during a manual sync", async () => {
+    bookBase = { local_checksum: "older-local", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v2", updatedAt: 1 },
+    ]);
+    const onConflict = vi.fn().mockResolvedValue("pull");
+
+    const result = await syncAllBooks("pass", onConflict);
+
+    expect(onConflict).toHaveBeenCalledTimes(1);
+    expect(mockApplyBookSnapshot).toHaveBeenCalledTimes(1);
+    expect(result.actions).toEqual(["pulled"]);
+  });
+
+  it("defers a true conflict during an automatic sync and keeps syncing the rest", async () => {
+    bookBase = { local_checksum: "older-local", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v2", updatedAt: 1 },
+    ]);
+    mockDb.select.mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (sql.includes("FROM sync_state")) return params?.[0] === "book" ? [bookBase] : [];
+      if (sql.includes("GROUP BY b.id")) return [{ id: "book-1", updated_at: 5000 }];
+      if (sql.includes("SELECT title")) return [{ title: "Item" }];
+      if (sql.includes("FROM notes") && sql.includes("updated_at")) {
+        return [{ id: "note-1", updated_at: 5000 }];
+      }
+      return [];
+    });
+
+    const result = await syncAllBooks("pass", async () => "skip", { trigger: "auto" });
+
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(mockApplyBookSnapshot).not.toHaveBeenCalled();
+    // The local-only note after the deferred book still syncs.
+    expect(mockPushNoteBlob).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ outcome: "partial", actions: ["deferred", "pushed"] });
+  });
+
+  it("does not replace an edit that lands while an automatic pull is deciding", async () => {
+    const { registerPendingEditsFlush } = await import("@/features/sync/pending-edits");
+    bookBase = { local_checksum: "local-checksum", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v2", updatedAt: 1 },
+    ]);
+    // The pending editor save lands during the flush, changing the local copy.
+    const flush = vi.fn(() => {
+      mockComputeChecksum.mockResolvedValue("edited-during-sync");
+    });
+    const unregister = registerPendingEditsFlush(flush);
+
+    try {
+      const result = await syncAllBooks("pass", vi.fn(), { trigger: "auto" });
+
+      expect(flush).toHaveBeenCalledTimes(1);
+      expect(mockApplyBookSnapshot).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ outcome: "partial", actions: ["deferred"] });
+    } finally {
+      unregister();
+    }
+  });
+
+  it("backs up lazily in automatic syncs: only when something is pulled", async () => {
+    bookBase = { local_checksum: "local-checksum", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v1", updatedAt: 1 },
+    ]);
+
+    await syncAllBooks("pass", vi.fn(), { trigger: "auto" });
+    expect(mockBackupServiceCreateBackup).not.toHaveBeenCalled();
+
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v2", updatedAt: 1 },
+    ]);
+    await syncAllBooks("pass", vi.fn(), { trigger: "auto" });
+    expect(mockBackupServiceCreateBackup).toHaveBeenCalledTimes(1);
+    expect(mockBackupServiceCreateBackup.mock.invocationCallOrder[0]).toBeLessThan(
+      mockApplyBookSnapshot.mock.invocationCallOrder[0]
+    );
+  });
+
+  it("still backs up up front in a manual sync", async () => {
+    bookBase = { local_checksum: "local-checksum", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v1", updatedAt: 1 },
+    ]);
+
+    await syncAllBooks("pass", vi.fn());
+
+    expect(mockBackupServiceCreateBackup).toHaveBeenCalledTimes(1);
+  });
+
+  it("records the base when the checksums already match", async () => {
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "local-checksum", updatedAt: 1 },
+    ]);
+
+    await syncAllBooks("pass", vi.fn());
+
+    expect(baseWrites()[0][1]).toEqual([
+      "book",
+      "book-1",
+      "local-checksum",
+      "local-checksum",
+      expect.any(Number),
+    ]);
+  });
+
+  it("pulls a remote-only note change without asking", async () => {
+    noteBase = { local_checksum: "local-checksum", remote_checksum: "note-v1" };
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockDb.select.mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (sql.includes("FROM sync_state")) return params?.[0] === "note" ? [noteBase] : [];
+      if (sql.includes("GROUP BY b.id")) return [];
+      if (sql.includes("FROM notes") && sql.includes("updated_at")) {
+        return [{ id: "note-1", updated_at: 9999 }];
+      }
+      if (sql.includes("SELECT title FROM notes")) return [{ title: "Note" }];
+      return [];
+    });
+    mockListRemoteNotes.mockResolvedValue([
+      { remoteId: "n1", noteId: "note-1", checksum: "note-v2", updatedAt: 1 },
+    ]);
+    mockPullNoteBlob.mockResolvedValue({ data: new Uint8Array([1]), checksum: "" });
+    mockDecrypt.mockResolvedValue('{"note":{"id":"note-1"}}');
+    const onConflict = vi.fn();
+
+    const result = await syncAllBooks("pass", onConflict);
+
+    expect(onConflict).not.toHaveBeenCalled();
+    expect(mockPullNoteBlob).toHaveBeenCalledWith("note-1", "n1");
+    expect(mockApplyNoteSnapshot).toHaveBeenCalledTimes(1);
+    expect(result.actions).toEqual(["pulled"]);
+  });
+
+  it("adopts a legacy raw book checksum as the base instead of asking", async () => {
+    // Pushed by a client whose checksum still covered lastOpenedAt & co.
+    mockSerializeBook.mockResolvedValue(
+      '{"book":{"id":"book-1","lastOpenedAt":7,"lastChapterId":null,"updatedAt":3},"chapters":[]}'
+    );
+    mockComputeChecksum.mockImplementation(async (text: string) =>
+      text.includes("lastOpenedAt") ? "legacy-raw" : "normalized"
+    );
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "legacy-raw", updatedAt: 9999 },
+    ]);
+    const onConflict = vi.fn();
+
+    const result = await syncAllBooks("pass", onConflict);
+
+    expect(onConflict).not.toHaveBeenCalled();
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(mockPullBookBlob).not.toHaveBeenCalled();
+    expect(result.actions).toEqual(["skipped"]);
+    expect(baseWrites()[0][1]).toEqual([
+      "book",
+      "book-1",
+      "normalized",
+      "legacy-raw",
+      expect.any(Number),
+    ]);
+  });
+
+  it("keeps an automatic sync going past deletions that still need review", async () => {
+    mockListPendingTombstones.mockResolvedValue([
+      {
+        id: "note:old",
+        entityType: "note",
+        entityId: "old",
+        title: "Deleted note",
+        deletedAt: 1,
+        confirmedAt: null,
+        pushedAt: null,
+      },
+    ]);
+    mockListRemoteBooks.mockResolvedValue([]);
+
+    const auto = await syncAllBooks("pass", vi.fn(), { trigger: "auto" });
+
+    expect(mockDeleteRemoteNote).not.toHaveBeenCalled();
+    expect(mockPushBookBlob).toHaveBeenCalledTimes(1);
+    expect(auto).toMatchObject({
+      outcome: "partial",
+      actions: ["pushed"],
+      pendingDeletions: [expect.objectContaining({ id: "note:old" })],
+    });
+
+    // A manual sync still stops for the review.
+    mockPushBookBlob.mockClear();
+    const manual = await syncAllBooks("pass", vi.fn());
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(manual.outcome).toBe("partial");
+  });
+
+  it("forgets the base once a deletion is pushed", async () => {
+    mockListPendingTombstones.mockResolvedValue([
+      {
+        id: "book:book-9",
+        entityType: "book",
+        entityId: "book-9",
+        title: "Gone",
+        deletedAt: 1,
+        confirmedAt: 2,
+        pushedAt: null,
+      },
+    ]);
+    mockListRemoteBooks.mockResolvedValue([]);
+    mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("GROUP BY b.id")) return [];
+      return [];
+    });
+
+    await syncAllBooks("pass", vi.fn());
+
+    expect(mockDb.execute).toHaveBeenCalledWith(
+      "DELETE FROM sync_state WHERE entity_type = ? AND entity_id = ?",
+      ["book", "book-9"]
+    );
+  });
+});
+
 describe("syncSingleNote — scoped current-note push", () => {
   const mockDb = {
     select: vi.fn(),

@@ -109,6 +109,30 @@ describe("NoteEditor after a sync pull replaces the document", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it("lets an automatic sync land the pending save before it reads the database", async () => {
+    vi.useFakeTimers();
+    const { flushPendingEdits } = await import("@/features/sync/pending-edits");
+    const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
+    const { unmount } = render(<NoteEditor note={buildNote()} onSave={onSave} />);
+
+    act(() => {
+      editorProps.current?.onUpdate("<p>Typed just before the sync</p>");
+    });
+    await act(async () => {
+      await flushPendingEdits();
+    });
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "<p>Typed just before the sync</p>" })
+    );
+
+    // Unmounted editors are no longer flushed.
+    unmount();
+    onSave.mockClear();
+    await flushPendingEdits();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("saves the pulled text, not the stale cached text, on the next save", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();

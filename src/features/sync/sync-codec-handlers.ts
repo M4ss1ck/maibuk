@@ -1,5 +1,5 @@
 import { parseSqlStatements } from "@/lib/db/sql-parser";
-import type { NoteSnapshot } from "@/features/sync/types";
+import type { BookSnapshot, NoteSnapshot } from "@/features/sync/types";
 
 // Pure CPU-bound helpers shared by the sync codec worker and its
 // no-Worker fallback. No database access here — only JSON encode/decode
@@ -34,6 +34,22 @@ export function normalizeNoteSnapshotJson(json: string): string {
       collapsedHeadings: null,
     },
   });
+}
+
+export function normalizeBookSnapshotJson(json: string): string {
+  const snapshot = JSON.parse(json) as BookSnapshot;
+  // Per-device navigation state: opening a book stamps lastOpenedAt, switching
+  // chapters stamps lastChapterId and the book's updatedAt. None of it is
+  // content, and counting it made merely opening a book look like a local edit
+  // (turning every incoming change into a conflict). Content edits still change
+  // the checksum through the book fields and each chapter's own updatedAt.
+  const {
+    lastOpenedAt: _lastOpenedAt,
+    lastChapterId: _lastChapterId,
+    updatedAt: _updatedAt,
+    ...book
+  } = snapshot.book;
+  return JSON.stringify({ ...snapshot, book });
 }
 
 const INSERT_PATTERN = /^INSERT\s/i;

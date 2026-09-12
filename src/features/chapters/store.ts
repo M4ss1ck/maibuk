@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
+import { notifyLocalChange } from "@/features/sync/local-changes";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 import { reindexSource } from "@/features/links/link-index";
 import type {
@@ -130,6 +131,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   },
 
   createChapter: async (input: CreateChapterInput) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const id = generateId();
     const now = Math.floor(Date.now() / 1000);
@@ -180,6 +182,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   },
 
   updateChapter: async (id: string, input: UpdateChapterInput) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const now = Math.floor(Date.now() / 1000);
     let sourceBookId =
@@ -273,6 +276,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   },
 
   deleteChapter: async (id: string) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const rows = await db.select<{ book_id: string }[]>(
       "SELECT book_id FROM chapters WHERE id = ?",
@@ -293,6 +297,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   },
 
   reorderChapters: async (bookId: string, chapterIds: string[]) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const now = Math.floor(Date.now() / 1000);
 

@@ -336,6 +336,17 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   `);
 
   await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS sync_state (
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      local_checksum TEXT NOT NULL,
+      remote_checksum TEXT NOT NULL,
+      synced_at INTEGER NOT NULL,
+      PRIMARY KEY (entity_type, entity_id)
+    )
+  `);
+
+  await adapter.execute(`
     CREATE TABLE IF NOT EXISTS canvases (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,

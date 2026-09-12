@@ -145,6 +145,7 @@ interface SettingsStore extends Settings {
   removePasteCleanupRule: (id: string) => void;
   movePasteCleanupRule: (id: string, direction: "up" | "down") => void;
   setPromptMarkdownOnPaste: (enabled: boolean) => void;
+  setAutoSync: (enabled: boolean) => void;
   setMetricsCategoryEnabled: (category: MetricsCategory, enabled: boolean) => void;
   setMetricsSyncEnabled: (enabled: boolean) => void;
   setMetricsStreakDailyWordThreshold: (threshold: number) => void;
@@ -218,6 +219,7 @@ const defaultSettings: Settings = {
     ...DEFAULT_METRICS_SETTINGS,
     enabled: { ...DEFAULT_METRICS_SETTINGS.enabled },
   },
+  autoSync: true,
 };
 
 function normalizeHexColor(color: string): string {
@@ -353,6 +355,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setDictionaryOpenInBrowser: (dictionaryOpenInBrowser) => set({ dictionaryOpenInBrowser }),
       setShowInlineFootnotes: (showInlineFootnotes) => set({ showInlineFootnotes }),
       setPromptMarkdownOnPaste: (promptMarkdownOnPaste) => set({ promptMarkdownOnPaste }),
+      setAutoSync: (autoSync) => set({ autoSync }),
       setShowNotesChapter: (showNotesChapter) => set({ showNotesChapter }),
       setBookSidePanelTab: (bookSidePanelTab) => set({ bookSidePanelTab }),
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),

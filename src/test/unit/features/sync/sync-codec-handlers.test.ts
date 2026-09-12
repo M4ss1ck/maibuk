@@ -3,6 +3,7 @@ import {
   stringifySnapshot,
   parseJsonValue,
   normalizeNoteSnapshotJson,
+  normalizeBookSnapshotJson,
   dumpHasDataSql,
   toOwnedBuffer,
   uint8ArrayToBase64,
@@ -88,5 +89,52 @@ describe("toOwnedBuffer / base64 helpers", () => {
   it("round-trips base64", () => {
     const data = new Uint8Array([0, 1, 250, 255]);
     expect(base64ToUint8Array(uint8ArrayToBase64(data))).toEqual(data);
+  });
+});
+
+describe("normalizeBookSnapshotJson", () => {
+  const book = {
+    id: "book-1",
+    title: "Title",
+    subtitle: null,
+    authorName: "Author",
+    description: null,
+    genre: null,
+    language: "en",
+    coverImagePath: null,
+    coverData: null,
+    wordCount: 3,
+    targetWordCount: null,
+    status: "draft",
+    createdAt: 1,
+    updatedAt: 10,
+    lastOpenedAt: 20,
+    lastChapterId: "ch-1",
+  };
+  const chapters = [{ id: "ch-1", content: "<p>Body</p>", updatedAt: 5 }];
+
+  // Opening a book or switching chapters must not read as a local edit.
+  it("ignores per-device navigation state", () => {
+    const opened = JSON.stringify({
+      book: { ...book, updatedAt: 99, lastOpenedAt: 99, lastChapterId: "ch-2" },
+      chapters,
+    });
+
+    expect(normalizeBookSnapshotJson(opened)).toBe(
+      normalizeBookSnapshotJson(JSON.stringify({ book, chapters }))
+    );
+  });
+
+  it("still changes when book fields or chapters change", () => {
+    const base = normalizeBookSnapshotJson(JSON.stringify({ book, chapters }));
+
+    expect(
+      normalizeBookSnapshotJson(JSON.stringify({ book: { ...book, title: "New" }, chapters }))
+    ).not.toBe(base);
+    expect(
+      normalizeBookSnapshotJson(
+        JSON.stringify({ book, chapters: [{ ...chapters[0], content: "<p>Edit</p>", updatedAt: 6 }] })
+      )
+    ).not.toBe(base);
   });
 });

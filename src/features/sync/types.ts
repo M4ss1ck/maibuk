@@ -9,15 +9,21 @@ export type SyncStatus =
   | "cancelled"
   | "partial";
 
-export type SyncAction = "pushed" | "pulled" | "skipped" | "cancelled";
+// "deferred": left for a manual sync (a conflict during an automatic sync, or
+// a local edit that landed while the sync was comparing).
+export type SyncAction = "pushed" | "pulled" | "skipped" | "cancelled" | "deferred";
 export type SyncOutcome = "success" | "cancelled" | "partial";
 export type SyncScope = "all" | "books" | "notes" | "metrics";
 export type SyncDirection = "bidirectional" | "pull" | "push";
 export type SyncEntityType = "book" | "note" | "canvas";
 
+export type SyncTrigger = "manual" | "auto";
+
 export interface SyncOptions {
   scope: SyncScope;
   direction: SyncDirection;
+  /** "auto" runs never prompt: conflicts are deferred and the safety backup is taken lazily. */
+  trigger?: SyncTrigger;
   confirmedDeletionIds?: string[];
   onLog?: (entry: SyncLogEntry) => void;
 }
@@ -86,7 +92,10 @@ export interface SyncConflict {
   remoteUpdatedAt: number;
 }
 
-export type ConflictResolver = (conflict: SyncConflict) => Promise<"push" | "pull" | "cancel">;
+// "skip" defers this item and lets the sync continue (used by automatic sync).
+export type ConflictResolver = (
+  conflict: SyncConflict
+) => Promise<"push" | "pull" | "cancel" | "skip">;
 
 export interface SyncItemMeta {
   remoteId: string;

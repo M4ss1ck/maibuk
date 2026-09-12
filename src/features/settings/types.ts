@@ -209,6 +209,9 @@ export interface Settings {
 
   // Writing metrics settings
   metrics: MetricsSettings;
+
+  // Sync automatically after local edits and at launch (when logged in with a stored passphrase)
+  autoSync: boolean;
 }
 
 export const PASTE_STRUCTURAL_OPTION_KEYS: PasteStructuralOptionKey[] = [

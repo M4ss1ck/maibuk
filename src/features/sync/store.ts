@@ -28,6 +28,7 @@ import {
 } from "@/features/sync/sync-engine";
 import { confirmTombstones } from "@/features/sync/tombstones";
 import { shouldRefreshAuth } from "@/features/sync/auth-policy";
+import { clearAllSyncBases } from "@/features/sync/sync-state";
 
 export type SessionRefreshResult = "refreshed" | "skipped" | "offline" | "expired" | "failed";
 
@@ -168,6 +169,11 @@ export const useSyncStore = create<SyncStore>()(
 
       setApiUrl: (url) => {
         const apiUrl = normalizeServerUrl(url);
+        // Sync bases compare against one server's copies; another server's
+        // copies must be compared afresh, never treated as remote edits.
+        if (apiUrl !== useSyncStore.getState().apiUrl) {
+          void clearAllSyncBases().catch(() => {});
+        }
         initClient(apiUrl);
         set({ apiUrl });
       },
@@ -213,6 +219,8 @@ export const useSyncStore = create<SyncStore>()(
       logout: () => {
         pbLogout();
         clearPassphrase();
+        // The next account's remote copies are unrelated to these bases.
+        void clearAllSyncBases().catch(() => {});
         set({
           authStatus: "logged-out",
           userEmail: null,
@@ -229,19 +237,9 @@ export const useSyncStore = create<SyncStore>()(
       },
 
       verifyAuth: async (): Promise<void> => {
-        const result = await useSyncStore.getState().refreshSession();
-        if (result !== "refreshed") return;
-
-        // Auto-sync if passphrase is available
-        const { passphrase } = useSyncStore.getState();
-        if (passphrase) {
-          const skipConflicts: ConflictResolver = async () => "cancel";
-          try {
-            await useSyncStore.getState().syncAll(passphrase, skipConflicts);
-          } catch {
-            // syncAll already sets error status in the store
-          }
-        }
+        await useSyncStore.getState().refreshSession();
+        // The launch sync is not started here: installAutoSync reacts to
+        // authVerified turning true and honours the automatic-sync setting.
       },
 
       refreshSession: async (): Promise<SessionRefreshResult> => {

@@ -10,6 +10,7 @@ import {
   stringifySnapshot,
   parseJsonValue,
   normalizeNoteSnapshotJson,
+  normalizeBookSnapshotJson,
   dumpHasDataSql,
   toOwnedBuffer,
 } from "@/features/sync/sync-codec-handlers";
@@ -42,6 +43,10 @@ async function handle(msg: CodecRequest): Promise<void> {
     }
     case "normalizeNote": {
       respond({ id, ok: true, json: normalizeNoteSnapshotJson(msg.json) });
+      return;
+    }
+    case "normalizeBook": {
+      respond({ id, ok: true, json: normalizeBookSnapshotJson(msg.json) });
       return;
     }
     case "encrypt": {

@@ -79,6 +79,8 @@ export function Settings() {
     setHideKeyboardHints,
     editorAutoClose,
     setEditorAutoClose,
+    autoSync,
+    setAutoSync,
   } = useSettings();
 
   const { apiUrl, setApiUrl, authStatus, userEmail, logout } = useSyncStore();
@@ -437,6 +439,16 @@ export function Settings() {
                 </Button>
               )}
             </div>
+
+            {authStatus === "logged-in" && (
+              <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
+                <div className="flex-1">
+                  <p className="font-medium">{t("sync.autoSync")}</p>
+                  <p className="text-sm text-muted-foreground">{t("sync.autoSyncDescription")}</p>
+                </div>
+                <Switch checked={autoSync} onChange={setAutoSync} label={t("sync.autoSync")} />
+              </div>
+            )}
 
             {authStatus === "logged-in" && (
               <div className="py-3">

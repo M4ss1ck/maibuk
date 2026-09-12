@@ -151,6 +151,22 @@ describe("BookEditor after a sync pull replaces the open chapter", () => {
     expect(mockUpdateChapter).toHaveBeenCalledWith("chapter-1", { content: "<p>Typed</p>" });
   });
 
+  it("lets an automatic sync land the pending autosave before it reads the database", async () => {
+    const { flushPendingEdits } = await import("@/features/sync/pending-edits");
+    render(<BookEditor />);
+
+    act(() => {
+      editorProps.current?.onUpdate("<p>Typed just before the sync</p>");
+    });
+    await act(async () => {
+      await flushPendingEdits();
+    });
+
+    expect(mockUpdateChapter).toHaveBeenCalledWith("chapter-1", {
+      content: "<p>Typed just before the sync</p>",
+    });
+  });
+
   it("drops the save queued for the old text and adopts the pulled word count", async () => {
     render(<BookEditor />);
 
