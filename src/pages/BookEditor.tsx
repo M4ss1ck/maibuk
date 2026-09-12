@@ -571,6 +571,17 @@ export function BookEditor() {
     [currentChapter, debouncedSave]
   );
 
+  // A sync pull replaced the open chapter: later saves must carry the pulled
+  // text, and a save queued for the old text would overwrite it.
+  const handleExternalContent = useCallback(
+    (content: string, count: number) => {
+      debouncedSave.cancel();
+      editorContentRef.current = content;
+      setWordCount(count);
+    },
+    [debouncedSave]
+  );
+
   // Handle word count changes
   const handleWordCountChange = useCallback((count: number) => {
     setWordCount(count);
@@ -1343,6 +1354,7 @@ export function BookEditor() {
             key={currentChapter.id}
             content={currentChapter.content}
             onUpdate={handleContentUpdate}
+            onExternalContent={handleExternalContent}
             onWordCountChange={handleWordCountChange}
             onStatsChange={handleStatsChange}
             onEditorReady={handleEditorReady}

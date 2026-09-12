@@ -102,6 +102,49 @@ describe("note snapshot serializer", () => {
     });
   });
 
+  // Regression: applying a pulled note only reloaded the notes list, so the open
+  // NoteEditor kept rendering the stale currentNote until the note was reopened.
+  it("refreshes the open note when its snapshot is pulled", async () => {
+    const { useNoteStore } = await import("@/features/notes/store");
+    await testDb.execute(
+      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["note-1", "Local title", "<p>Local</p>", "[]", 0, 0, 1, "[]", 10, 20]
+    );
+    await useNoteStore.getState().loadNote("note-1");
+
+    const loadingFlags: boolean[] = [];
+    const unsubscribe = useNoteStore.subscribe((state) => {
+      if (state.isLoading) loadingFlags.push(true);
+    });
+    try {
+      await applyNoteSnapshot({
+        note: {
+          id: "note-1",
+          title: "Remote title",
+          content: "<p>Remote</p>",
+          tags: "[]",
+          pinned: false,
+          order: 0,
+          wordCount: 1,
+          collapsedHeadings: "[]",
+          createdAt: 10,
+          updatedAt: 30,
+        },
+      });
+    } finally {
+      unsubscribe();
+    }
+
+    expect(loadingFlags).toEqual([]);
+    expect(useNoteStore.getState().currentNote).toMatchObject({
+      id: "note-1",
+      title: "Remote title",
+      content: "<p>Remote</p>",
+    });
+    expect(useNoteStore.getState().notes.map((note) => note.title)).toEqual(["Remote title"]);
+  });
+
   it("round-trips contentUpdatedAt through serialize and apply", async () => {
     await testDb.execute(
       `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
@@ -383,6 +426,129 @@ describe("book snapshot serializer", () => {
     await applyBookSnapshot(snapshot);
 
     expect(useChapterStore.getState().chapters.map((c) => c.id)).toEqual(["ch-1"]);
+  });
+
+  // Regression: pulling the open book used to call loadBooks (isLoading -> the
+  // BookEditor full-page loader) and loadChapters (currentChapter -> null), which
+  // tore the editor down. The open chapter must stay selected, carry the pulled
+  // content, and neither store may enter a loading state.
+  it("refreshes the open chapter in place when its book is pulled", async () => {
+    await insertBook(testDb, "book-1");
+    await insertChapter(testDb, "ch-1", "book-1", 0);
+    await insertChapter(testDb, "ch-2", "book-1", 1);
+    const { useBookStore } = await import("@/features/books/store");
+    await useBookStore.getState().loadBook("book-1");
+    await useChapterStore.getState().loadChapters("book-1");
+    const [, second] = useChapterStore.getState().chapters;
+    useChapterStore.getState().setCurrentChapter(second);
+
+    const loadingFlags: string[] = [];
+    const unsubscribeBooks = useBookStore.subscribe((state) => {
+      if (state.isLoading) loadingFlags.push("books");
+    });
+    const unsubscribeChapters = useChapterStore.subscribe((state) => {
+      if (state.isLoading) loadingFlags.push("chapters");
+      if (state.currentChapter === null) loadingFlags.push("no-current-chapter");
+    });
+
+    try {
+      await applyBookSnapshot({
+        book: {
+          id: "book-1",
+          title: "Pulled title",
+          subtitle: null,
+          authorName: "Author",
+          description: null,
+          genre: null,
+          language: "en",
+          coverImagePath: null,
+          coverData: null,
+          wordCount: 3,
+          targetWordCount: null,
+          status: "draft",
+          createdAt: 1,
+          updatedAt: 9,
+          lastOpenedAt: null,
+          lastChapterId: "ch-1",
+        },
+        chapters: [
+          {
+            id: "ch-1",
+            bookId: "book-1",
+            title: "Chapter 0",
+            content: "<p>Body</p>",
+            synopsis: null,
+            order: 0,
+            parentId: null,
+            chapterType: "chapter",
+            wordCount: 1,
+            status: "draft",
+            isIncludedInExport: true,
+            createdAt: 1,
+            updatedAt: 2,
+          },
+          {
+            id: "ch-2",
+            bookId: "book-1",
+            title: "Chapter 1",
+            content: "<p>Pulled from another device</p>",
+            synopsis: null,
+            order: 1,
+            parentId: null,
+            chapterType: "chapter",
+            wordCount: 4,
+            status: "draft",
+            isIncludedInExport: true,
+            createdAt: 1,
+            updatedAt: 9,
+          },
+        ],
+      });
+    } finally {
+      unsubscribeBooks();
+      unsubscribeChapters();
+    }
+
+    expect(loadingFlags).toEqual([]);
+    expect(useChapterStore.getState().currentChapter).toMatchObject({
+      id: "ch-2",
+      content: "<p>Pulled from another device</p>",
+      wordCount: 4,
+    });
+    expect(useBookStore.getState().currentBook?.title).toBe("Pulled title");
+  });
+
+  it("leaves another open book's chapters untouched", async () => {
+    await insertBook(testDb, "book-1");
+    await insertBook(testDb, "book-2");
+    await insertChapter(testDb, "b2-ch", "book-2", 0);
+    await useChapterStore.getState().loadChapters("book-2");
+    const before = useChapterStore.getState().chapters;
+
+    await applyBookSnapshot({
+      book: {
+        id: "book-1",
+        title: "Other",
+        subtitle: null,
+        authorName: "Author",
+        description: null,
+        genre: null,
+        language: "en",
+        coverImagePath: null,
+        coverData: null,
+        wordCount: 0,
+        targetWordCount: null,
+        status: "draft",
+        createdAt: 1,
+        updatedAt: 5,
+        lastOpenedAt: null,
+        lastChapterId: null,
+      },
+      chapters: [],
+    });
+
+    expect(useChapterStore.getState().currentBookId).toBe("book-2");
+    expect(useChapterStore.getState().chapters).toBe(before);
   });
 
   it("wraps errors with the failing chapter's position and title", async () => {

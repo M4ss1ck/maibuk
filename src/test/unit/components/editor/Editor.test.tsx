@@ -316,6 +316,66 @@ describe("Editor", () => {
     });
   });
 
+  it("reports a genuinely external change through onExternalContent", async () => {
+    const onExternalContent = vi.fn();
+    const { rerender } = render(
+      <Editor
+        content={"<p>Original</p>"}
+        onUpdate={vi.fn()}
+        onExternalContent={onExternalContent}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Original")).toBeInTheDocument();
+    });
+    expect(onExternalContent).not.toHaveBeenCalled();
+
+    rerender(
+      <Editor
+        content={"<p>Pulled from another device</p>"}
+        onUpdate={vi.fn()}
+        onExternalContent={onExternalContent}
+      />
+    );
+
+    await waitFor(() => {
+      expect(onExternalContent).toHaveBeenCalledWith(
+        "<p>Pulled from another device</p>",
+        expect.any(Number)
+      );
+    });
+  });
+
+  it("does not report the editor's own echo as external content", async () => {
+    let editor: TiptapEditor | null = null;
+    let lastContentProp = "";
+    const onExternalContent = vi.fn();
+
+    function EchoHarness() {
+      const [content, setContent] = useState("<p>Body</p>");
+      lastContentProp = content;
+      return (
+        <Editor
+          content={content}
+          onUpdate={setContent}
+          onExternalContent={onExternalContent}
+          onEditorReady={(instance) => {
+            editor = instance;
+          }}
+        />
+      );
+    }
+
+    render(<EchoHarness />);
+    await waitFor(() => expect(editor).not.toBeNull());
+
+    editor!.chain().focus("end").insertContent("!").run();
+    await waitFor(() => expect(lastContentProp).toContain("!"));
+
+    expect(onExternalContent).not.toHaveBeenCalled();
+  });
+
   // Regression: the store's echo is asynchronous and debounced. The normalized
   // echo of an EARLIER keystroke can land in the `content` prop AFTER the user
   // has already typed more. That stale echo differs from the editor's current

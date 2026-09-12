@@ -98,6 +98,39 @@ describe("useNoteStore", () => {
     });
   });
 
+  describe("refreshNotes()", () => {
+    it("refreshes the list and the open note without a loading state", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Old", content: "<p>Old</p>" });
+      useNoteStore.getState().setCurrentNote(note);
+      await testDb.execute("UPDATE notes SET title = ?, content = ? WHERE id = ?", [
+        "New",
+        "<p>New</p>",
+        note.id,
+      ]);
+
+      const loading: boolean[] = [];
+      const unsubscribe = useNoteStore.subscribe((state) => {
+        if (state.isLoading) loading.push(true);
+      });
+      await useNoteStore.getState().refreshNotes();
+      unsubscribe();
+
+      const state = useNoteStore.getState();
+      expect(loading).toEqual([]);
+      expect(state.currentNote).toMatchObject({ id: note.id, title: "New", content: "<p>New</p>" });
+      expect(state.notes.map((n) => n.title)).toEqual(["New"]);
+    });
+
+    it("keeps no open note when none was open", async () => {
+      await useNoteStore.getState().createNote({ title: "A" });
+      useNoteStore.setState({ currentNote: null });
+
+      await useNoteStore.getState().refreshNotes();
+
+      expect(useNoteStore.getState().currentNote).toBeNull();
+    });
+  });
+
   describe("loadNote()", () => {
     it("sets currentNote to null when the note does not exist", async () => {
       await useNoteStore.getState().loadNote("missing-id");

@@ -1,4 +1,9 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
+
+export type DebouncedCallback<T> = T & {
+  /** Drop the pending call, if any, without running it. */
+  cancel: () => void;
+};
 
 /**
  * A hook that debounces a callback function.
@@ -9,7 +14,7 @@ import { useRef, useEffect, useCallback } from "react";
 export function useDebouncedCallback<T extends (...args: any[]) => any>(
   callback: T,
   delay: number
-): T {
+): DebouncedCallback<T> {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callbackRef = useRef(callback);
 
@@ -27,18 +32,25 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
     };
   }, []);
 
-  const debouncedCallback = useCallback(
-    (...args: Parameters<T>) => {
+  const debouncedCallback = useMemo(() => {
+    const debounced = (...args: Parameters<T>) => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
 
       timeoutRef.current = setTimeout(() => {
+        timeoutRef.current = null;
         callbackRef.current(...args);
       }, delay);
-    },
-    [delay]
-  ) as T;
+    };
+    debounced.cancel = () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+    return debounced as DebouncedCallback<T>;
+  }, [delay]);
 
   return debouncedCallback;
 }

@@ -167,12 +167,10 @@ export async function applyBookSnapshot(snapshot: BookSnapshot): Promise<void> {
     }
   }
 
-  // Reload stores so UI reflects the new data
-  await useBookStore.getState().loadBooks();
-  const currentBookId = useChapterStore.getState().currentBookId;
-  if (currentBookId === book.id) {
-    await useChapterStore.getState().loadChapters(book.id);
-  }
+  // Refresh stores in place so an open editor shows the pulled content without
+  // being torn down (a loading flag or a cleared selection would remount it).
+  await useBookStore.getState().refreshBooks();
+  await useChapterStore.getState().refreshChapters(book.id);
 }
 
 interface NoteRow {
@@ -259,6 +257,6 @@ export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
     ]
   );
 
-  // Reload store so UI reflects the new data
-  await useNoteStore.getState().loadNotes();
+  // Refresh the list and the open note so its editor shows the pulled content.
+  await useNoteStore.getState().refreshNotes();
 }

@@ -234,7 +234,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | What                                                               | Where                                      |
 | ------------------------------------------------------------------ | ------------------------------------------ |
 | `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`                 |
-| `useDebouncedCallback(callback, delay)`                            | `src/hooks/useAutoSave.ts`                 |
+| `useDebouncedCallback(callback, delay)` (stable identity, `.cancel()` drops the pending call) | `src/hooks/useAutoSave.ts` |
 | `useShortcuts(shortcuts, options)`                                 | `src/lib/shortcuts.ts`                     |
 | `getDatabase()`                                                    | `src/lib/db/index.ts`                      |
 | `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                      |
