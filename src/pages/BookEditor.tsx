@@ -336,6 +336,41 @@ export function BookEditor() {
     [navigate, bookId, currentBook?.title]
   );
 
+  // The "saved" badge falls back to "idle" on a timer. Keeping the handle lets a
+  // second save replace the pending reset instead of stacking one, and lets the
+  // unmount cleanup drop it: without that the callback fires after React has torn
+  // the tree down and sets state on an unmounted component.
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A save started before unmount can still resolve after it, so the status
+  // writers check this rather than dispatching into a torn-down tree.
+  const isMountedRef = useRef(true);
+  const markSaved = useCallback(() => {
+    if (!isMountedRef.current) return;
+    setSaveStatus("saved");
+    if (saveStatusTimerRef.current !== null) clearTimeout(saveStatusTimerRef.current);
+    saveStatusTimerRef.current = setTimeout(() => {
+      saveStatusTimerRef.current = null;
+      setSaveStatus("idle");
+    }, 2000);
+  }, []);
+  const clearSaveStatus = useCallback(() => {
+    if (saveStatusTimerRef.current !== null) {
+      clearTimeout(saveStatusTimerRef.current);
+      saveStatusTimerRef.current = null;
+    }
+    if (isMountedRef.current) setSaveStatus("idle");
+  }, []);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (saveStatusTimerRef.current !== null) {
+        clearTimeout(saveStatusTimerRef.current);
+        saveStatusTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
   // The editor coalesces serialization across a typing burst, so the ref can lag
@@ -505,26 +540,22 @@ export function BookEditor() {
     setSaveStatus("saving");
     try {
       await flushEditorContent();
-      setSaveStatus("saved");
-      // Reset to idle after 2 seconds
-      setTimeout(() => setSaveStatus("idle"), 2000);
+      markSaved();
     } catch (error) {
       console.error("Failed to save:", error);
-      setSaveStatus("idle");
+      clearSaveStatus();
     }
-  }, [flushEditorContent]);
+  }, [flushEditorContent, markSaved, clearSaveStatus]);
 
   // Debounced auto-save
   const debouncedSave = useDebouncedCallback(async (chapterId: string, content: string) => {
     setSaveStatus("saving");
     try {
       await updateChapter(chapterId, { content });
-      setSaveStatus("saved");
-      // Reset to idle after 2 seconds
-      setTimeout(() => setSaveStatus("idle"), 2000);
+      markSaved();
     } catch (error) {
       console.error("Failed to save:", error);
-      setSaveStatus("idle");
+      clearSaveStatus();
     }
   }, 1000);
 
