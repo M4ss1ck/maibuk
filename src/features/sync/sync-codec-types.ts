@@ -6,6 +6,7 @@ export type CodecRequest =
   | { id: number; op: "stringify"; value: unknown }
   | { id: number; op: "parse"; text: string }
   | { id: number; op: "normalizeNote"; json: string }
+  | { id: number; op: "normalizeBook"; json: string }
   | { id: number; op: "encrypt"; plaintext: string; passphrase: string }
   | { id: number; op: "decrypt"; buffer: ArrayBuffer; passphrase: string }
   | { id: number; op: "encryptToBase64"; plaintext: string; passphrase: string }

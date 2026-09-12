@@ -109,6 +109,38 @@ describe("useDebouncedCallback()", () => {
     expect(callback).toHaveBeenCalledWith("fresh");
   });
 
+  it("flush() runs the pending call now, once, and returns its result", () => {
+    const callback = vi.fn((value: string) => `saved:${value}`);
+    const { result } = renderHook(() => useDebouncedCallback(callback, 300));
+
+    let flushed: string | undefined;
+    act(() => {
+      result.current("draft");
+      flushed = result.current.flush();
+    });
+
+    expect(flushed).toBe("saved:draft");
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
+  it("flush() does nothing without a pending call", () => {
+    const callback = vi.fn();
+    const { result } = renderHook(() => useDebouncedCallback(callback, 300));
+
+    act(() => {
+      result.current("once");
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(result.current.flush()).toBeUndefined();
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps a stable identity across renders", () => {
     const { result, rerender } = renderHook(({ cb }) => useDebouncedCallback(cb, 300), {
       initialProps: { cb: vi.fn() },

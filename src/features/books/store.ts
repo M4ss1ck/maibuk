@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
+import { notifyLocalChange } from "@/features/sync/local-changes";
 import { recordTombstone } from "@/features/sync/tombstones";
 import type { Book, BookStatus, CreateBookInput, UpdateBookInput } from "@/features/books/types";
 
@@ -111,6 +112,7 @@ export const useBookStore = create<BookStore>((set) => ({
   },
 
   createBook: async (input: CreateBookInput) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const id = generateId();
     const now = Math.floor(Date.now() / 1000);
@@ -149,6 +151,7 @@ export const useBookStore = create<BookStore>((set) => ({
   },
 
   updateBook: async (id: string, input: UpdateBookInput) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const now = Math.floor(Date.now() / 1000);
 
@@ -216,6 +219,7 @@ export const useBookStore = create<BookStore>((set) => ({
   },
 
   deleteBook: async (id: string) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [id]);
     if (rows.length > 0) {

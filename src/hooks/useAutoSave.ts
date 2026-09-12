@@ -3,6 +3,9 @@ import { useRef, useEffect, useCallback, useMemo } from "react";
 export type DebouncedCallback<T> = T & {
   /** Drop the pending call, if any, without running it. */
   cancel: () => void;
+  /** Run the pending call now, if any, and return its result. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  flush: () => (T extends (...args: any[]) => infer R ? R : never) | undefined;
 };
 
 /**
@@ -16,6 +19,7 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
   delay: number
 ): DebouncedCallback<T> {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingArgsRef = useRef<Parameters<T> | null>(null);
   const callbackRef = useRef(callback);
 
   // Update callback ref when callback changes
@@ -38,8 +42,10 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
         clearTimeout(timeoutRef.current);
       }
 
+      pendingArgsRef.current = args;
       timeoutRef.current = setTimeout(() => {
         timeoutRef.current = null;
+        pendingArgsRef.current = null;
         callbackRef.current(...args);
       }, delay);
     };
@@ -48,6 +54,13 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      pendingArgsRef.current = null;
+    };
+    debounced.flush = () => {
+      const args = pendingArgsRef.current;
+      if (!timeoutRef.current || !args) return undefined;
+      debounced.cancel();
+      return callbackRef.current(...args);
     };
     return debounced as DebouncedCallback<T>;
   }, [delay]);

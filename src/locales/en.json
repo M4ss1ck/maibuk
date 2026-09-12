@@ -1022,6 +1022,8 @@
     "useRemote": "Use Remote & Pull",
     "cancelSync": "Cancel",
     "sessionExpired": "Your session has expired. Please log in again.",
+    "autoSync": "Sync automatically",
+    "autoSyncDescription": "Sync when the app starts and shortly after you stop editing. Changes made on only one device are applied without asking; items changed on both are left for a manual sync.",
     "syncStatus": "Sync status"
   },
   "errors": {

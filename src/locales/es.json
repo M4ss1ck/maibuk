@@ -1022,6 +1022,8 @@
     "useRemote": "Usar remoto y descargar",
     "cancelSync": "Cancelar",
     "sessionExpired": "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.",
+    "autoSync": "Sincronizar automáticamente",
+    "autoSyncDescription": "Sincroniza al abrir la aplicación y poco después de dejar de editar. Los cambios hechos en un solo dispositivo se aplican sin preguntar; los elementos modificados en ambos quedan para una sincronización manual.",
     "syncStatus": "Estado de sincronización"
   },
   "errors": {

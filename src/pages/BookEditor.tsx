@@ -20,6 +20,7 @@ import { TruncatedText } from "@/components/ui/TruncatedText";
 import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { EditorStats } from "@/components/editor/Editor";
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
+import { registerPendingEditsFlush } from "@/features/sync/pending-edits";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ExportDialog } from "@/components/export";
 import {
@@ -581,6 +582,10 @@ export function BookEditor() {
     },
     [debouncedSave]
   );
+
+  // An automatic sync lands the pending autosave before it reads or replaces
+  // this chapter, so text typed just before a pull is never lost.
+  useEffect(() => registerPendingEditsFlush(() => debouncedSave.flush()), [debouncedSave]);
 
   // Handle word count changes
   const handleWordCountChange = useCallback((count: number) => {

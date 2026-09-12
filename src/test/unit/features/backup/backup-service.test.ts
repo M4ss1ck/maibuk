@@ -391,16 +391,18 @@ describe("BackupService", () => {
       expect(mockDb.execute).toHaveBeenNthCalledWith(4, "DELETE FROM notes");
       expect(mockDb.execute).toHaveBeenNthCalledWith(5, "DELETE FROM canvases");
       expect(mockDb.execute).toHaveBeenNthCalledWith(6, "DELETE FROM sync_tombstones");
-      expect(mockDb.execute).toHaveBeenNthCalledWith(7, 'INSERT INTO "books" VALUES ("book-1")');
+      // Sync bases describe the replaced library, so a restore drops them.
+      expect(mockDb.execute).toHaveBeenNthCalledWith(7, "DELETE FROM sync_state");
+      expect(mockDb.execute).toHaveBeenNthCalledWith(8, 'INSERT INTO "books" VALUES ("book-1")');
       expect(mockDb.execute).toHaveBeenNthCalledWith(
-        8,
+        9,
         'INSERT OR REPLACE INTO "chapters" VALUES ("chapter-1")'
       );
       expect(mockDb.execute).toHaveBeenNthCalledWith(
-        9,
+        10,
         'INSERT INTO "chapters" VALUES ("chapter-1")'
       );
-      expect(mockDb.execute).toHaveBeenCalledTimes(9);
+      expect(mockDb.execute).toHaveBeenCalledTimes(10);
       expect(mockLoadBooks).toHaveBeenCalled();
       expect(mockLoadNotes).toHaveBeenCalled();
       expect(mockLoadCanvases).toHaveBeenCalled();
@@ -494,6 +496,7 @@ describe("BackupService", () => {
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM notes
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM canvases
         .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM sync_tombstones
+        .mockResolvedValueOnce({ rowsAffected: 1 }) // DELETE FROM sync_state
         .mockRejectedValueOnce(new Error("UNIQUE constraint failed")); // INSERT fails
 
       await expect(
@@ -502,7 +505,7 @@ describe("BackupService", () => {
         "RESTORE_FAILED: Restore failed on statement 1/1: UNIQUE constraint failed"
       );
 
-      expect(mockDb.execute).toHaveBeenCalledTimes(7);
+      expect(mockDb.execute).toHaveBeenCalledTimes(8);
       expect(mockLoadBooks).not.toHaveBeenCalled();
     });
 

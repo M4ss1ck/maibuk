@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
+import { notifyLocalChange } from "@/features/sync/local-changes";
 import { recordTombstone } from "@/features/sync/tombstones";
 import { reindexSource } from "@/features/links/link-index";
 import type {
@@ -130,6 +131,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
   },
 
   createNote: async (input: CreateNoteInput) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const id = generateId();
     const now = nowSeconds();
@@ -180,6 +182,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
   },
 
   updateNote: async (input: UpdateNoteInput) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [
       input.id,
@@ -233,6 +236,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
   },
 
   deleteNote: async (id: string) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [id]);
     if (rows.length > 0) {
@@ -251,6 +255,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
   },
 
   reorderNotes: async (orderedItems: string[] | ReorderNoteItem[]) => {
+    notifyLocalChange();
     const db = await getDatabase();
     const now = nowSeconds();
     const ordered = orderedItems.map((item) =>

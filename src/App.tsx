@@ -23,6 +23,7 @@ import { AndroidBackNavigator } from "@/components/AndroidBackNavigator";
 import { scheduleDailyBackup } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { installAuthKeepAlive } from "@/features/sync/auth-keep-alive";
+import { installAutoSync } from "@/features/sync/auto-sync";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
 import { installAndroidBackHandler } from "@/lib/window/androidBack";
 import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
@@ -41,6 +42,7 @@ function App() {
     if (embedMode) return;
     scheduleDailyBackup();
     installAuthKeepAlive();
+    installAutoSync();
     if (IS_ANDROID) {
       void installAndroidBackHandler();
       void installAndroidLifecycleHandler();

@@ -250,6 +250,19 @@ async function initializeSchema(): Promise<void> {
     )
   `);
 
+  // Per-device base of the last successful sync of each book/note (see
+  // features/sync/sync-state.ts). Deliberately not part of SQL backups.
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS sync_state (
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      local_checksum TEXT NOT NULL,
+      remote_checksum TEXT NOT NULL,
+      synced_at INTEGER NOT NULL,
+      PRIMARY KEY (entity_type, entity_id)
+    )
+  `);
+
   // Create cover_templates table
   await db.execute(`
     CREATE TABLE IF NOT EXISTS cover_templates (
@@ -358,6 +371,7 @@ export async function resetDatabase(): Promise<void> {
   await database.execute("DELETE FROM canvases").catch(() => {});
   await database.execute("DELETE FROM links").catch(() => {});
   await database.execute("DELETE FROM sync_tombstones").catch(() => {});
+  await database.execute("DELETE FROM sync_state").catch(() => {});
   await database.execute("DELETE FROM settings");
   await database.execute("DELETE FROM metrics_cache").catch(() => {});
   await database.execute("DELETE FROM metrics_event_tombstones").catch(() => {});

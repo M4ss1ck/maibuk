@@ -98,6 +98,28 @@ describe("useNoteStore", () => {
     });
   });
 
+  describe("local change signal", () => {
+    it("signals edits so automatic sync can schedule, but not a sync refresh", async () => {
+      const { onLocalChange } = await import("@/features/sync/local-changes");
+      const listener = vi.fn();
+      const off = onLocalChange(listener);
+      try {
+        const note = await useNoteStore.getState().createNote({ title: "A" });
+        await useNoteStore.getState().updateNote({ id: note.id, title: "B" });
+        await useNoteStore.getState().reorderNotes([note.id]);
+        await useNoteStore.getState().deleteNote(note.id);
+        expect(listener).toHaveBeenCalledTimes(4);
+
+        listener.mockClear();
+        await useNoteStore.getState().loadNotes();
+        await useNoteStore.getState().refreshNotes();
+        expect(listener).not.toHaveBeenCalled();
+      } finally {
+        off();
+      }
+    });
+  });
+
   describe("refreshNotes()", () => {
     it("refreshes the list and the open note without a loading state", async () => {
       const note = await useNoteStore.getState().createNote({ title: "Old", content: "<p>Old</p>" });

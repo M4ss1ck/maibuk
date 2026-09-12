@@ -12,6 +12,7 @@ import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/CollapsibleHeading";
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
+import { registerPendingEditsFlush } from "@/features/sync/pending-edits";
 import { useShortcuts } from "@/lib/shortcuts";
 import { matchKeys } from "@/lib/shortcut-registry";
 import { TagEditor } from "@/components/notes/TagEditor";
@@ -376,6 +377,10 @@ export function NoteEditor({
     },
     [debouncedSave]
   );
+
+  // An automatic sync lands the pending autosave before it reads or replaces
+  // this note, so text typed just before a pull is never lost.
+  useEffect(() => registerPendingEditsFlush(() => debouncedSave.flush()), [debouncedSave]);
 
   const handleExportMarkdown = useCallback(async () => {
     try {

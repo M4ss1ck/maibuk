@@ -137,6 +137,8 @@ async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Pr
   await db.execute("DELETE FROM notes");
   await db.execute("DELETE FROM canvases");
   await db.execute("DELETE FROM sync_tombstones");
+  // Bases describe the replaced data; the restored library is compared afresh.
+  await db.execute("DELETE FROM sync_state").catch(() => {});
 
   for (let i = 0; i < statements.length; i++) {
     try {

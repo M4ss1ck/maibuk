@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -51,19 +52,20 @@ vi.mock("../../../features/backup/backup-service", () => ({
   })),
 }));
 
-vi.mock("../../../features/sync/store", () => {
-  const syncState = {
+const { syncState } = vi.hoisted(() => ({
+  syncState: {
     apiUrl: "",
     setApiUrl: vi.fn(),
-    authStatus: "logged-out",
-    userEmail: null,
+    authStatus: "logged-out" as "logged-out" | "logged-in",
+    userEmail: null as string | null,
     logout: vi.fn(),
-  };
-  return {
-    useSyncStore: (selector?: (state: typeof syncState) => unknown) =>
-      selector ? selector(syncState) : syncState,
-  };
-});
+  },
+}));
+
+vi.mock("../../../features/sync/store", () => ({
+  useSyncStore: (selector?: (state: typeof syncState) => unknown) =>
+    selector ? selector(syncState) : syncState,
+}));
 
 vi.mock("../../../features/sync/useSyncFlow", () => ({
   useSyncFlow: () => ({
@@ -171,5 +173,41 @@ describe("Settings page — container-aware layout", () => {
     expect(inputWrapper).not.toBeNull();
     expect(inputWrapper).toHaveClass("w-full", "@xl:w-80");
     expect(inputWrapper).not.toHaveClass("sm:w-80");
+  });
+});
+
+describe("Settings page — automatic sync", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useSettingsStore.setState({ autoSync: true } as never);
+    syncState.authStatus = "logged-in";
+    syncState.userEmail = "writer@example.com";
+  });
+
+  afterEach(() => {
+    syncState.authStatus = "logged-out";
+    syncState.userEmail = null;
+  });
+
+  it("is on by default and can be switched off from the keyboard", async () => {
+    const user = userEvent.setup();
+    render(<Settings />);
+
+    const toggle = screen.getByRole("switch", { name: "sync.autoSync" });
+    expect(toggle).toBeChecked();
+    expect(screen.getByText("sync.autoSyncDescription")).toBeInTheDocument();
+
+    toggle.focus();
+    await user.keyboard(" ");
+
+    expect(useSettingsStore.getState().autoSync).toBe(false);
+    expect(screen.getByRole("switch", { name: "sync.autoSync" })).not.toBeChecked();
+  });
+
+  it("is hidden while logged out", () => {
+    syncState.authStatus = "logged-out";
+    render(<Settings />);
+
+    expect(screen.queryByRole("switch", { name: "sync.autoSync" })).not.toBeInTheDocument();
   });
 });
