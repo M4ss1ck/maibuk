@@ -428,6 +428,38 @@ describe("BookEditor shortcuts", () => {
     );
   });
 
+  // Regression: the "saved" badge scheduled a bare setTimeout to fall back to
+  // "idle". It outlived unmount, so the callback dispatched a React update after
+  // the test environment was torn down and the run died with
+  // "ReferenceError: window is not defined".
+  it("clears the pending save-status reset when the editor unmounts", async () => {
+    const setSpy = vi.spyOn(globalThis, "setTimeout");
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+    try {
+      const user = userEvent.setup();
+      enableRealShortcuts();
+      const { unmount } = render(<BookEditor />);
+
+      screen.getByRole("textbox", { name: "Editor content" }).focus();
+      await user.keyboard("{Control>}s{/Control}");
+      await waitFor(() => expect(mockUpdateChapter).toHaveBeenCalled());
+
+      // The 2s reset is the only timer the save path schedules at that delay.
+      const resetTimers = setSpy.mock.results
+        .filter((_, i) => setSpy.mock.calls[i][1] === 2000)
+        .map((result) => result.value);
+      await waitFor(() => expect(resetTimers.length).toBeGreaterThan(0));
+
+      unmount();
+      for (const timer of resetTimers) {
+        expect(clearSpy).toHaveBeenCalledWith(timer);
+      }
+    } finally {
+      setSpy.mockRestore();
+      clearSpy.mockRestore();
+    }
+  });
+
   it("HistoryMenuButton receives version shortcuts", () => {
     render(<BookEditor />);
     expect(mockHistoryMenuButton).toHaveBeenCalledWith(
