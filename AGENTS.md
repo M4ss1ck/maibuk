@@ -254,6 +254,9 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`         |
 | PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`              |
 | `useSyncStore`                                                     | `src/features/sync/store.ts`               |
+| `shouldRefreshAuth()` / `getTokenExpiryMs()` (auth token renewal policy) | `src/features/sync/auth-policy.ts` |
+| `installAuthKeepAlive()` (renews the sync session while the app runs) | `src/features/sync/auth-keep-alive.ts` |
+| `buildTestJwt(expiresAtMs)` (JWT-shaped test token)              | `src/test/support/jwt.ts`                  |
 | `useVersionStore`                                                  | `src/features/versions/store.ts`           |
 | `useAutoCheckpoint`                                                | `src/features/versions/useAutoCheckpoint.ts` |
 | `sanitizeChapterHtml()`                                            | `src/features/versions/sanitize.ts`        |

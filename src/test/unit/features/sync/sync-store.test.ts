@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { buildTestJwt } from "@/test/support/jwt";
 
 // Mock all sync module dependencies before importing the store
 const {
@@ -65,6 +66,7 @@ function resetSyncStore() {
     userEmail: null,
     authToken: null,
     authVerified: false,
+    authRefreshedAt: null,
     passphrase: null,
     syncStatus: "idle",
     lastSyncedAt: null,
@@ -756,6 +758,182 @@ describe("useSyncStore", () => {
       await useSyncStore.getState().verifyAuth();
 
       expect(mockRefreshAuth).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("refreshSession()", () => {
+    it("renews the token and records when", async () => {
+      vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+      });
+      mockRefreshAuth.mockResolvedValue({ email: "user@test.com", token: "new-token" });
+
+      await expect(useSyncStore.getState().refreshSession()).resolves.toBe("refreshed");
+
+      const state = useSyncStore.getState();
+      expect(state.authToken).toBe("new-token");
+      expect(state.authVerified).toBe(true);
+      expect(state.authRefreshedAt).toBe(1_000_000);
+      vi.restoreAllMocks();
+    });
+
+    it("logs out with sync.sessionExpired on 401", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "expired-token",
+        apiUrl: "https://sync.example.com",
+        authRefreshedAt: 5,
+      });
+      mockRefreshAuth.mockRejectedValue(Object.assign(new Error("expired"), { status: 401 }));
+
+      await expect(useSyncStore.getState().refreshSession()).resolves.toBe("expired");
+
+      const state = useSyncStore.getState();
+      expect(state.authStatus).toBe("logged-out");
+      expect(state.authToken).toBeNull();
+      expect(state.authRefreshedAt).toBeNull();
+      expect(state.syncError).toBe("sync.sessionExpired");
+    });
+
+    it("reports a network failure without touching the session", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "token",
+        apiUrl: "https://sync.example.com",
+      });
+      mockRefreshAuth.mockRejectedValue(new Error("Failed to fetch"));
+
+      await expect(useSyncStore.getState().refreshSession()).resolves.toBe("failed");
+      expect(useSyncStore.getState().authStatus).toBe("logged-in");
+      expect(useSyncStore.getState().authToken).toBe("token");
+    });
+
+    it("does not resurrect a session the user logged out of mid-refresh", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+      });
+      let resolveRefresh!: (value: { email: string; token: string }) => void;
+      mockRefreshAuth.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = resolve;
+          })
+      );
+
+      const pending = useSyncStore.getState().refreshSession();
+      useSyncStore.getState().logout();
+      resolveRefresh({ email: "user@test.com", token: "renewed" });
+
+      await expect(pending).resolves.toBe("skipped");
+      expect(useSyncStore.getState().authStatus).toBe("logged-out");
+      expect(useSyncStore.getState().authToken).toBeNull();
+    });
+
+    it("does not log out a new session when a stale refresh gets a 401", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "old-token",
+        apiUrl: "https://sync.example.com",
+      });
+      let rejectRefresh!: (error: unknown) => void;
+      mockRefreshAuth.mockImplementation(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRefresh = reject;
+          })
+      );
+
+      const pending = useSyncStore.getState().refreshSession();
+      useSyncStore.setState({ authToken: "new-login-token" });
+      rejectRefresh(Object.assign(new Error("expired"), { status: 401 }));
+
+      await expect(pending).resolves.toBe("skipped");
+      expect(useSyncStore.getState().authStatus).toBe("logged-in");
+      expect(useSyncStore.getState().authToken).toBe("new-login-token");
+    });
+
+    it("skips the network while offline", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: "token",
+        apiUrl: "https://sync.example.com",
+      });
+      Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+
+      try {
+        await expect(useSyncStore.getState().refreshSession()).resolves.toBe("offline");
+        expect(mockRefreshAuth).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+      }
+    });
+  });
+
+  describe("keepSessionAlive()", () => {
+    const DAY = 24 * 60 * 60 * 1000;
+
+    it("does nothing when logged out", async () => {
+      await expect(useSyncStore.getState().keepSessionAlive()).resolves.toBe("skipped");
+      expect(mockRefreshAuth).not.toHaveBeenCalled();
+    });
+
+    it("skips a fresh token renewed recently", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: buildTestJwt(Date.now() + 7 * DAY),
+        apiUrl: "https://sync.example.com",
+        authVerified: true,
+        authRefreshedAt: Date.now() - 60_000,
+      });
+
+      await expect(useSyncStore.getState().keepSessionAlive()).resolves.toBe("skipped");
+      expect(mockRefreshAuth).not.toHaveBeenCalled();
+    });
+
+    // Regression: the session was only renewed at launch, so an app left open
+    // (tray, sleep) past the token lifetime was forced back to the login screen.
+    it("renews a verified token that is about to expire", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: buildTestJwt(Date.now() + DAY / 2),
+        apiUrl: "https://sync.example.com",
+        authVerified: true,
+        authRefreshedAt: Date.now() - DAY * 6,
+      });
+      mockRefreshAuth.mockResolvedValue({ email: "user@test.com", token: "renewed" });
+
+      await expect(useSyncStore.getState().keepSessionAlive()).resolves.toBe("refreshed");
+      expect(useSyncStore.getState().authToken).toBe("renewed");
+    });
+
+    it("retries verification that failed at launch", async () => {
+      useSyncStore.setState({
+        authStatus: "logged-in",
+        authToken: buildTestJwt(Date.now() + 7 * DAY),
+        apiUrl: "https://sync.example.com",
+        authVerified: false,
+      });
+      mockRefreshAuth.mockResolvedValue({ email: "user@test.com", token: "renewed" });
+
+      await expect(useSyncStore.getState().keepSessionAlive()).resolves.toBe("refreshed");
+      expect(useSyncStore.getState().authVerified).toBe(true);
+    });
+  });
+
+  describe("login()", () => {
+    it("records the refresh time so the keep-alive interval starts from login", async () => {
+      vi.spyOn(Date, "now").mockReturnValue(42_000);
+      mockPbLogin.mockResolvedValue({ email: "user@test.com", token: "t" });
+
+      await useSyncStore.getState().login("user@test.com", "pw");
+
+      expect(useSyncStore.getState().authRefreshedAt).toBe(42_000);
+      vi.restoreAllMocks();
     });
   });
 

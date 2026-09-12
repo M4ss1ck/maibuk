@@ -739,6 +739,39 @@ describe("ensureAuth — pre-sync auth guard", () => {
 
     expect(mockRefreshAuth).toHaveBeenCalled();
   });
+
+  // Regression: ensureAuth trusted authVerified forever, so a sync could run on
+  // a token that expired while the app stayed open. PocketBase answers an
+  // expired token's owner-scoped lists as a guest (empty), not with a 401.
+  it("renews a verified token that is about to expire before syncing", async () => {
+    const { buildTestJwt } = await import("@/test/support/jwt");
+    mockSyncStoreGetState.mockReturnValue({
+      authVerified: true,
+      authToken: buildTestJwt(Date.now() + 60 * 60 * 1000),
+      authRefreshedAt: Date.now() - 6 * 24 * 60 * 60 * 1000,
+    });
+    mockRefreshAuth.mockResolvedValue({ email: "user@test.com", token: "renewed" });
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockRefreshAuth).toHaveBeenCalledTimes(1);
+    expect(mockSyncStoreSetState).toHaveBeenCalledWith(
+      expect.objectContaining({ authToken: "renewed", authRefreshedAt: expect.any(Number) })
+    );
+  });
+
+  it("skips renewal for a fresh, recently renewed token", async () => {
+    const { buildTestJwt } = await import("@/test/support/jwt");
+    mockSyncStoreGetState.mockReturnValue({
+      authVerified: true,
+      authToken: buildTestJwt(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      authRefreshedAt: Date.now() - 60_000,
+    });
+
+    await syncBook("book-1", "pass", vi.fn());
+
+    expect(mockRefreshAuth).not.toHaveBeenCalled();
+  });
 });
 
 describe("syncVersions — pure union", () => {

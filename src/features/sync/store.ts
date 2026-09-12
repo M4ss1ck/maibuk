@@ -27,6 +27,9 @@ import {
   syncSingleNote as engineSyncSingleNote,
 } from "@/features/sync/sync-engine";
 import { confirmTombstones } from "@/features/sync/tombstones";
+import { shouldRefreshAuth } from "@/features/sync/auth-policy";
+
+export type SessionRefreshResult = "refreshed" | "skipped" | "offline" | "expired" | "failed";
 
 const STORAGE_KEY = "maibuk-sync";
 const MAX_SYNC_LOG_ENTRIES = 100;
@@ -93,6 +96,8 @@ interface SyncStore {
   syncLog: SyncLogEntry[];
   pendingDeletions: SyncDeletionReviewItem[];
   authVerified: boolean;
+  /** Epoch ms of the last successful login or token refresh this launch. Not persisted. */
+  authRefreshedAt: number | null;
   passphrase: string | null;
 
   setApiUrl: (url: string) => void;
@@ -102,6 +107,13 @@ interface SyncStore {
   loginWithOAuth: (provider: string) => Promise<void>;
   logout: () => void;
   verifyAuth: () => Promise<void>;
+  /**
+   * Renew the auth token now. A 401 means the session is gone (logs out with
+   * sync.sessionExpired); offline or network failures keep the current state.
+   */
+  refreshSession: () => Promise<SessionRefreshResult>;
+  /** Renew the token only when the refresh policy says it is due. */
+  keepSessionAlive: () => Promise<SessionRefreshResult>;
   syncAll: (
     passphrase: string,
     onConflict: ConflictResolver,
@@ -151,6 +163,7 @@ export const useSyncStore = create<SyncStore>()(
       syncLog: [],
       pendingDeletions: [],
       authVerified: false,
+      authRefreshedAt: null,
       passphrase: null,
 
       setApiUrl: (url) => {
@@ -171,6 +184,7 @@ export const useSyncStore = create<SyncStore>()(
           userEmail: result.email,
           authToken: result.token,
           authVerified: true,
+          authRefreshedAt: Date.now(),
         });
       },
 
@@ -181,6 +195,7 @@ export const useSyncStore = create<SyncStore>()(
           userEmail: result.email,
           authToken: result.token,
           authVerified: true,
+          authRefreshedAt: Date.now(),
         });
       },
 
@@ -191,6 +206,7 @@ export const useSyncStore = create<SyncStore>()(
           userEmail: result.email,
           authToken: result.token,
           authVerified: true,
+          authRefreshedAt: Date.now(),
         });
       },
 
@@ -202,6 +218,7 @@ export const useSyncStore = create<SyncStore>()(
           userEmail: null,
           authToken: null,
           authVerified: false,
+          authRefreshedAt: null,
           passphrase: null,
           syncStatus: "idle",
           syncError: null,
@@ -211,31 +228,47 @@ export const useSyncStore = create<SyncStore>()(
         });
       },
 
-      verifyAuth: async () => {
+      verifyAuth: async (): Promise<void> => {
+        const result = await useSyncStore.getState().refreshSession();
+        if (result !== "refreshed") return;
+
+        // Auto-sync if passphrase is available
+        const { passphrase } = useSyncStore.getState();
+        if (passphrase) {
+          const skipConflicts: ConflictResolver = async () => "cancel";
+          try {
+            await useSyncStore.getState().syncAll(passphrase, skipConflicts);
+          } catch {
+            // syncAll already sets error status in the store
+          }
+        }
+      },
+
+      refreshSession: async (): Promise<SessionRefreshResult> => {
         const { authToken, apiUrl } = useSyncStore.getState();
-        if (!authToken || !apiUrl) return;
-        if (!navigator.onLine) return;
+        if (!authToken || !apiUrl) return "skipped";
+        if (!navigator.onLine) return "offline";
+
+        // The session can change while the request is in flight (logout, a new
+        // login, or a concurrent refresh that already stored the renewed token).
+        const sessionChanged = (renewedToken?: string) => {
+          const current = useSyncStore.getState().authToken;
+          return current !== authToken && current !== renewedToken;
+        };
 
         try {
           const result = await pbRefreshAuth();
+          if (sessionChanged(result.token)) return "skipped";
           set({
             authStatus: "logged-in",
             userEmail: result.email,
             authToken: result.token,
             authVerified: true,
+            authRefreshedAt: Date.now(),
           });
-
-          // Auto-sync if passphrase is available
-          const { passphrase } = useSyncStore.getState();
-          if (passphrase) {
-            const skipConflicts: ConflictResolver = async () => "cancel";
-            try {
-              await useSyncStore.getState().syncAll(passphrase, skipConflicts);
-            } catch {
-              // syncAll already sets error status in the store
-            }
-          }
+          return "refreshed";
         } catch (error: unknown) {
+          if (sessionChanged()) return "skipped";
           const status = (error as { status?: number }).status;
           if (status === 401) {
             set({
@@ -243,11 +276,27 @@ export const useSyncStore = create<SyncStore>()(
               userEmail: null,
               authToken: null,
               authVerified: false,
+              authRefreshedAt: null,
               syncError: "sync.sessionExpired",
             });
+            return "expired";
           }
           // Network errors: keep optimistic state, authVerified stays false
+          return "failed";
         }
+      },
+
+      keepSessionAlive: async (): Promise<SessionRefreshResult> => {
+        const { authStatus, authToken, authVerified, authRefreshedAt } = useSyncStore.getState();
+        if (authStatus !== "logged-in") return "skipped";
+        const due = shouldRefreshAuth({
+          token: authToken,
+          authVerified,
+          refreshedAt: authRefreshedAt,
+          now: Date.now(),
+        });
+        if (!due) return "skipped";
+        return useSyncStore.getState().refreshSession();
       },
 
       syncAll: async (passphrase, onConflict, options) => {
