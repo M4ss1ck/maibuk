@@ -305,4 +305,29 @@ describe("BookEditor mobile overlays", () => {
     expect(screen.queryByRole("dialog", { name: "chapters.title" })).not.toBeInTheDocument();
     expect(chaptersButton).toHaveFocus();
   });
+
+  // The drawer carries role="dialog" only while open. A static role would satisfy
+  // biome's useAriaPropsSupportedByRole but strand focus: restoreChaptersFocus()
+  // bails when the active element sits inside [role="dialog"], which a closed
+  // drawer would still match.
+  it("pairs aria-modal with the dialog role and drops both when the drawer closes", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<BookEditor />);
+
+    const drawer = container.querySelector<HTMLElement>('[data-focus-pane="chapters"]');
+    expect(drawer).not.toBeNull();
+    expect(drawer).not.toHaveAttribute("role");
+    expect(drawer).not.toHaveAttribute("aria-modal");
+
+    screen.getByRole("button", { name: "chapters.title" }).focus();
+    await user.keyboard("{Enter}");
+    // Escape is handled inside the drawer, so wait for focus to land there first.
+    await waitFor(() => expect(drawer).toHaveFocus());
+    expect(drawer).toHaveAttribute("role", "dialog");
+    expect(drawer).toHaveAttribute("aria-modal", "true");
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(drawer).not.toHaveAttribute("role"));
+    expect(drawer).not.toHaveAttribute("aria-modal");
+  });
 });
