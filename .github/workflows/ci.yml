@@ -32,5 +32,8 @@ jobs:
       - name: Run tests with coverage gates
         run: pnpm test:coverage
 
+      - name: Test the release changelog generator
+        run: pnpm test:release
+
       - name: Build web target
         run: pnpm build:web

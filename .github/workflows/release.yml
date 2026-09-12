@@ -357,3 +357,32 @@ jobs:
           generate_release_notes: ${{ needs.prepare.outputs.changelog == '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Flip the release from draft to public, once and only once every platform's
+  # assets are attached. The build jobs deliberately still create the release as
+  # a draft: whichever finishes first would otherwise publish a release carrying
+  # only its own binaries, and watchers would get a notification for a release
+  # missing most of its downloads.
+  #
+  # If any build fails this job is skipped, so the release stays a draft rather
+  # than going public half-empty. Publish it by hand after fixing the build, or
+  # re-run the workflow.
+  publish:
+    needs: [prepare, build-linux, build-windows, build-android, build-arch]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Publish the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ needs.prepare.outputs.version }}
+        run: |
+          echo "Assets attached to $TAG:"
+          gh release view "$TAG" --json assets -q '.assets[].name'
+
+          gh release edit "$TAG" --draft=false --latest
+          echo "Published $TAG: $(gh release view "$TAG" --json url -q .url)"

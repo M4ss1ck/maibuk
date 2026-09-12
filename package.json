@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:release": "bash scripts/test-changelog.sh",
     "preview": "vite preview",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
