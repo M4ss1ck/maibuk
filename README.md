@@ -194,8 +194,17 @@ What it does:
    release workflow, which reads the latest `CHANGELOG.md` section into the
    GitHub release notes.
 
+The workflow builds Linux, Windows, Android and Arch packages in parallel. Each
+build attaches its binaries to a draft release; once all four have finished, the
+`publish` job flips that draft to a public release and marks it latest. There is
+no manual publish step.
+
+If a build fails, `publish` is skipped and the release stays a draft, so a
+half-empty release is never made public. Fix the build and re-run the workflow,
+or publish the draft by hand if the missing platform can wait.
+
 After the build finishes, open a PR from the `release/v<version>` branch into
-`main`, merge it, then review and publish the draft release.
+`main` and merge it.
 
 ### AI-assisted changelog (optional)
 
@@ -221,6 +230,16 @@ Both providers are OpenAI-compatible HTTP APIs and require an API key.
   endpoint via `OPENAI_BASE_URL` (OpenRouter, Groq, local, ...).
 
 Use `--dry-run` to preview the generated changelog before committing anything.
+
+If the provider rejects the request the script prints the HTTP status and the
+provider's error body, then falls back to the grouped commit list — the release
+never fails because of the changelog. Watch for a `[WARNING]` line: a silent
+fallback is what made a provider-side API change (opencode Go starting to
+require an `x-opencode-session` header) go unnoticed for four releases.
+
+Run `pnpm test:release` to exercise the generator offline; it stubs the network
+and asserts the provider request shape, so a change like that one fails a test
+instead of quietly degrading the changelog.
 
 ## Project Structure
 
