@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-12
+
+### Added
+- Automatic sync, enabled by default, runs at launch and 30 seconds after the last local edit when signed in and online
+
+### Changed
+- Sync now applies one-sided local or remote changes automatically and asks only when both sides changed
+- Automatic sync defers conflicts and continues past pending deletion reviews
+- Opening a book no longer counts as a local edit for sync
+
+### Fixed
+- Keep the sync session alive while the app runs, refreshing it periodically and on reconnect instead of forcing re-login
+- Refresh the open book, chapter, or note in place after a sync pull instead of showing stale content or remounting the editor
+
 ## [0.6.2] - 2026-09-12
 
 ### Fixed
