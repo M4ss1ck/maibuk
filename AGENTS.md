@@ -263,6 +263,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `loadEmojiSymbols()` (lazy, localized emoji/symbol autocomplete catalog) | `src/features/symbols/load.ts` |
 | `MarkdownPasteDialog` / `plainTextToEditorHtml()` (shared markdown-paste prompt + plain-text conversion) | `src/components/editor/MarkdownPasteDialog.tsx` / `plain-text-html.ts` |
 | `TableSizePicker` (reusable 5×5 table-dimension picker)            | `src/components/editor/TableSizePicker.tsx` |
+| `getEditorToolbarState()` (one shared formatting snapshot per immutable editor state) | `src/components/editor/toolbar/editor-toolbar-state.ts` |
 | `useReadingPositionStore` / `useReadingPosition()`                 | `src/features/reading-position/`           |
 | `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
 | `FileDropImportStatus` (localized file-import progress overlay)    | `src/components/ui/FileDropImportStatus.tsx` |
@@ -598,6 +599,7 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 
 ### Known Footguns
 
+- **Editor latency**: Keep toolbar props stable across parent statistics updates. Toolbar controls subscribe to their own editor state; history availability should update history controls only. Share formatting snapshots through `getEditorToolbarState()` because visible and measurement groups mount separately. Build command helpers inside effects/selectors, not effect dependency arrays. Nothing whose cost grows with chapter length may run per keystroke: `Editor.tsx` coalesces `getHTML()` and word counting into one job per typing burst (`EMIT_COALESCE_MS`), so read the live document through the editor instance at save/export time rather than trusting a pushed snapshot. Verify changes with `EditorToolbarSubscriptions.test.tsx`, `editor-toolbar-state.test.ts`, `Editor.test.tsx`, and Android input measurements.
 - **Platform branching**: `IS_WEB` and `IS_TAURI` are build-time constants. Test both targets when touching platform code
 - **Database migrations**: Schema changes in `src/lib/db/index.ts` use `ALTER TABLE ... ADD COLUMN` wrapped in `.catch()` to handle "column already exists" — follow this pattern for new columns
 - **TipTap content**: Chapter content is stored as TipTap JSON string in the database, not raw HTML. The export pipeline converts it via `processChapterHtml()`

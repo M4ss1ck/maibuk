@@ -338,6 +338,15 @@ export function BookEditor() {
 
   // Ref to store the latest editor content
   const editorContentRef = useRef<string>("");
+  // The editor coalesces serialization across a typing burst, so the ref can lag
+  // the document by a fraction of a second. Anything that saves or exports on
+  // demand reads the live document instead.
+  const tocEditorRef = useRef<TiptapEditor | null>(null);
+  const getLatestContent = useCallback(() => {
+    const html = tocEditorRef.current?.isDestroyed === false ? tocEditorRef.current.getHTML() : null;
+    if (html !== null) editorContentRef.current = html;
+    return editorContentRef.current;
+  }, []);
 
   // Load book and chapters
   useEffect(() => {
@@ -433,16 +442,16 @@ export function BookEditor() {
 
   // Flush latest editor content to the database immediately
   const flushEditorContent = useCallback(async () => {
-    const content = editorContentRef.current;
+    const content = getLatestContent();
     if (currentChapter && content) {
       await updateChapter(currentChapter.id, { content });
     }
-  }, [currentChapter, updateChapter]);
+  }, [currentChapter, updateChapter, getLatestContent]);
 
   // Export the current chapter as a Markdown file
   const handleExportMarkdown = useCallback(async () => {
     if (!currentChapter) return;
-    const html = editorContentRef.current || currentChapter.content || "";
+    const html = getLatestContent() || currentChapter.content || "";
     try {
       const markdown = editorHtmlToMarkdown(html);
       const saved = await saveMarkdownFile(markdownFilename(currentChapter.title), markdown);
@@ -451,12 +460,12 @@ export function BookEditor() {
       console.error("Markdown export failed:", error);
       toast.error(t("editor.exportMarkdownFailed"));
     }
-  }, [currentChapter, t]);
+  }, [currentChapter, t, getLatestContent]);
 
   // Export the current chapter as a PDF file
   const handleExportPdf = useCallback(async () => {
     if (!currentChapter) return;
-    const html = editorContentRef.current || currentChapter.content || "";
+    const html = getLatestContent() || currentChapter.content || "";
     try {
       const blob = await generateDocumentPdf(html, currentChapter.title);
       const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -471,7 +480,7 @@ export function BookEditor() {
       console.error("PDF export failed:", error);
       toast.error(t("editor.exportPdfFailed"));
     }
-  }, [currentChapter, t]);
+  }, [currentChapter, t, getLatestContent]);
 
   // Export the current chapter as a PNG image
   const handleExportImage = useCallback(async () => {
@@ -543,6 +552,7 @@ export function BookEditor() {
 
   // Receive the editor instance for the table-of-contents panel
   const handleEditorReady = useCallback((editor: TiptapEditor | null) => {
+    tocEditorRef.current = editor;
     setTocEditor(editor);
   }, []);
 

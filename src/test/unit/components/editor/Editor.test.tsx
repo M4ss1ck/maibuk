@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -172,6 +172,39 @@ describe("Editor", () => {
     capturedToolbarProps.length = 0;
   });
 
+  it("does not rerender the toolbar when typing updates parent statistics", async () => {
+    let editor: TiptapEditor | null = null;
+    const onEditorReady = (instance: TiptapEditor | null) => {
+      editor = instance;
+    };
+    const onUpdate = vi.fn();
+    function StatsHarness() {
+      const [stats, setStats] = useState<{ characters: number } | null>(null);
+      return (
+        <>
+          <output data-testid="characters">{stats?.characters}</output>
+          <Editor
+            content="<p>Hello</p>"
+            onUpdate={onUpdate}
+            onStatsChange={setStats}
+            onEditorReady={onEditorReady}
+          />
+        </>
+      );
+    }
+    render(<StatsHarness />);
+    await waitFor(() => expect(editor).not.toBeNull());
+    const renders = capturedToolbarProps.length;
+    act(() => {
+      editor!.commands.insertContent("!");
+    });
+    // Serialization and word counting are coalesced across a typing burst, so
+    // the parent's statistics land shortly after the keystroke, not during it.
+    await waitFor(() => expect(screen.getByTestId("characters")).toHaveTextContent("6"));
+    expect(onUpdate).toHaveBeenCalled();
+    expect(capturedToolbarProps).toHaveLength(renders);
+  });
+
   it("installs autoclose when the editor setting is enabled", async () => {
     let editorInstance: TiptapEditor | null = null;
     render(
@@ -313,6 +346,9 @@ describe("Editor", () => {
     // The user types "A" (store would debounce-save this snapshot), then quickly
     // types "B" before the async save round-trips.
     editor!.chain().focus("end").insertContent("A").run();
+    // The store only ever sees the editor's coalesced emissions, so wait for the
+    // "A" snapshot to be emitted before treating it as the one being saved.
+    await waitFor(() => expect(emitted.length).toBeGreaterThan(0));
     const afterA = emitted[emitted.length - 1];
     editor!.chain().focus("end").insertContent("B").run();
 
@@ -617,6 +653,143 @@ describe("Editor", () => {
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(onEscape).not.toHaveBeenCalled();
+  });
+
+  // Serializing the document and counting its words cost time proportional to
+  // chapter length — measured at ~10ms per keystroke on a 150k-character chapter
+  // on Android, which is most of the typing lag there. Both are display- or
+  // save-bound work that nothing needs per keystroke, so a burst must pay for
+  // them once. See docs/plans/android-editor-latency.md for the measurements.
+  it("serializes and counts once per typing burst, not once per keystroke", async () => {
+    let editor: TiptapEditor | null = null;
+    const onUpdate = vi.fn();
+    const onWordCountChange = vi.fn();
+    const onStatsChange = vi.fn();
+
+    render(
+      <Editor
+        content="<p>Hello</p>"
+        onUpdate={onUpdate}
+        onWordCountChange={onWordCountChange}
+        onStatsChange={onStatsChange}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+
+    onUpdate.mockClear();
+    onWordCountChange.mockClear();
+    onStatsChange.mockClear();
+
+    act(() => {
+      for (const character of "abcdefghij") editor!.chain().focus("end").insertContent(character).run();
+    });
+
+    // Nothing has been serialized yet: the keystrokes only marked the document
+    // dirty, which is the whole point.
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    expect(onUpdate.mock.calls).toHaveLength(1);
+    expect(onUpdate.mock.calls[0][0]).toContain("Helloabcdefghij");
+    expect(onWordCountChange.mock.calls).toHaveLength(1);
+    expect(onStatsChange.mock.calls).toHaveLength(1);
+  });
+
+  it("flushes the pending burst on blur so a save never reads a stale document", async () => {
+    let editor: TiptapEditor | null = null;
+    const onUpdate = vi.fn();
+    const onBlur = vi.fn();
+
+    const { container } = render(
+      <Editor
+        content="<p>Hello</p>"
+        onUpdate={onUpdate}
+        onBlur={onBlur}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    onUpdate.mockClear();
+
+    act(() => {
+      editor!.chain().focus("end").insertContent("X").run();
+    });
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    const scrollContainer = container.querySelector(".flex-1.overflow-auto");
+    expect(scrollContainer).not.toBeNull();
+    act(() => {
+      fireEvent.blur(scrollContainer as Element);
+    });
+
+    // Synchronously, before the coalescing window would have elapsed.
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate.mock.calls[0][0]).toContain("HelloX");
+    expect(onBlur).toHaveBeenCalled();
+  });
+
+  it("flushes the pending burst when the app is backgrounded", async () => {
+    let editor: TiptapEditor | null = null;
+    const onUpdate = vi.fn();
+
+    render(
+      <Editor
+        content="<p>Hello</p>"
+        onUpdate={onUpdate}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    onUpdate.mockClear();
+
+    act(() => {
+      editor!.chain().focus("end").insertContent("Z").run();
+    });
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    visibility.mockRestore();
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate.mock.calls[0][0]).toContain("HelloZ");
+  });
+
+  it("flushes the pending burst when the editor unmounts", async () => {
+    let editor: TiptapEditor | null = null;
+    const onUpdate = vi.fn();
+
+    const { unmount } = render(
+      <Editor
+        content="<p>Hello</p>"
+        onUpdate={onUpdate}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    onUpdate.mockClear();
+
+    act(() => {
+      editor!.chain().focus("end").insertContent("Y").run();
+    });
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    act(() => {
+      unmount();
+    });
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate.mock.calls[0][0]).toContain("HelloY");
   });
 });
 

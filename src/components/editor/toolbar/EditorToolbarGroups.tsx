@@ -54,6 +54,7 @@ import { TextCaseMenu } from "@/components/editor/TextCaseMenu";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 import { Tooltip } from "@/components/ui";
+import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
 import { useSettingsStore } from "@/features/settings/store";
 import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
 import type { ToolbarGroupId } from "@/features/settings/toolbar-config";
@@ -127,41 +128,10 @@ export function EditorToolbarGroups({
   const editorState = useEditorState({
     editor,
     selector: ({ editor: currentEditor }) => {
-      const attrs = currentEditor.getAttributes("textStyle");
-      const highlightAttrs = currentEditor.getAttributes("highlight");
-      return {
-        fontSize: attrs.fontSize ? attrs.fontSize.replace("px", "") : DEFAULT_FONT_SIZE,
-        lineHeight: attrs.lineHeight || "1.5",
-        fontFamily: attrs.fontFamily || "Literata, serif",
-        color: attrs.color || "",
-        highlightColor: highlightAttrs.color || "",
-        isBold: currentEditor.isActive("bold"),
-        isItalic: currentEditor.isActive("italic"),
-        isUnderline: currentEditor.isActive("underline"),
-        isStrike: currentEditor.isActive("strike"),
-        isHighlight: currentEditor.isActive("highlight"),
-        isSubscript: currentEditor.isActive("subscript"),
-        isSuperscript: currentEditor.isActive("superscript"),
-        isLink: currentEditor.isActive("link"),
-        isCode: currentEditor.isActive("code"),
-        isCodeBlock: currentEditor.isActive("codeBlock"),
-        isH1: currentEditor.isActive("heading", { level: 1 }),
-        isH2: currentEditor.isActive("heading", { level: 2 }),
-        isH3: currentEditor.isActive("heading", { level: 3 }),
-        isBulletList: currentEditor.isActive("bulletList"),
-        isOrderedList: currentEditor.isActive("orderedList"),
-        isTaskList: currentEditor.isActive("taskList"),
-        isBlockquote: currentEditor.isActive("blockquote"),
-        isAlignLeft: currentEditor.isActive({ textAlign: "left" }),
-        isAlignCenter: currentEditor.isActive({ textAlign: "center" }),
-        isAlignRight: currentEditor.isActive({ textAlign: "right" }),
-        isAlignJustify: currentEditor.isActive({ textAlign: "justify" }),
-        hasSelection: !currentEditor.state.selection.empty,
-        canUndo: currentEditor.can().undo(),
-        canRedo: currentEditor.can().redo(),
-        canSinkListItem: currentEditor.can().sinkListItem("listItem"),
-        canLiftListItem: currentEditor.can().liftListItem("listItem"),
-      };
+      const state = getEditorToolbarState(currentEditor);
+      // The first edit enables Undo. Only history controls need to render for it,
+      // including when groups are mounted in the hidden measurement lane.
+      return groupIds.includes("history") ? state : { ...state, canUndo: false, canRedo: false };
     },
   });
   const icon = iconSize === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";

@@ -7,6 +7,8 @@ import {
   useCallback,
   useRef,
   useState,
+  useMemo,
+  memo,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -41,11 +43,41 @@ import { IS_TAURI } from "@/lib/platform";
  * of keystrokes, so a small window is ample.
  */
 const MAX_RECENT_EMITTED = 30;
+/**
+ * How long a burst of keystrokes coalesces into one serialization. Serializing
+ * the document and counting its words costs time proportional to chapter length
+ * (~10ms per keystroke on a 150k-character chapter on Android), and every
+ * consumer of that work is already debounced far longer than this: the chapter
+ * store saves after 1000ms and the word counter is display-only. Explicit flush
+ * points (blur, unmount, chapter switch) drain the pending work synchronously,
+ * so nothing downstream ever reads a stale document.
+ */
+const EMIT_COALESCE_MS = 300;
+const EMPTY_INTERNAL_TARGETS: InternalTarget[] = [];
+// Parent statistics update while typing; toolbar state has its own subscriptions.
+const MemoizedEditorToolbar = memo(EditorToolbar);
 
 /**
  * Serialize HTML with heading ids stripped, parsing through a single serializer
  * so attribute order and whitespace are normalized consistently for comparison.
  */
+const strippedCache = new Map<string, string>();
+
+/**
+ * `stripHeadingIds` for repeated comparisons against the same strings. Echo
+ * detection compares one incoming document against up to MAX_RECENT_EMITTED
+ * previous emissions, and parsing a long chapter that many times is the kind of
+ * work that shows up as input lag.
+ */
+function stripHeadingIdsCached(html: string): string {
+  const hit = strippedCache.get(html);
+  if (hit !== undefined) return hit;
+  const stripped = stripHeadingIds(html);
+  if (strippedCache.size > MAX_RECENT_EMITTED * 2) strippedCache.clear();
+  strippedCache.set(html, stripped);
+  return stripped;
+}
+
 function stripHeadingIds(html: string): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
   for (const heading of doc.body.querySelectorAll("h1, h2, h3")) {
@@ -105,7 +137,7 @@ export function Editor({
   chapterId = null,
   restoreKey = null,
   suppressRestore = false,
-  internalTargets: providedInternalTargets = [],
+  internalTargets: providedInternalTargets = EMPTY_INTERNAL_TARGETS,
   loadInternalTargetChildren: providedLoadInternalTargetChildren,
   extraExtensions,
   headerContent,
@@ -146,15 +178,20 @@ export function Editor({
     setPendingMarkdownPaste(text);
   }, []);
   const chapters = useChapterStore((s) => s.chapters);
-  const bookInternalTargets: InternalTarget[] = bookId
-    ? chapters.map((c) => ({
-        type: "chapter" as const,
-        chapterId: c.id,
-        title: c.title,
-        headingId: null,
-      }))
-    : [];
-  const internalTargets = [...providedInternalTargets, ...bookInternalTargets];
+  const internalTargets = useMemo<InternalTarget[]>(
+    () => [
+      ...providedInternalTargets,
+      ...(bookId
+        ? chapters.map((c) => ({
+            type: "chapter" as const,
+            chapterId: c.id,
+            title: c.title,
+            headingId: null,
+          }))
+        : []),
+    ],
+    [providedInternalTargets, bookId, chapters]
+  );
   const loadInternalTargetChildren = useCallback<InternalTargetChildrenLoader>(
     async (target) => {
       if (providedLoadInternalTargetChildren) {
@@ -183,6 +220,103 @@ export function Editor({
   // output rather than a genuine external change.
   const recentEmittedRef = useRef<string[]>([]);
   const editorInstanceRef = useRef<TiptapEditor | null>(null);
+
+  // The coalesced emitter runs from a timer, so it reads the callbacks through
+  // refs rather than capturing whichever render scheduled it.
+  const onUpdateRef = useRef(onUpdate);
+  const onWordCountChangeRef = useRef(onWordCountChange);
+  const onStatsChangeRef = useRef(onStatsChange);
+  onUpdateRef.current = onUpdate;
+  onWordCountChangeRef.current = onWordCountChange;
+  onStatsChangeRef.current = onStatsChange;
+
+  const emitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentDirtyRef = useRef(false);
+  const statsDirtyRef = useRef(false);
+
+  /**
+   * Serialize the document, count its words, and hand both to the parent. This
+   * is everything on the edit path whose cost grows with chapter length, which
+   * is why it runs once per burst instead of once per keystroke.
+   */
+  const runEmit = useCallback(() => {
+    if (emitTimerRef.current !== null) {
+      clearTimeout(emitTimerRef.current);
+      emitTimerRef.current = null;
+    }
+    const editor = editorInstanceRef.current;
+    if (!editor || editor.isDestroyed) {
+      contentDirtyRef.current = false;
+      statsDirtyRef.current = false;
+      return;
+    }
+
+    // Counting the whole document is the expensive half; both consumers below
+    // want the same number, so it is counted at most once per burst.
+    let documentWords: number | null = null;
+    const countWords = () => {
+      documentWords ??= editor.storage.characterCount.words();
+      return documentWords;
+    };
+
+    if (contentDirtyRef.current) {
+      contentDirtyRef.current = false;
+      const html = editor.getHTML();
+      appliedContentRef.current = html;
+      const recent = recentEmittedRef.current;
+      recent.push(html);
+      if (recent.length > MAX_RECENT_EMITTED) recent.shift();
+      onUpdateRef.current(html);
+      onWordCountChangeRef.current?.(countWords());
+    }
+
+    if (statsDirtyRef.current) {
+      statsDirtyRef.current = false;
+      const onStatsChange = onStatsChangeRef.current;
+      if (onStatsChange) {
+        const { from, to } = editor.state.selection;
+        if (from !== to) {
+          const selectedText = editor.state.doc.textBetween(from, to, " ");
+          const words = selectedText
+            .trim()
+            .split(/\s+/)
+            .filter((word) => word.length > 0).length;
+          onStatsChange({ words, characters: selectedText.length, hasSelection: true });
+        } else {
+          onStatsChange({
+            words: countWords(),
+            characters: editor.storage.characterCount.characters(),
+            hasSelection: false,
+          });
+        }
+      }
+    }
+  }, []);
+
+  const scheduleEmit = useCallback(
+    (kind: "content" | "stats") => {
+      if (kind === "content") contentDirtyRef.current = true;
+      statsDirtyRef.current = true;
+      if (emitTimerRef.current !== null) return;
+      emitTimerRef.current = setTimeout(runEmit, EMIT_COALESCE_MS);
+    },
+    [runEmit]
+  );
+
+  // Anything that reads the saved document must see the newest keystrokes, so
+  // drain the pending burst before the editor goes away or loses focus.
+  useEffect(() => () => runEmit(), [runEmit]);
+
+  // Android kills backgrounded apps without warning, and coalescing would
+  // otherwise hold the last keystrokes of a burst past that point.
+  useEffect(() => {
+    const flushIfHidden = () => {
+      if (document.visibilityState === "hidden") runEmit();
+    };
+    document.addEventListener("visibilitychange", flushIfHidden);
+    return () => document.removeEventListener("visibilitychange", flushIfHidden);
+  }, [runEmit]);
+
   const editor = useEditor({
     extensions: [
       ...createRichTextExtensions({
@@ -242,19 +376,7 @@ export function Editor({
         return true;
       },
     },
-    onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
-      appliedContentRef.current = html;
-      const recent = recentEmittedRef.current;
-      recent.push(html);
-      if (recent.length > MAX_RECENT_EMITTED) recent.shift();
-      onUpdate(html);
-
-      if (onWordCountChange) {
-        const words = editor.storage.characterCount.words();
-        onWordCountChange(words);
-      }
-    },
+    onUpdate: () => scheduleEmit("content"),
   });
   editorInstanceRef.current = editor;
 
@@ -269,6 +391,10 @@ export function Editor({
   // Update content when it changes externally (e.g., switching chapters)
   useEffect(() => {
     if (!editor || content === null) return;
+    // A queued burst may already hold this exact document; emitting it first
+    // keeps the echo check below from mistaking our own text for an edit made
+    // elsewhere and resetting the caret mid-sentence.
+    if (contentDirtyRef.current) runEmit();
     if (appliedContentRef.current === content) return;
 
     // The chapter store echoes saved HTML back through `content` after stamping
@@ -280,10 +406,10 @@ export function Editor({
     // editor's current document. Recognize it by comparing against recent
     // emissions too. Genuinely external content (e.g. a version restore) matches
     // neither and still gets applied.
-    const incomingStripped = stripHeadingIds(content);
+    const incomingStripped = stripHeadingIdsCached(content);
     const isOwnEcho =
-      incomingStripped === stripHeadingIds(editor.getHTML()) ||
-      recentEmittedRef.current.some((html) => stripHeadingIds(html) === incomingStripped);
+      recentEmittedRef.current.some((html) => stripHeadingIdsCached(html) === incomingStripped) ||
+      incomingStripped === stripHeadingIds(editor.getHTML());
     if (isOwnEcho) {
       appliedContentRef.current = content;
       return;
@@ -293,7 +419,7 @@ export function Editor({
     appliedContentRef.current = content;
     // External content replaced the document; prior edit history is obsolete.
     recentEmittedRef.current = [];
-  }, [editor, content]);
+  }, [editor, content, runEmit]);
 
   useReadingPosition({
     editor,
@@ -305,12 +431,12 @@ export function Editor({
   useEffect(() => {
     if (!editor?.commands?.setSpellCheckEnabled) return;
     editor.commands.setSpellCheckEnabled(spellCheckEnabled);
-  }, [editor?.commands?.setSpellCheckEnabled, spellCheckEnabled]);
+  }, [editor, spellCheckEnabled]);
 
   useEffect(() => {
     if (!editor?.commands?.setSpellCheckLanguage) return;
     editor.commands.setSpellCheckLanguage(activeSpellCheckLanguage);
-  }, [editor?.commands?.setSpellCheckLanguage, activeSpellCheckLanguage]);
+  }, [editor, activeSpellCheckLanguage]);
 
   // Update word count on initial load
   useEffect(() => {
@@ -320,43 +446,28 @@ export function Editor({
     }
   }, [editor, onWordCountChange]);
 
-  // Track selection changes and update stats
+  // A pending burst must reach the parent before anything reads the saved
+  // document, and losing focus is when exports, saves and compares happen.
+  const handleEditorBlur = useCallback(() => {
+    runEmit();
+    onBlur?.();
+  }, [runEmit, onBlur]);
+
+  // Track selection changes and update stats. Counting words over the whole
+  // document costs milliseconds on a long chapter, so it goes through the same
+  // coalescing as content emission rather than running per keystroke.
   useEffect(() => {
     if (!editor || !onStatsChange) return;
 
-    const updateStats = () => {
-      const { from, to } = editor.state.selection;
-      const hasSelection = from !== to;
+    const markStatsDirty = () => scheduleEmit("stats");
+    runEmit();
+    markStatsDirty();
 
-      if (hasSelection) {
-        // Get selected text and calculate stats
-        const selectedText = editor.state.doc.textBetween(from, to, " ");
-        const words = selectedText
-          .trim()
-          .split(/\s+/)
-          .filter((word) => word.length > 0).length;
-        const characters = selectedText.length;
-        onStatsChange({ words, characters, hasSelection: true });
-      } else {
-        // No selection - use total document stats
-        const words = editor.storage.characterCount.words();
-        const characters = editor.storage.characterCount.characters();
-        onStatsChange({ words, characters, hasSelection: false });
-      }
-    };
-
-    // Initial stats
-    updateStats();
-
-    // Listen to selection changes
-    editor.on("selectionUpdate", updateStats);
-    editor.on("update", updateStats);
-
+    editor.on("selectionUpdate", markStatsDirty);
     return () => {
-      editor.off("selectionUpdate", updateStats);
-      editor.off("update", updateStats);
+      editor.off("selectionUpdate", markStatsDirty);
     };
-  }, [editor, onStatsChange]);
+  }, [editor, onStatsChange, scheduleEmit, runEmit]);
 
   const handleFocus = useCallback(
     (event: ReactMouseEvent | ReactKeyboardEvent) => {
@@ -383,7 +494,7 @@ export function Editor({
   return (
     <div className={`flex-1 flex flex-col min-h-0 ${focusMode ? "focus-mode" : ""}`}>
       {!focusMode && (
-        <EditorToolbar
+        <MemoizedEditorToolbar
           editor={editor}
           onContextMenuOpenChange={setIsContextMenuOpen}
           bookId={bookId}
@@ -404,7 +515,7 @@ export function Editor({
         className="flex-1 overflow-auto min-h-0"
         onClick={handleFocus}
         onKeyDown={handleFocus}
-        onBlur={onBlur}
+        onBlur={handleEditorBlur}
       >
         <div
           className={`editor-content-surface mx-auto editor-zoom-surface${
