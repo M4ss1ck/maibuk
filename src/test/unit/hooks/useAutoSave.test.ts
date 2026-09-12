@@ -87,6 +87,39 @@ describe("useDebouncedCallback()", () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
+  it("cancel() drops the pending call", () => {
+    const callback = vi.fn();
+    const { result } = renderHook(() => useDebouncedCallback(callback, 300));
+
+    act(() => {
+      result.current("stale");
+      result.current.cancel();
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(callback).not.toHaveBeenCalled();
+
+    // A call after cancel() is scheduled normally.
+    act(() => {
+      result.current("fresh");
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledWith("fresh");
+  });
+
+  it("keeps a stable identity across renders", () => {
+    const { result, rerender } = renderHook(({ cb }) => useDebouncedCallback(cb, 300), {
+      initialProps: { cb: vi.fn() },
+    });
+    const first = result.current;
+
+    rerender({ cb: vi.fn() });
+
+    expect(result.current).toBe(first);
+  });
+
   it("uses the latest callback reference", () => {
     let counter = 0;
     const { result, rerender } = renderHook(({ cb }) => useDebouncedCallback(cb, 300), {

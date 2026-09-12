@@ -366,6 +366,17 @@ export function NoteEditor({
     setWordCount(count);
   }, []);
 
+  // A sync pull replaced the document: later saves must carry the pulled text,
+  // and a save queued for the old text would overwrite it.
+  const handleExternalContent = useCallback(
+    (content: string, count: number) => {
+      debouncedSave.cancel();
+      contentRef.current = content;
+      setWordCount(count);
+    },
+    [debouncedSave]
+  );
+
   const handleExportMarkdown = useCallback(async () => {
     try {
       const markdown = editorHtmlToMarkdown(contentRef.current || "");
@@ -628,6 +639,7 @@ export function NoteEditor({
       <Editor
         content={note.content}
         onUpdate={handleContentUpdate}
+        onExternalContent={handleExternalContent}
         onWordCountChange={handleWordCountChange}
         onExportMarkdown={handleExportMarkdown}
         onExportPdf={handleExportPdf}

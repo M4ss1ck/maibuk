@@ -42,6 +42,14 @@ interface ChapterStore {
   // Actions
   loadChapters: (bookId: string) => Promise<void>;
   loadChapter: (id: string) => Promise<void>;
+  /**
+   * Re-read the loaded book's chapters after something outside the UI changed
+   * them (a sync pull). Unlike loadChapters it keeps the open chapter selected
+   * (replaced by its fresh row) and never flips isLoading, so the editor stays
+   * mounted and receives the new content in place. No-op for a book that is
+   * not the one currently loaded.
+   */
+  refreshChapters: (bookId: string) => Promise<void>;
   createChapter: (input: CreateChapterInput) => Promise<Chapter>;
   updateChapter: (id: string, input: UpdateChapterInput) => Promise<void>;
   deleteChapter: (id: string) => Promise<void>;
@@ -100,6 +108,25 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
+  },
+
+  refreshChapters: async (bookId: string) => {
+    if (get().currentBookId !== bookId) return;
+    const db = await getDatabase();
+    const result = await db.select<Record<string, unknown>[]>(
+      'SELECT * FROM chapters WHERE book_id = ? ORDER BY "order" ASC',
+      [bookId]
+    );
+    // The user may have switched books while the query ran.
+    if (get().currentBookId !== bookId) return;
+    const chapters = result.map(toChapter);
+    const openId = get().currentChapter?.id;
+    set({
+      chapters,
+      // A chapter the pull removed leaves nothing selected; BookEditor's
+      // auto-select then picks a surviving one.
+      currentChapter: openId ? (chapters.find((chapter) => chapter.id === openId) ?? null) : null,
+    });
   },
 
   createChapter: async (input: CreateChapterInput) => {

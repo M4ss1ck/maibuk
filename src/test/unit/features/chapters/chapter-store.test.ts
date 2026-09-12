@@ -249,6 +249,47 @@ describe("useChapterStore", () => {
     });
   });
 
+  describe("refreshChapters()", () => {
+    it("keeps the open chapter selected with its fresh row", async () => {
+      await seedChapter(testDb, "ch-1", "book-1", 0, "<p>Old</p>");
+      await useChapterStore.getState().loadChapters("book-1");
+      useChapterStore.getState().setCurrentChapter(useChapterStore.getState().chapters[0]);
+
+      await testDb.execute("UPDATE chapters SET content = ? WHERE id = ?", ["<p>New</p>", "ch-1"]);
+      await useChapterStore.getState().refreshChapters("book-1");
+
+      const state = useChapterStore.getState();
+      expect(state.isLoading).toBe(false);
+      expect(state.currentChapter?.id).toBe("ch-1");
+      expect(state.currentChapter?.content).toBe("<p>New</p>");
+      expect(state.chapters[0].content).toBe("<p>New</p>");
+    });
+
+    it("clears the selection when the open chapter no longer exists", async () => {
+      await seedChapter(testDb, "ch-1", "book-1", 0);
+      await seedChapter(testDb, "ch-2", "book-1", 1);
+      await useChapterStore.getState().loadChapters("book-1");
+      useChapterStore.getState().setCurrentChapter(useChapterStore.getState().chapters[1]);
+
+      await testDb.execute("DELETE FROM chapters WHERE id = ?", ["ch-2"]);
+      await useChapterStore.getState().refreshChapters("book-1");
+
+      expect(useChapterStore.getState().currentChapter).toBeNull();
+      expect(useChapterStore.getState().chapters.map((c) => c.id)).toEqual(["ch-1"]);
+    });
+
+    it("does nothing for a book that is not loaded", async () => {
+      await seedChapter(testDb, "ch-1", "book-1", 0);
+      await useChapterStore.getState().loadChapters("book-1");
+      const before = useChapterStore.getState().chapters;
+
+      await useChapterStore.getState().refreshChapters("other-book");
+
+      expect(useChapterStore.getState().chapters).toBe(before);
+      expect(useChapterStore.getState().currentBookId).toBe("book-1");
+    });
+  });
+
   describe("loadChapter()", () => {
     it("loads a single chapter as currentChapter", async () => {
       const created = await useChapterStore.getState().createChapter({

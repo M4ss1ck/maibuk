@@ -37,6 +37,13 @@ interface BookStore {
   // Actions
   loadBooks: () => Promise<void>;
   loadBook: (id: string) => Promise<void>;
+  /**
+   * Re-read books from the database after something outside the UI changed
+   * them (a sync pull). Unlike loadBooks/loadBook it never flips isLoading, so
+   * an open BookEditor keeps its editor mounted, and it does not touch
+   * last_opened_at.
+   */
+  refreshBooks: () => Promise<void>;
   createBook: (input: CreateBookInput) => Promise<Book>;
   updateBook: (id: string, input: UpdateBookInput) => Promise<void>;
   deleteBook: (id: string) => Promise<void>;
@@ -84,6 +91,23 @@ export const useBookStore = create<BookStore>((set) => ({
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
+  },
+
+  refreshBooks: async () => {
+    const db = await getDatabase();
+    const result = await db.select<Record<string, unknown>[]>(
+      "SELECT * FROM books ORDER BY last_opened_at DESC, updated_at DESC"
+    );
+    const books = result.map(toBook);
+    set((state) => {
+      const current = state.currentBook
+        ? books.find((book) => book.id === state.currentBook?.id)
+        : undefined;
+      return {
+        books,
+        currentBook: current ?? state.currentBook,
+      };
+    });
   },
 
   createBook: async (input: CreateBookInput) => {

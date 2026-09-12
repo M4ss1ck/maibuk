@@ -95,6 +95,12 @@ export interface EditorStats {
 interface EditorProps {
   content: string | null;
   onUpdate: (content: string) => void;
+  /**
+   * Fired after a genuinely external `content` change (a sync pull, a version
+   * restore) replaced the document. Parents that cache the latest HTML for
+   * saving must adopt it here, and drop any save queued for the old text.
+   */
+  onExternalContent?: (content: string, wordCount: number) => void;
   onWordCountChange?: (count: number) => void;
   onStatsChange?: (stats: EditorStats) => void;
   onBlur?: () => void;
@@ -125,6 +131,7 @@ interface EditorProps {
 export function Editor({
   content,
   onUpdate,
+  onExternalContent,
   onWordCountChange,
   onStatsChange,
   onBlur,
@@ -224,9 +231,11 @@ export function Editor({
   // The coalesced emitter runs from a timer, so it reads the callbacks through
   // refs rather than capturing whichever render scheduled it.
   const onUpdateRef = useRef(onUpdate);
+  const onExternalContentRef = useRef(onExternalContent);
   const onWordCountChangeRef = useRef(onWordCountChange);
   const onStatsChangeRef = useRef(onStatsChange);
   onUpdateRef.current = onUpdate;
+  onExternalContentRef.current = onExternalContent;
   onWordCountChangeRef.current = onWordCountChange;
   onStatsChangeRef.current = onStatsChange;
 
@@ -419,6 +428,8 @@ export function Editor({
     appliedContentRef.current = content;
     // External content replaced the document; prior edit history is obsolete.
     recentEmittedRef.current = [];
+    // setContentSilently suppresses onUpdate, so tell the parent explicitly.
+    onExternalContentRef.current?.(content, editor.storage.characterCount.words());
   }, [editor, content, runEmit]);
 
   useReadingPosition({

@@ -69,6 +69,12 @@ interface NoteStore {
   error: string | null;
   loadNotes: () => Promise<void>;
   loadNote: (id: string) => Promise<void>;
+  /**
+   * Re-read notes after something outside the UI changed them (a sync pull).
+   * Also replaces the open note with its fresh row so its editor shows the new
+   * content; never flips isLoading.
+   */
+  refreshNotes: () => Promise<void>;
   createNote: (input: CreateNoteInput) => Promise<Note>;
   updateNote: (input: UpdateNoteInput) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
@@ -107,6 +113,20 @@ export const useNoteStore = create<NoteStore>((set) => ({
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
+  },
+
+  refreshNotes: async () => {
+    const db = await getDatabase();
+    const rows = await db.select<Record<string, unknown>[]>(
+      'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC'
+    );
+    const notes = rows.map(toModel);
+    set((state) => ({
+      notes,
+      currentNote: state.currentNote
+        ? (notes.find((note) => note.id === state.currentNote?.id) ?? state.currentNote)
+        : null,
+    }));
   },
 
   createNote: async (input: CreateNoteInput) => {

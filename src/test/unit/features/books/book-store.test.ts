@@ -128,6 +128,25 @@ describe("useBookStore", () => {
     });
   });
 
+  describe("refreshBooks()", () => {
+    it("refreshes the list and the open book without a loading state", async () => {
+      const book = await useBookStore.getState().createBook({ title: "Old", authorName: "A" });
+      await useBookStore.getState().loadBook(book.id);
+      await testDb.execute("UPDATE books SET title = ? WHERE id = ?", ["New", book.id]);
+
+      const loading: boolean[] = [];
+      const unsubscribe = useBookStore.subscribe((state) => {
+        if (state.isLoading) loading.push(true);
+      });
+      await useBookStore.getState().refreshBooks();
+      unsubscribe();
+
+      expect(loading).toEqual([]);
+      expect(useBookStore.getState().currentBook?.title).toBe("New");
+      expect(useBookStore.getState().books.map((b) => b.title)).toEqual(["New"]);
+    });
+  });
+
   describe("loadBook()", () => {
     it("loads a single book and sets it as currentBook", async () => {
       const created = await useBookStore.getState().createBook({
