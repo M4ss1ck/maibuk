@@ -22,6 +22,7 @@ import { DeepLinkHandler } from "@/components/DeepLinkHandler";
 import { AndroidBackNavigator } from "@/components/AndroidBackNavigator";
 import { scheduleDailyBackup } from "@/features/backup/lifecycle";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
+import { installAuthKeepAlive } from "@/features/sync/auth-keep-alive";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
 import { installAndroidBackHandler } from "@/lib/window/androidBack";
 import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
@@ -39,6 +40,7 @@ function App() {
   useEffect(() => {
     if (embedMode) return;
     scheduleDailyBackup();
+    installAuthKeepAlive();
     if (IS_ANDROID) {
       void installAndroidBackHandler();
       void installAndroidLifecycleHandler();

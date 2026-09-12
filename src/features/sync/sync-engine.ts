@@ -55,6 +55,7 @@ import {
 } from "@/features/sync/tombstones";
 import { ensureGenericCollectionMigration } from "@/features/sync/migration-reset";
 import { createAsyncQueue } from "@/lib/async-queue";
+import { shouldRefreshAuth } from "@/features/sync/auth-policy";
 
 // FIFO serialization of all sync entrypoints (syncAllBooks, syncBook,
 // syncSingleNote). Concurrent callers queue instead of failing: each queued
@@ -249,7 +250,21 @@ async function processPendingDeletions(
 }
 
 async function ensureAuth(): Promise<void> {
-  if (useSyncStore.getState().authVerified) return;
+  // Checking only authVerified let a sync run on a token that had expired while
+  // the app stayed open. PocketBase treats an expired token as a guest, whose
+  // owner-scoped list requests come back empty rather than failing, so a stale
+  // token must be renewed (or rejected) before the sync reads remote state.
+  const { authVerified, authToken, authRefreshedAt } = useSyncStore.getState();
+  if (
+    !shouldRefreshAuth({
+      token: authToken ?? null,
+      authVerified,
+      refreshedAt: authRefreshedAt ?? null,
+      now: Date.now(),
+    })
+  ) {
+    return;
+  }
 
   try {
     const result = await pbRefreshAuth();
@@ -258,6 +273,7 @@ async function ensureAuth(): Promise<void> {
       userEmail: result.email,
       authToken: result.token,
       authVerified: true,
+      authRefreshedAt: Date.now(),
     });
   } catch (error: unknown) {
     const status = (error as { status?: number }).status;
@@ -267,6 +283,7 @@ async function ensureAuth(): Promise<void> {
         userEmail: null,
         authToken: null,
         authVerified: false,
+        authRefreshedAt: null,
       });
       throw new Error("sync.sessionExpired");
     }

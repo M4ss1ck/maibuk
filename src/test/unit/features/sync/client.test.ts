@@ -519,6 +519,34 @@ describe("refreshAuth()", () => {
 
     await expect(refreshAuth()).rejects.toThrow("Failed to fetch");
   });
+
+  it("shares one request between concurrent callers", async () => {
+    let resolveRefresh!: (value: unknown) => void;
+    mockAuthRefresh.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        })
+    );
+    mockAuthStoreToken = "shared-token";
+
+    const first = refreshAuth();
+    const second = refreshAuth();
+    resolveRefresh({ record: { id: "user-1", email: "user@test.com" } });
+
+    await expect(first).resolves.toEqual({ email: "user@test.com", token: "shared-token" });
+    await expect(second).resolves.toEqual({ email: "user@test.com", token: "shared-token" });
+    expect(mockAuthRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a new request once the previous one settled, even after a failure", async () => {
+    mockAuthRefresh.mockRejectedValueOnce(new Error("Failed to fetch"));
+    await expect(refreshAuth()).rejects.toThrow("Failed to fetch");
+
+    mockAuthRefresh.mockResolvedValueOnce({ record: { id: "user-1", email: "user@test.com" } });
+    await expect(refreshAuth()).resolves.toMatchObject({ email: "user@test.com" });
+    expect(mockAuthRefresh).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("login()", () => {

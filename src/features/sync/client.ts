@@ -105,13 +105,27 @@ export function restoreAuth(token: string): void {
   client.authStore.save(token);
 }
 
-export async function refreshAuth(): Promise<{ email: string; token: string }> {
+let inflightRefresh: Promise<{ email: string; token: string }> | null = null;
+
+/**
+ * Renew the auth token. Concurrent callers (launch verification, the
+ * keep-alive, a sync's pre-flight check) share one request.
+ */
+export function refreshAuth(): Promise<{ email: string; token: string }> {
+  if (inflightRefresh) return inflightRefresh;
   const client = getClient();
-  const authData = await client.collection("users").authRefresh();
-  return {
-    email: authData.record.email,
-    token: client.authStore.token,
-  };
+  inflightRefresh = (async () => {
+    try {
+      const authData = await client.collection("users").authRefresh();
+      return {
+        email: authData.record.email,
+        token: client.authStore.token,
+      };
+    } finally {
+      inflightRefresh = null;
+    }
+  })();
+  return inflightRefresh;
 }
 
 export function logout(): void {
