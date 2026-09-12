@@ -89,6 +89,7 @@ export default defineConfig(() => ({
         "src/components/editor/WidthControl.tsx",
         "src/components/editor/text-transforms.ts",
         "src/components/editor/toolbar/toolbar-groups.ts",
+        "src/components/editor/toolbar/editor-toolbar-state.ts",
         "src/components/editor/toolbar/useToolbarOverflow.ts",
         "src/components/editor/extensions/scene-break-utils.ts",
         "src/components/editor/extensions/SceneBreak.ts",

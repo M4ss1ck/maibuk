@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import type { Editor } from "@tiptap/react";
+import { useEditorState, type Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { TableSizePicker } from "@/components/editor/TableSizePicker";
 import { Tooltip, TooltipGroup } from "@/components/ui";
@@ -39,7 +39,31 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
     setShowMenu(false);
   };
 
-  const isInTable = editor.isActive("table");
+  const {
+    isInTable,
+    canAddColumnBefore,
+    canAddColumnAfter,
+    canAddRowBefore,
+    canAddRowAfter,
+    canDeleteColumn,
+    canDeleteRow,
+    canDeleteTable,
+  } = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      const can = currentEditor.can();
+      return {
+        isInTable: currentEditor.isActive("table"),
+        canAddColumnBefore: can.addColumnBefore(),
+        canAddColumnAfter: can.addColumnAfter(),
+        canAddRowBefore: can.addRowBefore(),
+        canAddRowAfter: can.addRowAfter(),
+        canDeleteColumn: can.deleteColumn(),
+        canDeleteRow: can.deleteRow(),
+        canDeleteTable: can.deleteTable(),
+      };
+    },
+  });
 
   useEffect(() => {
     if (!showMenu) return;
@@ -109,7 +133,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
           <button
             type="button"
             onClick={() => editor.chain().focus().addColumnBefore().run()}
-            disabled={!editor.can().addColumnBefore()}
+            disabled={!canAddColumnBefore}
             aria-label={t("editor.addColumnBefore")}
             className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -121,7 +145,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
           <button
             type="button"
             onClick={() => editor.chain().focus().addColumnAfter().run()}
-            disabled={!editor.can().addColumnAfter()}
+            disabled={!canAddColumnAfter}
             aria-label={t("editor.addColumnAfter")}
             className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -133,7 +157,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
           <button
             type="button"
             onClick={() => editor.chain().focus().addRowBefore().run()}
-            disabled={!editor.can().addRowBefore()}
+            disabled={!canAddRowBefore}
             aria-label={t("editor.addRowBefore")}
             className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -145,7 +169,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
           <button
             type="button"
             onClick={() => editor.chain().focus().addRowAfter().run()}
-            disabled={!editor.can().addRowAfter()}
+            disabled={!canAddRowAfter}
             aria-label={t("editor.addRowAfter")}
             className="p-1.5 rounded transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -159,7 +183,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
           <button
             type="button"
             onClick={() => editor.chain().focus().deleteColumn().run()}
-            disabled={!editor.can().deleteColumn()}
+            disabled={!canDeleteColumn}
             aria-label={t("editor.deleteColumn")}
             className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -171,7 +195,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
           <button
             type="button"
             onClick={() => editor.chain().focus().deleteRow().run()}
-            disabled={!editor.can().deleteRow()}
+            disabled={!canDeleteRow}
             aria-label={t("editor.deleteRow")}
             className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -183,7 +207,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
           <button
             type="button"
             onClick={() => editor.chain().focus().deleteTable().run()}
-            disabled={!editor.can().deleteTable()}
+            disabled={!canDeleteTable}
             aria-label={t("editor.deleteTable")}
             className="p-1.5 rounded transition-colors hover:bg-destructive/10 text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
           >
