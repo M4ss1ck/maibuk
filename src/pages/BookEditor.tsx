@@ -929,6 +929,13 @@ export function BookEditor() {
         <>
           {/* Mobile drawer */}
           <FocusScope contain={showMobileChapters}>
+            {/* The drawer is a dialog only while open: role and aria-modal are
+                set together, so aria-modal never appears without the role. Biome
+                cannot resolve the conditional role, and a static role="dialog"
+                is not an option - restoreChaptersFocus() skips focus restore
+                when the active element is inside [role="dialog"], so a
+                permanent role strands focus in the closed drawer. */}
+            {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role="dialog" is applied by the same condition as aria-modal */}
             <div
               ref={mobilePaneRef}
               {...(showMobileChapters ? mobileChaptersOverlayProps : {})}
