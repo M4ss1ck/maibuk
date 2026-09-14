@@ -315,6 +315,18 @@ Automated checks (axe) run per route as a safety net, but automated status alone
 not treated as evidence of screen-reader support — behavioral keyboard tests and
 manual assistive-technology sessions are the authority.
 
+## Troubleshooting sync uploads
+
+When an upload fails, the sync panel shows the error below the last synced time
+and records it in the sync log. Rejected object writes include the operation
+(`objects.create` or `objects.update`), object kind and ID, HTTP status when
+available, and server validation codes. Include that full error when reporting
+a sync problem; do not include passwords, encryption passphrases, or note text.
+
+The Notes scope processes all local notes, so a failed upload may belong to a
+different note from the one currently open. The reported object ID identifies
+which write failed. A failed sync does not advance the last synced time.
+
 ## Contributing
 
 Contributions are welcome. Please open a pull request.

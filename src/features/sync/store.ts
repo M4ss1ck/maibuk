@@ -45,7 +45,9 @@ export function resetSyncStoreConcurrencyForTests(): void {
   pendingSyncCount = 0;
 }
 
-type SyncStoreSetter = (partial: Partial<SyncStore>) => void;
+type SyncStoreSetter = (
+  partial: Partial<SyncStore> | ((state: SyncStore) => Partial<SyncStore>)
+) => void;
 
 function beginStoreSync(set: SyncStoreSetter): void {
   pendingSyncCount += 1;
@@ -78,11 +80,18 @@ function finishStoreSyncOutcome(
 
 function finishStoreSyncError(set: SyncStoreSetter, message: string): void {
   pendingSyncCount = Math.max(0, pendingSyncCount - 1);
-  if (pendingSyncCount > 0) {
-    set({ syncStatus: "syncing", syncError: message });
-    return;
-  }
-  set({ syncStatus: "error", syncError: message });
+  const entry: SyncLogEntry = {
+    id: crypto.randomUUID(),
+    timestamp: Math.floor(Date.now() / 1000),
+    level: "error",
+    event: "error",
+    message,
+  };
+  set((state) => ({
+    syncStatus: pendingSyncCount > 0 ? "syncing" : "error",
+    syncError: message,
+    syncLog: [entry, ...state.syncLog].slice(0, MAX_SYNC_LOG_ENTRIES),
+  }));
 }
 
 interface SyncStore {
