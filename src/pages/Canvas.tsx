@@ -416,7 +416,7 @@ function CanvasEditor() {
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       <h1 data-route-heading className="sr-only">
-        {current?.title || t("canvas.title")}
+        {current?.title || t("canvas.untitled")}
       </h1>
       <header className="z-10 flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
         <Button variant="ghost" size="sm" onClick={() => navigate("/canvas")}>

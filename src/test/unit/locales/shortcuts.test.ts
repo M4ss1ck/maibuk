@@ -13,8 +13,13 @@ describe("shortcut locale labels", () => {
     expect(es.shortcuts.toggleAlwaysOnTop).toBe("Alternar siempre visible");
   });
 
-  it("reuses the dictionary label for the dictionary shortcut", () => {
-    expect(en.editor.dictionary).toBe("Dictionary");
-    expect(es.editor.dictionary).toBe("Diccionario");
+  it("labels the word lookup shortcut as Word Lookup, not Custom Dictionary", () => {
+    expect(en.editor.dictionary).toBe("Look up word");
+    expect(es.editor.dictionary).toBe("Buscar palabra");
+  });
+
+  it("names the Books section and its shortcut Books, not projects", () => {
+    expect(en.shortcuts.gotoProjects).toBe("Go to Books");
+    expect(es.shortcuts.gotoProjects).toBe("Ir a Libros");
   });
 });
