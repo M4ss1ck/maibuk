@@ -260,3 +260,49 @@ export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
   // Refresh the list and the open note so its editor shows the pulled content.
   await useNoteStore.getState().refreshNotes();
 }
+
+// Removal of an item deleted on another device. Unlike the stores' delete
+// actions this records no tombstone (the server already has the deletion, and a
+// tombstone would block pulling the item if another device restores it) and
+// signals no local change.
+
+export async function removeLocalNote(noteId: string): Promise<void> {
+  const db = await getDatabase();
+  await db.execute("DELETE FROM notes WHERE id = ?", [noteId]);
+  await db.execute("DELETE FROM links WHERE source_id = ?", [noteId]).catch(() => {});
+  useNoteStore.setState((state) => ({
+    notes: state.notes.filter((note) => note.id !== noteId),
+    currentNote: state.currentNote?.id === noteId ? null : state.currentNote,
+  }));
+}
+
+export async function removeLocalBook(bookId: string): Promise<void> {
+  const db = await getDatabase();
+  const chapters = await db.select<{ id: string }[]>("SELECT id FROM chapters WHERE book_id = ?", [
+    bookId,
+  ]);
+  for (const chapter of chapters) {
+    await db.execute("DELETE FROM links WHERE source_id = ?", [chapter.id]).catch(() => {});
+  }
+  // The schema declares ON DELETE CASCADE, but no adapter enables SQLite's
+  // foreign_keys pragma, so the dependent rows are deleted explicitly.
+  for (const table of [
+    "chapter_epub_meta",
+    "epub_structures",
+    "book_styles",
+    "book_metadata",
+    "project_assets",
+    "book_versions",
+    "chapters",
+  ]) {
+    await db.execute(`DELETE FROM ${table} WHERE book_id = ?`, [bookId]).catch(() => {});
+  }
+  await db.execute("DELETE FROM books WHERE id = ?", [bookId]);
+  useBookStore.setState((state) => ({
+    books: state.books.filter((book) => book.id !== bookId),
+    currentBook: state.currentBook?.id === bookId ? null : state.currentBook,
+  }));
+  if (useChapterStore.getState().currentBookId === bookId) {
+    useChapterStore.setState({ chapters: [], currentChapter: null, currentBookId: null });
+  }
+}

@@ -113,6 +113,8 @@ const {
   pushObject,
   pullObjectContent,
   listObjects,
+  listRemoteDeletedBooks,
+  listRemoteDeletedNotes,
   pullObjectsSince,
   softDeleteObject,
   isKeyUniqueConstraintError,
@@ -412,6 +414,48 @@ describe("generic object sync core", () => {
       sort: "updated",
       fields: "id,kind,key,group,checksum,deleted,meta,updated",
     });
+  });
+
+  it("lists soft-deleted note rows, whose keys still hold the unique identity", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "dead-1",
+        kind: "note",
+        key: "note-1",
+        group: "",
+        checksum: "",
+        deleted: true,
+        meta: "",
+        updated: "2026-09-14 10:00:00.000Z",
+      },
+    ]);
+
+    const result = await listRemoteDeletedNotes();
+
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "note" && deleted = true',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+    expect(result).toEqual([
+      {
+        remoteId: "dead-1",
+        entityId: "note-1",
+        updatedAt: Math.floor(new Date("2026-09-14T10:00:00.000Z").getTime() / 1000),
+      },
+    ]);
+  });
+
+  it("lists soft-deleted book rows", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    await listRemoteDeletedBooks();
+
+    expect(mockGetFullList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter: 'app_name = "maibuk" && kind = "book" && deleted = true',
+      })
+    );
   });
 
   it("pulls objects since an updated timestamp without filtering deleted records", async () => {

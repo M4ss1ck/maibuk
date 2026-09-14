@@ -13,6 +13,8 @@ import {
   applyBookSnapshot,
   serializeNote,
   applyNoteSnapshot,
+  removeLocalBook,
+  removeLocalNote,
 } from "@/features/sync/serializer";
 import {
   pushBookBlob,
@@ -27,6 +29,8 @@ import {
   listRemoteNotes,
   deleteRemoteBook,
   deleteRemoteNote,
+  listRemoteDeletedBooks,
+  listRemoteDeletedNotes,
 } from "@/features/sync/client";
 import type {
   BookSnapshot,
@@ -41,6 +45,7 @@ import type {
   SyncEntityType,
   SyncDeletionReviewItem,
   SyncLogEntry,
+  RemoteDeletionMeta,
 } from "@/features/sync/types";
 import type { SyncAction, ConflictResolver } from "@/features/sync/types";
 import { createBackup } from "@/lib/platform";
@@ -53,6 +58,7 @@ import {
   getTombstone,
   listPendingTombstones,
   markTombstonePushed,
+  tombstoneId,
 } from "@/features/sync/tombstones";
 import { ensureGenericCollectionMigration } from "@/features/sync/migration-reset";
 import { createAsyncQueue } from "@/lib/async-queue";
@@ -204,8 +210,32 @@ async function createPreSyncBackupOrThrow(): Promise<void> {
   }
 }
 
-// Runs are serialized by syncQueue, so one flag per run is safe.
+// Runs are serialized by syncQueue, so one flag (and one review list) per run is safe.
 let backupTakenThisRun = false;
+// Items this run found deleted on another device, waiting for confirmation.
+let remoteDeletionReviews: SyncDeletionReviewItem[] = [];
+
+/** `{ pendingDeletions }` (local deletions first, then this run's reviews), or `{}` when none. */
+function pendingDeletionsField(pending: SyncDeletionReviewItem[] = []): {
+  pendingDeletions?: SyncDeletionReviewItem[];
+} {
+  const all = [...pending, ...remoteDeletionReviews];
+  return all.length > 0 ? { pendingDeletions: all } : {};
+}
+
+function singleSyncResult(action: SyncAction): SingleSyncResult {
+  const pending = pendingDeletionsField();
+  return {
+    outcome:
+      action === "cancelled"
+        ? "cancelled"
+        : action === "deferred" || pending.pendingDeletions
+          ? "partial"
+          : "success",
+    action,
+    ...pending,
+  };
+}
 
 async function ensurePreSyncBackup(options: SyncOptions): Promise<void> {
   if (backupTakenThisRun) return;
@@ -220,6 +250,7 @@ async function ensurePreSyncBackup(options: SyncOptions): Promise<void> {
 
 async function beginSyncRun(options: SyncOptions): Promise<void> {
   backupTakenThisRun = false;
+  remoteDeletionReviews = [];
   if (options.trigger === "auto") {
     emitLog(options, { level: "info", event: "scope", message: "Automatic sync" });
     // An automatic sync backs up only right before it first replaces local
@@ -238,6 +269,153 @@ async function computeLocalBookChecksum(bookId: string): Promise<{ json: string;
 async function computeLocalNoteChecksum(noteId: string): Promise<{ json: string; checksum: string }> {
   const json = await serializeNote(noteId);
   return { json, checksum: await computeChecksumAsync(await normalizeNoteSnapshotAsync(json)) };
+}
+
+/** Only a local item without a live remote row can collide with a deleted one. */
+async function listDeletionsIfNeeded(
+  localIds: string[],
+  liveIds: string[],
+  list: () => Promise<RemoteDeletionMeta[]>
+): Promise<RemoteDeletionMeta[]> {
+  const live = new Set(liveIds);
+  return localIds.some((id) => !live.has(id)) ? list() : [];
+}
+
+// A book whose remote row is deleted has no versions to reconcile unless this
+// run restored it: otherwise it was removed here, awaits review, or was left.
+function shouldSyncVersions(
+  bookId: string,
+  action: SyncAction,
+  remoteBooks: SyncItemMeta[],
+  remoteDeletions: RemoteDeletionMeta[]
+): boolean {
+  if (action === "cancelled") return false;
+  if (action === "pushed") return true;
+  return (
+    remoteBooks.some((remote) => remote.bookId === bookId) ||
+    !remoteDeletions.some((deletion) => deletion.entityId === bookId)
+  );
+}
+
+interface RemoteDeletionContext {
+  entityType: "book" | "note";
+  entityId: string;
+  title: string;
+  localChecksum: string;
+  localUpdatedAt: number;
+  deletion: RemoteDeletionMeta;
+  onConflict: ConflictResolver;
+  options: SyncOptions;
+  /** Uploads the local copy onto the given (deleted) row, restoring it. */
+  revive: (remoteId: string) => Promise<SyncAction>;
+  currentChecksum: () => Promise<string>;
+}
+
+async function removeDeletedElsewhere(ctx: RemoteDeletionContext): Promise<SyncAction> {
+  await ensurePreSyncBackup(ctx.options);
+  await (ctx.entityType === "book" ? removeLocalBook(ctx.entityId) : removeLocalNote(ctx.entityId));
+  await clearSyncBase(ctx.entityType, ctx.entityId);
+  emitLog(ctx.options, {
+    level: "success",
+    event: "pull",
+    message: `Removed ${ctx.entityType} ${ctx.title}, deleted on another device`,
+    entityType: ctx.entityType,
+    entityId: ctx.entityId,
+  });
+  return "pulled";
+}
+
+// The item exists here, but its remote row is soft-deleted. That row still
+// holds the server's unique identity, so the item is never re-created: an
+// unedited copy follows the deletion once the user confirms it, and an edited
+// one asks whether to restore it (update the deleted row) or delete it here.
+async function resolveRemoteDeletion(ctx: RemoteDeletionContext): Promise<SyncAction> {
+  const { entityType, entityId, title, options } = ctx;
+  const label = entityType === "book" ? "Book" : "Note";
+  const base = await getSyncBase(entityType, entityId);
+  // Without a base this copy was never agreed with the server (a restore, or a
+  // first sync here), so it may hold work the deletion never saw.
+  const editedHere = !base || base.localChecksum !== ctx.localChecksum;
+
+  if (!editedHere || options.direction === "pull") {
+    if (!canPull(options.direction)) {
+      emitLog(options, {
+        level: "warning",
+        event: "skip",
+        message: `${label} ${title} was deleted on another device; run a two-way or pull sync to review it`,
+        entityType,
+        entityId,
+      });
+      return "skipped";
+    }
+
+    const reviewId = tombstoneId(entityType, entityId);
+    if (!options.confirmedDeletionIds?.includes(reviewId)) {
+      remoteDeletionReviews.push({
+        id: reviewId,
+        entityType,
+        entityId,
+        title,
+        deletedAt: ctx.deletion.updatedAt,
+        deletedRemotely: true,
+      });
+      emitLog(options, {
+        level: "warning",
+        event: "delete-pending",
+        message: `Deleted on another device, needs confirmation: ${title}`,
+        entityType,
+        entityId,
+      });
+      return "skipped";
+    }
+
+    // The confirmation covered the copy the user reviewed. Land any pending
+    // editor save and re-check, so an edit made since is not deleted with it.
+    await flushPendingEdits();
+    if ((await ctx.currentChecksum()) !== ctx.localChecksum) {
+      emitLog(options, {
+        level: "warning",
+        event: "skip",
+        message: `${label} ${title} changed during sync; it will sync next time`,
+        entityType,
+        entityId,
+      });
+      return "deferred";
+    }
+    return removeDeletedElsewhere(ctx);
+  }
+
+  emitLog(options, {
+    level: "warning",
+    event: "conflict",
+    message: `${label} ${title} was deleted on another device but changed here`,
+    entityType,
+    entityId,
+  });
+  const choice = await ctx.onConflict({
+    entityType,
+    entityId,
+    entityTitle: title,
+    bookId: entityId,
+    bookTitle: title,
+    localUpdatedAt: ctx.localUpdatedAt,
+    remoteUpdatedAt: ctx.deletion.updatedAt,
+    remoteDeleted: true,
+  });
+
+  if (choice === "cancel") return "cancelled";
+  if (choice === "skip") {
+    emitLog(options, {
+      level: "warning",
+      event: "skip",
+      message: `${label} ${title} was deleted on another device but changed here; run a manual sync to choose`,
+      entityType,
+      entityId,
+    });
+    return "deferred";
+  }
+  if (choice === "push") return ctx.revive(ctx.deletion.remoteId);
+  return removeDeletedElsewhere(ctx);
 }
 
 async function processPendingDeletions(
@@ -363,7 +541,8 @@ async function syncBookInBatch(
   passphrase: string,
   onConflict: ConflictResolver,
   options: SyncOptions,
-  remoteBooks?: SyncItemMeta[],
+  remoteBooks: SyncItemMeta[],
+  remoteDeletions: RemoteDeletionMeta[],
   precomputedLocalUpdatedAt?: number
 ): Promise<SyncAction> {
   assertOnline();
@@ -374,8 +553,7 @@ async function syncBookInBatch(
   // avoiding a redundant per-book MAX query.
   const localUpdatedAt = precomputedLocalUpdatedAt ?? (await getLocalUpdatedAt(bookId));
 
-  const remotes = remoteBooks ?? (await listRemoteBooks());
-  const remote = remotes.find((r) => r.bookId === bookId);
+  const remote = remoteBooks.find((r) => r.bookId === bookId);
 
   const push = async (remoteId?: string): Promise<SyncAction> => {
     const encrypted = await encryptToBuffer(json, passphrase);
@@ -396,6 +574,21 @@ async function syncBookInBatch(
   };
 
   if (!remote) {
+    const deletion = remoteDeletions.find((d) => d.entityId === bookId);
+    if (deletion) {
+      return resolveRemoteDeletion({
+        entityType: "book",
+        entityId: bookId,
+        title: bookTitle,
+        localChecksum,
+        localUpdatedAt,
+        deletion,
+        onConflict,
+        options,
+        revive: push,
+        currentChecksum: async () => (await computeLocalBookChecksum(bookId)).checksum,
+      });
+    }
     if (!canPush(options.direction)) {
       emitLog(options, {
         level: "info",
@@ -546,6 +739,7 @@ async function syncNoteInBatch(
   onConflict: ConflictResolver,
   options: SyncOptions,
   remoteNotes: NoteSyncItemMeta[],
+  remoteDeletions: RemoteDeletionMeta[],
   localUpdatedAt: number
 ): Promise<SyncAction> {
   assertOnline();
@@ -574,6 +768,21 @@ async function syncNoteInBatch(
   };
 
   if (!remote) {
+    const deletion = remoteDeletions.find((d) => d.entityId === noteId);
+    if (deletion) {
+      return resolveRemoteDeletion({
+        entityType: "note",
+        entityId: noteId,
+        title: noteTitle,
+        localChecksum,
+        localUpdatedAt,
+        deletion,
+        onConflict,
+        options,
+        revive: push,
+        currentChecksum: async () => (await computeLocalNoteChecksum(noteId)).checksum,
+      });
+    }
     if (!canPush(options.direction)) {
       emitLog(options, {
         level: "info",
@@ -799,6 +1008,11 @@ async function syncAllNotes(
   const localNoteIds = new Set(localNotes.map((n) => n.id));
 
   const remoteNotes = await listRemoteNotes();
+  const remoteDeletions = await listDeletionsIfNeeded(
+    localNotes.map((note) => note.id),
+    remoteNotes.map((remote) => remote.noteId),
+    listRemoteDeletedNotes
+  );
   const actions: SyncAction[] = [];
 
   for (const note of localNotes) {
@@ -808,6 +1022,7 @@ async function syncAllNotes(
       onConflict,
       options,
       remoteNotes,
+      remoteDeletions,
       note.updated_at
     );
     actions.push(action);
@@ -907,15 +1122,25 @@ async function syncBookInternal(
     };
   }
 
-  const action = await syncBookInBatch(bookId, passphrase, onConflict, options);
-  if (action !== "cancelled") {
+  const remoteBooks = await listRemoteBooks();
+  const remoteDeletions = await listDeletionsIfNeeded(
+    [bookId],
+    remoteBooks.map((remote) => remote.bookId),
+    listRemoteDeletedBooks
+  );
+  const action = await syncBookInBatch(
+    bookId,
+    passphrase,
+    onConflict,
+    options,
+    remoteBooks,
+    remoteDeletions
+  );
+  if (shouldSyncVersions(bookId, action, remoteBooks, remoteDeletions)) {
     await syncVersions(bookId, passphrase, options);
   }
   await syncMetrics(passphrase, options);
-  return {
-    outcome: action === "cancelled" ? "cancelled" : action === "deferred" ? "partial" : "success",
-    action,
-  };
+  return singleSyncResult(action);
 }
 
 async function getNoteUpdatedAt(noteId: string): Promise<number> {
@@ -949,6 +1174,11 @@ async function syncSingleNoteInternal(
   await beginSyncRun(options);
 
   const remoteNotes = await listRemoteNotes();
+  const remoteDeletions = await listDeletionsIfNeeded(
+    [noteId],
+    remoteNotes.map((remote) => remote.noteId),
+    listRemoteDeletedNotes
+  );
   const localUpdatedAt = await getNoteUpdatedAt(noteId);
   const action = await syncNoteInBatch(
     noteId,
@@ -956,13 +1186,11 @@ async function syncSingleNoteInternal(
     onConflict,
     options,
     remoteNotes,
+    remoteDeletions,
     localUpdatedAt
   );
   await syncMetrics(passphrase, options);
-  return {
-    outcome: action === "cancelled" ? "cancelled" : action === "deferred" ? "partial" : "success",
-    action,
-  };
+  return singleSyncResult(action);
 }
 
 interface BookTimestampRow {
@@ -1021,6 +1249,11 @@ async function syncAllBooksInternal(
       const localBookIds = new Set(localBooks.map((b) => b.id));
 
       const remoteBooks = await listRemoteBooks();
+      const remoteBookDeletions = await listDeletionsIfNeeded(
+        localBooks.map((book) => book.id),
+        remoteBooks.map((remote) => remote.bookId),
+        listRemoteDeletedBooks
+      );
 
       for (const book of localBooks) {
         const action = await syncBookInBatch(
@@ -1029,9 +1262,10 @@ async function syncAllBooksInternal(
           onConflict,
           options,
           remoteBooks,
+          remoteBookDeletions,
           book.updated_at
         );
-        if (action !== "cancelled") {
+        if (shouldSyncVersions(book.id, action, remoteBooks, remoteBookDeletions)) {
           await syncVersions(book.id, passphrase, options);
         }
         actions.push(action);
@@ -1040,6 +1274,7 @@ async function syncAllBooksInternal(
           return {
             outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
             actions,
+            ...pendingDeletionsField(pendingDeletions),
           };
         }
       }
@@ -1095,6 +1330,7 @@ async function syncAllBooksInternal(
         return {
           outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
           actions,
+          ...pendingDeletionsField(pendingDeletions),
         };
       }
     }
@@ -1103,8 +1339,9 @@ async function syncAllBooksInternal(
       await syncMetrics(passphrase, options);
     }
 
-    if (pendingDeletions.length > 0) {
-      return { outcome: "partial", actions, pendingDeletions };
+    const pending = pendingDeletionsField(pendingDeletions);
+    if (pending.pendingDeletions) {
+      return { outcome: "partial", actions, ...pending };
     }
     return { outcome: actions.includes("deferred") ? "partial" : "success", actions };
 }

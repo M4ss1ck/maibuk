@@ -39,6 +39,34 @@ export function SyncControls({ onSync, layout = "popover" }: SyncControlsProps) 
     [t]
   );
 
+  // Confirming a local deletion removes the server copy; confirming one made on
+  // another device removes this device's copy. Keep the two visibly apart.
+  const deletionGroups = useMemo(() => {
+    const local = pendingDeletions.filter((item) => !item.deletedRemotely);
+    const remote = pendingDeletions.filter((item) => item.deletedRemotely);
+    return [
+      {
+        titleKey: "sync.pendingDeletionsTitle" as const,
+        descriptionKey: "sync.pendingDeletionsDescription" as const,
+        items: local,
+      },
+      {
+        titleKey: "sync.remoteDeletionsTitle" as const,
+        descriptionKey: "sync.remoteDeletionsDescription" as const,
+        items: remote,
+      },
+    ].filter((group) => group.items.length > 0);
+  }, [pendingDeletions]);
+
+  const hasLocalDeletions = pendingDeletions.some((item) => !item.deletedRemotely);
+  const hasRemoteDeletions = pendingDeletions.some((item) => item.deletedRemotely);
+  const confirmDeletionsKey =
+    hasLocalDeletions && hasRemoteDeletions
+      ? "sync.confirmDeletions"
+      : hasRemoteDeletions
+        ? "sync.confirmLocalDeletions"
+        : "sync.confirmRemoteDeletions";
+
   const handleSync = async () => {
     try {
       await onSync({ scope, direction });
@@ -102,20 +130,25 @@ export function SyncControls({ onSync, layout = "popover" }: SyncControlsProps) 
 
       {pendingDeletions.length > 0 && (
         <div className="rounded-lg border border-border bg-warning-bg p-3 text-warning-text">
-          <div className="flex items-start gap-2">
-            <Trash2 className="mt-0.5 h-4 w-4 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{t("sync.pendingDeletionsTitle")}</p>
-              <p className="mt-0.5 text-xs">{t("sync.pendingDeletionsDescription")}</p>
-              <ul className="mt-2 space-y-1">
-                {pendingDeletions.map((item) => (
-                  <li key={item.id} className="truncate text-xs">
-                    {item.title}
-                  </li>
-                ))}
-              </ul>
+          {deletionGroups.map((group, index) => (
+            <div
+              key={group.titleKey}
+              className={`flex items-start gap-2 ${index > 0 ? "mt-3" : ""}`}
+            >
+              <Trash2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{t(group.titleKey)}</p>
+                <p className="mt-0.5 text-xs">{t(group.descriptionKey)}</p>
+                <ul className="mt-2 space-y-1">
+                  {group.items.map((item) => (
+                    <li key={item.id} className="truncate text-xs">
+                      {item.title}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-          </div>
+          ))}
           <Button
             variant="destructive"
             size="sm"
@@ -124,7 +157,7 @@ export function SyncControls({ onSync, layout = "popover" }: SyncControlsProps) 
             disabled={syncStatus === "syncing"}
           >
             <Trash2 className="h-4 w-4" />
-            {t("sync.confirmRemoteDeletions")}
+            {t(confirmDeletionsKey)}
           </Button>
         </div>
       )}

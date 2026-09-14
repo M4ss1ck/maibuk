@@ -74,3 +74,62 @@ describe("SyncControls", () => {
     expect(screen.queryByText("Started sync")).not.toBeInTheDocument();
   });
 });
+
+describe("SyncControls deletion review", () => {
+  const localItem = {
+    id: "book:book-1",
+    entityType: "book" as const,
+    entityId: "book-1",
+    title: "Deleted here",
+    deletedAt: 100,
+  };
+  const remoteItem = {
+    id: "note:note-1",
+    entityType: "note" as const,
+    entityId: "note-1",
+    title: "Deleted elsewhere",
+    deletedAt: 200,
+    deletedRemotely: true,
+  };
+
+  beforeEach(() => {
+    useSyncStore.setState({
+      syncStatus: "idle",
+      syncError: null,
+      pendingDeletions: [],
+      syncLog: [],
+    });
+  });
+
+  it("labels deletions from another device as removing this device's copy", () => {
+    useSyncStore.setState({ pendingDeletions: [remoteItem] });
+
+    render(<SyncControls onSync={vi.fn()} />);
+
+    expect(screen.getByText("sync.remoteDeletionsTitle")).toBeInTheDocument();
+    expect(screen.queryByText("sync.pendingDeletionsTitle")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "sync.confirmLocalDeletions" })).toBeInTheDocument();
+  });
+
+  it("keeps local and remote deletions apart and confirms both by keyboard", async () => {
+    const user = userEvent.setup();
+    const onSync = vi.fn().mockResolvedValue(undefined);
+    const confirmPendingDeletions = vi.fn().mockResolvedValue(undefined);
+    useSyncStore.setState({ pendingDeletions: [localItem, remoteItem], confirmPendingDeletions });
+
+    render(<SyncControls onSync={onSync} />);
+
+    expect(screen.getByText("sync.pendingDeletionsTitle")).toBeInTheDocument();
+    expect(screen.getByText("sync.remoteDeletionsTitle")).toBeInTheDocument();
+    const confirm = screen.getByRole("button", { name: "sync.confirmDeletions" });
+    confirm.focus();
+    await user.keyboard("{Enter}");
+
+    expect(confirmPendingDeletions).toHaveBeenCalledWith(["book:book-1", "note:note-1"]);
+    expect(onSync).toHaveBeenCalledWith({
+      scope: "all",
+      direction: "bidirectional",
+      confirmedDeletionIds: ["book:book-1", "note:note-1"],
+    });
+  });
+});

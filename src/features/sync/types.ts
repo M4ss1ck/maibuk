@@ -58,6 +58,11 @@ export interface SyncDeletionReviewItem {
   entityId: string;
   title: string;
   deletedAt: number;
+  /**
+   * Deleted on another device while this device still has it. Confirming
+   * removes the local copy; without the flag, confirming removes the remote one.
+   */
+  deletedRemotely?: boolean;
 }
 
 export interface SyncTombstone {
@@ -90,6 +95,11 @@ export interface SyncConflict {
   bookTitle: string;
   localUpdatedAt: number;
   remoteUpdatedAt: number;
+  /**
+   * The remote copy was deleted on another device. "push" keeps this copy and
+   * restores it on the server; "pull" deletes it here.
+   */
+  remoteDeleted?: boolean;
 }
 
 // "skip" defers this item and lets the sync continue (used by automatic sync).
@@ -109,6 +119,13 @@ export interface NoteSyncItemMeta {
   noteId: string;
   checksum: string;
   updatedAt: number; // Unix seconds
+}
+
+/** A soft-deleted remote book or note row. Its key still occupies the server identity. */
+export interface RemoteDeletionMeta {
+  remoteId: string;
+  entityId: string;
+  updatedAt: number; // Unix seconds, when the deletion was written
 }
 
 import type { MetricEvent } from "@/features/metrics/types";

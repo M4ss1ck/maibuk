@@ -15,19 +15,21 @@ export function ConflictDialog({ conflict, onResolve }: ConflictDialogProps) {
   const remoteDate = new Date(conflict.remoteUpdatedAt * 1000).toLocaleString();
   const title = conflict.entityTitle ?? conflict.bookTitle;
   const entityLabel = conflict.entityType === "note" ? t("sync.entityNote") : t("sync.entityBook");
+  // Deleted elsewhere: "push" restores this copy on the server, "pull" deletes it here.
+  const deleted = conflict.remoteDeleted === true;
 
   return (
     <Modal
       isOpen={true}
       onClose={() => onResolve("cancel")}
-      title={t("sync.conflictTitle")}
+      title={deleted ? t("sync.deletedConflictTitle") : t("sync.conflictTitle")}
       footer={
         <div className="flex gap-2">
           <Button variant="primary" onClick={() => onResolve("push")}>
-            {t("sync.keepLocal")}
+            {deleted ? t("sync.keepAndRestore") : t("sync.keepLocal")}
           </Button>
           <Button variant="destructive" onClick={() => onResolve("pull")}>
-            {t("sync.useRemote")}
+            {deleted ? t("sync.deleteHere") : t("sync.useRemote")}
           </Button>
           <Button variant="ghost" onClick={() => onResolve("cancel")}>
             {t("sync.cancelSync")}
@@ -36,11 +38,17 @@ export function ConflictDialog({ conflict, onResolve }: ConflictDialogProps) {
       }
     >
       <p className="text-sm text-muted-foreground">
-        {t("sync.conflictDescription", { title, entity: entityLabel })}
+        {deleted
+          ? t("sync.deletedConflictDescription", { title, entity: entityLabel })
+          : t("sync.conflictDescription", { title, entity: entityLabel })}
       </p>
       <div className="mt-4 space-y-1 text-sm text-foreground">
         <p>{t("sync.localLastModified", { date: localDate })}</p>
-        <p>{t("sync.remoteLastSynced", { date: remoteDate })}</p>
+        <p>
+          {deleted
+            ? t("sync.remoteDeletedAt", { date: remoteDate })
+            : t("sync.remoteLastSynced", { date: remoteDate })}
+        </p>
       </div>
     </Modal>
   );

@@ -5,7 +5,7 @@
 // See the maibuk-sync repo's docs/object-contract.md before changing this file.
 import PocketBase from "pocketbase";
 import i18n from "i18next";
-import type { SyncItemMeta, NoteSyncItemMeta } from "@/features/sync/types";
+import type { SyncItemMeta, NoteSyncItemMeta, RemoteDeletionMeta } from "@/features/sync/types";
 import { encryptMeta, decryptMeta } from "@/features/sync/crypto";
 
 export type ObjectKind = "book" | "note" | "version" | "metric";
@@ -270,6 +270,35 @@ export async function listObjects(kind: ObjectKind, group?: string): Promise<Rem
   });
 
   return records.map((record) => toRemoteObject(record as Record<string, unknown>));
+}
+
+/**
+ * Soft-deleted rows of one kind. listObjects hides them, but their keys still
+ * hold the unique (user, app_name, kind, key) identity, so a device that still
+ * has the item must update the deleted row or remove its copy, never create.
+ */
+export async function listDeletedObjects(kind: ObjectKind): Promise<RemoteObject[]> {
+  const client = getClient();
+
+  const records = await client.collection("objects").getFullList({
+    filter: `app_name = "${APP_NAME}" && kind = "${kind}" && deleted = true`,
+    sort: "updated",
+    fields: OBJECT_LIST_FIELDS,
+  });
+
+  return records.map((record) => toRemoteObject(record as Record<string, unknown>));
+}
+
+function toRemoteDeletion(row: RemoteObject): RemoteDeletionMeta {
+  return { remoteId: row.remoteId, entityId: row.key, updatedAt: row.updatedAt };
+}
+
+export async function listRemoteDeletedBooks(): Promise<RemoteDeletionMeta[]> {
+  return (await listDeletedObjects("book")).map(toRemoteDeletion);
+}
+
+export async function listRemoteDeletedNotes(): Promise<RemoteDeletionMeta[]> {
+  return (await listDeletedObjects("note")).map(toRemoteDeletion);
 }
 
 export async function pullObjectsSince(

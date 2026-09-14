@@ -64,6 +64,8 @@ vi.mock("@/features/sync/client", () => ({
   pushNoteBlob: mockPushNoteBlob,
   pullNoteBlob: mockPullNoteBlob,
   listRemoteNotes: mockListRemoteNotes,
+  listRemoteDeletedBooks: vi.fn().mockResolvedValue([]),
+  listRemoteDeletedNotes: vi.fn().mockResolvedValue([]),
   deleteRemoteBook: mockDeleteRemoteBook,
   deleteRemoteNote: mockDeleteRemoteNote,
 }));
@@ -111,6 +113,7 @@ vi.mock("@/features/sync/tombstones", () => ({
   listPendingTombstones: mockListPendingTombstones,
   getTombstone: mockGetTombstone,
   markTombstonePushed: mockMarkTombstonePushed,
+  tombstoneId: (entityType: string, entityId: string) => `${entityType}:${entityId}`,
 }));
 
 vi.mock("@/features/sync/migration-reset", () => ({

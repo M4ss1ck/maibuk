@@ -327,6 +327,22 @@ The Notes scope processes all local notes, so a failed upload may belong to a
 different note from the one currently open. The reported object ID identifies
 which write failed. A failed sync does not advance the last synced time.
 
+### Items deleted on another device
+
+Deleting a book or note marks it deleted on the server; the server keeps the
+record under the same ID. When another device still has that item, sync never
+uploads it as a new item (the server would reject that with
+`validation_not_unique`). Instead:
+
+- **Not edited here since the last sync:** the item appears under "Deleted on
+  another device" in the sync panel. Nothing is removed until you confirm;
+  confirming takes a safety backup and removes the local copy.
+- **Edited here since the last sync:** sync asks. "Keep & Restore" uploads this
+  copy and restores the item on the server; "Delete Here" removes the local copy.
+  Automatic sync leaves the choice for a manual sync.
+- **Push only** skips the item with a warning in the sync log; run a two-way or
+  pull sync to review it. **Pull only** always lists it for confirmation.
+
 ## Contributing
 
 Contributions are welcome. Please open a pull request.
