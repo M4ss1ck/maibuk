@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { notifyLocalChange, onLocalChange } from "@/features/sync/local-changes";
-import { flushPendingEdits, registerPendingEditsFlush } from "@/features/sync/pending-edits";
+import {
+  flushPendingEdits,
+  PendingEditsFlushError,
+  registerPendingEditsFlush,
+} from "@/features/sync/pending-edits";
 
 describe("local change signal", () => {
   it("notifies subscribers until they unsubscribe", () => {
@@ -33,16 +37,41 @@ describe("pending edits flush", () => {
     expect(order.sort()).toEqual(["a", "b"]);
   });
 
-  it("keeps flushing the others when one save fails", async () => {
+  it("flushes every editor, then rejects when one save failed", async () => {
     const survivor = vi.fn();
     const offFailing = registerPendingEditsFlush(() => Promise.reject(new Error("disk full")));
     const offSurvivor = registerPendingEditsFlush(survivor);
 
-    await expect(flushPendingEdits()).resolves.toBeUndefined();
-    offFailing();
-    offSurvivor();
+    try {
+      await expect(flushPendingEdits()).rejects.toBeInstanceOf(PendingEditsFlushError);
+    } finally {
+      offFailing();
+      offSurvivor();
+    }
 
     expect(survivor).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects when a flush throws synchronously", async () => {
+    const off = registerPendingEditsFlush(() => {
+      throw new Error("disk full");
+    });
+
+    try {
+      await expect(flushPendingEdits()).rejects.toBeInstanceOf(PendingEditsFlushError);
+    } finally {
+      off();
+    }
+  });
+
+  it("resolves when every save lands", async () => {
+    const off = registerPendingEditsFlush(() => Promise.resolve());
+
+    try {
+      await expect(flushPendingEdits()).resolves.toBeUndefined();
+    } finally {
+      off();
+    }
   });
 
   it("stops calling a flush after it unregisters", async () => {

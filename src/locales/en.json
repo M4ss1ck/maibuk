@@ -333,6 +333,8 @@
     "loadingEditor": "Loading editor...",
     "saving": "Saving...",
     "saved": "Saved",
+    "notSaved": "Not saved",
+    "retrySave": "Try saving again",
     "noChapter": "No chapter selected",
     "createNewChapter": "Create a new chapter to start writing",
     "press": "Press",

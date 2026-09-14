@@ -1,10 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
+import { createRef, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { Editor } from "@/components/editor/Editor";
+import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 
@@ -822,6 +822,43 @@ describe("Editor", () => {
 
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate.mock.calls[0][0]).toContain("HelloZ");
+  });
+
+  it("hands the pending burst to the parent when asked to flush", async () => {
+    let editor: TiptapEditor | null = null;
+    const onUpdate = vi.fn();
+    const handle = createRef<EditorHandle>();
+
+    render(
+      <Editor
+        ref={handle}
+        content="<p>Hello</p>"
+        onUpdate={onUpdate}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    onUpdate.mockClear();
+
+    act(() => {
+      editor!.chain().focus("end").insertContent("W").run();
+    });
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    act(() => {
+      handle.current!.flush();
+    });
+
+    // Synchronously: a sync flush saves right after this returns.
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate.mock.calls[0][0]).toContain("HelloW");
+
+    act(() => {
+      handle.current!.flush();
+    });
+    expect(onUpdate).toHaveBeenCalledTimes(1);
   });
 
   it("flushes the pending burst when the editor unmounts", async () => {

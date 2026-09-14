@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
 import { serializeBook, applyBookSnapshot } from "@/features/sync/serializer";
+import { notifyLocalChange } from "@/features/sync/local-changes";
+import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { computeChecksum } from "@/lib/checksum";
 import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
 import type {
@@ -323,6 +325,10 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   },
 
   restoreVersion: async (versionId: string, options?: RestoreOptions) => {
+    // Open editors save first, so the pre-restore version holds the latest text
+    // instead of losing it when the restored content replaces the editor. A
+    // failed save rejects before anything is touched.
+    await flushPendingEdits();
     const db = await getDatabase();
 
     // Load target version metadata and snapshot
@@ -354,6 +360,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     });
 
     await applyBookSnapshot(snapshot);
+    notifyLocalChange();
     // Re-fetch page 1 so the new pre-restore version is visible on top.
     await useVersionStore.getState().loadVersions(bookId, 1);
   },

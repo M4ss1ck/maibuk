@@ -21,6 +21,8 @@ import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { EditorStats } from "@/components/editor/Editor";
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import { registerPendingEditsFlush } from "@/features/sync/pending-edits";
+import { createAsyncQueue } from "@/lib/async-queue";
+import type { EditorHandle } from "@/components/editor/Editor";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ExportDialog } from "@/components/export";
 import {
@@ -121,7 +123,7 @@ export function BookEditor() {
   const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle" | "error">("idle");
   const [showMobileChapters, setShowMobileChapters] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [tocEditor, setTocEditor] = useState<TiptapEditor | null>(null);
@@ -354,12 +356,13 @@ export function BookEditor() {
       setSaveStatus("idle");
     }, 2000);
   }, []);
-  const clearSaveStatus = useCallback(() => {
+  // A failed save stays on screen until a later save lands.
+  const markNotSaved = useCallback(() => {
     if (saveStatusTimerRef.current !== null) {
       clearTimeout(saveStatusTimerRef.current);
       saveStatusTimerRef.current = null;
     }
-    if (isMountedRef.current) setSaveStatus("idle");
+    if (isMountedRef.current) setSaveStatus("error");
   }, []);
   useEffect(() => {
     isMountedRef.current = true;
@@ -383,6 +386,33 @@ export function BookEditor() {
     if (html !== null) editorContentRef.current = html;
     return editorContentRef.current;
   }, []);
+  const editorHandleRef = useRef<EditorHandle>(null);
+  // Chapter text the database does not hold yet, by chapter id: typed and not
+  // saved, or typed and the save failed. A sync flush saves exactly these.
+  const unsavedChaptersRef = useRef(new Map<string, string>());
+  // Saves run one at a time, so an older save can never land after a newer one.
+  const [saveQueue] = useState(createAsyncQueue);
+
+  // Rejects when the save fails, leaving the chapter marked unsaved so the next
+  // edit or sync flush tries again.
+  const persistChapter = useCallback(
+    (chapterId: string, content: string) =>
+      saveQueue.enqueue(async () => {
+        if (isMountedRef.current) setSaveStatus("saving");
+        try {
+          await updateChapter(chapterId, { content });
+        } catch (error) {
+          console.error("Failed to save:", error);
+          markNotSaved();
+          throw error;
+        }
+        if (unsavedChaptersRef.current.get(chapterId) === content) {
+          unsavedChaptersRef.current.delete(chapterId);
+        }
+        markSaved();
+      }),
+    [saveQueue, updateChapter, markSaved, markNotSaved]
+  );
 
   // Load book and chapters
   useEffect(() => {
@@ -480,9 +510,12 @@ export function BookEditor() {
   const flushEditorContent = useCallback(async () => {
     const content = getLatestContent();
     if (currentChapter && content) {
-      await updateChapter(currentChapter.id, { content });
+      // The live document is the newest text; a later flush must not fall back
+      // to an older unsaved copy if this save fails.
+      unsavedChaptersRef.current.set(currentChapter.id, content);
+      await persistChapter(currentChapter.id, content);
     }
-  }, [currentChapter, updateChapter, getLatestContent]);
+  }, [currentChapter, persistChapter, getLatestContent]);
 
   // Export the current chapter as a Markdown file
   const handleExportMarkdown = useCallback(async () => {
@@ -538,27 +571,19 @@ export function BookEditor() {
 
   // triggered save - uses ref to get latest editor content
   const handleSaveNow = useCallback(async () => {
-    setSaveStatus("saving");
     try {
       await flushEditorContent();
-      markSaved();
-    } catch (error) {
-      console.error("Failed to save:", error);
-      clearSaveStatus();
+    } catch {
+      // Logged and shown as Not saved by persistChapter.
     }
-  }, [flushEditorContent, markSaved, clearSaveStatus]);
+  }, [flushEditorContent]);
 
-  // Debounced auto-save
-  const debouncedSave = useDebouncedCallback(async (chapterId: string, content: string) => {
-    setSaveStatus("saving");
-    try {
-      await updateChapter(chapterId, { content });
-      markSaved();
-    } catch (error) {
-      console.error("Failed to save:", error);
-      clearSaveStatus();
-    }
-  }, 1000);
+  // Debounced auto-save. Leaving the book lands the pending save instead of dropping it.
+  const debouncedSave = useDebouncedCallback(
+    (chapterId: string, content: string) => persistChapter(chapterId, content).catch(() => {}),
+    1000,
+    { flushOnUnmount: true }
+  );
 
   // Handle content changes
   const handleContentUpdate = useCallback(
@@ -566,6 +591,7 @@ export function BookEditor() {
       if (currentChapter) {
         // Update the ref with the latest content
         editorContentRef.current = content;
+        unsavedChaptersRef.current.set(currentChapter.id, content);
         debouncedSave(currentChapter.id, content);
       }
     },
@@ -578,14 +604,40 @@ export function BookEditor() {
     (content: string, count: number) => {
       debouncedSave.cancel();
       editorContentRef.current = content;
+      if (currentChapter) unsavedChaptersRef.current.delete(currentChapter.id);
       setWordCount(count);
     },
-    [debouncedSave]
+    [currentChapter, debouncedSave]
   );
 
-  // An automatic sync lands the pending autosave before it reads or replaces
-  // this chapter, so text typed just before a pull is never lost.
-  useEffect(() => registerPendingEditsFlush(() => debouncedSave.flush()), [debouncedSave]);
+  // A sync lands what this editor holds before it reads or replaces a chapter,
+  // so text typed just before a pull is never lost. Keystrokes the Editor is
+  // still coalescing count too. A failed save rejects, which stops the sync.
+  useEffect(
+    () =>
+      registerPendingEditsFlush(async () => {
+        editorHandleRef.current?.flush();
+        debouncedSave.cancel();
+        const unsaved = [...unsavedChaptersRef.current];
+        await Promise.all(
+          unsaved.map(([chapterId, content]) => persistChapter(chapterId, content))
+        );
+      }),
+    [debouncedSave, persistChapter]
+  );
+
+  // Leaving the book is a Flush too. The close checkpoint saves only the open
+  // chapter, so any other chapter whose save failed gets its retry here.
+  const persistChapterRef = useRef(persistChapter);
+  persistChapterRef.current = persistChapter;
+  useEffect(
+    () => () => {
+      for (const [chapterId, content] of unsavedChaptersRef.current) {
+        void persistChapterRef.current(chapterId, content).catch(() => {});
+      }
+    },
+    []
+  );
 
   // Handle word count changes
   const handleWordCountChange = useCallback((count: number) => {
@@ -1356,6 +1408,7 @@ export function BookEditor() {
         {/* Editor */}
         {currentChapter ? (
           <Editor
+            ref={editorHandleRef}
             key={currentChapter.id}
             content={currentChapter.content}
             onUpdate={handleContentUpdate}

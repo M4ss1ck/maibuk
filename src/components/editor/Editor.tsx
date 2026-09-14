@@ -5,10 +5,12 @@ import CharacterCount from "@tiptap/extension-character-count";
 import {
   useEffect,
   useCallback,
+  useImperativeHandle,
   useRef,
   useState,
   useMemo,
   memo,
+  type Ref,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -92,7 +94,14 @@ export interface EditorStats {
   hasSelection: boolean;
 }
 
+export interface EditorHandle {
+  /** Hand the typing burst still being coalesced to `onUpdate`, synchronously. */
+  flush: () => void;
+}
+
 interface EditorProps {
+  /** Lets a parent drain pending keystrokes before it saves, e.g. for a sync Flush. */
+  ref?: Ref<EditorHandle>;
   content: string | null;
   onUpdate: (content: string) => void;
   /**
@@ -129,6 +138,7 @@ interface EditorProps {
 }
 
 export function Editor({
+  ref,
   content,
   onUpdate,
   onExternalContent,
@@ -311,6 +321,8 @@ export function Editor({
     },
     [runEmit]
   );
+
+  useImperativeHandle(ref, () => ({ flush: runEmit }), [runEmit]);
 
   // Anything that reads the saved document must see the newest keystrokes, so
   // drain the pending burst before the editor goes away or loses focus.

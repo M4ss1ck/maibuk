@@ -248,6 +248,15 @@ async function ensurePreSyncBackup(options: SyncOptions): Promise<void> {
   });
 }
 
+/**
+ * Open editors save what they hold before the run backs up or reads the Library.
+ * A failed save rejects (PendingEditsFlushError) and stops the run: syncing now
+ * would push or replace a Library that is missing the author's latest text.
+ */
+async function landPendingEdits(): Promise<void> {
+  await flushPendingEdits();
+}
+
 async function beginSyncRun(options: SyncOptions): Promise<void> {
   backupTakenThisRun = false;
   remoteDeletionReviews = [];
@@ -1111,6 +1120,7 @@ async function syncBookInternal(
 ): Promise<SingleSyncResult> {
   await ensureGenericCollectionMigration();
   await ensureAuth();
+  await landPendingEdits();
   await beginSyncRun(options);
 
   const deletionResult = await processPendingDeletions(["book"], options);
@@ -1171,6 +1181,7 @@ async function syncSingleNoteInternal(
 ): Promise<SingleSyncResult> {
   await ensureGenericCollectionMigration();
   await ensureAuth();
+  await landPendingEdits();
   await beginSyncRun(options);
 
   const remoteNotes = await listRemoteNotes();
@@ -1219,6 +1230,7 @@ async function syncAllBooksInternal(
   assertOnline();
   const actions: SyncAction[] = [];
 
+    await landPendingEdits();
     await beginSyncRun(options);
 
     const deletionScopes: SyncEntityType[] = [];

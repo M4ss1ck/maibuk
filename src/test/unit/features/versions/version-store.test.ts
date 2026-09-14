@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
+import { onLocalChange } from "@/features/sync/local-changes";
+import { PendingEditsFlushError, registerPendingEditsFlush } from "@/features/sync/pending-edits";
 
 const { mockGetDatabase } = vi.hoisted(() => ({
   mockGetDatabase: vi.fn(),
@@ -682,6 +684,74 @@ describe("useVersionStore", () => {
 
       expect(applied.book.updatedAt).toBeGreaterThanOrEqual(beforeRestore);
       expect(applied.book.updatedAt).toBeLessThanOrEqual(afterRestore);
+    });
+
+    it("lands pending editor saves before taking the pre-restore version", async () => {
+      mockSerializeBook.mockResolvedValue(makeSnapshot(1000, 1000));
+      const target = await useVersionStore.getState().createVersion({
+        bookId: "book-1",
+        triggerType: "manual",
+      });
+      mockSerializeBook.mockClear();
+      const flush = vi.fn();
+      const unregister = registerPendingEditsFlush(flush);
+
+      try {
+        await useVersionStore.getState().restoreVersion(target!.id);
+      } finally {
+        unregister();
+      }
+
+      expect(flush).toHaveBeenCalledTimes(1);
+      // The pre-restore version serializes the book; it must include the flushed text.
+      expect(flush.mock.invocationCallOrder[0]).toBeLessThan(
+        mockSerializeBook.mock.invocationCallOrder[0]
+      );
+    });
+
+    it("leaves the book untouched when a pending editor save fails", async () => {
+      mockSerializeBook.mockResolvedValue(makeSnapshot(1000, 1000));
+      const target = await useVersionStore.getState().createVersion({
+        bookId: "book-1",
+        triggerType: "manual",
+      });
+      const unregister = registerPendingEditsFlush(() => Promise.reject(new Error("disk full")));
+
+      try {
+        await expect(useVersionStore.getState().restoreVersion(target!.id)).rejects.toBeInstanceOf(
+          PendingEditsFlushError
+        );
+      } finally {
+        unregister();
+      }
+
+      expect(mockApplyBookSnapshot).not.toHaveBeenCalled();
+      const preRestore = await testDb.select<Record<string, unknown>[]>(
+        `SELECT id FROM book_versions WHERE trigger_type = 'pre-restore'`
+      );
+      expect(preRestore).toHaveLength(0);
+    });
+
+    it("signals a local change so Auto Sync picks up the restored book", async () => {
+      mockSerializeBook.mockResolvedValue(makeSnapshot(1000, 1000));
+      const target = await useVersionStore.getState().createVersion({
+        bookId: "book-1",
+        triggerType: "manual",
+      });
+      const listener = vi.fn();
+      const off = onLocalChange(listener);
+
+      try {
+        await useVersionStore.getState().restoreVersion(target!.id);
+      } finally {
+        off();
+      }
+
+      expect(listener).toHaveBeenCalled();
+      const calls = listener.mock.invocationCallOrder;
+      expect(calls[calls.length - 1]).toBeGreaterThan(
+        mockApplyBookSnapshot.mock.invocationCallOrder[0]
+      );
     });
 
     it("refreshes version list after restore", async () => {

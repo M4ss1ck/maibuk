@@ -1560,20 +1560,143 @@ describe("three-way sync against the last-synced base", () => {
       { remoteId: "r1", bookId: "book-1", checksum: "remote-v2", updatedAt: 1 },
     ]);
     // The pending editor save lands during the flush, changing the local copy.
-    const flush = vi.fn(() => {
-      mockComputeChecksum.mockResolvedValue("edited-during-sync");
-    });
+    // The run lands pending edits once up front; the edit typed after that
+    // lands in the second flush, right before the destructive step.
+    const flush = vi
+      .fn()
+      .mockImplementationOnce(() => {})
+      .mockImplementation(() => {
+        mockComputeChecksum.mockResolvedValue("edited-during-sync");
+      });
     const unregister = registerPendingEditsFlush(flush);
 
     try {
       const result = await syncAllBooks("pass", vi.fn(), { trigger: "auto" });
 
-      expect(flush).toHaveBeenCalledTimes(1);
+      expect(flush).toHaveBeenCalledTimes(2);
       expect(mockApplyBookSnapshot).not.toHaveBeenCalled();
       expect(result).toMatchObject({ outcome: "partial", actions: ["deferred"] });
     } finally {
       unregister();
     }
+  });
+
+  it.each([
+    "manual",
+    "auto",
+  ] as const)("lands pending edits before a %s sync backs up or reads the Library", async (trigger) => {
+    const { registerPendingEditsFlush } = await import("@/features/sync/pending-edits");
+    bookBase = { local_checksum: "older-local", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v1", updatedAt: 1 },
+    ]);
+    const flush = vi.fn();
+    const unregister = registerPendingEditsFlush(flush);
+
+    try {
+      await syncAllBooks("pass", vi.fn(), { trigger });
+    } finally {
+      unregister();
+    }
+
+    expect(flush).toHaveBeenCalled();
+    const firstRead = mockDb.select.mock.invocationCallOrder[0];
+    expect(flush.mock.invocationCallOrder[0]).toBeLessThan(firstRead);
+    if (trigger === "manual") {
+      expect(flush.mock.invocationCallOrder[0]).toBeLessThan(
+        mockBackupServiceCreateBackup.mock.invocationCallOrder[0]
+      );
+    }
+  });
+
+  it.each([
+    "manual",
+    "auto",
+  ] as const)("stops a %s sync when an open editor cannot save", async (trigger) => {
+    const { PendingEditsFlushError, registerPendingEditsFlush } = await import(
+      "@/features/sync/pending-edits"
+    );
+    bookBase = { local_checksum: "older-local", remote_checksum: "remote-v2" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v2", updatedAt: 1 },
+    ]);
+    const unregister = registerPendingEditsFlush(() => Promise.reject(new Error("disk full")));
+
+    try {
+      await expect(syncAllBooks("pass", vi.fn(), { trigger })).rejects.toBeInstanceOf(
+        PendingEditsFlushError
+      );
+    } finally {
+      unregister();
+    }
+
+    expect(mockBackupServiceCreateBackup).not.toHaveBeenCalled();
+    expect(mockListRemoteBooks).not.toHaveBeenCalled();
+    expect(mockPushBookBlob).not.toHaveBeenCalled();
+    expect(mockApplyBookSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("stops before pulling when the pre-pull flush cannot save", async () => {
+    const { PendingEditsFlushError, registerPendingEditsFlush } = await import(
+      "@/features/sync/pending-edits"
+    );
+    bookBase = { local_checksum: "local-checksum", remote_checksum: "remote-v1" };
+    mockListRemoteBooks.mockResolvedValue([
+      { remoteId: "r1", bookId: "book-1", checksum: "remote-v2", updatedAt: 1 },
+    ]);
+    // The first flush (start of the run) lands; the edit typed after it fails to save.
+    const flush = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValue(new Error("disk full"));
+    const unregister = registerPendingEditsFlush(flush);
+
+    try {
+      await expect(syncAllBooks("pass", vi.fn(), { trigger: "auto" })).rejects.toBeInstanceOf(
+        PendingEditsFlushError
+      );
+    } finally {
+      unregister();
+    }
+
+    expect(mockApplyBookSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("stops a single-book sync when an open editor cannot save", async () => {
+    const { PendingEditsFlushError, registerPendingEditsFlush } = await import(
+      "@/features/sync/pending-edits"
+    );
+    const unregister = registerPendingEditsFlush(() => Promise.reject(new Error("disk full")));
+
+    try {
+      await expect(syncBook("book-1", "pass", vi.fn())).rejects.toBeInstanceOf(
+        PendingEditsFlushError
+      );
+    } finally {
+      unregister();
+    }
+
+    expect(mockBackupServiceCreateBackup).not.toHaveBeenCalled();
+    expect(mockListRemoteBooks).not.toHaveBeenCalled();
+  });
+
+  it("stops a single-note sync when an open editor cannot save", async () => {
+    const { PendingEditsFlushError, registerPendingEditsFlush } = await import(
+      "@/features/sync/pending-edits"
+    );
+    const unregister = registerPendingEditsFlush(() => Promise.reject(new Error("disk full")));
+
+    try {
+      await expect(syncSingleNote("note-1", "pass", vi.fn())).rejects.toBeInstanceOf(
+        PendingEditsFlushError
+      );
+    } finally {
+      unregister();
+    }
+
+    expect(mockBackupServiceCreateBackup).not.toHaveBeenCalled();
+    expect(mockListRemoteNotes).not.toHaveBeenCalled();
+    expect(mockPushNoteBlob).not.toHaveBeenCalled();
   });
 
   it("backs up lazily in automatic syncs: only when something is pulled", async () => {
@@ -1933,9 +2056,14 @@ describe("items deleted on another device", () => {
 
   it("keeps a confirmed note whose pending edit lands during the sync", async () => {
     const { registerPendingEditsFlush } = await import("@/features/sync/pending-edits");
-    const flush = vi.fn(() => {
-      mockComputeChecksum.mockResolvedValue("edited-during-sync");
-    });
+    // The run lands pending edits once up front; the edit typed after that
+    // lands in the second flush, right before the destructive step.
+    const flush = vi
+      .fn()
+      .mockImplementationOnce(() => {})
+      .mockImplementation(() => {
+        mockComputeChecksum.mockResolvedValue("edited-during-sync");
+      });
     const unregister = registerPendingEditsFlush(flush);
 
     try {
@@ -1944,7 +2072,7 @@ describe("items deleted on another device", () => {
         confirmedDeletionIds: ["note:note-1"],
       });
 
-      expect(flush).toHaveBeenCalledTimes(1);
+      expect(flush).toHaveBeenCalledTimes(2);
       expect(mockRemoveLocalNote).not.toHaveBeenCalled();
       expect(mockPushNoteBlob).not.toHaveBeenCalled();
       expect(result).toMatchObject({ outcome: "partial", actions: ["deferred"] });
