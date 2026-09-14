@@ -6,14 +6,13 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "@/features/notes";
+import { useEditSession } from "@/features/edit-session";
 import { useNoteStore } from "@/features/notes/store";
 import { Editor, SaveStatus } from "@/components/editor";
 import type { EditorHandle } from "@/components/editor/Editor";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/CollapsibleHeading";
-import { useDebouncedCallback } from "@/hooks/useAutoSave";
-import { registerPendingEditsFlush } from "@/features/sync/pending-edits";
 import { createAsyncQueue } from "@/lib/async-queue";
 import { useShortcuts } from "@/lib/shortcuts";
 import { matchKeys } from "@/lib/shortcut-registry";
@@ -210,7 +209,8 @@ const NotesTaskDndBehavior = Extension.create({
 
 interface NoteEditorProps {
   note: Note;
-  onSave: (input: UpdateNoteInput) => Promise<void>;
+  /** Resolves with the note as stored (null or nothing when unknown). */
+  onSave: (input: UpdateNoteInput) => Promise<Note | null | void>;
   onReturnToBook?: () => void;
   returnLabel?: string;
   suppressRestore?: boolean;
@@ -226,7 +226,6 @@ export function NoteEditor({
   const { t, i18n } = useTranslation();
   const title = note.title;
   const [wordCount, setWordCount] = useState(note.wordCount);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle" | "error">("idle");
   const [showTagEditor, setShowTagEditor] = useState(false);
   const tagEditorRef = useRef<HTMLDivElement>(null);
   const notes = useNoteStore((s) => s.notes);
@@ -234,21 +233,48 @@ export function NoteEditor({
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
   const books = useBookStore((s) => s.books);
   const navigate = useNavigate();
-  // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
-  const contentRef = useRef(note.content);
   const wordCountRef = useRef(note.wordCount);
+  const titleRef = useRef(title);
+  titleRef.current = title;
   const editorHandleRef = useRef<EditorHandle>(null);
-  // True while the editor holds text the database does not: typed and not yet
-  // saved, or typed and the save failed. A sync flush saves only then.
-  const unsavedRef = useRef(false);
-  // Counts edits so a save that started before a newer keystroke does not
-  // mark that keystroke as saved.
-  const editCountRef = useRef(0);
-  // Saves run one at a time, so an older save can never land after a newer one.
+  // Content saves and tag or language saves share one queue: the store rewrites
+  // the whole row, so two writes to this note must never overlap.
   const [saveQueue] = useState(createAsyncQueue);
-  // A save can resolve after the editor closed; status updates check this.
-  const isMountedRef = useRef(true);
-  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveContent = useCallback(
+    async (content: string, noteId: string) => {
+      try {
+        const stored = await onSave({
+          id: noteId,
+          title: titleRef.current,
+          content,
+          wordCount: wordCountRef.current,
+        });
+        return stored?.content ?? content;
+      } catch (error) {
+        console.error("Failed to save note:", error);
+        throw error;
+      }
+    },
+    [onSave]
+  );
+
+  const {
+    sessionRef,
+    status: saveStatus,
+    editorContent,
+  } = useEditSession({
+    sessionKey: note.id,
+    content: note.content,
+    save: saveContent,
+    beforeFlush: () => editorHandleRef.current?.flush(),
+    queue: saveQueue,
+  });
+  // The newest text, including what is not saved yet.
+  const latestContent = useCallback(
+    () => sessionRef.current?.getContent() ?? note.content,
+    [sessionRef, note.content]
+  );
 
   // Dismiss the tag editor popover when clicking outside of it.
   useEffect(() => {
@@ -319,7 +345,7 @@ export function NoteEditor({
       if (target.type === "note") {
         const targetNote =
           target.noteId === note.id
-            ? { ...note, content: contentRef.current }
+            ? { ...note, content: latestContent() }
             : notes.find((existingNote) => existingNote.id === target.noteId);
         if (!targetNote) return [];
         return assignHeadingIds(targetNote.content).headings.map((heading) => ({
@@ -332,88 +358,42 @@ export function NoteEditor({
 
       return [];
     },
-    [note, notes]
+    [note, notes, latestContent]
   );
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      if (statusTimerRef.current !== null) {
-        clearTimeout(statusTimerRef.current);
-        statusTimerRef.current = null;
-      }
-    };
-  }, []);
+  // Ctrl+S and the Save button: save now, even when nothing changed. A failure
+  // shows as Not saved.
+  const saveNow = useCallback(() => {
+    void sessionRef.current?.save().catch(() => {});
+  }, [sessionRef]);
 
-  const showSaveStatus = useCallback((status: "saving" | "saved" | "error") => {
-    if (statusTimerRef.current !== null) {
-      clearTimeout(statusTimerRef.current);
-      statusTimerRef.current = null;
-    }
-    if (!isMountedRef.current) return;
-    setSaveStatus(status);
-    if (status === "saved") {
-      statusTimerRef.current = setTimeout(() => {
-        statusTimerRef.current = null;
-        setSaveStatus("idle");
-      }, 2000);
-    }
-  }, []);
-
-  // Rejects when the save fails, leaving the text marked unsaved so the next
-  // edit or sync flush tries again.
-  const persist = useCallback(
-    (extra: Partial<UpdateNoteInput> = {}) =>
-      saveQueue.enqueue(async () => {
-        const editCount = editCountRef.current;
-        showSaveStatus("saving");
-        try {
-          await onSave({
-            id: note.id,
-            title,
-            content: contentRef.current,
-            wordCount: wordCountRef.current,
-            ...extra,
-          });
-        } catch (error) {
+  // Tags and language are not content: they save on their own, in order with
+  // content saves, and a failure is reported without touching Save Status.
+  const saveNoteFields = useCallback(
+    (fields: Omit<UpdateNoteInput, "id">) => {
+      void saveQueue
+        .enqueue(() => onSave({ id: note.id, ...fields }))
+        .catch((error) => {
           console.error("Failed to save note:", error);
-          showSaveStatus("error");
-          throw error;
-        }
-        if (editCountRef.current === editCount) unsavedRef.current = false;
-        showSaveStatus("saved");
-      }),
-    [note.id, onSave, title, saveQueue, showSaveStatus]
+          toast.error(t("common.error"));
+        });
+    },
+    [saveQueue, onSave, note.id, t]
   );
-
-  // For saves nobody awaits: a failure is already logged and shown as Not saved.
-  const saveNow = useCallback(
-    (extra: Partial<UpdateNoteInput> = {}) => persist(extra).catch(() => {}),
-    [persist]
-  );
-
-  // Switching notes remounts this editor; the pending save must land, not vanish.
-  const debouncedSave = useDebouncedCallback(() => saveNow(), 1000, { flushOnUnmount: true });
 
   useShortcuts([
     {
       keys: matchKeys("editor.save"),
-      onTrigger: () => {
-        void saveNow();
-      },
+      onTrigger: saveNow,
       allowInInput: true,
     },
   ]);
 
   const handleContentUpdate = useCallback(
     (content: string) => {
-      contentRef.current = content;
-      editCountRef.current += 1;
-      unsavedRef.current = true;
-      debouncedSave();
+      sessionRef.current?.update(content);
     },
-    [debouncedSave]
+    [sessionRef]
   );
 
   const handleWordCountChange = useCallback((count: number) => {
@@ -421,58 +401,28 @@ export function NoteEditor({
     setWordCount(count);
   }, []);
 
-  // A sync pull replaced the document: later saves must carry the pulled text,
-  // and a save queued for the old text would overwrite it.
-  const handleExternalContent = useCallback(
-    (content: string, count: number) => {
-      debouncedSave.cancel();
-      contentRef.current = content;
-      unsavedRef.current = false;
-      wordCountRef.current = count;
-      setWordCount(count);
-    },
-    [debouncedSave]
-  );
-
-  // A sync lands what this editor holds before it reads or replaces the note, so
-  // text typed just before a pull is never lost. Keystrokes the Editor is still
-  // coalescing count too. A failed save rejects, which stops the sync.
-  useEffect(
-    () =>
-      registerPendingEditsFlush(async () => {
-        editorHandleRef.current?.flush();
-        debouncedSave.cancel();
-        if (unsavedRef.current) await persist();
-      }),
-    [debouncedSave, persist]
-  );
-
-  // Leaving the note is a Flush too: text whose save failed gets one more try
-  // instead of vanishing with the editor.
-  const persistRef = useRef(persist);
-  persistRef.current = persist;
-  useEffect(
-    () => () => {
-      if (unsavedRef.current) void persistRef.current().catch(() => {});
-    },
-    []
-  );
+  // The Edit Session adopted an outside change (a Pull, a Restore) and the
+  // editor now shows it.
+  const handleExternalContent = useCallback((_content: string, count: number) => {
+    wordCountRef.current = count;
+    setWordCount(count);
+  }, []);
 
   const handleExportMarkdown = useCallback(async () => {
     try {
-      const markdown = editorHtmlToMarkdown(contentRef.current || "");
+      const markdown = editorHtmlToMarkdown(latestContent() || "");
       const saved = await saveMarkdownFile(markdownFilename(title || note.title), markdown);
       if (saved) toast.success(t("editor.exportMarkdownSuccess"));
     } catch (error) {
       console.error("Markdown export failed:", error);
       toast.error(t("editor.exportMarkdownFailed"));
     }
-  }, [title, note.title, t]);
+  }, [title, note.title, t, latestContent]);
 
   const handleExportPdf = useCallback(async () => {
     const noteTitle = title || note.title;
     try {
-      const blob = await generateDocumentPdf(contentRef.current || "", noteTitle);
+      const blob = await generateDocumentPdf(latestContent() || "", noteTitle);
       const bytes = new Uint8Array(await blob.arrayBuffer());
       const saved = await saveBinaryFile(
         exportFilename(noteTitle, "pdf"),
@@ -485,7 +435,7 @@ export function NoteEditor({
       console.error("PDF export failed:", error);
       toast.error(t("editor.exportPdfFailed"));
     }
-  }, [title, note.title, t]);
+  }, [title, note.title, t, latestContent]);
 
   const handleExportImage = useCallback(async () => {
     const editor = editorRef.current;
@@ -555,9 +505,9 @@ export function NoteEditor({
 
   const handleSpellCheckLanguageChange = useCallback(
     (language: Language) => {
-      void saveNow({ language });
+      saveNoteFields({ language });
     },
-    [saveNow]
+    [saveNoteFields]
   );
 
   const collapsedHeadingsKey = note.collapsedHeadings.join(",");
@@ -618,9 +568,9 @@ export function NoteEditor({
       const cleanTags = tags
         .map((tag) => tag.trim())
         .filter((tag, idx, arr) => tag.length > 0 && arr.indexOf(tag) === idx);
-      void saveNow({ tags: cleanTags });
+      saveNoteFields({ tags: cleanTags });
     },
-    [saveNow]
+    [saveNoteFields]
   );
 
   return (
@@ -685,7 +635,7 @@ export function NoteEditor({
         </div>
 
         <div className="shrink-0">
-          <SaveStatus status={saveStatus} onSave={() => void saveNow()} />
+          <SaveStatus status={saveStatus} onSave={saveNow} />
         </div>
 
         <span className="hidden @2xl:inline shrink-0 text-xs text-muted-foreground">
@@ -719,7 +669,7 @@ export function NoteEditor({
       {/* Body */}
       <Editor
         ref={editorHandleRef}
-        content={note.content}
+        content={editorContent}
         onUpdate={handleContentUpdate}
         onExternalContent={handleExternalContent}
         onWordCountChange={handleWordCountChange}

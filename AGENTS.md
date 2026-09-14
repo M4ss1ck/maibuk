@@ -133,6 +133,7 @@ src/
 │   ├── chapters/        # store.ts, types.ts
 │   ├── canvas/          # versioned docs, store, React Flow adapter, custom nodes
 │   ├── covers/          # types.ts
+│   ├── edit-session/    # createEditSession (framework-free), useEditSession hook
 │   ├── ephemeral/       # memory-only scratch buffer store
 │   ├── export/          # generators, sanitizers, styles, types
 │   ├── metrics/         # writing metrics types, classifier, repo, settings, session tracking
@@ -249,8 +250,9 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | What                                                               | Where                                      |
 | ------------------------------------------------------------------ | ------------------------------------------ |
 | `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`                 |
-| `useDebouncedCallback(callback, delay, { flushOnUnmount })` (stable identity, `.cancel()` drops the pending call, `.flush()` runs it now; `flushOnUnmount` lands it on unmount, for saves) | `src/hooks/useAutoSave.ts` |
+| `useDebouncedCallback(callback, delay)` (stable identity, `.cancel()` drops the pending call, `.flush()` runs it now; not for saves, which use `useEditSession`) | `src/hooks/useAutoSave.ts` |
 | `EditorHandle` (`<Editor ref>`; `flush()` hands the coalesced typing burst to `onUpdate` synchronously) | `src/components/editor/Editor.tsx` |
+| `createEditSession()` / `useEditSession()` (one Edit Session per open Chapter or Note: debounced save, Save Status, Flush registration, echo check against the content the last save returned; `Editor` never guesses echoes) | `src/features/edit-session/` |
 | `useShortcuts(shortcuts, options)`                                 | `src/lib/shortcuts.ts`                     |
 | `getDatabase()`                                                    | `src/lib/db/index.ts`                      |
 | `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                      |

@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted
 ---
 
 # Edit Session is a framework-free module

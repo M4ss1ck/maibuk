@@ -14,6 +14,7 @@ const { editorProps, burst } = vi.hoisted(() => ({
     current: null as null | {
       onUpdate: (content: string) => void;
       onExternalContent?: (content: string, wordCount: number) => void;
+      onSpellCheckLanguageChange?: (language: "en" | "es") => void;
     },
   },
   burst: { current: null as string | null },
@@ -252,6 +253,70 @@ describe("NoteEditor never silently loses an edit", () => {
     expect(onSave).toHaveBeenLastCalledWith(
       expect.objectContaining({ content: "<p>Failed once</p>" })
     );
+  });
+
+  it("keeps a closed note whose save failed in the next sync Flush until it saves", async () => {
+    onSave
+      .mockRejectedValueOnce(new Error("disk full"))
+      .mockRejectedValueOnce(new Error("disk full"));
+    const { unmount } = render(<NoteEditor note={buildNote()} onSave={onSave} />);
+
+    act(() => {
+      editorProps.current?.onUpdate("<p>Stuck</p>");
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    // Closing retries once, and that fails too.
+    unmount();
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await expect(flushPendingEdits()).resolves.toBeUndefined();
+    });
+    expect(onSave).toHaveBeenCalledTimes(3);
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ content: "<p>Stuck</p>" }));
+
+    // Saved: the closed note leaves the Flush.
+    await act(async () => {
+      await flushPendingEdits();
+    });
+    expect(onSave).toHaveBeenCalledTimes(3);
+  });
+
+  it("waits for a running content save before saving the note language", async () => {
+    let finishContentSave!: () => void;
+    onSave.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishContentSave = resolve;
+        })
+    );
+    render(<NoteEditor note={buildNote()} onSave={onSave} />);
+
+    act(() => {
+      editorProps.current?.onUpdate("<p>Typed</p>");
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      editorProps.current?.onSpellCheckLanguageChange?.("es");
+    });
+    await settle();
+    // The store rewrites the whole row, so the two writes must not overlap.
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishContentSave();
+    });
+    await settle();
+
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onSave).toHaveBeenLastCalledWith({ id: "note-1", language: "es" });
   });
 
   it("leaves no status timer running after it closes", async () => {

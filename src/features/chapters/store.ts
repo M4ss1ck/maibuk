@@ -52,7 +52,8 @@ interface ChapterStore {
    */
   refreshChapters: (bookId: string) => Promise<void>;
   createChapter: (input: CreateChapterInput) => Promise<Chapter>;
-  updateChapter: (id: string, input: UpdateChapterInput) => Promise<void>;
+  /** Resolves with the chapter as stored (content normalized), or null when it is not loaded. */
+  updateChapter: (id: string, input: UpdateChapterInput) => Promise<Chapter | null>;
   deleteChapter: (id: string) => Promise<void>;
   reorderChapters: (bookId: string, chapterIds: string[]) => Promise<void>;
   setCurrentChapter: (chapter: Chapter | null) => void;
@@ -265,6 +266,11 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
           : state.currentChapter,
     }));
 
+    // Captured before awaiting: a later save may publish newer content meanwhile.
+    const stored =
+      get().chapters.find((chapter) => chapter.id === id) ??
+      (get().currentChapter?.id === id ? get().currentChapter : null);
+
     if (input.content !== undefined) {
       await reindexSource({
         sourceType: "chapter",
@@ -273,6 +279,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
         contentHtml: input.content,
       }).catch(() => {});
     }
+    return stored;
   },
 
   deleteChapter: async (id: string) => {

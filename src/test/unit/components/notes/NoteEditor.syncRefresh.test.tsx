@@ -1,12 +1,13 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { act, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import type { Note, UpdateNoteInput } from "@/features/notes";
+import { flushPendingEdits } from "@/features/sync/pending-edits";
 
 const { editorProps } = vi.hoisted(() => ({
   editorProps: {
     current: null as null | {
+      content?: string | null;
       onUpdate: (content: string) => void;
       onExternalContent?: (content: string, wordCount: number) => void;
     },
@@ -93,20 +94,21 @@ describe("NoteEditor after a sync pull replaces the document", () => {
     editorProps.current = null;
   });
 
-  it("drops a save queued for the old text", async () => {
+  it("drops a save queued for the old text and shows the pulled text", async () => {
     vi.useFakeTimers();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
-    render(<NoteEditor note={buildNote()} onSave={onSave} />);
+    const { rerender } = render(<NoteEditor note={buildNote()} onSave={onSave} />);
 
     act(() => {
       editorProps.current?.onUpdate("<p>Typed before the pull</p>");
-      editorProps.current?.onExternalContent?.("<p>Remote</p>", 1);
     });
+    rerender(<NoteEditor note={buildNote({ content: "<p>Remote</p>" })} onSave={onSave} />);
     await act(async () => {
       vi.advanceTimersByTime(1500);
     });
 
     expect(onSave).not.toHaveBeenCalled();
+    expect(editorProps.current?.content).toBe("<p>Remote</p>");
   });
 
   it("lets an automatic sync land the pending save before it reads the database", async () => {
@@ -133,29 +135,29 @@ describe("NoteEditor after a sync pull replaces the document", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("saves the pulled text, not the stale cached text, on the next save", async () => {
-    const user = userEvent.setup();
+  it("saves later edits on top of the pulled text, with its word count", async () => {
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
     const { rerender } = render(<NoteEditor note={buildNote()} onSave={onSave} />);
 
     const pulled = buildNote({ content: "<p>Pulled from another device</p>", wordCount: 4 });
     rerender(<NoteEditor note={pulled} onSave={onSave} />);
+    // The Editor applies the pulled document and reports its word count.
     act(() => {
       editorProps.current?.onExternalContent?.("<p>Pulled from another device</p>", 4);
     });
-
-    // Adding a tag saves immediately with the cached content and word count.
-    await user.click(screen.getByRole("button", { name: "Add tag" }));
-    await user.type(screen.getByRole("combobox"), "fresh{Enter}");
-
-    await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: "<p>Pulled from another device</p>",
-          wordCount: 4,
-        })
-      );
+    act(() => {
+      editorProps.current?.onUpdate("<p>Pulled from another device</p><p>More</p>");
     });
+    await act(async () => {
+      await flushPendingEdits();
+    });
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "<p>Pulled from another device</p><p>More</p>",
+        wordCount: 4,
+      })
+    );
     expect(onSave).not.toHaveBeenCalledWith(expect.objectContaining({ content: "<p>Local</p>" }));
   });
 });
