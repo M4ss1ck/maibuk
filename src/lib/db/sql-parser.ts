@@ -1,11 +1,17 @@
+interface SqlScan {
+  statements: string[];
+  lineComments: string[];
+}
+
 /**
- * Parse a SQL dump into individual statements, correctly handling semicolons
- * inside single-quoted and double-quoted strings.
- * Strips SQL line comments (--) that appear outside quoted strings.
+ * Walk a SQL dump once, splitting statements on semicolons outside quoted
+ * strings and collecting the `--` line comments that sit outside them.
  */
-export function parseSqlStatements(sqlContent: string): string[] {
+function scanSql(sqlContent: string): SqlScan {
   const statements: string[] = [];
+  const lineComments: string[] = [];
   let current = "";
+  let comment = "";
   let inSingleQuote = false;
   let inDoubleQuote = false;
   let inLineComment = false;
@@ -17,6 +23,10 @@ export function parseSqlStatements(sqlContent: string): string[] {
     if (inLineComment) {
       if (char === "\n") {
         inLineComment = false;
+        lineComments.push(comment.trim());
+        comment = "";
+      } else {
+        comment += char;
       }
       continue;
     }
@@ -74,10 +84,29 @@ export function parseSqlStatements(sqlContent: string): string[] {
     }
   }
 
+  if (inLineComment) lineComments.push(comment.trim());
   const trimmed = current.trim();
   if (trimmed.length > 0) {
     statements.push(trimmed);
   }
 
-  return statements;
+  return { statements, lineComments };
+}
+
+/**
+ * Parse a SQL dump into individual statements, correctly handling semicolons
+ * inside single-quoted and double-quoted strings.
+ * Strips SQL line comments (--) that appear outside quoted strings.
+ */
+export function parseSqlStatements(sqlContent: string): string[] {
+  return scanSql(sqlContent).statements;
+}
+
+/**
+ * The text of every `--` line comment outside quoted strings, without the
+ * leading dashes. Dump section headers are these comments, so a value that
+ * merely contains "-- Canvases" is never mistaken for one.
+ */
+export function parseSqlLineComments(sqlContent: string): string[] {
+  return scanSql(sqlContent).lineComments;
 }

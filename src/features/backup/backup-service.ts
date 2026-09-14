@@ -6,7 +6,8 @@ import type {
   DatabaseAdapter,
 } from "@/lib/platform/types";
 import { getDatabase } from "@/lib/db";
-import { parseSqlStatements } from "@/lib/db/sql-parser";
+import { parseSqlLineComments, parseSqlStatements } from "@/lib/db/sql-parser";
+import { CANVASES_SECTION_TITLE } from "@/lib/db/sql-export-format";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import { useNoteStore } from "@/features/notes/store";
@@ -122,12 +123,32 @@ function normalizeCanvasRestoreStatement(statement: string): string {
   const docIndex = columns.indexOf("doc");
   if (docIndex < 0 || docIndex >= values.length) throw new Error("RESTORE_INVALID");
   const parsed = parseCanvasDoc(parseSqlString(values[docIndex]));
-  if (!parsed.ok) throw new Error("RESTORE_INVALID");
+  if (!parsed.ok) {
+    // A newer app wrote this Canvas. Now that every Backup carries the
+    // device's Canvases, refusing it would make the whole Backup
+    // unrestorable; keep the document untouched so it opens read-only.
+    if (parsed.error.code === "unsupported-version") return statement;
+    throw new Error("RESTORE_INVALID");
+  }
   values[docIndex] = toSqlString(serializeCanvasDoc(parsed.doc));
   return `${prefix}${rawColumns ?? ""}VALUES (${values.join(", ")})`;
 }
 
-async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Promise<void> {
+// Every Backup taken before canvases joined the export (v0.4.14 through
+// v0.7.1) has no Canvases section. Restoring one must keep this device's
+// Canvases instead of replacing them with nothing.
+function backupCoversCanvases(sql: string, statements: string[]): boolean {
+  return (
+    parseSqlLineComments(sql).includes(CANVASES_SECTION_TITLE) ||
+    statements.some((statement) => CANVAS_INSERT_PATTERN.test(statement.trim()))
+  );
+}
+
+async function replaceRestoreData(
+  db: DatabaseAdapter,
+  statements: string[],
+  replaceCanvases: boolean
+): Promise<void> {
   // Delete existing data first, then insert from backup.
   // Each statement is auto-committed. If an INSERT fails, the database
   // will be in a partial state — the pre-restore backup is the safety net.
@@ -135,7 +156,7 @@ async function replaceRestoreData(db: DatabaseAdapter, statements: string[]): Pr
   await db.execute("DELETE FROM book_versions");
   await db.execute("DELETE FROM books");
   await db.execute("DELETE FROM notes");
-  await db.execute("DELETE FROM canvases");
+  if (replaceCanvases) await db.execute("DELETE FROM canvases");
   await db.execute("DELETE FROM sync_tombstones");
   // Bases describe the replaced data; the restored library is compared afresh.
   await db.execute("DELETE FROM sync_state").catch(() => {});
@@ -226,10 +247,11 @@ export class BackupService {
       throw new Error("RESTORE_INVALID");
     }
 
+    const replaceCanvases = backupCoversCanvases(sql, statements);
     const db = await getDatabase();
 
     try {
-      await replaceRestoreData(db, statements);
+      await replaceRestoreData(db, statements, replaceCanvases);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error("Restore data replacement failed:", detail);

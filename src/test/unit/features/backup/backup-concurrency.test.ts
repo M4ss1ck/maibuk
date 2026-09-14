@@ -31,6 +31,7 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/db/sql-parser", () => ({
   parseSqlStatements: mockParseSqlStatements,
+  parseSqlLineComments: () => ["Canvases"],
 }));
 
 vi.mock("@/features/books/store", () => ({

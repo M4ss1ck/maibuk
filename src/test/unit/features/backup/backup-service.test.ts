@@ -7,6 +7,7 @@ const mockGenerateSqlDump = vi.hoisted(() => vi.fn());
 const mockCreateBackup = vi.hoisted(() => vi.fn());
 const mockGetDatabase = vi.hoisted(() => vi.fn());
 const mockParseSqlStatements = vi.hoisted(() => vi.fn());
+const mockParseSqlLineComments = vi.hoisted(() => vi.fn());
 const mockLoadBooks = vi.hoisted(() => vi.fn());
 const mockLoadChapters = vi.hoisted(() => vi.fn());
 const mockLoadNotes = vi.hoisted(() => vi.fn());
@@ -37,6 +38,7 @@ vi.mock("../../../../lib/db", () => ({
 
 vi.mock("../../../../lib/db/sql-parser", () => ({
   parseSqlStatements: mockParseSqlStatements,
+  parseSqlLineComments: mockParseSqlLineComments,
 }));
 
 vi.mock("../../../../features/books/store", () => ({
@@ -129,6 +131,10 @@ describe("BackupService", () => {
       }
       return [];
     });
+    // Mocked dumps stand for current-format Backups, which carry a Canvases
+    // section. Legacy Backups are covered end to end in
+    // src/test/integration/backup-restore-canvases.test.ts.
+    mockParseSqlLineComments.mockReturnValue(["Books", "Notes", "Canvases"]);
     mockBookState.books = [{ id: "book-1" }];
     mockChapterState.currentBookId = "book-1";
     mockLoadBooks.mockResolvedValue(undefined);

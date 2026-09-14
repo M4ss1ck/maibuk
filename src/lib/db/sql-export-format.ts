@@ -6,6 +6,10 @@ export interface SqlExportTable {
   comment: string;
 }
 
+// Dumps made before canvases joined the export (v0.4.14 through v0.7.1) have no
+// section with this title; restore uses that to keep the device's Canvases.
+export const CANVASES_SECTION_TITLE = "Canvases";
+
 // Fixed table set and order: the dump format must stay stable so backups
 // restore across versions.
 export const SQL_EXPORT_TABLES: SqlExportTable[] = [
@@ -13,6 +17,7 @@ export const SQL_EXPORT_TABLES: SqlExportTable[] = [
   { name: "chapters", comment: "-- Chapters" },
   { name: "book_versions", comment: "-- Book Versions" },
   { name: "notes", comment: "-- Notes" },
+  { name: "canvases", comment: `-- ${CANVASES_SECTION_TITLE}` },
   { name: "sync_tombstones", comment: "-- Sync Tombstones" },
   { name: "cover_templates", comment: "-- Cover Templates" },
   { name: "settings", comment: "-- Settings" },

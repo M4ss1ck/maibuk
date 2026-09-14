@@ -8,30 +8,7 @@
 import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { parseSqlStatements } from "@/lib/db/sql-parser";
-
-function escapeSQL(value: unknown): string {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  if (typeof value === "string") {
-    return `'${value.replace(/'/g, "''")}'`;
-  }
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
-
-function generateInsertStatements(tableName: string, rows: Record<string, unknown>[]): string {
-  if (rows.length === 0) return "";
-
-  const statements: string[] = [];
-  for (const row of rows) {
-    const columns = Object.keys(row);
-    const values = columns.map((col) => escapeSQL(row[col]));
-    statements.push(
-      `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
-    );
-  }
-  return statements.join("\n");
-}
+import { exportSqlDump } from "@/lib/db/sql-export";
 
 class InMemoryDatabaseAdapter implements DatabaseAdapter {
   constructor(private db: SqlJsDatabase) {}
@@ -60,83 +37,10 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
   }
 
   async exportData(): Promise<Uint8Array> {
-    const [
-      books,
-      chapters,
-      bookVersions,
-      projectAssets,
-      bookMetadata,
-      bookStyles,
-      epubStructures,
-      chapterEpubMeta,
-      notes,
-      canvases,
-      syncTombstones,
-      coverTemplates,
-      settings,
-    ] = await Promise.all([
-      this.select<Record<string, unknown>[]>("SELECT * FROM books"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM chapters"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM book_versions"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM project_assets"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM book_metadata"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM book_styles"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM epub_structures"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM chapter_epub_meta"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM notes"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM canvases"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM sync_tombstones"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM cover_templates"),
-      this.select<Record<string, unknown>[]>("SELECT * FROM settings"),
-    ]);
-
-    const lines: string[] = [
-      "-- Maibuk Database Export (SQL Dump)",
-      `-- Exported at: ${new Date().toISOString()}`,
-      "-- Import this file into a SQLite database after creating the schema",
-      "",
-      "-- Books",
-      generateInsertStatements("books", books),
-      "",
-      "-- Chapters",
-      generateInsertStatements("chapters", chapters),
-      "",
-      "-- Book Versions",
-      generateInsertStatements("book_versions", bookVersions),
-      "",
-      "-- Project Assets",
-      generateInsertStatements("project_assets", projectAssets),
-      "",
-      "-- Book Metadata",
-      generateInsertStatements("book_metadata", bookMetadata),
-      "",
-      "-- Book Styles",
-      generateInsertStatements("book_styles", bookStyles),
-      "",
-      "-- EPUB Structures",
-      generateInsertStatements("epub_structures", epubStructures),
-      "",
-      "-- Chapter EPUB Metadata",
-      generateInsertStatements("chapter_epub_meta", chapterEpubMeta),
-      "",
-      "-- Notes",
-      generateInsertStatements("notes", notes),
-      "",
-      "-- Canvases",
-      generateInsertStatements("canvases", canvases),
-      "",
-      "-- Sync Tombstones",
-      generateInsertStatements("sync_tombstones", syncTombstones),
-      "",
-      "-- Cover Templates",
-      generateInsertStatements("cover_templates", coverTemplates),
-      "",
-      "-- Settings",
-      generateInsertStatements("settings", settings),
-    ];
-
-    const sqlDump = lines.join("\n");
-    return new TextEncoder().encode(sqlDump);
+    // Same exporter as the Tauri and web adapters. A hand-written dump here
+    // once included canvases while production never did, which hid the
+    // Backup restore that deleted every Canvas.
+    return exportSqlDump(this);
   }
 
   async importData(sqlContent: string): Promise<void> {
