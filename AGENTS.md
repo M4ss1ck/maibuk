@@ -6,22 +6,22 @@
 
 ### Tech Stack
 
-| Layer            | Technology                                                  |
-| ---------------- | ----------------------------------------------------------- |
-| UI Framework     | React 19 + TypeScript 5.8                                   |
-| Bundler          | Vite 7                                                      |
-| Native Shell     | Tauri 2.0 (Rust)                                            |
-| Styling          | Tailwind CSS 4 + CSS custom properties                      |
-| State            | Zustand 5 (with `persist` middleware for settings/theme)    |
-| Routing          | React Router v7 (`react-router-dom`)                        |
-| Rich Text Editor | TipTap 3.15                                                 |
-| Version Diff/Sanitization | node-htmldiff + DOMPurify                         |
-| Cover Designer   | Fabric.js 7                                                 |
-| Database         | SQLite (Tauri plugin) / sql.js (web) via Drizzle ORM schema |
-| i18n             | i18next + react-i18next (English, Spanish)                  |
-| Icons            | Lucide React + custom SVGs in `src/components/icons/`       |
-| Accessible UI    | React Aria 3 / React Aria Components 1                     |
-| Package Manager  | pnpm 10                                                     |
+| Layer                     | Technology                                                  |
+| ------------------------- | ----------------------------------------------------------- |
+| UI Framework              | React 19 + TypeScript 5.8                                   |
+| Bundler                   | Vite 7                                                      |
+| Native Shell              | Tauri 2.0 (Rust)                                            |
+| Styling                   | Tailwind CSS 4 + CSS custom properties                      |
+| State                     | Zustand 5 (with `persist` middleware for settings/theme)    |
+| Routing                   | React Router v7 (`react-router-dom`)                        |
+| Rich Text Editor          | TipTap 3.15                                                 |
+| Version Diff/Sanitization | node-htmldiff + DOMPurify                                   |
+| Cover Designer            | Fabric.js 7                                                 |
+| Database                  | SQLite (Tauri plugin) / sql.js (web) via Drizzle ORM schema |
+| i18n                      | i18next + react-i18next (English, Spanish)                  |
+| Icons                     | Lucide React + custom SVGs in `src/components/icons/`       |
+| Accessible UI             | React Aria 3 / React Aria Components 1                      |
+| Package Manager           | pnpm 10                                                     |
 
 ### Entry Points
 
@@ -68,7 +68,7 @@ Every new or modified UI feature ships keyboard-operable and screen-reader-corre
 2. **Focus is managed** — visible focus, dialogs trap and restore focus to their trigger, arrow-key navigation inside lists/menus/toolbars, Escape closes or exits.
 3. **Library behavior, never hand-rolled focus code** — React Aria is the approved standard for dialogs, collections, roving focus, and keyboard-operable drag-and-drop. Do not hand-write roving tabindex, focus traps, or listbox key handling.
 4. **Labels are localized** — every `aria-label` goes through i18n like any other user-visible string.
-5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) so they surface in the shortcut help.
+5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) with the registry `id` on the entry. That id is what makes it a Bound Shortcut listed under "On this screen" in the help. A key handled elsewhere (a component's own `onKeyDown`, a native control) declares its id with `useBoundShortcutIds`; TipTap formatting keys are tagged `source: "editor-keymap"` and listed from each editor's real keymap. `shortcut-bindings.test.ts` fails when a registry id is bound nowhere.
 6. **Proven by behavioral tests** — see the Keyboard & Accessibility Test Gate in section 6.
 
 Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and `tabIndex` wiring looked correct while the widget was inoperable by keyboard, and attribute-level tests stayed green. Attributes are not accessibility; behavior is.
@@ -247,74 +247,76 @@ Every store follows this structure (see `src/features/books/store.ts`):
 
 ### Existing Shared Utilities — CHECK BEFORE WRITING NEW ONES
 
-| What                                                               | Where                                      |
-| ------------------------------------------------------------------ | ------------------------------------------ |
-| `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`                 |
-| `useDebouncedCallback(callback, delay)` (stable identity, `.cancel()` drops the pending call, `.flush()` runs it now; not for saves, which use `useEditSession`) | `src/hooks/useAutoSave.ts` |
-| `EditorHandle` (`<Editor ref>`; `flush()` hands the coalesced typing burst to `onUpdate` synchronously) | `src/components/editor/Editor.tsx` |
-| `createEditSession()` / `useEditSession()` (one Edit Session per open Chapter or Note: debounced save, Save Status, Flush registration, echo check against the content the last save returned; `Editor` never guesses echoes) | `src/features/edit-session/` |
-| `useShortcuts(shortcuts, options)`                                 | `src/lib/shortcuts.ts`                     |
-| `getDatabase()`                                                    | `src/lib/db/index.ts`                      |
-| `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                      |
-| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`                |
-| `IS_WEB` / `IS_TAURI`                                              | `src/lib/platform/index.ts`                |
-| `setWindowAlwaysOnTop()`                                           | `src/lib/platform/index.ts`                |
-| `isMac()`                                                          | `src/lib/platform/detect.ts`               |
-| `processChapterHtml()` / `sanitizeHtmlForEpub()`                   | `src/features/export/html-sanitizer.ts`    |
-| `cleanPastedHtml()` (configurable paste-cleanup engine)            | `src/components/editor/paste-cleanup.ts`   |
-| `generateEpub()` / `generatePdfHtml()`                             | `src/features/export/`                     |
-| `APP_VERSION` / `DOWNLOAD_PAGE`                                    | `src/constants.ts`                         |
-| `detectSystemLocale()`                                             | `src/i18n.ts`                              |
-| Font/size/language option arrays                                   | `src/features/settings/types.ts`           |
-| `encrypt()` / `decrypt()`                                          | `src/features/sync/crypto.ts`              |
-| `stringifySnapshotAsync()` / `encryptToBuffer()` / `computeChecksumAsync()` / `dumpHasDataAsync()` (sync CPU codec worker) | `src/features/sync/sync-codec.ts` |
-| `serializeBook()` / `applyBookSnapshot()`                          | `src/features/sync/serializer.ts`          |
-| `syncBook()` / `syncAllBooks()`                                    | `src/features/sync/sync-engine.ts`         |
-| PocketBase client (`initClient`, `login`, etc.)                    | `src/features/sync/client.ts`              |
-| `useSyncStore`                                                     | `src/features/sync/store.ts`               |
-| `shouldRefreshAuth()` / `getTokenExpiryMs()` (auth token renewal policy) | `src/features/sync/auth-policy.ts` |
-| `installAuthKeepAlive()` (renews the sync session while the app runs) | `src/features/sync/auth-keep-alive.ts` |
-| `buildTestJwt(expiresAtMs)` (JWT-shaped test token)              | `src/test/support/jwt.ts`                  |
-| `decideSyncAction()` (pure three-way push/pull/conflict decision against the last-synced base) | `src/features/sync/sync-decision.ts` |
-| `getSyncBase()` / `setSyncBase()` / `clearAllSyncBases()` (per-device `sync_state` table, not backed up) | `src/features/sync/sync-state.ts` |
-| `installAutoSync()` / `runAutoSync()` (launch + idle-after-edit automatic sync, `autoSync` setting) | `src/features/sync/auto-sync.ts` |
-| `notifyLocalChange()` / `onLocalChange()` (dependency-free "user edited synced data" signal; call from store mutations) | `src/features/sync/local-changes.ts` |
-| `registerPendingEditsFlush()` / `flushPendingEdits()` (editors land unsaved text, including the Editor's coalescing burst, before a sync run or Version restore; rejects with `PendingEditsFlushError` when a save fails, which stops the run) | `src/features/sync/pending-edits.ts` |
-| `useVersionStore`                                                  | `src/features/versions/store.ts`           |
-| `useAutoCheckpoint`                                                | `src/features/versions/useAutoCheckpoint.ts` |
-| `sanitizeChapterHtml()`                                            | `src/features/versions/sanitize.ts`        |
-| `diffSnapshots()`                                                  | `src/features/versions/compare.ts`         |
-| `useCanvasStore` / `parseCanvasDoc()` / `toFlowNodes()` (text nodes carry an optional persisted `width`) | `src/features/canvas/`                     |
-| `createRichTextExtensions()` (canonical rich-text schema shared by the main editor, Quick Note, and canvas) | `src/components/editor/extensions/createRichTextExtensions.ts` |
-| `loadEmojiSymbols()` (lazy, localized emoji/symbol autocomplete catalog) | `src/features/symbols/load.ts` |
-| `MarkdownPasteDialog` / `plainTextToEditorHtml()` (shared markdown-paste prompt + plain-text conversion) | `src/components/editor/MarkdownPasteDialog.tsx` / `plain-text-html.ts` |
-| `TableSizePicker` (reusable 5×5 table-dimension picker)            | `src/components/editor/TableSizePicker.tsx` |
-| `getEditorToolbarState()` (one shared formatting snapshot per immutable editor state) | `src/components/editor/toolbar/editor-toolbar-state.ts` |
-| `useReadingPositionStore` / `useReadingPosition()`                 | `src/features/reading-position/`           |
-| `toast.success()` / `ToastViewport`                                | `src/components/ui/Toast.tsx`              |
-| `FileDropImportStatus` (localized file-import progress overlay)    | `src/components/ui/FileDropImportStatus.tsx` |
-| `KeyboardShortcut` (`<kbd>` hint renderer)                         | `src/components/ui/KeyboardShortcut.tsx`   |
-| `ResponsiveToggleGroup` (measured segmented toggle; labels collapse to icons only when full labels do not fit) | `src/components/ui/ResponsiveToggleGroup.tsx` |
-| `MultiSelectCombobox` (multi-select chips, checkbox dropdown, optional custom values) | `src/components/ui/MultiSelectCombobox.tsx` |
-| `buildBook()` / `buildChapter()` (test fixtures)                   | `src/test/support/fixtures.ts`             |
-| `createTestDatabase()` (in-memory sql.js for store tests)          | `src/test/support/db-test-context.ts`      |
-| `isTypingTarget()` / `isModKey()`                                  | `src/lib/keyboard.ts`                      |
-| `BackupService` (create, prune, verify)                            | `src/features/backup/backup-service.ts`    |
-| `generateSqlDump()`                                                | `src/features/backup/generate-sql-dump.ts` |
-| `createLaunchBackup()` / `createCloseBackup()`                     | `src/features/backup/lifecycle.ts`         |
-| `parseSqlStatements()`                                             | `src/lib/db/sql-parser.ts`                 |
-| `exportSqlDump()` (paged SQL export with worker formatting)         | `src/lib/db/sql-export.ts`                |
-| `createAsyncQueue()` (FIFO serialization that advances after failures) | `src/lib/async-queue.ts`                |
-| `createBackup()` (platform factory)                                | `src/lib/platform/index.ts`                |
-| `computeChecksum()`                                                | `src/lib/checksum.ts`                      |
-| `parseTriggerFromFilename()`                                       | `src/features/backup/utils.ts`             |
-| `countWords()` / `classifyTransaction()`                           | `src/features/metrics/word-count.ts` / `classifier.ts` |
-| `ensureMetricsSchema()` / `insertEvents()`                         | `src/features/metrics/events-repo.ts`      |
-| `metricsService`                                                   | `src/lib/metrics/MetricsService.ts`        |
-| `useNoteStore` / `saveCollapsedHeadings`                          | `src/features/notes/store.ts`              |
-| `CollapsibleHeading` / `collapsibleHeadingPluginKey`              | `src/components/editor/extensions/CollapsibleHeading.ts` |
-| `SceneBreakDescriptor` / scene-break attribute helpers             | `src/components/editor/extensions/scene-break-utils.ts` |
-| `useModalScope(isOpen)` (LIFO modal ID registration/unregistration) | `src/hooks/useModalScope.ts`                 |
+| What                                                                                                                                                                                                                                           | Where                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `useAutoSave(callback, delay)`                                                                                                                                                                                                                 | `src/hooks/useAutoSave.ts`                                             |
+| `useDebouncedCallback(callback, delay)` (stable identity, `.cancel()` drops the pending call, `.flush()` runs it now; not for saves, which use `useEditSession`)                                                                               | `src/hooks/useAutoSave.ts`                                             |
+| `EditorHandle` (`<Editor ref>`; `flush()` hands the coalesced typing burst to `onUpdate` synchronously)                                                                                                                                        | `src/components/editor/Editor.tsx`                                     |
+| `createEditSession()` / `useEditSession()` (one Edit Session per open Chapter or Note: debounced save, Save Status, Flush registration, echo check against the content the last save returned; `Editor` never guesses echoes)                  | `src/features/edit-session/`                                           |
+| `useShortcuts(shortcuts, options)` (an entry's registry `id` lists it as a Bound Shortcut while mounted and enabled)                                                                                                                           | `src/lib/shortcuts.ts`                                                 |
+| `useBoundShortcutIds(ids, enabled)` / `useBoundShortcuts()` (declare keys handled outside `useShortcuts`; read what works on this screen)                                                                                                      | `src/lib/bound-shortcuts.ts`                                           |
+| `editorKeymapShortcutIds(editor)` (the `editor-keymap` registry shortcuts a TipTap editor's extensions really bind)                                                                                                                            | `src/components/editor/keymap-shortcuts.ts`                            |
+| `getDatabase()`                                                                                                                                                                                                                                | `src/lib/db/index.ts`                                                  |
+| `exportDatabase()` / `importDatabase()` / `resetDatabase()`                                                                                                                                                                                    | `src/lib/db/index.ts`                                                  |
+| `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()`                                                                                                                                                                             | `src/lib/platform/index.ts`                                            |
+| `IS_WEB` / `IS_TAURI`                                                                                                                                                                                                                          | `src/lib/platform/index.ts`                                            |
+| `setWindowAlwaysOnTop()`                                                                                                                                                                                                                       | `src/lib/platform/index.ts`                                            |
+| `isMac()`                                                                                                                                                                                                                                      | `src/lib/platform/detect.ts`                                           |
+| `processChapterHtml()` / `sanitizeHtmlForEpub()`                                                                                                                                                                                               | `src/features/export/html-sanitizer.ts`                                |
+| `cleanPastedHtml()` (configurable paste-cleanup engine)                                                                                                                                                                                        | `src/components/editor/paste-cleanup.ts`                               |
+| `generateEpub()` / `generatePdfHtml()`                                                                                                                                                                                                         | `src/features/export/`                                                 |
+| `APP_VERSION` / `DOWNLOAD_PAGE`                                                                                                                                                                                                                | `src/constants.ts`                                                     |
+| `detectSystemLocale()`                                                                                                                                                                                                                         | `src/i18n.ts`                                                          |
+| Font/size/language option arrays                                                                                                                                                                                                               | `src/features/settings/types.ts`                                       |
+| `encrypt()` / `decrypt()`                                                                                                                                                                                                                      | `src/features/sync/crypto.ts`                                          |
+| `stringifySnapshotAsync()` / `encryptToBuffer()` / `computeChecksumAsync()` / `dumpHasDataAsync()` (sync CPU codec worker)                                                                                                                     | `src/features/sync/sync-codec.ts`                                      |
+| `serializeBook()` / `applyBookSnapshot()`                                                                                                                                                                                                      | `src/features/sync/serializer.ts`                                      |
+| `syncBook()` / `syncAllBooks()`                                                                                                                                                                                                                | `src/features/sync/sync-engine.ts`                                     |
+| PocketBase client (`initClient`, `login`, etc.)                                                                                                                                                                                                | `src/features/sync/client.ts`                                          |
+| `useSyncStore`                                                                                                                                                                                                                                 | `src/features/sync/store.ts`                                           |
+| `shouldRefreshAuth()` / `getTokenExpiryMs()` (auth token renewal policy)                                                                                                                                                                       | `src/features/sync/auth-policy.ts`                                     |
+| `installAuthKeepAlive()` (renews the sync session while the app runs)                                                                                                                                                                          | `src/features/sync/auth-keep-alive.ts`                                 |
+| `buildTestJwt(expiresAtMs)` (JWT-shaped test token)                                                                                                                                                                                            | `src/test/support/jwt.ts`                                              |
+| `decideSyncAction()` (pure three-way push/pull/conflict decision against the last-synced base)                                                                                                                                                 | `src/features/sync/sync-decision.ts`                                   |
+| `getSyncBase()` / `setSyncBase()` / `clearAllSyncBases()` (per-device `sync_state` table, not backed up)                                                                                                                                       | `src/features/sync/sync-state.ts`                                      |
+| `installAutoSync()` / `runAutoSync()` (launch + idle-after-edit automatic sync, `autoSync` setting)                                                                                                                                            | `src/features/sync/auto-sync.ts`                                       |
+| `notifyLocalChange()` / `onLocalChange()` (dependency-free "user edited synced data" signal; call from store mutations)                                                                                                                        | `src/features/sync/local-changes.ts`                                   |
+| `registerPendingEditsFlush()` / `flushPendingEdits()` (editors land unsaved text, including the Editor's coalescing burst, before a sync run or Version restore; rejects with `PendingEditsFlushError` when a save fails, which stops the run) | `src/features/sync/pending-edits.ts`                                   |
+| `useVersionStore`                                                                                                                                                                                                                              | `src/features/versions/store.ts`                                       |
+| `useAutoCheckpoint`                                                                                                                                                                                                                            | `src/features/versions/useAutoCheckpoint.ts`                           |
+| `sanitizeChapterHtml()`                                                                                                                                                                                                                        | `src/features/versions/sanitize.ts`                                    |
+| `diffSnapshots()`                                                                                                                                                                                                                              | `src/features/versions/compare.ts`                                     |
+| `useCanvasStore` / `parseCanvasDoc()` / `toFlowNodes()` (text nodes carry an optional persisted `width`)                                                                                                                                       | `src/features/canvas/`                                                 |
+| `createRichTextExtensions()` (canonical rich-text schema shared by the main editor, Quick Note, and canvas)                                                                                                                                    | `src/components/editor/extensions/createRichTextExtensions.ts`         |
+| `loadEmojiSymbols()` (lazy, localized emoji/symbol autocomplete catalog)                                                                                                                                                                       | `src/features/symbols/load.ts`                                         |
+| `MarkdownPasteDialog` / `plainTextToEditorHtml()` (shared markdown-paste prompt + plain-text conversion)                                                                                                                                       | `src/components/editor/MarkdownPasteDialog.tsx` / `plain-text-html.ts` |
+| `TableSizePicker` (reusable 5×5 table-dimension picker)                                                                                                                                                                                        | `src/components/editor/TableSizePicker.tsx`                            |
+| `getEditorToolbarState()` (one shared formatting snapshot per immutable editor state)                                                                                                                                                          | `src/components/editor/toolbar/editor-toolbar-state.ts`                |
+| `useReadingPositionStore` / `useReadingPosition()`                                                                                                                                                                                             | `src/features/reading-position/`                                       |
+| `toast.success()` / `ToastViewport`                                                                                                                                                                                                            | `src/components/ui/Toast.tsx`                                          |
+| `FileDropImportStatus` (localized file-import progress overlay)                                                                                                                                                                                | `src/components/ui/FileDropImportStatus.tsx`                           |
+| `KeyboardShortcut` (`<kbd>` hint renderer)                                                                                                                                                                                                     | `src/components/ui/KeyboardShortcut.tsx`                               |
+| `ResponsiveToggleGroup` (measured segmented toggle; labels collapse to icons only when full labels do not fit)                                                                                                                                 | `src/components/ui/ResponsiveToggleGroup.tsx`                          |
+| `MultiSelectCombobox` (multi-select chips, checkbox dropdown, optional custom values)                                                                                                                                                          | `src/components/ui/MultiSelectCombobox.tsx`                            |
+| `buildBook()` / `buildChapter()` (test fixtures)                                                                                                                                                                                               | `src/test/support/fixtures.ts`                                         |
+| `createTestDatabase()` (in-memory sql.js for store tests)                                                                                                                                                                                      | `src/test/support/db-test-context.ts`                                  |
+| `isTypingTarget()` / `isModKey()`                                                                                                                                                                                                              | `src/lib/keyboard.ts`                                                  |
+| `BackupService` (create, prune, verify)                                                                                                                                                                                                        | `src/features/backup/backup-service.ts`                                |
+| `generateSqlDump()`                                                                                                                                                                                                                            | `src/features/backup/generate-sql-dump.ts`                             |
+| `createLaunchBackup()` / `createCloseBackup()`                                                                                                                                                                                                 | `src/features/backup/lifecycle.ts`                                     |
+| `parseSqlStatements()`                                                                                                                                                                                                                         | `src/lib/db/sql-parser.ts`                                             |
+| `exportSqlDump()` (paged SQL export with worker formatting)                                                                                                                                                                                    | `src/lib/db/sql-export.ts`                                             |
+| `createAsyncQueue()` (FIFO serialization that advances after failures)                                                                                                                                                                         | `src/lib/async-queue.ts`                                               |
+| `createBackup()` (platform factory)                                                                                                                                                                                                            | `src/lib/platform/index.ts`                                            |
+| `computeChecksum()`                                                                                                                                                                                                                            | `src/lib/checksum.ts`                                                  |
+| `parseTriggerFromFilename()`                                                                                                                                                                                                                   | `src/features/backup/utils.ts`                                         |
+| `countWords()` / `classifyTransaction()`                                                                                                                                                                                                       | `src/features/metrics/word-count.ts` / `classifier.ts`                 |
+| `ensureMetricsSchema()` / `insertEvents()`                                                                                                                                                                                                     | `src/features/metrics/events-repo.ts`                                  |
+| `metricsService`                                                                                                                                                                                                                               | `src/lib/metrics/MetricsService.ts`                                    |
+| `useNoteStore` / `saveCollapsedHeadings`                                                                                                                                                                                                       | `src/features/notes/store.ts`                                          |
+| `CollapsibleHeading` / `collapsibleHeadingPluginKey`                                                                                                                                                                                           | `src/components/editor/extensions/CollapsibleHeading.ts`               |
+| `SceneBreakDescriptor` / scene-break attribute helpers                                                                                                                                                                                         | `src/components/editor/extensions/scene-break-utils.ts`                |
+| `useModalScope(isOpen)` (LIFO modal ID registration/unregistration)                                                                                                                                                                            | `src/hooks/useModalScope.ts`                                           |
 
 ---
 
@@ -565,7 +567,7 @@ Any change that adds or modifies interactive UI is **not done** until behavioral
    - Dialogs: Escape closes, and focus returns to the trigger element.
    - Lists / menus / toolbars: arrow keys move focus — assert `document.activeElement` changed, not that a handler is attached.
    - Reordering / drag-and-drop: the keyboard reorder path is tested end-to-end.
-3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected and are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`).
+3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected, are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`), and the screen's test asserts their id is bound (`useBoundShortcutStore`).
 
 ### Linting & Formatting
 
@@ -692,8 +694,8 @@ Maibuk is confident, not timid. It has opinions about how writing software shoul
 4. **Tangible feedback** — Every interaction should feel responsive and real. Save status, sync state, export progress, drag-and-drop reordering — these moments are where trust is built. Invest in making them feel right.
 5. **Never generic** — Before adding any UI element, ask: "Would this look the same in a generic template?" If yes, reconsider. Maibuk's identity comes from the accumulation of small, intentional choices — a distinctive empty state, a satisfying hover effect, a well-crafted transition.
 
-
 <!-- headroom:rtk-instructions -->
+
 # RTK (Rust Token Killer) - Token-Optimized Commands
 
 When running shell commands, **always prefix with `rtk`**. This reduces context
@@ -701,6 +703,7 @@ usage by 60-90% with zero behavior change. If rtk has no filter for a command,
 it passes through unchanged — so it is always safe to use.
 
 ## Key Commands
+
 ```bash
 # Git (59-80% savings)
 rtk git status          rtk git diff            rtk git log
@@ -731,6 +734,7 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 ```
 
 ## Rules
+
 - In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
 - For debugging, use raw command without rtk prefix
 - `rtk proxy <cmd>` runs command without filtering but tracks usage

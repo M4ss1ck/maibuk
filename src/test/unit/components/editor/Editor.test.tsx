@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import userEvent from "@testing-library/user-event";
 import { createRef, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -202,6 +203,30 @@ describe("Editor", () => {
     await waitFor(() => expect(screen.getByTestId("characters")).toHaveTextContent("6"));
     expect(onUpdate).toHaveBeenCalled();
     expect(capturedToolbarProps).toHaveLength(renders);
+  });
+
+  it("lists the formatting keys its own extensions bind", async () => {
+    let editorInstance: TiptapEditor | null = null;
+    const { unmount } = render(
+      <Editor
+        content="<p>Hello</p>"
+        onUpdate={vi.fn()}
+        onEditorReady={(instance) => {
+          editorInstance = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editorInstance).not.toBeNull());
+
+    const bound = Object.keys(useBoundShortcutStore.getState().counts);
+    expect(bound).toEqual(
+      expect.arrayContaining(["editor.bold", "editor.redo", "editor.heading2"])
+    );
+    // Task lists are a Notes extension, not part of this editor.
+    expect(bound).not.toContain("editor.taskList");
+
+    unmount();
+    expect(Object.keys(useBoundShortcutStore.getState().counts)).not.toContain("editor.bold");
   });
 
   it("installs autoclose when the editor setting is enabled", async () => {

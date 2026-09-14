@@ -17,16 +17,19 @@ export function wheelZoomDirection(event: WheelEvent): "in" | "out" | null {
 export function useEditorZoomControls(scrollEl: HTMLElement | null) {
   useShortcuts([
     {
+      id: "editor.zoomIn",
       keys: ["ctrl+=", "meta+=", "ctrl++", "meta++", "ctrl+shift++", "meta+shift++"],
       allowInInput: true,
       onTrigger: () => useSettingsStore.getState().zoomIn(),
     },
     {
+      id: "editor.zoomOut",
       keys: ["ctrl+-", "meta+-"],
       allowInInput: true,
       onTrigger: () => useSettingsStore.getState().zoomOut(),
     },
     {
+      id: "editor.zoomReset",
       keys: ["ctrl+0", "meta+0"],
       allowInInput: true,
       onTrigger: () => useSettingsStore.getState().resetZoom(),

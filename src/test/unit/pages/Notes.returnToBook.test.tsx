@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Notes } from "@/pages/Notes";
 
@@ -103,6 +104,10 @@ vi.mock("../../../components/notes", () => ({
   },
 }));
 
+function boundIds() {
+  return Object.keys(useBoundShortcutStore.getState().counts);
+}
+
 describe("Notes page return-to-book navigation", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
@@ -146,6 +151,14 @@ describe("Notes page return-to-book navigation", () => {
 
     fireEvent.keyDown(document.body, { key: "Backspace" });
     expect(mockNavigate).toHaveBeenCalledWith("/book/book-1");
+  });
+
+  it("lists Backspace as the way back while the Notes screen is open", () => {
+    mockLocation.state = { openNoteId: "n1" };
+
+    render(<Notes />);
+
+    expect(boundIds()).toContain("editor.back");
   });
 
   it("returns to the gallery on Backspace without a return target", () => {

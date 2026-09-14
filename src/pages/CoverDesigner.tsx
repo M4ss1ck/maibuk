@@ -124,19 +124,31 @@ export function CoverDesigner() {
 
   useShortcuts([
     {
+      id: "cover.delete",
       keys: ["delete", "backspace"],
       onTrigger: () => {
         const { selectedId, removeLayer } = useCoverStore.getState();
         if (selectedId) removeLayer(selectedId);
       },
     },
-    { keys: matchKeys("cover.save"), onTrigger: () => handleSave(), allowInInput: true },
-    { keys: ["ctrl+z", "meta+z"], onTrigger: () => useCoverStore.getState().undo() },
     {
+      id: "cover.save",
+      keys: matchKeys("cover.save"),
+      onTrigger: () => handleSave(),
+      allowInInput: true,
+    },
+    {
+      id: "cover.undo",
+      keys: ["ctrl+z", "meta+z"],
+      onTrigger: () => useCoverStore.getState().undo(),
+    },
+    {
+      id: "cover.redo",
       keys: ["ctrl+shift+z", "meta+shift+z", "ctrl+y"],
       onTrigger: () => useCoverStore.getState().redo(),
     },
     {
+      id: "cover.duplicate",
       keys: matchKeys("cover.duplicate"),
       onTrigger: () => useCoverStore.getState().duplicateSelected(),
       preventDefault: true,

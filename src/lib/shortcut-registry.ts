@@ -1,6 +1,9 @@
 import { isMac } from "@/lib/platform";
 
-export type ShortcutDef = { labelKey: string } & (
+/** Where the key is handled when no `useShortcuts` binding carries its id. */
+export type ShortcutSource = "editor-keymap";
+
+export type ShortcutDef = { labelKey: string; source?: ShortcutSource } & (
   | { keys: readonly string[] }
   | { sequence: readonly [string, string] }
 );
@@ -90,50 +93,73 @@ export const SHORTCUTS = {
     labelKey: "shortcuts.zoomReset",
     keys: ["Ctrl+0"],
   },
-  "editor.bold": { labelKey: "editor.bold", keys: ["Ctrl+B"] },
-  "editor.italic": { labelKey: "editor.italic", keys: ["Ctrl+I"] },
-  "editor.underline": { labelKey: "editor.underline", keys: ["Ctrl+U"] },
+  "editor.bold": { labelKey: "editor.bold", source: "editor-keymap", keys: ["Ctrl+B"] },
+  "editor.italic": { labelKey: "editor.italic", source: "editor-keymap", keys: ["Ctrl+I"] },
+  "editor.underline": { labelKey: "editor.underline", source: "editor-keymap", keys: ["Ctrl+U"] },
   "editor.strikethrough": {
     labelKey: "editor.strikethrough",
+    source: "editor-keymap",
     keys: ["Ctrl+Shift+S"],
   },
   "editor.highlight": {
     labelKey: "editor.highlight",
+    source: "editor-keymap",
     keys: ["Ctrl+Shift+H"],
   },
-  "editor.subscript": { labelKey: "editor.subscript", keys: ["Ctrl+,"] },
-  "editor.superscript": { labelKey: "editor.superscript", keys: ["Ctrl+."] },
-  "editor.code": { labelKey: "editor.code", keys: ["Ctrl+E"] },
-  "editor.codeBlock": { labelKey: "editor.codeBlock", keys: ["Ctrl+Alt+C"] },
-  "editor.heading1": { labelKey: "editor.heading1", keys: ["Ctrl+Alt+1"] },
-  "editor.heading2": { labelKey: "editor.heading2", keys: ["Ctrl+Alt+2"] },
-  "editor.heading3": { labelKey: "editor.heading3", keys: ["Ctrl+Alt+3"] },
+  "editor.subscript": { labelKey: "editor.subscript", source: "editor-keymap", keys: ["Ctrl+,"] },
+  "editor.superscript": {
+    labelKey: "editor.superscript",
+    source: "editor-keymap",
+    keys: ["Ctrl+."],
+  },
+  "editor.code": { labelKey: "editor.code", source: "editor-keymap", keys: ["Ctrl+E"] },
+  "editor.codeBlock": {
+    labelKey: "editor.codeBlock",
+    source: "editor-keymap",
+    keys: ["Ctrl+Alt+C"],
+  },
+  "editor.heading1": { labelKey: "editor.heading1", source: "editor-keymap", keys: ["Ctrl+Alt+1"] },
+  "editor.heading2": { labelKey: "editor.heading2", source: "editor-keymap", keys: ["Ctrl+Alt+2"] },
+  "editor.heading3": { labelKey: "editor.heading3", source: "editor-keymap", keys: ["Ctrl+Alt+3"] },
   "editor.bulletList": {
     labelKey: "editor.bulletList",
+    source: "editor-keymap",
     keys: ["Ctrl+Shift+8"],
   },
   "editor.numberedList": {
     labelKey: "editor.numberedList",
+    source: "editor-keymap",
     keys: ["Ctrl+Shift+7"],
   },
-  "editor.taskList": { labelKey: "editor.taskList", keys: ["Ctrl+Shift+9"] },
-  "editor.quote": { labelKey: "editor.quote", keys: ["Ctrl+Shift+B"] },
-  "editor.alignLeft": { labelKey: "editor.alignLeft", keys: ["Ctrl+Shift+L"] },
+  "editor.taskList": {
+    labelKey: "editor.taskList",
+    source: "editor-keymap",
+    keys: ["Ctrl+Shift+9"],
+  },
+  "editor.quote": { labelKey: "editor.quote", source: "editor-keymap", keys: ["Ctrl+Shift+B"] },
+  "editor.alignLeft": {
+    labelKey: "editor.alignLeft",
+    source: "editor-keymap",
+    keys: ["Ctrl+Shift+L"],
+  },
   "editor.alignCenter": {
     labelKey: "editor.alignCenter",
+    source: "editor-keymap",
     keys: ["Ctrl+Shift+E"],
   },
   "editor.alignRight": {
     labelKey: "editor.alignRight",
+    source: "editor-keymap",
     keys: ["Ctrl+Shift+R"],
   },
   "editor.alignJustify": {
     labelKey: "editor.alignJustify",
+    source: "editor-keymap",
     keys: ["Ctrl+Shift+J"],
   },
   "editor.insertLink": { labelKey: "editor.insertLink", keys: ["Ctrl+K"] },
-  "editor.undo": { labelKey: "editor.undo", keys: ["Ctrl+Z"] },
-  "editor.redo": { labelKey: "editor.redo", keys: ["Ctrl+Shift+Z"] },
+  "editor.undo": { labelKey: "editor.undo", source: "editor-keymap", keys: ["Ctrl+Z"] },
+  "editor.redo": { labelKey: "editor.redo", source: "editor-keymap", keys: ["Ctrl+Shift+Z"] },
   "editor.dictionary": { labelKey: "editor.dictionary", keys: ["Ctrl+Shift+D"] },
   "editor.insertSymbol": {
     labelKey: "shortcuts.insertSymbol",
@@ -149,10 +175,12 @@ export const SHORTCUTS = {
   },
   "editor.increaseIndent": {
     labelKey: "editor.increaseIndent",
+    source: "editor-keymap",
     keys: ["Tab"],
   },
   "editor.decreaseIndent": {
     labelKey: "editor.decreaseIndent",
+    source: "editor-keymap",
     keys: ["Shift+Tab"],
   },
   "editor.findNext": { labelKey: "editor.findNext", keys: ["Enter"] },

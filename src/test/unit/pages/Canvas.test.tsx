@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -131,6 +132,10 @@ function renderCanvas() {
   );
 }
 
+function boundIds() {
+  return Object.keys(useBoundShortcutStore.getState().counts);
+}
+
 describe("Canvas page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -142,6 +147,24 @@ describe("Canvas page", () => {
     renderCanvas();
     expect(mocks.actions.loadNotes).toHaveBeenCalledTimes(1);
     expect(mocks.actions.loadBooks).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists the canvas tool shortcuts as bound once the canvas is ready", () => {
+    renderCanvas();
+
+    expect(boundIds()).toEqual(
+      expect.arrayContaining([
+        "canvas.toolSelect",
+        "canvas.toolPen",
+        "canvas.toolEraser",
+        "canvas.addTextNode",
+        "canvas.addNoteRef",
+        "canvas.zoomIn",
+        "canvas.zoomOut",
+        "canvas.fitView",
+        "canvas.lock",
+      ])
+    );
   });
 
   it("disables built-in deletion and synchronizes React Flow node selection to the store", () => {

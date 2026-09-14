@@ -130,10 +130,6 @@ vi.mock("../../../features/sync/store", () => ({
 }));
 
 vi.mock("../../../features/sync/crypto", () => ({ getPassphrase: () => "passphrase" }));
-vi.mock("../../../hooks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../hooks")>();
-  return { ...actual, useActiveShortcuts: () => [] };
-});
 vi.mock("../../../components/ShortcutsHelpDialog", () => ({ ShortcutsHelpDialog: () => null }));
 
 vi.mock("../../../lib/metrics/MetricsService", () => ({

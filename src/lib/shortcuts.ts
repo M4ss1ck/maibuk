@@ -1,8 +1,12 @@
 import { useEffect, useRef } from "react";
 import { isTypingTarget } from "@/lib/keyboard";
 import { useModalStore } from "@/components/ui/modal-store";
+import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import type { ShortcutId } from "@/lib/shortcut-registry";
 
 type Shortcut = {
+  /** The registry shortcut this binding implements; while enabled it is listed as bound. */
+  id?: ShortcutId;
   keys?: string | string[];
   sequence?: readonly [string, string];
   onTrigger: (event: KeyboardEvent) => void;
@@ -40,6 +44,15 @@ export function useShortcuts(shortcuts: Shortcut[], options: UseShortcutsOptions
   const shortcutsRef = useRef(shortcuts);
   const sequenceRef = useRef<{ key: string; time: number } | null>(null);
   const modalIdsLen = useModalStore((s) => s.modalIds.length);
+
+  // Listed as bound regardless of open dialogs: the shortcut help is a dialog.
+  const boundIds =
+    options.enabled === false
+      ? []
+      : shortcuts.flatMap((shortcut) =>
+          shortcut.id && shortcut.enabled !== false ? [shortcut.id] : []
+        );
+  useBoundShortcutIds(boundIds);
 
   useEffect(() => {
     shortcutsRef.current = shortcuts;

@@ -36,7 +36,6 @@ vi.mock("@/features/notes", () => ({
   useNoteStore: { getState: () => ({ currentNote: null }) },
 }));
 vi.mock("@/features/sync/crypto", () => ({ getPassphrase: () => null }));
-vi.mock("@/hooks", () => ({ useActiveShortcuts: () => [] }));
 vi.mock("@/components/ShortcutsHelpDialog", () => ({ ShortcutsHelpDialog: () => null }));
 
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";

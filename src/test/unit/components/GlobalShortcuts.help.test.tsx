@@ -2,6 +2,7 @@ import { render, act } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 interface ShortcutConfig {
+  id?: string;
   keys?: string[];
   sequence?: string[];
   onTrigger: () => void;
@@ -12,7 +13,7 @@ const { mockUseShortcuts, platformState } = vi.hoisted(() => ({
   platformState: { isDesktop: true },
 }));
 
-let capturedShortcuts: unknown[] = [];
+let helpOpen = false;
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -59,53 +60,66 @@ vi.mock("@/features/notes", () => ({
 }));
 vi.mock("@/features/sync/crypto", () => ({ getPassphrase: () => null }));
 
-const mockShortcutItems = [
-  {
-    id: "global.gotoProjects",
-    label: "Go to Projects",
-    formatted: { groups: [["g", "p"]], isSequence: true },
-  },
-  { id: "global.showHelp", label: "Show Help", formatted: { groups: [["?"]], isSequence: false } },
-];
-
-vi.mock("@/hooks", () => ({
-  useActiveShortcuts: () => mockShortcutItems,
-}));
-
 vi.mock("@/components/ShortcutsHelpDialog", () => ({
-  ShortcutsHelpDialog: ({ isOpen, shortcuts }: { isOpen: boolean; shortcuts: unknown[] }) => {
-    if (isOpen) capturedShortcuts = shortcuts;
+  ShortcutsHelpDialog: ({ isOpen }: { isOpen: boolean }) => {
+    helpOpen = isOpen;
     return null;
   },
 }));
 
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 
-function triggerHelpShortcut() {
+function latestConfigs() {
   const calls = mockUseShortcuts.mock.calls;
-  const configs = calls[calls.length - 1]?.[0] as ShortcutConfig[];
+  return calls[calls.length - 1]?.[0] as ShortcutConfig[];
+}
+
+function triggerHelpShortcut() {
+  const configs = latestConfigs();
   const helpShortcut = configs.find((c) => c.keys && c.keys.includes("?"));
   if (!helpShortcut) throw new Error("Help shortcut not registered");
   helpShortcut.onTrigger();
 }
 
-describe("GlobalShortcuts help snapshot", () => {
+describe("GlobalShortcuts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    capturedShortcuts = [];
+    helpOpen = false;
     platformState.isDesktop = true;
     settingsState.setAlwaysOnTop.mockReset();
   });
 
-  it("snapshots the pre-open active shortcuts and passes them to the help dialog", async () => {
+  it("opens the shortcut help from ?", async () => {
     render(<GlobalShortcuts />);
 
     await act(async () => {
       triggerHelpShortcut();
     });
 
-    expect(capturedShortcuts).toEqual(mockShortcutItems);
-    expect(capturedShortcuts.length).toBeGreaterThan(0);
+    expect(helpOpen).toBe(true);
+  });
+
+  it("binds every global shortcut under its registry id, so the help lists it", () => {
+    render(<GlobalShortcuts />);
+
+    const ids = latestConfigs()
+      .map((config) => config.id)
+      .sort();
+
+    expect(ids).toEqual([
+      "global.cyclePanes",
+      "global.gotoCanvas",
+      "global.gotoEphemeral",
+      "global.gotoMetrics",
+      "global.gotoNotes",
+      "global.gotoProjects",
+      "global.gotoSettings",
+      "global.showHelp",
+      "global.syncNow",
+      "global.toggleAlwaysOnTop",
+      "global.toggleShortcutHints",
+      "global.toggleTheme",
+    ]);
   });
 
   it("toggles always-on-top via shortcut only when on desktop", () => {
