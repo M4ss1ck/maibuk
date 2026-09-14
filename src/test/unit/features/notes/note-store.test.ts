@@ -161,6 +161,23 @@ describe("useNoteStore", () => {
   });
 
   describe("updateNote()", () => {
+    it("returns the note exactly as stored", async () => {
+      const note = await useNoteStore.getState().createNote({ title: "Draft" });
+
+      const stored = await useNoteStore
+        .getState()
+        .updateNote({ id: note.id, content: "<p>kept</p>", wordCount: 1 });
+
+      expect(stored?.content).toBe("<p>kept</p>");
+      expect(stored).toEqual(useNoteStore.getState().notes.find((n) => n.id === note.id));
+    });
+
+    it("returns null when the note no longer exists", async () => {
+      await expect(
+        useNoteStore.getState().updateNote({ id: "missing", content: "<p>x</p>" })
+      ).resolves.toBeNull();
+    });
+
     it("updates fields and currentNote when it matches", async () => {
       const note = await useNoteStore.getState().createNote({ title: "Draft" });
       useNoteStore.getState().setCurrentNote(note);

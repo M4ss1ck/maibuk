@@ -299,6 +299,10 @@ _Avoid_: dirty flag
 Saving what an open Chapter or Note editor still holds, done before a sync reads the Library and before a Version Restore; if that save fails, the sync or Restore stops.
 _Avoid_: force save, commit
 
+**Edit Session**:
+The span from opening one Chapter or Note for editing to leaving it, during which Maibuk holds what the author typed until it is saved; leaving always Flushes. Canvases join it with Canvas sync. (ADR 0001)
+_Avoid_: editor state, autosave
+
 **Reading Position**:
 Where the author was in a Chapter or Note on this device: caret and scroll.
 _Avoid_: bookmark, cursor position
@@ -373,10 +377,6 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 ## Decided, not built
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter and a Canvas's pan and zoom, and ADR 0003 extends Last Edited to Books, whose cards still show en "Updated" for every change.
-
-**Edit Session**:
-The span from opening one Chapter, Note, or Canvas for editing to leaving it, during which Maibuk holds what the author typed until it is saved. (ADR 0001)
-_Avoid_: editor state, autosave
 
 **Change**:
 One saved edit to a Synced Item, marked with its Origin and its Change Kind. (ADR 0003)

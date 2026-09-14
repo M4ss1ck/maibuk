@@ -114,7 +114,7 @@ function buildNote(overrides: Partial<Note>): Note {
 }
 
 describe("NoteEditor tags", () => {
-  it("adds tags through the tag editor and saves with full payload", async () => {
+  it("adds tags through the tag editor and saves only the tags", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
@@ -125,11 +125,9 @@ describe("NoteEditor tags", () => {
     await user.click(await screen.findByRole("button", { name: "research" }));
 
     await waitFor(() => {
+      // Content belongs to the Edit Session; a tag save must not rewrite it.
       expect(onSave).toHaveBeenCalledWith({
         id: "note-1",
-        title: "Initial",
-        content: "<p>Initial body</p>",
-        wordCount: 10,
         tags: ["draft", "research"],
       });
     });

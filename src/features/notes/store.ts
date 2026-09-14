@@ -77,7 +77,8 @@ interface NoteStore {
    */
   refreshNotes: () => Promise<void>;
   createNote: (input: CreateNoteInput) => Promise<Note>;
-  updateNote: (input: UpdateNoteInput) => Promise<void>;
+  /** Resolves with the note as stored, or null when it no longer exists. */
+  updateNote: (input: UpdateNoteInput) => Promise<Note | null>;
   deleteNote: (id: string) => Promise<void>;
   reorderNotes: (orderedItems: string[] | ReorderNoteItem[]) => Promise<void>;
   setCurrentNote: (note: Note | null) => void;
@@ -187,7 +188,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
     const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [
       input.id,
     ]);
-    if (rows.length === 0) return;
+    if (rows.length === 0) return null;
     const existing = toModel(rows[0]);
     const now = nowSeconds();
     // Tagging, pinning, filing, and reordering are organizational changes, not
@@ -233,6 +234,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
         contentHtml: updated.content,
       });
     }
+    return updated;
   },
 
   deleteNote: async (id: string) => {

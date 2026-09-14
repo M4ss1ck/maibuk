@@ -337,6 +337,25 @@ describe("useChapterStore", () => {
   });
 
   describe("updateChapter()", () => {
+    it("returns the chapter exactly as stored, including normalized content", async () => {
+      const created = await useChapterStore.getState().createChapter({
+        bookId: "book-1",
+        title: "Normalized",
+      });
+
+      const stored = await useChapterStore.getState().updateChapter(created.id, {
+        content: "<h2>Heading</h2><p>Body</p>",
+      });
+
+      // The store stamps heading ids; the Edit Session recognizes its own echo by
+      // comparing what the store publishes with exactly this value.
+      expect(stored?.content).toMatch(/<h2 id="[^"]+">Heading<\/h2>/);
+      const published = useChapterStore.getState().chapters.find((c) => c.id === created.id);
+      expect(published?.content).toBe(stored?.content);
+      const reloaded = await getChapterForLinking(created.id);
+      expect(reloaded?.content).toBe(stored?.content);
+    });
+
     it("updates chapter fields in DB and state", async () => {
       const created = await useChapterStore.getState().createChapter({
         bookId: "book-1",
