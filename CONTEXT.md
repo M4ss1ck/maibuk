@@ -20,7 +20,7 @@ _Avoid_: dashboard, home (for the Book Gallery)
 
 **Book**:
 What the author is writing for publication, made of ordered Chapters plus its Cover, details, and history.
-_UI_: en "Projects", "Book projects" / es "Proyectos"; en "Per work", "Time per work" / es "Por obra" in Metrics _(known mismatch)_
+_UI_: en "Books", "Book actions" / es "Libros", "Acciones del libro"; en "Per book", "Time per book" / es "Por libro" in Metrics
 _Avoid_: project, work, manuscript (as a thing separate from Book)
 
 **Author Name**:
@@ -37,7 +37,7 @@ The Book Status of a Book the author has put away; it is hidden from the default
 
 **Unarchive**:
 Changing an Archived Book to any other Book Status.
-_UI_: en "Restored" / es "Se restauró" in the confirmation toast _(known mismatch)_
+_UI_: en "Unarchived" / es "Se desarchivó" in the confirmation toast
 _Avoid_: restore
 
 **Chapter**:
@@ -46,7 +46,7 @@ _Avoid_: page
 
 **Chapter Type**:
 The role a Chapter plays in its Book: Chapter, Prologue, Epilogue, Part, Front Matter, or Back Matter. A Part marks where a division of the Book begins; it does not contain other Chapters.
-_UI_: es "Anteportada", "Apéndice" _(known mismatch)_
+_UI_: es "Páginas preliminares", "Páginas finales" for Front Matter and Back Matter
 
 **Chapter Status**:
 How finished a Chapter is: Draft, Revised, or Final.
@@ -100,7 +100,8 @@ _UI_: en "Book Notes" / es "Notas del Libro"
 
 **Unfiled Note**:
 A Note attached to no Book.
-_UI_: en "Unfiled"; es "Sin archivar" _(known mismatch: reads as not Archived)_
+_UI_: en "Unfiled" / es "Sin libro"
+_Avoid_: "Sin archivar" (reads as not Archived)
 
 **Tag**:
 A word an author puts on Notes to group and filter them.
@@ -133,7 +134,7 @@ _Avoid_: scratchpad, scratch editor, draft
 
 **Canvas**:
 An infinite surface where an author lays out Text Nodes, Note References, Connections, and Drawings.
-_UI_: es "lienzo" for one Canvas, as in "Fijar lienzo"; es "Lienzos" as a singular title _(known mismatch)_
+_UI_: es "Lienzos" for the Gallery, "Lienzo sin título" for an untitled Canvas
 _Avoid_: mind map, board, and "canvas" for the Cover Designer
 
 **Text Node**:
@@ -150,7 +151,7 @@ _UI_: en "Missing note" / es "Nota no disponible" when no title was kept
 
 **Connection**:
 A line joining two items on a Canvas, with an optional direction and caption.
-_UI_: es "conexión"; en "Edge label" _(known mismatch)_
+_UI_: en "Connection label" / es "Etiqueta de conexión"
 _Avoid_: edge, arrow
 
 **Drawing**:
@@ -201,8 +202,8 @@ Bringing back the state saved in a Version or a Backup, replacing what is there 
 _Avoid_: revert, rollback, and "restore" for Unarchive or Keep
 
 **Reset**:
-Clearing everything in the Library on this device, including settings, history, sync state, and metrics.
-_UI_: en "Reset Database" / es "Reiniciar Base de Datos" _(known mismatch)_
+Clearing everything in the Library on this device, including history, sync state, and metrics; app settings are kept.
+_UI_: en "Reset Library" / es "Reiniciar biblioteca"
 _Avoid_: wipe, factory reset
 
 **Compare**:
@@ -233,7 +234,7 @@ Which kinds of data a sync run covers: all, Books, Notes, or metrics.
 
 **Sync Direction**:
 Which way a sync run moves changes: two-way, pull only, or push only.
-_UI_: en "Two-way", "Pull only", "Push only"; es "Solo descargar", "Solo subir" _(known mismatch)_
+_UI_: en "Two-way", "Pull only", "Push only" / es "Bidireccional", "Solo recibir", "Solo enviar"
 
 **Auto Sync**:
 Sync that runs on its own at launch and shortly after the author stops editing, setting aside anything that needs the author's answer.
@@ -242,11 +243,13 @@ _Avoid_: background sync, live sync
 
 **Push**:
 Sending this device's state of a Synced Item to the author's other devices.
-_Avoid_: upload
+_UI_: es "enviar"
+_Avoid_: upload, es "subir"
 
 **Pull**:
 Replacing this device's state of a Synced Item with the state from another device.
-_Avoid_: download
+_UI_: es "recibir"
+_Avoid_: download, es "descargar"
 
 **Sync Base**:
 What a Synced Item looked like on both sides the last time this device synced it; what both sides are compared against to decide which one changed.
@@ -275,11 +278,11 @@ _Avoid_: remote deletion (in UI copy)
 
 **Deletion Review**:
 The step where the author confirms pending deletions before a sync carries them out, both deletions made here and Deleted Elsewhere items; unconfirmed ones wait.
-_UI_: en "Confirm remote deletions" / es "Confirmar eliminaciones remotas" as the heading for deletions made here _(known mismatch)_
+_UI_: en "Deletions made on this device", "Deleted on another device" / es "Eliminaciones hechas en este dispositivo", "Eliminados en otro dispositivo"
 
 **Keep**:
 Choosing, for a Deleted Elsewhere item that was also edited here, to hold on to this device's state and send it back to the other devices.
-_UI_: en "Keep & Restore" / es "Mantener y restaurar" _(known mismatch)_
+_UI_: en "Keep & Push" / es "Mantener y enviar"
 _Avoid_: restore, undelete
 
 **Sync Log**:
@@ -306,7 +309,7 @@ _Avoid_: current chapter, resume point
 
 **Focus Mode**:
 A writing view that hides everything except the text.
-_UI_: en "Focus Mode" / es "Modo Enfocado"; es "modo enfoque" in the shortcut list _(known mismatch)_
+_UI_: en "Focus Mode" / es "Modo Enfocado", "Alternar modo enfocado"
 _Avoid_: zen mode, distraction-free mode
 
 **Spell Check**:
@@ -320,7 +323,7 @@ _Avoid_: word list, user dictionary
 
 **Word Lookup**:
 Finding a word's definition while writing.
-_UI_: en "Look up" / es "Buscar"; en "Dictionary" as the panel title _(known mismatch)_
+_UI_: en "Look up word", "Word lookup" / es "Buscar palabra"
 _Avoid_: dictionary (reserved for Custom Dictionary)
 
 **Symbol**:
