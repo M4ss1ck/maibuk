@@ -22,13 +22,13 @@ import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
-import { useActiveShortcuts, type ShortcutItem } from "@/hooks";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Language } from "@/features/settings/types";
 import { openExternal } from "@/lib/platform";
 import { isModKey } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
+import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { matchKeys } from "@/lib/shortcut-registry";
 import { ChevronDown, ChevronUp, Settings2 } from "lucide-react";
 
@@ -70,14 +70,9 @@ export function EditorToolbar({
   const [showSymbolsDialog, setShowSymbolsDialog] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showToolbarSettings, setShowToolbarSettings] = useState(false);
-  const shortcuts = useActiveShortcuts();
-  // Snapshot the active shortcuts before opening the help dialog: useActiveShortcuts
-  // returns [] while any modal is open, and the help dialog is itself a modal.
-  const helpSnapshotRef = useRef<ShortcutItem[]>([]);
   const openShortcutsHelp = useCallback(() => {
-    helpSnapshotRef.current = shortcuts;
     setShowShortcutsHelp(true);
-  }, [shortcuts]);
+  }, []);
   const [isToolbarExpanded, setIsToolbarExpanded] = [
     useSettingsStore((state) => state.toolbarExpanded),
     useSettingsStore((state) => state.setToolbarExpanded),
@@ -221,23 +216,30 @@ export function EditorToolbar({
     };
   }, [editor]);
 
+  // Ctrl+K reaches the link dialog through the editor's own key handler above.
+  useBoundShortcutIds(["editor.insertLink"]);
+
   useShortcuts([
     {
+      id: "editor.findReplace",
       keys: matchKeys("editor.findReplace"),
       allowInInput: true,
       onTrigger: openFindReplace,
     },
     {
+      id: "editor.dictionary",
       keys: matchKeys("editor.dictionary"),
       allowInInput: true,
       onTrigger: handleOpenDictionary,
     },
     {
+      id: "editor.insertSymbol",
       keys: matchKeys("editor.insertSymbol"),
       allowInInput: true,
       onTrigger: () => setShowSymbolsDialog(true),
     },
     {
+      id: "editor.toolbarSettings",
       keys: matchKeys("editor.toolbarSettings"),
       allowInInput: true,
       onTrigger: () => setShowToolbarSettings(true),
@@ -383,8 +385,6 @@ export function EditorToolbar({
         <ShortcutsHelpDialog
           isOpen={showShortcutsHelp}
           onClose={() => setShowShortcutsHelp(false)}
-          title={t("shortcuts.title")}
-          shortcuts={helpSnapshotRef.current}
         />
         <ToolbarSettingsDialog
           isOpen={showToolbarSettings}

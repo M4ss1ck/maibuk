@@ -38,6 +38,8 @@ import { textDropExtension } from "@/features/markdown/dropped-file";
 import { readDroppedWebFiles } from "@/hooks/useTextFileDrop";
 import { useEditorFileDrop } from "@/components/editor/useEditorFileDrop";
 import { IS_TAURI } from "@/lib/platform";
+import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 
 /**
  * How many recent editor emissions to retain for stale-echo detection. The
@@ -400,6 +402,13 @@ export function Editor({
     onUpdate: () => scheduleEmit("content"),
   });
   editorInstanceRef.current = editor;
+
+  // Formatting keys belong to TipTap; list the ones this editor's extensions bind.
+  const keymapShortcutIds = useMemo(
+    () => (editor ? editorKeymapShortcutIds(editor) : []),
+    [editor]
+  );
+  useBoundShortcutIds(keymapShortcutIds, editable);
 
   // Expose the editor instance to parents (e.g. the table-of-contents panel)
   useEffect(() => {

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEditor, EditorContent } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
+import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
+import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { useSettingsStore } from "@/features/settings/store";
 import { Tooltip } from "@/components/ui";
 import {
@@ -49,6 +51,11 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
     },
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
   });
+  const keymapShortcutIds = useMemo(
+    () => (editor ? editorKeymapShortcutIds(editor) : []),
+    [editor]
+  );
+  useBoundShortcutIds(keymapShortcutIds);
 
   const toolbarButton = (
     label: string,

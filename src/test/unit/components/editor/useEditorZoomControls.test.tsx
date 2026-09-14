@@ -1,4 +1,5 @@
 import { renderHook } from "@testing-library/react";
+import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("../../../../i18n", () => ({
@@ -67,5 +68,18 @@ describe("useEditorZoomControls", () => {
     expect(event.defaultPrevented).toBe(true);
 
     document.body.removeChild(el);
+  });
+});
+
+describe("useEditorZoomControls bound shortcuts", () => {
+  it("lists zoom in, zoom out and reset zoom while mounted", () => {
+    const { unmount } = renderHook(() => useEditorZoomControls(null));
+
+    expect(Object.keys(useBoundShortcutStore.getState().counts)).toEqual(
+      expect.arrayContaining(["editor.zoomIn", "editor.zoomOut", "editor.zoomReset"])
+    );
+
+    unmount();
+    expect(Object.keys(useBoundShortcutStore.getState().counts)).not.toContain("editor.zoomReset");
   });
 });

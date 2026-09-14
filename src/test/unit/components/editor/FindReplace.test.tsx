@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
@@ -19,7 +20,7 @@ function renderFindReplace(onClose: () => void) {
     extensions: [...createRichTextExtensions(), SearchReplace],
   });
   editors.push(editor);
-  render(
+  return render(
     <div>
       <EditorContent editor={editor} />
       <FindReplace editor={editor} isOpen onClose={onClose} />
@@ -32,6 +33,17 @@ afterEach(() => {
 });
 
 describe("FindReplace", () => {
+  it("lists its Enter, Shift+Enter and Escape keys as bound while open", () => {
+    const { unmount } = renderFindReplace(() => {});
+
+    expect(Object.keys(useBoundShortcutStore.getState().counts)).toEqual(
+      expect.arrayContaining(["editor.findNext", "editor.findPrevious", "editor.closeFindReplace"])
+    );
+
+    unmount();
+    expect(Object.keys(useBoundShortcutStore.getState().counts)).not.toContain("editor.findNext");
+  });
+
   it("closes with Escape from the find input", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

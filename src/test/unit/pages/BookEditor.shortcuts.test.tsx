@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -160,10 +161,6 @@ vi.mock("../../../features/sync/store", () => ({
 }));
 
 vi.mock("../../../features/sync/crypto", () => ({ getPassphrase: () => "passphrase" }));
-vi.mock("../../../hooks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../hooks")>();
-  return { ...actual, useActiveShortcuts: () => [] };
-});
 vi.mock("../../../components/ShortcutsHelpDialog", () => ({ ShortcutsHelpDialog: () => null }));
 
 vi.mock("../../../lib/metrics/MetricsService", () => ({
@@ -458,6 +455,22 @@ describe("BookEditor shortcuts", () => {
       setSpy.mockRestore();
       clearSpy.mockRestore();
     }
+  });
+
+  it("lists the Book editor shortcuts as bound, including Backspace back", () => {
+    enableRealShortcuts();
+    render(<BookEditor />);
+
+    expect(Object.keys(useBoundShortcutStore.getState().counts)).toEqual(
+      expect.arrayContaining([
+        "editor.save",
+        "editor.saveVersion",
+        "editor.versionHistory",
+        "editor.focusMode",
+        "editor.toggleSidebar",
+        "editor.back",
+      ])
+    );
   });
 
   it("HistoryMenuButton receives version shortcuts", () => {

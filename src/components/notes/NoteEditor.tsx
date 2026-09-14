@@ -398,6 +398,7 @@ export function NoteEditor({
 
   useShortcuts([
     {
+      id: "editor.save",
       keys: matchKeys("editor.save"),
       onTrigger: () => {
         void saveNow();

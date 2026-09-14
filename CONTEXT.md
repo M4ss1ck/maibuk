@@ -340,6 +340,7 @@ _UI_: en "Paste cleanup" / es "Limpieza al pegar"
 
 **Bound Shortcut**:
 A keyboard shortcut that works on the screen the author is on right now.
+_UI_: en "On this screen" / es "En esta pantalla"
 _Avoid_: hotkey, keybinding (for this concept)
 
 ## Import and export

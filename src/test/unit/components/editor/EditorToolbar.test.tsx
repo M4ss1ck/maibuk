@@ -20,7 +20,6 @@ vi.mock("react-i18next", async (importOriginal) => ({
 }));
 
 vi.mock("@/hooks", () => ({
-  useActiveShortcuts: () => [],
   useModalScope: () => "mock-modal-id",
 }));
 

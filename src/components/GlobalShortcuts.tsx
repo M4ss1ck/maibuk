@@ -1,7 +1,6 @@
-import { useState, useCallback, useRef } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShortcuts } from "@/lib/shortcuts";
-import { useTranslation } from "react-i18next";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { useThemeStore, getCycledTheme } from "@/features/theme";
 import { useSettingsStore } from "@/features/settings/store";
@@ -9,7 +8,6 @@ import { useSyncStore } from "@/features/sync/store";
 import { useNoteStore } from "@/features/notes";
 import { getPassphrase } from "@/features/sync/crypto";
 import { IS_DESKTOP } from "@/lib/platform";
-import { useActiveShortcuts, type ShortcutItem } from "@/hooks";
 import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
 
 function isVisiblePane(pane: HTMLElement): boolean {
@@ -36,7 +34,6 @@ function cyclePanes(forward: boolean) {
 }
 
 export function GlobalShortcuts() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -47,16 +44,9 @@ export function GlobalShortcuts() {
   const alwaysOnTop = useSettingsStore((state) => state.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((state) => state.setAlwaysOnTop);
 
-  const activeShortcuts = useActiveShortcuts();
-  const helpSnapshotRef = useRef<ShortcutItem[]>([]);
-
-  const openHelp = useCallback(() => {
-    helpSnapshotRef.current = activeShortcuts;
-    setShowShortcutsHelp(true);
-  }, [activeShortcuts]);
-
   useShortcuts([
     {
+      id: "global.gotoProjects",
       sequence: SHORTCUTS["global.gotoProjects"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/") {
@@ -65,6 +55,7 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.gotoSettings",
       sequence: SHORTCUTS["global.gotoSettings"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/settings") {
@@ -73,6 +64,7 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.gotoMetrics",
       sequence: SHORTCUTS["global.gotoMetrics"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/metrics") {
@@ -81,6 +73,7 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.gotoNotes",
       sequence: SHORTCUTS["global.gotoNotes"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/notes") {
@@ -89,6 +82,7 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.gotoCanvas",
       sequence: SHORTCUTS["global.gotoCanvas"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/canvas") {
@@ -97,6 +91,7 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.gotoEphemeral",
       sequence: SHORTCUTS["global.gotoEphemeral"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/ephemeral") {
@@ -105,6 +100,7 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.toggleTheme",
       sequence: SHORTCUTS["global.toggleTheme"].sequence,
       onTrigger: () => {
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -112,12 +108,14 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.toggleShortcutHints",
       sequence: SHORTCUTS["global.toggleShortcutHints"].sequence,
       onTrigger: () => {
         setHideKeyboardHints(!hideKeyboardHints);
       },
     },
     {
+      id: "global.toggleAlwaysOnTop",
       keys: matchKeys("global.toggleAlwaysOnTop"),
       allowInInput: true,
       enabled: IS_DESKTOP,
@@ -126,6 +124,7 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.syncNow",
       keys: matchKeys("global.syncNow"),
       allowInInput: true,
       onTrigger: () => {
@@ -154,6 +153,7 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.cyclePanes",
       keys: matchKeys("global.cyclePanes"),
       allowInInput: true,
       onTrigger: (event) => {
@@ -161,19 +161,15 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.showHelp",
       keys: ["shift+/", "shift+?", "?"],
       onTrigger: () => {
-        openHelp();
+        setShowShortcutsHelp(true);
       },
     },
   ]);
 
   return (
-    <ShortcutsHelpDialog
-      isOpen={showShortcutsHelp}
-      onClose={() => setShowShortcutsHelp(false)}
-      title={t("shortcuts.title")}
-      shortcuts={helpSnapshotRef.current}
-    />
+    <ShortcutsHelpDialog isOpen={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
   );
 }

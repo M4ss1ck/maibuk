@@ -27,6 +27,7 @@ import {
 } from "@/components/editor/extensions/SearchReplace";
 import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { ShortcutId } from "@/lib/shortcut-registry";
+import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 
 interface FindReplaceProps {
   editor: Editor;
@@ -69,6 +70,11 @@ function IconButton({
 
 export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindReplaceProps) {
   const { t } = useTranslation();
+  // Enter, Shift+Enter and Escape are handled by the find field itself.
+  useBoundShortcutIds(
+    ["editor.findNext", "editor.findPrevious", "editor.closeFindReplace"],
+    isOpen
+  );
 
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceTerm, setReplaceTerm] = useState("");

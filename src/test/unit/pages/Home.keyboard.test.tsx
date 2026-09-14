@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildBook } from "@/test/support/fixtures";
@@ -76,6 +77,10 @@ const books = [
   buildBook({ id: "gamma", title: "Gamma", authorName: "C" }),
 ];
 
+function boundIds() {
+  return Object.keys(useBoundShortcutStore.getState().counts);
+}
+
 describe("Home keyboard navigation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -146,6 +151,21 @@ describe("Home keyboard navigation", () => {
     importButton.focus();
     await user.keyboard("{ArrowDown}");
     expect(screen.getAllByRole("row")[0]).toHaveFocus();
+  });
+
+  it("lists the Books screen shortcuts as bound while it is open", () => {
+    // Enter opens a focused card, so it is only bound when a card exists.
+    storeState.books = [buildBook({ id: "b1", title: "One" })];
+    render(<Home />);
+
+    expect(boundIds()).toEqual(
+      expect.arrayContaining([
+        "home.newBook",
+        "home.jumpBooks",
+        "home.moveSelection",
+        "home.openSelected",
+      ])
+    );
   });
 
   it("navigates from a focused card with Enter and Space", async () => {
@@ -226,12 +246,7 @@ describe("Home keyboard navigation", () => {
     const { container } = render(<Home />);
 
     const scrollOwner = container.firstElementChild;
-    expect(scrollOwner).toHaveClass(
-      "h-full",
-      "min-h-0",
-      "overflow-x-hidden",
-      "overflow-y-auto"
-    );
+    expect(scrollOwner).toHaveClass("h-full", "min-h-0", "overflow-x-hidden", "overflow-y-auto");
     expect(scrollOwner).not.toHaveClass("@container", "overflow-auto");
 
     const queryContainer = scrollOwner?.firstElementChild;

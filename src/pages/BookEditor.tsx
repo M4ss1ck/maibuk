@@ -925,11 +925,13 @@ export function BookEditor() {
       allowInInput: false,
     },
     {
+      id: "editor.focusMode",
       keys: ["f11", "ctrl+shift+f", "meta+shift+f"],
       onTrigger: () => toggleFocusMode(),
       allowInInput: true,
     },
     {
+      id: "editor.save",
       keys: matchKeys("editor.save"),
       onTrigger: () => {
         handleSaveNow();
@@ -937,6 +939,7 @@ export function BookEditor() {
       allowInInput: true,
     },
     {
+      id: "editor.toggleSidebar",
       keys: matchKeys("editor.toggleSidebar"),
       onTrigger: () => {
         setShowSidebar((prev) => {
@@ -946,12 +949,14 @@ export function BookEditor() {
       },
     },
     {
+      id: "editor.back",
       keys: "backspace",
       onTrigger: () => {
         navigate("/");
       },
     },
     {
+      id: "editor.saveVersion",
       keys: matchKeys("editor.saveVersion"),
       onTrigger: () => {
         void handleSaveVersion();
@@ -959,6 +964,7 @@ export function BookEditor() {
       allowInInput: true,
     },
     {
+      id: "editor.versionHistory",
       sequence: SHORTCUTS["editor.versionHistory"].sequence,
       onTrigger: () => {
         setShowVersionPanel(true);

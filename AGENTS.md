@@ -68,7 +68,7 @@ Every new or modified UI feature ships keyboard-operable and screen-reader-corre
 2. **Focus is managed** — visible focus, dialogs trap and restore focus to their trigger, arrow-key navigation inside lists/menus/toolbars, Escape closes or exits.
 3. **Library behavior, never hand-rolled focus code** — React Aria is the approved standard for dialogs, collections, roving focus, and keyboard-operable drag-and-drop. Do not hand-write roving tabindex, focus traps, or listbox key handling.
 4. **Labels are localized** — every `aria-label` goes through i18n like any other user-visible string.
-5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) so they surface in the shortcut help.
+5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) with the registry `id` on the entry. That id is what makes it a Bound Shortcut listed under "On this screen" in the help. A key handled elsewhere (a component's own `onKeyDown`, a native control) declares its id with `useBoundShortcutIds`; TipTap formatting keys are tagged `source: "editor-keymap"` and listed from each editor's real keymap. `shortcut-bindings.test.ts` fails when a registry id is bound nowhere.
 6. **Proven by behavioral tests** — see the Keyboard & Accessibility Test Gate in section 6.
 
 Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and `tabIndex` wiring looked correct while the widget was inoperable by keyboard, and attribute-level tests stayed green. Attributes are not accessibility; behavior is.
@@ -251,7 +251,9 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`                 |
 | `useDebouncedCallback(callback, delay, { flushOnUnmount })` (stable identity, `.cancel()` drops the pending call, `.flush()` runs it now; `flushOnUnmount` lands it on unmount, for saves) | `src/hooks/useAutoSave.ts` |
 | `EditorHandle` (`<Editor ref>`; `flush()` hands the coalesced typing burst to `onUpdate` synchronously) | `src/components/editor/Editor.tsx` |
-| `useShortcuts(shortcuts, options)`                                 | `src/lib/shortcuts.ts`                     |
+| `useShortcuts(shortcuts, options)` (an entry's registry `id` lists it as a Bound Shortcut while mounted and enabled) | `src/lib/shortcuts.ts`                     |
+| `useBoundShortcutIds(ids, enabled)` / `useBoundShortcuts()` (declare keys handled outside `useShortcuts`; read what works on this screen) | `src/lib/bound-shortcuts.ts` |
+| `editorKeymapShortcutIds(editor)` (the `editor-keymap` registry shortcuts a TipTap editor's extensions really bind) | `src/components/editor/keymap-shortcuts.ts` |
 | `getDatabase()`                                                    | `src/lib/db/index.ts`                      |
 | `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                      |
 | `createDatabase()` / `getFileSystem()` / `getDialog()` / `getOS()` | `src/lib/platform/index.ts`                |
@@ -563,7 +565,7 @@ Any change that adds or modifies interactive UI is **not done** until behavioral
    - Dialogs: Escape closes, and focus returns to the trigger element.
    - Lists / menus / toolbars: arrow keys move focus — assert `document.activeElement` changed, not that a handler is attached.
    - Reordering / drag-and-drop: the keyboard reorder path is tested end-to-end.
-3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected and are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`).
+3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected, are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`), and the screen's test asserts their id is bound (`useBoundShortcutStore`).
 
 ### Linting & Formatting
 

@@ -1074,7 +1074,14 @@
     "zoomReset": "Reset zoom",
     "insertSymbol": "Insert symbol",
     "deleteSelection": "Delete selected object",
-    "cyclePanes": "Cycle through panes"
+    "cyclePanes": "Cycle through panes",
+    "onThisScreen": "On this screen",
+    "onOtherScreens": "On other screens",
+    "areaGlobal": "Everywhere",
+    "areaHome": "Books",
+    "areaEditor": "Editor",
+    "areaCanvas": "Canvas",
+    "areaCover": "Cover Designer"
   },
   "versions": {
     "title": "Version history",

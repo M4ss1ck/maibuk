@@ -19,6 +19,7 @@ import { DOWNLOAD_PAGE } from "@/constants";
 import { KeyboardShortcut, toast } from "@/components/ui";
 import { isModKey, isTypingTarget } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
+import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { scanEpubForImport } from "@/features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "@/features/import";
 import { formatKeys, SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
@@ -84,8 +85,12 @@ export function Home() {
     previousBookIdsRef.current = visibleBooks.map((book) => book.id);
   }, [visibleBooks, focusBook, focusedBookId]);
 
+  // Enter on a focused book card opens it through the card's own link.
+  useBoundShortcutIds(["home.openSelected"], visibleBooks.length > 0);
+
   useShortcuts([
     {
+      id: "home.moveSelection",
       keys: ["arrowdown", "arrowright", "arrowup", "arrowleft"],
       onTrigger: (event) => {
         const activeElement = document.activeElement;
@@ -107,6 +112,7 @@ export function Home() {
       enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
     {
+      id: "home.newBook",
       keys: matchKeys("home.newBook"),
       onTrigger: (event) => {
         if (isTypingTarget(event.target) || isModKey(event) === false) return;
@@ -115,6 +121,7 @@ export function Home() {
       allowInInput: true,
     },
     {
+      id: "home.moveSelection",
       keys: "j",
       onTrigger: () => {
         const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
@@ -127,6 +134,7 @@ export function Home() {
       enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
     {
+      id: "home.moveSelection",
       keys: "k",
       onTrigger: () => {
         const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
@@ -139,6 +147,7 @@ export function Home() {
       enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
     ...Array.from({ length: 9 }, (_, i) => ({
+      id: "home.jumpBooks" as const,
       keys: String(i + 1),
       onTrigger: () => {
         const target = visibleBooks[i];
