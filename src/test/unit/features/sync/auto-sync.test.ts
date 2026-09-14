@@ -78,18 +78,12 @@ describe("automatic sync", () => {
   });
 
   describe("runAutoSync()", () => {
-    it("syncs everything with a non-prompting resolver after landing pending edits", async () => {
-      const order: string[] = [];
-      mockFlushPendingEdits.mockImplementation(async () => {
-        order.push("flush");
-      });
-      syncState.syncAll.mockImplementation(async () => {
-        order.push("sync");
-      });
-
+    it("syncs everything with a non-prompting resolver", async () => {
       await expect(runAutoSync("idle")).resolves.toBe("synced");
 
-      expect(order).toEqual(["flush", "sync"]);
+      // Landing pending edits belongs to the sync run, which stops and logs when
+      // a save fails; a flush here would swallow that failure.
+      expect(mockFlushPendingEdits).not.toHaveBeenCalled();
       expect(syncState.syncAll).toHaveBeenCalledWith("session-pass", expect.any(Function), {
         trigger: "auto",
       });

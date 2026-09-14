@@ -3,13 +3,34 @@ import { CheckIcon, SaveIcon, SpinnerIcon } from "@/components/icons";
 import { Tooltip } from "@/components/ui";
 
 interface SaveStatusProps {
-  status: "idle" | "saving" | "saved";
+  status: "idle" | "saving" | "saved" | "error";
   onSave: () => void;
   disabled?: boolean;
 }
 
 export function SaveStatus({ status, onSave, disabled }: SaveStatusProps) {
   const { t } = useTranslation();
+
+  // A failed save stays visible until a later save lands: the text is only in
+  // the editor, and the author needs to know before closing the app.
+  if (status === "error") {
+    return (
+      <span className="flex items-center gap-1 text-sm text-destructive">
+        <span role="status">{t("editor.notSaved")}</span>
+        <Tooltip content={t("editor.retrySave")} shortcut="editor.save">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={disabled}
+            aria-label={t("editor.retrySave")}
+            className="p-2 rounded transition-colors text-destructive hover:text-primary"
+          >
+            <SaveIcon className="w-5 h-5" />
+          </button>
+        </Tooltip>
+      </span>
+    );
+  }
 
   if (status === "saving") {
     return (

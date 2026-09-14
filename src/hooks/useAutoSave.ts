@@ -8,6 +8,15 @@ export type DebouncedCallback<T> = T & {
   flush: () => (T extends (...args: any[]) => infer R ? R : never) | undefined;
 };
 
+export interface DebounceOptions {
+  /**
+   * Run the pending call when the component unmounts instead of dropping it,
+   * and run calls made after unmount right away. Saves use this so leaving an
+   * editor never discards what the author typed.
+   */
+  flushOnUnmount?: boolean;
+}
+
 /**
  * A hook that debounces a callback function.
  * The callback will only be executed after the specified delay has passed
@@ -16,28 +25,31 @@ export type DebouncedCallback<T> = T & {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useDebouncedCallback<T extends (...args: any[]) => any>(
   callback: T,
-  delay: number
+  delay: number,
+  options: DebounceOptions = {}
 ): DebouncedCallback<T> {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingArgsRef = useRef<Parameters<T> | null>(null);
   const callbackRef = useRef(callback);
+  const flushOnUnmountRef = useRef(options.flushOnUnmount ?? false);
+  flushOnUnmountRef.current = options.flushOnUnmount ?? false;
+  const unmountedRef = useRef(false);
 
   // Update callback ref when callback changes
   useEffect(() => {
     callbackRef.current = callback;
   }, [callback]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
   const debouncedCallback = useMemo(() => {
     const debounced = (...args: Parameters<T>) => {
+      // A child can call in during its own unmount, after this hook's cleanup
+      // ran; a timer scheduled now would outlive the component.
+      if (unmountedRef.current && flushOnUnmountRef.current) {
+        pendingArgsRef.current = null;
+        callbackRef.current(...args);
+        return;
+      }
+
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
@@ -64,6 +76,24 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
     };
     return debounced as DebouncedCallback<T>;
   }, [delay]);
+
+  const latestDebouncedRef = useRef(debouncedCallback);
+  latestDebouncedRef.current = debouncedCallback;
+
+  // Cleanup on unmount
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      if (flushOnUnmountRef.current) {
+        latestDebouncedRef.current.flush();
+      } else if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+        pendingArgsRef.current = null;
+      }
+    };
+  }, []);
 
   return debouncedCallback;
 }

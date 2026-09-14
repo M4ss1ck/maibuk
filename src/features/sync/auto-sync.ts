@@ -2,7 +2,6 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { getPassphrase } from "@/features/sync/crypto";
 import { onLocalChange } from "@/features/sync/local-changes";
-import { flushPendingEdits } from "@/features/sync/pending-edits";
 import type { ConflictResolver } from "@/features/sync/types";
 
 /** Quiet period after the last local change before an automatic sync runs. */
@@ -46,7 +45,7 @@ export async function runAutoSync(_trigger: AutoSyncTrigger): Promise<AutoSyncRe
 
   running = true;
   try {
-    await flushPendingEdits();
+    // The sync run lands pending editor saves itself and stops if one fails.
     await useSyncStore.getState().syncAll(passphrase, deferConflicts, { trigger: "auto" });
   } catch {
     // syncAll records the failure in the store (syncStatus/syncError).

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { SaveStatus } from "@/components/editor/SaveStatus";
 
@@ -29,6 +30,29 @@ describe("SaveStatus", () => {
 
     expect(screen.getByText("editor.saving")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("says the text is not saved after a failure and offers to retry", () => {
+    const onSave = vi.fn();
+    render(<SaveStatus status="error" onSave={onSave} />);
+
+    expect(screen.getByText("editor.notSaved")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "editor.retrySave" }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failed save from the keyboard", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<SaveStatus status="error" onSave={onSave} />);
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "editor.retrySave" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+
+    expect(onSave).toHaveBeenCalledTimes(2);
   });
 
   it("shows the saved indicator when saved", () => {

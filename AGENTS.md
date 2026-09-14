@@ -249,7 +249,8 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | What                                                               | Where                                      |
 | ------------------------------------------------------------------ | ------------------------------------------ |
 | `useAutoSave(callback, delay)`                                     | `src/hooks/useAutoSave.ts`                 |
-| `useDebouncedCallback(callback, delay)` (stable identity, `.cancel()` drops the pending call) | `src/hooks/useAutoSave.ts` |
+| `useDebouncedCallback(callback, delay, { flushOnUnmount })` (stable identity, `.cancel()` drops the pending call, `.flush()` runs it now; `flushOnUnmount` lands it on unmount, for saves) | `src/hooks/useAutoSave.ts` |
+| `EditorHandle` (`<Editor ref>`; `flush()` hands the coalesced typing burst to `onUpdate` synchronously) | `src/components/editor/Editor.tsx` |
 | `useShortcuts(shortcuts, options)`                                 | `src/lib/shortcuts.ts`                     |
 | `getDatabase()`                                                    | `src/lib/db/index.ts`                      |
 | `exportDatabase()` / `importDatabase()` / `resetDatabase()`        | `src/lib/db/index.ts`                      |
@@ -276,7 +277,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `getSyncBase()` / `setSyncBase()` / `clearAllSyncBases()` (per-device `sync_state` table, not backed up) | `src/features/sync/sync-state.ts` |
 | `installAutoSync()` / `runAutoSync()` (launch + idle-after-edit automatic sync, `autoSync` setting) | `src/features/sync/auto-sync.ts` |
 | `notifyLocalChange()` / `onLocalChange()` (dependency-free "user edited synced data" signal; call from store mutations) | `src/features/sync/local-changes.ts` |
-| `registerPendingEditsFlush()` / `flushPendingEdits()` (editors land debounced saves before a sync reads or pulls) | `src/features/sync/pending-edits.ts` |
+| `registerPendingEditsFlush()` / `flushPendingEdits()` (editors land unsaved text, including the Editor's coalescing burst, before a sync run or Version restore; rejects with `PendingEditsFlushError` when a save fails, which stops the run) | `src/features/sync/pending-edits.ts` |
 | `useVersionStore`                                                  | `src/features/versions/store.ts`           |
 | `useAutoCheckpoint`                                                | `src/features/versions/useAutoCheckpoint.ts` |
 | `sanitizeChapterHtml()`                                            | `src/features/versions/sanitize.ts`        |
@@ -543,7 +544,8 @@ Required coverage for the current sync-safety / backup / version-control feature
 6. **Conflict outcomes are truthful**: equal-timestamp conflicts, remote-only pulls, cancel behavior, and final sync status must be tested end-to-end through the store/UI flow.
 7. **Lifecycle triggers are covered**: launch, close, manual, pre-sync, and pre-restore backup triggers must be tested at the orchestration layer.
 8. **Shared destructive helpers are tested directly**: if a helper is extracted and used by restore/import/sync, it needs its own unit tests and must be added to `coverage.include`.
-9. **Version restore and version sync are safe**: `restoreVersion` creates a `pre-restore` version before applying the snapshot, bumps `updated_at` to now, and `syncVersions` verifies checksums before inserting pulled blobs; pure-union sync with no duplicates.
+9. **Version restore and version sync are safe**: `restoreVersion` lands pending editor saves first (a failed save rejects before anything changes), creates a `pre-restore` version before applying the snapshot, bumps `updated_at` to now, and calls `notifyLocalChange()`; `syncVersions` verifies checksums before inserting pulled blobs; pure-union sync with no duplicates.
+10. **Unsaved editor text is never dropped silently**: every sync run flushes open editors before its pre-sync backup or first read, and a failed save stops the run with a Sync Log error; a failed editor save shows Save Status "Not saved" and is retried on the next edit, Flush, or unmount. Test through `NoteEditor.dataSafety.test.tsx` and `BookEditor.dataSafety.test.tsx`.
 
 Rules for this feature:
 

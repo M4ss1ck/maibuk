@@ -8,11 +8,13 @@ import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "@/features/notes";
 import { useNoteStore } from "@/features/notes/store";
 import { Editor, SaveStatus } from "@/components/editor";
+import type { EditorHandle } from "@/components/editor/Editor";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/CollapsibleHeading";
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import { registerPendingEditsFlush } from "@/features/sync/pending-edits";
+import { createAsyncQueue } from "@/lib/async-queue";
 import { useShortcuts } from "@/lib/shortcuts";
 import { matchKeys } from "@/lib/shortcut-registry";
 import { TagEditor } from "@/components/notes/TagEditor";
@@ -224,7 +226,7 @@ export function NoteEditor({
   const { t, i18n } = useTranslation();
   const title = note.title;
   const [wordCount, setWordCount] = useState(note.wordCount);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle" | "error">("idle");
   const [showTagEditor, setShowTagEditor] = useState(false);
   const tagEditorRef = useRef<HTMLDivElement>(null);
   const notes = useNoteStore((s) => s.notes);
@@ -234,6 +236,19 @@ export function NoteEditor({
   const navigate = useNavigate();
   // Latest editor HTML, captured for the debounced save without re-rendering on keystroke.
   const contentRef = useRef(note.content);
+  const wordCountRef = useRef(note.wordCount);
+  const editorHandleRef = useRef<EditorHandle>(null);
+  // True while the editor holds text the database does not: typed and not yet
+  // saved, or typed and the save failed. A sync flush saves only then.
+  const unsavedRef = useRef(false);
+  // Counts edits so a save that started before a newer keystroke does not
+  // mark that keystroke as saved.
+  const editCountRef = useRef(0);
+  // Saves run one at a time, so an older save can never land after a newer one.
+  const [saveQueue] = useState(createAsyncQueue);
+  // A save can resolve after the editor closed; status updates check this.
+  const isMountedRef = useRef(true);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Dismiss the tag editor popover when clicking outside of it.
   useEffect(() => {
@@ -320,30 +335,66 @@ export function NoteEditor({
     [note, notes]
   );
 
-  const saveNow = useCallback(
-    async (extra: Partial<UpdateNoteInput> = {}) => {
-      setSaveStatus("saving");
-      try {
-        await onSave({
-          id: note.id,
-          title,
-          content: contentRef.current,
-          wordCount,
-          ...extra,
-        });
-        setSaveStatus("saved");
-        setTimeout(() => setSaveStatus("idle"), 2000);
-      } catch (error) {
-        console.error("Failed to save note:", error);
-        setSaveStatus("idle");
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (statusTimerRef.current !== null) {
+        clearTimeout(statusTimerRef.current);
+        statusTimerRef.current = null;
       }
-    },
-    [note.id, onSave, title, wordCount]
+    };
+  }, []);
+
+  const showSaveStatus = useCallback((status: "saving" | "saved" | "error") => {
+    if (statusTimerRef.current !== null) {
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = null;
+    }
+    if (!isMountedRef.current) return;
+    setSaveStatus(status);
+    if (status === "saved") {
+      statusTimerRef.current = setTimeout(() => {
+        statusTimerRef.current = null;
+        setSaveStatus("idle");
+      }, 2000);
+    }
+  }, []);
+
+  // Rejects when the save fails, leaving the text marked unsaved so the next
+  // edit or sync flush tries again.
+  const persist = useCallback(
+    (extra: Partial<UpdateNoteInput> = {}) =>
+      saveQueue.enqueue(async () => {
+        const editCount = editCountRef.current;
+        showSaveStatus("saving");
+        try {
+          await onSave({
+            id: note.id,
+            title,
+            content: contentRef.current,
+            wordCount: wordCountRef.current,
+            ...extra,
+          });
+        } catch (error) {
+          console.error("Failed to save note:", error);
+          showSaveStatus("error");
+          throw error;
+        }
+        if (editCountRef.current === editCount) unsavedRef.current = false;
+        showSaveStatus("saved");
+      }),
+    [note.id, onSave, title, saveQueue, showSaveStatus]
   );
 
-  const debouncedSave = useDebouncedCallback(async () => {
-    await saveNow();
-  }, 1000);
+  // For saves nobody awaits: a failure is already logged and shown as Not saved.
+  const saveNow = useCallback(
+    (extra: Partial<UpdateNoteInput> = {}) => persist(extra).catch(() => {}),
+    [persist]
+  );
+
+  // Switching notes remounts this editor; the pending save must land, not vanish.
+  const debouncedSave = useDebouncedCallback(() => saveNow(), 1000, { flushOnUnmount: true });
 
   useShortcuts([
     {
@@ -358,12 +409,15 @@ export function NoteEditor({
   const handleContentUpdate = useCallback(
     (content: string) => {
       contentRef.current = content;
+      editCountRef.current += 1;
+      unsavedRef.current = true;
       debouncedSave();
     },
     [debouncedSave]
   );
 
   const handleWordCountChange = useCallback((count: number) => {
+    wordCountRef.current = count;
     setWordCount(count);
   }, []);
 
@@ -373,14 +427,36 @@ export function NoteEditor({
     (content: string, count: number) => {
       debouncedSave.cancel();
       contentRef.current = content;
+      unsavedRef.current = false;
+      wordCountRef.current = count;
       setWordCount(count);
     },
     [debouncedSave]
   );
 
-  // An automatic sync lands the pending autosave before it reads or replaces
-  // this note, so text typed just before a pull is never lost.
-  useEffect(() => registerPendingEditsFlush(() => debouncedSave.flush()), [debouncedSave]);
+  // A sync lands what this editor holds before it reads or replaces the note, so
+  // text typed just before a pull is never lost. Keystrokes the Editor is still
+  // coalescing count too. A failed save rejects, which stops the sync.
+  useEffect(
+    () =>
+      registerPendingEditsFlush(async () => {
+        editorHandleRef.current?.flush();
+        debouncedSave.cancel();
+        if (unsavedRef.current) await persist();
+      }),
+    [debouncedSave, persist]
+  );
+
+  // Leaving the note is a Flush too: text whose save failed gets one more try
+  // instead of vanishing with the editor.
+  const persistRef = useRef(persist);
+  persistRef.current = persist;
+  useEffect(
+    () => () => {
+      if (unsavedRef.current) void persistRef.current().catch(() => {});
+    },
+    []
+  );
 
   const handleExportMarkdown = useCallback(async () => {
     try {
@@ -642,6 +718,7 @@ export function NoteEditor({
 
       {/* Body */}
       <Editor
+        ref={editorHandleRef}
         content={note.content}
         onUpdate={handleContentUpdate}
         onExternalContent={handleExternalContent}

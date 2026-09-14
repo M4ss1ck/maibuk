@@ -292,11 +292,11 @@ _UI_: en "Sync log" / es "Registro de sincronización"
 ## Editing
 
 **Save Status**:
-What the editor tells the author about saving the open Chapter, Note, or Canvas: saving, saved, or, for a Canvas, unsaved changes.
+What the editor tells the author about saving the open Chapter, Note, or Canvas: saving, saved, not saved after a failed save of a Chapter or Note, or, for a Canvas, unsaved changes.
 _Avoid_: dirty flag
 
 **Flush**:
-Saving what an open Chapter or Note editor still holds, done before a sync reads the Library.
+Saving what an open Chapter or Note editor still holds, done before a sync reads the Library and before a Version Restore; if that save fails, the sync or Restore stops.
 _Avoid_: force save, commit
 
 **Reading Position**:
