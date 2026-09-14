@@ -45,6 +45,21 @@
 
 ## 2. Development Principles
 
+### Domain Language and Decisions Come First
+
+Before naming anything or proposing a restructure, read:
+
+1. **`CONTEXT.md`**: the domain glossary. New identifiers, UI copy, test names, commit messages, and docs use its terms (Book, Checkpoint, Unfiled Note, Deleted Elsewhere...). A word listed under a term's _Avoid_ is a review flag.
+   - Terms in the main sections describe how the app works today.
+   - Terms under **Decided, not built** have an accepted ADR the code has not caught up with. Until a change implements that ADR, new code uses the current mechanism (for example, new store writes still call `notifyLocalChange()`). Use an ADR term only for something that already behaves as the term defines; otherwise refer to the current mechanism by its code name (`notifyLocalChange`, `refreshBooks`) and do not coin a synonym. Implementing an ADR is its own change.
+   - Terms under **Anticipated** are reserved names for features nobody has decided to build. Use them if that feature is built instead of inventing a synonym.
+   - A `_UI_` label marked _(known mismatch)_ is shipped copy that contradicts the glossary. It may be fixed in a dedicated copy change or in any change that already touches that screen; neither is required. The fix updates both locale files and, in the same commit, edits only the mismatched part of that `_UI_` line in `CONTEXT.md`: the new label replaces the old one and the _(known mismatch)_ marker goes. Correct labels on the same line stay. A label that only becomes wrong once a **Decided, not built** term ships is changed by the change implementing that ADR, not before.
+2. **`docs/adr/`**: architecture decisions. `status: accepted (not implemented)` means decided but not yet in the code. Do not re-propose an alternative an ADR rejected unless you can name what changed; if you do, write a new ADR that supersedes it.
+
+An existing identifier that uses an avoided word may be renamed by a change that already touches it; that change is not required to rename it, and no change renames identifiers in a sweep. A user-visible rename changes the string in both `en.json` and `es.json` in the same commit.
+
+When a new domain concept appears, add it to `CONTEXT.md` in the same change: one or two sentences saying what it is, no implementation details. Record a decision as an ADR only when it is hard to reverse, would surprise a future reader, and came from a real trade-off.
+
 ### Keyboard & Accessibility Are Completion Requirements
 
 Every new or modified UI feature ships keyboard-operable and screen-reader-correct, or it is **not done** — same standing as tests passing. Definition of done for any interactive UI:
