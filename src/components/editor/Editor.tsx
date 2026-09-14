@@ -42,12 +42,6 @@ import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 
 /**
- * How many recent editor emissions to retain for stale-echo detection. The
- * store's async, debounced round-trip only lags the live document by a handful
- * of keystrokes, so a small window is ample.
- */
-const MAX_RECENT_EMITTED = 30;
-/**
  * How long a burst of keystrokes coalesces into one serialization. Serializing
  * the document and counting its words costs time proportional to chapter length
  * (~10ms per keystroke on a 150k-character chapter on Android), and every
@@ -60,35 +54,6 @@ const EMIT_COALESCE_MS = 300;
 const EMPTY_INTERNAL_TARGETS: InternalTarget[] = [];
 // Parent statistics update while typing; toolbar state has its own subscriptions.
 const MemoizedEditorToolbar = memo(EditorToolbar);
-
-/**
- * Serialize HTML with heading ids stripped, parsing through a single serializer
- * so attribute order and whitespace are normalized consistently for comparison.
- */
-const strippedCache = new Map<string, string>();
-
-/**
- * `stripHeadingIds` for repeated comparisons against the same strings. Echo
- * detection compares one incoming document against up to MAX_RECENT_EMITTED
- * previous emissions, and parsing a long chapter that many times is the kind of
- * work that shows up as input lag.
- */
-function stripHeadingIdsCached(html: string): string {
-  const hit = strippedCache.get(html);
-  if (hit !== undefined) return hit;
-  const stripped = stripHeadingIds(html);
-  if (strippedCache.size > MAX_RECENT_EMITTED * 2) strippedCache.clear();
-  strippedCache.set(html, stripped);
-  return stripped;
-}
-
-function stripHeadingIds(html: string): string {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  for (const heading of doc.body.querySelectorAll("h1, h2, h3")) {
-    heading.removeAttribute("id");
-  }
-  return doc.body.innerHTML;
-}
 
 export interface EditorStats {
   words: number;
@@ -230,14 +195,9 @@ export function Editor({
     },
     [chapters, providedLoadInternalTargetChildren]
   );
+  // The document as last emitted or applied. A `content` prop equal to it is the
+  // parent handing back what the editor already shows.
   const appliedContentRef = useRef(content);
-  // Recent HTML the editor has emitted, newest last. The chapter store saves
-  // debounced snapshots and echoes their normalized form back through `content`
-  // asynchronously, so an echo can arrive after the user has typed further. Such
-  // a stale echo differs from the editor's *current* document but still matches
-  // one of these recent emissions — the signal that it is the editor's own
-  // output rather than a genuine external change.
-  const recentEmittedRef = useRef<string[]>([]);
   const editorInstanceRef = useRef<TiptapEditor | null>(null);
 
   // The coalesced emitter runs from a timer, so it reads the callbacks through
@@ -284,9 +244,6 @@ export function Editor({
       contentDirtyRef.current = false;
       const html = editor.getHTML();
       appliedContentRef.current = html;
-      const recent = recentEmittedRef.current;
-      recent.push(html);
-      if (recent.length > MAX_RECENT_EMITTED) recent.shift();
       onUpdateRef.current(html);
       onWordCountChangeRef.current?.(countWords());
     }
@@ -418,37 +375,26 @@ export function Editor({
 
   useEditorFileDrop(editor, editable);
 
-  // Update content when it changes externally (e.g., switching chapters)
+  // A changed `content` prop is something new to show: an outside change the
+  // parent's Edit Session adopted, or controlled state (Ephemeral) moving on. The
+  // parent decides what is an echo (ADR 0002); the editor only skips a value it
+  // already shows.
   useEffect(() => {
     if (!editor || content === null) return;
-    // A queued burst may already hold this exact document; emitting it first
-    // keeps the echo check below from mistaking our own text for an edit made
-    // elsewhere and resetting the caret mid-sentence.
-    if (contentDirtyRef.current) runEmit();
     if (appliedContentRef.current === content) return;
-
-    // The chapter store echoes saved HTML back through `content` after stamping
-    // heading ids onto it (assignHeadingIds). That echo is the editor's own
-    // document, not an external change, so adopt it as applied without resetting
-    // — otherwise the caret jumps away mid-edit. Because the store saves
-    // debounced snapshots asynchronously, the echo can also be *stale*: it may
-    // arrive after the user has typed further, so it no longer matches the
-    // editor's current document. Recognize it by comparing against recent
-    // emissions too. Genuinely external content (e.g. a version restore) matches
-    // neither and still gets applied.
-    const incomingStripped = stripHeadingIdsCached(content);
-    const isOwnEcho =
-      recentEmittedRef.current.some((html) => stripHeadingIdsCached(html) === incomingStripped) ||
-      incomingStripped === stripHeadingIds(editor.getHTML());
-    if (isOwnEcho) {
-      appliedContentRef.current = content;
-      return;
+    if (contentDirtyRef.current) {
+      // A queued burst may already hold this exact document.
+      if (editor.getHTML() === content) {
+        runEmit();
+        return;
+      }
+      // Outside content replaces keystrokes not yet handed over; emitting them
+      // now would queue a save of the text being replaced.
+      contentDirtyRef.current = false;
     }
 
     setContentSilently(editor, content);
     appliedContentRef.current = content;
-    // External content replaced the document; prior edit history is obsolete.
-    recentEmittedRef.current = [];
     // setContentSilently suppresses onUpdate, so tell the parent explicitly.
     onExternalContentRef.current?.(content, editor.storage.characterCount.words());
   }, [editor, content, runEmit]);

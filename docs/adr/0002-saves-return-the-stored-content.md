@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted
 ---
 
 # Saves return the stored content

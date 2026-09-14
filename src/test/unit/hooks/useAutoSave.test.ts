@@ -87,42 +87,6 @@ describe("useDebouncedCallback()", () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
-  it("with flushOnUnmount, runs the pending call when the component unmounts", () => {
-    const callback = vi.fn();
-    const { result, unmount } = renderHook(() =>
-      useDebouncedCallback(callback, 300, { flushOnUnmount: true })
-    );
-
-    act(() => {
-      result.current("typed");
-    });
-    unmount();
-
-    expect(callback).toHaveBeenCalledTimes(1);
-    expect(callback).toHaveBeenCalledWith("typed");
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
-    expect(callback).toHaveBeenCalledTimes(1);
-  });
-
-  it("with flushOnUnmount, runs a call made after unmount right away", () => {
-    // A child editor drains its last keystrokes during its own unmount, which
-    // React runs after the parent's cleanup. That call must not be scheduled
-    // on a timer nobody will clear or wait for.
-    const callback = vi.fn();
-    const { result, unmount } = renderHook(() =>
-      useDebouncedCallback(callback, 300, { flushOnUnmount: true })
-    );
-    const debounced = result.current;
-    unmount();
-
-    debounced("drained");
-
-    expect(callback).toHaveBeenCalledWith("drained");
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
   it("cancel() drops the pending call", () => {
     const callback = vi.fn();
     const { result } = renderHook(() => useDebouncedCallback(callback, 300));

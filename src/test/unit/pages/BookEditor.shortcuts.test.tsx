@@ -304,7 +304,8 @@ describe("BookEditor shortcuts", () => {
     editor.focus();
     await user.keyboard("{Control>}{Alt>}s{/Alt}{/Control}");
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
-    expect(mockUpdateChapter).toHaveBeenCalledWith("c1", { content: "<p>x</p>" });
+    // Saving a Version flushes only unsaved text; the chapter was just saved.
+    expect(mockUpdateChapter).not.toHaveBeenCalled();
   });
 
   it("enters and exits focus mode from editor content without moving to chapters", async () => {

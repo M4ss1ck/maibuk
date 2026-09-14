@@ -1,8 +1,8 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { chapter, editorProps, mockUpdateChapter } = vi.hoisted(() => ({
-  chapter: {
+const { chapter, chapterState, editorProps, mockUpdateChapter } = vi.hoisted(() => {
+  const chapter = {
     id: "chapter-1",
     bookId: "book-1",
     title: "Chapter 1",
@@ -12,15 +12,20 @@ const { chapter, editorProps, mockUpdateChapter } = vi.hoisted(() => ({
     chapterType: "chapter",
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
-  },
-  editorProps: {
-    current: null as null | {
-      onUpdate: (content: string) => void;
-      onExternalContent?: (content: string, wordCount: number) => void;
+  };
+  return {
+    chapter,
+    chapterState: { current: chapter },
+    editorProps: {
+      current: null as null | {
+        content?: string | null;
+        onUpdate: (content: string) => void;
+        onExternalContent?: (content: string, wordCount: number) => void;
+      },
     },
-  },
-  mockUpdateChapter: vi.fn(),
-}));
+    mockUpdateChapter: vi.fn(),
+  };
+});
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -66,9 +71,9 @@ vi.mock("../../../features/books/store", () => ({
 
 vi.mock("../../../features/chapters/store", () => ({
   useChapterStore: () => ({
-    chapters: [chapter],
+    chapters: [chapterState.current],
     currentBookId: "book-1",
-    currentChapter: chapter,
+    currentChapter: chapterState.current,
     isLoading: false,
     loadChapters: vi.fn(),
     createChapter: vi.fn(),
@@ -132,6 +137,7 @@ describe("BookEditor after a sync pull replaces the open chapter", () => {
     vi.useFakeTimers();
     mockUpdateChapter.mockReset().mockResolvedValue(undefined);
     editorProps.current = null;
+    chapterState.current = chapter;
   });
 
   afterEach(() => {
@@ -168,10 +174,16 @@ describe("BookEditor after a sync pull replaces the open chapter", () => {
   });
 
   it("drops the save queued for the old text and adopts the pulled word count", async () => {
-    render(<BookEditor />);
+    const { rerender } = render(<BookEditor />);
 
     act(() => {
       editorProps.current?.onUpdate("<p>Typed before the pull</p>");
+    });
+    chapterState.current = { ...chapter, content: "<p>Remote</p>", wordCount: 42 };
+    rerender(<BookEditor />);
+    expect(editorProps.current?.content).toBe("<p>Remote</p>");
+    // The Editor applies the pulled document and reports its word count.
+    act(() => {
       editorProps.current?.onExternalContent?.("<p>Remote</p>", 42);
     });
     await act(async () => {

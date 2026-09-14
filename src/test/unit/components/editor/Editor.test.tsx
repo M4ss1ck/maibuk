@@ -7,7 +7,6 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
-import { assignHeadingIds } from "@/features/links/heading-ids";
 
 const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),
@@ -259,59 +258,6 @@ describe("Editor", () => {
     });
   });
 
-  // Regression: the chapter store normalizes saved HTML with assignHeadingIds
-  // (adding ids to headings) and echoes it back into the `content` prop. That
-  // normalized echo differs from the raw HTML the editor emitted, so the
-  // external-content sync used to fire setContentSilently mid-edit, resetting
-  // the document and jerking the caret elsewhere.
-  it("does not re-apply content that is a normalized echo of the user's own edit", async () => {
-    let editor: TiptapEditor | null = null;
-    let lastContentProp = "";
-
-    // Harness mirrors BookEditor -> chapter store: every update is normalized
-    // through assignHeadingIds (which stamps ids onto un-id'd headings) and fed
-    // straight back down as `content`.
-    function RoundTripHarness() {
-      const [content, setContent] = useState("<h2>Chapter Title</h2><p>Body</p>");
-      lastContentProp = content;
-      return (
-        <Editor
-          content={content}
-          onUpdate={(html) => setContent(assignHeadingIds(html).html)}
-          onWordCountChange={vi.fn()}
-          onEditorReady={(instance) => {
-            editor = instance;
-          }}
-        />
-      );
-    }
-
-    render(<RoundTripHarness />);
-
-    await waitFor(() => {
-      expect(editor).not.toBeNull();
-    });
-
-    mockSetContentSilently.mockClear();
-
-    // Simulate the user typing a character. This fires onUpdate, which routes
-    // the raw HTML through assignHeadingIds and echoes the normalized result
-    // (now carrying a fresh heading id) back into the `content` prop.
-    editor!.chain().focus("end").insertContent("!").run();
-
-    // Wait until the normalized echo has propagated back down as `content`.
-    // waitFor flushes React effects between polls, so once the id-bearing echo
-    // is the current prop, the external-content sync effect has already run.
-    await waitFor(() => {
-      expect(lastContentProp).toContain('id="h-');
-    });
-
-    // The normalized echo is the editor's own output, not a genuine external
-    // change, so it must NOT trigger a full-document reset (which would jerk
-    // the caret away from where the user is typing).
-    expect(mockSetContentSilently).not.toHaveBeenCalled();
-  });
-
   it("still applies a genuinely external content change (e.g. version restore)", async () => {
     const { rerender } = render(
       <Editor content={"<p>Original</p>"} onUpdate={vi.fn()} onWordCountChange={vi.fn()} />
@@ -401,62 +347,52 @@ describe("Editor", () => {
     expect(onExternalContent).not.toHaveBeenCalled();
   });
 
-  // Regression: the store's echo is asynchronous and debounced. The normalized
-  // echo of an EARLIER keystroke can land in the `content` prop AFTER the user
-  // has already typed more. That stale echo differs from the editor's current
-  // (newer) document even with heading ids stripped, so the sync effect fired
-  // setContentSilently — clobbering the freshly typed characters and jerking the
-  // caret. This is the case the original heading-id fix did not cover.
-  it("does not re-apply a STALE echo that lags behind newer typing", async () => {
+  it("replaces the document with new content, dropping keystrokes not yet handed over", async () => {
     let editor: TiptapEditor | null = null;
-    const emitted: string[] = [];
-
+    const onUpdate = vi.fn();
+    const onEditorReady = (instance: TiptapEditor | null) => {
+      editor = instance;
+    };
     const { rerender } = render(
-      <Editor
-        content={"<h2>Chapter Title</h2><p>Body</p>"}
-        onUpdate={(html) => emitted.push(html)}
-        onWordCountChange={vi.fn()}
-        onEditorReady={(instance) => {
-          editor = instance;
-        }}
-      />
+      <Editor content="<p>Original</p>" onUpdate={onUpdate} onEditorReady={onEditorReady} />
     );
-
-    await waitFor(() => {
-      expect(editor).not.toBeNull();
-    });
-
+    await waitFor(() => expect(editor).not.toBeNull());
     mockSetContentSilently.mockClear();
+    onUpdate.mockClear();
 
-    // The user types "A" (store would debounce-save this snapshot), then quickly
-    // types "B" before the async save round-trips.
-    editor!.chain().focus("end").insertContent("A").run();
-    // The store only ever sees the editor's coalesced emissions, so wait for the
-    // "A" snapshot to be emitted before treating it as the one being saved.
-    await waitFor(() => expect(emitted.length).toBeGreaterThan(0));
-    const afterA = emitted[emitted.length - 1];
-    editor!.chain().focus("end").insertContent("B").run();
-
-    // Now the debounced+async save of the "A" snapshot finally resolves and the
-    // store feeds its normalized (heading-id-stamped) form back down as `content`
-    // — but the editor already contains "...AB".
-    const staleEcho = assignHeadingIds(afterA).html;
-    rerender(
-      <Editor
-        content={staleEcho}
-        onUpdate={(html) => emitted.push(html)}
-        onWordCountChange={vi.fn()}
-        onEditorReady={(instance) => {
-          editor = instance;
-        }}
-      />
-    );
-
-    // The stale echo is the editor's own earlier output, not an external change,
-    // so it must NOT reset the document (which would drop "B" and jump the caret).
-    await waitFor(() => {
-      expect(editor!.getHTML()).toContain("AB");
+    act(() => {
+      editor!.chain().focus("end").insertContent("X").run();
     });
+    rerender(<Editor content="<p>Pulled</p>" onUpdate={onUpdate} onEditorReady={onEditorReady} />);
+
+    await waitFor(() =>
+      expect(mockSetContentSilently).toHaveBeenCalledWith(expect.anything(), "<p>Pulled</p>")
+    );
+    // Past the coalescing window: the replaced keystrokes never reach a save.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it("treats content equal to its queued burst as its own text", async () => {
+    let editor: TiptapEditor | null = null;
+    const onUpdate = vi.fn();
+    const onEditorReady = (instance: TiptapEditor | null) => {
+      editor = instance;
+    };
+    const { rerender } = render(
+      <Editor content="<p>Hello</p>" onUpdate={onUpdate} onEditorReady={onEditorReady} />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    mockSetContentSilently.mockClear();
+    onUpdate.mockClear();
+
+    act(() => {
+      editor!.chain().focus("end").insertContent("!").run();
+    });
+    const current = editor!.getHTML();
+    rerender(<Editor content={current} onUpdate={onUpdate} onEditorReady={onEditorReady} />);
+
+    expect(onUpdate).toHaveBeenCalledWith(current);
     expect(mockSetContentSilently).not.toHaveBeenCalled();
   });
 
