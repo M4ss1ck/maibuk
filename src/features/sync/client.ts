@@ -4,7 +4,8 @@
 // metric immutability, soft-delete-only) are enforced HERE, not by the server.
 // See the maibuk-sync repo's docs/object-contract.md before changing this file.
 import PocketBase from "pocketbase";
-import type { SyncItemMeta, NoteSyncItemMeta } from "@/features/sync/types";
+import i18n from "i18next";
+import type { SyncItemMeta, NoteSyncItemMeta, RemoteDeletionMeta } from "@/features/sync/types";
 import { encryptMeta, decryptMeta } from "@/features/sync/crypto";
 
 export type ObjectKind = "book" | "note" | "version" | "metric";
@@ -177,19 +178,64 @@ function buildObjectFormData(input: PushObjectInput, userId: string, deleted: bo
   return formData;
 }
 
-export async function pushObject(input: PushObjectInput): Promise<string> {
-  const client = getClient();
-  const userId = client.authStore.record?.id;
+function objectRequestError(error: unknown, input: PushObjectInput, operation: string): Error {
+  const response = error && typeof error === "object" ? (error as Record<string, unknown>) : {};
+  const status = typeof response.status === "number" ? response.status : undefined;
+  const data = response.data;
+  const fields = data && typeof data === "object" && "data" in data ? data.data : undefined;
+  const details = [`objects.${operation}`, `${input.kind}:${input.key}`];
+  if (status) details.push(`HTTP ${status}`);
+  // Validation messages/data can echo submitted values. Only field names and
+  // machine-readable codes belong in the user-visible diagnostic.
+  if (fields && typeof fields === "object") {
+    for (const [field, value] of Object.entries(fields).slice(0, 12)) {
+      const code = value && typeof value === "object" && "code" in value ? value.code : undefined;
+      if (
+        /^[\w.-]{1,100}$/.test(field) &&
+        typeof code === "string" &&
+        /^[\w.-]{1,100}$/.test(code)
+      ) {
+        details.push(`${field}=${code}`);
+      }
+    }
+  }
+  const message =
+    error instanceof Error
+      ? error.message
+      : i18n.t("sync.syncError", { defaultValue: "Sync failed" });
+  // Keep the response shape used by metrics' duplicate detection and auth
+  // status handling; callers must not lose those policies when adding context.
+  return Object.assign(new Error(`${message} [${details.join("; ")}]`), {
+    cause: error,
+    status,
+    data,
+  });
+}
+
+async function writeObject(
+  input: PushObjectInput,
+  deleted: boolean,
+  client = getClient(),
+  userId = client.authStore.record?.id
+): Promise<string> {
   if (!userId) throw new Error("Not authenticated");
 
-  const formData = buildObjectFormData(input, userId, false);
-  if (input.remoteId) {
-    const record = await client.collection("objects").update(input.remoteId, formData);
-    return (record.id as string | undefined) ?? input.remoteId;
-  }
+  const formData = buildObjectFormData(input, userId, deleted);
+  try {
+    if (input.remoteId) {
+      const record = await client.collection("objects").update(input.remoteId, formData);
+      return (record.id as string | undefined) ?? input.remoteId;
+    }
 
-  const record = await client.collection("objects").create(formData);
-  return (record.id as string | undefined) ?? "";
+    const record = await client.collection("objects").create(formData);
+    return (record.id as string | undefined) ?? "";
+  } catch (error) {
+    throw objectRequestError(error, input, input.remoteId ? "update" : "create");
+  }
+}
+
+export async function pushObject(input: PushObjectInput): Promise<string> {
+  return writeObject(input, false);
 }
 
 export async function pullObjectContent(remoteId: string): Promise<Uint8Array | null> {
@@ -226,6 +272,35 @@ export async function listObjects(kind: ObjectKind, group?: string): Promise<Rem
   return records.map((record) => toRemoteObject(record as Record<string, unknown>));
 }
 
+/**
+ * Soft-deleted rows of one kind. listObjects hides them, but their keys still
+ * hold the unique (user, app_name, kind, key) identity, so a device that still
+ * has the item must update the deleted row or remove its copy, never create.
+ */
+export async function listDeletedObjects(kind: ObjectKind): Promise<RemoteObject[]> {
+  const client = getClient();
+
+  const records = await client.collection("objects").getFullList({
+    filter: `app_name = "${APP_NAME}" && kind = "${kind}" && deleted = true`,
+    sort: "updated",
+    fields: OBJECT_LIST_FIELDS,
+  });
+
+  return records.map((record) => toRemoteObject(record as Record<string, unknown>));
+}
+
+function toRemoteDeletion(row: RemoteObject): RemoteDeletionMeta {
+  return { remoteId: row.remoteId, entityId: row.key, updatedAt: row.updatedAt };
+}
+
+export async function listRemoteDeletedBooks(): Promise<RemoteDeletionMeta[]> {
+  return (await listDeletedObjects("book")).map(toRemoteDeletion);
+}
+
+export async function listRemoteDeletedNotes(): Promise<RemoteDeletionMeta[]> {
+  return (await listDeletedObjects("note")).map(toRemoteDeletion);
+}
+
 export async function pullObjectsSince(
   kind: ObjectKind,
   sinceIso: string
@@ -259,19 +334,18 @@ export async function softDeleteObject(
   const existing = await client.collection("objects").getList(1, 1, { filter });
 
   const input: PushObjectInput = { kind, key, meta };
-  const formData = buildObjectFormData(input, userId, true);
   if (existing.items.length > 0) {
-    await client.collection("objects").update(existing.items[0].id, formData);
+    await writeObject({ ...input, remoteId: existing.items[0].id }, true, client, userId);
   } else {
     try {
-      await client.collection("objects").create(formData);
+      await writeObject(input, true, client, userId);
     } catch (error) {
       if (!isKeyUniqueConstraintError(error)) throw error;
 
       const racedExisting = await client.collection("objects").getList(1, 1, { filter });
       if (racedExisting.items.length === 0) throw error;
 
-      await client.collection("objects").update(racedExisting.items[0].id, formData);
+      await writeObject({ ...input, remoteId: racedExisting.items[0].id }, true, client, userId);
     }
   }
 }

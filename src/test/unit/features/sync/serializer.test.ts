@@ -18,6 +18,8 @@ const {
   applyBookSnapshot,
   applyNoteSnapshot,
   normalizeNoteSnapshotForSync,
+  removeLocalBook,
+  removeLocalNote,
   serializeBook,
   serializeNote,
 } = await import("@/features/sync/serializer");
@@ -637,5 +639,88 @@ describe("serializeNote", () => {
 
   it("throws when the note does not exist", async () => {
     await expect(serializeNote("missing")).rejects.toThrow("Note not found: missing");
+  });
+});
+
+// Removal of an item deleted on another device: no tombstone (it would block
+// pulling the item back if another device restores it), and the open item closes.
+describe("removing items deleted on another device", () => {
+  beforeEach(async () => {
+    testDb = await createTestDatabase();
+    mockGetDatabase.mockResolvedValue(testDb);
+    useChapterStore.setState({ chapters: [], currentChapter: null, currentBookId: null });
+  });
+
+  async function insertLink(db: DatabaseAdapter, id: string, sourceType: string, sourceId: string) {
+    await db.execute(
+      `INSERT INTO links (id, source_type, source_id, target_type, target_id, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, sourceType, sourceId, "note", "other-note", 1]
+    );
+  }
+
+  async function count(sql: string, params: unknown[]): Promise<number> {
+    const rows = await testDb.select<{ n: number }[]>(sql, params);
+    return rows[0].n;
+  }
+
+  it("removes the note, its outgoing links and the open note, without a tombstone", async () => {
+    const { useNoteStore } = await import("@/features/notes/store");
+    await testDb.execute(
+      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["note-1", "Gone", "<p>Body</p>", "[]", 0, 0, 1, "[]", 10, 20]
+    );
+    await testDb.execute(
+      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["note-2", "Kept", "<p>Body</p>", "[]", 0, 1, 1, "[]", 10, 20]
+    );
+    await insertLink(testDb, "link-1", "note", "note-1");
+    await useNoteStore.getState().loadNotes();
+    await useNoteStore.getState().loadNote("note-1");
+
+    await removeLocalNote("note-1");
+
+    expect(await count("SELECT COUNT(*) AS n FROM notes WHERE id = ?", ["note-1"])).toBe(0);
+    expect(await count("SELECT COUNT(*) AS n FROM links WHERE source_id = ?", ["note-1"])).toBe(0);
+    expect(await count("SELECT COUNT(*) AS n FROM sync_tombstones", [])).toBe(0);
+    expect(useNoteStore.getState().currentNote).toBeNull();
+    expect(useNoteStore.getState().notes.map((note) => note.id)).toEqual(["note-2"]);
+  });
+
+  it("removes the book with its chapters, versions and links, and closes it", async () => {
+    const { useBookStore } = await import("@/features/books/store");
+    await insertBook(testDb, "book-1");
+    await insertBook(testDb, "book-2");
+    await insertChapter(testDb, "ch-1", "book-1", 0);
+    await insertChapter(testDb, "ch-2", "book-2", 0);
+    await testDb.execute(
+      `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["ver-1", "book-1", null, "{}", 0, "sum", "manual", 1]
+    );
+    await insertLink(testDb, "link-1", "chapter", "ch-1");
+    await useBookStore.getState().loadBooks();
+    await useBookStore.getState().loadBook("book-1");
+    await useChapterStore.getState().loadChapters("book-1");
+
+    await removeLocalBook("book-1");
+
+    expect(await count("SELECT COUNT(*) AS n FROM books WHERE id = ?", ["book-1"])).toBe(0);
+    expect(await count("SELECT COUNT(*) AS n FROM chapters WHERE book_id = ?", ["book-1"])).toBe(0);
+    expect(
+      await count("SELECT COUNT(*) AS n FROM book_versions WHERE book_id = ?", ["book-1"])
+    ).toBe(0);
+    expect(await count("SELECT COUNT(*) AS n FROM links WHERE source_id = ?", ["ch-1"])).toBe(0);
+    expect(await count("SELECT COUNT(*) AS n FROM chapters WHERE book_id = ?", ["book-2"])).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM sync_tombstones", [])).toBe(0);
+    expect(useBookStore.getState().currentBook).toBeNull();
+    expect(useBookStore.getState().books.map((book) => book.id)).toEqual(["book-2"]);
+    expect(useChapterStore.getState()).toMatchObject({
+      chapters: [],
+      currentChapter: null,
+      currentBookId: null,
+    });
   });
 });

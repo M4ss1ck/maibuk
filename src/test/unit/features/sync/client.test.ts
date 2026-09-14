@@ -113,6 +113,8 @@ const {
   pushObject,
   pullObjectContent,
   listObjects,
+  listRemoteDeletedBooks,
+  listRemoteDeletedNotes,
   pullObjectsSince,
   softDeleteObject,
   isKeyUniqueConstraintError,
@@ -249,6 +251,61 @@ describe("generic object sync core", () => {
     expect(formData.get("deleted")).toBe("false");
   });
 
+  it.each([
+    "create",
+    "update",
+  ] as const)("identifies a rejected note %s without exposing payloads", async (operation) => {
+    const error = Object.assign(new Error("Failed to create record."), {
+      status: 400,
+      data: { data: { key: { code: "validation_not_unique", message: "private server value" } } },
+    });
+    (operation === "create" ? mockSyncCreate : mockUpdate).mockRejectedValueOnce(error);
+    const result = await pushNoteBlob(
+      "note-1",
+      new Blob(["private note text"]),
+      "sum",
+      operation === "update" ? "remote-1" : undefined
+    ).catch((failure: unknown) => failure);
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain(`objects.${operation}`);
+    expect((result as Error).message).toContain("note-1");
+    expect((result as Error).message).toContain("HTTP 400");
+    expect((result as Error).message).toContain("key=validation_not_unique");
+    expect((result as Error).message).not.toContain("private");
+    expect(isKeyUniqueConstraintError(result)).toBe(true);
+    if (operation === "create") expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("keeps connection failures identifiable without inventing an HTTP status", async () => {
+    mockSyncCreate.mockRejectedValueOnce(new Error("Failed to fetch"));
+    await expect(pushNoteBlob("note-1", new Blob(["text"]), "sum")).rejects.toMatchObject({
+      message: "Failed to fetch [objects.create; note:note-1]",
+      status: undefined,
+    });
+  });
+
+  it("does not let malformed validation details replace the original failure", async () => {
+    mockSyncCreate.mockRejectedValueOnce(
+      Object.assign(new Error("Rejected"), {
+        status: 400,
+        data: {
+          data: { key: null, content: { code: "private value with spaces" }, checksum: "invalid" },
+        },
+      })
+    );
+    await expect(pushNoteBlob("note-1", new Blob(["text"]), "sum")).rejects.toMatchObject({
+      message: "Rejected [objects.create; note:note-1; HTTP 400]",
+    });
+  });
+
+  it("identifies failures while creating a deletion marker", async () => {
+    mockGetList.mockResolvedValueOnce({ items: [] });
+    mockSyncCreate.mockRejectedValueOnce(Object.assign(new Error("Rejected"), { status: 403 }));
+    await expect(softDeleteObject("note", "note-1")).rejects.toThrow(
+      "Rejected [objects.create; note:note-1; HTTP 403]"
+    );
+  });
+
   it("returns null when pulled object content has no file", async () => {
     mockGetOne.mockResolvedValue({ id: "r1", content: "" });
 
@@ -357,6 +414,48 @@ describe("generic object sync core", () => {
       sort: "updated",
       fields: "id,kind,key,group,checksum,deleted,meta,updated",
     });
+  });
+
+  it("lists soft-deleted note rows, whose keys still hold the unique identity", async () => {
+    mockGetFullList.mockResolvedValue([
+      {
+        id: "dead-1",
+        kind: "note",
+        key: "note-1",
+        group: "",
+        checksum: "",
+        deleted: true,
+        meta: "",
+        updated: "2026-09-14 10:00:00.000Z",
+      },
+    ]);
+
+    const result = await listRemoteDeletedNotes();
+
+    expect(mockGetFullList).toHaveBeenCalledWith({
+      filter: 'app_name = "maibuk" && kind = "note" && deleted = true',
+      sort: "updated",
+      fields: "id,kind,key,group,checksum,deleted,meta,updated",
+    });
+    expect(result).toEqual([
+      {
+        remoteId: "dead-1",
+        entityId: "note-1",
+        updatedAt: Math.floor(new Date("2026-09-14T10:00:00.000Z").getTime() / 1000),
+      },
+    ]);
+  });
+
+  it("lists soft-deleted book rows", async () => {
+    mockGetFullList.mockResolvedValue([]);
+
+    await listRemoteDeletedBooks();
+
+    expect(mockGetFullList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter: 'app_name = "maibuk" && kind = "book" && deleted = true',
+      })
+    );
   });
 
   it("pulls objects since an updated timestamp without filtering deleted records", async () => {
@@ -940,7 +1039,12 @@ describe("pushMetricsEventRow()", () => {
     };
     mockSyncCreate.mockRejectedValue(error);
 
-    await expect(pushMetricsEventRow(row)).rejects.toBe(error);
+    await expect(pushMetricsEventRow(row)).rejects.toMatchObject({
+      cause: error,
+      status: 400,
+      data: error.data,
+      message: expect.stringContaining("key=validation_required"),
+    });
   });
 });
 

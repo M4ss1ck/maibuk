@@ -243,6 +243,38 @@ describe("useSyncStore", () => {
   });
 
   describe("syncAll()", () => {
+    it.each([
+      { scope: "all", direction: "bidirectional" },
+      { scope: "notes", direction: "push" },
+    ] as const)("logs a failed upload after the safety backup for $scope/$direction", async (options) => {
+      const backup = {
+        id: "backup",
+        timestamp: 1,
+        level: "success",
+        event: "backup",
+        message: "Created pre-sync safety backup",
+      };
+      const failure = new Error(
+        "Failed to create record. [objects.create; note:note-1; HTTP 400; key=validation_not_unique]"
+      );
+      useSyncStore.setState({ lastSyncedAt: 123 });
+      mockSyncAllBooks.mockImplementationOnce(async (_passphrase, _onConflict, runOptions) => {
+        runOptions.onLog(backup);
+        throw failure;
+      });
+      await expect(useSyncStore.getState().syncAll("passphrase", vi.fn(), options)).rejects.toBe(
+        failure
+      );
+      expect(useSyncStore.getState()).toMatchObject({
+        syncStatus: "error",
+        syncError: failure.message,
+        lastSyncedAt: 123,
+        syncLog: [
+          expect.objectContaining({ level: "error", event: "error", message: failure.message }),
+          backup,
+        ],
+      });
+    });
     it("calls syncAllBooks and sets success status", async () => {
       mockSyncAllBooks.mockResolvedValue({ outcome: "success", actions: ["pushed"] });
       const mockOnConflict = vi.fn();
@@ -272,6 +304,9 @@ describe("useSyncStore", () => {
 
       expect(useSyncStore.getState().syncStatus).toBe("error");
       expect(useSyncStore.getState().syncError).toBe("Network error");
+      expect(useSyncStore.getState().syncLog).toEqual([
+        expect.objectContaining({ level: "error", event: "error", message: "Network error" }),
+      ]);
     });
 
     it("sets syncing status during operation", async () => {
@@ -449,6 +484,10 @@ describe("useSyncStore", () => {
 
       expect(useSyncStore.getState().syncStatus).toBe("error");
       expect(useSyncStore.getState().syncError).toBe("Sync failed");
+      expect(useSyncStore.getState().syncLog[0]).toMatchObject({
+        level: "error",
+        message: "Sync failed",
+      });
     });
 
     it("handles non-Error rejections gracefully", async () => {
@@ -502,6 +541,11 @@ describe("useSyncStore", () => {
 
       expect(useSyncStore.getState().syncStatus).toBe("error");
       expect(useSyncStore.getState().syncError).toBe("Sync failed");
+      expect(useSyncStore.getState().syncLog[0]).toMatchObject({
+        level: "error",
+        event: "error",
+        message: "Sync failed",
+      });
     });
 
     it("sets cancelled status when the user cancels a single-note conflict", async () => {
