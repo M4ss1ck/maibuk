@@ -7,11 +7,17 @@
 import { getDatabase } from "@/lib/db";
 import { applyBookSnapshotData, removeBookRow, type AppliedBook } from "@/features/books/write";
 import { applyNoteSnapshotData, removeNoteRow } from "@/features/notes/write";
-import { normalizeNoteSnapshotJson } from "@/features/sync/sync-codec-handlers";
+import {
+  applyCanvasSnapshotData,
+  fetchStoredCanvas,
+  removeCanvasRow,
+} from "@/features/canvas/write";
+import { normalizeCanvasSnapshotJson, normalizeNoteSnapshotJson } from "@/features/sync/sync-codec-handlers";
 import { stringifySnapshotAsync } from "@/features/sync/sync-codec";
 import type { ChangeOrigin } from "@/features/sync/change-feed";
-import type { BookSnapshot, NoteSnapshot } from "@/features/sync/types";
+import type { BookSnapshot, CanvasSnapshot, NoteSnapshot } from "@/features/sync/types";
 import type { Note } from "@/features/notes/types";
+import type { Canvas } from "@/features/canvas/types";
 
 interface BookRow {
   id: string;
@@ -168,6 +174,77 @@ export function normalizeNoteSnapshotForSync(json: string): string {
   return normalizeNoteSnapshotJson(json);
 }
 
+export function normalizeCanvasSnapshotForSync(json: string): string {
+  return normalizeCanvasSnapshotJson(json);
+}
+
+interface CanvasRow {
+  id: string;
+  title: string;
+  doc: string;
+  pinned: number;
+  order: number;
+  created_at: number;
+  updated_at: number;
+  content_updated_at: number | null;
+}
+
+/**
+ * Snapshot one canvas for sync. The viewport never leaves the device: it is
+ * stripped from the doc before stringifying, so moving the view cannot change
+ * the checksum. A doc with a newer schemaVersion than this client understands
+ * travels as its stored bytes, unparsed and unmigrated.
+ */
+export async function serializeCanvas(canvasId: string): Promise<string> {
+  const db = await getDatabase();
+
+  const rows = await db.select<CanvasRow[]>("SELECT * FROM canvases WHERE id = ?", [canvasId]);
+
+  if (rows.length === 0) {
+    throw new Error(`Canvas not found: ${canvasId}`);
+  }
+
+  const row = rows[0];
+  let doc: unknown;
+  try {
+    const parsed = JSON.parse(row.doc) as Record<string, unknown>;
+    const { viewport: _viewport, ...content } = parsed;
+    doc = content;
+  } catch {
+    throw new Error(`Canvas document is corrupt: ${canvasId}`);
+  }
+
+  const snapshot: CanvasSnapshot = {
+    canvas: {
+      id: row.id,
+      title: row.title,
+      pinned: Boolean(row.pinned),
+      order: row.order,
+      doc,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      contentUpdatedAt: row.content_updated_at ?? row.updated_at,
+    },
+  };
+
+  return stringifySnapshotAsync(snapshot);
+}
+
+/**
+ * Replace the local canvas with a snapshot (remote pull by default).
+ * Resolves with the canvas as stored.
+ */
+export async function applyCanvasSnapshot(
+  snapshot: CanvasSnapshot,
+  origin: ChangeOrigin = "remote"
+): Promise<Canvas> {
+  return applyCanvasSnapshotData(snapshot, origin);
+}
+
+export async function fetchCanvas(canvasId: string): Promise<Canvas | null> {
+  return fetchStoredCanvas(canvasId);
+}
+
 /**
  * Replace the local note with a snapshot (remote pull by default).
  * Resolves with the note as stored.
@@ -185,6 +262,10 @@ export async function applyNoteSnapshot(
 
 export async function removeLocalNote(noteId: string): Promise<void> {
   await removeNoteRow(noteId, "remote");
+}
+
+export async function removeLocalCanvas(canvasId: string): Promise<void> {
+  await removeCanvasRow(canvasId, "remote");
 }
 
 export async function removeLocalBook(bookId: string): Promise<void> {

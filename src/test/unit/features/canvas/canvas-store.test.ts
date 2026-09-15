@@ -49,7 +49,14 @@ describe("useCanvasStore", () => {
       "SELECT title, doc FROM canvases WHERE id = ?",
       [canvas.id]
     );
-    expect(rows).toEqual([{ title: "Map", doc: JSON.stringify(createDefaultCanvasDoc()) }]);
+    // The viewport is device-local: the stored doc carries content only.
+    expect(rows[0].title).toBe("Map");
+    const { viewport: _viewport, ...storedContent } = JSON.parse(rows[0].doc as string) as Record<
+      string,
+      unknown
+    >;
+    const { viewport: _defaultViewport, ...defaultContent } = createDefaultCanvasDoc();
+    expect(storedContent).toEqual(defaultContent);
   });
 
   it("loads and sorts pinned canvases by order", async () => {
@@ -123,7 +130,13 @@ describe("useCanvasStore", () => {
     const rows = await testDb.select<{ doc: string }[]>(
       "SELECT doc FROM canvases WHERE id = 'bad'"
     );
-    expect(rows[0].doc).toBe(JSON.stringify(createDefaultCanvasDoc()));
+    // Recovery persists content only; the viewport stays device-local.
+    const { viewport: _viewport, ...storedContent } = JSON.parse(rows[0].doc) as Record<
+      string,
+      unknown
+    >;
+    const { viewport: _defaultViewport, ...defaultContent } = createDefaultCanvasDoc();
+    expect(storedContent).toEqual(defaultContent);
   });
 
   it("commits node edits with one history entry and a revision", () => {
@@ -413,12 +426,36 @@ describe("useCanvasStore", () => {
     expect(useCanvasStore.getState()).not.toHaveProperty("updateNodePosition");
   });
 
-  it("persists viewport without adding undo history", () => {
+  it("persists viewport device-local without history, revision, or database write", async () => {
+    const { useReadingPositionStore } = await import("@/features/reading-position/store");
+    useReadingPositionStore.setState({ canvasViewports: {} });
+    const canvas = await useCanvasStore.getState().createCanvas({ title: "Map" });
+    await useCanvasStore.getState().loadCanvas(canvas.id);
     const before = useCanvasStore.getState().past.length;
+    const revisionBefore = useCanvasStore.getState().revision;
+    const storedBefore = await testDb.select<{ updated_at: number }[]>(
+      "SELECT updated_at FROM canvases WHERE id = ?",
+      [canvas.id]
+    );
+
     useCanvasStore.getState().setViewport({ x: 5, y: 6, zoom: 2 });
-    expect(useCanvasStore.getState().doc.viewport).toEqual({ x: 5, y: 6, zoom: 2 });
-    expect(useCanvasStore.getState().past).toHaveLength(before);
-    expect(useCanvasStore.getState().revision).toBe(1);
+
+    const state = useCanvasStore.getState();
+    expect(state.doc.viewport).toEqual({ x: 5, y: 6, zoom: 2 });
+    expect(state.past).toHaveLength(before);
+    expect(state.revision).toBe(revisionBefore);
+    expect(state.dirty).toBe(false);
+    // The view lives in Reading Position, not the synced row.
+    expect(useReadingPositionStore.getState().getCanvasViewport(canvas.id)).toEqual({
+      x: 5,
+      y: 6,
+      zoom: 2,
+    });
+    const storedAfter = await testDb.select<{ updated_at: number; doc: string }[]>(
+      "SELECT updated_at, doc FROM canvases WHERE id = ?",
+      [canvas.id]
+    );
+    expect(storedAfter[0].updated_at).toBe(storedBefore[0].updated_at);
   });
 
   it("keeps selection exclusive and deletes through deleteSelection", () => {

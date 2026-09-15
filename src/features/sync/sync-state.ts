@@ -6,7 +6,7 @@ import type { SyncBase } from "@/features/sync/sync-decision";
 // part of backups, and restores or resets clear it, so a restored library is
 // compared against the server from scratch instead of against stale bases.
 
-export type SyncStateEntity = "book" | "note";
+export type SyncStateEntity = "book" | "note" | "canvas";
 
 interface SyncStateRow {
   local_checksum: string;

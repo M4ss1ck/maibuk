@@ -5,19 +5,24 @@
 // this port — they are not part of the adapter shape.
 import {
   deleteRemoteBook,
+  deleteRemoteCanvas,
   deleteRemoteNote,
   listRemoteBooks,
+  listRemoteCanvases,
   listRemoteDeletedBooks,
+  listRemoteDeletedCanvases,
   listRemoteDeletedNotes,
   listRemoteNotes,
   pullBookBlob,
+  pullCanvasBlob,
   pullNoteBlob,
   pushBookBlob,
+  pushCanvasBlob,
   pushNoteBlob,
 } from "@/features/sync/client";
 import type { RemoteDeletionMeta } from "@/features/sync/types";
 
-export type EntityRemoteKind = "book" | "note";
+export type EntityRemoteKind = "book" | "note" | "canvas";
 
 export interface RemoteItemMeta {
   remoteId: string;
@@ -67,18 +72,25 @@ export const pocketBaseRemote: EntityRemote = {
     if (kind === "book") {
       return (await listRemoteBooks()).map((row) => toItemMeta(row, row.bookId));
     }
-    return (await listRemoteNotes()).map((row) => toItemMeta(row, row.noteId));
+    if (kind === "note") {
+      return (await listRemoteNotes()).map((row) => toItemMeta(row, row.noteId));
+    }
+    return (await listRemoteCanvases()).map((row) => toItemMeta(row, row.canvasId));
   },
 
   async listDeleted(kind) {
-    return kind === "book" ? listRemoteDeletedBooks() : listRemoteDeletedNotes();
+    if (kind === "book") return listRemoteDeletedBooks();
+    if (kind === "note") return listRemoteDeletedNotes();
+    return listRemoteDeletedCanvases();
   },
 
   async pullBlob(kind, entityId, remoteId) {
     const pulled =
       kind === "book"
         ? await pullBookBlob(entityId, remoteId)
-        : await pullNoteBlob(entityId, remoteId);
+        : kind === "note"
+          ? await pullNoteBlob(entityId, remoteId)
+          : await pullCanvasBlob(entityId, remoteId);
     return pulled ? { data: pulled.data, checksum: pulled.checksum } : null;
   },
 
@@ -90,11 +102,17 @@ export const pocketBaseRemote: EntityRemote = {
       } else {
         await pushBookBlob(entityId, data, checksum, remoteId);
       }
-    } else {
+    } else if (kind === "note") {
       if (remoteId === undefined) {
         await pushNoteBlob(entityId, data, checksum);
       } else {
         await pushNoteBlob(entityId, data, checksum, remoteId);
+      }
+    } else {
+      if (remoteId === undefined) {
+        await pushCanvasBlob(entityId, data, checksum);
+      } else {
+        await pushCanvasBlob(entityId, data, checksum, remoteId);
       }
     }
   },
@@ -102,8 +120,10 @@ export const pocketBaseRemote: EntityRemote = {
   async deleteRemote(kind, entityId) {
     if (kind === "book") {
       await deleteRemoteBook(entityId);
-    } else {
+    } else if (kind === "note") {
       await deleteRemoteNote(entityId);
+    } else {
+      await deleteRemoteCanvas(entityId);
     }
   },
 };

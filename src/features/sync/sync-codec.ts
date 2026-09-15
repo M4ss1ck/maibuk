@@ -4,6 +4,7 @@ import {
   parseJsonValue,
   normalizeNoteSnapshotJson,
   normalizeBookSnapshotJson,
+  normalizeCanvasSnapshotJson,
   dumpHasDataSql,
   toOwnedBuffer,
   uint8ArrayToBase64,
@@ -122,6 +123,8 @@ async function runFallback(request: FallbackRequest): Promise<SuccessResponse> {
       return { id, ok: true, json: normalizeNoteSnapshotJson(request.json) };
     case "normalizeBook":
       return { id, ok: true, json: normalizeBookSnapshotJson(request.json) };
+    case "normalizeCanvas":
+      return { id, ok: true, json: normalizeCanvasSnapshotJson(request.json) };
     case "encrypt":
       return {
         id,
@@ -218,6 +221,10 @@ export async function normalizeNoteSnapshotAsync(json: string): Promise<string> 
 
 export async function normalizeBookSnapshotAsync(json: string): Promise<string> {
   return requiredJson(await dispatch({ op: "normalizeBook", json }), "normalizeBook");
+}
+
+export async function normalizeCanvasSnapshotAsync(json: string): Promise<string> {
+  return requiredJson(await dispatch({ op: "normalizeCanvas", json }), "normalizeCanvas");
 }
 
 // Returns a freshly owned transferable buffer — wrap it directly in a Blob,

@@ -11,13 +11,13 @@
 // Dependency-free on purpose: data write paths import this without pulling
 // the sync stack in.
 
-export type ChangeEntity = "book" | "note";
+export type ChangeEntity = "book" | "note" | "canvas";
 export type ChangeOrigin = "local" | "remote";
 export type ChangeKind = "content" | "metadata";
 
 export interface Change {
   entity: ChangeEntity;
-  /** Book id, or note id. For chapters, the containing book's id. */
+  /** Book id, note id, or canvas id. For chapters, the containing book's id. */
   id: string;
   origin: ChangeOrigin;
   kind: ChangeKind;

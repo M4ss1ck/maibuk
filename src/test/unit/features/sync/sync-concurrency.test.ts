@@ -21,6 +21,12 @@ const mockApplyNoteSnapshot = vi.hoisted(() => vi.fn());
 const mockPushNoteBlob = vi.hoisted(() => vi.fn());
 const mockPullNoteBlob = vi.hoisted(() => vi.fn());
 const mockListRemoteNotes = vi.hoisted(() => vi.fn());
+const mockSerializeCanvas = vi.hoisted(() => vi.fn());
+const mockApplyCanvasSnapshot = vi.hoisted(() => vi.fn());
+const mockPushCanvasBlob = vi.hoisted(() => vi.fn());
+const mockPullCanvasBlob = vi.hoisted(() => vi.fn());
+const mockListRemoteCanvases = vi.hoisted(() => vi.fn());
+const mockDeleteRemoteCanvas = vi.hoisted(() => vi.fn());
 const mockDeleteRemoteBook = vi.hoisted(() => vi.fn());
 const mockDeleteRemoteNote = vi.hoisted(() => vi.fn());
 const mockRefreshAuth = vi.hoisted(() => vi.fn());
@@ -44,6 +50,8 @@ vi.mock("@/features/sync/serializer", () => ({
   serializeNote: mockSerializeNote,
   normalizeNoteSnapshotForSync: mockNormalizeNoteSnapshotForSync,
   applyNoteSnapshot: mockApplyNoteSnapshot,
+  serializeCanvas: mockSerializeCanvas,
+  applyCanvasSnapshot: mockApplyCanvasSnapshot,
 }));
 
 vi.mock("@/features/sync/crypto", () => ({
@@ -64,10 +72,15 @@ vi.mock("@/features/sync/client", () => ({
   pushNoteBlob: mockPushNoteBlob,
   pullNoteBlob: mockPullNoteBlob,
   listRemoteNotes: mockListRemoteNotes,
+  pushCanvasBlob: mockPushCanvasBlob,
+  pullCanvasBlob: mockPullCanvasBlob,
+  listRemoteCanvases: mockListRemoteCanvases,
   listRemoteDeletedBooks: vi.fn().mockResolvedValue([]),
   listRemoteDeletedNotes: vi.fn().mockResolvedValue([]),
+  listRemoteDeletedCanvases: vi.fn().mockResolvedValue([]),
   deleteRemoteBook: mockDeleteRemoteBook,
   deleteRemoteNote: mockDeleteRemoteNote,
+  deleteRemoteCanvas: mockDeleteRemoteCanvas,
 }));
 
 vi.mock("@/lib/platform", () => ({
@@ -144,6 +157,7 @@ describe("sync concurrency — FIFO serialization", () => {
     mockBackupServiceDeleteByTrigger.mockResolvedValue(undefined);
     mockSerializeBook.mockResolvedValue('{"book":{}}');
     mockSerializeNote.mockResolvedValue('{"note":{}}');
+    mockSerializeCanvas.mockResolvedValue('{"canvas":{}}');
     mockComputeChecksum.mockResolvedValue("local-checksum");
     mockEncrypt.mockResolvedValue(new Uint8Array([1, 2, 3]));
     mockDecrypt.mockResolvedValue('{"book":{"id":"book-1"}}');
@@ -157,11 +171,15 @@ describe("sync concurrency — FIFO serialization", () => {
     mockPullBookBlob.mockResolvedValue(null);
     mockPushNoteBlob.mockResolvedValue(undefined);
     mockPullNoteBlob.mockResolvedValue(null);
+    mockPushCanvasBlob.mockResolvedValue(undefined);
+    mockPullCanvasBlob.mockResolvedValue(null);
     mockListRemoteNotes.mockResolvedValue([]);
+    mockListRemoteCanvases.mockResolvedValue([]);
     mockListPendingTombstones.mockResolvedValue([]);
     mockGetTombstone.mockResolvedValue(null);
     mockDeleteRemoteBook.mockResolvedValue(undefined);
     mockDeleteRemoteNote.mockResolvedValue(undefined);
+    mockDeleteRemoteCanvas.mockResolvedValue(undefined);
     mockMarkTombstonePushed.mockResolvedValue(undefined);
     mockSyncMetricsRows.mockResolvedValue(undefined);
     mockDb.select.mockImplementation(async (sql: string) => {

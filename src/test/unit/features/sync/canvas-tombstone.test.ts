@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { SyncEntityType } from "@/features/sync/types";
 
 // Regression test for the pending-deletion dispatcher: a tombstone whose kind
-// has no registered sync adapter (e.g. "canvas", which nothing syncs yet)
-// must never be sent to another kind's remote delete. The pre-Entity-Sync
-// engine sent every non-book tombstone to `deleteRemoteNote`; restoring that
+// has no registered sync adapter must never be sent to another kind's remote
+// delete. Canvas used to be that kind; since Canvas sync shipped it is
+// registered, so this test uses a still-unregistered kind. Restoring a
 // fallback (`registry[type] ?? registry.note`) turns this test red.
+const unregisteredKind = "metric" as unknown as SyncEntityType;
 const mockDeleteRemoteBook = vi.hoisted(() => vi.fn());
 const mockDeleteRemoteNote = vi.hoisted(() => vi.fn());
 const mockMarkTombstonePushed = vi.hoisted(() => vi.fn());
@@ -34,14 +36,14 @@ beforeEach(() => {
   mockMarkTombstonePushed.mockResolvedValue(undefined);
 });
 
-describe("canvas tombstone", () => {
+describe("unregistered-kind tombstone", () => {
   it("never calls another kind's remote delete for an unregistered kind", async () => {
     mockListPendingTombstones.mockResolvedValue([
       {
-        id: "canvas:canvas-1",
-        entityType: "canvas",
-        entityId: "canvas-1",
-        title: "Plot map",
+        id: `${unregisteredKind}:orphan-1`,
+        entityType: unregisteredKind,
+        entityId: "orphan-1",
+        title: "Orphan",
         deletedAt: 1000,
         confirmedAt: 1001,
         pushedAt: null,
@@ -54,7 +56,7 @@ describe("canvas tombstone", () => {
         book: { deleteRemote: mockDeleteRemoteBook },
         note: { deleteRemote: mockDeleteRemoteNote },
       },
-      ["book", "note", "canvas"],
+      ["book", "note"],
       { scope: "all", direction: "bidirectional", confirmedDeletionIds: [] },
       emitLog
     );

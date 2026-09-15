@@ -10,7 +10,14 @@ export {
   SyncCryptoError,
   isSyncCryptoError,
 } from "@/features/sync/crypto";
-export { serializeBook, applyBookSnapshot } from "@/features/sync/serializer";
+export {
+  serializeBook,
+  applyBookSnapshot,
+  serializeNote,
+  applyNoteSnapshot,
+  serializeCanvas,
+  applyCanvasSnapshot,
+} from "@/features/sync/serializer";
 export {
   emitChange,
   onChange,
@@ -46,6 +53,7 @@ export type {
   SyncItemMeta,
   BookSnapshot,
   NoteSnapshot,
+  CanvasSnapshot,
   SyncOptions,
   SyncScope,
   SyncDirection,

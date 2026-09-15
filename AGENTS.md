@@ -138,7 +138,7 @@ src/
 │   ├── export/          # generators, sanitizers, styles, types
 │   ├── metrics/         # writing metrics types, classifier, repo, settings, session tracking
 │   ├── notes/           # store.ts, types.ts
-│   ├── reading-position/ # local-only editor caret/viewport persistence
+│   ├── reading-position/ # local-only editor caret and Canvas viewport persistence (never synced, ADR 0004)
 │   ├── settings/        # store.ts, types.ts, AppSettingsProvider.tsx
 │   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts, entity-sync.ts, remote-port.ts
 │   ├── theme/           # store.ts
@@ -236,7 +236,7 @@ Button.displayName = "Button";
 
 ### Synced entity writes
 
-Book, Chapter, and Note mutations go through `src/features/books/write.ts`, `src/features/chapters/write.ts`, and `src/features/notes/write.ts`. These paths own normalization, persistence, stored return values, and the Change Feed. Stores remain in-memory views. Restore, Import, and the sync serializer use the same paths.
+Book, Chapter, Note, and Canvas mutations go through `src/features/books/write.ts`, `src/features/chapters/write.ts`, `src/features/notes/write.ts`, and `src/features/canvas/write.ts`. These paths own normalization, persistence, stored return values, and the Change Feed. Stores remain in-memory views. Restore, Import, and the sync serializer use the same paths.
 
 A Chapter Change identifies its containing Book. Every local Change schedules Auto Sync, including metadata. Last Edited advances for content and title changes; pin, order, and status leave it unchanged. Publish only after persistence; tests must cover failed writes, partial multi-write failures, origin, and the resulting view refresh.
 
@@ -258,7 +258,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useAutoSave(callback, delay)`                                                                                                                                                                                                                 | `src/hooks/useAutoSave.ts`                                             |
 | `useDebouncedCallback(callback, delay)` (stable identity, `.cancel()` drops the pending call, `.flush()` runs it now; not for saves, which use `useEditSession`)                                                                               | `src/hooks/useAutoSave.ts`                                             |
 | `EditorHandle` (`<Editor ref>`; `flush()` hands the coalesced typing burst to `onUpdate` synchronously)                                                                                                                                        | `src/components/editor/Editor.tsx`                                     |
-| `createEditSession()` / `useEditSession()` (one Edit Session per open Chapter or Note: debounced save, Save Status, Flush registration, echo check against the content the last save returned; `Editor` never guesses echoes)                  | `src/features/edit-session/`                                           |
+| `createEditSession()` / `useEditSession()` (one Edit Session per open Chapter, Note, or Canvas: debounced save, Save Status, Flush registration, echo check against the content the last save returned; `Editor` never guesses echoes)                  | `src/features/edit-session/`                                           |
 | `useShortcuts(shortcuts, options)` (an entry's registry `id` lists it as a Bound Shortcut while mounted and enabled)                                                                                                                           | `src/lib/shortcuts.ts`                                                 |
 | `useBoundShortcutIds(ids, enabled)` / `useBoundShortcuts()` (declare keys handled outside `useShortcuts`; read what works on this screen)                                                                                                      | `src/lib/bound-shortcuts.ts`                                           |
 | `editorKeymapShortcutIds(editor)` (the `editor-keymap` registry shortcuts a TipTap editor's extensions really bind)                                                                                                                            | `src/components/editor/keymap-shortcuts.ts`                            |
