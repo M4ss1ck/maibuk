@@ -79,6 +79,7 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
       status TEXT DEFAULT 'draft',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
+      content_updated_at INTEGER,
       last_opened_at INTEGER,
       last_chapter_id TEXT
     )

@@ -1,21 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
-import { notifyLocalChange, onLocalChange } from "@/features/sync/local-changes";
+import { emitChange, onChange, resetChangeFeedForTests } from "@/features/sync/change-feed";
 import {
   flushPendingEdits,
   PendingEditsFlushError,
   registerPendingEditsFlush,
 } from "@/features/sync/pending-edits";
 
-describe("local change signal", () => {
-  it("notifies subscribers until they unsubscribe", () => {
+describe("change feed", () => {
+  it("notifies subscribers until they unsubscribe", async () => {
+    resetChangeFeedForTests();
     const listener = vi.fn();
-    const off = onLocalChange(listener);
+    const off = onChange(listener);
 
-    notifyLocalChange();
+    await emitChange({ entity: "book", id: "b1", origin: "local", kind: "content" });
     off();
-    notifyLocalChange();
+    await emitChange({ entity: "book", id: "b1", origin: "local", kind: "content" });
 
     expect(listener).toHaveBeenCalledTimes(1);
+    resetChangeFeedForTests();
   });
 });
 

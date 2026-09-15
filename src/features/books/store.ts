@@ -1,33 +1,13 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
-import { notifyLocalChange } from "@/features/sync/local-changes";
-import { recordTombstone } from "@/features/sync/tombstones";
-import type { Book, BookStatus, CreateBookInput, UpdateBookInput } from "@/features/books/types";
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function toBook(row: Record<string, unknown>): Book {
-  return {
-    id: row.id as string,
-    title: row.title as string,
-    subtitle: row.subtitle as string | undefined,
-    authorName: row.author_name as string,
-    description: row.description as string | undefined,
-    genre: row.genre as string | undefined,
-    language: row.language as string,
-    coverImagePath: row.cover_image_path as string | undefined,
-    coverData: row.cover_data as string | undefined,
-    wordCount: row.word_count as number,
-    targetWordCount: row.target_word_count as number | undefined,
-    status: row.status as BookStatus,
-    createdAt: new Date((row.created_at as number) * 1000),
-    updatedAt: new Date((row.updated_at as number) * 1000),
-    lastOpenedAt: row.last_opened_at ? new Date((row.last_opened_at as number) * 1000) : undefined,
-    lastChapterId: row.last_chapter_id as string | undefined,
-  };
-}
+import {
+  createBookRow,
+  deleteBookRow,
+  toBook,
+  updateBookRow,
+  updateBookWordCountRow,
+} from "@/features/books/write";
+import type { Book, CreateBookInput, UpdateBookInput } from "@/features/books/types";
 
 interface BookStore {
   books: Book[];
@@ -84,7 +64,7 @@ export const useBookStore = create<BookStore>((set) => ({
       }
       const book = toBook(result[0]);
 
-      // Update last opened timestamp
+      // Update last opened timestamp. Navigation state: no Change is emitted.
       const now = Math.floor(Date.now() / 1000);
       await db.execute("UPDATE books SET last_opened_at = ? WHERE id = ?", [now, id]);
 
@@ -112,124 +92,27 @@ export const useBookStore = create<BookStore>((set) => ({
   },
 
   createBook: async (input: CreateBookInput) => {
-    notifyLocalChange();
-    const db = await getDatabase();
-    const id = generateId();
-    const now = Math.floor(Date.now() / 1000);
-
-    await db.execute(
-      `INSERT INTO books (id, title, subtitle, author_name, description, genre, language, word_count, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'en', 0, 'draft', ?, ?)`,
-      [
-        id,
-        input.title,
-        input.subtitle || null,
-        input.authorName,
-        input.description || null,
-        input.genre || null,
-        now,
-        now,
-      ]
-    );
-
-    const newBook: Book = {
-      id,
-      title: input.title,
-      subtitle: input.subtitle,
-      authorName: input.authorName,
-      description: input.description,
-      genre: input.genre,
-      language: "en",
-      wordCount: 0,
-      status: "draft",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    // The write path persists, returns the stored book, and emits the Change.
+    const newBook = await createBookRow(input, "local");
 
     set((state) => ({ books: [newBook, ...state.books] }));
     return newBook;
   },
 
   updateBook: async (id: string, input: UpdateBookInput) => {
-    notifyLocalChange();
-    const db = await getDatabase();
-    const now = Math.floor(Date.now() / 1000);
-
-    const updates: string[] = ["updated_at = ?"];
-    const values: unknown[] = [now];
-
-    if (input.title !== undefined) {
-      updates.push("title = ?");
-      values.push(input.title);
-    }
-    if (input.subtitle !== undefined) {
-      updates.push("subtitle = ?");
-      values.push(input.subtitle);
-    }
-    if (input.authorName !== undefined) {
-      updates.push("author_name = ?");
-      values.push(input.authorName);
-    }
-    if (input.description !== undefined) {
-      updates.push("description = ?");
-      values.push(input.description);
-    }
-    if (input.genre !== undefined) {
-      updates.push("genre = ?");
-      values.push(input.genre);
-    }
-    if (input.language !== undefined) {
-      updates.push("language = ?");
-      values.push(input.language);
-    }
-    if (input.status !== undefined) {
-      updates.push("status = ?");
-      values.push(input.status);
-    }
-    if (input.targetWordCount !== undefined) {
-      updates.push("target_word_count = ?");
-      values.push(input.targetWordCount);
-    }
-    if (input.coverImagePath !== undefined) {
-      updates.push("cover_image_path = ?");
-      values.push(input.coverImagePath);
-    }
-    if (input.coverData !== undefined) {
-      updates.push("cover_data = ?");
-      values.push(input.coverData);
-    }
-    if (input.lastChapterId !== undefined) {
-      updates.push("last_chapter_id = ?");
-      values.push(input.lastChapterId);
-    }
-
-    values.push(id);
-
-    await db.execute(`UPDATE books SET ${updates.join(", ")} WHERE id = ?`, values);
+    // The write path persists, returns the stored book, and emits the Change.
+    const updated = await updateBookRow(id, input, "local");
+    if (!updated) return;
 
     set((state) => ({
-      books: state.books.map((book) =>
-        book.id === id ? { ...book, ...input, updatedAt: new Date() } : book
-      ),
-      currentBook:
-        state.currentBook?.id === id
-          ? { ...state.currentBook, ...input, updatedAt: new Date() }
-          : state.currentBook,
+      books: state.books.map((book) => (book.id === id ? updated : book)),
+      currentBook: state.currentBook?.id === id ? updated : state.currentBook,
     }));
   },
 
   deleteBook: async (id: string) => {
-    notifyLocalChange();
-    const db = await getDatabase();
-    const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [id]);
-    if (rows.length > 0) {
-      await recordTombstone({
-        entityType: "book",
-        entityId: id,
-        title: rows[0].title,
-      });
-    }
-    await db.execute("DELETE FROM books WHERE id = ?", [id]);
+    // The write path records the tombstone, deletes, and emits the Change.
+    await deleteBookRow(id, "local");
 
     set((state) => ({
       books: state.books.filter((book) => book.id !== id),
@@ -238,23 +121,13 @@ export const useBookStore = create<BookStore>((set) => ({
   },
 
   updateWordCount: async (id: string, wordCount: number) => {
-    const db = await getDatabase();
-    const now = Math.floor(Date.now() / 1000);
-
-    await db.execute("UPDATE books SET word_count = ?, updated_at = ? WHERE id = ?", [
-      wordCount,
-      now,
-      id,
-    ]);
+    // Derived recompute: bumps the sync clock but never Last Edited, no Change.
+    const updated = await updateBookWordCountRow(id, wordCount);
+    if (!updated) return;
 
     set((state) => ({
-      books: state.books.map((book) =>
-        book.id === id ? { ...book, wordCount, updatedAt: new Date() } : book
-      ),
-      currentBook:
-        state.currentBook?.id === id
-          ? { ...state.currentBook, wordCount, updatedAt: new Date() }
-          : state.currentBook,
+      books: state.books.map((book) => (book.id === id ? updated : book)),
+      currentBook: state.currentBook?.id === id ? updated : state.currentBook,
     }));
   },
 }));

@@ -1,7 +1,7 @@
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { getPassphrase } from "@/features/sync/crypto";
-import { onLocalChange } from "@/features/sync/local-changes";
+import { onChange } from "@/features/sync/change-feed";
 import type { ConflictResolver } from "@/features/sync/types";
 
 /** Quiet period after the last local change before an automatic sync runs. */
@@ -63,7 +63,12 @@ export async function runAutoSync(_trigger: AutoSyncTrigger): Promise<AutoSyncRe
 export function installAutoSync(): () => void {
   if (uninstall) return uninstall;
 
-  const stopChanges = onLocalChange(() => scheduleAutoSync());
+  // Every local Change — content or metadata — schedules a sync; the kind
+  // only decides whether Last Edited moves.
+  const stopChanges = onChange((change) => {
+    if (change.origin !== "local") return;
+    scheduleAutoSync();
+  });
   const stopAuth = useSyncStore.subscribe((state, previous) => {
     if (state.authVerified && !previous.authVerified) void runAutoSync("launch");
   });

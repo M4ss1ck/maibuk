@@ -346,6 +346,7 @@ function makeBook(overrides: Partial<Book> = {}): Book {
     status: "draft",
     createdAt: new Date(),
     updatedAt: new Date(),
+    contentUpdatedAt: new Date(),
     ...overrides,
   };
 }

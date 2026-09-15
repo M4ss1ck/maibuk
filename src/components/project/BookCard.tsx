@@ -163,7 +163,7 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
         </div>
 
         <p className="text-xs text-muted-foreground mt-2">
-          {t("books.updated")} {formatDate(book.updatedAt)}
+          {t("books.lastEdited")} {formatDate(book.contentUpdatedAt ?? book.updatedAt)}
         </p>
       </div>
     </GridListItem>

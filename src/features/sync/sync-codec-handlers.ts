@@ -43,10 +43,14 @@ export function normalizeBookSnapshotJson(json: string): string {
   // content, and counting it made merely opening a book look like a local edit
   // (turning every incoming change into a conflict). Content edits still change
   // the checksum through the book fields and each chapter's own updatedAt.
+  // contentUpdatedAt is derived from content the same way a note's is: drop it
+  // so the checksum byte-matches a legacy snapshot and unchanged books don't
+  // hit the conflict path on the first sync after upgrade.
   const {
     lastOpenedAt: _lastOpenedAt,
     lastChapterId: _lastChapterId,
     updatedAt: _updatedAt,
+    contentUpdatedAt: _contentUpdatedAt,
     ...book
   } = snapshot.book;
   return JSON.stringify({ ...snapshot, book });

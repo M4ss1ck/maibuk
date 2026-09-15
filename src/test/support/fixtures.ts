@@ -34,6 +34,7 @@ export function buildBook(overrides: Partial<Book> = {}): Book {
     status: "draft",
     createdAt: now,
     updatedAt: now,
+    contentUpdatedAt: now,
     ...overrides,
   };
 }

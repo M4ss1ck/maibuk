@@ -108,6 +108,7 @@
     "noBooksFull": "Todo gran libro empieza con una página en blanco y el valor de llenarla. Crea tu primer libro y deja que las palabras fluyan.",
     "noBooksButton": "Empieza a escribir",
     "updated": "Actualizado",
+    "lastEdited": "Última edición",
     "bookTitle": "Título",
     "bookTitlePlaceholder": "Ingresa el título de tu libro",
     "subtitle": "Subtítulo",

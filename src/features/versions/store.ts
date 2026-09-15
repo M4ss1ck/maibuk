@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
 import { serializeBook, applyBookSnapshot } from "@/features/sync/serializer";
-import { notifyLocalChange } from "@/features/sync/local-changes";
+import { refreshViewsForLocalRestore } from "@/features/sync/view-refresh";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { computeChecksum } from "@/lib/checksum";
 import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
@@ -12,6 +12,7 @@ import type {
   VersionTrigger,
 } from "@/features/versions/types";
 import type { BookSnapshot } from "@/features/sync/types";
+import type { AppliedBook } from "@/features/books/write";
 
 export const DEFAULT_VERSIONS_PAGE_SIZE = 10;
 
@@ -94,7 +95,7 @@ interface VersionStore {
   setPage: (page: number) => Promise<void>;
   createVersion: (input: CreateVersionInput) => Promise<BookVersion | null>;
   getVersionSnapshot: (versionId: string) => Promise<string>;
-  restoreVersion: (versionId: string, options?: RestoreOptions) => Promise<void>;
+  restoreVersion: (versionId: string, options?: RestoreOptions) => Promise<AppliedBook | undefined>;
   renameVersion: (versionId: string, name: string) => Promise<void>;
   deleteVersion: (versionId: string) => Promise<void>;
 }
@@ -351,18 +352,16 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     });
 
     const snapshot = JSON.parse(targetJson) as BookSnapshot;
-    const now = Math.floor(Date.now() / 1000);
 
-    // Bump timestamps so restore reads as a fresh local edit
-    snapshot.book.updatedAt = now;
-    snapshot.chapters.forEach((c) => {
-      c.updatedAt = now;
-    });
-
-    await applyBookSnapshot(snapshot);
-    notifyLocalChange();
+    // A local apply reads as a fresh local edit (timestamps move to now),
+    // persists through the book write path, and emits the local Change so
+    // Auto Sync picks the restored book up. Resolves with the rows as stored.
+    const applied = await applyBookSnapshot(snapshot, "local");
+    // The writing store was bypassed, so refresh the views explicitly.
+    await refreshViewsForLocalRestore(applied.book.id);
     // Re-fetch page 1 so the new pre-restore version is visible on top.
     await useVersionStore.getState().loadVersions(bookId, 1);
+    return applied;
   },
 
   renameVersion: async (versionId: string, name: string) => {

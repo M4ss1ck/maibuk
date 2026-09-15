@@ -90,6 +90,8 @@ function buildBook(overrides: Partial<Book>): Book {
     status: overrides.status ?? "draft",
     createdAt: overrides.createdAt ?? new Date("2026-01-01T00:00:00Z"),
     updatedAt: overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
+    contentUpdatedAt:
+      overrides.contentUpdatedAt ?? overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
   };
 }
 

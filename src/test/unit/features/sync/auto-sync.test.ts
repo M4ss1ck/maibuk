@@ -42,7 +42,7 @@ vi.mock("../../../../features/sync/pending-edits", () => ({
 
 const { AUTO_SYNC_IDLE_DELAY_MS, installAutoSync, resetAutoSyncForTests, runAutoSync } =
   await import("@/features/sync/auto-sync");
-const { notifyLocalChange } = await import("@/features/sync/local-changes");
+const { emitChange } = await import("@/features/sync/change-feed");
 
 function setSyncState(partial: Partial<SyncState>) {
   const previous = { ...syncState };
@@ -164,14 +164,23 @@ describe("automatic sync", () => {
     it("syncs once, after the idle delay following the last local change", async () => {
       installAutoSync();
 
-      notifyLocalChange();
+      await emitChange({ entity: "book", id: "b1", origin: "local", kind: "content" });
       await vi.advanceTimersByTimeAsync(AUTO_SYNC_IDLE_DELAY_MS - 5_000);
-      notifyLocalChange();
+      await emitChange({ entity: "note", id: "n1", origin: "local", kind: "metadata" });
       await vi.advanceTimersByTimeAsync(AUTO_SYNC_IDLE_DELAY_MS - 1);
       expect(syncState.syncAll).not.toHaveBeenCalled();
 
       await vi.advanceTimersByTimeAsync(1);
       expect(syncState.syncAll).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores remote changes", async () => {
+      installAutoSync();
+
+      await emitChange({ entity: "book", id: "b1", origin: "remote", kind: "content" });
+      await vi.advanceTimersByTimeAsync(AUTO_SYNC_IDLE_DELAY_MS * 2);
+
+      expect(syncState.syncAll).not.toHaveBeenCalled();
     });
 
     it("runs the launch sync when the session becomes verified", async () => {
@@ -202,7 +211,7 @@ describe("automatic sync", () => {
       const uninstall = installAutoSync();
       expect(installAutoSync()).toBe(uninstall);
 
-      notifyLocalChange();
+      await emitChange({ entity: "book", id: "b1", origin: "local", kind: "content" });
       uninstall();
       setSyncState({ authVerified: true });
       await vi.advanceTimersByTimeAsync(AUTO_SYNC_IDLE_DELAY_MS * 2);

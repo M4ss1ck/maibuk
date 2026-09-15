@@ -25,6 +25,9 @@ export const books = sqliteTable("books", {
   // Timestamps (stored as Unix timestamps)
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
+  // User-facing Last Edited: moves on content/title edits, not on
+  // organizational changes. Null on rows from before the column existed.
+  contentUpdatedAt: integer("content_updated_at"),
   lastOpenedAt: integer("last_opened_at"),
 });
 

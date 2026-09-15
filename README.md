@@ -323,6 +323,26 @@ and records it in the sync log. Rejected object writes include the operation
 available, and server validation codes. Include that full error when reporting
 a sync problem; do not include passwords, encryption passphrases, or note text.
 
+### How local edits reach sync and the screen
+
+Every Book, Chapter, and Note write goes through one narrow write path per
+entity (`src/features/books/write.ts`, `src/features/chapters/write.ts`,
+`src/features/notes/write.ts`): normalize, persist, return the stored row,
+then emit a Change on the single Change Feed
+(`src/features/sync/change-feed.ts`) shaped
+`{ entity: "book" | "note", id, origin: "local" | "remote", kind: "content" | "metadata" }`.
+Chapter edits are reported under their containing Book's id.
+
+- Auto Sync listens to local Changes of both kinds; remote Changes never
+  schedule it.
+- Pulled snapshots apply through the same write paths with a remote origin;
+  the view-refresh subscriber (`src/features/sync/view-refresh.ts`) re-reads
+  the affected stores in place, so open editors keep their mounts and
+  selection. Version Restore applies with a local origin and refreshes the
+  views explicitly.
+- The kind only decides whether Last Edited (`content_updated_at`) moves:
+  content and title edits move it, pin/order/status moves do not.
+
 The Notes scope processes all local notes, so a failed upload may belong to a
 different note from the one currently open. The reported object ID identifies
 which write failed. A failed sync does not advance the last synced time.

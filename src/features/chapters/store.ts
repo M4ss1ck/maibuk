@@ -1,37 +1,17 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
-import { notifyLocalChange } from "@/features/sync/local-changes";
-import { assignHeadingIds } from "@/features/links/heading-ids";
-import { reindexSource } from "@/features/links/link-index";
+import {
+  createChapterRow,
+  deleteChapterRow,
+  reorderChapterRows,
+  toChapter,
+  updateChapterRow,
+} from "@/features/chapters/write";
 import type {
   Chapter,
   CreateChapterInput,
   UpdateChapterInput,
-  ChapterType,
-  ChapterStatus,
 } from "@/features/chapters/types";
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function toChapter(row: Record<string, unknown>): Chapter {
-  return {
-    id: row.id as string,
-    bookId: row.book_id as string,
-    title: row.title as string,
-    content: row.content as string | null,
-    synopsis: row.synopsis as string | undefined,
-    order: row.order as number,
-    parentId: row.parent_id as string | undefined,
-    chapterType: row.chapter_type as ChapterType,
-    wordCount: row.word_count as number,
-    status: row.status as ChapterStatus,
-    isIncludedInExport: Boolean(row.is_included_in_export),
-    createdAt: new Date((row.created_at as number) * 1000),
-    updatedAt: new Date((row.updated_at as number) * 1000),
-  };
-}
 
 interface ChapterStore {
   chapters: Chapter[];
@@ -132,47 +112,8 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   },
 
   createChapter: async (input: CreateChapterInput) => {
-    notifyLocalChange();
-    const db = await getDatabase();
-    const id = generateId();
-    const now = Math.floor(Date.now() / 1000);
-
-    // Get the next order number
-    const orderResult = await db.select<{ max_order: number | null }[]>(
-      'SELECT MAX("order") as max_order FROM chapters WHERE book_id = ?',
-      [input.bookId]
-    );
-    const nextOrder = (orderResult[0]?.max_order ?? -1) + 1;
-
-    await db.execute(
-      `INSERT INTO chapters (id, book_id, title, "order", parent_id, chapter_type, word_count, status, is_included_in_export, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, 'draft', 1, ?, ?)`,
-      [
-        id,
-        input.bookId,
-        input.title,
-        nextOrder,
-        input.parentId || null,
-        input.chapterType || "chapter",
-        now,
-        now,
-      ]
-    );
-
-    const newChapter: Chapter = {
-      id,
-      bookId: input.bookId,
-      title: input.title,
-      content: null,
-      order: nextOrder,
-      parentId: input.parentId,
-      chapterType: input.chapterType || "chapter",
-      wordCount: 0,
-      status: "draft",
-      isIncludedInExport: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    // The write path persists, returns the stored chapter, and emits the Change.
+    const newChapter = await createChapterRow(input, "local");
 
     set((state) =>
       state.currentBookId === null || state.currentBookId === input.bookId
@@ -183,119 +124,22 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   },
 
   updateChapter: async (id: string, input: UpdateChapterInput) => {
-    notifyLocalChange();
-    const db = await getDatabase();
-    const now = Math.floor(Date.now() / 1000);
-    let sourceBookId =
-      get().chapters.find((chapter) => chapter.id === id)?.bookId ??
-      (get().currentChapter?.id === id ? get().currentChapter?.bookId : undefined);
-    if (input.content !== undefined && sourceBookId === undefined) {
-      const rows = await db.select<{ book_id: string }[]>(
-        "SELECT book_id FROM chapters WHERE id = ?",
-        [id]
-      );
-      sourceBookId = rows[0]?.book_id;
-    }
-
-    const updates: string[] = ["updated_at = ?"];
-    const values: unknown[] = [now];
-
-    if (input.title !== undefined) {
-      updates.push("title = ?");
-      values.push(input.title);
-    }
-    if (input.content !== undefined) {
-      const normalized = assignHeadingIds(input.content);
-      input = { ...input, content: normalized.html };
-      updates.push("content = ?");
-      values.push(normalized.html);
-
-      // Calculate word count from content
-      const text = normalized.html.replace(/<[^>]*>/g, " ");
-      const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length;
-      updates.push("word_count = ?");
-      values.push(wordCount);
-    }
-    if (input.synopsis !== undefined) {
-      updates.push("synopsis = ?");
-      values.push(input.synopsis);
-    }
-    if (input.chapterType !== undefined) {
-      updates.push("chapter_type = ?");
-      values.push(input.chapterType);
-    }
-    if (input.status !== undefined) {
-      updates.push("status = ?");
-      values.push(input.status);
-    }
-    if (input.isIncludedInExport !== undefined) {
-      updates.push("is_included_in_export = ?");
-      values.push(input.isIncludedInExport ? 1 : 0);
-    }
-
-    values.push(id);
-
-    await db.execute(`UPDATE chapters SET ${updates.join(", ")} WHERE id = ?`, values);
-
-    // Calculate word count if content was updated
-    let wordCount: number | undefined;
-    if (input.content !== undefined) {
-      const text = input.content.replace(/<[^>]*>/g, " ");
-      wordCount = text.split(/\s+/).filter((w) => w.length > 0).length;
-    }
+    // The write path normalizes, persists, returns the stored chapter (even
+    // when it is not loaded), and emits the Change.
+    const stored = await updateChapterRow(id, input, "local");
+    if (!stored) return null;
 
     set((state) => ({
-      chapters: state.chapters.map((chapter) =>
-        chapter.id === id
-          ? {
-              ...chapter,
-              ...input,
-              ...(wordCount !== undefined ? { wordCount } : {}),
-              updatedAt: new Date(),
-            }
-          : chapter
-      ),
-      currentChapter:
-        state.currentChapter?.id === id
-          ? {
-              ...state.currentChapter,
-              ...input,
-              ...(wordCount !== undefined ? { wordCount } : {}),
-              updatedAt: new Date(),
-            }
-          : state.currentChapter,
+      chapters: state.chapters.map((chapter) => (chapter.id === id ? stored : chapter)),
+      currentChapter: state.currentChapter?.id === id ? stored : state.currentChapter,
     }));
 
-    // Captured before awaiting: a later save may publish newer content meanwhile.
-    const stored =
-      get().chapters.find((chapter) => chapter.id === id) ??
-      (get().currentChapter?.id === id ? get().currentChapter : null);
-
-    if (input.content !== undefined) {
-      await reindexSource({
-        sourceType: "chapter",
-        sourceId: id,
-        sourceBookId,
-        contentHtml: input.content,
-      }).catch(() => {});
-    }
     return stored;
   },
 
   deleteChapter: async (id: string) => {
-    notifyLocalChange();
-    const db = await getDatabase();
-    const rows = await db.select<{ book_id: string }[]>(
-      "SELECT book_id FROM chapters WHERE id = ?",
-      [id]
-    );
-    await db.execute("DELETE FROM chapters WHERE id = ?", [id]);
-    if (rows.length > 0) {
-      await db.execute("UPDATE books SET updated_at = ? WHERE id = ?", [
-        Math.floor(Date.now() / 1000),
-        rows[0].book_id,
-      ]);
-    }
+    // The write path deletes, touches the parent Book, and emits the Change.
+    await deleteChapterRow(id, "local");
 
     set((state) => ({
       chapters: state.chapters.filter((chapter) => chapter.id !== id),
@@ -304,23 +148,8 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   },
 
   reorderChapters: async (bookId: string, chapterIds: string[]) => {
-    notifyLocalChange();
-    const db = await getDatabase();
-    const now = Math.floor(Date.now() / 1000);
-
-    // Update each chapter's order — each statement auto-commits individually
-    for (let i = 0; i < chapterIds.length; i++) {
-      try {
-        await db.execute('UPDATE chapters SET "order" = ?, updated_at = ? WHERE id = ?', [
-          i,
-          now,
-          chapterIds[i],
-        ]);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to reorder chapter ${i + 1}/${chapterIds.length}: ${detail}`);
-      }
-    }
+    // The write path persists the order and emits the Change.
+    await reorderChapterRows(bookId, chapterIds, "local");
 
     // Update local state
     set((state) => ({
