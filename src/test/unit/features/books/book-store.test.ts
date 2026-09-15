@@ -130,9 +130,9 @@ describe("useBookStore", () => {
 
   describe("local change signal", () => {
     it("signals edits, but not opening a book, word counts, or a sync refresh", async () => {
-      const { onLocalChange } = await import("@/features/sync/local-changes");
+      const { onChange } = await import("@/features/sync/change-feed");
       const listener = vi.fn();
-      const off = onLocalChange(listener);
+      const off = onChange(listener);
       try {
         const book = await useBookStore.getState().createBook({ title: "A", authorName: "Me" });
         await useBookStore.getState().updateBook(book.id, { title: "B" });

@@ -155,9 +155,11 @@ export interface BookSnapshot {
     wordCount: number;
     targetWordCount: number | null;
     status: string;
-    createdAt: number; // Unix seconds
-    updatedAt: number;
-    lastOpenedAt: number | null;
+      createdAt: number; // Unix seconds
+      updatedAt: number;
+      // Optional for backward compatibility with snapshots from older clients.
+      contentUpdatedAt?: number;
+      lastOpenedAt: number | null;
     lastChapterId: string | null;
   };
   chapters: Array<{

@@ -17,6 +17,8 @@ export interface Book {
   status: BookStatus;
   createdAt: Date;
   updatedAt: Date;
+  /** User-facing Last Edited: moves on title/details/cover and chapter text edits, not on organizational changes. */
+  contentUpdatedAt: Date;
   lastOpenedAt?: Date;
   lastChapterId?: string;
 }

@@ -13,7 +13,10 @@ const {
   mockInsertProjectAssets,
   mockNormalizeEpubProject,
   mockReadEpub,
+  mockRefreshBooks,
+  mockRefreshChapters,
   mockScanEpub,
+  mockSelect,
   mockUpdateBook,
   mockUpdateChapter,
 } = vi.hoisted(() => ({
@@ -29,7 +32,10 @@ const {
   mockInsertProjectAssets: vi.fn(),
   mockNormalizeEpubProject: vi.fn(),
   mockReadEpub: vi.fn(),
+  mockRefreshBooks: vi.fn(),
+  mockRefreshChapters: vi.fn(),
   mockScanEpub: vi.fn(),
+  mockSelect: vi.fn(),
   mockUpdateBook: vi.fn(),
   mockUpdateChapter: vi.fn(),
 }));
@@ -53,12 +59,20 @@ vi.mock("../../../../features/import/epub-project-repo", () => ({
 }));
 vi.mock("../../../../features/books/store", () => ({
   useBookStore: {
-    getState: () => ({ createBook: mockCreateBook, updateBook: mockUpdateBook }),
+    getState: () => ({
+      createBook: mockCreateBook,
+      updateBook: mockUpdateBook,
+      refreshBooks: mockRefreshBooks,
+    }),
   },
 }));
 vi.mock("../../../../features/chapters/store", () => ({
   useChapterStore: {
-    getState: () => ({ createChapter: mockCreateChapter, updateChapter: mockUpdateChapter }),
+    getState: () => ({
+      createChapter: mockCreateChapter,
+      updateChapter: mockUpdateChapter,
+      refreshChapters: mockRefreshChapters,
+    }),
   },
 }));
 vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
@@ -150,7 +164,8 @@ describe("EPUB import service", () => {
     mockInsertEpubStructure.mockResolvedValue(undefined);
     mockInsertChapterEpubMeta.mockResolvedValue(undefined);
     mockDeleteExecute.mockResolvedValue({ rowsAffected: 0 });
-    mockGetDatabase.mockResolvedValue({ execute: mockDeleteExecute });
+    mockSelect.mockResolvedValue([]);
+    mockGetDatabase.mockResolvedValue({ execute: mockDeleteExecute, select: mockSelect });
   });
 
   it("scans without writing to the database", async () => {
@@ -192,10 +207,53 @@ describe("EPUB import service", () => {
 
   it("creates book, chapters, assets, metadata, styles, structure, and chapter mappings", async () => {
     mockScanEpub.mockReturnValue(lossyReport);
+    // Stored-result reads after the writes.
+    mockSelect
+      .mockResolvedValueOnce([
+        {
+          id: "book-1",
+          title: "Imported Book",
+          subtitle: null,
+          author_name: "Author",
+          description: "Description",
+          genre: null,
+          language: "es",
+          cover_image_path: null,
+          cover_data: null,
+          word_count: 1,
+          target_word_count: null,
+          status: "draft",
+          created_at: 1000,
+          updated_at: 1000,
+          content_updated_at: 1000,
+          last_opened_at: null,
+          last_chapter_id: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "chapter-1",
+          book_id: "book-1",
+          title: "Chapter One",
+          content: "<p>One</p>",
+          synopsis: null,
+          order: 0,
+          parent_id: null,
+          chapter_type: "chapter",
+          word_count: 1,
+          status: "draft",
+          is_included_in_export: 1,
+          created_at: 1000,
+          updated_at: 1000,
+        },
+      ]);
 
     const result = await importEpubProject({ bytes: new Uint8Array([1]), acknowledged: true });
 
-    expect(result).toEqual({ bookId: "book-1" });
+    expect(result.bookId).toBe("book-1");
+    expect(result.book).toMatchObject({ id: "book-1", title: "Imported Book", language: "es" });
+    expect(result.chapters.map((c) => c.id)).toEqual(["chapter-1"]);
+    expect(result.chapters[0].content).toBe("<p>One</p>");
     expect(mockCreateBook).toHaveBeenCalledWith({
       title: "Imported Book",
       authorName: "Author",
@@ -240,5 +298,12 @@ describe("EPUB import service", () => {
       "book-1",
     ]);
     expect(mockDeleteExecute).toHaveBeenCalledWith("DELETE FROM books WHERE id = ?", ["book-1"]);
+    // Shared removal path: no tombstone for a book that was never synced...
+    for (const [sql] of mockDeleteExecute.mock.calls) {
+      expect(String(sql)).not.toContain("sync_tombstones");
+    }
+    // ...and the views are refreshed so no phantom book lingers.
+    expect(mockRefreshBooks).toHaveBeenCalled();
+    expect(mockRefreshChapters).toHaveBeenCalledWith("book-1");
   });
 });

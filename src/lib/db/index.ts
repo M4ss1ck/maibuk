@@ -46,10 +46,13 @@ async function initializeSchema(): Promise<void> {
       status TEXT DEFAULT 'draft',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
+      content_updated_at INTEGER,
       last_opened_at INTEGER,
       last_chapter_id TEXT
     )
   `);
+
+  await migrateBooksContentUpdatedAt(db);
 
   // Migration: Add last_chapter_id column for existing databases
   await db
@@ -341,8 +344,20 @@ async function initializeSchema(): Promise<void> {
   await ensureMetricsSchema(db);
 }
 
-export async function closeDatabase(): Promise<void> {
-  if (db) {
+// Migration: add the Book Last Edited column (user-facing "modified" time,
+// bumped only by title/details/cover and chapter text edits — not by status,
+// order, or navigation stamps). Backfill existing rows from updated_at so
+// their displayed date is preserved.
+export async function migrateBooksContentUpdatedAt(
+  db: Pick<DatabaseAdapter, "execute">
+): Promise<void> {
+  await db.execute(`ALTER TABLE books ADD COLUMN content_updated_at INTEGER`).catch(() => {});
+  await db
+    .execute(`UPDATE books SET content_updated_at = updated_at WHERE content_updated_at IS NULL`)
+    .catch(() => {});
+}
+
+export async function closeDatabase(): Promise<void> {  if (db) {
     await db.close();
     db = null;
   }

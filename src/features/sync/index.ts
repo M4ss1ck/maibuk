@@ -11,6 +11,22 @@ export {
   isSyncCryptoError,
 } from "@/features/sync/crypto";
 export { serializeBook, applyBookSnapshot } from "@/features/sync/serializer";
+export {
+  emitChange,
+  onChange,
+  resetChangeFeedForTests,
+} from "@/features/sync/change-feed";
+export type {
+  Change,
+  ChangeEntity,
+  ChangeKind,
+  ChangeOrigin,
+} from "@/features/sync/change-feed";
+export {
+  installViewRefresh,
+  refreshViewsForLocalRestore,
+  resetViewRefreshForTests,
+} from "@/features/sync/view-refresh";
 export { syncBook, syncAllBooks } from "@/features/sync/sync-engine";
 export {
   recordTombstone,

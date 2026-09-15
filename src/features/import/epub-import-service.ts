@@ -1,6 +1,8 @@
-import { getDatabase } from "@/lib/db";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
+import { fetchStoredBook, removeBookRow } from "@/features/books/write";
+import { fetchStoredChapters } from "@/features/chapters/write";
+import { refreshViewsForLocalRestore } from "@/features/sync/view-refresh";
 import {
   insertBookMetadata,
   insertBookStyles,
@@ -14,6 +16,8 @@ import { insertProjectAssets } from "@/features/import/project-assets-repo";
 import { rewriteImportedInternalLinks } from "@/features/import/internal-link-rewrite";
 import type { CompatibilityReport, ImportPreview } from "@/features/import/types";
 import { canImport, requiresAcknowledgement } from "@/features/import/types";
+import type { Book } from "@/features/books/types";
+import type { Chapter } from "@/features/chapters/types";
 
 export async function scanEpubForImport(
   bytes: Uint8Array
@@ -29,7 +33,7 @@ export async function scanEpubForImport(
 export async function importEpubProject(input: {
   bytes: Uint8Array;
   acknowledged: boolean;
-}): Promise<{ bookId: string }> {
+}): Promise<{ bookId: string; book: Book; chapters: Chapter[] }> {
   const report = scanEpub(input.bytes);
 
   if (!canImport(report)) {
@@ -96,7 +100,11 @@ export async function importEpubProject(input: {
     });
     await insertChapterEpubMeta(chapterMappings);
 
-    return { bookId: book.id };
+    // Return the rows as stored, after normalization and the link rewrite.
+    const storedBook = await fetchStoredBook(book.id);
+    if (!storedBook) throw new Error(`Book not found after import: ${book.id}`);
+    const storedChapters = await fetchStoredChapters(book.id);
+    return { bookId: book.id, book: storedBook, chapters: storedChapters };
   } catch (error) {
     if (createdBookId) {
       await cleanupPartialImport(createdBookId);
@@ -105,13 +113,21 @@ export async function importEpubProject(input: {
   }
 }
 
+/**
+ * Remove a half-imported book through the shared book removal path (no
+ * tombstone: a failed import was never synced) and refresh the views so no
+ * phantom book lingers. Best-effort: the original import error takes
+ * precedence.
+ */
 async function cleanupPartialImport(bookId: string): Promise<void> {
-  const db = await getDatabase();
-  await db.execute("DELETE FROM chapter_epub_meta WHERE book_id = ?", [bookId]).catch(() => {});
-  await db.execute("DELETE FROM epub_structures WHERE book_id = ?", [bookId]).catch(() => {});
-  await db.execute("DELETE FROM book_styles WHERE book_id = ?", [bookId]).catch(() => {});
-  await db.execute("DELETE FROM book_metadata WHERE book_id = ?", [bookId]).catch(() => {});
-  await db.execute("DELETE FROM project_assets WHERE book_id = ?", [bookId]).catch(() => {});
-  await db.execute("DELETE FROM chapters WHERE book_id = ?", [bookId]).catch(() => {});
-  await db.execute("DELETE FROM books WHERE id = ?", [bookId]).catch(() => {});
+  try {
+    await removeBookRow(bookId, "remote");
+  } catch {
+    // The import already failed; a cleanup failure must not mask it.
+  }
+  try {
+    await refreshViewsForLocalRestore(bookId);
+  } catch {
+    // View refresh is best-effort during cleanup.
+  }
 }

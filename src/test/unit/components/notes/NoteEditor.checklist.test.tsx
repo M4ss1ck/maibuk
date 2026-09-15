@@ -56,6 +56,7 @@ const { mockEditor, mockNotes, mockBooks, mockListAllChaptersForLinking } = vi.h
       status: "draft",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      contentUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
     },
   ] satisfies Book[],
 }));

@@ -1,10 +1,17 @@
+// Sync serialization: snapshots in and out of the database. Writes go
+// through the narrow per-entity write paths (ADR 0005) with a remote origin;
+// view refresh happens through the Change Feed's view-refresh subscribers,
+// which apply callers await via the emission. This module never imports or
+// mutates stores directly.
+
 import { getDatabase } from "@/lib/db";
-import { useBookStore } from "@/features/books/store";
-import { useChapterStore } from "@/features/chapters/store";
-import { useNoteStore } from "@/features/notes/store";
+import { applyBookSnapshotData, removeBookRow, type AppliedBook } from "@/features/books/write";
+import { applyNoteSnapshotData, removeNoteRow } from "@/features/notes/write";
 import { normalizeNoteSnapshotJson } from "@/features/sync/sync-codec-handlers";
 import { stringifySnapshotAsync } from "@/features/sync/sync-codec";
+import type { ChangeOrigin } from "@/features/sync/change-feed";
 import type { BookSnapshot, NoteSnapshot } from "@/features/sync/types";
+import type { Note } from "@/features/notes/types";
 
 interface BookRow {
   id: string;
@@ -21,6 +28,7 @@ interface BookRow {
   status: string;
   created_at: number;
   updated_at: number;
+  content_updated_at: number | null;
   last_opened_at: number | null;
   last_chapter_id: string | null;
 }
@@ -72,6 +80,7 @@ export async function serializeBook(bookId: string): Promise<string> {
       status: bookRow.status,
       createdAt: bookRow.created_at,
       updatedAt: bookRow.updated_at,
+      contentUpdatedAt: bookRow.content_updated_at ?? bookRow.updated_at,
       lastOpenedAt: bookRow.last_opened_at,
       lastChapterId: bookRow.last_chapter_id,
     },
@@ -95,82 +104,17 @@ export async function serializeBook(bookId: string): Promise<string> {
   return stringifySnapshotAsync(snapshot);
 }
 
-export async function applyBookSnapshot(snapshot: BookSnapshot): Promise<void> {
-  const db = await getDatabase();
-  const { book, chapters } = snapshot;
-
-  // Each statement is auto-committed individually. The pre-sync backup
-  // is the safety net if something fails mid-apply (tauri-plugin-sql uses
-  // a connection pool, so BEGIN/COMMIT across separate execute() calls
-  // cannot be relied upon).
-
-  // Upsert book
-  await db.execute(
-    `INSERT OR REPLACE INTO books (
-      id, title, subtitle, author_name, description, genre, language,
-      cover_image_path, cover_data, word_count, target_word_count, status,
-      created_at, updated_at, last_opened_at, last_chapter_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      book.id,
-      book.title,
-      book.subtitle,
-      book.authorName,
-      book.description,
-      book.genre,
-      book.language,
-      book.coverImagePath,
-      book.coverData,
-      book.wordCount,
-      book.targetWordCount,
-      book.status,
-      book.createdAt,
-      book.updatedAt,
-      book.lastOpenedAt,
-      book.lastChapterId,
-    ]
-  );
-
-  // Delete existing chapters for this book, then insert fresh
-  await db.execute("DELETE FROM chapters WHERE book_id = ?", [book.id]);
-
-  for (let i = 0; i < chapters.length; i++) {
-    const ch = chapters[i];
-    try {
-      await db.execute(
-        `INSERT INTO chapters (
-          id, book_id, title, content, synopsis, "order", parent_id,
-          chapter_type, word_count, status, is_included_in_export,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          ch.id,
-          ch.bookId,
-          ch.title,
-          ch.content,
-          ch.synopsis,
-          ch.order,
-          ch.parentId,
-          ch.chapterType,
-          ch.wordCount,
-          ch.status,
-          ch.isIncludedInExport ? 1 : 0,
-          ch.createdAt,
-          ch.updatedAt,
-        ]
-      );
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        `Sync apply failed on chapter ${i + 1}/${chapters.length} ("${ch.title}"): ${detail}`
-      );
-    }
-  }
-
-  // Refresh stores in place so an open editor shows the pulled content without
-  // being torn down (a loading flag or a cleared selection would remount it).
-  await useBookStore.getState().refreshBooks();
-  await useChapterStore.getState().refreshChapters(book.id);
+/**
+ * Replace the local book with a snapshot. Origin is remote for pulls
+ * (timestamps kept) and local for Version Restore (timestamps move to now).
+ * Resolves with the rows as stored; the emission awaits the view refresh, so
+ * by the time this returns an open editor already shows the new content.
+ */
+export async function applyBookSnapshot(
+  snapshot: BookSnapshot,
+  origin: ChangeOrigin = "remote"
+): Promise<AppliedBook> {
+  return applyBookSnapshotData(snapshot, origin);
 }
 
 interface NoteRow {
@@ -224,85 +168,25 @@ export function normalizeNoteSnapshotForSync(json: string): string {
   return normalizeNoteSnapshotJson(json);
 }
 
-export async function applyNoteSnapshot(snapshot: NoteSnapshot): Promise<void> {
-  const db = await getDatabase();
-  const { note } = snapshot;
-  const existing = await db.select<{ collapsed_headings: string | null }[]>(
-    "SELECT collapsed_headings FROM notes WHERE id = ?",
-    [note.id]
-  );
-  const collapsedHeadings =
-    existing.length > 0
-      ? (existing[0].collapsed_headings ?? "[]")
-      : (note.collapsedHeadings ?? "[]");
-
-  await db.execute(
-    `INSERT OR REPLACE INTO notes (
-      id, book_id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      note.id,
-      note.bookId ?? null,
-      note.title,
-      note.content,
-      note.language ?? "en",
-      note.tags,
-      note.pinned ? 1 : 0,
-      note.order,
-      note.wordCount,
-      collapsedHeadings,
-      note.createdAt,
-      note.updatedAt,
-      note.contentUpdatedAt ?? note.updatedAt,
-    ]
-  );
-
-  // Refresh the list and the open note so its editor shows the pulled content.
-  await useNoteStore.getState().refreshNotes();
+/**
+ * Replace the local note with a snapshot (remote pull by default).
+ * Resolves with the note as stored.
+ */
+export async function applyNoteSnapshot(
+  snapshot: NoteSnapshot,
+  origin: ChangeOrigin = "remote"
+): Promise<Note> {
+  return applyNoteSnapshotData(snapshot, origin);
 }
 
-// Removal of an item deleted on another device. Unlike the stores' delete
-// actions this records no tombstone (the server already has the deletion, and a
-// tombstone would block pulling the item if another device restores it) and
-// signals no local change.
+// Removal of an item deleted on another device. Unlike the local delete
+// paths this records no tombstone (the server already has the deletion, and a
+// tombstone would block pulling the item if another device restores it).
 
 export async function removeLocalNote(noteId: string): Promise<void> {
-  const db = await getDatabase();
-  await db.execute("DELETE FROM notes WHERE id = ?", [noteId]);
-  await db.execute("DELETE FROM links WHERE source_id = ?", [noteId]).catch(() => {});
-  useNoteStore.setState((state) => ({
-    notes: state.notes.filter((note) => note.id !== noteId),
-    currentNote: state.currentNote?.id === noteId ? null : state.currentNote,
-  }));
+  await removeNoteRow(noteId, "remote");
 }
 
 export async function removeLocalBook(bookId: string): Promise<void> {
-  const db = await getDatabase();
-  const chapters = await db.select<{ id: string }[]>("SELECT id FROM chapters WHERE book_id = ?", [
-    bookId,
-  ]);
-  for (const chapter of chapters) {
-    await db.execute("DELETE FROM links WHERE source_id = ?", [chapter.id]).catch(() => {});
-  }
-  // The schema declares ON DELETE CASCADE, but no adapter enables SQLite's
-  // foreign_keys pragma, so the dependent rows are deleted explicitly.
-  for (const table of [
-    "chapter_epub_meta",
-    "epub_structures",
-    "book_styles",
-    "book_metadata",
-    "project_assets",
-    "book_versions",
-    "chapters",
-  ]) {
-    await db.execute(`DELETE FROM ${table} WHERE book_id = ?`, [bookId]).catch(() => {});
-  }
-  await db.execute("DELETE FROM books WHERE id = ?", [bookId]);
-  useBookStore.setState((state) => ({
-    books: state.books.filter((book) => book.id !== bookId),
-    currentBook: state.currentBook?.id === bookId ? null : state.currentBook,
-  }));
-  if (useChapterStore.getState().currentBookId === bookId) {
-    useChapterStore.setState({ chapters: [], currentChapter: null, currentBookId: null });
-  }
+  await removeBookRow(bookId, "remote");
 }

@@ -251,9 +251,9 @@ describe("useChapterStore", () => {
 
   describe("local change signal", () => {
     it("signals edits so automatic sync can schedule, but not a sync refresh", async () => {
-      const { onLocalChange } = await import("@/features/sync/local-changes");
+      const { onChange } = await import("@/features/sync/change-feed");
       const listener = vi.fn();
-      const off = onLocalChange(listener);
+      const off = onChange(listener);
       try {
         const chapter = await useChapterStore.getState().createChapter({
           bookId: "book-1",

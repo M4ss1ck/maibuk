@@ -51,7 +51,7 @@ Before naming anything or proposing a restructure, read:
 
 1. **`CONTEXT.md`**: the domain glossary. New identifiers, UI copy, test names, commit messages, and docs use its terms (Book, Checkpoint, Unfiled Note, Deleted Elsewhere...). A word listed under a term's _Avoid_ is a review flag.
    - Terms in the main sections describe how the app works today.
-   - Terms under **Decided, not built** have an accepted ADR the code has not caught up with. Until a change implements that ADR, new code uses the current mechanism (for example, new store writes still call `notifyLocalChange()`). Use an ADR term only for something that already behaves as the term defines; otherwise refer to the current mechanism by its code name (`notifyLocalChange`, `refreshBooks`) and do not coin a synonym. Implementing an ADR is its own change.
+   - Terms under **Decided, not built** have an accepted ADR the code has not caught up with. Until a change implements that ADR, new code uses the current mechanism (for example, Book and Note sync still runs through the separate `syncBook()` and `syncSingleNote()` paths in `sync-engine.ts` until Entity Sync ships). Use an ADR term only for something that already behaves as the term defines; otherwise refer to the current mechanism by its code name (`refreshBooks`) and do not coin a synonym. Implementing an ADR is its own change.
    - Terms under **Anticipated** are reserved names for features nobody has decided to build. Use them if that feature is built instead of inventing a synonym.
    - A `_UI_` label marked _(known mismatch)_ is shipped copy that contradicts the glossary. It may be fixed in a dedicated copy change or in any change that already touches that screen; neither is required. The fix updates both locale files and, in the same commit, edits only the mismatched part of that `_UI_` line in `CONTEXT.md`: the new label replaces the old one and the _(known mismatch)_ marker goes. Correct labels on the same line stay. A label that only becomes wrong once a **Decided, not built** term ships is changed by the change implementing that ADR, not before.
 2. **`docs/adr/`**: architecture decisions. `status: accepted (not implemented)` means decided but not yet in the code. Do not re-propose an alternative an ADR rejected unless you can name what changed; if you do, write a new ADR that supersedes it.
@@ -234,6 +234,12 @@ Button.displayName = "Button";
 - **Local component state**: `useState` / `useRef` for ephemeral UI state
 - **No Context API for data** — Zustand handles all shared state. Context is only used for providers (`ThemeProvider`, `AppSettingsProvider`)
 
+### Synced entity writes
+
+Book, Chapter, and Note mutations go through `src/features/books/write.ts`, `src/features/chapters/write.ts`, and `src/features/notes/write.ts`. These paths own normalization, persistence, stored return values, and the Change Feed. Stores remain in-memory views. Restore, Import, and the sync serializer use the same paths.
+
+A Chapter Change identifies its containing Book. Every local Change schedules Auto Sync, including metadata. Last Edited advances for content and title changes; pin, order, and status leave it unchanged. Publish only after persistence; tests must cover failed writes, partial multi-write failures, origin, and the resulting view refresh.
+
 ### Zustand Store Pattern
 
 Every store follows this structure (see `src/features/books/store.ts`):
@@ -280,7 +286,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `decideSyncAction()` (pure three-way push/pull/conflict decision against the last-synced base)                                                                                                                                                 | `src/features/sync/sync-decision.ts`                                   |
 | `getSyncBase()` / `setSyncBase()` / `clearAllSyncBases()` (per-device `sync_state` table, not backed up)                                                                                                                                       | `src/features/sync/sync-state.ts`                                      |
 | `installAutoSync()` / `runAutoSync()` (launch + idle-after-edit automatic sync, `autoSync` setting)                                                                                                                                            | `src/features/sync/auto-sync.ts`                                       |
-| `notifyLocalChange()` / `onLocalChange()` (dependency-free "user edited synced data" signal; call from store mutations)                                                                                                                        | `src/features/sync/local-changes.ts`                                   |
+| `emitChange()` / `onChange()` (Change Feed; per-entity write paths publish persisted Changes, Auto Sync consumes local Changes)                                                                                                                        | `src/features/sync/change-feed.ts`                                   |
 | `registerPendingEditsFlush()` / `flushPendingEdits()` (editors land unsaved text, including the Editor's coalescing burst, before a sync run or Version restore; rejects with `PendingEditsFlushError` when a save fails, which stops the run) | `src/features/sync/pending-edits.ts`                                   |
 | `useVersionStore`                                                                                                                                                                                                                              | `src/features/versions/store.ts`                                       |
 | `useAutoCheckpoint`                                                                                                                                                                                                                            | `src/features/versions/useAutoCheckpoint.ts`                           |
@@ -548,7 +554,7 @@ Required coverage for the current sync-safety / backup / version-control feature
 6. **Conflict outcomes are truthful**: equal-timestamp conflicts, remote-only pulls, cancel behavior, and final sync status must be tested end-to-end through the store/UI flow.
 7. **Lifecycle triggers are covered**: launch, close, manual, pre-sync, and pre-restore backup triggers must be tested at the orchestration layer.
 8. **Shared destructive helpers are tested directly**: if a helper is extracted and used by restore/import/sync, it needs its own unit tests and must be added to `coverage.include`.
-9. **Version restore and version sync are safe**: `restoreVersion` lands pending editor saves first (a failed save rejects before anything changes), creates a `pre-restore` version before applying the snapshot, bumps `updated_at` to now, and calls `notifyLocalChange()`; `syncVersions` verifies checksums before inserting pulled blobs; pure-union sync with no duplicates.
+9. **Version restore and version sync are safe**: `restoreVersion` lands pending editor saves first (a failed save rejects before anything changes), creates a `pre-restore` version before applying the snapshot, bumps `updated_at` to now, and emits a local content Change through the shared Book write path; `syncVersions` verifies checksums before inserting pulled blobs; pure-union sync with no duplicates.
 10. **Unsaved editor text is never dropped silently**: every sync run flushes open editors before its pre-sync backup or first read, and a failed save stops the run with a Sync Log error; a failed editor save shows Save Status "Not saved" and is retried on the next edit, Flush, or unmount. Test through `NoteEditor.dataSafety.test.tsx` and `BookEditor.dataSafety.test.tsx`.
 
 Rules for this feature:

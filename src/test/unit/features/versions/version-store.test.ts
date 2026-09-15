@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
-import { onLocalChange } from "@/features/sync/local-changes";
 import { PendingEditsFlushError, registerPendingEditsFlush } from "@/features/sync/pending-edits";
 
 const { mockGetDatabase } = vi.hoisted(() => ({
@@ -66,6 +65,9 @@ describe("useVersionStore", () => {
     await seedBook(testDb);
     mockSerializeBook.mockReset();
     mockApplyBookSnapshot.mockReset();
+    // applyBookSnapshot resolves with the rows as stored; restore reads the
+    // applied book id off it to refresh the views.
+    mockApplyBookSnapshot.mockResolvedValue({ book: { id: "book-1" }, chapters: [] });
 
     useVersionStore.setState({
       versions: [],
@@ -659,7 +661,7 @@ describe("useVersionStore", () => {
       expect(rows[0].name).toBe('Before restoring "Target"');
     });
 
-    it("bumps updatedAt timestamps in the snapshot before applying", async () => {
+    it("hands the stored snapshot to the local snapshot apply", async () => {
       const targetSnapshot = makeSnapshot(1000, 1000);
       const currentSnapshot = makeSnapshot(1200, 2000);
 
@@ -672,18 +674,15 @@ describe("useVersionStore", () => {
         triggerType: "manual",
       });
 
-      const beforeRestore = Math.floor(Date.now() / 1000);
       await useVersionStore.getState().restoreVersion(target!.id);
-      const afterRestore = Math.floor(Date.now() / 1000);
 
+      // Timestamp bumps and the local Change live in the snapshot write path
+      // (covered with a live serializer in the restore integration test);
+      // restore owns routing the stored snapshot through it as local.
       expect(mockApplyBookSnapshot).toHaveBeenCalledTimes(1);
-      const applied = mockApplyBookSnapshot.mock.calls[0][0] as {
-        book: { updatedAt: number };
-        chapters: Array<{ updatedAt: number }>;
-      };
-
-      expect(applied.book.updatedAt).toBeGreaterThanOrEqual(beforeRestore);
-      expect(applied.book.updatedAt).toBeLessThanOrEqual(afterRestore);
+      const [snapshotArg, origin] = mockApplyBookSnapshot.mock.calls[0];
+      expect(snapshotArg).toEqual(JSON.parse(targetSnapshot));
+      expect(origin).toBe("local");
     });
 
     it("lands pending editor saves before taking the pre-restore version", async () => {
@@ -732,26 +731,20 @@ describe("useVersionStore", () => {
       expect(preRestore).toHaveLength(0);
     });
 
-    it("signals a local change so Auto Sync picks up the restored book", async () => {
+    it("applies the restored snapshot as a local change so Auto Sync picks it up", async () => {
       mockSerializeBook.mockResolvedValue(makeSnapshot(1000, 1000));
       const target = await useVersionStore.getState().createVersion({
         bookId: "book-1",
         triggerType: "manual",
       });
-      const listener = vi.fn();
-      const off = onLocalChange(listener);
+      // The snapshot apply itself is mocked here; what this owns is routing
+      // the restore through it as a local apply. The real local emission is
+      // covered by the restore integration test with a live serializer.
+      await useVersionStore.getState().restoreVersion(target!.id);
 
-      try {
-        await useVersionStore.getState().restoreVersion(target!.id);
-      } finally {
-        off();
-      }
-
-      expect(listener).toHaveBeenCalled();
-      const calls = listener.mock.invocationCallOrder;
-      expect(calls[calls.length - 1]).toBeGreaterThan(
-        mockApplyBookSnapshot.mock.invocationCallOrder[0]
-      );
+      expect(mockApplyBookSnapshot).toHaveBeenCalled();
+      const [, origin] = mockApplyBookSnapshot.mock.calls[0];
+      expect(origin).toBe("local");
     });
 
     it("refreshes version list after restore", async () => {

@@ -112,7 +112,7 @@ Kept at the top of its Gallery by the author's choice, for Notes and Canvases.
 _Avoid_: favorite, starred
 
 **Last Edited**:
-When a Note's or Canvas's content or title last changed, ignoring Tags, pins, and order.
+When a Note's, Book's, or Canvas's content or title last changed, ignoring Tags, pins, order, and status. A Chapter text or title change moves its Book's Last Edited.
 _Avoid_: updated, modified
 
 **Heading**:
@@ -289,6 +289,20 @@ _Avoid_: restore, undelete
 The list of what one sync run did to each Synced Item, including failures.
 _UI_: en "Sync log" / es "Registro de sincronización"
 
+**Change**:
+One saved edit to a Synced Item, marked with its Origin and its Change Kind. (ADR 0003)
+_Avoid_: event, mutation
+
+**Origin**:
+Where a Change came from: this device, or another device through a Pull. (ADR 0003)
+
+**Change Kind**:
+Whether a Change touched what an item says (content, including its title) or only how it is organized (metadata such as pin, order, and status). Every Change schedules Auto Sync regardless of kind; the kind only decides whether Last Edited moves. (ADR 0003)
+
+**Change Feed**:
+The single stream of Changes that Auto Sync, Galleries, and open editors listen to. (ADR 0003)
+_Avoid_: event bus, notifications
+
 ## Editing
 
 **Save Status**:
@@ -377,21 +391,7 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 
 ## Decided, not built
 
-Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter and a Canvas's pan and zoom, and ADR 0003 extends Last Edited to Books, whose cards still show en "Updated" for every change.
-
-**Change**:
-One saved edit to a Synced Item, marked with its Origin and its Change Kind. (ADR 0003)
-_Avoid_: event, mutation
-
-**Origin**:
-Where a Change came from: this device, or another device through a Pull. (ADR 0003)
-
-**Change Kind**:
-Whether a Change touched what an item says (content, including its title) or only how it is organized (metadata such as pin, order, and status). (ADR 0003)
-
-**Change Feed**:
-The single stream of Changes that Auto Sync, Galleries, and open editors listen to. (ADR 0003)
-_Avoid_: event bus, notifications
+Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter and a Canvas's pan and zoom.
 
 **Entity Sync**:
 The one shared way Books, Notes, and Canvases are pushed, pulled, and put in Conflict, separate from how history and metrics sync. (ADR 0006, 0007)

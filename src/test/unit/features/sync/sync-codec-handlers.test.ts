@@ -137,4 +137,13 @@ describe("normalizeBookSnapshotJson", () => {
       )
     ).not.toBe(base);
   });
+
+  it("byte-matches a legacy snapshot missing contentUpdatedAt", () => {
+    const current = normalizeBookSnapshotJson(
+      JSON.stringify({ book: { ...book, contentUpdatedAt: 7 }, chapters })
+    );
+    const legacy = normalizeBookSnapshotJson(JSON.stringify({ book, chapters }));
+
+    expect(current).toBe(legacy);
+  });
 });

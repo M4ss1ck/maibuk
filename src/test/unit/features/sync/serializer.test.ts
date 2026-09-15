@@ -1,8 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 import type { BookSnapshot, NoteSnapshot } from "@/features/sync/types";
+import type { Note } from "@/features/notes/types";
+import type { AppliedBook } from "@/features/books/write";
 import { useChapterStore } from "@/features/chapters/store";
+import { installViewRefresh, resetViewRefreshForTests } from "@/features/sync/view-refresh";
+import { onChange, resetChangeFeedForTests, type Change } from "@/features/sync/change-feed";
 
 let testDb: DatabaseAdapter;
 
@@ -68,6 +72,13 @@ describe("note snapshot serializer", () => {
   beforeEach(async () => {
     testDb = await createTestDatabase();
     mockGetDatabase.mockResolvedValue(testDb);
+    // Snapshot apply refreshes views through the Change Feed, not directly.
+    installViewRefresh();
+  });
+
+  afterEach(() => {
+    resetViewRefreshForTests();
+    resetChangeFeedForTests();
   });
 
   it("preserves local collapsed headings when applying a pulled note snapshot", async () => {
@@ -212,6 +223,82 @@ describe("note snapshot serializer", () => {
     expect(rows[0].content_updated_at).toBe(30);
   });
 
+  it("classifies a metadata-only note pull as metadata and preserves Last Edited", async () => {
+    await testDb.execute(
+      `INSERT INTO notes (id, title, content, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["note-1", "Title", "<p>Body</p>", "[]", 0, 0, 1, "[]", 10, 40, 25]
+    );
+
+    const snapshot = JSON.parse(await serializeNote("note-1")) as NoteSnapshot;
+    // Legacy client shape: no contentUpdatedAt key, only a tag change plus a
+    // newer sync clock.
+    const { contentUpdatedAt: _dropped, ...legacyFields } = snapshot.note;
+    const seen: Change[] = [];
+    const off = onChange((change) => {
+      seen.push(change);
+    });
+    try {
+      await applyNoteSnapshot({
+        note: { ...legacyFields, tags: '["x"]', updatedAt: 50 },
+      });
+    } finally {
+      off();
+    }
+
+    const rows = await testDb.select<{ updated_at: number; content_updated_at: number }[]>(
+      "SELECT updated_at, content_updated_at FROM notes WHERE id = ?",
+      ["note-1"]
+    );
+    expect(rows[0].updated_at).toBe(50);
+    expect(rows[0].content_updated_at).toBe(25);
+    expect(seen).toEqual([{ entity: "note", id: "note-1", origin: "remote", kind: "metadata" }]);
+  });
+
+  it("still emits when the post-apply read-back fails", async () => {
+    const realDb = testDb;
+    let selects = 0;
+    mockGetDatabase.mockResolvedValue({
+      ...realDb,
+      execute: realDb.execute.bind(realDb),
+      select: async <T>(sql: string, params?: unknown[]): Promise<T> => {
+        selects++;
+        // Existing-row read succeeds; the post-apply read-back fails after
+        // the durable write.
+        if (selects > 1) throw new Error("read failed");
+        return realDb.select<T>(sql, params);
+      },
+    } as DatabaseAdapter);
+
+    const seen: Change[] = [];
+    const off = onChange((change) => {
+      seen.push(change);
+    });
+    let applied: Note | undefined;
+    try {
+      applied = await applyNoteSnapshot({
+        note: {
+          id: "note-1",
+          title: "Stored",
+          content: "<p>Body</p>",
+          tags: "[]",
+          pinned: false,
+          order: 0,
+          wordCount: 1,
+          collapsedHeadings: "[]",
+          createdAt: 10,
+          updatedAt: 30,
+          contentUpdatedAt: 30,
+        },
+      });
+    } finally {
+      off();
+    }
+
+    expect(applied!.title).toBe("Stored");
+    expect(seen).toEqual([{ entity: "note", id: "note-1", origin: "remote", kind: "content" }]);
+  });
+
   it("defaults old note snapshots without language to English", async () => {
     const snapshot: NoteSnapshot = {
       note: {
@@ -309,6 +396,12 @@ describe("book snapshot serializer", () => {
     testDb = await createTestDatabase();
     mockGetDatabase.mockResolvedValue(testDb);
     useChapterStore.setState({ currentBookId: null });
+    installViewRefresh();
+  });
+
+  afterEach(() => {
+    resetViewRefreshForTests();
+    resetChangeFeedForTests();
   });
 
   it("serializes a book with its chapters ordered by `order`", async () => {
@@ -614,12 +707,245 @@ describe("book snapshot serializer", () => {
       'Sync apply failed on chapter 2/2 ("Second")'
     );
   });
+
+  it("round-trips contentUpdatedAt through serialize and apply", async () => {
+    await insertBook(testDb, "book-1");
+    await testDb.execute("UPDATE books SET content_updated_at = ? WHERE id = ?", [25, "book-1"]);
+
+    const snapshot = JSON.parse(await serializeBook("book-1")) as BookSnapshot;
+    expect(snapshot.book.contentUpdatedAt).toBe(25);
+
+    await testDb.execute("DELETE FROM books WHERE id = ?", ["book-1"]);
+    const applied = await applyBookSnapshot(snapshot);
+
+    const rows = await testDb.select<{ content_updated_at: number }[]>(
+      "SELECT content_updated_at FROM books WHERE id = ?",
+      ["book-1"]
+    );
+    expect(rows[0].content_updated_at).toBe(25);
+    expect(applied.book.contentUpdatedAt).toEqual(new Date(25 * 1000));
+  });
+
+  it("falls back to updatedAt for rows and snapshots from before the column existed", async () => {
+    await insertBook(testDb, "book-1");
+
+    // insertBook leaves content_updated_at NULL: serialize falls back.
+    const snapshot = JSON.parse(await serializeBook("book-1")) as BookSnapshot;
+    expect(snapshot.book.contentUpdatedAt).toBe(2);
+
+    const { contentUpdatedAt: _dropped, ...legacyBook } = snapshot.book;
+    await testDb.execute("DELETE FROM books WHERE id = ?", ["book-1"]);
+    await applyBookSnapshot({ book: legacyBook, chapters: [] });
+
+    const rows = await testDb.select<{ content_updated_at: number }[]>(
+      "SELECT content_updated_at FROM books WHERE id = ?",
+      ["book-1"]
+    );
+    expect(rows[0].content_updated_at).toBe(2);
+  });
+
+  it("resolves with the stored book and chapters", async () => {
+    await insertBook(testDb, "book-1");
+
+    const applied = await applyBookSnapshot({
+      book: {
+        id: "book-1",
+        title: "Stored",
+        subtitle: null,
+        authorName: "Author",
+        description: null,
+        genre: null,
+        language: "en",
+        coverImagePath: null,
+        coverData: null,
+        wordCount: 1,
+        targetWordCount: null,
+        status: "draft",
+        createdAt: 1,
+        updatedAt: 5,
+        lastOpenedAt: null,
+        lastChapterId: null,
+      },
+      chapters: [
+        {
+          id: "ch-1",
+          bookId: "book-1",
+          title: "One",
+          content: "<p>Body</p>",
+          synopsis: null,
+          order: 0,
+          parentId: null,
+          chapterType: "chapter",
+          wordCount: 1,
+          status: "draft",
+          isIncludedInExport: true,
+          createdAt: 1,
+          updatedAt: 5,
+        },
+      ],
+    });
+
+    expect(applied.book.title).toBe("Stored");
+    expect(applied.chapters.map((c) => c.id)).toEqual(["ch-1"]);
+  });
+
+  it("still emits when the post-apply read-back fails", async () => {
+    const realDb = testDb;
+    let selects = 0;
+    mockGetDatabase.mockResolvedValue({
+      ...realDb,
+      execute: realDb.execute.bind(realDb),
+      select: async <T>(sql: string, params?: unknown[]): Promise<T> => {
+        selects++;
+        // Existing-row reads succeed; the post-apply read-back fails after
+        // the durable writes.
+        if (selects > 2) throw new Error("read failed");
+        return realDb.select<T>(sql, params);
+      },
+    } as DatabaseAdapter);
+
+    const seen: Change[] = [];
+    const off = onChange((change) => {
+      seen.push(change);
+    });
+    let applied: AppliedBook | undefined;
+    try {
+      applied = await applyBookSnapshot({
+        book: {
+          id: "book-1",
+          title: "Stored",
+          subtitle: null,
+          authorName: "Author",
+          description: null,
+          genre: null,
+          language: "en",
+          coverImagePath: null,
+          coverData: null,
+          wordCount: 1,
+          targetWordCount: null,
+          status: "draft",
+          createdAt: 1,
+          updatedAt: 5,
+          lastOpenedAt: null,
+          lastChapterId: null,
+        },
+        chapters: [
+          {
+            id: "ch-1",
+            bookId: "book-1",
+            title: "One",
+            content: "<p>Body</p>",
+            synopsis: null,
+            order: 0,
+            parentId: null,
+            chapterType: "chapter",
+            wordCount: 1,
+            status: "draft",
+            isIncludedInExport: true,
+            createdAt: 1,
+            updatedAt: 5,
+          },
+        ],
+      });
+    } finally {
+      off();
+    }
+
+    expect(applied!.book.title).toBe("Stored");
+    expect(applied!.chapters.map((c) => c.id)).toEqual(["ch-1"]);
+    expect(seen).toEqual([{ entity: "book", id: "book-1", origin: "remote", kind: "content" }]);
+  });
+
+  it("classifies a metadata-only book pull as metadata and preserves Last Edited", async () => {
+    await insertBook(testDb, "book-1");
+    await insertChapter(testDb, "ch-1", "book-1", 0);
+    await testDb.execute("UPDATE books SET content_updated_at = ? WHERE id = ?", [7, "book-1"]);
+
+    const snapshot = JSON.parse(await serializeBook("book-1")) as BookSnapshot;
+    snapshot.book.status = "archived";
+    snapshot.book.updatedAt = 50;
+    // A stale incoming Last Edited must not overwrite the device's own.
+    snapshot.book.contentUpdatedAt = 40;
+
+    const seen: Change[] = [];
+    const off = onChange((change) => {
+      seen.push(change);
+    });
+    try {
+      await applyBookSnapshot(snapshot);
+    } finally {
+      off();
+    }
+
+    const rows = await testDb.select<{ updated_at: number; content_updated_at: number }[]>(
+      "SELECT updated_at, content_updated_at FROM books WHERE id = ?",
+      ["book-1"]
+    );
+    // The sync clock adopts the snapshot; Last Edited stays where the author left it.
+    expect(rows[0].updated_at).toBe(50);
+    expect(rows[0].content_updated_at).toBe(7);
+    expect(seen).toEqual([{ entity: "book", id: "book-1", origin: "remote", kind: "metadata" }]);
+  });
+
+  it("indexes links for applied chapters", async () => {
+    await insertBook(testDb, "book-1");
+
+    await applyBookSnapshot({
+      book: {
+        id: "book-1",
+        title: "Title",
+        subtitle: null,
+        authorName: "Author",
+        description: null,
+        genre: null,
+        language: "en",
+        coverImagePath: null,
+        coverData: null,
+        wordCount: 1,
+        targetWordCount: null,
+        status: "draft",
+        createdAt: 1,
+        updatedAt: 5,
+        lastOpenedAt: null,
+        lastChapterId: null,
+      },
+      chapters: [
+        {
+          id: "ch-1",
+          bookId: "book-1",
+          title: "Linked",
+          content: '<p><a href="maibuk://note/note-9">Ninth</a></p>',
+          synopsis: null,
+          order: 0,
+          parentId: null,
+          chapterType: "chapter",
+          wordCount: 1,
+          status: "draft",
+          isIncludedInExport: true,
+          createdAt: 1,
+          updatedAt: 5,
+        },
+      ],
+    });
+
+    const links = await testDb.select<{ target_id: string }[]>(
+      "SELECT target_id FROM links WHERE source_id = ?",
+      ["ch-1"]
+    );
+    expect(links).toEqual([{ target_id: "note-9" }]);
+  });
 });
 
 describe("serializeNote", () => {
   beforeEach(async () => {
     testDb = await createTestDatabase();
     mockGetDatabase.mockResolvedValue(testDb);
+    installViewRefresh();
+  });
+
+  afterEach(() => {
+    resetViewRefreshForTests();
+    resetChangeFeedForTests();
   });
 
   it("serializes an existing note", async () => {
@@ -649,6 +975,12 @@ describe("removing items deleted on another device", () => {
     testDb = await createTestDatabase();
     mockGetDatabase.mockResolvedValue(testDb);
     useChapterStore.setState({ chapters: [], currentChapter: null, currentBookId: null });
+    installViewRefresh();
+  });
+
+  afterEach(() => {
+    resetViewRefreshForTests();
+    resetChangeFeedForTests();
   });
 
   async function insertLink(db: DatabaseAdapter, id: string, sourceType: string, sourceId: string) {
