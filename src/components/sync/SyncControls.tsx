@@ -9,13 +9,14 @@ import type { SyncDirection, SyncOptions, SyncScope } from "@/features/sync/type
 interface SyncControlsProps {
   onSync: (options?: Partial<SyncOptions>) => Promise<void>;
   layout?: "popover" | "settings";
+  defaultScope?: SyncScope;
 }
 
-export function SyncControls({ onSync, layout = "popover" }: SyncControlsProps) {
+export function SyncControls({ onSync, layout = "popover", defaultScope = "all" }: SyncControlsProps) {
   const { t } = useTranslation();
   const { syncStatus, pendingDeletions, syncLog, confirmPendingDeletions, clearSyncLog } =
     useSyncStore();
-  const [scope, setScope] = useState<SyncScope>("all");
+  const [scope, setScope] = useState<SyncScope>(defaultScope);
   const [direction, setDirection] = useState<SyncDirection>("bidirectional");
   const [isLogOpen, setIsLogOpen] = useState(true);
   const isSettingsLayout = layout === "settings";

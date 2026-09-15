@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useSyncStore } from "@/features/sync/store";
-import type { SyncOptions } from "@/features/sync/types";
+import type { SyncOptions, SyncScope } from "@/features/sync/types";
 import { SyncControls } from "@/components/sync/SyncControls";
 import { timeAgo } from "@/components/notes/timeAgo";
 import { Tooltip } from "@/components/ui";
@@ -10,9 +10,10 @@ import { Tooltip } from "@/components/ui";
 interface SyncPanelProps {
   onClose: () => void;
   onSync: (options?: Partial<SyncOptions>) => Promise<void>;
+  defaultScope?: SyncScope;
 }
 
-export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
+export function SyncPanel({ onClose, onSync, defaultScope = "all" }: SyncPanelProps) {
   const { t, i18n } = useTranslation();
   const { userEmail, lastSyncedAt, syncError, logout } = useSyncStore();
 
@@ -43,7 +44,7 @@ export function SyncPanel({ onClose, onSync }: SyncPanelProps) {
       )}
 
       <div className="p-3 space-y-3">
-        <SyncControls onSync={onSync} />
+        <SyncControls onSync={onSync} defaultScope={defaultScope} />
 
         <Button variant="destructive" size="sm" className="w-full" onClick={handleLogout}>
           <LogOut className="w-4 h-4" />

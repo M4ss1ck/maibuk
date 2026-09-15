@@ -644,7 +644,7 @@ export function NoteEditor({
         </span>
 
         <div className="shrink-0">
-          <SyncStatusButton />
+          <SyncStatusButton defaultScope="notes" />
         </div>
 
         <div className="shrink-0">

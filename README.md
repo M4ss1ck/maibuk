@@ -323,6 +323,11 @@ and records it in the sync log. Rejected object writes include the operation
 available, and server validation codes. Include that full error when reporting
 a sync problem; do not include passwords, encryption passphrases, or note text.
 
+The sync panel opens preselecting the scope for where you opened it: Notes
+from a note, Books from a book, Canvases from an open canvas, and All from
+Settings. Opening the panel never starts a sync on its own; changing the scope
+applies to that opening only, and reopening resets to the contextual default.
+
 ### How local edits reach sync and the screen
 
 Every Book, Chapter, and Note write goes through one narrow write path per
