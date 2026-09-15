@@ -9,6 +9,7 @@ import { onChange, type Change } from "@/features/sync/change-feed";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import { useNoteStore } from "@/features/notes/store";
+import { useCanvasStore } from "@/features/canvas/store";
 
 let uninstall: (() => void) | null = null;
 
@@ -32,7 +33,7 @@ async function refreshViewsForRemote(change: Change): Promise<void> {
         useChapterStore.setState({ chapters: [], currentChapter: null, currentBookId: null });
       }
     }
-  } else {
+  } else if (change.entity === "note") {
     await useNoteStore.getState().refreshNotes();
     const notes = useNoteStore.getState();
     if (
@@ -40,6 +41,19 @@ async function refreshViewsForRemote(change: Change): Promise<void> {
       !notes.notes.some((note) => note.id === change.id)
     ) {
       useNoteStore.setState({ currentNote: null });
+    }
+  } else {
+    await useCanvasStore.getState().refreshCanvases();
+    const canvases = useCanvasStore.getState();
+    if (
+      canvases.current?.id === change.id &&
+      !canvases.canvases.some((canvas) => canvas.id === change.id)
+    ) {
+      useCanvasStore.setState({ current: null });
+    } else if (canvases.current?.id === change.id) {
+      // A remote Change to the open canvas hands the new doc to the Edit
+      // Session as external content (never as a local edit).
+      await useCanvasStore.getState().refreshOpenCanvas();
     }
   }
 }

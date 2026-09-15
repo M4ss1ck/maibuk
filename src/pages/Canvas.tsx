@@ -36,25 +36,24 @@ import { CanvasDrawingLayer } from "@/features/canvas/drawing/CanvasDrawingLayer
 import { DrawingCaptureOverlay } from "@/features/canvas/drawing/DrawingCaptureOverlay";
 import { nodeTypes } from "@/features/canvas/nodes";
 import { fromConnection, toFlowEdges, toFlowNodes } from "@/features/canvas/reactFlowAdapter";
-import { useCanvasStore } from "@/features/canvas/store";
+import { canvasWriteQueue, useCanvasStore } from "@/features/canvas/store";
 import type { CanvasDoc } from "@/features/canvas/types";
+import { useEditSession } from "@/features/edit-session";
 import { useNoteStore } from "@/features/notes";
 import { useThemeStore } from "@/features/theme";
 import { CANVAS_TEXT_NODE_DEFAULT_WIDTH } from "@/constants";
 import { useShortcuts } from "@/lib/shortcuts";
 
-const AUTOSAVE_DELAY = 800;
+const DEFAULT_SESSION_VIEWPORT = { x: 0, y: 0, zoom: 1 };
 
-function canPersist(state: ReturnType<typeof useCanvasStore.getState>): boolean {
-  return Boolean(
-    state.current?.id &&
-      state.dirty &&
-      state.revision > state.savedRevision &&
-      !state.docWriteBlocked &&
-      !state.editorReadOnly &&
-      !state.docLoadError &&
-      !state.corruptDocReplacementAllowed
-  );
+/** The doc as the Edit Session sees it: content only, viewport neutralized. */
+function sessionDocKey(doc: CanvasDoc): string {
+  const { viewport: _viewport, ...content } = doc;
+  return JSON.stringify(content);
+}
+
+function sessionDocFromKey(key: string): CanvasDoc {
+  return { ...(JSON.parse(key) as Omit<CanvasDoc, "viewport">), viewport: DEFAULT_SESSION_VIEWPORT };
 }
 
 function hasMeaningfulViewport(doc: CanvasDoc): boolean {
@@ -134,20 +133,14 @@ function CanvasEditor() {
   const { canvasId = "" } = useParams();
   const reactFlow = useReactFlow();
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const current = useCanvasStore((state) => state.current);
   const doc = useCanvasStore((state) => state.doc);
   const loadState = useCanvasStore((state) => state.loadState);
-  const saveState = useCanvasStore((state) => state.saveState);
   const docLoadError = useCanvasStore((state) => state.docLoadError);
-  const docWriteBlocked = useCanvasStore((state) => state.docWriteBlocked);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
-  const corruptDocReplacementAllowed = useCanvasStore(
-    (state) => state.corruptDocReplacementAllowed
-  );
   const dirty = useCanvasStore((state) => state.dirty);
   const revision = useCanvasStore((state) => state.revision);
-  const savedRevision = useCanvasStore((state) => state.savedRevision);
+  const externalDocNonce = useCanvasStore((state) => state.externalDocNonce);
   const past = useCanvasStore((state) => state.past);
   const future = useCanvasStore((state) => state.future);
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
@@ -158,7 +151,6 @@ function CanvasEditor() {
   const toggleInteractivityLocked = useCanvasStore((state) => state.toggleInteractivityLocked);
   const loadCanvas = useCanvasStore((state) => state.loadCanvas);
   const closeCanvas = useCanvasStore((state) => state.closeCanvas);
-  const persistCanvas = useCanvasStore((state) => state.persistCanvas);
   const replaceCorruptDocWithDefault = useCanvasStore(
     (state) => state.replaceCorruptDocWithDefault
   );
@@ -186,25 +178,79 @@ function CanvasEditor() {
   const [edgeLabelDraft, setEdgeLabelDraft] = useState("");
   const [connecting, setConnecting] = useState(false);
 
+  // The Edit Session owns doc saving: content commits flow in through the
+  // revision below and are saved once the author pauses; leaving the page or a
+  // sync Flushes through the pending-edits registration. Viewport moves never
+  // reach the session (they share no key with content).
+  //
+  // The session's content prop must stay pinned per session: the hook forwards
+  // every prop change as outside content, while the store doc is the editing
+  // buffer and changes on each commit. So the prop is captured once per
+  // session, local commits enter through update() below, and a remote Change
+  // starts a fresh session already holding the pulled doc. Nothing here
+  // stringifies the doc per render: canvases can be several MB.
+  const sessionKey = `${canvasId}:${loadState === "ready" ? "ready" : "loading"}:${externalDocNonce}`;
+  const sessionInitialRef = useRef<{ key: string; doc: CanvasDoc } | null>(null);
+  if (sessionInitialRef.current?.key !== sessionKey) {
+    sessionInitialRef.current = { key: sessionKey, doc: sessionDocFromKey(sessionDocKey(doc)) };
+  }
+
+  const saveSessionDoc = useCallback(
+    async (content: CanvasDoc) => {
+      const stored = await useCanvasStore.getState().saveDoc(content);
+      // saveDoc refuses while read-only, write-blocked, recovering, or when
+      // the canvas closed mid-save: keep the session content as-is instead of
+      // failing the save.
+      if (!stored || stored.id !== canvasId) return content;
+      return content;
+    },
+    [canvasId]
+  );
+
+  const {
+    sessionRef,
+    status: saveStatus,
+  } = useEditSession({
+    sessionKey,
+    content: sessionInitialRef.current.doc,
+    save: saveSessionDoc,
+    queue: canvasWriteQueue,
+  });
+
+  // The revision the session already holds: a fresh session starts holding
+  // the current revision, so the pulled or just-loaded doc is never re-saved
+  // as a local edit.
+  const sentRevisionRef = useRef<number | null>(null);
+  useEffect(() => {
+    sentRevisionRef.current = useCanvasStore.getState().revision;
+  }, [sessionKey]);
+
+  // Local content commits (only content edits bump the revision) enter the
+  // session as the author's own typing.
+  useEffect(() => {
+    if (sentRevisionRef.current === revision) return;
+    sentRevisionRef.current = revision;
+    sessionRef.current?.update(sessionDocFromKey(sessionDocKey(useCanvasStore.getState().doc)));
+  }, [revision, sessionRef]);
+
   useEffect(() => {
     void loadCanvas(canvasId);
     void loadNotes();
     void loadBooks();
     return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-      const state = useCanvasStore.getState();
-      if (state.current?.id === canvasId && canPersist(state)) {
-        const snapshotId = state.current.id;
-        void state
-          .persistCanvas(snapshotId, structuredClone(state.doc), state.revision)
-          .finally(() => {
-            if (useCanvasStore.getState().current?.id === snapshotId) closeCanvas();
-          });
-      } else if (state.current?.id === canvasId) {
+      // Leaving always Flushes: unsaved content lands before the editor
+      // closes. The session stays registered until its save settles, so a
+      // close whose save failed is retried by the next Flush.
+      const session = sessionRef.current;
+      if (useCanvasStore.getState().current?.id === canvasId) {
+        void session?.flush().finally(() => {
+          if (useCanvasStore.getState().current?.id === canvasId) closeCanvas();
+        });
+      } else {
         closeCanvas();
       }
     };
-  }, [canvasId, closeCanvas, loadBooks, loadCanvas, loadNotes]);
+  }, [canvasId, closeCanvas, loadBooks, loadCanvas, loadNotes, sessionRef]);
 
   useEffect(() => {
     setTitleDraft(current?.title ?? "");
@@ -216,39 +262,6 @@ function CanvasEditor() {
   useEffect(() => {
     setEdgeLabelDraft(selectedEdge?.label ?? "");
   }, [selectedEdge?.id, selectedEdge?.label]);
-
-  useEffect(() => {
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    if (
-      !current ||
-      !dirty ||
-      revision <= savedRevision ||
-      docWriteBlocked ||
-      editorReadOnly ||
-      docLoadError ||
-      corruptDocReplacementAllowed
-    ) {
-      return;
-    }
-    const snapshot = { canvasId: current.id, doc: structuredClone(doc), revision };
-    autosaveTimer.current = setTimeout(() => {
-      void persistCanvas(snapshot.canvasId, snapshot.doc, snapshot.revision);
-    }, AUTOSAVE_DELAY);
-    return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    };
-  }, [
-    corruptDocReplacementAllowed,
-    current,
-    dirty,
-    doc,
-    docLoadError,
-    docWriteBlocked,
-    editorReadOnly,
-    persistCanvas,
-    revision,
-    savedRevision,
-  ]);
 
   const flowNodes = useMemo(
     () =>
@@ -385,19 +398,29 @@ function CanvasEditor() {
   }
 
   if (docLoadError) {
+    // A canvas synced from a newer Maibuk is read-only here: offering the
+    // corrupt-doc replacement would overwrite another device's work and then
+    // push it. It stays viewable until this device upgrades.
+    const isNewerFormat = docLoadError.code === "unsupported-version";
     return (
       <div className="flex h-full items-center justify-center bg-background p-6">
         <div className="max-w-lg rounded-lg border border-border bg-card p-6 text-center shadow-sm">
           <Network className="mx-auto mb-4 size-10 text-destructive" aria-hidden="true" />
-          <h1 className="text-xl font-semibold">{t("canvas.corruptDocTitle")}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{t("canvas.corruptDocDescription")}</p>
+          <h1 className="text-xl font-semibold">
+            {t(isNewerFormat ? "canvas.newerCanvasTitle" : "canvas.corruptDocTitle")}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t(isNewerFormat ? "canvas.newerCanvasDescription" : "canvas.corruptDocDescription")}
+          </p>
           <div className="mt-6 flex justify-center gap-3">
             <Button variant="secondary" onClick={() => navigate("/canvas")}>
               {t("canvas.backToCanvasGallery")}
             </Button>
-            <Button variant="destructive" onClick={() => void replaceCorruptDocWithDefault()}>
-              {t("canvas.replaceWithEmptyCanvas")}
-            </Button>
+            {!isNewerFormat && (
+              <Button variant="destructive" onClick={() => void replaceCorruptDocWithDefault()}>
+                {t("canvas.replaceWithEmptyCanvas")}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -405,11 +428,11 @@ function CanvasEditor() {
   }
 
   const saveLabel =
-    saveState === "saving"
+    saveStatus === "saving"
       ? t("canvas.saving")
-      : saveState === "error"
+      : saveStatus === "error"
         ? t("canvas.saveError")
-        : dirty
+        : dirty || sessionRef.current?.hasUnsavedChanges()
           ? t("canvas.unsaved")
           : t("canvas.saved");
 

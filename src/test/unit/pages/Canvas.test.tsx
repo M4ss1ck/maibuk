@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
     loadCanvas: vi.fn().mockResolvedValue(undefined),
     closeCanvas: vi.fn(),
     persistCanvas: vi.fn().mockResolvedValue(undefined),
+    saveDoc: vi.fn().mockResolvedValue(null),
     replaceCorruptDocWithDefault: vi.fn().mockResolvedValue(undefined),
     addNode: vi.fn(),
     addEdge: vi.fn(),
@@ -47,11 +48,12 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("../../../features/canvas/store", () => {
+vi.mock("../../../features/canvas/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/canvas/store")>();
   const useCanvasStore = (selector: (state: Record<string, unknown>) => unknown) =>
     selector(mocks.state);
   useCanvasStore.getState = () => mocks.state;
-  return { useCanvasStore };
+  return { ...actual, useCanvasStore, canvasWriteQueue: actual.canvasWriteQueue };
 });
 
 vi.mock("../../../features/notes", () => ({
@@ -111,6 +113,7 @@ function readyState() {
     dirty: false,
     revision: 0,
     savedRevision: 0,
+    externalDocNonce: 0,
     past: [],
     future: [],
     selectedNodeId: null,

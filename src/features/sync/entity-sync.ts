@@ -1,5 +1,5 @@
 // Entity Sync: the one shared Push, Pull, and Conflict flow every Synced Item
-// follows (Book or Note today; Canvas joins with its own adapter later).
+// follows (Book, Note, or Canvas, each with its own adapter).
 // Per-kind behavior lives in an EntitySyncAdapter; this module owns the
 // orchestration — three-way decision via decideSyncAction, conflict and
 // Deletion Review handling, Deleted Elsewhere resolution, pre-sync backup and
@@ -12,6 +12,7 @@
 import { decideSyncAction } from "@/features/sync/sync-decision";
 import { clearSyncBase, getSyncBase, setSyncBase } from "@/features/sync/sync-state";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
+import { isContentSizeLimitError } from "@/features/sync/client";
 import {
   getTombstone,
   listPendingTombstones,
@@ -66,6 +67,13 @@ export interface EntitySyncAdapter<TSnapshot> {
   removeLocal(id: string): Promise<void>;
   currentChecksum(id: string): Promise<string>;
   beforePull?(id: string): Promise<void>;
+  /**
+   * Whether this item may be uploaded. A canvas stored from a newer
+   * schemaVersion than this client understands is read-only here and must
+   * never be pushed back from any branch (ADR 0006). Kinds without newer
+   * schemas omit the hook and are always pushable.
+   */
+  canPush?(id: string): Promise<boolean>;
 }
 
 export interface EntitySyncContext {
@@ -185,7 +193,8 @@ async function removeDeletedElsewhere<TSnapshot>(
 async function resolveRemoteDeletion<TSnapshot>(
   ctx: EntitySyncContext,
   deletionCtx: RemoteDeletionContext<TSnapshot>,
-  revive: (remoteId: string) => Promise<SyncAction>
+  revive: (remoteId: string) => Promise<SyncAction>,
+  canPushItem: boolean
 ): Promise<SyncAction> {
   const { adapter, entityId, title, localChecksum, localUpdatedAt, deletion } = deletionCtx;
   const { label } = adapter;
@@ -240,6 +249,20 @@ async function resolveRemoteDeletion<TSnapshot>(
       });
       return "deferred";
     }
+    return removeDeletedElsewhere(ctx, deletionCtx);
+  }
+
+  // A read-only item (a newer-schema canvas) can never be pushed back, so the
+  // push side of this conflict does not exist: the remote change wins without
+  // asking, the same rule as the edit/edit conflict below.
+  if (!canPushItem) {
+    ctx.emitLog({
+      level: "warning",
+      event: "skip",
+      message: `${label} ${title} was deleted on another device and cannot be uploaded from this device; removing the local copy`,
+      entityType: adapter.entityType,
+      entityId,
+    });
     return removeDeletedElsewhere(ctx, deletionCtx);
   }
 
@@ -298,17 +321,50 @@ export async function syncEntity<TSnapshot>(
 
   const { json, checksum: localChecksum } = await adapter.snapshotChecksums(id);
   const title = await adapter.getTitle(id);
+  // A read-only item (a newer-schema canvas) is never pushed from any branch.
+  const canPushItem = adapter.canPush ? await adapter.canPush(id) : true;
   // The batch loop reuses its listing query's timestamp when available,
   // avoiding a redundant per-item query.
   const localUpdatedAt = precomputedLocalUpdatedAt ?? (await adapter.getLocalUpdatedAt(id));
 
   const remote = seen.remotes.find((r) => r.entityId === id);
 
+  function logPushRefused(): void {
+    ctx.emitLog({
+      level: "warning",
+      event: "skip",
+      message: `Skipped ${adapter.entityType} ${title}: it uses a newer format than this device understands and will not be uploaded`,
+      entityType: adapter.entityType,
+      entityId: id,
+    });
+  }
+
   const push = async (remoteId?: string): Promise<SyncAction> => {
+    if (!canPushItem) {
+      logPushRefused();
+      return "skipped";
+    }
     const encrypted = await encryptToBuffer(json, ctx.passphrase);
     const blob = new Blob([encrypted]);
-    // A local-only item has no remote row yet: create it (no remoteId argument).
-    await ctx.remote.pushBlob(adapter.entityType, id, blob, localChecksum, remoteId);
+    try {
+      // A local-only item has no remote row yet: create it (no remoteId argument).
+      await ctx.remote.pushBlob(adapter.entityType, id, blob, localChecksum, remoteId);
+    } catch (error) {
+      // The server's 50 MB content limit rejects the upload. Canvases with
+      // embedded images can reach it; clients set no cap themselves. Name the
+      // item clearly and keep syncing everything else.
+      if (isContentSizeLimitError(error)) {
+        ctx.emitLog({
+          level: "error",
+          event: "error",
+          message: `${adapter.label} "${title}" exceeds the sync server's 50 MB limit and was not uploaded`,
+          entityType: adapter.entityType,
+          entityId: id,
+        });
+        return "skipped";
+      }
+      throw error;
+    }
     await setSyncBase(adapter.entityType, id, {
       localChecksum,
       remoteChecksum: localChecksum,
@@ -329,7 +385,8 @@ export async function syncEntity<TSnapshot>(
       return resolveRemoteDeletion(
         ctx,
         { adapter, entityId: id, title, localChecksum, localUpdatedAt, deletion },
-        push
+        push,
+        canPushItem
       );
     }
     if (!canPush(options.direction)) {
@@ -420,7 +477,13 @@ export async function syncEntity<TSnapshot>(
     return pullEntity(adapter, id, remote, ctx, { title, remoteOnly: false });
   }
 
-  // Both sides changed (or no base and the remote looks newer): ask.
+  // Both sides changed (or no base and the remote looks newer): ask — unless
+  // this item can never be pushed, in which case the remote change wins
+  // without asking.
+  if (!canPushItem) {
+    logPushRefused();
+    return pullEntity(adapter, id, remote, ctx, { title, remoteOnly: false });
+  }
   ctx.emitLog({
     level: "warning",
     event: "conflict",
@@ -542,7 +605,7 @@ function toDeletionReviewItem(tombstone: {
   };
 }
 
-/** One registered delete path per synced kind. Kinds without an entry (e.g. "canvas") are never synced. */
+/** One registered delete path per synced kind. Every Synced Item kind (book, note, canvas) has an entry; a tombstone whose kind has none is skipped, never sent to another kind's delete. */
 export interface EntityDeletionHandler {
   deleteRemote(entityId: string): Promise<void>;
 }
@@ -600,9 +663,7 @@ export async function processPendingDeletions(
 
     await handler.deleteRemote(tombstone.entityId);
     await markTombstonePushed(tombstone.entityType, tombstone.entityId);
-    if (tombstone.entityType === "book" || tombstone.entityType === "note") {
-      await clearSyncBase(tombstone.entityType, tombstone.entityId);
-    }
+    await clearSyncBase(tombstone.entityType, tombstone.entityId);
     emitLog({
       level: "success",
       event: "delete-pushed",

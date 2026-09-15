@@ -4,6 +4,7 @@ import {
   computeChecksumAsync,
   normalizeNoteSnapshotAsync,
   normalizeBookSnapshotAsync,
+  normalizeCanvasSnapshotAsync,
   encryptToBuffer,
   decryptBufferToText,
 } from "@/features/sync/sync-codec";
@@ -12,8 +13,11 @@ import {
   applyBookSnapshot,
   serializeNote,
   applyNoteSnapshot,
+  serializeCanvas,
+  applyCanvasSnapshot,
   removeLocalBook,
   removeLocalNote,
+  removeLocalCanvas,
 } from "@/features/sync/serializer";
 import {
   refreshAuth as pbRefreshAuth,
@@ -23,6 +27,7 @@ import {
 } from "@/features/sync/client";
 import type {
   BookSnapshot,
+  CanvasSnapshot,
   NoteSnapshot,
   SingleSyncResult,
   BatchSyncResult,
@@ -36,6 +41,7 @@ import type {
 import type { SyncAction, ConflictResolver } from "@/features/sync/types";
 import { createBackup } from "@/lib/platform";
 import { BackupService } from "@/features/backup/backup-service";
+import { isReadOnlySchemaVersion } from "@/features/canvas/write";
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { useVersionStore } from "@/features/versions/store";
@@ -92,7 +98,8 @@ function includesScope(scope: SyncScope, entity: SyncEntityType | "metrics"): bo
     scope === "all" ||
     scope === entity ||
     (entity === "book" && scope === "books") ||
-    (entity === "note" && scope === "notes")
+    (entity === "note" && scope === "notes") ||
+    (entity === "canvas" && scope === "canvases")
   );
 }
 
@@ -239,12 +246,90 @@ export const noteAdapter: EntitySyncAdapter<NoteSnapshot> = {
   },
 };
 
+// The Canvas side of Entity Sync. A canvas syncs as one whole document with
+// the same three-way decision and Conflict path as books and notes (ADR
+// 0006): no per-node combining. The viewport never reaches the snapshot, and
+// a canvas stored from a newer schemaVersion is read-only here — canPush
+// refuses it from every push branch of the generic flow. Exported for
+// per-adapter tests.
+export const canvasAdapter: EntitySyncAdapter<CanvasSnapshot> = {
+  entityType: "canvas",
+  label: "Canvas",
+
+  async listLocal() {
+    const db = await getDatabase();
+    const rows = await db.select<LocalIdRow[]>("SELECT id, updated_at FROM canvases");
+    return rows.map((row) => ({ id: row.id, updatedAt: row.updated_at }));
+  },
+
+  async getLocalUpdatedAt(canvasId) {
+    const db = await getDatabase();
+    const rows = await db.select<EffectiveTimestamp[]>(
+      "SELECT updated_at FROM canvases WHERE id = ?",
+      [canvasId]
+    );
+    return rows[0]?.updated_at ?? 0;
+  },
+
+  async getTitle(canvasId) {
+    const db = await getDatabase();
+    const rows = await db.select<TitleRow[]>("SELECT title FROM canvases WHERE id = ?", [canvasId]);
+    return rows[0]?.title ?? canvasId;
+  },
+
+  async snapshotChecksums(canvasId) {
+    const json = await serializeCanvas(canvasId);
+    return {
+      json,
+      checksum: await computeChecksumAsync(await normalizeCanvasSnapshotAsync(json)),
+    };
+  },
+
+  async legacyRawChecksum() {
+    return null;
+  },
+
+  titleOfSnapshot(snapshot) {
+    return snapshot.canvas.title;
+  },
+
+  async applySnapshot(snapshot) {
+    await applyCanvasSnapshot(snapshot);
+  },
+
+  async removeLocal(canvasId) {
+    await removeLocalCanvas(canvasId);
+  },
+
+  async currentChecksum(canvasId) {
+    return (await this.snapshotChecksums(canvasId)).checksum;
+  },
+
+  async canPush(canvasId) {
+    const db = await getDatabase();
+    const rows = await db.select<{ doc: string }[]>("SELECT doc FROM canvases WHERE id = ?", [
+      canvasId,
+    ]);
+    if (rows.length === 0) return true;
+    try {
+      // A newer schemaVersion than this client understands is read-only here
+      // and must never be pushed back (ADR 0006).
+      return !isReadOnlySchemaVersion(JSON.parse(rows[0].doc) as unknown);
+    } catch {
+      // A corrupt doc cannot be snapshotted either; let the snapshot path
+      // report it rather than refusing here.
+      return true;
+    }
+  },
+};
+
 // Pending deletions dispatch through this registry keyed by entityType. Only
-// Book and Note sync — a tombstone of any other kind has no entry and is
+// Book, Note, and Canvas sync — a tombstone of any other kind has no entry and is
 // skipped, never sent to another kind's delete.
 const deletionRegistry: EntityDeletionRegistry = {
   book: { deleteRemote: (entityId) => pocketBaseRemote.deleteRemote("book", entityId) },
   note: { deleteRemote: (entityId) => pocketBaseRemote.deleteRemote("note", entityId) },
+  canvas: { deleteRemote: (entityId) => pocketBaseRemote.deleteRemote("canvas", entityId) },
 };
 
 function entityContext(
@@ -644,6 +729,7 @@ async function syncAllBooksInternal(
   const deletionScopes: SyncEntityType[] = [];
   if (includesScope(options.scope, "book")) deletionScopes.push("book");
   if (includesScope(options.scope, "note")) deletionScopes.push("note");
+  if (includesScope(options.scope, "canvas")) deletionScopes.push("canvas");
   const deletionResult = await processPendingDeletions(
     deletionRegistry,
     deletionScopes,
@@ -684,6 +770,21 @@ async function syncAllBooksInternal(
     const noteBatch = await syncEntityBatch(noteAdapter, ctx);
     actions.push(...noteBatch.actions);
     if (noteBatch.cancelled) {
+      await syncMetrics(passphrase, options);
+      return {
+        outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
+        actions,
+        ...pendingDeletionsField(pendingDeletions),
+      };
+    }
+  }
+
+  // Canvases sync as whole documents through the same Entity Sync flow, in
+  // the same pass. A cancelled canvas conflict aborts the rest of canvas sync.
+  if (includesScope(options.scope, "canvas")) {
+    const canvasBatch = await syncEntityBatch(canvasAdapter, ctx);
+    actions.push(...canvasBatch.actions);
+    if (canvasBatch.cancelled) {
       await syncMetrics(passphrase, options);
       return {
         outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",

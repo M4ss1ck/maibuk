@@ -213,7 +213,7 @@ _Avoid_: diff
 ## Sync
 
 **Sync**:
-Keeping a Library's Books, Notes, history, and metrics the same across the author's devices, encrypted so the server can never read them.
+Keeping a Library's Books, Notes, Canvases, history, and metrics the same across the author's devices, encrypted so the server can never read them.
 _Avoid_: backup, upload, cloud save
 
 **Passphrase**:
@@ -226,11 +226,11 @@ The author's sign-in on the sync server, separate from the Passphrase.
 _UI_: en "Account" / es "Cuenta"
 
 **Synced Item**:
-A Book or Note as Sync sees it: one thing that is pushed, pulled, or in Conflict as a whole.
+A Book, Note, or Canvas as Sync sees it: one thing that is pushed, pulled, or in Conflict as a whole.
 _Avoid_: object, record, entity (in UI copy)
 
 **Sync Scope**:
-Which kinds of data a sync run covers: all, Books, Notes, or metrics.
+Which kinds of data a sync run covers: all, Books, Notes, Canvases, or metrics.
 
 **Sync Direction**:
 Which way a sync run moves changes: two-way, pull only, or push only.
@@ -317,11 +317,11 @@ Saving what an open Chapter or Note editor still holds, done before a sync reads
 _Avoid_: force save, commit
 
 **Edit Session**:
-The span from opening one Chapter or Note for editing to leaving it, during which Maibuk holds what the author typed until it is saved; leaving always Flushes. Canvases join it with Canvas sync. (ADR 0001)
+The span from opening one Chapter, Note, or Canvas for editing to leaving it, during which Maibuk holds what the author typed until it is saved; leaving always Flushes. (ADR 0001)
 _Avoid_: editor state, autosave
 
 **Reading Position**:
-Where the author was in a Chapter or Note on this device: caret and scroll.
+Where the author was on this device: caret and scroll in a Chapter or Note, and pan and zoom on a Canvas.
 _Avoid_: bookmark, cursor position
 
 **Last Opened Chapter**:
@@ -394,7 +394,7 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 
 ## Decided, not built
 
-Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter and a Canvas's pan and zoom.
+Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
 
 ## Relationships
 
@@ -404,8 +404,8 @@ Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widen
 - A **Canvas** holds **Text Nodes**, **Note References**, **Connections**, and **Drawings**; a **Note Reference** points at one **Note**.
 - A **Version** saves one **Book**; a **Backup** saves the whole **Library**.
 - A **Database File** is not a **Backup**, and loading one is not a **Restore**.
-- **Books** and **Notes** are **Synced Items**; each has one **Sync Base** per device.
-- Deleting a **Book** or **Note** leaves a **Tombstone** here; after a **Deletion Review** it becomes **Deleted Elsewhere** on the other devices, where a second **Deletion Review** confirms it; if the item was also edited there, a **Conflict** lets the author **Keep** it instead. Deleting a **Canvas** leaves a **Tombstone** that nothing syncs yet.
+- **Books**, **Notes**, and **Canvases** are **Synced Items**; each has one **Sync Base** per device.
+- Deleting a **Book**, **Note**, or **Canvas** leaves a **Tombstone** here; after a **Deletion Review** it becomes **Deleted Elsewhere** on the other devices, where a second **Deletion Review** confirms it; if the item was also edited there, a **Conflict** lets the author **Keep** it instead.
 - Open editors **Flush** before a **Sync** reads the **Library**.
 
 ## Anticipated

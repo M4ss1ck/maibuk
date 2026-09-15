@@ -1,10 +1,17 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
-import { recordTombstone } from "@/features/sync/tombstones";
+import { createAsyncQueue } from "@/lib/async-queue";
+import { useReadingPositionStore } from "@/features/reading-position/store";
+import {
+  createCanvasRow,
+  deleteCanvasRow,
+  reorderCanvasRows,
+  updateCanvasDocRow,
+  updateCanvasRow,
+} from "@/features/canvas/write";
 import {
   isFinitePosition,
   parseCanvasDoc,
-  serializeCanvasDoc,
   type CanvasDocLoadError,
 } from "@/features/canvas/serialization";
 import {
@@ -38,8 +45,35 @@ function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+// Doc saves and metadata saves rewrite the same row, so they share one queue:
+// two writes to one canvas must never overlap. The Canvas page hands this
+// queue to its Edit Session so session saves join the same ordering.
+export const canvasWriteQueue = createAsyncQueue();
+
 function cloneDoc(doc: CanvasDoc): CanvasDoc {
   return structuredClone(doc);
+}
+
+/**
+ * The viewport to show for a canvas: the device-local view when one was
+ * saved, otherwise the legacy viewport still carried by the doc (seeded into
+ * Reading Position on first read so no view is lost), otherwise the default.
+ * Viewport is never synced and never touches updated_at.
+ */
+function viewportForCanvas(canvasId: string, legacyViewport: CanvasViewport): CanvasViewport {
+  const readingPosition = useReadingPositionStore.getState();
+  const stored = readingPosition.getCanvasViewport(canvasId);
+  if (stored) return stored;
+  const fallback = createDefaultCanvasDoc().viewport;
+  if (
+    legacyViewport.x !== fallback.x ||
+    legacyViewport.y !== fallback.y ||
+    legacyViewport.zoom !== fallback.zoom
+  ) {
+    readingPosition.saveCanvasViewport(canvasId, legacyViewport);
+    return legacyViewport;
+  }
+  return fallback;
 }
 
 function sortCanvases(canvases: Canvas[]): Canvas[] {
@@ -94,6 +128,7 @@ function editorResetState() {
     past: [],
     future: [],
     liveBaseDoc: null,
+    externalDocNonce: 0,
     interactivityLocked: false,
   };
 }
@@ -120,6 +155,8 @@ export interface CanvasStoreState {
   past: CanvasDoc[];
   future: CanvasDoc[];
   liveBaseDoc: CanvasDoc | null;
+  /** Bumped when a remote Change replaces the open doc; the Edit Session adopts it as outside content. */
+  externalDocNonce: number;
   toolMode: "select" | "pen" | "eraser";
   penWidth: number;
   penColor: string;
@@ -132,6 +169,8 @@ export interface CanvasStoreState {
   setPenColor: (color: string) => void;
   toggleInteractivityLocked: () => void;
   loadCanvases: () => Promise<void>;
+  refreshCanvases: () => Promise<void>;
+  refreshOpenCanvas: () => Promise<void>;
   createCanvas: (input?: CreateCanvasInput) => Promise<Canvas>;
   deleteCanvas: (id: string) => Promise<void>;
   renameCanvas: (id: string, title: string) => Promise<void>;
@@ -162,6 +201,13 @@ export interface CanvasStoreState {
   setViewport: (viewport: CanvasViewport) => void;
   replaceCorruptDocWithDefault: () => Promise<void>;
   persistCorruptDocReplacement: (canvasId: string, doc: CanvasDoc) => Promise<void>;
+  /**
+   * Save the open doc through the canvas write path. Resolves with the stored
+   * canvas, or null when the save was refused (read-only, write-blocked, or
+   * another canvas is open). The Canvas page's Edit Session is the only
+   * caller; persistCanvas/persistCurrent stay for the pre-session save path.
+   */
+  saveDoc: (doc: CanvasDoc) => Promise<Canvas | null>;
   persistCanvas: (canvasId: string, doc: CanvasDoc, revision: number) => Promise<void>;
   persistCurrent: () => Promise<void>;
   markSaved: (revision: number) => void;
@@ -185,48 +231,78 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       const rows = await db.select<Record<string, unknown>[]>(
         'SELECT * FROM canvases ORDER BY pinned DESC, "order" ASC, updated_at DESC'
       );
-      const canvases = rows.map((row) => toModel(row, parseCanvasDoc(row.doc as string).doc));
+      const canvases = rows.map((row) => {
+        const parsed = parseCanvasDoc(row.doc as string);
+        const doc = parsed.ok
+          ? { ...parsed.doc, viewport: viewportForCanvas(row.id as string, parsed.doc.viewport) }
+          : parsed.doc;
+        return toModel(row, doc);
+      });
       set({ canvases: sortCanvases(canvases), galleryLoaded: true, galleryLoading: false });
     } catch (error) {
       set({ galleryError: String(error), galleryLoading: false });
     }
   },
 
-  createCanvas: async (input = {}) => {
+  refreshCanvases: async () => {
+    // Re-read the list after something outside the UI changed it (a sync
+    // pull); never flips the gallery loading flags.
     const db = await getDatabase();
-    const id = generateId();
-    const now = nowSeconds();
-    const doc = createDefaultCanvasDoc();
-    const rows = await db.select<{ max_order: number | null }[]>(
-      'SELECT MAX("order") AS max_order FROM canvases'
+    const rows = await db.select<Record<string, unknown>[]>(
+      'SELECT * FROM canvases ORDER BY pinned DESC, "order" ASC, updated_at DESC'
     );
-    const canvas: Canvas = {
-      id,
-      title: input.title ?? "",
+    const canvases = rows.map((row) => {
+      const parsed = parseCanvasDoc(row.doc as string);
+      const doc = parsed.ok
+        ? { ...parsed.doc, viewport: viewportForCanvas(row.id as string, parsed.doc.viewport) }
+        : parsed.doc;
+      return toModel(row, doc);
+    });
+    set((state) => ({
+      canvases: sortCanvases(canvases),
+      current: state.current
+        ? (canvases.find((canvas) => canvas.id === state.current?.id) ?? state.current)
+        : null,
+    }));
+  },
+
+  refreshOpenCanvas: async () => {
+    // Re-read the open canvas after a remote Change replaced it: adopt the
+    // stored doc with this device's viewport and bump the nonce so the Edit
+    // Session takes it as outside content instead of a local edit.
+    const state = get();
+    if (!state.current) return;
+    const db = await getDatabase();
+    const rows = await db.select<Record<string, unknown>[]>(
+      "SELECT * FROM canvases WHERE id = ?",
+      [state.current.id]
+    );
+    if (!rows[0]) return;
+    const parsed = parseCanvasDoc(rows[0].doc as string);
+    const stored = toModel(
+      rows[0],
+      parsed.ok ? parsed.doc : createDefaultCanvasDoc()
+    );
+    const doc = parsed.ok
+      ? { ...parsed.doc, viewport: viewportForCanvas(stored.id, parsed.doc.viewport) }
+      : stored.doc;
+    set((currentState) => ({
       doc,
-      pinned: false,
-      order: (rows[0]?.max_order ?? -1) + 1,
-      createdAt: now,
-      updatedAt: now,
-      contentUpdatedAt: now,
-    };
-    await db.execute(
-      'INSERT INTO canvases (id, title, doc, pinned, "order", created_at, updated_at, content_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [canvas.id, canvas.title, serializeCanvasDoc(canvas.doc), 0, canvas.order, now, now, now]
-    );
+      current: currentState.current ? { ...currentState.current, ...stored, doc } : null,
+      externalDocNonce: currentState.externalDocNonce + 1,
+    }));
+  },
+
+  createCanvas: async (input = {}) => {
+    // The write path persists, returns the stored canvas, and emits the Change.
+    const canvas = await createCanvasRow(input, "local");
     set((state) => ({ canvases: sortCanvases([...state.canvases, canvas]) }));
     return canvas;
   },
 
   deleteCanvas: async (id) => {
-    const db = await getDatabase();
-    const rows = await db.select<{ title: string }[]>("SELECT title FROM canvases WHERE id = ?", [
-      id,
-    ]);
-    if (rows[0]) {
-      await recordTombstone({ entityType: "canvas", entityId: id, title: rows[0].title });
-    }
-    await db.execute("DELETE FROM canvases WHERE id = ?", [id]);
+    // The write path records the tombstone, deletes, and emits the Change.
+    await deleteCanvasRow(id, "local");
     set((state) => ({
       canvases: state.canvases.filter((canvas) => canvas.id !== id),
       ...(state.current?.id === id ? editorResetState() : {}),
@@ -236,51 +312,44 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   renameCanvas: async (id, title) => get().updateCanvas(id, { title }),
 
   updateCanvas: async (id, input) => {
-    const db = await getDatabase();
-    const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM canvases WHERE id = ?", [
-      id,
-    ]);
-    if (!rows[0]) return;
-    const parsed = parseCanvasDoc(rows[0].doc as string);
-    const existing = toModel(rows[0], parsed.doc);
-    const now = nowSeconds();
-    const updated: Canvas = {
-      ...existing,
-      ...input,
-      updatedAt: now,
-      contentUpdatedAt:
-        input.title !== undefined && input.title !== existing.title
-          ? now
-          : existing.contentUpdatedAt,
-    };
-    await db.execute(
-      'UPDATE canvases SET title = ?, pinned = ?, "order" = ?, updated_at = ?, content_updated_at = ? WHERE id = ?',
-      [
-        updated.title,
-        updated.pinned ? 1 : 0,
-        updated.order,
-        updated.updatedAt,
-        updated.contentUpdatedAt,
-        id,
-      ]
-    );
+    // The write path persists, returns the stored canvas, and emits the
+    // Change (content for a title change, metadata for pin/order).
+    const stored = await canvasWriteQueue.enqueue(() => updateCanvasRow(id, input, "local"));
+    if (!stored) return;
     set((state) => ({
-      canvases: sortCanvases(state.canvases.map((canvas) => (canvas.id === id ? updated : canvas))),
+      canvases: sortCanvases(
+        state.canvases.map((canvas) =>
+          canvas.id === id
+            ? {
+                ...canvas,
+                title: stored.title,
+                pinned: stored.pinned,
+                order: stored.order,
+                updatedAt: stored.updatedAt,
+                contentUpdatedAt: stored.contentUpdatedAt,
+              }
+            : canvas
+        )
+      ),
       current:
-        state.current?.id === id ? { ...state.current, ...updated, doc: state.doc } : state.current,
+        state.current?.id === id
+          ? {
+              ...state.current,
+              title: stored.title,
+              pinned: stored.pinned,
+              order: stored.order,
+              updatedAt: stored.updatedAt,
+              contentUpdatedAt: stored.contentUpdatedAt,
+              doc: state.doc,
+            }
+          : state.current,
     }));
   },
 
   reorderCanvases: async (items) => {
-    const db = await getDatabase();
+    // The write path persists the order and emits one metadata Change per row.
+    await canvasWriteQueue.enqueue(() => reorderCanvasRows(items, "local"));
     const now = nowSeconds();
-    for (const item of items) {
-      await db.execute('UPDATE canvases SET "order" = ?, updated_at = ? WHERE id = ?', [
-        item.order,
-        now,
-        item.id,
-      ]);
-    }
     const orderById = new Map(items.map((item) => [item.id, item.order]));
     set((state) => ({
       canvases: sortCanvases(
@@ -308,7 +377,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
         return;
       }
       const result = parseCanvasDoc(rows[0].doc as string);
-      const current = toModel(rows[0], result.doc);
+      const current = toModel(rows[0], result.ok ? result.doc : createDefaultCanvasDoc());
       if (!result.ok) {
         set({
           current,
@@ -320,7 +389,8 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
         });
         return;
       }
-      set({ current, doc: result.doc, loadState: "ready" });
+      const doc = { ...result.doc, viewport: viewportForCanvas(current.id, result.doc.viewport) };
+      set({ current: { ...current, doc }, doc, loadState: "ready" });
     } catch (error) {
       set({ loadState: "error", editorError: String(error), editorReadOnly: true });
     }
@@ -661,23 +731,28 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   setViewport: (viewport) => {
     const state = get();
     if (
-      state.editorReadOnly ||
-      (state.doc.viewport.x === viewport.x &&
-        state.doc.viewport.y === viewport.y &&
-        state.doc.viewport.zoom === viewport.zoom)
+      state.doc.viewport.x === viewport.x &&
+      state.doc.viewport.y === viewport.y &&
+      state.doc.viewport.zoom === viewport.zoom
     ) {
       return;
     }
-    set({
-      doc: { ...state.doc, viewport: { ...viewport } },
-      dirty: true,
-      revision: state.revision + 1,
-    });
+    // Device-local view state (ADR 0004): persisted to Reading Position, never
+    // to the synced row. No revision, no dirty flag, no updated_at bump, no
+    // Change, no Auto Sync — moving the view is not an edit.
+    if (state.current) {
+      useReadingPositionStore.getState().saveCanvasViewport(state.current.id, viewport);
+    }
+    set({ doc: { ...state.doc, viewport: { ...viewport } } });
   },
 
   replaceCorruptDocWithDefault: async () => {
     const state = get();
     if (!state.current || !state.docLoadError) return;
+    // A newer-schema canvas is read-only here: replacing it with the default
+    // would overwrite another device's work and then push it. Recovery is
+    // only for corrupt or invalid local docs.
+    if (state.docLoadError.code === "unsupported-version") return;
     const replacementDoc = createDefaultCanvasDoc();
     const replacementRevision = state.revision + 1;
     set({
@@ -720,12 +795,85 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     if (!state.corruptDocReplacementAllowed || state.current?.id !== canvasId) {
       throw new Error("Canvas document replacement is not allowed");
     }
-    const db = await getDatabase();
-    const now = nowSeconds();
-    await db.execute(
-      "UPDATE canvases SET doc = ?, updated_at = ?, content_updated_at = ? WHERE id = ?",
-      [serializeCanvasDoc(doc), now, now, canvasId]
+    // Recovery is a content edit like any other: it goes through the write
+    // path so it emits a Change and syncs.
+    const stored = await canvasWriteQueue.enqueue(() =>
+      updateCanvasDocRow(canvasId, doc, "local")
     );
+    if (!stored) {
+      throw new Error("Canvas document replacement is not allowed");
+    }
+    set((currentState) => ({
+      canvases: currentState.canvases.map((canvas) =>
+        canvas.id === canvasId
+          ? {
+              ...canvas,
+              updatedAt: stored.updatedAt,
+              contentUpdatedAt: stored.contentUpdatedAt,
+            }
+          : canvas
+      ),
+      current:
+        currentState.current?.id === canvasId
+          ? {
+              ...currentState.current,
+              updatedAt: stored.updatedAt,
+              contentUpdatedAt: stored.contentUpdatedAt,
+            }
+          : currentState.current,
+    }));
+  },
+
+  saveDoc: async (doc) => {
+    const state = get();
+    if (
+      !state.current ||
+      state.docWriteBlocked ||
+      state.editorReadOnly ||
+      state.docLoadError ||
+      state.corruptDocReplacementAllowed
+    ) {
+      return null;
+    }
+    const canvasId = state.current.id;
+    const revision = state.revision;
+    set({ saveState: "saving", editorError: null });
+    try {
+      // The write path persists, returns the stored canvas, and emits the
+      // Change. The open doc keeps its device-local viewport; only the clocks
+      // move. This runs inside the Edit Session's own queue, so it must not
+      // re-enter the shared write queue (that self-deadlocks); metadata saves
+      // below stay on the shared queue, where the session save never runs.
+      const stored = await updateCanvasDocRow(canvasId, doc, "local");
+      if (!stored) return null;
+      if (get().current?.id !== canvasId) return stored;
+      set((currentState) => ({
+        canvases: currentState.canvases.map((canvas) =>
+          canvas.id === canvasId
+            ? {
+                ...canvas,
+                updatedAt: stored.updatedAt,
+                contentUpdatedAt: stored.contentUpdatedAt,
+              }
+            : canvas
+        ),
+        current:
+          currentState.current?.id === canvasId
+            ? {
+                ...currentState.current,
+                updatedAt: stored.updatedAt,
+                contentUpdatedAt: stored.contentUpdatedAt,
+              }
+            : currentState.current,
+      }));
+      get().markSaved(revision);
+      return stored;
+    } catch (error) {
+      if (get().current?.id === canvasId) {
+        set({ saveState: "error", editorError: String(error), dirty: true });
+      }
+      throw error;
+    }
   },
 
   persistCanvas: async (canvasId, doc, revision) => {
@@ -741,22 +889,29 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     }
     set({ saveState: "saving", editorError: null });
     try {
-      const db = await getDatabase();
-      const now = nowSeconds();
-      await db.execute(
-        "UPDATE canvases SET doc = ?, updated_at = ?, content_updated_at = ? WHERE id = ?",
-        [serializeCanvasDoc(doc), now, now, canvasId]
+      // The write path persists, returns the stored canvas, and emits the
+      // Change. A delayed snapshot for another canvas is dropped on arrival.
+      const stored = await canvasWriteQueue.enqueue(() =>
+        updateCanvasDocRow(canvasId, doc, "local")
       );
-      if (get().current?.id !== canvasId) return;
+      if (!stored || get().current?.id !== canvasId) return;
       set((currentState) => ({
         canvases: currentState.canvases.map((canvas) =>
           canvas.id === canvasId
-            ? { ...canvas, doc, updatedAt: now, contentUpdatedAt: now }
+            ? {
+                ...canvas,
+                updatedAt: stored.updatedAt,
+                contentUpdatedAt: stored.contentUpdatedAt,
+              }
             : canvas
         ),
         current:
           currentState.current?.id === canvasId
-            ? { ...currentState.current, doc, updatedAt: now, contentUpdatedAt: now }
+            ? {
+                ...currentState.current,
+                updatedAt: stored.updatedAt,
+                contentUpdatedAt: stored.contentUpdatedAt,
+              }
             : currentState.current,
       }));
       get().markSaved(revision);

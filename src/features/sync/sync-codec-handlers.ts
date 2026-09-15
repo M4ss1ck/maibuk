@@ -1,5 +1,5 @@
 import { parseSqlStatements } from "@/lib/db/sql-parser";
-import type { BookSnapshot, NoteSnapshot } from "@/features/sync/types";
+import type { BookSnapshot, CanvasSnapshot, NoteSnapshot } from "@/features/sync/types";
 
 // Pure CPU-bound helpers shared by the sync codec worker and its
 // no-Worker fallback. No database access here — only JSON encode/decode
@@ -54,6 +54,16 @@ export function normalizeBookSnapshotJson(json: string): string {
     ...book
   } = snapshot.book;
   return JSON.stringify({ ...snapshot, book });
+}
+
+export function normalizeCanvasSnapshotJson(json: string): string {
+  const snapshot = JSON.parse(json) as CanvasSnapshot;
+  // contentUpdatedAt is derived from content (already in the checksum).
+  // Drop the key entirely so the checksum byte-matches a snapshot without it.
+  // The viewport never reaches the snapshot: serializeCanvas strips it before
+  // stringifying, so moving the view cannot change the checksum.
+  const { contentUpdatedAt: _contentUpdatedAt, ...canvas } = snapshot.canvas;
+  return JSON.stringify({ ...snapshot, canvas });
 }
 
 const INSERT_PATTERN = /^INSERT\s/i;

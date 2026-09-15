@@ -13,7 +13,7 @@ export type SyncStatus =
 // a local edit that landed while the sync was comparing).
 export type SyncAction = "pushed" | "pulled" | "skipped" | "cancelled" | "deferred";
 export type SyncOutcome = "success" | "cancelled" | "partial";
-export type SyncScope = "all" | "books" | "notes" | "metrics";
+export type SyncScope = "all" | "books" | "notes" | "canvases" | "metrics";
 export type SyncDirection = "bidirectional" | "pull" | "push";
 export type SyncEntityType = "book" | "note" | "canvas";
 
@@ -191,6 +191,28 @@ export interface NoteSnapshot {
     order: number;
     wordCount: number;
     collapsedHeadings: string | null;
+    createdAt: number; // Unix seconds
+    updatedAt: number;
+    // Optional for backward compatibility with snapshots from older clients.
+    contentUpdatedAt?: number;
+  };
+}
+
+/**
+ * One Canvas as Sync sees it. The doc carries the whole document minus the
+ * viewport (ADR 0004): pan and zoom are device-local, excluded from the
+ * payload and the checksum, so moving the view never changes the object. A
+ * doc from a newer schemaVersion than this client understands is stored
+ * verbatim and never pushed back (ADR 0006).
+ */
+export interface CanvasSnapshot {
+  canvas: {
+    id: string;
+    title: string;
+    pinned: boolean;
+    order: number;
+    /** Whole document without the viewport. Unknown shape for newer schemas. */
+    doc: unknown;
     createdAt: number; // Unix seconds
     updatedAt: number;
     // Optional for backward compatibility with snapshots from older clients.

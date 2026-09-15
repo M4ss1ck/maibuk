@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted (Canvas viewport implemented; Last Opened Chapter not yet)
 ---
 
 # Position state is device-local

@@ -8,7 +8,7 @@ import i18n from "i18next";
 import type { SyncItemMeta, NoteSyncItemMeta, RemoteDeletionMeta } from "@/features/sync/types";
 import { encryptMeta, decryptMeta } from "@/features/sync/crypto";
 
-export type ObjectKind = "book" | "note" | "version" | "metric";
+export type ObjectKind = "book" | "note" | "canvas" | "version" | "metric";
 export const APP_NAME = "maibuk";
 
 export interface RemoteObject {
@@ -376,6 +376,20 @@ export function isKeyUniqueConstraintError(error: unknown): boolean {
   });
 }
 
+/**
+ * The sync server's 50 MB content limit surfaces as a PocketBase validation
+ * error on the `content` field (HTTP 400 with `data.data.content`). Canvases
+ * can be several MB with embedded images; clients set no cap themselves and
+ * surface this rejection as a clear per-item Sync Log error.
+ */
+export function isContentSizeLimitError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const status = (error as { status?: number }).status;
+  if (status !== undefined && status !== 400 && status !== 413) return false;
+  const fieldErrors = (error as { data?: { data?: Record<string, unknown> } }).data?.data;
+  return !!fieldErrors && typeof fieldErrors === "object" && "content" in fieldErrors;
+}
+
 export async function pushBookBlob(
   bookId: string,
   encryptedData: Blob,
@@ -439,6 +453,59 @@ export async function pullNoteBlob(
 
 export async function deleteRemoteNote(noteId: string): Promise<void> {
   await softDeleteObject("note", noteId);
+}
+
+export interface CanvasSyncItemMeta {
+  remoteId: string;
+  canvasId: string;
+  checksum: string;
+  updatedAt: number; // Unix seconds
+}
+
+export async function pushCanvasBlob(
+  canvasId: string,
+  encryptedData: Blob,
+  checksum: string,
+  remoteId?: string
+): Promise<void> {
+  await pushObject({ kind: "canvas", key: canvasId, checksum, content: encryptedData, remoteId });
+}
+
+export async function pullCanvasBlob(
+  canvasId: string,
+  remoteId?: string
+): Promise<{ data: Uint8Array; checksum: string } | null> {
+  // Callers that already hold the remote object pass its remoteId so we skip the
+  // full-list lookup (otherwise pulling N canvases would re-list every canvas N times).
+  if (remoteId) {
+    const data = await pullObjectContent(remoteId);
+    return data ? { data, checksum: "" } : null;
+  }
+
+  const rows = await listObjects("canvas");
+  const row = rows.find((r) => r.key === canvasId);
+  if (!row) return null;
+  const data = await pullObjectContent(row.remoteId);
+  if (!data) return null;
+  return { data, checksum: row.checksum };
+}
+
+export async function deleteRemoteCanvas(canvasId: string): Promise<void> {
+  await softDeleteObject("canvas", canvasId);
+}
+
+export async function listRemoteCanvases(): Promise<CanvasSyncItemMeta[]> {
+  const rows = await listObjects("canvas");
+  return rows.map((r) => ({
+    remoteId: r.remoteId,
+    canvasId: r.key,
+    checksum: r.checksum,
+    updatedAt: r.updatedAt,
+  }));
+}
+
+export async function listRemoteDeletedCanvases(): Promise<RemoteDeletionMeta[]> {
+  return (await listDeletedObjects("canvas")).map(toRemoteDeletion);
 }
 
 export async function listRemoteNotes(): Promise<NoteSyncItemMeta[]> {

@@ -19,6 +19,14 @@ const mockApplyNoteSnapshot = vi.hoisted(() => vi.fn());
 const mockPushNoteBlob = vi.hoisted(() => vi.fn());
 const mockPullNoteBlob = vi.hoisted(() => vi.fn());
 const mockListRemoteNotes = vi.hoisted(() => vi.fn());
+const mockSerializeCanvas = vi.hoisted(() => vi.fn());
+const mockApplyCanvasSnapshot = vi.hoisted(() => vi.fn());
+const mockPushCanvasBlob = vi.hoisted(() => vi.fn());
+const mockPullCanvasBlob = vi.hoisted(() => vi.fn());
+const mockListRemoteCanvases = vi.hoisted(() => vi.fn());
+const mockDeleteRemoteCanvas = vi.hoisted(() => vi.fn());
+const mockListRemoteDeletedCanvases = vi.hoisted(() => vi.fn());
+const mockRemoveLocalCanvas = vi.hoisted(() => vi.fn());
 const mockDeleteRemoteBook = vi.hoisted(() => vi.fn());
 const mockDeleteRemoteNote = vi.hoisted(() => vi.fn());
 const mockRefreshAuth = vi.hoisted(() => vi.fn());
@@ -47,8 +55,11 @@ vi.mock("../../../../features/sync/serializer", () => ({
   serializeNote: mockSerializeNote,
   normalizeNoteSnapshotForSync: mockNormalizeNoteSnapshotForSync,
   applyNoteSnapshot: mockApplyNoteSnapshot,
+  serializeCanvas: mockSerializeCanvas,
+  applyCanvasSnapshot: mockApplyCanvasSnapshot,
   removeLocalBook: mockRemoveLocalBook,
   removeLocalNote: mockRemoveLocalNote,
+  removeLocalCanvas: mockRemoveLocalCanvas,
 }));
 
 class FakeSyncCryptoError extends Error {
@@ -77,10 +88,15 @@ vi.mock("../../../../features/sync/client", () => ({
   pushNoteBlob: mockPushNoteBlob,
   pullNoteBlob: mockPullNoteBlob,
   listRemoteNotes: mockListRemoteNotes,
+  pushCanvasBlob: mockPushCanvasBlob,
+  pullCanvasBlob: mockPullCanvasBlob,
+  listRemoteCanvases: mockListRemoteCanvases,
   deleteRemoteBook: mockDeleteRemoteBook,
   deleteRemoteNote: mockDeleteRemoteNote,
+  deleteRemoteCanvas: mockDeleteRemoteCanvas,
   listRemoteDeletedBooks: mockListRemoteDeletedBooks,
   listRemoteDeletedNotes: mockListRemoteDeletedNotes,
+  listRemoteDeletedCanvases: mockListRemoteDeletedCanvases,
 }));
 
 // Pre-mock backup module — Task 10 will add backup imports to sync-engine.ts.
@@ -147,6 +163,12 @@ mockListRemoteNotes.mockResolvedValue([]);
 mockSerializeNote.mockResolvedValue('{"note":{}}');
 mockPushNoteBlob.mockResolvedValue(undefined);
 mockPullNoteBlob.mockResolvedValue(null);
+mockListRemoteCanvases.mockResolvedValue([]);
+mockSerializeCanvas.mockResolvedValue('{"canvas":{}}');
+mockPushCanvasBlob.mockResolvedValue(undefined);
+mockPullCanvasBlob.mockResolvedValue(null);
+mockDeleteRemoteCanvas.mockResolvedValue(undefined);
+mockListRemoteDeletedCanvases.mockResolvedValue([]);
 mockListPendingTombstones.mockResolvedValue([]);
 mockHasTombstone.mockResolvedValue(false);
 mockGetTombstone.mockResolvedValue(null);
@@ -159,6 +181,7 @@ mockListRemoteDeletedNotes.mockResolvedValue([]);
 beforeEach(() => {
   mockListRemoteDeletedBooks.mockResolvedValue([]);
   mockListRemoteDeletedNotes.mockResolvedValue([]);
+  mockListRemoteDeletedCanvases.mockResolvedValue([]);
   mockListPendingTombstones.mockResolvedValue([]);
   mockHasTombstone.mockResolvedValue(false);
   mockGetTombstone.mockResolvedValue(null);

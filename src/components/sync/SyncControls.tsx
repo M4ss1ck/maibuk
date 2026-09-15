@@ -25,6 +25,7 @@ export function SyncControls({ onSync, layout = "popover" }: SyncControlsProps) 
       { value: "all" as const, label: t("sync.scopeAll") },
       { value: "books" as const, label: t("sync.scopeBooks") },
       { value: "notes" as const, label: t("sync.scopeNotes") },
+      { value: "canvases" as const, label: t("sync.scopeCanvases") },
       { value: "metrics" as const, label: t("sync.scopeMetrics") },
     ],
     [t]
