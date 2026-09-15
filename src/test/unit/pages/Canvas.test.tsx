@@ -91,6 +91,16 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+// The header hosts the real sync button; isolate the flow here while still
+// verifying its contextual scope wiring through the captured props.
+const syncButtonProps = { current: null as null | { defaultScope?: string } };
+vi.mock("@/components/sync/SyncStatusButton", () => ({
+  SyncStatusButton: (props: { defaultScope?: string }) => {
+    syncButtonProps.current = props;
+    return <button type="button">sync</button>;
+  },
+}));
+
 const { Canvas } = await import("@/pages/Canvas");
 
 function readyState() {
@@ -323,6 +333,28 @@ describe("Canvas page", () => {
     renderCanvas();
     fireEvent.click(screen.getByRole("button", { name: "canvas.lockInteractivity" }));
     expect(mocks.actions.toggleInteractivityLocked).toHaveBeenCalledTimes(1);
+  });
+
+  it("wires the header sync button to the Canvases scope before Delete Selection", () => {
+    renderCanvas();
+    const syncButton = screen.getByRole("button", { name: "sync" });
+    const deleteButton = screen.getByRole("button", { name: "canvas.deleteSelection" });
+
+    expect(syncButtonProps.current?.defaultScope).toBe("canvases");
+    // Shared sync button sits immediately before Delete Selection in the header.
+    expect(syncButton.nextElementSibling).toBe(deleteButton);
+  });
+
+  it("keeps the header sync button enabled with no elements selected", () => {
+    Object.assign(mocks.state, { selectedNodeId: null, selectedEdgeId: null });
+    renderCanvas();
+    const syncButton = screen.getByRole("button", { name: "sync" });
+    const deleteButton = screen.getByRole("button", { name: "canvas.deleteSelection" });
+
+    expect(mocks.state.selectedNodeId).toBeNull();
+    expect(mocks.state.selectedEdgeId).toBeNull();
+    expect(deleteButton).toBeDisabled();
+    expect(syncButton).toBeEnabled();
   });
 
   it("renders recovery UI instead of React Flow for a corrupt document", () => {

@@ -9,9 +9,9 @@ import { AuthDialog } from "@/components/sync/AuthDialog";
 import { SyncPanel } from "@/components/sync/SyncPanel";
 import { PassphraseDialog } from "@/components/sync/PassphraseDialog";
 import { ConflictDialog } from "@/components/sync/ConflictDialog";
-import type { SyncOptions } from "@/features/sync/types";
+import type { SyncOptions, SyncScope } from "@/features/sync/types";
 
-export function SyncStatusButton() {
+export function SyncStatusButton({ defaultScope = "all" }: { defaultScope?: SyncScope }) {
   const { t } = useTranslation();
   const { authStatus, syncStatus, lastSyncedAt } = useSyncStore();
   const { books } = useBookStore();
@@ -102,6 +102,7 @@ export function SyncStatusButton() {
           <Dialog aria-label={t("sync.syncStatus")} className="outline-none">
             <SyncPanel
               onClose={() => setShowSyncPanel(false)}
+              defaultScope={defaultScope}
               onSync={async (options?: Partial<SyncOptions>) => {
                 const didSync = await syncAllWithSessionPassphrase(options);
                 if (!didSync) {

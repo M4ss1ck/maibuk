@@ -27,6 +27,7 @@ import { maibukArt } from "@/assets/ascii/maibuk";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
 import { EdgeInspectorCard } from "@/features/canvas/EdgeInspectorCard";
@@ -488,6 +489,7 @@ function CanvasEditor() {
         >
           <Redo2 className="size-4" aria-hidden="true" />
         </Button>
+        <SyncStatusButton defaultScope="canvases" />
         <Button
           variant="ghost"
           size="sm"

@@ -78,6 +78,12 @@ vi.mock("../../../features/canvas/drawing/DrawingCaptureOverlay", () => ({
   DrawingCaptureOverlay: () => null,
 }));
 
+// The header now hosts the real sync button; keep edit-session tests isolated
+// from the sync flow while still accepting its contextual scope wiring.
+vi.mock("@/components/sync/SyncStatusButton", () => ({
+  SyncStatusButton: (_props: { defaultScope?: string }) => <button type="button">sync</button>,
+}));
+
 const { Canvas } = await import("@/pages/Canvas");
 const { useCanvasStore } = await import("@/features/canvas/store");
 const { useReadingPositionStore } = await import("@/features/reading-position/store");

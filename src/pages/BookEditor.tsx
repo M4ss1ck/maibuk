@@ -1075,7 +1075,7 @@ export function BookEditor() {
               />
 
               {/* Sync */}
-              <SyncStatusButton />
+              <SyncStatusButton defaultScope="books" />
               <div className="hidden @2xl:block">
                 <HistoryMenuButton
                   onOpenPanel={() => setShowVersionPanel(true)}
