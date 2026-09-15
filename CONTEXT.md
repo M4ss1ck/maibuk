@@ -303,6 +303,9 @@ Whether a Change touched what an item says (content, including its title) or onl
 The single stream of Changes that Auto Sync, Galleries, and open editors listen to. (ADR 0003)
 _Avoid_: event bus, notifications
 
+**Entity Sync**:
+The one shared Push, Pull, and Conflict path every Synced Item follows, with one adapter per kind carrying its local reads and writes. (ADR 0006, 0007)
+
 ## Editing
 
 **Save Status**:
@@ -392,9 +395,6 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 ## Decided, not built
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter and a Canvas's pan and zoom.
-
-**Entity Sync**:
-The one shared way Books, Notes, and Canvases are pushed, pulled, and put in Conflict, separate from how history and metrics sync. (ADR 0006, 0007)
 
 ## Relationships
 

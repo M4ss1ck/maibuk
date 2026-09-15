@@ -132,6 +132,8 @@ export default defineConfig(() => ({
         "src/features/sync/change-feed.ts",
         "src/features/sync/view-refresh.ts",
         "src/features/sync/auto-sync.ts",
+        "src/features/sync/entity-sync.ts",
+        "src/features/sync/remote-port.ts",
         "src/features/books/store.ts",
         "src/features/books/write.ts",
         "src/features/chapters/store.ts",

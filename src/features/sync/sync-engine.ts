@@ -1,7 +1,6 @@
 import { getDatabase } from "@/lib/db";
 import { isSyncCryptoError } from "@/features/sync/crypto";
 import {
-  parseJsonAsync,
   computeChecksumAsync,
   normalizeNoteSnapshotAsync,
   normalizeBookSnapshotAsync,
@@ -17,31 +16,18 @@ import {
   removeLocalNote,
 } from "@/features/sync/serializer";
 import {
-  pushBookBlob,
-  pullBookBlob,
-  listRemoteBooks,
   refreshAuth as pbRefreshAuth,
   listRemoteVersions,
   pushVersionBlob,
   pullVersionBlob,
-  pushNoteBlob,
-  pullNoteBlob,
-  listRemoteNotes,
-  deleteRemoteBook,
-  deleteRemoteNote,
-  listRemoteDeletedBooks,
-  listRemoteDeletedNotes,
 } from "@/features/sync/client";
 import type {
   BookSnapshot,
   NoteSnapshot,
-  SyncItemMeta,
-  NoteSyncItemMeta,
   SingleSyncResult,
   BatchSyncResult,
   SyncOptions,
   SyncScope,
-  SyncDirection,
   SyncEntityType,
   SyncDeletionReviewItem,
   SyncLogEntry,
@@ -54,18 +40,22 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { useVersionStore } from "@/features/versions/store";
 import { syncMetricsRows } from "@/features/metrics/metrics-sync";
-import {
-  getTombstone,
-  listPendingTombstones,
-  markTombstonePushed,
-  tombstoneId,
-} from "@/features/sync/tombstones";
 import { ensureGenericCollectionMigration } from "@/features/sync/migration-reset";
 import { createAsyncQueue } from "@/lib/async-queue";
 import { shouldRefreshAuth } from "@/features/sync/auth-policy";
-import { decideSyncAction } from "@/features/sync/sync-decision";
-import { clearSyncBase, getSyncBase, setSyncBase } from "@/features/sync/sync-state";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
+import {
+  canPull,
+  canPush,
+  processPendingDeletions,
+  syncEntity,
+  syncEntityBatch,
+  type BatchSeen,
+  type EntityDeletionRegistry,
+  type EntitySyncAdapter,
+  type EntitySyncContext,
+} from "@/features/sync/entity-sync";
+import { pocketBaseRemote, type RemoteItemMeta } from "@/features/sync/remote-port";
 
 // FIFO serialization of all sync entrypoints (syncAllBooks, syncBook,
 // syncSingleNote). Concurrent callers queue instead of failing: each queued
@@ -80,24 +70,6 @@ const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   direction: "bidirectional",
   confirmedDeletionIds: [],
 };
-
-async function decryptSnapshot(data: Uint8Array, passphrase: string): Promise<BookSnapshot> {
-  const decrypted = await decryptBufferToText(data, passphrase);
-  try {
-    return await parseJsonAsync<BookSnapshot>(decrypted);
-  } catch {
-    throw new Error("Synced payload is invalid or corrupted");
-  }
-}
-
-async function decryptNoteSnapshot(data: Uint8Array, passphrase: string): Promise<NoteSnapshot> {
-  const decrypted = await decryptBufferToText(data, passphrase);
-  try {
-    return await parseJsonAsync<NoteSnapshot>(decrypted);
-  } catch {
-    throw new Error("Synced payload is invalid or corrupted");
-  }
-}
 
 function assertOnline(): void {
   if (!navigator.onLine) {
@@ -124,30 +96,6 @@ function includesScope(scope: SyncScope, entity: SyncEntityType | "metrics"): bo
   );
 }
 
-function canPull(direction: SyncDirection): boolean {
-  return direction !== "push";
-}
-
-function canPush(direction: SyncDirection): boolean {
-  return direction !== "pull";
-}
-
-function toDeletionReviewItem(tombstone: {
-  id: string;
-  entityType: SyncEntityType;
-  entityId: string;
-  title: string;
-  deletedAt: number;
-}): SyncDeletionReviewItem {
-  return {
-    id: tombstone.id,
-    entityType: tombstone.entityType,
-    entityId: tombstone.entityId,
-    title: tombstone.title,
-    deletedAt: tombstone.deletedAt,
-  };
-}
-
 function emitLog(options: SyncOptions, entry: Omit<SyncLogEntry, "id" | "timestamp">): void {
   options.onLog?.({
     id: crypto.randomUUID(),
@@ -160,33 +108,161 @@ interface EffectiveTimestamp {
   updated_at: number;
 }
 
-async function getLocalUpdatedAt(bookId: string): Promise<number> {
-  const db = await getDatabase();
-  const rows = await db.select<EffectiveTimestamp[]>(
-    `SELECT COALESCE(MAX(ts), 0) AS updated_at FROM (
-      SELECT updated_at AS ts FROM books WHERE id = ?
-      UNION ALL
-      SELECT updated_at AS ts FROM chapters WHERE book_id = ?
-    )`,
-    [bookId, bookId]
-  );
-  return rows[0]?.updated_at ?? 0;
+interface LocalIdRow {
+  id: string;
+  updated_at: number;
 }
 
-async function getBookTitle(bookId: string): Promise<string> {
-  const db = await getDatabase();
-  const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [
-    bookId,
-  ]);
-  return rows[0]?.title ?? bookId;
+interface TitleRow {
+  title: string;
 }
 
-async function getNoteTitle(noteId: string): Promise<string> {
-  const db = await getDatabase();
-  const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [
-    noteId,
-  ]);
-  return rows[0]?.title ?? noteId;
+// The Book side of Entity Sync: local reads through the serializer and the
+// same timestamp/title queries the per-book copies used, remote operations
+// through the Remote port. The pre-pull Checkpoint stays here because only
+// the engine may touch the version store. Exported for per-adapter tests.
+export const bookAdapter: EntitySyncAdapter<BookSnapshot> = {
+  entityType: "book",
+  label: "Book",
+
+  async listLocal() {
+    const db = await getDatabase();
+    const rows = await db.select<LocalIdRow[]>(
+      `SELECT b.id, MAX(b.updated_at, COALESCE(MAX(c.updated_at), 0)) AS updated_at
+       FROM books b
+       LEFT JOIN chapters c ON c.book_id = b.id
+       GROUP BY b.id`
+    );
+    return rows.map((row) => ({ id: row.id, updatedAt: row.updated_at }));
+  },
+
+  async getLocalUpdatedAt(bookId) {
+    const db = await getDatabase();
+    const rows = await db.select<EffectiveTimestamp[]>(
+      `SELECT COALESCE(MAX(ts), 0) AS updated_at FROM (
+        SELECT updated_at AS ts FROM books WHERE id = ?
+        UNION ALL
+        SELECT updated_at AS ts FROM chapters WHERE book_id = ?
+      )`,
+      [bookId, bookId]
+    );
+    return rows[0]?.updated_at ?? 0;
+  },
+
+  async getTitle(bookId) {
+    const db = await getDatabase();
+    const rows = await db.select<TitleRow[]>("SELECT title FROM books WHERE id = ?", [bookId]);
+    return rows[0]?.title ?? bookId;
+  },
+
+  async snapshotChecksums(bookId) {
+    const json = await serializeBook(bookId);
+    return { json, checksum: await computeChecksumAsync(await normalizeBookSnapshotAsync(json)) };
+  },
+
+  async legacyRawChecksum(json) {
+    return computeChecksumAsync(json);
+  },
+
+  titleOfSnapshot(snapshot) {
+    return snapshot.book.title;
+  },
+
+  async applySnapshot(snapshot) {
+    await applyBookSnapshot(snapshot);
+  },
+
+  async removeLocal(bookId) {
+    await removeLocalBook(bookId);
+  },
+
+  async currentChecksum(bookId) {
+    return (await this.snapshotChecksums(bookId)).checksum;
+  },
+
+  async beforePull(bookId) {
+    await useVersionStore.getState().createVersion({ bookId, triggerType: "pre-sync" });
+  },
+};
+
+// The Note side of Entity Sync. Notes are not versioned, so there is no
+// pre-pull snapshot to take (the pre-sync backup is the safety net) and no
+// legacy checksum history to adopt. Exported for per-adapter tests.
+export const noteAdapter: EntitySyncAdapter<NoteSnapshot> = {
+  entityType: "note",
+  label: "Note",
+
+  async listLocal() {
+    const db = await getDatabase();
+    const rows = await db.select<LocalIdRow[]>("SELECT id, updated_at FROM notes");
+    return rows.map((row) => ({ id: row.id, updatedAt: row.updated_at }));
+  },
+
+  async getLocalUpdatedAt(noteId) {
+    const db = await getDatabase();
+    const rows = await db.select<EffectiveTimestamp[]>(
+      "SELECT updated_at FROM notes WHERE id = ?",
+      [noteId]
+    );
+    return rows[0]?.updated_at ?? 0;
+  },
+
+  async getTitle(noteId) {
+    const db = await getDatabase();
+    const rows = await db.select<TitleRow[]>("SELECT title FROM notes WHERE id = ?", [noteId]);
+    return rows[0]?.title ?? noteId;
+  },
+
+  async snapshotChecksums(noteId) {
+    const json = await serializeNote(noteId);
+    return { json, checksum: await computeChecksumAsync(await normalizeNoteSnapshotAsync(json)) };
+  },
+
+  async legacyRawChecksum() {
+    return null;
+  },
+
+  titleOfSnapshot(snapshot) {
+    return snapshot.note.title;
+  },
+
+  async applySnapshot(snapshot) {
+    await applyNoteSnapshot(snapshot);
+  },
+
+  async removeLocal(noteId) {
+    await removeLocalNote(noteId);
+  },
+
+  async currentChecksum(noteId) {
+    return (await this.snapshotChecksums(noteId)).checksum;
+  },
+};
+
+// Pending deletions dispatch through this registry keyed by entityType. Only
+// Book and Note sync — a tombstone of any other kind has no entry and is
+// skipped, never sent to another kind's delete.
+const deletionRegistry: EntityDeletionRegistry = {
+  book: { deleteRemote: (entityId) => pocketBaseRemote.deleteRemote("book", entityId) },
+  note: { deleteRemote: (entityId) => pocketBaseRemote.deleteRemote("note", entityId) },
+};
+
+function entityContext(
+  passphrase: string,
+  onConflict: ConflictResolver,
+  options: SyncOptions
+): EntitySyncContext {
+  return {
+    passphrase,
+    onConflict,
+    options,
+    remote: pocketBaseRemote,
+    ensureBackup: () => ensurePreSyncBackup(options),
+    emitLog: (entry) => emitLog(options, entry),
+    queueRemoteDeletionReview: (item) => {
+      remoteDeletionReviews.push(item);
+    },
+  };
 }
 
 async function createPreSyncBackupOrThrow(): Promise<void> {
@@ -270,211 +346,31 @@ async function beginSyncRun(options: SyncOptions): Promise<void> {
   await ensurePreSyncBackup(options);
 }
 
-async function computeLocalBookChecksum(bookId: string): Promise<{ json: string; checksum: string }> {
-  const json = await serializeBook(bookId);
-  return { json, checksum: await computeChecksumAsync(await normalizeBookSnapshotAsync(json)) };
-}
-
-async function computeLocalNoteChecksum(noteId: string): Promise<{ json: string; checksum: string }> {
-  const json = await serializeNote(noteId);
-  return { json, checksum: await computeChecksumAsync(await normalizeNoteSnapshotAsync(json)) };
-}
-
-/** Only a local item without a live remote row can collide with a deleted one. */
-async function listDeletionsIfNeeded(
-  localIds: string[],
-  liveIds: string[],
-  list: () => Promise<RemoteDeletionMeta[]>
-): Promise<RemoteDeletionMeta[]> {
-  const live = new Set(liveIds);
-  return localIds.some((id) => !live.has(id)) ? list() : [];
-}
-
 // A book whose remote row is deleted has no versions to reconcile unless this
 // run restored it: otherwise it was removed here, awaits review, or was left.
 function shouldSyncVersions(
   bookId: string,
   action: SyncAction,
-  remoteBooks: SyncItemMeta[],
+  remoteBooks: RemoteItemMeta[],
   remoteDeletions: RemoteDeletionMeta[]
 ): boolean {
   if (action === "cancelled") return false;
   if (action === "pushed") return true;
   return (
-    remoteBooks.some((remote) => remote.bookId === bookId) ||
+    remoteBooks.some((remote) => remote.entityId === bookId) ||
     !remoteDeletions.some((deletion) => deletion.entityId === bookId)
   );
 }
 
-interface RemoteDeletionContext {
-  entityType: "book" | "note";
-  entityId: string;
-  title: string;
-  localChecksum: string;
-  localUpdatedAt: number;
-  deletion: RemoteDeletionMeta;
-  onConflict: ConflictResolver;
-  options: SyncOptions;
-  /** Uploads the local copy onto the given (deleted) row, restoring it. */
-  revive: (remoteId: string) => Promise<SyncAction>;
-  currentChecksum: () => Promise<string>;
-}
-
-async function removeDeletedElsewhere(ctx: RemoteDeletionContext): Promise<SyncAction> {
-  await ensurePreSyncBackup(ctx.options);
-  await (ctx.entityType === "book" ? removeLocalBook(ctx.entityId) : removeLocalNote(ctx.entityId));
-  await clearSyncBase(ctx.entityType, ctx.entityId);
-  emitLog(ctx.options, {
-    level: "success",
-    event: "pull",
-    message: `Removed ${ctx.entityType} ${ctx.title}, deleted on another device`,
-    entityType: ctx.entityType,
-    entityId: ctx.entityId,
-  });
-  return "pulled";
-}
-
-// The item exists here, but its remote row is soft-deleted. That row still
-// holds the server's unique identity, so the item is never re-created: an
-// unedited copy follows the deletion once the user confirms it, and an edited
-// one asks whether to restore it (update the deleted row) or delete it here.
-async function resolveRemoteDeletion(ctx: RemoteDeletionContext): Promise<SyncAction> {
-  const { entityType, entityId, title, options } = ctx;
-  const label = entityType === "book" ? "Book" : "Note";
-  const base = await getSyncBase(entityType, entityId);
-  // Without a base this copy was never agreed with the server (a restore, or a
-  // first sync here), so it may hold work the deletion never saw.
-  const editedHere = !base || base.localChecksum !== ctx.localChecksum;
-
-  if (!editedHere || options.direction === "pull") {
-    if (!canPull(options.direction)) {
-      emitLog(options, {
-        level: "warning",
-        event: "skip",
-        message: `${label} ${title} was deleted on another device; run a two-way or pull sync to review it`,
-        entityType,
-        entityId,
-      });
-      return "skipped";
-    }
-
-    const reviewId = tombstoneId(entityType, entityId);
-    if (!options.confirmedDeletionIds?.includes(reviewId)) {
-      remoteDeletionReviews.push({
-        id: reviewId,
-        entityType,
-        entityId,
-        title,
-        deletedAt: ctx.deletion.updatedAt,
-        deletedRemotely: true,
-      });
-      emitLog(options, {
-        level: "warning",
-        event: "delete-pending",
-        message: `Deleted on another device, needs confirmation: ${title}`,
-        entityType,
-        entityId,
-      });
-      return "skipped";
-    }
-
-    // The confirmation covered the copy the user reviewed. Land any pending
-    // editor save and re-check, so an edit made since is not deleted with it.
-    await flushPendingEdits();
-    if ((await ctx.currentChecksum()) !== ctx.localChecksum) {
-      emitLog(options, {
-        level: "warning",
-        event: "skip",
-        message: `${label} ${title} changed during sync; it will sync next time`,
-        entityType,
-        entityId,
-      });
-      return "deferred";
-    }
-    return removeDeletedElsewhere(ctx);
-  }
-
-  emitLog(options, {
-    level: "warning",
-    event: "conflict",
-    message: `${label} ${title} was deleted on another device but changed here`,
-    entityType,
-    entityId,
-  });
-  const choice = await ctx.onConflict({
-    entityType,
-    entityId,
-    entityTitle: title,
-    bookId: entityId,
-    bookTitle: title,
-    localUpdatedAt: ctx.localUpdatedAt,
-    remoteUpdatedAt: ctx.deletion.updatedAt,
-    remoteDeleted: true,
-  });
-
-  if (choice === "cancel") return "cancelled";
-  if (choice === "skip") {
-    emitLog(options, {
-      level: "warning",
-      event: "skip",
-      message: `${label} ${title} was deleted on another device but changed here; run a manual sync to choose`,
-      entityType,
-      entityId,
-    });
-    return "deferred";
-  }
-  if (choice === "push") return ctx.revive(ctx.deletion.remoteId);
-  return removeDeletedElsewhere(ctx);
-}
-
-async function processPendingDeletions(
-  entityTypes: SyncEntityType[],
+function afterBookItem(
+  passphrase: string,
   options: SyncOptions
-): Promise<{
-  actions: SyncAction[];
-  pendingDeletions: SyncDeletionReviewItem[];
-}> {
-  if (!canPush(options.direction) || entityTypes.length === 0) {
-    return { actions: [], pendingDeletions: [] };
-  }
-
-  const tombstones = await listPendingTombstones(entityTypes);
-  const confirmedIds = new Set(options.confirmedDeletionIds ?? []);
-  const pendingDeletions: SyncDeletionReviewItem[] = [];
-  const actions: SyncAction[] = [];
-
-  for (const tombstone of tombstones) {
-    const isConfirmed = tombstone.confirmedAt != null || confirmedIds.has(tombstone.id);
-    if (!isConfirmed) {
-      emitLog(options, {
-        level: "warning",
-        event: "delete-pending",
-        message: `Deletion needs confirmation: ${tombstone.title}`,
-        entityType: tombstone.entityType,
-        entityId: tombstone.entityId,
-      });
-      pendingDeletions.push(toDeletionReviewItem(tombstone));
-      continue;
+): (id: string, action: SyncAction, seen: BatchSeen) => Promise<void> {
+  return async (id, action, seen) => {
+    if (shouldSyncVersions(id, action, seen.remotes, seen.deletions)) {
+      await syncVersions(id, passphrase, options);
     }
-
-    if (tombstone.entityType === "book") {
-      await deleteRemoteBook(tombstone.entityId);
-    } else {
-      await deleteRemoteNote(tombstone.entityId);
-    }
-    await markTombstonePushed(tombstone.entityType, tombstone.entityId);
-    await clearSyncBase(tombstone.entityType === "book" ? "book" : "note", tombstone.entityId);
-    emitLog(options, {
-      level: "success",
-      event: "delete-pushed",
-      message: `Deleted remote ${tombstone.entityType}: ${tombstone.title}`,
-      entityType: tombstone.entityType,
-      entityId: tombstone.entityId,
-    });
-    actions.push("pushed");
-  }
-
-  return { actions, pendingDeletions };
+  };
 }
 
 async function ensureAuth(): Promise<void> {
@@ -517,380 +413,6 @@ async function ensureAuth(): Promise<void> {
     }
     throw error;
   }
-}
-
-async function pullBook(
-  bookId: string,
-  bookTitle: string,
-  remote: SyncItemMeta,
-  passphrase: string,
-  options: SyncOptions
-): Promise<SyncAction> {
-  await ensurePreSyncBackup(options);
-  await useVersionStore.getState().createVersion({ bookId, triggerType: "pre-sync" });
-  const pulled = await pullBookBlob(bookId, remote.remoteId);
-  if (!pulled) return "skipped";
-
-  const snapshot = await decryptSnapshot(pulled.data, passphrase);
-  await applyBookSnapshot(snapshot);
-  const { checksum } = await computeLocalBookChecksum(bookId);
-  await setSyncBase("book", bookId, { localChecksum: checksum, remoteChecksum: remote.checksum });
-  emitLog(options, {
-    level: "success",
-    event: "pull",
-    message: `Pulled book ${bookTitle}`,
-    entityType: "book",
-    entityId: bookId,
-  });
-  return "pulled";
-}
-
-async function syncBookInBatch(
-  bookId: string,
-  passphrase: string,
-  onConflict: ConflictResolver,
-  options: SyncOptions,
-  remoteBooks: SyncItemMeta[],
-  remoteDeletions: RemoteDeletionMeta[],
-  precomputedLocalUpdatedAt?: number
-): Promise<SyncAction> {
-  assertOnline();
-
-  const { json, checksum: localChecksum } = await computeLocalBookChecksum(bookId);
-  const bookTitle = await getBookTitle(bookId);
-  // Reuse the timestamp from syncAllBooks' GROUP BY query when available,
-  // avoiding a redundant per-book MAX query.
-  const localUpdatedAt = precomputedLocalUpdatedAt ?? (await getLocalUpdatedAt(bookId));
-
-  const remote = remoteBooks.find((r) => r.bookId === bookId);
-
-  const push = async (remoteId?: string): Promise<SyncAction> => {
-    const encrypted = await encryptToBuffer(json, passphrase);
-    const blob = new Blob([encrypted]);
-    // A local-only item has no remote row yet: create it (no remoteId argument).
-    await (remoteId
-      ? pushBookBlob(bookId, blob, localChecksum, remoteId)
-      : pushBookBlob(bookId, blob, localChecksum));
-    await setSyncBase("book", bookId, { localChecksum, remoteChecksum: localChecksum });
-    emitLog(options, {
-      level: "success",
-      event: "push",
-      message: `Pushed book ${bookTitle}`,
-      entityType: "book",
-      entityId: bookId,
-    });
-    return "pushed";
-  };
-
-  if (!remote) {
-    const deletion = remoteDeletions.find((d) => d.entityId === bookId);
-    if (deletion) {
-      return resolveRemoteDeletion({
-        entityType: "book",
-        entityId: bookId,
-        title: bookTitle,
-        localChecksum,
-        localUpdatedAt,
-        deletion,
-        onConflict,
-        options,
-        revive: push,
-        currentChecksum: async () => (await computeLocalBookChecksum(bookId)).checksum,
-      });
-    }
-    if (!canPush(options.direction)) {
-      emitLog(options, {
-        level: "info",
-        event: "skip",
-        message: `Skipped local-only book ${bookTitle} in pull-only sync`,
-        entityType: "book",
-        entityId: bookId,
-      });
-      return "skipped";
-    }
-    return push();
-  }
-
-  const base = await getSyncBase("book", bookId);
-
-  // Books pushed before the checksum ignored navigation state carry the raw
-  // snapshot checksum. An unchanged book still matches it: adopt it as the base
-  // instead of reporting a conflict on the first sync after upgrading.
-  if (
-    !base &&
-    remote.checksum !== localChecksum &&
-    remote.checksum === (await computeChecksumAsync(json))
-  ) {
-    await setSyncBase("book", bookId, { localChecksum, remoteChecksum: remote.checksum });
-    emitLog(options, {
-      level: "info",
-      event: "skip",
-      message: `Skipped unchanged book ${bookTitle}`,
-      entityType: "book",
-      entityId: bookId,
-    });
-    return "skipped";
-  }
-
-  const decision = decideSyncAction({
-    localChecksum,
-    remoteChecksum: remote.checksum,
-    base,
-    direction: options.direction,
-    localUpdatedAt,
-    remoteUpdatedAt: remote.updatedAt,
-  });
-
-  if (decision === "in-sync" || decision === "unchanged") {
-    if (
-      decision === "in-sync" &&
-      (base?.localChecksum !== localChecksum || base?.remoteChecksum !== remote.checksum)
-    ) {
-      await setSyncBase("book", bookId, { localChecksum, remoteChecksum: remote.checksum });
-    }
-    emitLog(options, {
-      level: "info",
-      event: "skip",
-      message: `Skipped unchanged book ${bookTitle}`,
-      entityType: "book",
-      entityId: bookId,
-    });
-    return "skipped";
-  }
-
-  if (decision === "push") return push(remote.remoteId);
-
-  if (decision === "pull") {
-    // Only the remote changed, so nobody was asked. Land any pending editor
-    // save and re-check: an edit made while this sync ran must not be replaced.
-    if (options.direction === "bidirectional") {
-      await flushPendingEdits();
-      const { checksum: current } = await computeLocalBookChecksum(bookId);
-      if (current !== localChecksum) {
-        emitLog(options, {
-          level: "warning",
-          event: "skip",
-          message: `Book ${bookTitle} changed during sync; it will sync next time`,
-          entityType: "book",
-          entityId: bookId,
-        });
-        return "deferred";
-      }
-    }
-    return pullBook(bookId, bookTitle, remote, passphrase, options);
-  }
-
-  // Both sides changed (or no base and the remote looks newer): ask.
-  emitLog(options, {
-    level: "warning",
-    event: "conflict",
-    message: `Book conflict: ${bookTitle}`,
-    entityType: "book",
-    entityId: bookId,
-  });
-  const choice = await onConflict({
-    entityType: "book",
-    entityId: bookId,
-    entityTitle: bookTitle,
-    bookId,
-    bookTitle,
-    localUpdatedAt,
-    remoteUpdatedAt: remote.updatedAt,
-  });
-
-  if (choice === "cancel") {
-    return "cancelled";
-  }
-  if (choice === "skip") {
-    emitLog(options, {
-      level: "warning",
-      event: "skip",
-      message: `Book ${bookTitle} changed here and on another device; run a manual sync to choose`,
-      entityType: "book",
-      entityId: bookId,
-    });
-    return "deferred";
-  }
-  if (choice === "push") {
-    return push(remote.remoteId);
-  }
-  return pullBook(bookId, bookTitle, remote, passphrase, options);
-}
-
-async function pullNote(
-  noteId: string,
-  noteTitle: string,
-  remote: NoteSyncItemMeta,
-  passphrase: string,
-  options: SyncOptions
-): Promise<SyncAction> {
-  await ensurePreSyncBackup(options);
-  const pulled = await pullNoteBlob(noteId, remote.remoteId);
-  if (!pulled) return "skipped";
-
-  const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
-  await applyNoteSnapshot(snapshot);
-  const { checksum } = await computeLocalNoteChecksum(noteId);
-  await setSyncBase("note", noteId, { localChecksum: checksum, remoteChecksum: remote.checksum });
-  emitLog(options, {
-    level: "success",
-    event: "pull",
-    message: `Pulled note ${noteTitle}`,
-    entityType: "note",
-    entityId: noteId,
-  });
-  return "pulled";
-}
-
-async function syncNoteInBatch(
-  noteId: string,
-  passphrase: string,
-  onConflict: ConflictResolver,
-  options: SyncOptions,
-  remoteNotes: NoteSyncItemMeta[],
-  remoteDeletions: RemoteDeletionMeta[],
-  localUpdatedAt: number
-): Promise<SyncAction> {
-  assertOnline();
-
-  const { json, checksum: localChecksum } = await computeLocalNoteChecksum(noteId);
-  const noteTitle = await getNoteTitle(noteId);
-
-  const remote = remoteNotes.find((r) => r.noteId === noteId);
-
-  const push = async (remoteId?: string): Promise<SyncAction> => {
-    const encrypted = await encryptToBuffer(json, passphrase);
-    const blob = new Blob([encrypted]);
-    // A local-only item has no remote row yet: create it (no remoteId argument).
-    await (remoteId
-      ? pushNoteBlob(noteId, blob, localChecksum, remoteId)
-      : pushNoteBlob(noteId, blob, localChecksum));
-    await setSyncBase("note", noteId, { localChecksum, remoteChecksum: localChecksum });
-    emitLog(options, {
-      level: "success",
-      event: "push",
-      message: `Pushed note ${noteTitle}`,
-      entityType: "note",
-      entityId: noteId,
-    });
-    return "pushed";
-  };
-
-  if (!remote) {
-    const deletion = remoteDeletions.find((d) => d.entityId === noteId);
-    if (deletion) {
-      return resolveRemoteDeletion({
-        entityType: "note",
-        entityId: noteId,
-        title: noteTitle,
-        localChecksum,
-        localUpdatedAt,
-        deletion,
-        onConflict,
-        options,
-        revive: push,
-        currentChecksum: async () => (await computeLocalNoteChecksum(noteId)).checksum,
-      });
-    }
-    if (!canPush(options.direction)) {
-      emitLog(options, {
-        level: "info",
-        event: "skip",
-        message: `Skipped local-only note ${noteTitle} in pull-only sync`,
-        entityType: "note",
-        entityId: noteId,
-      });
-      return "skipped";
-    }
-    return push();
-  }
-
-  const base = await getSyncBase("note", noteId);
-  const decision = decideSyncAction({
-    localChecksum,
-    remoteChecksum: remote.checksum,
-    base,
-    direction: options.direction,
-    localUpdatedAt,
-    remoteUpdatedAt: remote.updatedAt,
-  });
-
-  if (decision === "in-sync" || decision === "unchanged") {
-    if (
-      decision === "in-sync" &&
-      (base?.localChecksum !== localChecksum || base?.remoteChecksum !== remote.checksum)
-    ) {
-      await setSyncBase("note", noteId, { localChecksum, remoteChecksum: remote.checksum });
-    }
-    emitLog(options, {
-      level: "info",
-      event: "skip",
-      message: `Skipped unchanged note ${noteTitle}`,
-      entityType: "note",
-      entityId: noteId,
-    });
-    return "skipped";
-  }
-
-  if (decision === "push") return push(remote.remoteId);
-
-  if (decision === "pull") {
-    // Only the remote changed, so nobody was asked. Land any pending editor
-    // save and re-check: an edit made while this sync ran must not be replaced.
-    if (options.direction === "bidirectional") {
-      await flushPendingEdits();
-      const { checksum: current } = await computeLocalNoteChecksum(noteId);
-      if (current !== localChecksum) {
-        emitLog(options, {
-          level: "warning",
-          event: "skip",
-          message: `Note ${noteTitle} changed during sync; it will sync next time`,
-          entityType: "note",
-          entityId: noteId,
-        });
-        return "deferred";
-      }
-    }
-    return pullNote(noteId, noteTitle, remote, passphrase, options);
-  }
-
-  // Both sides changed (or no base and the remote looks newer): ask. Notes are
-  // not versioned, so there is no pre-pull snapshot to take (the pre-sync
-  // backup is the safety net).
-  emitLog(options, {
-    level: "warning",
-    event: "conflict",
-    message: `Note conflict: ${noteTitle}`,
-    entityType: "note",
-    entityId: noteId,
-  });
-  const choice = await onConflict({
-    entityType: "note",
-    entityId: noteId,
-    entityTitle: noteTitle,
-    bookId: noteId,
-    bookTitle: noteTitle,
-    localUpdatedAt,
-    remoteUpdatedAt: remote.updatedAt,
-  });
-
-  if (choice === "cancel") {
-    return "cancelled";
-  }
-  if (choice === "skip") {
-    emitLog(options, {
-      level: "warning",
-      event: "skip",
-      message: `Note ${noteTitle} changed here and on another device; run a manual sync to choose`,
-      entityType: "note",
-      entityId: noteId,
-    });
-    return "deferred";
-  }
-  if (choice === "push") {
-    return push(remote.remoteId);
-  }
-  return pullNote(noteId, noteTitle, remote, passphrase, options);
 }
 
 async function syncVersions(
@@ -994,94 +516,6 @@ async function syncVersions(
   }
 }
 
-interface NoteTimestampRow {
-  id: string;
-  updated_at: number;
-}
-
-/**
- * Syncs all notes the same way books are synced: one encrypted blob per note,
- * checksum + timestamp conflict resolution, auto-pull of remote-only notes.
- * Notes are not versioned, so there is no per-note version history to reconcile.
- * Returns the per-note actions and whether the user cancelled at a conflict.
- */
-async function syncAllNotes(
-  passphrase: string,
-  onConflict: ConflictResolver,
-  options: SyncOptions
-): Promise<{ actions: SyncAction[]; cancelled: boolean }> {
-  assertOnline();
-
-  const db = await getDatabase();
-  const localNotes = await db.select<NoteTimestampRow[]>("SELECT id, updated_at FROM notes");
-  const localNoteIds = new Set(localNotes.map((n) => n.id));
-
-  const remoteNotes = await listRemoteNotes();
-  const remoteDeletions = await listDeletionsIfNeeded(
-    localNotes.map((note) => note.id),
-    remoteNotes.map((remote) => remote.noteId),
-    listRemoteDeletedNotes
-  );
-  const actions: SyncAction[] = [];
-
-  for (const note of localNotes) {
-    const action = await syncNoteInBatch(
-      note.id,
-      passphrase,
-      onConflict,
-      options,
-      remoteNotes,
-      remoteDeletions,
-      note.updated_at
-    );
-    actions.push(action);
-    if (action === "cancelled") {
-      return { actions, cancelled: true };
-    }
-  }
-
-  // Pull remote-only notes (no local data — auto-pull, no conflict dialog)
-  if (canPull(options.direction)) {
-    for (const remote of remoteNotes) {
-      if (localNoteIds.has(remote.noteId)) continue;
-      const noteTombstone = await getTombstone("note", remote.noteId);
-      if (noteTombstone) {
-        emitLog(options, {
-          level: "warning",
-          event: "skip",
-          message: `Skipped tombstoned remote note ${noteTombstone.title}`,
-          entityType: "note",
-          entityId: remote.noteId,
-        });
-        actions.push("skipped");
-        continue;
-      }
-
-      await ensurePreSyncBackup(options);
-      const pulled = await pullNoteBlob(remote.noteId, remote.remoteId);
-      if (!pulled) continue;
-
-      const snapshot = await decryptNoteSnapshot(pulled.data, passphrase);
-      await applyNoteSnapshot(snapshot);
-      const { checksum } = await computeLocalNoteChecksum(remote.noteId);
-      await setSyncBase("note", remote.noteId, {
-        localChecksum: checksum,
-        remoteChecksum: remote.checksum,
-      });
-      emitLog(options, {
-        level: "success",
-        event: "pull",
-        message: `Pulled remote-only note ${snapshot.note.title}`,
-        entityType: "note",
-        entityId: remote.noteId,
-      });
-      actions.push("pulled");
-    }
-  }
-
-  return { actions, cancelled: false };
-}
-
 // Only log metrics push progress when there's a real backlog (e.g. the one-time
 // post-cutover re-upload), so ordinary incremental syncs stay quiet.
 const METRICS_PROGRESS_LOG_THRESHOLD = 200;
@@ -1122,8 +556,14 @@ async function syncBookInternal(
   await ensureAuth();
   await landPendingEdits();
   await beginSyncRun(options);
+  const ctx = entityContext(passphrase, onConflict, options);
 
-  const deletionResult = await processPendingDeletions(["book"], options);
+  const deletionResult = await processPendingDeletions(
+    deletionRegistry,
+    ["book"],
+    options,
+    ctx.emitLog
+  );
   if (deletionResult.pendingDeletions.length > 0) {
     return {
       outcome: "partial",
@@ -1132,33 +572,15 @@ async function syncBookInternal(
     };
   }
 
-  const remoteBooks = await listRemoteBooks();
-  const remoteDeletions = await listDeletionsIfNeeded(
-    [bookId],
-    remoteBooks.map((remote) => remote.bookId),
-    listRemoteDeletedBooks
-  );
-  const action = await syncBookInBatch(
-    bookId,
-    passphrase,
-    onConflict,
-    options,
-    remoteBooks,
-    remoteDeletions
-  );
-  if (shouldSyncVersions(bookId, action, remoteBooks, remoteDeletions)) {
+  const remotes = await pocketBaseRemote.list("book");
+  const live = new Set(remotes.map((remote) => remote.entityId));
+  const deletions = live.has(bookId) ? [] : await pocketBaseRemote.listDeleted("book");
+  const action = await syncEntity(bookAdapter, bookId, ctx, { remotes, deletions });
+  if (shouldSyncVersions(bookId, action, remotes, deletions)) {
     await syncVersions(bookId, passphrase, options);
   }
   await syncMetrics(passphrase, options);
   return singleSyncResult(action);
-}
-
-async function getNoteUpdatedAt(noteId: string): Promise<number> {
-  const db = await getDatabase();
-  const rows = await db.select<EffectiveTimestamp[]>("SELECT updated_at FROM notes WHERE id = ?", [
-    noteId,
-  ]);
-  return rows[0]?.updated_at ?? 0;
 }
 
 export async function syncSingleNote(
@@ -1183,30 +605,15 @@ async function syncSingleNoteInternal(
   await ensureAuth();
   await landPendingEdits();
   await beginSyncRun(options);
+  const ctx = entityContext(passphrase, onConflict, options);
 
-  const remoteNotes = await listRemoteNotes();
-  const remoteDeletions = await listDeletionsIfNeeded(
-    [noteId],
-    remoteNotes.map((remote) => remote.noteId),
-    listRemoteDeletedNotes
-  );
-  const localUpdatedAt = await getNoteUpdatedAt(noteId);
-  const action = await syncNoteInBatch(
-    noteId,
-    passphrase,
-    onConflict,
-    options,
-    remoteNotes,
-    remoteDeletions,
-    localUpdatedAt
-  );
+  const remotes = await pocketBaseRemote.list("note");
+  const live = new Set(remotes.map((remote) => remote.entityId));
+  const deletions = live.has(noteId) ? [] : await pocketBaseRemote.listDeleted("note");
+  const localUpdatedAt = await noteAdapter.getLocalUpdatedAt(noteId);
+  const action = await syncEntity(noteAdapter, noteId, ctx, { remotes, deletions }, localUpdatedAt);
   await syncMetrics(passphrase, options);
   return singleSyncResult(action);
-}
-
-interface BookTimestampRow {
-  id: string;
-  updated_at: number;
 }
 
 export async function syncAllBooks(
@@ -1230,132 +637,71 @@ async function syncAllBooksInternal(
   assertOnline();
   const actions: SyncAction[] = [];
 
-    await landPendingEdits();
-    await beginSyncRun(options);
+  await landPendingEdits();
+  await beginSyncRun(options);
+  const ctx = entityContext(passphrase, onConflict, options);
 
-    const deletionScopes: SyncEntityType[] = [];
-    if (includesScope(options.scope, "book")) deletionScopes.push("book");
-    if (includesScope(options.scope, "note")) deletionScopes.push("note");
-    const deletionResult = await processPendingDeletions(deletionScopes, options);
-    actions.push(...deletionResult.actions);
-    const { pendingDeletions } = deletionResult;
-    // A manual sync stops so the deletions are reviewed first. An automatic
-    // sync keeps syncing everything else: tombstones already keep the deleted
-    // items from being pulled back, and the review waits for the user.
-    if (pendingDeletions.length > 0 && options.trigger !== "auto") {
+  const deletionScopes: SyncEntityType[] = [];
+  if (includesScope(options.scope, "book")) deletionScopes.push("book");
+  if (includesScope(options.scope, "note")) deletionScopes.push("note");
+  const deletionResult = await processPendingDeletions(
+    deletionRegistry,
+    deletionScopes,
+    options,
+    ctx.emitLog
+  );
+  actions.push(...deletionResult.actions);
+  const { pendingDeletions } = deletionResult;
+  // A manual sync stops so the deletions are reviewed first. An automatic
+  // sync keeps syncing everything else: tombstones already keep the deleted
+  // items from being pulled back, and the review waits for the user.
+  if (pendingDeletions.length > 0 && options.trigger !== "auto") {
+    return {
+      outcome: "partial",
+      actions,
+      pendingDeletions: deletionResult.pendingDeletions,
+    };
+  }
+
+  if (includesScope(options.scope, "book")) {
+    const bookBatch = await syncEntityBatch(bookAdapter, ctx, {
+      afterItem: afterBookItem(passphrase, options),
+    });
+    actions.push(...bookBatch.actions);
+    if (bookBatch.cancelled) {
+      await syncMetrics(passphrase, options);
       return {
-        outcome: actions.length > 0 ? "partial" : "partial",
+        outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
         actions,
-        pendingDeletions: deletionResult.pendingDeletions,
+        ...pendingDeletionsField(pendingDeletions),
       };
     }
+  }
 
-    const db = await getDatabase();
-    if (includesScope(options.scope, "book")) {
-      const localBooks = await db.select<BookTimestampRow[]>(
-        `SELECT b.id, MAX(b.updated_at, COALESCE(MAX(c.updated_at), 0)) AS updated_at
-         FROM books b
-         LEFT JOIN chapters c ON c.book_id = b.id
-         GROUP BY b.id`
-      );
-      const localBookIds = new Set(localBooks.map((b) => b.id));
-
-      const remoteBooks = await listRemoteBooks();
-      const remoteBookDeletions = await listDeletionsIfNeeded(
-        localBooks.map((book) => book.id),
-        remoteBooks.map((remote) => remote.bookId),
-        listRemoteDeletedBooks
-      );
-
-      for (const book of localBooks) {
-        const action = await syncBookInBatch(
-          book.id,
-          passphrase,
-          onConflict,
-          options,
-          remoteBooks,
-          remoteBookDeletions,
-          book.updated_at
-        );
-        if (shouldSyncVersions(book.id, action, remoteBooks, remoteBookDeletions)) {
-          await syncVersions(book.id, passphrase, options);
-        }
-        actions.push(action);
-        if (action === "cancelled") {
-          await syncMetrics(passphrase, options);
-          return {
-            outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
-            actions,
-            ...pendingDeletionsField(pendingDeletions),
-          };
-        }
-      }
-
-      // Pull remote-only books (no local data — auto-pull, no conflict dialog)
-      if (canPull(options.direction)) {
-        for (const remote of remoteBooks) {
-          if (localBookIds.has(remote.bookId)) continue;
-          const bookTombstone = await getTombstone("book", remote.bookId);
-          if (bookTombstone) {
-            emitLog(options, {
-              level: "warning",
-              event: "skip",
-              message: `Skipped tombstoned remote book ${bookTombstone.title}`,
-              entityType: "book",
-              entityId: remote.bookId,
-            });
-            actions.push("skipped");
-            continue;
-          }
-
-          await ensurePreSyncBackup(options);
-          const pulled = await pullBookBlob(remote.bookId, remote.remoteId);
-          if (!pulled) continue;
-
-          const snapshot = await decryptSnapshot(pulled.data, passphrase);
-          await applyBookSnapshot(snapshot);
-          const { checksum } = await computeLocalBookChecksum(remote.bookId);
-          await setSyncBase("book", remote.bookId, {
-            localChecksum: checksum,
-            remoteChecksum: remote.checksum,
-          });
-          emitLog(options, {
-            level: "success",
-            event: "pull",
-            message: `Pulled remote-only book ${snapshot.book.title}`,
-            entityType: "book",
-            entityId: remote.bookId,
-          });
-          actions.push("pulled");
-          await syncVersions(remote.bookId, passphrase, options);
-        }
-      }
-    }
-
-    // Notes sync alongside books in the same pass, sharing the auth check and
-    // pre-sync backup. A cancelled note conflict aborts the rest of note sync.
-    if (includesScope(options.scope, "note")) {
-      const noteResult = await syncAllNotes(passphrase, onConflict, options);
-      actions.push(...noteResult.actions);
-      if (noteResult.cancelled) {
-        await syncMetrics(passphrase, options);
-        return {
-          outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
-          actions,
-          ...pendingDeletionsField(pendingDeletions),
-        };
-      }
-    }
-
-    if (includesScope(options.scope, "metrics")) {
+  // Notes sync alongside books in the same pass, sharing the auth check and
+  // pre-sync backup. A cancelled note conflict aborts the rest of note sync.
+  if (includesScope(options.scope, "note")) {
+    const noteBatch = await syncEntityBatch(noteAdapter, ctx);
+    actions.push(...noteBatch.actions);
+    if (noteBatch.cancelled) {
       await syncMetrics(passphrase, options);
+      return {
+        outcome: actions.some((entry) => entry !== "cancelled") ? "partial" : "cancelled",
+        actions,
+        ...pendingDeletionsField(pendingDeletions),
+      };
     }
+  }
 
-    const pending = pendingDeletionsField(pendingDeletions);
-    if (pending.pendingDeletions) {
-      return { outcome: "partial", actions, ...pending };
-    }
-    return { outcome: actions.includes("deferred") ? "partial" : "success", actions };
+  if (includesScope(options.scope, "metrics")) {
+    await syncMetrics(passphrase, options);
+  }
+
+  const pending = pendingDeletionsField(pendingDeletions);
+  if (pending.pendingDeletions) {
+    return { outcome: "partial", actions, ...pending };
+  }
+  return { outcome: actions.includes("deferred") ? "partial" : "success", actions };
 }
 
 export function resetSyncEngineForTests(): void {
