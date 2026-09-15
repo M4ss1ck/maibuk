@@ -27,7 +27,12 @@ export {
   refreshViewsForLocalRestore,
   resetViewRefreshForTests,
 } from "@/features/sync/view-refresh";
-export { syncBook, syncAllBooks } from "@/features/sync/sync-engine";
+export {
+  syncBook,
+  syncSingleNote,
+  syncAllBooks,
+  resetSyncEngineForTests,
+} from "@/features/sync/sync-engine";
 export {
   recordTombstone,
   listPendingTombstones,
