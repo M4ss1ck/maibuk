@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-16
+
+### Added
+- Canvas sync as a synced item with its own sync scope and deletion review
+- Help dialog that lists the keyboard shortcuts bound on the current screen, grouped by area
+
+### Changed
+- Manual sync now defaults to the current editor's scope
+- Book Last Edited timestamps now change only for content or title edits, not pin, order, or status changes
+- UI labels now align with the domain glossary in both English and Spanish
+
+### Fixed
+- On Android, deleting at the start of a task item now works with the soft keyboard
+- Pending note and book edits are saved on unmount, failed saves are retried, and Save Status shows "Not saved" instead of losing changes
+- Backups now include Canvases, and restoring a backup only replaces Canvases when the backup contains them
+- Reset, Restore, and restore-failure warnings now accurately describe what is kept, replaced, or recoverable
+
 ## [0.7.1] - 2026-09-14
 
 ### Added
