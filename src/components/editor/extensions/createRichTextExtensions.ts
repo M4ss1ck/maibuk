@@ -21,6 +21,7 @@ import { LineHeight } from "@/components/editor/extensions/LineHeight";
 import { Indent } from "@/components/editor/extensions/Indent";
 import { PasteHandler } from "@/components/editor/extensions/PasteHandler";
 import { CopyHandler } from "@/components/editor/extensions/CopyHandler";
+import { TaskItemDeletion } from "@/components/editor/extensions/TaskItemDeletion";
 import { CodeBlockWithCopy } from "@/components/editor/extensions/CodeBlock";
 import { CustomCode } from "@/components/editor/extensions/CustomCode";
 import { SmartItalic } from "@/components/editor/extensions/SmartItalic";
@@ -95,6 +96,7 @@ export function createRichTextExtensions({
     Indent,
     PasteHandler.configure({ onMarkdownPaste: onMarkdownPaste ?? null }),
     CopyHandler,
+    TaskItemDeletion,
     SymbolAutocomplete,
     Footnote.configure({ startIndex: footnoteStartIndex }),
     ...(spellCheck ? [SpellCheck.configure(spellCheck)] : []),
