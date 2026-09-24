@@ -33,6 +33,7 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const isArchived = book.status === "archived";
   const StatusIcon = statusIcons[book.status];
+  const statusLabel = t(`common.${book.status}`);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat(i18n.language, {
@@ -76,64 +77,6 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
         />
       ) : null}
 
-      <DialogTrigger isOpen={isStatusOpen} onOpenChange={setIsStatusOpen}>
-        <Button
-          aria-label={t("books.changeStatus", { title: book.title })}
-          className={`absolute right-2 top-2 z-10 inline-flex items-center gap-0.5 rounded-md bg-card/80 p-1.5 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 group-focus-within:opacity-100 ${isStatusOpen ? "opacity-100" : ""}`}
-        >
-          <StatusIcon className="h-4 w-4" />
-          <ChevronDown className="h-3 w-3" />
-        </Button>
-
-        <Popover
-          placement="bottom end"
-          className="z-50 mt-1 w-44 overflow-auto rounded-lg border border-border bg-background shadow-lg focus:outline-none"
-        >
-          <Dialog
-            aria-label={t("books.changeStatus", { title: book.title })}
-            className="outline-none"
-          >
-            <ListBox
-              autoFocus
-              aria-label={t("books.changeStatus", { title: book.title })}
-              items={BOOK_STATUSES.map((status) => ({
-                status,
-                label: t(`common.${status}`),
-              }))}
-              selectionMode="single"
-              escapeKeyBehavior="none"
-              selectedKeys={[book.status]}
-              onSelectionChange={(keys) => {
-                const status = [...keys][0] as BookStatus | undefined;
-                if (status && status !== book.status) onStatusChange(status);
-                setIsStatusOpen(false);
-              }}
-              className="outline-none"
-            >
-              {(option) => (
-                <ListBoxItem
-                  id={option.status}
-                  textValue={option.label}
-                  className="relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted data-selected:text-primary"
-                >
-                  {({ isSelected }) => (
-                    <>
-                      <Check
-                        className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "opacity-100" : "opacity-0"}`}
-                      />
-                      <span
-                        className={`flex-1 truncate ${isSelected ? "font-medium" : "font-normal"}`}
-                      >
-                        {option.label}
-                      </span>
-                    </>
-                  )}
-                </ListBoxItem>
-              )}
-            </ListBox>
-          </Dialog>
-        </Popover>
-      </DialogTrigger>
 
       <div
         className={`aspect-2/3 bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center ${
@@ -152,11 +95,66 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
         <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
 
         <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-          <span
-            className={`text-xs px-2 py-1 rounded-full capitalize ${statusColors[book.status]}`}
-          >
-            {t(`common.${book.status}`)}
-          </span>
+          <DialogTrigger isOpen={isStatusOpen} onOpenChange={setIsStatusOpen}>
+            <Button
+              // Starts with the visible status so voice control can target it by what it shows.
+              aria-label={`${statusLabel}, ${t("books.changeStatus", { title: book.title })}`}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 pointer-coarse:py-1.5 text-xs transition-shadow hover:ring-1 hover:ring-current/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${statusColors[book.status]}`}
+            >
+              <StatusIcon className="h-3 w-3" aria-hidden="true" />
+              <span className="capitalize">{statusLabel}</span>
+              <ChevronDown className="h-3 w-3" aria-hidden="true" />
+            </Button>
+
+            <Popover
+              placement="bottom start"
+              className="z-50 mt-1 w-44 overflow-auto rounded-lg border border-border bg-background shadow-lg focus:outline-none"
+            >
+              <Dialog
+                aria-label={t("books.changeStatus", { title: book.title })}
+                className="outline-none"
+              >
+                <ListBox
+                  autoFocus
+                  aria-label={t("books.changeStatus", { title: book.title })}
+                  items={BOOK_STATUSES.map((status) => ({
+                    status,
+                    label: t(`common.${status}`),
+                  }))}
+                  selectionMode="single"
+                  escapeKeyBehavior="none"
+                  selectedKeys={[book.status]}
+                  onSelectionChange={(keys) => {
+                    const status = [...keys][0] as BookStatus | undefined;
+                    if (status && status !== book.status) onStatusChange(status);
+                    setIsStatusOpen(false);
+                  }}
+                  className="outline-none"
+                >
+                  {(option) => (
+                    <ListBoxItem
+                      id={option.status}
+                      textValue={option.label}
+                      className="relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted data-selected:text-primary"
+                    >
+                      {({ isSelected }) => (
+                        <>
+                          <Check
+                            className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                          />
+                          <span
+                            className={`flex-1 truncate ${isSelected ? "font-medium" : "font-normal"}`}
+                          >
+                            {option.label}
+                          </span>
+                        </>
+                      )}
+                    </ListBoxItem>
+                  )}
+                </ListBox>
+              </Dialog>
+            </Popover>
+          </DialogTrigger>
           <span className="text-xs text-muted-foreground">
             {book.wordCount.toLocaleString()} {t("common.words")}
           </span>

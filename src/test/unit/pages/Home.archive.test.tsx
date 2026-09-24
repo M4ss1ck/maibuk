@@ -124,7 +124,7 @@ describe("Home archiving", () => {
     screen.getAllByRole("row")[0].focus();
     await user.keyboard("{Tab}");
 
-    const statusButton = screen.getByRole("button", { name: "Change status of Alpha" });
+    const statusButton = screen.getByRole("button", { name: /Change status of Alpha$/ });
     expect(statusButton).toHaveFocus();
 
     await user.keyboard("{Enter}");
@@ -139,10 +139,28 @@ describe("Home archiving", () => {
     useSettingsStore.setState({ booksStatusFilter: ["archived"] });
     render(<Home />);
 
-    await user.click(screen.getByRole("button", { name: "Change status of Gamma" }));
+    await user.click(screen.getByRole("button", { name: /Change status of Gamma$/ }));
     await user.click(await screen.findByRole("option", { name: "Draft" }));
 
     expect(mockUpdateBook).toHaveBeenCalledWith("gamma", { status: "draft" });
+  });
+
+  it("offers status change on the visible pill, named by what it shows", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    const pill = screen.getByRole("button", { name: /Change status of Alpha$/ });
+    expect(pill).toHaveTextContent("Draft");
+    expect(pill).toHaveAccessibleName(/^Draft, /);
+    expect(pill.className).not.toMatch(/opacity-0|group-hover/);
+
+    await user.click(pill);
+    await screen.findByRole("listbox");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockUpdateBook).not.toHaveBeenCalled();
   });
 
   it("still opens a book with Enter on the card itself", async () => {
@@ -159,7 +177,7 @@ describe("Home archiving", () => {
     const user = userEvent.setup();
     render(<Home />);
 
-    await user.click(screen.getByRole("button", { name: "Change status of Alpha" }));
+    await user.click(screen.getByRole("button", { name: /Change status of Alpha$/ }));
     await user.click(await screen.findByRole("option", { name: "Completed" }));
 
     expect(mockUpdateBook).toHaveBeenCalledWith("alpha", { status: "completed" });
@@ -170,7 +188,7 @@ describe("Home archiving", () => {
     const user = userEvent.setup();
     render(<Home />);
 
-    await user.click(screen.getByRole("button", { name: "Change status of Alpha" }));
+    await user.click(screen.getByRole("button", { name: /Change status of Alpha$/ }));
     await user.click(await screen.findByRole("option", { name: "Draft" }));
 
     expect(mockUpdateBook).not.toHaveBeenCalled();
