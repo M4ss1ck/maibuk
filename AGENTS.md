@@ -70,6 +70,7 @@ Every new or modified UI feature ships keyboard-operable and screen-reader-corre
 4. **Labels are localized** — every `aria-label` goes through i18n like any other user-visible string.
 5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) with the registry `id` on the entry. That id is what makes it a Bound Shortcut listed under "On this screen" in the help. A key handled elsewhere (a component's own `onKeyDown`, a native control) declares its id with `useBoundShortcutIds`; TipTap formatting keys are tagged `source: "editor-keymap"` and listed from each editor's real keymap. `shortcut-bindings.test.ts` fails when a registry id is bound nowhere.
 6. **Proven by behavioral tests** — see the Keyboard & Accessibility Test Gate in section 6.
+7. **Reachable by touch** — Android and phone browsers have no hover, and Tailwind 4 only applies `hover:`/`group-hover:` where hover exists. Never hide a control until hover: an item's actions go in an always-visible ⋯ `ItemActionsMenu` (or an `ItemActionsPopover` for Canvas nodes) opened also by long-press and right click through `useItemContextMenu`; a single action is an always-visible button. A hover reveal that stays needs a `pointer-coarse:` class or an entry, with its touch path, in `src/test/unit/touch-reachability.test.ts`, which fails otherwise. Long-press opens the Item Menu, so on touch a drag starts only from a `data-drag-handle` (wrap the list in `useTouchDragFromHandle`).
 
 Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and `tabIndex` wiring looked correct while the widget was inoperable by keyboard, and attribute-level tests stayed green. Attributes are not accessibility; behavior is.
 
@@ -359,6 +360,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 - **Button variants**: `primary`, `secondary`, `ghost`, `destructive` — use the existing `Button` component, don't create ad-hoc button styles
 - **Border radius**: Consistently `rounded-lg` across the codebase
 - **Panel layout responds to its container, not the viewport**: content sits beside a resizable sidebar, so a viewport breakpoint (`md:`) does not describe the space a panel actually has. Mark the wrapper `@container` and use container variants (`@md:`, `@3xl:`) for anything laid out inside the main content area — see the notes filter panel in `src/pages/NotesGallery.tsx`. Viewport breakpoints stay correct for the outermost page shell
+- **Touch compatibility**: No hover-only controls (section 2, item 7). Use `pointer-coarse:` for larger touch targets or touch-only visibility, never a viewport breakpoint
 - **Keyboard compatibility**: Any UI feature with interactive controls must meet the keyboard & accessibility completion requirements in section 2 and the test gate in section 6 — this is a definition-of-done item, not a styling preference
 
 ---
@@ -635,6 +637,7 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 - **Use `get()` inside Zustand stores** — existing stores only use `set()`
 - **Hand-roll focus management** — no bespoke roving tabindex, focus traps, or listbox key handling; use React Aria behavior (see section 2)
 - **Ship pointer-only interactions** — drag-and-drop, hover-only controls, and canvas gestures need a keyboard-accessible path
+- **Hide controls until hover** — touch screens never hover; see section 2, item 7
 - **Prove keyboard support with attribute assertions** — tests must press keys via `user-event` and assert behavior, not check `tabIndex`/`aria-*` values (see section 6 test gate)
 
 ### Known Footguns
