@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, SeparatorHorizontal, Trash2 } from "lucide-react";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop, type TextDropItem } from "react-aria-components/useDragAndDrop";
@@ -117,7 +117,6 @@ interface ToolbarSectionGridProps {
 
 function ToolbarSectionGrid({ section, entries, announceMove }: ToolbarSectionGridProps) {
   const { t } = useTranslation();
-  const [isDragging, setIsDragging] = useState(false);
   const moveToolbarEntry = useSettingsStore((state) => state.moveToolbarEntry);
   const moveToolbarEntryTo = useSettingsStore((state) => state.moveToolbarEntryTo);
 
@@ -126,8 +125,6 @@ function ToolbarSectionGrid({ section, entries, announceMove }: ToolbarSectionGr
       [...keys].map((key) => ({
         [TOOLBAR_DND_TYPE]: JSON.stringify({ section, id: String(key) }),
       })),
-    onDragStart: () => setIsDragging(true),
-    onDragEnd: () => setIsDragging(false),
     onReorder: (e) => {
       const key = [...e.keys][0];
       if (key === undefined) return;
@@ -211,14 +208,12 @@ function ToolbarSectionGrid({ section, entries, announceMove }: ToolbarSectionGr
             <GroupGridItem
               section={section}
               entry={entry}
-              isDragging={isDragging}
               onMove={handleMove}
             />
           ) : (
             <DividerGridItem
               section={section}
               entry={entry}
-              isDragging={isDragging}
               onMove={handleMove}
             />
           )
@@ -231,11 +226,10 @@ function ToolbarSectionGrid({ section, entries, announceMove }: ToolbarSectionGr
 interface GroupGridItemProps {
   section: ToolbarSection;
   entry: Extract<ToolbarEntry, { kind: "group" }>;
-  isDragging: boolean;
   onMove: (index: number, direction: "up" | "down") => void;
 }
 
-function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProps) {
+function GroupGridItem({ section, entry, onMove }: GroupGridItemProps) {
   const { t } = useTranslation();
   const index = useSettingsStore((state) =>
     state.toolbarConfig[section].findIndex((candidate) => candidate.id === entry.id)
@@ -319,8 +313,7 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
           </Button>
         </Tooltip>
       </div>
-      <span className="w-10" aria-hidden="true" />
-      <InsertDividerControl section={section} index={index + 1} isDragging={isDragging} />
+      <InsertDividerControl section={section} index={index + 1} />
     </GridListItem>
   );
 }
@@ -328,11 +321,10 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
 interface DividerGridItemProps {
   section: ToolbarSection;
   entry: Extract<ToolbarEntry, { kind: "divider" }>;
-  isDragging: boolean;
   onMove: (index: number, direction: "up" | "down") => void;
 }
 
-function DividerGridItem({ section, entry, isDragging, onMove }: DividerGridItemProps) {
+function DividerGridItem({ section, entry, onMove }: DividerGridItemProps) {
   const { t } = useTranslation();
   const index = useSettingsStore((state) =>
     state.toolbarConfig[section].findIndex((candidate) => candidate.id === entry.id)
@@ -396,7 +388,6 @@ function DividerGridItem({ section, entry, isDragging, onMove }: DividerGridItem
           </Button>
         </Tooltip>
       </div>
-      <InsertDividerControl section={section} index={index + 1} isDragging={isDragging} />
     </GridListItem>
   );
 }
@@ -408,44 +399,26 @@ function canInsertDividerAt(entries: ToolbarEntry[], index: number): boolean {
   return previous?.kind !== "divider" && next?.kind !== "divider";
 }
 
-function InsertDividerControl({
-  section,
-  index,
-  isDragging,
-}: {
-  section: ToolbarSection;
-  index: number;
-  isDragging: boolean;
-}) {
+function InsertDividerControl({ section, index }: { section: ToolbarSection; index: number }) {
   const { t } = useTranslation();
   const addToolbarDivider = useSettingsStore((state) => state.addToolbarDivider);
   const entries = useSettingsStore((s) => s.toolbarConfig[section]);
-  const label = t("toolbar.settings.addDivider");
+  const label = t("toolbar.settings.addDividerBelow");
 
-  if (!canInsertDividerAt(entries, index)) return null;
+  if (!canInsertDividerAt(entries, index)) return <span className="w-10" aria-hidden="true" />;
 
   return (
-    <div
-      data-testid={`toolbar-add-divider-${section}-${index}`}
-      className={`absolute bottom-0 left-1/2 z-20 w-[90%] -translate-x-1/2 translate-y-1/2 transition-opacity ${
-        isDragging
-          ? "pointer-events-none opacity-0"
-          : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
-      }`}
-    >
-      <button
-        type="button"
-        aria-label={label}
-        onClick={() => addToolbarDivider(section, index)}
-        className="flex h-6 w-full items-center gap-2 rounded text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        <span className="h-px flex-1 bg-border" aria-hidden="true" />
-        <span className="flex shrink-0 items-center gap-1 bg-background px-2">
-          <Plus className="h-3 w-3" aria-hidden="true" />
-          {label}
-        </span>
-        <span className="h-px flex-1 bg-border" aria-hidden="true" />
-      </button>
+    <div data-testid={`toolbar-add-divider-${section}-${index}`} className="flex justify-center">
+      <Tooltip content={label}>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={label}
+          onClick={() => addToolbarDivider(section, index)}
+        >
+          <SeparatorHorizontal className="h-4 w-4" />
+        </Button>
+      </Tooltip>
     </div>
   );
 }

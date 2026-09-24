@@ -595,7 +595,7 @@
     "settings": {
       "actionsColumn": "Actions",
       "actionsColumnHelp": "Remove or manage",
-      "addDivider": "Add divider",
+      "addDividerBelow": "Add divider below",
       "close": "Close",
       "description": "Choose which tools appear in the toolbar and selection menu, and arrange their order.",
       "dividerLabel": "Divider",

@@ -269,7 +269,7 @@ describe("contextual add divider controls", () => {
 
     const control = screen.getByTestId("toolbar-add-divider-start-1");
     const button = within(control).getByRole("button", {
-      name: "toolbar.settings.addDivider",
+      name: "toolbar.settings.addDividerBelow",
     });
     fireEvent.click(button);
 
@@ -329,27 +329,19 @@ describe("contextual add divider controls", () => {
     renderDialog();
 
     const control = within(screen.getByTestId("toolbar-add-divider-start-1")).getByRole("button", {
-      name: "toolbar.settings.addDivider",
+      name: "toolbar.settings.addDividerBelow",
     });
     control.focus();
     expect(control).toHaveFocus();
-    expect(control).toHaveAttribute("aria-label", "toolbar.settings.addDivider");
+    expect(control).toHaveAttribute("aria-label", "toolbar.settings.addDividerBelow");
   });
 
-  it("appears on row hover or focus, spans most of the row, and hides during drag", () => {
+  it("sits in the row's actions column, visible without hover or focus", () => {
     renderDialog();
 
     const control = screen.getByTestId("toolbar-add-divider-start-3");
-    expect(control).toHaveClass(
-      "absolute",
-      "w-[90%]",
-      "pointer-events-none",
-      "opacity-0",
-      "group-hover:pointer-events-auto",
-      "group-hover:opacity-100",
-      "focus-within:pointer-events-auto",
-      "focus-within:opacity-100"
-    );
+    expect(control.closest('[role="row"]')).toContainElement(control);
+    expect(control.className).not.toMatch(/opacity-0|group-hover|pointer-events-none/);
     expect(control.querySelector("svg")).toBeInTheDocument();
   });
 });
@@ -441,7 +433,7 @@ describe("keyboard operation of every control", () => {
     renderDialog();
 
     const addBtn = within(screen.getByTestId("toolbar-add-divider-start-1")).getByRole("button", {
-      name: "toolbar.settings.addDivider",
+      name: "toolbar.settings.addDividerBelow",
     });
 
     addBtn.focus();
@@ -486,24 +478,6 @@ describe("keyboard operation of every control", () => {
     closeBtn.focus();
     await user.keyboard("{Enter}");
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("hides add-divider controls while a keyboard drag is active", async () => {
-    const user = userEvent.setup();
-    renderDialog();
-
-    const historyRow = findRowByName(/toolbar\.groups\.history/);
-    const dragHandle = getDragHandle(historyRow);
-    dragHandle.focus();
-    await user.keyboard("{Enter}");
-
-    // During drag, isDragging=true hides the add-divider control
-    const control = screen.getByTestId("toolbar-add-divider-start-3");
-    expect(control).toHaveClass("pointer-events-none", "opacity-0");
-
-    // Cancel the drag
-    await user.keyboard("{Escape}");
-    expect(useSettingsStore.getState().toolbarConfig.start[0].id).toBe("history");
   });
 });
 
