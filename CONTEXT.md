@@ -396,6 +396,14 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
 
+**Tutorial**:
+A guided run through Maibuk's screens, shown with sample content, that the author can skip at any step and start again from Settings; dismissing it once stops it appearing on its own on this device. (ADR 0008, 0009)
+_Avoid_: tour, walkthrough, onboarding, guide
+
+**Tutorial Library**:
+The throwaway sample Library the Tutorial runs in; nothing in it syncs, is backed up, is counted in metrics, or outlives the Tutorial. (ADR 0008)
+_Avoid_: sample book, demo data, sandbox (in UI copy)
+
 ## Relationships
 
 - A **Library** holds many **Books**, **Notes**, and **Canvases**.
