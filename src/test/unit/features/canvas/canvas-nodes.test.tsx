@@ -1,10 +1,17 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
+
+installPointerEvent();
 
 const mocks = vi.hoisted(() => ({
   updateTextNode: vi.fn(),
   resizeTextNode: vi.fn(),
+  selectNode: vi.fn(),
+  removeNode: vi.fn(),
+  openConnectPicker: vi.fn(),
   editorReadOnly: false,
   interactivityLocked: false,
   notes: [] as Array<{
@@ -46,6 +53,9 @@ vi.mock("../../../../features/canvas/store", () => ({
     selector({
       updateTextNode: mocks.updateTextNode,
       resizeTextNode: mocks.resizeTextNode,
+      selectNode: mocks.selectNode,
+      removeNode: mocks.removeNode,
+      openConnectPicker: mocks.openConnectPicker,
       editorReadOnly: mocks.editorReadOnly,
       interactivityLocked: mocks.interactivityLocked,
     }),
@@ -141,6 +151,31 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByTestId("resize-right").className).toContain("z-0!");
   });
 
+  it("shows the connection ports of a selected node on touch screens, larger", () => {
+    render(
+      <LightweightNode
+        {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+      />
+    );
+    for (const handle of screen.getAllByTestId("handle")) {
+      expect(handle.className).toContain("pointer-coarse:opacity-100");
+      expect(handle.className).toContain("pointer-coarse:h-5!");
+      // With a mouse, ports stay a hover affordance, as before.
+      expect(handle.className).toContain("group-hover:opacity-100");
+    }
+  });
+
+  it("keeps the ports of an unselected node for hover only", () => {
+    render(
+      <LightweightNode
+        {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+      />
+    );
+    const handle = screen.getAllByTestId("handle")[0];
+    expect(handle.className).toContain("group-hover:opacity-100");
+    expect(handle.className).not.toContain("pointer-coarse:opacity-100");
+  });
+
   it("hides connection ports and resize grips when interactivity is locked", () => {
     mocks.interactivityLocked = true;
     render(
@@ -151,6 +186,67 @@ describe("Canvas custom nodes", () => {
     expect(screen.queryAllByTestId("handle")).toHaveLength(0);
     expect(screen.queryByTestId("resize-left")).toBeNull();
     expect(screen.queryByTestId("resize-right")).toBeNull();
+  });
+
+  describe("node Item Menu", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("opens on touch long-press, selects the node, and connects from it", async () => {
+      vi.useFakeTimers();
+      render(
+        <LightweightNode
+          {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+        />
+      );
+
+      touchLongPress(screen.getByText("Idea"));
+
+      expect(mocks.selectNode).toHaveBeenCalledWith("node");
+      touchTap(screen.getByRole("menuitem", { name: "canvas.connectTo" }));
+      expect(mocks.openConnectPicker).toHaveBeenCalledWith("node");
+    });
+
+    it("opens on right click and deletes the node by keyboard", async () => {
+      const user = userEvent.setup();
+      render(
+        <NoteRefNode
+          {...({
+            selected: false,
+            data: { ...textNodeData(), node: { id: "ref", kind: "noteRef", noteId: "n1", label: "Linked", position: { x: 0, y: 0 } } },
+          } as unknown as Parameters<typeof NoteRefNode>[0])}
+        />,
+        { wrapper: MemoryRouter }
+      );
+
+      fireEvent.contextMenu(screen.getByText("Linked"));
+      const menu = await screen.findByRole("menu", { name: "canvas.nodeActions" });
+      expect(menu).toBeInTheDocument();
+      // Focus moves into the menu (the menu or its first item, by input modality).
+      await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
+      const deleteItem = screen.getByRole("menuitem", { name: "common.delete" });
+      for (let step = 0; step < 3 && document.activeElement !== deleteItem; step++) {
+        await user.keyboard("{ArrowDown}");
+      }
+      expect(deleteItem).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      expect(mocks.removeNode).toHaveBeenCalledWith("ref");
+    });
+
+    it("does not open while the canvas is locked", () => {
+      mocks.interactivityLocked = true;
+      render(
+        <LightweightNode
+          {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
+        />
+      );
+
+      fireEvent.contextMenu(screen.getByText("Idea"));
+
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
   });
 
   it("renders text node html without a card border/background and shows a connected stub", () => {

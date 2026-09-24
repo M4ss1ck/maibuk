@@ -1,10 +1,13 @@
-import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "@/components/notes/NotesList";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
+import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
+
+installPointerEvent();
 
 vi.mock("../../../../lib/platform", () => ({
   IS_ANDROID: false,
@@ -275,7 +278,7 @@ describe("NotesList", () => {
     expect(onCreateNote).toHaveBeenCalledWith("book-a");
   });
 
-  it("renames a note inline from the book-tree view", () => {
+  it("renames a note inline from the book-tree view", async () => {
     const onRenameNote = vi.fn();
     const books = [buildBook({ id: "book-a", title: "Novel" })];
     const notes = [buildNote({ id: "a", title: "Novel note" }) as Note & { bookId: string }];
@@ -294,7 +297,8 @@ describe("NotesList", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tree" }));
-    fireEvent.click(screen.getByRole("button", { name: "common.edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "common.moreActionsFor" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "common.rename" }));
 
     const input = screen.getByDisplayValue("Novel note");
     fireEvent.change(input, { target: { value: "Renamed note" } });
@@ -1157,5 +1161,223 @@ describe("NotesList", () => {
 
     fireEvent.drop(row);
     expect(onReorderNotes).not.toHaveBeenCalled();
+  });
+});
+
+describe("NotesList item menu", () => {
+  function renderMenuList(overrides: Partial<Parameters<typeof NotesList>[0]> = {}) {
+    const props = {
+      notes: [
+        buildNote({ id: "a", title: "Alpha", order: 0 }),
+        buildNote({ id: "b", title: "Beta", order: 1 }),
+      ],
+      books: [buildBook({ id: "book-a", title: "Novel" })],
+      currentNoteId: null,
+      onSelectNote: vi.fn(),
+      onCreateNote: vi.fn(),
+      onReorderNotes: vi.fn(async () => {}),
+      onReassignNoteBook: vi.fn(),
+      onDeleteNote: vi.fn(),
+      onDuplicateNote: vi.fn(),
+      onRenameNote: vi.fn(),
+      ...overrides,
+    };
+    render(<NotesList {...props} />);
+    return props;
+  }
+
+  async function openMenuFor(user: ReturnType<typeof userEvent.setup>, index: number) {
+    const trigger = screen.getAllByRole("button", { name: "common.moreActionsFor" })[index];
+    await user.click(trigger);
+    await screen.findByRole("menu");
+    return trigger;
+  }
+
+  it("asks before deleting and deletes only after confirmation", async () => {
+    const user = userEvent.setup();
+    const props = renderMenuList();
+
+    await openMenuFor(user, 0);
+    await user.click(screen.getByRole("menuitem", { name: "common.delete" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
+    expect(dialog).toHaveTextContent("notes.deleteConfirmBody");
+    expect(props.onDeleteNote).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "notes.delete" }));
+
+    expect(props.onDeleteNote).toHaveBeenCalledWith("a");
+    expect(props.onSelectNote).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("Escape cancels the delete confirmation without deleting", async () => {
+    const user = userEvent.setup();
+    const props = renderMenuList();
+
+    await openMenuFor(user, 1);
+    await user.keyboard("{End}{Enter}");
+    await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(props.onDeleteNote).not.toHaveBeenCalled();
+  });
+
+  it("pins a note from the menu through the ordering write", async () => {
+    const user = userEvent.setup();
+    const props = renderMenuList();
+
+    await openMenuFor(user, 1);
+    await user.click(screen.getByRole("menuitem", { name: "Pin" }));
+
+    expect(props.onReorderNotes).toHaveBeenCalledWith([
+      { id: "b", pinned: true },
+      { id: "a", pinned: false },
+    ]);
+  });
+
+  it("unpins a pinned note to the top of the other notes", async () => {
+    const user = userEvent.setup();
+    const props = renderMenuList({
+      notes: [
+        buildNote({ id: "p", title: "Pinned", pinned: true }),
+        buildNote({ id: "a", title: "Alpha", order: 0 }),
+      ],
+    });
+
+    await openMenuFor(user, 0);
+    await user.click(screen.getByRole("menuitem", { name: "Unpin" }));
+
+    expect(props.onReorderNotes).toHaveBeenCalledWith([
+      { id: "p", pinned: false },
+      { id: "a", pinned: false },
+    ]);
+  });
+
+  it("pinning while searching keeps notes hidden by the search in the order", async () => {
+    const user = userEvent.setup();
+    const props = renderMenuList();
+
+    fireEvent.change(screen.getByPlaceholderText("Search notes..."), {
+      target: { value: "Beta" },
+    });
+    await openMenuFor(user, 0);
+    await user.click(screen.getByRole("menuitem", { name: "Pin" }));
+
+    expect(props.onReorderNotes).toHaveBeenCalledWith([
+      { id: "b", pinned: true },
+      { id: "a", pinned: false },
+    ]);
+  });
+
+  it("moves a note to a Book by keyboard through the submenu", async () => {
+    const user = userEvent.setup();
+    const props = renderMenuList();
+
+    await openMenuFor(user, 0);
+    const move = screen.getByRole("menuitem", { name: "notes.moveToBook" });
+    while (document.activeElement !== move) await user.keyboard("{ArrowDown}");
+    await user.keyboard("{ArrowRight}");
+    await waitFor(() => expect(screen.getByRole("menuitem", { name: "Unfiled" })).toHaveFocus());
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    expect(props.onReassignNoteBook).toHaveBeenCalledWith("a", "book-a");
+  });
+
+  // jsdom applies no CSS: with a mouse the ⋯ button is display:none and Tab
+  // skips it, on touch the hover icons are; both sit in the row's tab order.
+  async function tabFromFirstRowTo(user: ReturnType<typeof userEvent.setup>, name: string) {
+    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+    row.focus();
+    const target = screen.getAllByRole("button", { name })[0];
+    for (let step = 0; step < 6 && document.activeElement !== target; step++) await user.tab();
+    expect(target).toHaveFocus();
+    return row;
+  }
+
+  it("keeps one-click edit, duplicate and delete on the row for the mouse, and confirms delete", async () => {
+    const user = userEvent.setup();
+    const props = renderMenuList();
+
+    const row = await tabFromFirstRowTo(user, "common.edit");
+    const inRow = within(row);
+    expect(inRow.getByRole("button", { name: "notes.duplicate" })).toBeInTheDocument();
+    expect(inRow.getByRole("button", { name: "common.edit" }).parentElement).toHaveClass(
+      "group-hover:opacity-100",
+      "pointer-coarse:hidden"
+    );
+    expect(inRow.getByRole("button", { name: "common.moreActionsFor" })).toHaveClass(
+      "hidden",
+      "pointer-coarse:inline-flex"
+    );
+
+    await user.click(inRow.getByRole("button", { name: "common.delete" }));
+    await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
+    expect(props.onDeleteNote).not.toHaveBeenCalled();
+  });
+
+  it("reaches the ⋯ button from its row with Tab and opens it with Enter", async () => {
+    const user = userEvent.setup();
+    renderMenuList();
+
+    await tabFromFirstRowTo(user, "common.moreActionsFor");
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
+  });
+
+  it("Escape closes the item menu and keeps focus on that note", async () => {
+    const user = userEvent.setup();
+    renderMenuList();
+
+    const row = await tabFromFirstRowTo(user, "common.moreActionsFor");
+    await user.keyboard("{Enter}");
+    await screen.findByRole("menu");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
+  });
+
+  it("opens the menu on touch long-press without opening the note", () => {
+    vi.useFakeTimers();
+    try {
+      const props = renderMenuList();
+
+      touchLongPress(screen.getByText("Alpha"));
+
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+      expect(props.onSelectNote).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens the note on a short touch tap", () => {
+    vi.useFakeTimers();
+    try {
+      const props = renderMenuList();
+
+      touchTap(screen.getByText("Alpha"));
+
+      expect(props.onSelectNote).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the add-note button of a Book group in the tab order without hover", async () => {
+    const user = userEvent.setup();
+    const onCreateNote = vi.fn();
+    renderMenuList({ onCreateNote });
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    const add = screen.getByRole("button", { name: "Add note" });
+    add.focus();
+    await user.keyboard("{Enter}");
+
+    expect(onCreateNote).toHaveBeenCalledWith("book-a");
   });
 });

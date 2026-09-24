@@ -354,6 +354,49 @@ describe("contextual add divider controls", () => {
   });
 });
 
+// ─── touch: add divider from the row's actions column ─────────────────
+
+describe("add divider below (touch)", () => {
+  it("offers Add divider below in the actions column of rows with an eligible gap", () => {
+    renderDialog();
+
+    const cell = screen.getByTestId("toolbar-divider-below-start-3");
+    expect(cell.closest('[role="row"]')).toContainElement(cell);
+    // Hidden with a mouse, where the between-rows control appears on hover.
+    expect(cell).toHaveClass("[&>*]:hidden", "pointer-coarse:[&>*]:inline-flex");
+    expect(screen.queryByTestId("toolbar-divider-below-start-1")).not.toBeInTheDocument();
+  });
+
+  it("adds a divider below the row with the keyboard", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
+        end: [],
+      },
+    });
+    renderDialog();
+
+    const button = within(screen.getByTestId("toolbar-divider-below-start-1")).getByRole(
+      "button",
+      { name: "toolbar.settings.addDividerBelow" }
+    );
+    button.focus();
+    await user.keyboard("{Enter}");
+
+    const start = useSettingsStore.getState().toolbarConfig.start;
+    expect(start).toHaveLength(3);
+    expect(start[1].kind).toBe("divider");
+  });
+
+  it("hides the between-rows control on touch screens", () => {
+    renderDialog();
+    expect(screen.getByTestId("toolbar-add-divider-start-3")).toHaveClass(
+      "pointer-coarse:hidden"
+    );
+  });
+});
+
 // ─── direct move up/down buttons ──────────────────────────────────────
 
 it("moves entries up and down via keyboard Enter and disables move buttons at boundaries", async () => {

@@ -2,6 +2,8 @@ export { Button } from "@/components/ui/Button";
 export { Combobox } from "@/components/ui/Combobox";
 export { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 export { Input } from "@/components/ui/Input";
+export { ItemActionsMenu, ItemActionsPopover } from "@/components/ui/ItemActionsMenu";
+export type { ItemAction } from "@/components/ui/ItemActionsMenu";
 export { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 export { Modal } from "@/components/ui/Modal";
 export { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";

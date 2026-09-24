@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Plus, SeparatorHorizontal, Trash2 } from "lucide-react";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop, type TextDropItem } from "react-aria-components/useDragAndDrop";
@@ -319,7 +319,7 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
           </Button>
         </Tooltip>
       </div>
-      <span className="w-10" aria-hidden="true" />
+      <InsertDividerCell section={section} index={index + 1} />
       <InsertDividerControl section={section} index={index + 1} isDragging={isDragging} />
     </GridListItem>
   );
@@ -408,6 +408,33 @@ function canInsertDividerAt(entries: ToolbarEntry[], index: number): boolean {
   return previous?.kind !== "divider" && next?.kind !== "divider";
 }
 
+// Touch has no hover to reveal the between-rows control: the row offers it
+// in its Actions column instead.
+function InsertDividerCell({ section, index }: { section: ToolbarSection; index: number }) {
+  const { t } = useTranslation();
+  const addToolbarDivider = useSettingsStore((state) => state.addToolbarDivider);
+  const entries = useSettingsStore((s) => s.toolbarConfig[section]);
+  const label = t("toolbar.settings.addDividerBelow");
+
+  if (!canInsertDividerAt(entries, index)) return <span className="w-10" aria-hidden="true" />;
+
+  return (
+    <div
+      data-testid={`toolbar-divider-below-${section}-${index}`}
+      className="flex justify-center [&>*]:hidden pointer-coarse:[&>*]:inline-flex"
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={label}
+        onClick={() => addToolbarDivider(section, index)}
+      >
+        <SeparatorHorizontal className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 function InsertDividerControl({
   section,
   index,
@@ -430,7 +457,7 @@ function InsertDividerControl({
       className={`absolute bottom-0 left-1/2 z-20 w-[90%] -translate-x-1/2 translate-y-1/2 transition-opacity ${
         isDragging
           ? "pointer-events-none opacity-0"
-          : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+          : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 pointer-coarse:hidden"
       }`}
     >
       <button

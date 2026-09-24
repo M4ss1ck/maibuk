@@ -2,6 +2,7 @@ import { MarkerType } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
 import {
   computeConnectedSides,
+  connectionBetween,
   fromConnection,
   toFlowEdges,
   toFlowNodes,
@@ -97,5 +98,35 @@ describe("computeConnectedSides", () => {
   it("defaults a missing handle to the right (source) / left (target)", () => {
     const sides = computeConnectedSides("a", [{ id: "e1", source: "a", target: "b" }]);
     expect(sides.right.connected).toBe(true);
+  });
+});
+
+describe("connectionBetween", () => {
+  const at = (id: string, x: number, y: number) => ({
+    id,
+    kind: "text" as const,
+    html: "",
+    position: { x, y },
+  });
+
+  it("leaves and enters on the sides that face each other", () => {
+    expect(connectionBetween(at("a", 0, 0), at("b", 300, 40))).toMatchObject({
+      sourceHandle: "right",
+      targetHandle: "left",
+    });
+    expect(connectionBetween(at("a", 0, 0), at("b", -300, 40))).toMatchObject({
+      sourceHandle: "left",
+      targetHandle: "right",
+    });
+    expect(connectionBetween(at("a", 0, 0), at("b", 40, 300))).toMatchObject({
+      sourceHandle: "bottom",
+      targetHandle: "top",
+    });
+    expect(connectionBetween(at("a", 0, 0), at("b", 40, -300))).toMatchObject({
+      source: "a",
+      target: "b",
+      sourceHandle: "top",
+      targetHandle: "bottom",
+    });
   });
 });

@@ -3,22 +3,33 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { GridList } from "react-aria-components/GridList";
 import {
+  BookOpen,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Copy,
   EyeOff,
   Info,
   Search,
   SlidersHorizontal,
   Tags,
+  Trash2,
   X,
 } from "lucide-react";
 import { useNoteStore } from "@/features/notes";
+import type { Note } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
 import { useSettingsStore } from "@/features/settings/store";
+import { normalizeLanguage } from "@/features/settings/types";
 import { NoteCard } from "@/components/notes";
+import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
 import { NotesSortMenu } from "@/components/notes/NotesSortMenu";
-import { filterNotes, sortNotesBy } from "@/components/notes/notes-list-model";
+import {
+  duplicateNoteInput,
+  filterNotes,
+  sortNotesBy,
+} from "@/components/notes/notes-list-model";
+import type { ItemAction } from "@/components/ui";
 import { Button } from "@/components/ui/Button";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -35,6 +46,10 @@ export function NotesGallery() {
   const notes = useNoteStore((s) => s.notes);
   const loadNotes = useNoteStore((s) => s.loadNotes);
   const createNote = useNoteStore((s) => s.createNote);
+  const updateNote = useNoteStore((s) => s.updateNote);
+  const deleteNote = useNoteStore((s) => s.deleteNote);
+  const lastNoteId = useSettingsStore((s) => s.lastNoteId);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const books = useBookStore((s) => s.books);
   const loadBooks = useBookStore((s) => s.loadBooks);
   const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
@@ -152,6 +167,57 @@ export function NotesGallery() {
     },
     [navigate, setLastNoteId]
   );
+
+  // The gallery is where phones browse notes, so each card carries an Item Menu.
+  const noteActions = (note: Note): ItemAction[] => [
+    ...(books.length > 0
+      ? [
+          {
+            id: "move",
+            label: t("notes.moveToBook"),
+            icon: BookOpen,
+            children: [
+              { id: null as string | null, label: t("notes.unfiled"), language: undefined },
+              ...books.map((book) => ({ id: book.id, label: book.title, language: book.language })),
+            ].map((target) => ({
+              id: `move:${target.id ?? "unfiled"}`,
+              label: target.label,
+              isCurrent: (note.bookId ?? null) === target.id,
+              onAction: () => {
+                if ((note.bookId ?? null) === target.id) return;
+                void updateNote({
+                  id: note.id,
+                  bookId: target.id,
+                  language: normalizeLanguage(target.language),
+                });
+              },
+            })),
+          },
+        ]
+      : []),
+    {
+      id: "duplicate",
+      label: t("notes.duplicate"),
+      icon: Copy,
+      onAction: () => void createNote(duplicateNoteInput(note)),
+    },
+    {
+      id: "delete",
+      label: t("common.delete"),
+      icon: Trash2,
+      isDestructive: true,
+      onAction: () => setPendingDeleteId(note.id),
+    },
+  ];
+
+  const pendingDeleteNote = notes.find((note) => note.id === pendingDeleteId) ?? null;
+  const confirmDelete = async () => {
+    const id = pendingDeleteId;
+    setPendingDeleteId(null);
+    if (!id) return;
+    await deleteNote(id);
+    if (lastNoteId === id) setLastNoteId(null);
+  };
 
   const handleCreateNote = async () => {
     const note = await createNote({ title: "", bookId: null });
@@ -408,10 +474,17 @@ export function NotesGallery() {
               note={note}
               bookTitle={note.bookId ? bookTitleById.get(note.bookId) : null}
               onClick={() => openNote(note.id)}
+              actions={noteActions(note)}
             />
           )}
         </GridList>
       )}
+
+      <DeleteNoteDialog
+        note={pendingDeleteNote}
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }

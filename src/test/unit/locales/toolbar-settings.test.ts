@@ -50,6 +50,7 @@ describe("toolbar settings i18n", () => {
       "floatingVisible",
       "floatingUnavailable",
       "addDivider",
+      "addDividerBelow",
       "remove",
       "moveUp",
       "moveDown",

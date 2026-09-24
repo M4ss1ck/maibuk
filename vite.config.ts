@@ -51,6 +51,7 @@ export default defineConfig(() => ({
         "src/features/theme/store.ts",
         "src/features/sync/store.ts",
         "src/hooks/useAutoSave.ts",
+        "src/hooks/useItemContextMenu.ts",
         "src/features/version/useVersionCheck.ts",
         // Phase 3: UI components
         "src/components/ui/Button.tsx",
@@ -61,6 +62,7 @@ export default defineConfig(() => ({
         "src/components/ui/Toast.tsx",
         "src/components/ui/Combobox.tsx",
         "src/components/ui/MultiSelectCombobox.tsx",
+        "src/components/ui/ItemActionsMenu.tsx",
         // Phase 4: Integration (routing, providers, layout)
         "src/components/LoadingScreen.tsx",
         "src/components/PathTracker.tsx",

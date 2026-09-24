@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +34,9 @@ const mocks = vi.hoisted(() => {
     removeStroke: vi.fn(),
     loadBooks: vi.fn().mockResolvedValue(undefined),
     loadNotes: vi.fn().mockResolvedValue(undefined),
+    openConnectPicker: vi.fn(),
+    closeConnectPicker: vi.fn(),
+    connectNodes: vi.fn(),
   };
   const flowActions = {
     fitView: vi.fn(),
@@ -132,6 +136,7 @@ function readyState() {
     penWidth: 3,
     penColor: "#ef4444",
     interactivityLocked: false,
+    connectSourceNodeId: null,
   });
 }
 
@@ -212,6 +217,87 @@ describe("Canvas page", () => {
       })
     );
     expect(mocks.actions.selectNode).toHaveBeenCalledWith(addedNode.id);
+  });
+
+  describe("Connect to…", () => {
+    function withTwoNodes(overrides: Record<string, unknown> = {}) {
+      const doc = {
+        ...(mocks.state.doc as Record<string, unknown>),
+        nodes: [
+          { id: "node", kind: "text", html: "<p>Idea</p>", position: { x: 0, y: 0 } },
+          { id: "other", kind: "text", html: "<p>Second thought</p>", position: { x: 300, y: 0 } },
+          { id: "third", kind: "text", html: "<p>Third</p>", position: { x: 0, y: 300 } },
+        ],
+        edges: [],
+      };
+      Object.assign(mocks.state, {
+        doc,
+        selectedNodeId: "node",
+        selectedEdgeId: null,
+        ...overrides,
+      });
+    }
+
+    it("opens the picker for the selected node from the side panel by keyboard", async () => {
+      const user = userEvent.setup();
+      withTwoNodes();
+      renderCanvas();
+
+      const button = screen.getByRole("button", { name: "canvas.connectTo" });
+      button.focus();
+      await user.keyboard("{Enter}");
+
+      expect(mocks.actions.openConnectPicker).toHaveBeenCalledWith("node");
+    });
+
+    it("hides the side-panel entry when nothing is selected or the canvas is locked", () => {
+      withTwoNodes({ selectedNodeId: null });
+      const { unmount } = renderCanvas();
+      expect(screen.queryByRole("button", { name: "canvas.connectTo" })).toBeNull();
+      unmount();
+
+      withTwoNodes({ interactivityLocked: true });
+      renderCanvas();
+      expect(screen.queryByRole("button", { name: "canvas.connectTo" })).toBeNull();
+    });
+
+    it("connects to a searched node with the keyboard", async () => {
+      const user = userEvent.setup();
+      withTwoNodes({ connectSourceNodeId: "node" });
+      renderCanvas();
+
+      const dialog = await screen.findByRole("dialog", { name: "canvas.connectFrom" });
+      expect(dialog).toHaveTextContent("Second thought");
+      expect(dialog).toHaveTextContent("Third");
+      await waitFor(() =>
+        expect(screen.getByRole("textbox", { name: "canvas.searchNodesPlaceholder" })).toHaveFocus()
+      );
+      await user.keyboard("second");
+      expect(dialog).not.toHaveTextContent("Third");
+      await user.tab();
+      expect(screen.getByRole("button", { name: "Second thought" })).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      expect(mocks.actions.connectNodes).toHaveBeenCalledWith("node", "other");
+      expect(mocks.actions.closeConnectPicker).toHaveBeenCalled();
+    });
+
+    it("leaves out nodes it is already connected to, and closes with Escape", async () => {
+      const user = userEvent.setup();
+      withTwoNodes({ connectSourceNodeId: "node" });
+      (mocks.state.doc as { edges: unknown[] }).edges = [
+        { id: "e", source: "other", target: "node" },
+      ];
+      renderCanvas();
+
+      const dialog = await screen.findByRole("dialog", { name: "canvas.connectFrom" });
+      expect(dialog).not.toHaveTextContent("Second thought");
+      expect(dialog).toHaveTextContent("Third");
+      await user.keyboard("{Escape}");
+
+      expect(mocks.actions.closeConnectPicker).toHaveBeenCalled();
+      expect(mocks.actions.connectNodes).not.toHaveBeenCalled();
+    });
   });
 
   it("selects a node on click", () => {

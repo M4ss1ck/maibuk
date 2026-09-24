@@ -1,10 +1,17 @@
 import type { DragEvent, KeyboardEvent } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
-import { Tooltip } from "@/components/ui";
+import { ItemActionsMenu, Tooltip } from "@/components/ui";
+import type { ItemAction } from "@/components/ui";
+import { useItemContextMenu } from "@/hooks/useItemContextMenu";
+
+export interface NoteMoveTarget {
+  bookId: string | null;
+  label: string;
+}
 
 interface NoteListItemProps {
   note: Note;
@@ -13,6 +20,9 @@ interface NoteListItemProps {
   onDelete?: (id: string) => void;
   onDuplicate?: (note: Note) => void;
   onRename?: (note: Note, title: string) => void;
+  onTogglePinned?: (note: Note) => void;
+  moveTargets?: NoteMoveTarget[];
+  onMove?: (note: Note, bookId: string | null) => void;
   draggable?: boolean;
   isDragging?: boolean;
   onDragStart?: (e: DragEvent<HTMLDivElement>) => void;
@@ -42,6 +52,9 @@ export function NoteListItem({
   onDelete,
   onDuplicate,
   onRename,
+  onTogglePinned,
+  moveTargets = [],
+  onMove,
   draggable = false,
   isDragging = false,
   onDragStart,
@@ -52,8 +65,67 @@ export function NoteListItem({
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(note.title);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = note.title || t("notes.untitled");
   const preview = toPreview(note.content);
+
+  const actions: ItemAction[] = [];
+  if (onRename) {
+    actions.push({
+      id: "rename",
+      label: t("common.rename"),
+      icon: Pencil,
+      onAction: () => {
+        setDraftTitle(note.title);
+        setIsEditing(true);
+      },
+    });
+  }
+  if (onTogglePinned) {
+    actions.push({
+      id: "pin",
+      label: note.pinned ? t("notes.unpin") : t("notes.pin"),
+      icon: note.pinned ? PinOff : Pin,
+      onAction: () => onTogglePinned(note),
+    });
+  }
+  if (onMove && moveTargets.length > 0) {
+    actions.push({
+      id: "move",
+      label: t("notes.moveToBook"),
+      icon: BookOpen,
+      children: moveTargets.map((target) => ({
+        id: `move:${target.bookId ?? "unfiled"}`,
+        label: target.label,
+        isCurrent: (note.bookId ?? null) === target.bookId,
+        onAction: () => {
+          if ((note.bookId ?? null) !== target.bookId) onMove(note, target.bookId);
+        },
+      })),
+    });
+  }
+  if (onDuplicate) {
+    actions.push({
+      id: "duplicate",
+      label: t("notes.duplicate"),
+      icon: Copy,
+      onAction: () => onDuplicate(note),
+    });
+  }
+  if (onDelete) {
+    actions.push({
+      id: "delete",
+      label: t("common.delete"),
+      icon: Trash2,
+      isDestructive: true,
+      onAction: () => onDelete(note.id),
+    });
+  }
+  const hasActions = actions.length > 0;
+  const { itemProps } = useItemContextMenu({
+    onOpen: () => setIsMenuOpen(true),
+    isDisabled: !hasActions || isEditing,
+  });
 
   const commitTitle = () => {
     const nextTitle = draftTitle.trim();
@@ -87,22 +159,26 @@ export function NoteListItem({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className={`group relative border-l-2 py-3 pl-2 pr-3 transition-colors ${
+      {...itemProps}
+      className={`group relative border-l-2 py-3 pl-2 pr-3 transition-colors pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
       } ${
         isSelected ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted/50"
       } ${isDragging ? "opacity-50" : ""}`}
-      onClick={() => {
+      onClick={(e) => {
+        // Menu items live in a portal but still bubble through React.
+        if (!e.currentTarget.contains(e.target as Node)) return;
         if (!isEditing) onSelect(note);
       }}
       onKeyDown={(e) => {
+        if (!e.currentTarget.contains(e.target as Node)) return;
         if (!isEditing && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onSelect(note);
         }
       }}
     >
-      {/* Line 1: title + action buttons (edit, duplicate, delete) */}
+      {/* Line 1: title + item menu */}
       <div className="flex min-w-0 items-center gap-1">
         {isEditing ? (
           <input
@@ -117,7 +193,8 @@ export function NoteListItem({
         ) : (
           <>
             <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{title}</h3>
-            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {/* Mouse devices keep one-click actions on hover; touch gets the Item Menu. */}
+            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:hidden">
               {onRename && (
                 <Tooltip content={t("common.edit")}>
                   <button
@@ -165,6 +242,15 @@ export function NoteListItem({
                 </Tooltip>
               )}
             </div>
+            {hasActions && (
+              <ItemActionsMenu
+                label={t("common.moreActionsFor", { title })}
+                actions={actions}
+                isOpen={isMenuOpen}
+                onOpenChange={setIsMenuOpen}
+                className="hidden pointer-coarse:inline-flex"
+              />
+            )}
           </>
         )}
       </div>
@@ -172,10 +258,14 @@ export function NoteListItem({
       {/* Line 2: description + drag handle */}
       <div className="mt-1 flex min-h-4 min-w-0 items-center gap-1">
         <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{preview}</p>
-        <GripVertical
-          data-testid="note-drag-handle"
-          className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-        />
+        {draggable && (
+          <GripVertical
+            data-testid="note-drag-handle"
+            data-drag-handle=""
+            aria-hidden="true"
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:h-5 pointer-coarse:w-5 pointer-coarse:opacity-100"
+          />
+        )}
       </div>
 
       {/* Line 3: tags + last-modified */}

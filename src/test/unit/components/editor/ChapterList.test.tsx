@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
 import { act, render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { buildChapter } from "@/test/support/fixtures";
+import { installPointerEvent, touchLongPress } from "@/test/support/pointer-events";
 import type { Chapter } from "@/features/chapters/types";
 import type { DropItem } from "react-aria-components/useDragAndDrop";
 
@@ -168,6 +169,14 @@ function DeleteHarness({
       })}
     />
   );
+}
+
+async function openChapterMenu(user: ReturnType<typeof userEvent.setup>, index = 0) {
+  const trigger = screen.getAllByRole("button", { name: "common.moreActionsFor" })[index];
+  await user.click(trigger);
+  await screen.findByRole("menu");
+  await waitFor(() => expect(screen.getAllByRole("menuitem")[0]).toHaveFocus());
+  return trigger;
 }
 
 async function tabToControl(user: ReturnType<typeof userEvent.setup>, control: HTMLElement) {
@@ -491,7 +500,20 @@ describe("ChapterList", () => {
       expect(actions).not.toHaveClass("pl-3");
     });
 
-    it("Tab reaches drag handle, edit, delete, and outline controls", async () => {
+    it("keeps hover edit/delete for the mouse and the item menu for touch", () => {
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      const hoverActions = screen.getByRole("button", { name: "chapters.editChapter" }).parentElement;
+      expect(hoverActions).toHaveClass("group-hover:opacity-100", "pointer-coarse:hidden");
+      expect(screen.getByRole("button", { name: "common.moreActionsFor" })).toHaveClass(
+        "hidden",
+        "pointer-coarse:inline-flex"
+      );
+    });
+
+    it("Tab reaches drag handle, edit, delete, item menu, and outline controls", async () => {
+      // jsdom applies no CSS; in the app Tab skips whichever set is display:none.
       const user = userEvent.setup();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id, editor: { state: {} } });
@@ -499,35 +521,19 @@ describe("ChapterList", () => {
       const rows = screen.getAllByRole("row");
       rows[0].focus();
 
-      await user.tab();
-      const dragBtn = screen.getByRole("button", { name: "chapters.reorder" });
-      expect(dragBtn).toHaveFocus();
-
-      await user.tab();
-      const editBtn = screen.getByRole("button", { name: "chapters.editChapter" });
-      expect(editBtn).toHaveFocus();
-
-      await user.tab();
-      const delBtn = screen.getByRole("button", { name: "chapters.deleteChapter" });
-      expect(delBtn).toHaveFocus();
-
-      await user.tab();
-      expect(screen.getByRole("button", { name: "toc.showOutline" })).toHaveFocus();
+      for (const name of [
+        "chapters.reorder",
+        "chapters.editChapter",
+        "chapters.deleteChapter",
+        "common.moreActionsFor",
+        "toc.showOutline",
+      ]) {
+        await user.tab();
+        expect(screen.getByRole("button", { name })).toHaveFocus();
+      }
     });
 
-    it("pressing the edit button shows the edit form", async () => {
-      const user = userEvent.setup();
-      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
-      renderCL({ chapters, currentChapterId: chapters[0].id });
-
-      const editBtn = screen.getByRole("button", { name: "chapters.editChapter" });
-      editBtn.focus();
-      expect(editBtn).toHaveFocus();
-      await user.keyboard("{Enter}");
-      expect(screen.getByDisplayValue("First")).toBeInTheDocument();
-    });
-
-    it("pressing the delete button shows confirmation", async () => {
+    it("pressing the hover delete button shows confirmation", async () => {
       const user = userEvent.setup();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id });
@@ -536,6 +542,102 @@ describe("ChapterList", () => {
       delBtn.focus();
       await user.keyboard("{Enter}");
       expect(screen.getByText("common.deleteConfirm")).toBeInTheDocument();
+    });
+
+    it("choosing Edit from the item menu by keyboard shows the edit form", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
+
+      const input = await screen.findByDisplayValue("First");
+      await waitFor(() => expect(input).toHaveFocus());
+    });
+
+    it("choosing Delete from the item menu by keyboard shows confirmation", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      await openChapterMenu(user);
+      await user.keyboard("{ArrowDown}");
+      expect(screen.getByRole("menuitem", { name: "chapters.deleteChapter" })).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
+    });
+
+    it("Escape closes the item menu and keeps focus on that chapter", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      const trigger = await openChapterMenu(user);
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+      // React Aria's GridList takes focus back to the row the menu belongs to.
+      const row = screen.getByRole("row", { name: "First" });
+      await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
+      await tabToControl(user, trigger);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  describe("touch", () => {
+    beforeEach(() => {
+      installPointerEvent();
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("long-press on a chapter opens its item menu without selecting it", () => {
+      const onSelect = vi.fn();
+      const chapters = [
+        buildChapter({ id: "ch-1", title: "First", order: 1 }),
+        buildChapter({ id: "ch-2", title: "Second", order: 2 }),
+      ];
+      renderCL({ chapters, currentChapterId: "ch-1", onSelectChapter: onSelect });
+
+      touchLongPress(screen.getByText("Second"));
+
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it("long-press on the drag handle is left to reordering", () => {
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: "ch-1" });
+
+      touchLongPress(screen.getByRole("button", { name: "chapters.reorder" }));
+
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
+    it("a touch drag from the row body is blocked, one from the handle is not", () => {
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: "ch-1" });
+      const row = screen.getAllByRole("row")[0];
+
+      // A native listener on the row only hears drags the guard lets through.
+      const reachedRow = vi.fn();
+      row.addEventListener("dragstart", reachedRow);
+      const dragFrom = (origin: Element, pointerType: string) => {
+        reachedRow.mockClear();
+        fireEvent.pointerDown(origin, { pointerType });
+        fireEvent.dragStart(row);
+        return reachedRow.mock.calls.length > 0;
+      };
+      const handle = screen.getByRole("button", { name: "chapters.reorder" });
+
+      expect(dragFrom(screen.getByText("First"), "touch")).toBe(false);
+      expect(dragFrom(handle, "touch")).toBe(true);
+      expect(dragFrom(screen.getByText("First"), "mouse")).toBe(true);
     });
   });
 
@@ -580,10 +682,10 @@ describe("ChapterList", () => {
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id, onUpdateChapter: onUpdate });
 
-      const editBtn = screen.getByRole("button", { name: "chapters.editChapter" });
-      await user.click(editBtn);
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
 
-      const input = screen.getByDisplayValue("First");
+      const input = await screen.findByDisplayValue("First");
       await user.clear(input);
       await user.type(input, "Updated Title{Enter}");
 
@@ -595,8 +697,9 @@ describe("ChapterList", () => {
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id });
 
-      const editBtn = screen.getByRole("button", { name: "chapters.editChapter" });
-      await user.click(editBtn);
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.getByDisplayValue("First")).toHaveFocus());
 
       await user.keyboard("{Escape}");
 
@@ -616,9 +719,8 @@ describe("ChapterList", () => {
       ];
       render(<DeleteHarness initialChapters={chapters} onDelete={onDelete} />);
 
-      const deleteButton = screen.getAllByRole("button", { name: "chapters.deleteChapter" })[0];
-      deleteButton.focus();
-      await user.keyboard("{Enter}");
+      await openChapterMenu(user, 0);
+      await user.keyboard("{ArrowDown}{Enter}");
       const yesButton = screen.getByRole("button", { name: "common.yes" });
       await tabToControl(user, yesButton);
       await user.keyboard("{Enter}");
@@ -626,7 +728,7 @@ describe("ChapterList", () => {
       await waitFor(() => expect(screen.getByRole("row", { name: "Second" })).toHaveFocus());
     });
 
-    it("cancels delete by keyboard (Tab to No, Enter) and focus returns", async () => {
+    it("cancels delete by keyboard (Tab to No, Enter) and focus returns to the hover delete", async () => {
       const user = userEvent.setup();
       const onDelete = vi.fn();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
@@ -641,9 +743,28 @@ describe("ChapterList", () => {
 
       expect(onDelete).not.toHaveBeenCalled();
       expect(screen.queryByText("common.deleteConfirm")).not.toBeInTheDocument();
-      await waitFor(() => {
-        expect(screen.getByRole("button", { name: "chapters.deleteChapter" })).toHaveFocus();
-      });
+      await waitFor(() => expect(deleteButton).toHaveFocus());
+    });
+
+    it("on touch, cancelling a delete from the item menu returns focus to its ⋯ button", async () => {
+      const user = userEvent.setup();
+      const matchMedia = vi.spyOn(window, "matchMedia").mockImplementation(
+        (query: string) => ({ matches: query === "(pointer: coarse)" }) as MediaQueryList
+      );
+      try {
+        const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+        renderCL({ chapters, currentChapterId: chapters[0].id });
+
+        const trigger = await openChapterMenu(user);
+        await user.keyboard("{ArrowDown}{Enter}");
+        const noButton = screen.getByRole("button", { name: "common.no" });
+        await tabToControl(user, noButton);
+        await user.keyboard("{Enter}");
+
+        await waitFor(() => expect(trigger).toHaveFocus());
+      } finally {
+        matchMedia.mockRestore();
+      }
     });
   });
 

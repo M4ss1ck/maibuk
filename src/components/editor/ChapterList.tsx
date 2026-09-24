@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef, type Key } from "react";
+import { useCallback, useState, useEffect, useRef, type Key, type ReactNode } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import type { DropItem } from "react-aria-components/useDragAndDrop";
 import { DropIndicator } from "react-aria-components";
@@ -15,12 +15,13 @@ import { readDroppedWebFiles, useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
-import { Tooltip } from "@/components/ui";
+import { ItemActionsMenu, Tooltip } from "@/components/ui";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { toast } from "@/components/ui/Toast";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop } from "react-aria-components/useDragAndDrop";
+import { useItemContextMenu, useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -35,6 +36,28 @@ interface ChapterListProps {
 }
 
 const CHAPTER_DND_TYPE = "chapter";
+
+function ChapterItemGestures({
+  onOpenMenu,
+  isDisabled,
+  className,
+  children,
+}: {
+  onOpenMenu: () => void;
+  isDisabled: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  const { itemProps } = useItemContextMenu({ onOpen: onOpenMenu, isDisabled });
+  return (
+    <div
+      {...itemProps}
+      className={`${className} pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]`}
+    >
+      {children}
+    </div>
+  );
+}
 
 /** Reads supported text files out of react-aria drop items, preserving order. */
 export async function readChapterDropItems(items: DropItem[]): Promise<DroppedTextFile[]> {
@@ -104,7 +127,9 @@ export function ChapterList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editType, setEditType] = useState<ChapterType>("chapter");
+  const [menuChapterId, setMenuChapterId] = useState<string | null>(null);
   const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const touchDragGuard = useTouchDragFromHandle();
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
   const chapterTypeLabels: Record<ChapterType, string> = {
@@ -226,7 +251,17 @@ export function ChapterList({
 
   const cancelDelete = (id: string) => {
     setDeleteConfirmId(null);
-    requestAnimationFrame(() => deleteButtonRefs.current.get(id)?.focus());
+    // Back to whichever control started the delete: the hover icon with a mouse,
+    // the Item Menu button on touch.
+    requestAnimationFrame(() => {
+      const isTouch = window.matchMedia?.("(pointer: coarse)").matches;
+      const target = isTouch
+        ? listContainerRef.current?.querySelector<HTMLElement>(
+            `[data-key="${CSS.escape(id)}"] [data-item-actions]`
+          )
+        : deleteButtonRefs.current.get(id);
+      target?.focus();
+    });
   };
 
   const startEditing = (chapter: Chapter) => {
@@ -340,6 +375,7 @@ export function ChapterList({
       <div
         ref={listContainerRef}
         className={`relative flex-1 overflow-y-auto overflow-x-hidden ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        {...touchDragGuard}
         {...(chapters.length === 0 ? dropHandlers : {})}
       >
         {(isImportingFiles || activeReactAriaImports > 0) && <FileDropImportStatus />}
@@ -351,6 +387,7 @@ export function ChapterList({
           dependencies={[
             currentChapterId,
             deleteConfirmId,
+            menuChapterId,
             editTitle,
             editType,
             editingId,
@@ -402,7 +439,9 @@ export function ChapterList({
                   isActive ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
                 }`}
               >
-                <div
+                <ChapterItemGestures
+                  onOpenMenu={() => setMenuChapterId(chapter.id)}
+                  isDisabled={editingId === chapter.id || deleteConfirmId === chapter.id}
                   className={
                     isActive && showChapterOutline
                       ? "sticky top-0 z-10 rounded bg-inherit backdrop-blur-sm"
@@ -454,14 +493,15 @@ export function ChapterList({
                       <div className="flex w-full min-w-0 items-center">
                         <AriaButton
                           slot="drag"
+                          data-drag-handle=""
                           aria-label={t("chapters.reorder")}
-                          className="shrink-0 cursor-grab rounded p-0.5 mr-1 text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                          className="shrink-0 cursor-grab rounded p-0.5 pointer-coarse:p-1.5 mr-1 text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
                           <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
                         </AriaButton>
 
                         <div className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}>
-                          {/* Title line: icon, title, inline edit/delete actions */}
+                          {/* Title line: icon, title, hover actions (mouse), item menu (touch) */}
                           <div className="flex min-w-0 items-center gap-2 bg-inherit">
                             <ChapterIcon
                               className={`shrink-0 text-muted-foreground ${
@@ -478,7 +518,7 @@ export function ChapterList({
                               </span>
 
                               {/* Edit/Delete overlay the full-width title without causing hover reflow. */}
-                              <span className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                              <span className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:hidden">
                                 <Tooltip content={t("chapters.editChapter")}>
                                   <AriaButton
                                     onPress={() => startEditing(chapter)}
@@ -504,6 +544,27 @@ export function ChapterList({
                                 </Tooltip>
                               </span>
                             </span>
+                            <ItemActionsMenu
+                              label={t("common.moreActionsFor", { title: chapter.title })}
+                              actions={[
+                                {
+                                  id: "edit",
+                                  label: t("chapters.editChapter"),
+                                  icon: EditIcon,
+                                  onAction: () => startEditing(chapter),
+                                },
+                                {
+                                  id: "delete",
+                                  label: t("chapters.deleteChapter"),
+                                  icon: DeleteIcon,
+                                  isDestructive: true,
+                                  onAction: () => setDeleteConfirmId(chapter.id),
+                                },
+                              ]}
+                              isOpen={menuChapterId === chapter.id}
+                              onOpenChange={(open) => setMenuChapterId(open ? chapter.id : null)}
+                              className="hidden pointer-coarse:inline-flex"
+                            />
 
                             {/* Compact view has no metadata line: keep the toggle here */}
                             {isCompactView && outlineToggle}
@@ -545,7 +606,7 @@ export function ChapterList({
                       )}
                     </>
                   )}
-                </div>
+                </ChapterItemGestures>
                 {isActive && editor && showChapterOutline && (
                   <div className="list-none">
                     <ChapterOutline editor={editor} />

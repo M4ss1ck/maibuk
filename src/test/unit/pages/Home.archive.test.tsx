@@ -145,6 +145,47 @@ describe("Home archiving", () => {
     expect(mockUpdateBook).toHaveBeenCalledWith("gamma", { status: "draft" });
   });
 
+  it("offers status change on the status pill for touch screens, named by what it shows", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    const pill = screen.getByRole("button", { name: "Draft, Change status of Alpha" });
+    expect(pill).toHaveTextContent("Draft");
+    // Only touch screens show it; the mouse keeps the hover-revealed corner button.
+    expect(pill).toHaveClass("hidden", "pointer-coarse:inline-flex");
+    expect(screen.getByRole("button", { name: "Change status of Alpha" })).toHaveClass(
+      "pointer-coarse:hidden"
+    );
+
+    await user.click(pill);
+    await screen.findByRole("listbox");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    // React Aria's GridList takes focus back to the card the popover belongs to.
+    await waitFor(() => expect(screen.getByRole("row", { name: "Alpha" })).toHaveFocus());
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockUpdateBook).not.toHaveBeenCalled();
+  });
+
+  it("keeps focus on the card after picking a status by keyboard", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    screen.getAllByRole("row")[0].focus();
+    await user.keyboard("{Tab}");
+    const pill = screen.getByRole("button", { name: "Change status of Alpha" });
+    expect(pill).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    await screen.findByRole("listbox");
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    expect(mockUpdateBook).toHaveBeenCalledWith("alpha", { status: "in-progress" });
+    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("row", { name: "Alpha" })).toHaveFocus());
+  });
+
   it("still opens a book with Enter on the card itself", async () => {
     const user = userEvent.setup();
     render(<Home />);
