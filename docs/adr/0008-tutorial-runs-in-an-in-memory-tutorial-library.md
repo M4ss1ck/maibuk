@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted
 ---
 
 # The Tutorial runs in an in-memory Tutorial Library

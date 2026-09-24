@@ -43,6 +43,8 @@ interface EditorToolbarProps {
   onExportMarkdown?: () => void;
   onExportPdf?: () => void;
   onExportImage?: () => void;
+  /** The Tutorial step that points at this toolbar, if any. */
+  tutorialAnchor?: string;
 }
 
 export function EditorToolbar({
@@ -56,6 +58,7 @@ export function EditorToolbar({
   onExportMarkdown,
   onExportPdf,
   onExportImage,
+  tutorialAnchor,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -275,7 +278,10 @@ export function EditorToolbar({
 
   return (
     <TooltipGroup>
-      <div className="border-b border-border bg-background sticky top-0 z-10">
+      <div
+        className="border-b border-border bg-background sticky top-0 z-10"
+        data-tutorial={tutorialAnchor}
+      >
         <ResponsiveEditorToolbar
           editor={editor}
           callbacks={callbacks}

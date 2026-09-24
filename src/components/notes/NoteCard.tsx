@@ -16,9 +16,11 @@ interface NoteCardProps {
   onClick: () => void;
   /** The card's Item Menu, for touch screens: long-press or the ⋯ button. */
   actions?: ItemAction[];
+  /** The Tutorial step that points at this card, if any. */
+  tutorialAnchor?: string;
 }
 
-export function NoteCard({ note, bookTitle, onClick, actions = [] }: NoteCardProps) {
+export function NoteCard({ note, bookTitle, onClick, actions = [], tutorialAnchor }: NoteCardProps) {
   const { t, i18n } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = note.title || t("notes.untitled");
@@ -33,6 +35,7 @@ export function NoteCard({ note, bookTitle, onClick, actions = [] }: NoteCardPro
     <GridListItem
       id={note.id}
       textValue={title}
+      data-tutorial={tutorialAnchor}
       onAction={onClick}
       className={({ isFocusVisible, isHovered, isPressed }) =>
         `relative h-44 overflow-hidden rounded-xl border bg-card text-left transition-all duration-200 ${

@@ -16,6 +16,7 @@ import { parseCanvasDoc, serializeCanvasDoc } from "@/features/canvas/serializat
 import { generateSqlDump } from "@/features/backup/generate-sql-dump";
 import { dumpHasDataAsync } from "@/features/sync/sync-codec";
 import { createAsyncQueue } from "@/lib/async-queue";
+import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 
 // Serializes expensive backup work (create/restore) and concurrent
 // delete/prune writes across ALL BackupService instances. Reads
@@ -182,6 +183,9 @@ export class BackupService {
 
   async createBackup(trigger: BackupEntry["trigger"]): Promise<string> {
     return backupQueue.enqueue(async () => {
+      // Second defence behind the lifecycle gates: the dump reads getDatabase(),
+      // which is the Tutorial Library while the Tutorial runs.
+      if (isTutorialLibraryActive()) throw new Error("BACKUP_TUTORIAL_ACTIVE");
       const sql = await generateSqlDump();
       if (!(await dumpHasDataAsync(sql))) {
         throw new Error("BACKUP_EMPTY");

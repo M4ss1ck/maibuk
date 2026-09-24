@@ -1,12 +1,15 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import { Modal, KeyboardShortcut } from "@/components/ui";
+import { GraduationCap } from "lucide-react";
+import { Button, Modal, KeyboardShortcut } from "@/components/ui";
 import { useBoundShortcuts } from "@/lib/bound-shortcuts";
 import { SHORTCUTS, formatKeys, type ShortcutId } from "@/lib/shortcut-registry";
 
 interface ShortcutsHelpDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Runs this screen's Tutorial section; the dialog closes first. */
+  onStartTutorial?: () => void;
 }
 
 const AREAS = [
@@ -15,6 +18,7 @@ const AREAS = [
   { prefix: "editor.", labelKey: "shortcuts.areaEditor" },
   { prefix: "canvas.", labelKey: "shortcuts.areaCanvas" },
   { prefix: "cover.", labelKey: "shortcuts.areaCover" },
+  { prefix: "tutorial.", labelKey: "shortcuts.areaTutorial" },
 ] as const;
 
 type AreaGroup = {
@@ -54,7 +58,7 @@ function AreaGroups({ groups }: { groups: AreaGroup[] }) {
   );
 }
 
-export function ShortcutsHelpDialog({ isOpen, onClose }: ShortcutsHelpDialogProps) {
+export function ShortcutsHelpDialog({ isOpen, onClose, onStartTutorial }: ShortcutsHelpDialogProps) {
   const { t } = useTranslation();
   const thisScreenId = useId();
   const otherScreensId = useId();
@@ -78,6 +82,20 @@ export function ShortcutsHelpDialog({ isOpen, onClose }: ShortcutsHelpDialogProp
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t("shortcuts.title")} footer={null}>
       <div className="space-y-6">
+        {onStartTutorial && (
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={() => {
+              onClose();
+              onStartTutorial();
+            }}
+          >
+            <GraduationCap className="h-4 w-4" aria-hidden="true" />
+            {t("tutorial.help.startForScreen")}
+          </Button>
+        )}
         <section aria-labelledby={thisScreenId}>
           <h3
             id={thisScreenId}

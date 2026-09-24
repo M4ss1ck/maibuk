@@ -1521,6 +1521,19 @@ option {
     animation: none;
     opacity: 1;
   }
+
+  /* React Joyride ignores prefers-reduced-motion (ADR 0009): its floater
+     fades with an inline transition and the spotlight cutout fades in. */
+  [data-tutorial-portal],
+  [data-tutorial-portal] * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* The Tutorial card draws its own shadow; Joyride's inline drop-shadow doubles it. */
+[data-tutorial-portal] .react-joyride__floater {
+  filter: none !important;
 }
 
 /* Hide native number-input spinners (cover editor uses themed controls) */

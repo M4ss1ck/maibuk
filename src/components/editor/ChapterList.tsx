@@ -33,6 +33,8 @@ interface ChapterListProps {
   onDeleteChapter: (id: string) => void;
   onReorderChapters: (chapterIds: string[]) => void;
   onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
+  /** Marks Tutorial step targets; only the list the author can see carries them. */
+  tutorialAnchors?: boolean;
 }
 
 const CHAPTER_DND_TYPE = "chapter";
@@ -79,6 +81,7 @@ export function ChapterList({
   onDeleteChapter,
   onReorderChapters,
   onImportFiles,
+  tutorialAnchors = false,
 }: ChapterListProps) {
   const { t, i18n } = useTranslation();
   const chapterListView = useSettingsStore((state) => state.chapterListView);
@@ -416,6 +419,7 @@ export function ChapterList({
               isActive && editor ? (
                 <Tooltip content={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}>
                   <AriaButton
+                    data-tutorial={tutorialAnchors ? "book-editor.outline" : undefined}
                     onPress={() => setShowChapterOutline(!showChapterOutline)}
                     aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
                     aria-pressed={showChapterOutline}

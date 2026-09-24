@@ -9,6 +9,7 @@
 // not. Equal-content updates never advance it.
 
 import { getDatabase } from "@/lib/db";
+import { assertWritableId } from "@/features/tutorial/library-switch";
 import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 import { reindexSource } from "@/features/links/link-index";
@@ -101,6 +102,8 @@ export async function createChapterRow(
   input: CreateChapterInput,
   origin: ChangeOrigin
 ): Promise<Chapter> {
+  assertWritableId(input.bookId);
+  assertWritableId(input.parentId);
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
@@ -174,6 +177,7 @@ export async function updateChapterRow(
   input: UpdateChapterInput,
   origin: ChangeOrigin
 ): Promise<Chapter | null> {
+  assertWritableId(id);
   const db = await getDatabase();
   const now = nowSeconds();
   const rows = await db.select<Record<string, unknown>[]>(
@@ -300,6 +304,7 @@ export async function updateChapterRow(
 }
 
 export async function deleteChapterRow(id: string, origin: ChangeOrigin): Promise<void> {
+  assertWritableId(id);
   const db = await getDatabase();
   const rows = await db.select<{ book_id: string }[]>(
     "SELECT book_id FROM chapters WHERE id = ?",
@@ -331,6 +336,8 @@ export async function reorderChapterRows(
   chapterIds: string[],
   origin: ChangeOrigin
 ): Promise<void> {
+  assertWritableId(bookId);
+  for (const chapterId of chapterIds) assertWritableId(chapterId);
   const db = await getDatabase();
   const now = nowSeconds();
 

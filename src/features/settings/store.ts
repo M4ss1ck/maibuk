@@ -50,6 +50,7 @@ import {
 import { DEFAULT_STATUS_FILTER } from "@/components/project/book-list-model";
 import type { BookStatus } from "@/features/books/types";
 import { setLaunchOnStartup as applyLaunchOnStartup } from "@/lib/platform";
+import { isTutorialRunInProgress } from "@/features/tutorial/library-switch";
 import {
   DEFAULT_TOOLBAR_CONFIG,
   addDivider,
@@ -622,8 +623,16 @@ export const useSettingsStore = create<SettingsStore>()(
           ),
         }));
       },
-      setLastPath: (lastPath) => set({ lastPath }),
-      setLastNoteId: (lastNoteId) => set({ lastNoteId }),
+      // The Tutorial moves between screens on its own; where it went is not
+      // where the author was (ADR 0008).
+      setLastPath: (lastPath) => {
+        if (isTutorialRunInProgress()) return;
+        set({ lastPath });
+      },
+      setLastNoteId: (lastNoteId) => {
+        if (isTutorialRunInProgress()) return;
+        set({ lastNoteId });
+      },
     }),
     {
       name: STORAGE_KEY,

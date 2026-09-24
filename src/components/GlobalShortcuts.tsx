@@ -9,6 +9,8 @@ import { useNoteStore } from "@/features/notes";
 import { getPassphrase } from "@/features/sync/crypto";
 import { IS_DESKTOP } from "@/lib/platform";
 import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
+import { requestTutorial } from "@/features/tutorial/controller";
+import { sectionForPath } from "@/features/tutorial/sections";
 
 function isVisiblePane(pane: HTMLElement): boolean {
   if (pane.closest('[hidden], [inert], [aria-hidden="true"], [data-closed]')) return false;
@@ -170,6 +172,16 @@ export function GlobalShortcuts() {
   ]);
 
   return (
-    <ShortcutsHelpDialog isOpen={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
+    <ShortcutsHelpDialog
+      isOpen={showShortcutsHelp}
+      onClose={() => setShowShortcutsHelp(false)}
+      onStartTutorial={() =>
+        requestTutorial({
+          section: sectionForPath(location.pathname),
+          origin: "help",
+          returnTo: location.pathname + location.search,
+        })
+      }
+    />
   );
 }

@@ -1098,7 +1098,10 @@
     "areaHome": "Books",
     "areaEditor": "Editor",
     "areaCanvas": "Canvas",
-    "areaCover": "Cover Designer"
+    "areaCover": "Cover Designer",
+    "startTutorial": "Start the Tutorial",
+    "skipTutorial": "Skip the Tutorial",
+    "areaTutorial": "Tutorial"
   },
   "versions": {
     "title": "Version history",
@@ -1198,5 +1201,330 @@
     "resourceGone": "The linked resource no longer exists.",
     "headingGone": "The linked heading no longer exists.",
     "genericError": "Couldn’t open the link."
+  },
+  "tutorial": {
+    "name": "Tutorial",
+    "offer": {
+      "title": "Take the Tutorial?",
+      "body": "A short, look-only run through Maibuk's screens, shown with sample content. It takes about 5 minutes and leaves your Library untouched.",
+      "continueTitle": "Continue the Tutorial?",
+      "continueBody": "You stopped in the {{section}} section last time. Pick up where you left off.",
+      "start": "Start",
+      "continue": "Continue",
+      "notNow": "Not now"
+    },
+    "relaunchHint": "You can start the Tutorial again from Settings → Tutorial or from Keyboard shortcuts (?).",
+    "preparing": "Preparing the Tutorial…",
+    "startFailed": "The Tutorial did not start: text in an open editor could not be saved. Your text is still there; try again after it saves.",
+    "card": {
+      "progress": "Step {{current}} of {{total}}",
+      "back": "Back",
+      "next": "Next",
+      "finish": "Finish",
+      "skip": "Skip"
+    },
+    "settings": {
+      "title": "Tutorial",
+      "description": "A look-only run through Maibuk's screens with sample content. Your Library is never changed.",
+      "startAll": "Start from the beginning",
+      "sectionsLabel": "Tutorial sections",
+      "sectionRow": "{{section}} · {{steps}}",
+      "steps_one": "{{count}} step",
+      "steps_other": "{{count}} steps",
+      "done": "Done"
+    },
+    "help": {
+      "startForScreen": "Tutorial for this screen"
+    },
+    "sections": {
+      "books": "Books Gallery",
+      "book-editor": "Book Editor",
+      "cover-designer": "Cover Designer",
+      "notes": "Notes",
+      "canvas-gallery": "Canvas Gallery",
+      "canvas": "Canvas",
+      "ephemeral": "Ephemeral",
+      "settings": "Settings"
+    },
+    "steps": {
+      "books": {
+        "gallery": {
+          "title": "Your Books",
+          "body": "This Gallery lists the Books in your Library with their Last Edited date. Right now it shows the Tutorial Library: sample content that disappears when the Tutorial ends. Your own Library is untouched."
+        },
+        "new-book": {
+          "title": "New Book",
+          "body": "Start a Book here. It needs a title and an Author Name; a Genre and a Target Word Count can go in its details later."
+        },
+        "import": {
+          "title": "Import",
+          "body": "Bring an EPUB into your Library as a new Book. Before anything is imported, a Compatibility Report shows what will convert, what will be lost and what would block it."
+        },
+        "status": {
+          "title": "Book Status",
+          "body": "Every Book is Draft, In Progress, Completed or Archived. This filter picks which ones the Gallery shows. Archived Books are hidden by default and keep all their content; giving one another status Unarchives it."
+        },
+        "nav": {
+          "title": "Notes, Canvas and Ephemeral",
+          "body": "Notes hold writing that lives outside your Books. A Canvas lays ideas out on an open surface. Ephemeral is scratch space that is never saved."
+        },
+        "metrics": {
+          "title": "Metrics",
+          "body": "Metrics shows your Writing Sessions, the words you wrote and your Streak of writing days."
+        },
+        "settings": {
+          "title": "Settings and Sync",
+          "body": "Settings shapes Maibuk to your habits. It is also where you set up Sync, which keeps your Books, Notes and Canvases the same on all your devices, encrypted so the server can never read them."
+        },
+        "remember": {
+          "title": "Maibuk remembers your layout",
+          "body": "Drag this handle to resize the sidebar. Panel sizes, filters and the screen you were on are remembered on this device, and every Chapter reopens at your Reading Position."
+        }
+      },
+      "book-editor": {
+        "chapters": {
+          "title": "Chapters",
+          "body": "A Book is made of ordered Chapters. Each one has a Chapter Type, such as Prologue or Part, and a Chapter Status: Draft, Revised or Final. The Book reopens at the Chapter you had open last."
+        },
+        "text": {
+          "title": "Your text",
+          "body": "Write here. Headings divide a Chapter, a Scene Break marks a pause, and a Footnote is printed apart from the running text."
+        },
+        "outline": {
+          "title": "Outline",
+          "body": "The Outline lists this Chapter's Headings and Scene Breaks. Choose one to jump straight to it."
+        },
+        "toolbar": {
+          "title": "Toolbar",
+          "body": "Formatting lives here, along with Spell Check, Word Lookup, Symbols and Text Case. Each tool shows its keyboard shortcut."
+        },
+        "save-status": {
+          "title": "Save Status",
+          "body": "Maibuk saves as you type. Save Status tells you whether the open Chapter is saving, saved, or not saved after a failed save. Text still waiting to be saved is always saved before a sync reads your Library."
+        },
+        "book-notes": {
+          "title": "Book Notes",
+          "body": "Book Notes are Notes attached to this Book. Open them beside your text while you write."
+        },
+        "history": {
+          "title": "Version history",
+          "body": "Maibuk takes Checkpoints of a Book on its own: after idle time, when you close it, and before a Pull or a Restore. You can also save a Named Version. Here you can Compare any Version with the Book or Restore it. The Book shown here has one of each."
+        },
+        "sync": {
+          "title": "Sync",
+          "body": "Sync this Book now. A sync Pushes your changes and Pulls the ones made on your other devices. When a Book changed on both, a Sync Conflict asks which one wins, and the Sync Log lists what each run did."
+        },
+        "export": {
+          "title": "Export",
+          "body": "Export the Book as EPUB, PDF, Markdown or an image. An exported Book can include a Table of Contents."
+        },
+        "focus": {
+          "title": "Focus Mode and shortcuts",
+          "body": "Focus Mode hides everything except your text. Press ? on any screen to see the keyboard shortcuts that work there."
+        },
+        "cover": {
+          "title": "Cover",
+          "body": "Open the Cover Designer to build this Book's Cover. That is where the Tutorial goes next."
+        }
+      },
+      "cover-designer": {
+        "templates": {
+          "title": "Cover Templates",
+          "body": "This is the Cover Designer. Start from a Cover Template, a ready-made background with the title and author already placed, then change anything."
+        },
+        "size": {
+          "title": "Cover size",
+          "body": "Pick a Cover Size Preset: a print trim size or an ebook store's dimensions."
+        },
+        "export": {
+          "title": "Export the Cover",
+          "body": "Save the Cover as an image, ready for a printer or an ebook store."
+        }
+      },
+      "notes": {
+        "gallery": {
+          "title": "Notes",
+          "body": "Notes are free-form writing outside your Books: research, characters, ideas."
+        },
+        "card": {
+          "title": "Book Notes, Tags and pins",
+          "body": "This Note belongs to a Book, so it is a Book Note. Tags group Notes and filter them. Pinned Notes stay at the top of the Gallery. Right-click a Note, or long-press it on a touch screen, for its actions."
+        },
+        "filters": {
+          "title": "Filters",
+          "body": "Search, require or exclude Tags, or pick a date range. Your filters are remembered on this device."
+        },
+        "new": {
+          "title": "New Note",
+          "body": "A new Note starts as an Unfiled Note, attached to no Book. You can file it under a Book at any time."
+        },
+        "tree": {
+          "title": "List or tree",
+          "body": "Show Notes as a list, or as a tree grouped by Book (Book Notes and Unfiled), by Tag or by date. Groups you collapse stay collapsed."
+        },
+        "tags": {
+          "title": "Tags",
+          "body": "Add or remove this Note's Tags here."
+        },
+        "content": {
+          "title": "Checklists and Links",
+          "body": "Notes use the same editor as Chapters: Headings, checklists and more. A Link points to a Book, Chapter, Note or Heading and opens it; type [[ to add one."
+        },
+        "backlinks": {
+          "title": "Linked from",
+          "body": "Backlinks list the Notes that Link to this one, so you can walk back to them."
+        }
+      },
+      "canvas-gallery": {
+        "canvas": {
+          "title": "Canvases",
+          "body": "A Canvas is an open surface for laying out ideas. Pin the ones you use most."
+        },
+        "new": {
+          "title": "New Canvas",
+          "body": "Start a blank Canvas here."
+        }
+      },
+      "canvas": {
+        "surface": {
+          "title": "The Canvas",
+          "body": "Drag to move around and zoom to see more. A Connection joins two items, with an optional direction and caption."
+        },
+        "text-node": {
+          "title": "Text Nodes",
+          "body": "Add a Text Node: a block of rich text you can place anywhere on the Canvas."
+        },
+        "note-ref": {
+          "title": "Note References",
+          "body": "A Note Reference stands for one of your Notes and opens it. If that Note is deleted, the reference stays as a Missing Note Reference."
+        },
+        "pen": {
+          "title": "Drawing",
+          "body": "Use the Pen to draw freehand on the Canvas. The eraser removes a Drawing."
+        }
+      },
+      "ephemeral": {
+        "editor": {
+          "title": "Ephemeral",
+          "body": "Ephemeral is scratch space for writing you do not need to keep. It is never saved and is gone when Maibuk closes."
+        },
+        "to-note": {
+          "title": "Keep it as a Note",
+          "body": "Changed your mind? Turn what you wrote into a Note."
+        }
+      },
+      "settings": {
+        "appearance": {
+          "title": "Appearance",
+          "body": "Theme, font, font size and the primary color that marks active controls."
+        },
+        "window": {
+          "title": "Window",
+          "body": "Launch Maibuk when you sign in, and keep it in the tray when you close the window."
+        },
+        "general": {
+          "title": "General",
+          "body": "Autosave, always on top and the language Maibuk speaks."
+        },
+        "sync": {
+          "title": "Sync",
+          "body": "Your Sync Account signs you in to the sync server. Your Passphrase is a separate secret that encrypts everything before it leaves this device; only you know it. Sync automatically runs a sync at launch and shortly after you stop editing. Each run has a Sync Scope and a Sync Direction, and deletions wait for your Deletion Review.",
+          "link": "Get Maibuk for your other devices"
+        },
+        "backups": {
+          "title": "Backups",
+          "body": "Maibuk Backs Up your Library every day, on close and before risky steps such as a sync or a Restore. Retention sets how many Backups are kept. Restoring a Backup brings back Books, Notes, Canvases and Version history."
+        },
+        "metrics": {
+          "title": "Metrics",
+          "body": "Choose which Metrics Categories to collect: writing volume, time tracking and engagement. The daily word threshold decides which days count toward your Streak."
+        },
+        "editor": {
+          "title": "Editor",
+          "body": "Spell Check, your Custom Dictionary, Paste Cleanup rules and more editor options."
+        },
+        "advanced": {
+          "title": "Advanced",
+          "body": "Export or Import a Database File, a copy of your writing and settings kept outside Backups, or Reset the Library on this device."
+        },
+        "tutorial": {
+          "title": "Come back any time",
+          "body": "Start the Tutorial again here, from the beginning or one section at a time. You can also start it from Keyboard shortcuts (?)."
+        }
+      }
+    },
+    "sample": {
+      "authorName": "Alex Rivera",
+      "novel": {
+        "title": "The Lighthouse Keeper",
+        "description": "A keeper, a storm and a letter that arrives forty years late.",
+        "genre": "Literary fiction",
+        "prologue": {
+          "title": "Prologue",
+          "text": "Nobody on the mainland remembered who had lit the lamp the night the ferry went down. Mara did."
+        },
+        "part": {
+          "title": "Part One: The Island"
+        },
+        "chapterOne": {
+          "title": "The Letter",
+          "headingMorning": "Morning",
+          "morning": "The letter came with the supply boat, folded twice and soft from travel. The stamp was older than Mara.",
+          "footnote": "Stamps like this one were withdrawn in 1984.",
+          "headingStorm": "The storm",
+          "storm": "By evening the wind had turned. Mara climbed the ninety steps with the letter still unopened in her coat.",
+          "revision": "She read it at the top, by the light of the lamp she had kept for forty years."
+        },
+        "chapterTwo": {
+          "title": "Old Maps",
+          "text": "The maps in the keeper's cabinet disagreed about where the reef began."
+        },
+        "namedVersion": "First full draft"
+      },
+      "completed": {
+        "title": "Salt and Stone",
+        "chapter": "The Quarry",
+        "text": "The quarry had been closed for a decade when the children found the door."
+      },
+      "archived": {
+        "title": "Early Poems",
+        "chapter": "Untitled",
+        "text": "Rain on the window, the kettle, the long afternoon."
+      },
+      "notes": {
+        "characters": {
+          "title": "Characters",
+          "text": "Mara: the keeper. Stubborn, patient, afraid of boats."
+        },
+        "research": {
+          "title": "Lighthouse research",
+          "heading": "To check",
+          "itemDone": "How a Fresnel lens works",
+          "itemOpen": "Ferry routes in the 1980s"
+        },
+        "ideas": {
+          "title": "Ideas for the ending",
+          "text": "What if the letter is from the ferry captain? More in",
+          "linkLabel": "Lighthouse research"
+        },
+        "reading": {
+          "title": "Reading list",
+          "itemOne": "A book about lighthouses",
+          "itemTwo": "Letters never sent"
+        }
+      },
+      "tags": {
+        "characters": "characters",
+        "research": "research",
+        "ideas": "ideas"
+      },
+      "canvas": {
+        "title": "Plot map",
+        "storm": "The storm",
+        "letter": "The letter arrives",
+        "connection": "leads to"
+      },
+      "ephemeral": "Ephemeral text is never saved. Try it after the Tutorial."
+    }
   }
 }

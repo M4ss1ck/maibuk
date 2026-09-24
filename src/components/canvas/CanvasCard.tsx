@@ -10,6 +10,8 @@ interface CanvasCardProps {
   onRename: (title: string) => void;
   onDelete: () => void;
   onTogglePinned: () => void;
+  /** The Tutorial step that points at this card, if any. */
+  tutorialAnchor?: string;
 }
 
 export function CanvasCard({
@@ -18,6 +20,7 @@ export function CanvasCard({
   onRename,
   onDelete,
   onTogglePinned,
+  tutorialAnchor,
 }: CanvasCardProps) {
   const { t, i18n } = useTranslation();
   const [renaming, setRenaming] = useState(false);
@@ -52,7 +55,9 @@ export function CanvasCard({
   );
 
   return (
-    <article className="flex h-48 flex-col rounded-lg border border-border bg-card p-4 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg">
+    <article
+      data-tutorial={tutorialAnchor}
+      className="flex h-48 flex-col rounded-lg border border-border bg-card p-4 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg">
       {renaming ? (
         <div className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">

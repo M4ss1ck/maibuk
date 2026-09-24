@@ -64,6 +64,7 @@ vi.mock("../../../../features/canvas/store", () => ({
 }));
 
 const { BackupService } = await import("@/features/backup/backup-service");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 function createMockAdapter(): BackupAdapter {
   const store = new Map<string, { sql: Uint8Array; entry: BackupEntry }>();
@@ -175,6 +176,17 @@ describe("BackupService", () => {
       );
 
       await expect(service.createBackup("daily")).rejects.toThrow("BACKUP_EMPTY");
+      expect(mockAdapter.saveBackup).not.toHaveBeenCalled();
+    });
+
+    it("refuses to back up while the Tutorial Library is active", async () => {
+      librarySwitch.activateTutorialDatabase({} as never);
+      try {
+        await expect(service.createBackup("manual")).rejects.toThrow("BACKUP_TUTORIAL_ACTIVE");
+      } finally {
+        librarySwitch.resetLibrarySwitchForTests();
+      }
+      expect(mockGenerateSqlDump).not.toHaveBeenCalled();
       expect(mockAdapter.saveBackup).not.toHaveBeenCalled();
     });
 

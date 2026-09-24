@@ -28,6 +28,12 @@ export default defineConfig(() => ({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
+    alias: [
+      {
+        find: /^sql\.js\/dist\/sql-wasm\.wasm\?url$/,
+        replacement: resolve(__dirname, "src/test/support/sql-wasm-url.ts"),
+      },
+    ],
     include: ["src/test/**/*.test.ts", "src/test/**/*.test.tsx"],
     coverage: {
       provider: "v8" as const,
@@ -173,6 +179,18 @@ export default defineConfig(() => ({
         "src/features/deep-link/resolve.ts",
         "src/features/links/resolve-target.ts",
         "src/features/deep-link/bridge.ts",
+        // Tutorial (issue #189)
+        "src/features/tutorial/library-switch.ts",
+        "src/features/tutorial/tutorial-library.ts",
+        "src/features/tutorial/sample-library.ts",
+        "src/features/tutorial/sections.ts",
+        "src/features/tutorial/store.ts",
+        "src/features/tutorial/controller.ts",
+        "src/lib/db/memory-database.ts",
+        "src/components/tutorial/TutorialCard.tsx",
+        "src/components/tutorial/TutorialRunner.tsx",
+        "src/components/tutorial/TutorialOffer.tsx",
+        "src/components/settings/TutorialSection.tsx",
       ],
       exclude: ["src/**/*.d.ts"],
       thresholds: {

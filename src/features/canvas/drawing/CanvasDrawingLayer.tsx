@@ -9,7 +9,10 @@ export function CanvasDrawingLayer() {
       <svg
         aria-hidden="true"
         className="pointer-events-none absolute left-0 top-0 overflow-visible"
-        style={{ width: 0, height: 0 }}
+        // A zero-size outer <svg> is not rendered at all (SVG width/height 0
+        // disables rendering), which hid every saved Drawing; 1px with
+        // overflow visible paints the strokes around it.
+        style={{ width: 1, height: 1 }}
       >
         {strokes.map((stroke) => (
           <path

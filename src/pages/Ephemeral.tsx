@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Feather, Pin, Trash2 } from "lucide-react";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
-import { Editor } from "@/components/editor";
+import { Editor, type EditorTutorialAnchors } from "@/components/editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Tooltip } from "@/components/ui";
@@ -11,6 +11,8 @@ import { useEphemeralStore } from "@/features/ephemeral";
 import { useNoteStore } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
 import { IS_DESKTOP } from "@/lib/platform";
+
+const EPHEMERAL_TUTORIAL_ANCHORS: EditorTutorialAnchors = { text: "ephemeral.editor" };
 
 export function Ephemeral() {
   const { t } = useTranslation();
@@ -66,6 +68,7 @@ export function Ephemeral() {
           type="button"
           onClick={handleCreateNote}
           disabled={isEmpty}
+          data-tutorial="ephemeral.to-note"
           className="inline-flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           aria-label={t("ephemeral.createNote")}
         >
@@ -102,6 +105,7 @@ export function Ephemeral() {
         restoreKey={null}
         placeholder={t("ephemeral.placeholder")}
         extraExtensions={ephemeralExtensions}
+        tutorialAnchors={EPHEMERAL_TUTORIAL_ANCHORS}
       />
     </div>
   );

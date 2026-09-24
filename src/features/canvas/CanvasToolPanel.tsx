@@ -101,6 +101,7 @@ export function CanvasToolPanel({
                 active={toolMode === mode}
                 onClick={() => setToolMode(mode)}
                 aria-label={label}
+                data-tutorial={mode === "pen" ? "canvas.pen" : undefined}
               >
                 <Icon className="size-4" aria-hidden="true" />
               </ToolbarButton>
@@ -112,12 +113,20 @@ export function CanvasToolPanel({
 
         <ToolbarGroup>
           <Tooltip content={t("canvas.addTextNode")} shortcut="canvas.addTextNode">
-            <ToolbarButton onClick={onAddText} aria-label={t("canvas.addTextNode")}>
+            <ToolbarButton
+              onClick={onAddText}
+              aria-label={t("canvas.addTextNode")}
+              data-tutorial="canvas.text-node"
+            >
               <FilePlus2 className="size-4" aria-hidden="true" />
             </ToolbarButton>
           </Tooltip>
           <Tooltip content={t("canvas.addNoteRef")} shortcut="canvas.addNoteRef">
-            <ToolbarButton onClick={onAddNoteRef} aria-label={t("canvas.addNoteRef")}>
+            <ToolbarButton
+              onClick={onAddNoteRef}
+              aria-label={t("canvas.addNoteRef")}
+              data-tutorial="canvas.note-ref"
+            >
               <Link2 className="size-4" aria-hidden="true" />
             </ToolbarButton>
           </Tooltip>

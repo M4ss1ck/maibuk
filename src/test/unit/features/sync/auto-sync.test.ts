@@ -40,8 +40,15 @@ vi.mock("../../../../features/sync/pending-edits", () => ({
   flushPendingEdits: mockFlushPendingEdits,
 }));
 
-const { AUTO_SYNC_IDLE_DELAY_MS, installAutoSync, resetAutoSyncForTests, runAutoSync } =
-  await import("@/features/sync/auto-sync");
+const {
+  AUTO_SYNC_IDLE_DELAY_MS,
+  hasLaunchAutoSyncSettled,
+  installAutoSync,
+  onLaunchAutoSyncSettled,
+  resetAutoSyncForTests,
+  runAutoSync,
+} = await import("@/features/sync/auto-sync");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 const { emitChange } = await import("@/features/sync/change-feed");
 
 function setSyncState(partial: Partial<SyncState>) {
@@ -74,7 +81,72 @@ describe("automatic sync", () => {
 
   afterEach(() => {
     resetAutoSyncForTests();
+    librarySwitch.resetLibrarySwitchForTests();
     vi.useRealTimers();
+  });
+
+  describe("while the Tutorial Library is active", () => {
+    beforeEach(() => {
+      librarySwitch.activateTutorialDatabase({} as never);
+    });
+
+    it("never syncs, at launch or when idle", async () => {
+      await expect(runAutoSync("launch")).resolves.toBe("tutorial");
+      await expect(runAutoSync("idle")).resolves.toBe("tutorial");
+      expect(syncState.syncAll).not.toHaveBeenCalled();
+    });
+
+    it("schedules nothing for the sample content's local Changes", async () => {
+      installAutoSync();
+      await emitChange({ entity: "book", id: "tutorial-book-novel", origin: "local", kind: "content" });
+      librarySwitch.resetLibrarySwitchForTests();
+      await vi.advanceTimersByTimeAsync(AUTO_SYNC_IDLE_DELAY_MS * 2);
+
+      expect(syncState.syncAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("launch settlement (gates the first-launch Tutorial offer)", () => {
+    it("is settled at once when automatic sync is off or nobody is signed in", () => {
+      settings.autoSync = false;
+      expect(hasLaunchAutoSyncSettled()).toBe(true);
+      settings.autoSync = true;
+      setSyncState({ authStatus: "logged-out" });
+      expect(hasLaunchAutoSyncSettled()).toBe(true);
+    });
+
+    it("waits for the launch run when a signed-in device syncs automatically", async () => {
+      let finish!: () => void;
+      syncState.syncAll.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          })
+      );
+      const settled = vi.fn();
+      onLaunchAutoSyncSettled(settled);
+      expect(hasLaunchAutoSyncSettled()).toBe(false);
+
+      const launch = runAutoSync("launch");
+      await flushMicrotasks();
+      expect(hasLaunchAutoSyncSettled()).toBe(false);
+
+      finish();
+      await launch;
+      expect(hasLaunchAutoSyncSettled()).toBe(true);
+      expect(settled).toHaveBeenCalledTimes(1);
+    });
+
+    it("settles even when the launch run could not sync", async () => {
+      mockGetPassphrase.mockReturnValue(null);
+      await expect(runAutoSync("launch")).resolves.toBe("ineligible");
+      expect(hasLaunchAutoSyncSettled()).toBe(true);
+    });
+
+    it("is not settled by an idle run", async () => {
+      await runAutoSync("idle");
+      expect(hasLaunchAutoSyncSettled()).toBe(false);
+    });
   });
 
   describe("runAutoSync()", () => {

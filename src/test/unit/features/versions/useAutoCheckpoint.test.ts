@@ -12,6 +12,7 @@ vi.mock("../../../../features/versions/store", () => ({
 }));
 
 const { useAutoCheckpoint } = await import("@/features/versions/useAutoCheckpoint");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 describe("useAutoCheckpoint", () => {
   beforeEach(() => {
@@ -21,6 +22,23 @@ describe("useAutoCheckpoint", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    librarySwitch.resetLibrarySwitchForTests();
+  });
+
+  it("takes no Checkpoint while the Tutorial Library is active", async () => {
+    mockCreateVersion.mockResolvedValue({ id: "ver-1" });
+    const { rerender } = renderHook(
+      ({ wordCount }) =>
+        useAutoCheckpoint({ bookId: "tutorial-book-novel", wordCount, enabled: true }),
+      { initialProps: { wordCount: 0 } }
+    );
+    rerender({ wordCount: 1000 });
+    rerender({ wordCount: 1300 });
+    librarySwitch.activateTutorialDatabase({} as never);
+
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+
+    expect(mockCreateVersion).not.toHaveBeenCalled();
   });
 
   it("does not checkpoint before the word-change threshold is crossed", () => {

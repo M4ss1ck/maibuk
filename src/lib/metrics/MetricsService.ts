@@ -13,6 +13,7 @@ import {
   upsertCache,
 } from "@/features/metrics/events-repo";
 import { isMetricsDevDisabled } from "@/features/metrics/settings";
+import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { useMetricsStore } from "@/features/metrics/store";
 import { SessionTracker } from "@/features/metrics/session-tracker";
 import { useSettingsStore } from "@/features/settings/store";
@@ -81,7 +82,7 @@ export class MetricsService {
   }
 
   recordEvents(events: MetricEvent[]): void {
-    if (events.length === 0 || this.isDisabled()) return;
+    if (events.length === 0 || this.isDisabled() || isTutorialLibraryActive()) return;
     const filtered = this.filterDisabledCategories(events);
     if (filtered.length === 0) return;
 
@@ -93,7 +94,7 @@ export class MetricsService {
   }
 
   markActive(workId: string | null, now: Date = new Date()): void {
-    if (this.isDisabled()) return;
+    if (this.isDisabled() || isTutorialLibraryActive()) return;
     if (!useSettingsStore.getState().metrics.enabled.time) return;
 
     const nowMs = now.getTime();
@@ -121,6 +122,16 @@ export class MetricsService {
     this.endSessionInternal(now);
   }
 
+  /**
+   * Forgets the open Writing Session without recording it. Leaving the
+   * Tutorial Library drops whatever tracking began there (ADR 0008).
+   */
+  discardSession(): void {
+    this.sessionTracker = null;
+    this.sessionWorkId = null;
+    this.lastActiveAt = null;
+  }
+
   private endSessionInternal(now: Date): void {
     if (!this.sessionTracker) return;
     this.sessionTracker.end(now);
@@ -139,7 +150,8 @@ export class MetricsService {
   }
 
   async flushNow(): Promise<void> {
-    if (this.isDisabled() || !this.worker) return;
+    // Buffered events belong to the author's Library; they wait for it.
+    if (this.isDisabled() || !this.worker || isTutorialLibraryActive()) return;
     await this.readyPromise;
 
     const id = ++this.requestId;

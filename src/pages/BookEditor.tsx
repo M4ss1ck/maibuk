@@ -13,7 +13,7 @@ import { FocusScope, useOverlay } from "react-aria";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import type { Chapter, ChapterType } from "@/features/chapters/types";
-import { Editor, ChapterList, SaveStatus } from "@/components/editor";
+import { Editor, ChapterList, SaveStatus, type EditorTutorialAnchors } from "@/components/editor";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { BookSidePanel } from "@/components/book/BookSidePanel";
 import { TruncatedText } from "@/components/ui/TruncatedText";
@@ -75,6 +75,10 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
 import { metricsService } from "@/lib/metrics/MetricsService";
+import {
+  isTutorialLibraryActive,
+  trackAuthorLibraryWork,
+} from "@/features/tutorial/library-switch";
 import { useModalScope } from "@/hooks";
 import { useModalStore } from "@/components/ui/modal-store";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
@@ -84,6 +88,11 @@ const VersionPanel = lazy(() =>
     default: module.VersionPanel,
   }))
 );
+
+const CHAPTER_EDITOR_TUTORIAL_ANCHORS: EditorTutorialAnchors = {
+  toolbar: "book-editor.toolbar",
+  text: "book-editor.text",
+};
 
 export function BookEditor() {
   const { t } = useTranslation();
@@ -818,12 +827,18 @@ export function BookEditor() {
     return () => {
       if (!bookId) return;
       metricsService.endSession();
-      // Fire-and-forget: the unmount cleanup cannot await reliably.
-      void (async () => {
-        await metricsService.flushNow();
-        await flushEditorContentRef.current();
-        await useVersionStore.getState().createVersion({ bookId, triggerType: "close" });
-      })();
+      // A Book of the Tutorial Library takes no Checkpoint (ADR 0008).
+      if (isTutorialLibraryActive()) return;
+      // Fire-and-forget: the unmount cleanup cannot await reliably. Tracked so
+      // a Tutorial switch waits for it instead of finishing it in the other
+      // Library.
+      void trackAuthorLibraryWork(
+        (async () => {
+          await metricsService.flushNow();
+          await flushEditorContentRef.current();
+          await useVersionStore.getState().createVersion({ bookId, triggerType: "close" });
+        })()
+      );
     };
   }, [bookId]);
 
@@ -968,6 +983,7 @@ export function BookEditor() {
             className="hidden md:flex h-full relative shrink-0"
             tabIndex={-1}
             data-focus-pane="chapters"
+            data-tutorial="book-editor.chapters"
             style={{
               width: showSidebar ? `${sidebarWidth}px` : 0,
               overflow: showSidebar ? undefined : "hidden",
@@ -983,6 +999,7 @@ export function BookEditor() {
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
               onImportFiles={handleImportFiles}
+              tutorialAnchors
             />
             {showSidebar && (
               <div
@@ -1075,17 +1092,21 @@ export function BookEditor() {
               </div>
 
               {/* Save status */}
-              <SaveStatus
-                status={saveStatus}
-                onSave={() => {
-                  handleSaveNow();
-                }}
-                disabled={!currentChapter?.content}
-              />
+              <span data-tutorial="book-editor.save-status" className="inline-flex">
+                <SaveStatus
+                  status={saveStatus}
+                  onSave={() => {
+                    handleSaveNow();
+                  }}
+                  disabled={!currentChapter?.content}
+                />
+              </span>
 
               {/* Sync */}
-              <SyncStatusButton defaultScope="books" />
-              <div className="hidden @2xl:block">
+              <span data-tutorial="book-editor.sync" className="inline-flex">
+                <SyncStatusButton defaultScope="books" />
+              </span>
+              <div className="hidden @2xl:block" data-tutorial="book-editor.history">
                 <HistoryMenuButton
                   onOpenPanel={() => setShowVersionPanel(true)}
                   onSaveVersion={() => void handleSaveVersion()}
@@ -1101,6 +1122,7 @@ export function BookEditor() {
                     setShowNotesChapter(true);
                   }}
                   disabled={showNotesChapter && bookSidePanelTab === "notes"}
+                  data-tutorial="book-editor.book-notes"
                   className="hidden @2xl:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
                   aria-label={t("nav.bookNotes")}
                 >
@@ -1133,6 +1155,7 @@ export function BookEditor() {
                     onClick={() => setShowExportDialog(true)}
                     className="p-2 hover:bg-muted rounded transition-colors"
                     aria-label={t("nav.exportBook")}
+                    data-tutorial="book-editor.export"
                   >
                     <ExportIcon className="w-5 h-5" />
                   </button>
@@ -1145,6 +1168,7 @@ export function BookEditor() {
                     onClick={() => navigate(`/book/${bookId}/cover`)}
                     className="p-2 hover:bg-muted rounded transition-colors"
                     aria-label={t("nav.designCover")}
+                    data-tutorial="book-editor.cover"
                   >
                     <CoverDesignIcon className="w-5 h-5" />
                   </button>
@@ -1187,6 +1211,7 @@ export function BookEditor() {
                     onClick={toggleFocusMode}
                     className="p-2 hover:bg-muted rounded transition-colors"
                     aria-label={t("nav.focusMode")}
+                    data-tutorial="book-editor.focus"
                   >
                     <FocusModeIcon className="w-5 h-5" />
                   </button>
@@ -1325,6 +1350,7 @@ export function BookEditor() {
           <Editor
             ref={editorHandleRef}
             key={currentChapter.id}
+            tutorialAnchors={CHAPTER_EDITOR_TUTORIAL_ANCHORS}
             content={editorContent}
             onUpdate={handleContentUpdate}
             onExternalContent={handleExternalContent}

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { CanvasViewport } from "@/features/canvas/types";
+import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 
 export interface ReadingPosition {
   /** ProseMirror document position of the caret (selection.from). */
@@ -43,6 +44,8 @@ export const useReadingPositionStore = create<ReadingPositionStore>()(
       positions: {},
       getPosition: (key) => get().positions[key],
       savePosition: (key, position) => {
+        // Positions inside the Tutorial Library are sample places, not the author's.
+        if (isTutorialLibraryActive()) return;
         set((state) => {
           const next: Record<string, ReadingPosition> = {
             ...state.positions,
@@ -65,7 +68,7 @@ export const useReadingPositionStore = create<ReadingPositionStore>()(
       canvasViewports: {},
       getCanvasViewport: (canvasId) => get().canvasViewports[canvasId],
       saveCanvasViewport: (canvasId, viewport) => {
-        if (!isValidViewport(viewport)) return;
+        if (!isValidViewport(viewport) || isTutorialLibraryActive()) return;
         set((state) => ({
           canvasViewports: {
             ...state.canvasViewports,

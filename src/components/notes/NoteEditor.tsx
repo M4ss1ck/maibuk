@@ -9,7 +9,7 @@ import type { Note, UpdateNoteInput } from "@/features/notes";
 import { useEditSession } from "@/features/edit-session";
 import { useNoteStore } from "@/features/notes/store";
 import { Editor, SaveStatus } from "@/components/editor";
-import type { EditorHandle } from "@/components/editor/Editor";
+import type { EditorHandle, EditorTutorialAnchors } from "@/components/editor/Editor";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/CollapsibleHeading";
@@ -215,6 +215,8 @@ interface NoteEditorProps {
   returnLabel?: string;
   suppressRestore?: boolean;
 }
+
+const NOTE_EDITOR_TUTORIAL_ANCHORS: EditorTutorialAnchors = { text: "notes.content" };
 
 export function NoteEditor({
   note,
@@ -600,7 +602,7 @@ export function NoteEditor({
             {title || note.title || t("notes.untitled")}
           </h1>
           <div className="flex min-w-0 items-center gap-2">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1" data-tutorial="notes.tags">
               <NoteTagsRow
                 tags={note.tags}
                 dateLabel={timeAgo(note.contentUpdatedAt, i18n.language, t)}
@@ -686,6 +688,7 @@ export function NoteEditor({
         internalTargets={internalTargets}
         onEditorReady={handleEditorReady}
         loadInternalTargetChildren={loadInternalTargetChildren}
+        tutorialAnchors={NOTE_EDITOR_TUTORIAL_ANCHORS}
       />
       <NoteBacklinks
         noteId={note.id}

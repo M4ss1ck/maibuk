@@ -8,6 +8,7 @@
 // persisted before rethrowing a partial failure.
 
 import { getDatabase } from "@/lib/db";
+import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
 import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
 import { reindexSource } from "@/features/links/link-index";
@@ -76,6 +77,7 @@ export async function createNoteRow(
   input: CreateNoteInput,
   origin: ChangeOrigin
 ): Promise<Note> {
+  assertWritableId(input.bookId);
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
@@ -142,6 +144,8 @@ export async function updateNoteRow(
   input: UpdateNoteInput,
   origin: ChangeOrigin
 ): Promise<Note | null> {
+  assertWritableId(input.id);
+  assertWritableId(input.bookId);
   const db = await getDatabase();
   const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [
     input.id,
@@ -204,6 +208,7 @@ export async function updateNoteRow(
 
 /** Local delete: records a tombstone so sync carries the deletion. */
 export async function deleteNoteRow(id: string, origin: ChangeOrigin): Promise<void> {
+  assertWritableId(id);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [id]);
   if (rows.length > 0) {
@@ -224,6 +229,7 @@ export async function deleteNoteRow(id: string, origin: ChangeOrigin): Promise<v
  * note back if another device restores it).
  */
 export async function removeNoteRow(id: string, origin: ChangeOrigin): Promise<void> {
+  assertWritableId(id);
   const db = await getDatabase();
   await db.execute("DELETE FROM notes WHERE id = ?", [id]);
   await db.execute("DELETE FROM links WHERE source_id = ?", [id]).catch(() => {});
@@ -234,6 +240,7 @@ export async function reorderNoteRows(
   orderedItems: string[] | ReorderNoteItem[],
   origin: ChangeOrigin
 ): Promise<void> {
+  for (const item of orderedItems) assertWritableId(typeof item === "string" ? item : item.id);
   const db = await getDatabase();
   const now = nowSeconds();
   const ordered = orderedItems.map((item) =>
@@ -281,6 +288,7 @@ export async function saveCollapsedHeadingsRow(
   noteId: string,
   collapsedHeadings: string[]
 ): Promise<void> {
+  assertWritableId(noteId);
   const db = await getDatabase();
   await db.execute("UPDATE notes SET collapsed_headings = ? WHERE id = ?", [
     JSON.stringify(collapsedHeadings),
@@ -300,6 +308,8 @@ export async function applyNoteSnapshotData(
   snapshot: NoteSnapshot,
   origin: ChangeOrigin
 ): Promise<Note> {
+  assertWritableId(snapshot.note.id);
+  assertWritableId(snapshot.note.bookId);
   const db = await getDatabase();
   const { note } = snapshot;
   const existingRows = await db.select<Record<string, unknown>[]>(

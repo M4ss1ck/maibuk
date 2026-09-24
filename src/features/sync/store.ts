@@ -29,6 +29,7 @@ import {
 import { confirmTombstones } from "@/features/sync/tombstones";
 import { shouldRefreshAuth } from "@/features/sync/auth-policy";
 import { clearAllSyncBases } from "@/features/sync/sync-state";
+import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 
 export type SessionRefreshResult = "refreshed" | "skipped" | "offline" | "expired" | "failed";
 
@@ -307,6 +308,8 @@ export const useSyncStore = create<SyncStore>()(
       },
 
       syncAll: async (passphrase, onConflict, options) => {
+        // Nothing syncs while the Tutorial Library is active (ADR 0008).
+        if (isTutorialLibraryActive()) return;
         beginStoreSync(set);
         try {
           const result = await syncAllBooks(passphrase, onConflict, {
@@ -329,6 +332,8 @@ export const useSyncStore = create<SyncStore>()(
       },
 
       syncSingleBook: async (bookId, passphrase, onConflict, options) => {
+        // Nothing syncs while the Tutorial Library is active (ADR 0008).
+        if (isTutorialLibraryActive()) return;
         beginStoreSync(set);
         try {
           const result = await syncBook(bookId, passphrase, onConflict, {
@@ -351,6 +356,8 @@ export const useSyncStore = create<SyncStore>()(
       },
 
       syncSingleNote: async (noteId, passphrase, onConflict, options) => {
+        // Nothing syncs while the Tutorial Library is active (ADR 0008).
+        if (isTutorialLibraryActive()) return;
         beginStoreSync(set);
         try {
           const result = await engineSyncSingleNote(noteId, passphrase, onConflict, {

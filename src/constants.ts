@@ -5,6 +5,9 @@ export const DOWNLOAD_PAGE = "https://github.com/M4ss1ck/maibuk/releases";
 
 export const CANVAS_TEXT_NODE_DEFAULT_WIDTH = 288;
 
+// Long enough to read "Settings → Tutorial" and "Keyboard shortcuts" after a dismiss.
+export const TUTORIAL_RELAUNCH_HINT_DURATION_MS = 8000;
+
 // Auto-checkpoint heuristics for book version control
 export const VERSION_CHECKPOINT_WORD_THRESHOLD = 300;
 export const VERSION_CHECKPOINT_IDLE_MS = 2 * 60 * 1000;

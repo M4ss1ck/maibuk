@@ -5,53 +5,9 @@
  *
  * Adapted from the kaont project's service-test-context pattern.
  */
-import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
+import initSqlJs from "sql.js";
 import type { DatabaseAdapter } from "@/lib/platform/types";
-import { parseSqlStatements } from "@/lib/db/sql-parser";
-import { exportSqlDump } from "@/lib/db/sql-export";
-
-class InMemoryDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: SqlJsDatabase) {}
-
-  async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
-    this.db.run(sql, params as (string | number | null | Uint8Array)[]);
-    return { rowsAffected: this.db.getRowsModified() };
-  }
-
-  async select<T>(sql: string, params?: unknown[]): Promise<T> {
-    const stmt = this.db.prepare(sql);
-    if (params) {
-      stmt.bind(params as (string | number | null | Uint8Array)[]);
-    }
-
-    const results: Record<string, unknown>[] = [];
-    while (stmt.step()) {
-      results.push(stmt.getAsObject());
-    }
-    stmt.free();
-    return results as T;
-  }
-
-  async close(): Promise<void> {
-    this.db.close();
-  }
-
-  async exportData(): Promise<Uint8Array> {
-    // Same exporter as the Tauri and web adapters. A hand-written dump here
-    // once included canvases while production never did, which hid the
-    // Backup restore that deleted every Canvas.
-    return exportSqlDump(this);
-  }
-
-  async importData(sqlContent: string): Promise<void> {
-    const statements = parseSqlStatements(sqlContent);
-    for (const statement of statements) {
-      if (statement.length > 0) {
-        this.db.run(statement);
-      }
-    }
-  }
-}
+import { MemoryDatabaseAdapter } from "@/lib/db/memory-database";
 
 /**
  * Create an in-memory SQLite database with the Maibuk schema.
@@ -60,7 +16,7 @@ class InMemoryDatabaseAdapter implements DatabaseAdapter {
 export async function createTestDatabase(): Promise<DatabaseAdapter> {
   const SQL = await initSqlJs();
   const sqlDb = new SQL.Database();
-  const adapter = new InMemoryDatabaseAdapter(sqlDb);
+  const adapter = new MemoryDatabaseAdapter(sqlDb);
 
   // Mirror the schema from src/lib/db/index.ts initializeSchema()
   await adapter.execute(`

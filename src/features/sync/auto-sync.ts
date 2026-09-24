@@ -2,13 +2,14 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { getPassphrase } from "@/features/sync/crypto";
 import { onChange } from "@/features/sync/change-feed";
+import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import type { ConflictResolver } from "@/features/sync/types";
 
 /** Quiet period after the last local change before an automatic sync runs. */
 export const AUTO_SYNC_IDLE_DELAY_MS = 30_000;
 
 export type AutoSyncTrigger = "launch" | "idle";
-export type AutoSyncResult = "synced" | "disabled" | "ineligible" | "busy";
+export type AutoSyncResult = "synced" | "disabled" | "ineligible" | "busy" | "tutorial";
 
 // Automatic syncs never prompt. A true conflict (both sides changed) is left
 // for a manual sync; everything else keeps syncing.
@@ -17,6 +18,32 @@ const deferConflicts: ConflictResolver = async () => "skip";
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let uninstall: (() => void) | null = null;
+let launchSettled = false;
+const launchSettledListeners = new Set<() => void>();
+
+function markLaunchSettled(): void {
+  if (launchSettled) return;
+  launchSettled = true;
+  for (const listener of [...launchSettledListeners]) listener();
+}
+
+/**
+ * Whether this launch's Auto Sync is behind us: it ran (whatever it
+ * decided), or it never will because automatic sync is off or no Sync
+ * Account is signed in. A device about to Pull the author's Books is not
+ * treated as a new author before then.
+ */
+export function hasLaunchAutoSyncSettled(): boolean {
+  if (launchSettled || !useSettingsStore.getState().autoSync) return true;
+  return useSyncStore.getState().authStatus !== "logged-in";
+}
+
+export function onLaunchAutoSyncSettled(listener: () => void): () => void {
+  launchSettledListeners.add(listener);
+  return () => {
+    launchSettledListeners.delete(listener);
+  };
+}
 
 export function scheduleAutoSync(delayMs = AUTO_SYNC_IDLE_DELAY_MS): void {
   if (idleTimer !== null) clearTimeout(idleTimer);
@@ -28,10 +55,20 @@ export function scheduleAutoSync(delayMs = AUTO_SYNC_IDLE_DELAY_MS): void {
 
 /**
  * Sync now if automatic sync is enabled and possible: logged in, a passphrase
- * available, online. While another sync runs, retries after the idle delay
+ * available, online, and the Tutorial Library not active. While another sync runs, retries after the idle delay
  * instead of queueing behind it.
  */
-export async function runAutoSync(_trigger: AutoSyncTrigger): Promise<AutoSyncResult> {
+export async function runAutoSync(trigger: AutoSyncTrigger): Promise<AutoSyncResult> {
+  try {
+    return await runAutoSyncOnce();
+  } finally {
+    if (trigger === "launch") markLaunchSettled();
+  }
+}
+
+async function runAutoSyncOnce(): Promise<AutoSyncResult> {
+  // The Tutorial Library never syncs; its sample Changes schedule nothing.
+  if (isTutorialLibraryActive()) return "tutorial";
   if (!useSettingsStore.getState().autoSync) return "disabled";
 
   const { authStatus, passphrase: storedPassphrase, syncStatus } = useSyncStore.getState();
@@ -66,7 +103,7 @@ export function installAutoSync(): () => void {
   // Every local Change — content or metadata — schedules a sync; the kind
   // only decides whether Last Edited moves.
   const stopChanges = onChange((change) => {
-    if (change.origin !== "local") return;
+    if (change.origin !== "local" || isTutorialLibraryActive()) return;
     scheduleAutoSync();
   });
   const stopAuth = useSyncStore.subscribe((state, previous) => {
@@ -87,4 +124,6 @@ export function installAutoSync(): () => void {
 export function resetAutoSyncForTests(): void {
   uninstall?.();
   running = false;
+  launchSettled = false;
+  launchSettledListeners.clear();
 }

@@ -2,6 +2,7 @@ import { createBackup as createBackupAdapter, IS_ANDROID } from "@/lib/platform"
 import { waitForDatabaseReady } from "@/lib/db";
 import { useSettingsStore } from "@/features/settings/store";
 import { BackupService } from "@/features/backup/backup-service";
+import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 
 let dailyBackupStarted = false;
 let pendingDailyBackupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -23,6 +24,8 @@ async function createConfiguredBackupService(): Promise<BackupService> {
  * If today's daily backup already exists, this is a no-op.
  */
 export async function createDailyBackup(): Promise<void> {
+  // A Backup holds the author's Library only (ADR 0008).
+  if (isTutorialLibraryActive()) return;
   try {
     const service = await createConfiguredBackupService();
     if (await service.hasBackupForToday("daily")) {
@@ -40,6 +43,9 @@ export async function createDailyBackup(): Promise<void> {
 // same backup service as daily/pre-sync; failures are swallowed like daily.
 // Skips the dump when a "close" backup already exists within the last 6 hours.
 export async function runBackgroundBackup(): Promise<void> {
+  // Nothing the author can change happens during the Tutorial, so skipping
+  // loses no work; the next background or daily Backup covers the Library.
+  if (isTutorialLibraryActive()) return;
   try {
     const service = await createConfiguredBackupService();
     if (await service.hasRecentBackup("close", CLOSE_BACKUP_MIN_INTERVAL_MS)) {

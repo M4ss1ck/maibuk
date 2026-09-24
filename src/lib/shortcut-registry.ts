@@ -54,6 +54,12 @@ export const SHORTCUTS = {
     labelKey: "shortcuts.cyclePanes",
     keys: ["F6", "Shift+F6"],
   },
+  "global.startTutorial": {
+    labelKey: "shortcuts.startTutorial",
+    keys: ["Ctrl+Shift+T"],
+  },
+
+  "tutorial.skip": { labelKey: "shortcuts.skipTutorial", keys: ["Esc"] },
 
   "home.newBook": { labelKey: "shortcuts.newBook", keys: ["Ctrl+N"] },
   "home.jumpBooks": { labelKey: "shortcuts.jumpBooks", keys: ["1-9"] },

@@ -20,6 +20,14 @@ _Avoid_: dashboard, home (for the Book Gallery)
 The actions for one Note, Chapter, Text Node, or Note Reference, opened from its ⋯ button (lists only), a long-press on touch, or a right click.
 _Avoid_: context menu, kebab menu, overflow menu
 
+**Tutorial**:
+A guided run through Maibuk's screens, shown with sample content, that the author can skip at any step and start again from Settings; dismissing it once stops it appearing on its own on this device. (ADR 0008, 0009)
+_Avoid_: tour, walkthrough, onboarding, guide
+
+**Tutorial Library**:
+The throwaway sample Library the Tutorial runs in; nothing in it syncs, is backed up, is counted in metrics, or outlives the Tutorial. (ADR 0008)
+_Avoid_: sample book, demo data, sandbox (in UI copy)
+
 ## Manuscript
 
 **Book**:
@@ -400,14 +408,6 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
 
-**Tutorial**:
-A guided run through Maibuk's screens, shown with sample content, that the author can skip at any step and start again from Settings; dismissing it once stops it appearing on its own on this device. (ADR 0008, 0009)
-_Avoid_: tour, walkthrough, onboarding, guide
-
-**Tutorial Library**:
-The throwaway sample Library the Tutorial runs in; nothing in it syncs, is backed up, is counted in metrics, or outlives the Tutorial. (ADR 0008)
-_Avoid_: sample book, demo data, sandbox (in UI copy)
-
 ## Relationships
 
 - A **Library** holds many **Books**, **Notes**, and **Canvases**.
@@ -419,6 +419,7 @@ _Avoid_: sample book, demo data, sandbox (in UI copy)
 - **Books**, **Notes**, and **Canvases** are **Synced Items**; each has one **Sync Base** per device.
 - Deleting a **Book**, **Note**, or **Canvas** leaves a **Tombstone** here; after a **Deletion Review** it becomes **Deleted Elsewhere** on the other devices, where a second **Deletion Review** confirms it; if the item was also edited there, a **Conflict** lets the author **Keep** it instead.
 - Open editors **Flush** before a **Sync** reads the **Library**.
+- The **Tutorial** runs in a **Tutorial Library**, never in the author's **Library**; ending it brings back the author's own.
 
 ## Anticipated
 

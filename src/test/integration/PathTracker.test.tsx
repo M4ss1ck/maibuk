@@ -10,11 +10,35 @@ vi.mock("../../i18n", () => ({
 
 import { PathTracker } from "@/components/PathTracker";
 import { useSettingsStore } from "@/features/settings/store";
+import {
+  resetLibrarySwitchForTests,
+  setTutorialRunInProgress,
+} from "@/features/tutorial/library-switch";
 
 describe("PathTracker", () => {
   beforeEach(() => {
     localStorage.clear();
     useSettingsStore.setState({ lastPath: null });
+  });
+
+  it("leaves the last location alone while a Tutorial run moves between screens", () => {
+    useSettingsStore.setState({ lastPath: "/book/my-book", lastNoteId: "my-note" });
+    setTutorialRunInProgress(true);
+    try {
+      render(
+        <MemoryRouter initialEntries={["/book/tutorial-book-novel"]}>
+          <PathTracker />
+        </MemoryRouter>
+      );
+      useSettingsStore.getState().setLastNoteId("tutorial-note-research");
+    } finally {
+      resetLibrarySwitchForTests();
+    }
+
+    expect(useSettingsStore.getState()).toMatchObject({
+      lastPath: "/book/my-book",
+      lastNoteId: "my-note",
+    });
   });
 
   it("renders nothing visible", () => {

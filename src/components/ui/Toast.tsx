@@ -4,7 +4,8 @@ import { CheckIcon, XIcon } from "@/components/icons";
 const DEFAULT_DURATION_MS = 2000;
 const MAX_TOASTS = 3;
 
-type ToastVariant = "success" | "error";
+/** `info` is text only: a hint, not the outcome of an action. */
+type ToastVariant = "success" | "error" | "info";
 
 type Toast = {
   id: string;
@@ -76,6 +77,8 @@ export const toast = {
     showToast({ message, variant: "success", ...options }),
   error: (message: string, options: Omit<InternalToastInput, "message" | "variant"> = {}) =>
     showToast({ message, variant: "error", ...options }),
+  info: (message: string, options: Omit<ToastInput, "message" | "variant"> = {}) =>
+    showToast({ message, variant: "info", ...options }),
 };
 
 export function forceToastError(message: string): void {

@@ -12,6 +12,7 @@
 // device's viewport on top. A pulled doc never carries a viewport either.
 
 import { getDatabase } from "@/lib/db";
+import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
 import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
 import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
@@ -148,6 +149,7 @@ export async function updateCanvasDocRow(
   doc: CanvasDoc,
   origin: ChangeOrigin
 ): Promise<Canvas | null> {
+  assertWritableId(id);
   const db = await getDatabase();
   const existing = await readCanvasRow(id);
   if (!existing) return null;
@@ -177,6 +179,7 @@ export async function updateCanvasRow(
   input: UpdateCanvasInput,
   origin: ChangeOrigin
 ): Promise<Canvas | null> {
+  assertWritableId(id);
   const db = await getDatabase();
   const existing = await readCanvasRow(id);
   if (!existing) return null;
@@ -209,6 +212,7 @@ export async function reorderCanvasRows(
   items: ReorderCanvasItem[],
   origin: ChangeOrigin
 ): Promise<void> {
+  for (const item of items) assertWritableId(item.id);
   const db = await getDatabase();
   const now = nowSeconds();
 
@@ -240,6 +244,7 @@ export async function reorderCanvasRows(
 
 /** Local delete: records a tombstone so sync carries the deletion. */
 export async function deleteCanvasRow(id: string, origin: ChangeOrigin): Promise<void> {
+  assertWritableId(id);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM canvases WHERE id = ?", [
     id,
@@ -261,6 +266,7 @@ export async function deleteCanvasRow(id: string, origin: ChangeOrigin): Promise
  * canvas back if another device restores it).
  */
 export async function removeCanvasRow(id: string, origin: ChangeOrigin): Promise<void> {
+  assertWritableId(id);
   const db = await getDatabase();
   await db.execute("DELETE FROM canvases WHERE id = ?", [id]);
   await emitChange({ entity: "canvas", id, origin, kind: "content" });
@@ -280,6 +286,7 @@ export async function applyCanvasSnapshotData(
   snapshot: CanvasSnapshot,
   origin: ChangeOrigin
 ): Promise<Canvas> {
+  assertWritableId(snapshot.canvas.id);
   const db = await getDatabase();
   const { canvas } = snapshot;
   const existing = await readCanvasRow(canvas.id);

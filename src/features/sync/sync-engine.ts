@@ -48,6 +48,7 @@ import { useVersionStore } from "@/features/versions/store";
 import { syncMetricsRows } from "@/features/metrics/metrics-sync";
 import { ensureGenericCollectionMigration } from "@/features/sync/migration-reset";
 import { createAsyncQueue } from "@/lib/async-queue";
+import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { shouldRefreshAuth } from "@/features/sync/auth-policy";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import {
@@ -76,6 +77,29 @@ const DEFAULT_SYNC_OPTIONS: SyncOptions = {
   direction: "bidirectional",
   confirmedDeletionIds: [],
 };
+
+/** Thrown when a sync run would read the Tutorial Library instead of the author's (ADR 0008). */
+export class TutorialSyncBlockedError extends Error {
+  constructor() {
+    super("Sync is paused while the Tutorial runs");
+    this.name = "TutorialSyncBlockedError";
+  }
+}
+
+// Last line of defence behind the store and Auto Sync gates: a run that
+// starts while the Tutorial Library is active would Push sample content.
+function assertAuthorLibrary(): void {
+  if (isTutorialLibraryActive()) throw new TutorialSyncBlockedError();
+}
+
+/**
+ * Runs a task between sync runs: it waits for every queued run to settle, and
+ * any run requested meanwhile starts only after the task. The Tutorial
+ * switches Libraries through this so no run ever reads two Libraries.
+ */
+export function runBetweenSyncRuns<T>(task: () => Promise<T>): Promise<T> {
+  return syncQueue.enqueue(task);
+}
 
 function assertOnline(): void {
   if (!navigator.onLine) {
@@ -628,7 +652,10 @@ export async function syncBook(
   // Normalized here — at enqueue time — so each queued caller keeps its own
   // options snapshot (including its own confirmedDeletionIds copy).
   const options = resolveSyncOptions({ scope: "books", ...optionsInput });
-  return syncQueue.enqueue(() => syncBookInternal(bookId, passphrase, onConflict, options));
+  return syncQueue.enqueue(async () => {
+    assertAuthorLibrary();
+    return syncBookInternal(bookId, passphrase, onConflict, options);
+  });
 }
 
 async function syncBookInternal(
@@ -677,7 +704,10 @@ export async function syncSingleNote(
   // Normalized here — at enqueue time — so each queued caller keeps its own
   // options snapshot (including its own confirmedDeletionIds copy).
   const options = resolveSyncOptions({ scope: "notes", ...optionsInput });
-  return syncQueue.enqueue(() => syncSingleNoteInternal(noteId, passphrase, onConflict, options));
+  return syncQueue.enqueue(async () => {
+    assertAuthorLibrary();
+    return syncSingleNoteInternal(noteId, passphrase, onConflict, options);
+  });
 }
 
 async function syncSingleNoteInternal(
@@ -709,7 +739,10 @@ export async function syncAllBooks(
   // Normalized here — at enqueue time — so each queued caller keeps its own
   // options snapshot (including its own confirmedDeletionIds copy).
   const options = resolveSyncOptions(optionsInput);
-  return syncQueue.enqueue(() => syncAllBooksInternal(passphrase, onConflict, options));
+  return syncQueue.enqueue(async () => {
+    assertAuthorLibrary();
+    return syncAllBooksInternal(passphrase, onConflict, options);
+  });
 }
 
 async function syncAllBooksInternal(
