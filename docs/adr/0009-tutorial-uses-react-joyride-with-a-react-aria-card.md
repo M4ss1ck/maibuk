@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted
 ---
 
 # The Tutorial uses React Joyride with a React Aria card

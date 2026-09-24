@@ -134,8 +134,9 @@ vi.mock("../../../features/versions/useAutoCheckpoint", () => ({
   useAutoCheckpoint: vi.fn(),
 }));
 
+const { mockCreateVersion } = vi.hoisted(() => ({ mockCreateVersion: vi.fn() }));
 vi.mock("../../../features/versions/store", () => ({
-  useVersionStore: { getState: () => ({ createVersion: vi.fn() }) },
+  useVersionStore: { getState: () => ({ createVersion: mockCreateVersion }) },
 }));
 
 vi.mock("../../../components/editor", async () => {
@@ -169,6 +170,11 @@ vi.mock("../../../components/versions/HistoryMenuButton", () => ({
 }));
 
 import { BookEditor } from "@/pages/BookEditor";
+import {
+  activateTutorialDatabase,
+  resetLibrarySwitchForTests,
+  settleAuthorLibraryWork,
+} from "@/features/tutorial/library-switch";
 
 async function settle() {
   await act(async () => {});
@@ -194,6 +200,35 @@ describe("BookEditor never silently loses an edit", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    resetLibrarySwitchForTests();
+  });
+
+  it("takes the close Checkpoint before a Tutorial switch can happen", async () => {
+    mockCreateVersion.mockReset().mockResolvedValue(null);
+    const { unmount } = render(<BookEditor />);
+    act(() => {
+      editorProps.current?.onUpdate("<p>Typed, then the Tutorial started</p>");
+    });
+    unmount();
+
+    // The switch waits for the close work; by then the Checkpoint was taken.
+    await settleAuthorLibraryWork();
+
+    expect(mockUpdateChapter).toHaveBeenCalledWith("chapter-1", {
+      content: "<p>Typed, then the Tutorial started</p>",
+    });
+    expect(mockCreateVersion).toHaveBeenCalledWith({ bookId: "book-1", triggerType: "close" });
+  });
+
+  it("takes no close Checkpoint when a Book of the Tutorial Library closes", async () => {
+    mockCreateVersion.mockReset().mockResolvedValue(null);
+    const { unmount } = render(<BookEditor />);
+    activateTutorialDatabase({} as never);
+    unmount();
+    await settle();
+    await settleAuthorLibraryWork();
+
+    expect(mockCreateVersion).not.toHaveBeenCalled();
   });
 
   it("saves typed text when the author leaves the book", async () => {

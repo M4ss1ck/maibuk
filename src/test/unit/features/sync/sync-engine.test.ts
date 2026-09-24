@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const mockGetDatabase = vi.hoisted(() => vi.fn());
 const mockCreateBackupAdapter = vi.hoisted(() => vi.fn());
@@ -152,9 +152,15 @@ vi.mock("../../../../features/sync/migration-reset", () => ({
   ensureGenericCollectionMigration: mockEnsureGenericCollectionMigration,
 }));
 
-const { syncBook, syncAllBooks, syncSingleNote, resetSyncEngineForTests } = await import(
-  "@/features/sync/sync-engine"
-);
+const {
+  syncBook,
+  syncAllBooks,
+  syncSingleNote,
+  resetSyncEngineForTests,
+  runBetweenSyncRuns,
+  TutorialSyncBlockedError,
+} = await import("@/features/sync/sync-engine");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 // Note sync runs inside syncAllBooks. These defaults survive vi.clearAllMocks()
 // (which clears call history, not implementations), so the existing book-focused
@@ -676,6 +682,43 @@ describe("syncAllBooks — scoped direction and deletion safety", () => {
     expect(mockDeleteRemoteNote).toHaveBeenCalledWith("note-1");
     expect(mockMarkTombstonePushed).toHaveBeenCalledWith("book", "book-1");
     expect(mockMarkTombstonePushed).toHaveBeenCalledWith("note", "note-1");
+  });
+});
+
+describe("the Tutorial Library (ADR 0008)", () => {
+  afterEach(() => {
+    librarySwitch.resetLibrarySwitchForTests();
+  });
+
+  it("refuses every run that would start while the Tutorial Library is active", async () => {
+    mockEnsureGenericCollectionMigration.mockClear();
+    librarySwitch.activateTutorialDatabase({} as never);
+
+    await expect(syncAllBooks("pass", vi.fn())).rejects.toBeInstanceOf(TutorialSyncBlockedError);
+    await expect(syncBook("tutorial-book-novel", "pass", vi.fn())).rejects.toBeInstanceOf(
+      TutorialSyncBlockedError
+    );
+    await expect(syncSingleNote("tutorial-note-research", "pass", vi.fn())).rejects.toBeInstanceOf(
+      TutorialSyncBlockedError
+    );
+    expect(mockEnsureGenericCollectionMigration).not.toHaveBeenCalled();
+  });
+
+  it("checks the switch when the queued run starts, not when it was requested", async () => {
+    let releaseSwitch!: () => void;
+    const switching = runBetweenSyncRuns(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSwitch = resolve;
+        })
+    );
+    const queued = syncAllBooks("pass", vi.fn());
+    await vi.waitFor(() => expect(releaseSwitch).toBeTypeOf("function"));
+    librarySwitch.activateTutorialDatabase({} as never);
+    releaseSwitch();
+    await switching;
+
+    await expect(queued).rejects.toBeInstanceOf(TutorialSyncBlockedError);
   });
 });
 

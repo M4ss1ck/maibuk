@@ -328,6 +328,7 @@ export function NotesGallery() {
                 <Button
                   type="button"
                   variant={showAdvanced ? "secondary" : "ghost"}
+                  data-tutorial="notes.filters"
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   aria-expanded={showAdvanced}
                   aria-label={t("notes.advancedFilters")}
@@ -425,7 +426,7 @@ export function NotesGallery() {
 
         <div className="row-start-2 flex items-center gap-2 @xl:col-start-2 @xl:row-start-1 @xl:ml-auto">
           {notes.length > 0 && <NotesSortMenu value={sort} onChange={setSort} />}
-          <Button onClick={handleCreateNote} className="text-sm">
+          <Button onClick={handleCreateNote} className="text-sm" data-tutorial="notes.new">
             <AddIcon className="w-5 h-5" />
             <span>{t("notes.newNote")}</span>
           </Button>
@@ -462,6 +463,7 @@ export function NotesGallery() {
       ) : (
         <GridList
           ref={gridRef}
+          data-tutorial="notes.gallery"
           aria-label={t("notes.collectionLabel")}
           items={filteredNotes}
           layout="grid"
@@ -472,6 +474,7 @@ export function NotesGallery() {
           {(note) => (
             <NoteCard
               note={note}
+              tutorialAnchor={note.id === filteredNotes[0]?.id ? "notes.card" : undefined}
               bookTitle={note.bookId ? bookTitleById.get(note.bookId) : null}
               onClick={() => openNote(note.id)}
               actions={noteActions(note)}

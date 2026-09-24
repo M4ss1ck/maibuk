@@ -1,6 +1,7 @@
 import { IS_DESKTOP } from "@/lib/platform";
 import { useSettingsStore } from "@/features/settings/store";
 import { metricsService } from "@/lib/metrics/MetricsService";
+import { deactivateTutorialDatabase } from "@/features/tutorial/library-switch";
 
 let unlisten: (() => void) | null = null;
 
@@ -26,6 +27,10 @@ export async function installWindowCloseHandler(): Promise<void> {
         await win.hide();
         return;
       }
+      // Closing mid-Tutorial: switch back first, so the close-time work below
+      // lands in the author's Library. The Tutorial Library is in memory
+      // and goes with the process.
+      deactivateTutorialDatabase();
       try {
         metricsService.endSession();
         await Promise.race([

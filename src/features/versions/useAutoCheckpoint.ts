@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import { useVersionStore } from "@/features/versions/store";
+import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import {
   VERSION_CHECKPOINT_WORD_THRESHOLD,
   VERSION_CHECKPOINT_IDLE_MS,
@@ -54,6 +55,11 @@ export function useAutoCheckpoint(params: {
       }
 
       timerRef.current = setTimeout(async () => {
+        // No Checkpoint is ever taken of the Tutorial Library (ADR 0008).
+        if (isTutorialLibraryActive()) {
+          timerRef.current = null;
+          return;
+        }
         const created = await useVersionStore
           .getState()
           .createVersion({ bookId, triggerType: "auto-idle" });

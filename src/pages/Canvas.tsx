@@ -503,7 +503,7 @@ function CanvasEditor() {
         </Button>
       </header>
 
-      <main ref={surfaceRef} className="relative min-h-0 flex-1">
+      <main ref={surfaceRef} className="relative min-h-0 flex-1" data-tutorial="canvas.surface">
         <ReactFlow
           colorMode={theme}
           className={connecting ? "canvas-connecting" : undefined}

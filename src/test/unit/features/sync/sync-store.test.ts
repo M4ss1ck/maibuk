@@ -65,6 +65,7 @@ vi.mock("../../../../features/sync/sync-state", () => ({
 }));
 
 const { useSyncStore } = await import("@/features/sync/store");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 function resetSyncStore() {
   useSyncStore.setState({
@@ -239,6 +240,26 @@ describe("useSyncStore", () => {
 
       expect(mockPbLogout).toHaveBeenCalled();
       expect(mockClearPassphrase).toHaveBeenCalled();
+    });
+  });
+
+  describe("while the Tutorial Library is active", () => {
+    it("starts no sync run of any kind and leaves the status alone", async () => {
+      useSyncStore.setState({ syncStatus: "idle" });
+      librarySwitch.activateTutorialDatabase({} as never);
+      try {
+        const store = useSyncStore.getState();
+        await store.syncAll("passphrase", vi.fn());
+        await store.syncSingleBook("tutorial-book-novel", "passphrase", vi.fn());
+        await store.syncSingleNote("tutorial-note-research", "passphrase", vi.fn());
+      } finally {
+        librarySwitch.resetLibrarySwitchForTests();
+      }
+
+      expect(mockSyncAllBooks).not.toHaveBeenCalled();
+      expect(mockSyncBook).not.toHaveBeenCalled();
+      expect(mockSyncSingleNote).not.toHaveBeenCalled();
+      expect(useSyncStore.getState().syncStatus).toBe("idle");
     });
   });
 

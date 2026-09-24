@@ -127,6 +127,7 @@ src/
 │   ├── project/         # Book card, new book dialog
 │   ├── book/            # Book settings dialog
 │   ├── canvas/          # Canvas gallery cards
+│   ├── tutorial/        # TutorialRunner (Joyride + inert boundary), TutorialCard (React Aria dialog), TutorialOffer
 │   └── icons/           # Custom SVG icon components
 ├── features/            # Feature modules (business logic + state)
 │   ├── backup/          # backup-service.ts, generate-sql-dump.ts, lifecycle.ts, types.ts
@@ -143,6 +144,7 @@ src/
 │   ├── settings/        # store.ts, types.ts, AppSettingsProvider.tsx
 │   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts, entity-sync.ts, remote-port.ts
 │   ├── theme/           # store.ts
+│   ├── tutorial/        # Tutorial + Tutorial Library switch (ADR 0008/0009): library-switch.ts, tutorial-library.ts, sample-library.ts, sections.ts, store.ts, controller.ts
 │   ├── version/         # useVersionCheck.ts (app update checker)
 │   └── versions/        # store.ts, types.ts, useAutoCheckpoint.ts, sanitize.ts, compare.ts (book version control)
 ├── hooks/               # Shared React hooks
@@ -241,6 +243,20 @@ Book, Chapter, Note, and Canvas mutations go through `src/features/books/write.t
 
 A Chapter Change identifies its containing Book. Every local Change schedules Auto Sync, including metadata. Last Edited advances for content and title changes; pin, order, and status leave it unchanged. Publish only after persistence; tests must cover failed writes, partial multi-write failures, origin, and the resulting view refresh.
 
+### The Tutorial Library switch (ADR 0008)
+
+While the Tutorial runs, `getDatabase()` returns an in-memory Tutorial Library (`src/features/tutorial/library-switch.ts`). The author's own database is `getAuthorDatabase()`. Rules for every change:
+
+- **Every background job that touches the Library checks `isTutorialLibraryActive()` and does nothing while it is on**, with a test proving it. Today: Auto Sync (launch and idle), the sync store and sync engine, daily/background Backups and `BackupService.createBackup`, idle and close Checkpoints, `metricsService` (record, mark active, flush), Reading Position saves, and last-location tracking (`setLastPath`/`setLastNoteId` check `isTutorialRunInProgress()`). A new job joins this list in the same change.
+- **Fire-and-forget work against the author's Library** (like the Book Editor's close Checkpoint) is wrapped in `trackAuthorLibraryWork()`, so a switch waits for it.
+- **A store that caches Library rows** is listed in `LIBRARY_VIEWS` (`src/features/tutorial/tutorial-library.ts`) with how it empties and re-reads on a switch.
+- **Sample ids start with `tutorial-`**. Every per-entity write path calls `assertWritableId()` on ids it did not generate; a new write path does the same.
+- Sample content is built through the real write paths (`sample-library.ts`) from `tutorial.sample.*` strings in both locales.
+
+### Tutorial steps and anchors
+
+Steps live in `src/features/tutorial/sections.ts`. A step points at the element carrying `data-tutorial="<section>.<step>"`; never at a label or class. When a control a step points at is renamed, moved, or removed, move its `data-tutorial` attribute with it: `tutorial-app.test.tsx` renders every step on its screen and fails when a target is missing. A new glossary term in `CONTEXT.md` is either added to a step's `terms` or listed in `TUTORIAL_OUT_OF_SCOPE_TERMS` with a reason (`gates.test.ts`). While a run is active the app is `inert` and only the `tutorial.skip` shortcut works.
+
 ### Zustand Store Pattern
 
 Every store follows this structure (see `src/features/books/store.ts`):
@@ -328,6 +344,13 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useNoteStore` / `saveCollapsedHeadings`                                                                                                                                                                                                       | `src/features/notes/store.ts`                                          |
 | `CollapsibleHeading` / `collapsibleHeadingPluginKey`                                                                                                                                                                                           | `src/components/editor/extensions/CollapsibleHeading.ts`               |
 | `SceneBreakDescriptor` / scene-break attribute helpers                                                                                                                                                                                         | `src/components/editor/extensions/scene-break-utils.ts`                |
+| `isTutorialLibraryActive()` / `isTutorialRunInProgress()` / `assertWritableId()` / `trackAuthorLibraryWork()` (Tutorial Library switch; background jobs and write paths honor it)                                                                                     | `src/features/tutorial/library-switch.ts`                              |
+| `getAuthorDatabase()` / `initializeSchema(adapter)` (the author's database regardless of the switch; schema on any adapter)                                                                                                                  | `src/lib/db/index.ts`                                                  |
+| `createMemoryDatabase()` / `MemoryDatabaseAdapter` (in-memory sql.js Library with the bundled wasm; also backs `createTestDatabase()`)                                                                                                         | `src/lib/db/memory-database.ts`                                        |
+| `requestTutorial()` / `startTutorial()` / `exitTutorial()` / `decideTutorialOffer()` / `useTutorialStore` (Tutorial runs and device-local state)                                                                                             | `src/features/tutorial/`                                               |
+| `runBetweenSyncRuns(task)` (runs a task with no sync run in flight; the Tutorial switch uses it)                                                                                                                                             | `src/features/sync/sync-engine.ts`                                     |
+| `hasLaunchAutoSyncSettled()` / `onLaunchAutoSyncSettled()` (whether this launch's Auto Sync is behind us)                                                                                                                                     | `src/features/sync/auto-sync.ts`                                       |
+| `toast.info()` (text-only hint toast)                                                                                                                                                                                                        | `src/components/ui/Toast.tsx`                                          |
 | `useModalScope(isOpen)` (LIFO modal ID registration/unregistration)                                                                                                                                                                            | `src/hooks/useModalScope.ts`                                           |
 
 ---

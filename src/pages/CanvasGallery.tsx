@@ -49,7 +49,7 @@ export function CanvasGallery() {
               </p>
             )}
           </div>
-          <Button onClick={() => void handleCreate()}>
+          <Button onClick={() => void handleCreate()} data-tutorial="canvas-gallery.new">
             <Plus className="size-5" aria-hidden="true" />
             {t("canvas.newCanvas")}
           </Button>
@@ -85,9 +85,10 @@ export function CanvasGallery() {
         <p className="py-16 text-center text-muted-foreground">{t("canvas.noMatches")}</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 @sm:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
-          {filteredCanvases.map((canvas) => (
+          {filteredCanvases.map((canvas, index) => (
             <CanvasCard
               key={canvas.id}
+              tutorialAnchor={index === 0 ? "canvas-gallery.canvas" : undefined}
               canvas={canvas}
               onOpen={() => navigate(`/canvas/${canvas.id}`)}
               onRename={(title) => void renameCanvas(canvas.id, title)}

@@ -39,6 +39,7 @@ import { SyncControls } from "@/components/sync/SyncControls";
 import { BackupSection } from "@/components/settings/BackupSection";
 import { MetricsSection } from "@/components/settings/MetricsSection";
 import { PasteCleanupSection } from "@/components/settings/PasteCleanupSection";
+import { TutorialSection } from "@/components/settings/TutorialSection";
 import { AsciiBanner } from "@/components/settings/AsciiBanner";
 import { AsciiFieldBackground } from "@/components/settings/AsciiFieldBackground";
 
@@ -208,7 +209,10 @@ export function Settings() {
         </h1>
 
         {/* Appearance Settings */}
-        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
+        <section
+          data-tutorial="settings.appearance"
+          className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
+        >
           <h2 className="text-lg text-primary font-medium mb-4">{t("settings.appearance")}</h2>
           <div className="space-y-4">
             <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
@@ -309,7 +313,7 @@ export function Settings() {
 
         {/* Window Settings */}
         {IS_DESKTOP && !isMac() && (
-          <section className="mb-6 @lg:mb-8">
+          <section data-tutorial="settings.window" className="mb-6 @lg:mb-8">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t("settings.window")}
             </h2>
@@ -346,7 +350,7 @@ export function Settings() {
         )}
 
         {/* General Settings */}
-        <section className="mb-6 @lg:mb-8">
+        <section data-tutorial="settings.general" className="mb-6 @lg:mb-8">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             {t("settings.general")}
           </h2>
@@ -395,7 +399,10 @@ export function Settings() {
         </section>
 
         {/* Sync Settings */}
-        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
+        <section
+          data-tutorial="settings.sync"
+          className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
+        >
           <h2 className="text-lg text-primary font-medium mb-4">{t("sync.title")}</h2>
           <div className="divide-y divide-border">
             <div className="flex flex-col @xl:flex-row @xl:items-center justify-between py-3 gap-2 @xl:gap-4">
@@ -468,12 +475,15 @@ export function Settings() {
         </section>
 
         {/* Backups */}
-        <section className="pt-4 border-t border-border mb-6">
+        <section data-tutorial="settings.backups" className="pt-4 border-t border-border mb-6">
           <BackupSection />
         </section>
 
         {/* Metrics */}
-        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
+        <section
+          data-tutorial="settings.metrics"
+          className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
+        >
           <MetricsSection />
         </section>
 
@@ -490,7 +500,10 @@ export function Settings() {
         {activeConflict && <ConflictDialog conflict={activeConflict} onResolve={resolveConflict} />}
 
         {/* Editor Settings */}
-        <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
+        <section
+          data-tutorial="settings.editor"
+          className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
+        >
           <h2 className="text-lg text-primary font-medium mb-4">{t("settings.editor")}</h2>
           <div className="space-y-4">
             <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
@@ -627,8 +640,17 @@ export function Settings() {
           </div>
         </section>
 
-        {/* Advanced Settings */}
+        {/* Tutorial */}
         <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
+          <h2 className="text-lg text-primary font-medium mb-4">{t("tutorial.settings.title")}</h2>
+          <TutorialSection />
+        </section>
+
+        {/* Advanced Settings */}
+        <section
+          data-tutorial="settings.advanced"
+          className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
+        >
           <button
             type="button"
             onClick={() => setAdvancedOpen(!advancedOpen)}

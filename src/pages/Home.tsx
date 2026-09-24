@@ -268,6 +268,7 @@ export function Home() {
             onClick={handleImportEpub}
             className="text-sm"
             disabled={isScanningEpub}
+            data-tutorial="books.import"
           >
             <FileUp className="w-5 h-5" />
             <span className="hidden @xl:inline">
@@ -275,7 +276,11 @@ export function Home() {
             </span>
             <span className="@xl:hidden">{t("books.importShort")}</span>
           </Button>
-          <Button onClick={() => setIsNewBookOpen(true)} className="text-sm">
+          <Button
+            onClick={() => setIsNewBookOpen(true)}
+            className="text-sm"
+            data-tutorial="books.new-book"
+          >
             <AddIcon className="w-5 h-5" />
             <span className="hidden @xl:inline">{t("books.newBook")}</span>
             <span className="@xl:hidden">{t("common.new")}</span>
@@ -323,6 +328,7 @@ export function Home() {
       ) : (
         /* Book grid */
         <div
+          data-tutorial="books.gallery"
           onFocusCapture={(event) => {
             const row = (event.target as HTMLElement).closest<HTMLElement>("[data-key]");
             if (row?.dataset.key) focusedBookIdRef.current = row.dataset.key;

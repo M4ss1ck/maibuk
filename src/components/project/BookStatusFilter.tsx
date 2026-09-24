@@ -36,6 +36,7 @@ export function BookStatusFilter({ value, counts, onChange }: BookStatusFilterPr
     <DialogTrigger>
       <Button
         aria-label={t("books.filterByStatus")}
+        data-tutorial="books.status"
         className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
       >
         <ListFilter className="h-4 w-4 shrink-0" />

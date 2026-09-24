@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_READING_POSITIONS, useReadingPositionStore } from "@/features/reading-position/store";
+import {
+  activateTutorialDatabase,
+  resetLibrarySwitchForTests,
+} from "@/features/tutorial/library-switch";
 
 describe("useReadingPositionStore", () => {
   beforeEach(() => {
@@ -16,6 +20,21 @@ describe("useReadingPositionStore", () => {
       top: 3,
       updatedAt: 1000,
     });
+  });
+
+  it("keeps no Reading Position while the Tutorial Library is active", () => {
+    useReadingPositionStore.setState({ positions: {}, canvasViewports: {} });
+    activateTutorialDatabase({} as never);
+    try {
+      const { savePosition, saveCanvasViewport } = useReadingPositionStore.getState();
+      savePosition("chapter:tutorial-chapter-one", { caret: 5, top: 3 });
+      saveCanvasViewport("tutorial-canvas-plot", { x: 1, y: 2, zoom: 1 });
+    } finally {
+      resetLibrarySwitchForTests();
+    }
+
+    expect(useReadingPositionStore.getState().positions).toEqual({});
+    expect(useReadingPositionStore.getState().canvasViewports).toEqual({});
   });
 
   it("returns undefined for an unknown key", () => {

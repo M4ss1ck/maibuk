@@ -9,6 +9,7 @@
 // not. updated_at stays the sync conflict clock and always bumps.
 
 import { getDatabase } from "@/lib/db";
+import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
 import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
 import { normalizeChapterContent, toChapter } from "@/features/chapters/write";
@@ -140,6 +141,7 @@ export async function updateBookRow(
   input: UpdateBookInput,
   origin: ChangeOrigin
 ): Promise<Book | null> {
+  assertWritableId(id);
   const db = await getDatabase();
   const existing = await readBook(id);
   if (!existing) return null;
@@ -237,6 +239,7 @@ export async function updateBookRow(
  * moves Last Edited and emits no Change.
  */
 export async function updateBookWordCountRow(id: string, wordCount: number): Promise<Book | null> {
+  assertWritableId(id);
   const db = await getDatabase();
   const now = nowSeconds();
 
@@ -251,6 +254,7 @@ export async function updateBookWordCountRow(id: string, wordCount: number): Pro
 
 /** Local delete: records a tombstone so sync carries the deletion. */
 export async function deleteBookRow(id: string, origin: ChangeOrigin): Promise<void> {
+  assertWritableId(id);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [id]);
   if (rows.length > 0) {
@@ -270,6 +274,7 @@ export async function deleteBookRow(id: string, origin: ChangeOrigin): Promise<v
  * book back if another device restores it).
  */
 export async function removeBookRow(id: string, origin: ChangeOrigin): Promise<void> {
+  assertWritableId(id);
   const db = await getDatabase();
   const chapters = await db.select<{ id: string }[]>("SELECT id FROM chapters WHERE book_id = ?", [
     id,
@@ -316,6 +321,8 @@ export async function applyBookSnapshotData(
   snapshot: BookSnapshot,
   origin: ChangeOrigin
 ): Promise<AppliedBook> {
+  assertWritableId(snapshot.book.id);
+  for (const chapter of snapshot.chapters) assertWritableId(chapter.id);
   const db = await getDatabase();
   const { book, chapters } = snapshot;
 

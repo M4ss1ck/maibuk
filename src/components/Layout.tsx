@@ -14,6 +14,13 @@ import { useVersionCheck } from "@/features/version";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { formatKeys, SHORTCUTS } from "@/lib/shortcut-registry";
 
+// Tutorial steps that point at a sidebar item (the desktop sidebar only; the
+// mobile menu is closed while the Tutorial runs, so those steps show centered).
+const NAV_TUTORIAL_ANCHORS: Record<string, string | undefined> = {
+  "/metrics": "books.metrics",
+  "/settings": "books.settings",
+};
+
 export function Layout() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
@@ -157,7 +164,11 @@ export function Layout() {
         )}
       </div>
 
-      <nav className="flex-1 p-2" aria-label={t("nav.primary")}>
+      <nav
+        className="flex-1 p-2"
+        aria-label={t("nav.primary")}
+        data-tutorial={mobile ? undefined : "books.nav"}
+      >
         <RouterProvider navigate={navigate} useHref={useHref}>
           <ListBox
             aria-label={t("nav.primary")}
@@ -171,6 +182,7 @@ export function Layout() {
                 id={item.id}
                 href={item.id}
                 textValue={item.label}
+                data-tutorial={mobile ? undefined : NAV_TUTORIAL_ANCHORS[item.id]}
                 onAction={closeMobileMenu}
                 className={({ isFocusVisible }) =>
                   `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
@@ -267,6 +279,7 @@ export function Layout() {
         {sidebarContent(false)}
         <div
           onMouseDown={handleResizeStart}
+          data-tutorial="books.remember"
           className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
         />
       </aside>

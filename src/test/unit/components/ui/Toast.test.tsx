@@ -70,6 +70,24 @@ describe("Toast", () => {
     });
   });
 
+  describe("toast.info()", () => {
+    it("shows the text alone, with no success or error icon", () => {
+      render(<ToastViewport />);
+
+      act(() => {
+        toast.info("Start again from Settings", { durationMs: 6000 });
+      });
+
+      const status = screen.getByRole("status");
+      expect(status).toHaveTextContent("Start again from Settings");
+      expect(status.querySelector("svg")).toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(5999);
+      });
+      expect(screen.getByText("Start again from Settings")).toBeInTheDocument();
+    });
+  });
+
   describe("multiple toasts", () => {
     it("shows multiple toasts simultaneously", () => {
       render(<ToastViewport />);

@@ -1,11 +1,23 @@
 import { createDatabase, IS_TAURI, type DatabaseAdapter } from "@/lib/platform";
 import { ensureMetricsSchema } from "@/features/metrics/events-repo";
+import { getTutorialDatabase } from "@/features/tutorial/library-switch";
 import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;
 
+/**
+ * The Library every read and write goes to: the Tutorial Library while the
+ * Tutorial runs (ADR 0008), otherwise the author's own.
+ */
 export async function getDatabase(): Promise<DatabaseAdapter> {
+  const tutorial = getTutorialDatabase();
+  if (tutorial) return tutorial;
+  return getAuthorDatabase();
+}
+
+/** The author's own Library, whatever the Tutorial switch says. */
+export async function getAuthorDatabase(): Promise<DatabaseAdapter> {
   if (db) {
     return db;
   }
@@ -13,9 +25,10 @@ export async function getDatabase(): Promise<DatabaseAdapter> {
   if (!dbPromise) {
     dbPromise = (async () => {
       const dbPath = IS_TAURI ? "sqlite:maibuk.db" : "maibuk.db";
-      db = await createDatabase(dbPath);
-      await initializeSchema();
-      return db;
+      const created = await createDatabase(dbPath);
+      await initializeSchema(created);
+      db = created;
+      return created;
     })();
   }
 
@@ -23,12 +36,11 @@ export async function getDatabase(): Promise<DatabaseAdapter> {
 }
 
 export async function waitForDatabaseReady(): Promise<void> {
-  await getDatabase();
+  await getAuthorDatabase();
 }
 
-async function initializeSchema(): Promise<void> {
-  if (!db) return;
-
+/** Creates or migrates the Library schema on any adapter (the author's or the Tutorial's). */
+export async function initializeSchema(db: DatabaseAdapter): Promise<void> {
   // Create books table
   await db.execute(`
     CREATE TABLE IF NOT EXISTS books (
@@ -357,7 +369,8 @@ export async function migrateBooksContentUpdatedAt(
     .catch(() => {});
 }
 
-export async function closeDatabase(): Promise<void> {  if (db) {
+export async function closeDatabase(): Promise<void> {
+  if (db) {
     await db.close();
     db = null;
   }

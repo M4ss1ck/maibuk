@@ -14,6 +14,8 @@ interface ResponsiveToggleGroupProps<T extends string> {
   onChange: (value: T) => void;
   testId: string;
   className?: string;
+  /** The Tutorial step that points at these toggles, if any. */
+  tutorialAnchor?: string;
 }
 
 const toggleButtonBaseClass =
@@ -62,6 +64,7 @@ export function ResponsiveToggleGroup<T extends string>({
   onChange,
   testId,
   className = "",
+  tutorialAnchor,
 }: ResponsiveToggleGroupProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
@@ -113,7 +116,10 @@ export function ResponsiveToggleGroup<T extends string>({
       data-label-mode={showLabels ? "full" : "icon"}
       className={`relative min-w-0 overflow-hidden ${className}`}
     >
-      <div className="inline-flex max-w-full rounded-lg bg-muted/60 p-0.5">
+      <div
+        className="inline-flex max-w-full rounded-lg bg-muted/60 p-0.5"
+        data-tutorial={tutorialAnchor}
+      >
         {options.map((option) => (
           <ToggleButton
             key={option.value}

@@ -1098,7 +1098,10 @@
     "areaHome": "Libros",
     "areaEditor": "Editor",
     "areaCanvas": "Lienzo",
-    "areaCover": "Diseñador de portada"
+    "areaCover": "Diseñador de portada",
+    "startTutorial": "Empezar el Tutorial",
+    "skipTutorial": "Omitir el Tutorial",
+    "areaTutorial": "Tutorial"
   },
   "versions": {
     "title": "Historial de versiones",
@@ -1198,5 +1201,330 @@
     "resourceGone": "El recurso enlazado ya no existe.",
     "headingGone": "El encabezado enlazado ya no existe.",
     "genericError": "No se pudo abrir el enlace."
+  },
+  "tutorial": {
+    "name": "Tutorial",
+    "offer": {
+      "title": "¿Quieres hacer el Tutorial?",
+      "body": "Un recorrido breve, solo para mirar, por las pantallas de Maibuk con contenido de ejemplo. Dura unos 5 minutos y no toca tu biblioteca.",
+      "continueTitle": "¿Continuar el Tutorial?",
+      "continueBody": "La última vez te quedaste en la sección {{section}}. Sigue donde lo dejaste.",
+      "start": "Empezar",
+      "continue": "Continuar",
+      "notNow": "Ahora no"
+    },
+    "relaunchHint": "Puedes volver a empezar el Tutorial desde Ajustes → Tutorial o desde Atajos de teclado (?).",
+    "preparing": "Preparando el Tutorial…",
+    "startFailed": "El Tutorial no empezó: no se pudo guardar el texto de un editor abierto. Tu texto sigue ahí; inténtalo de nuevo cuando se guarde.",
+    "card": {
+      "progress": "Paso {{current}} de {{total}}",
+      "back": "Atrás",
+      "next": "Siguiente",
+      "finish": "Terminar",
+      "skip": "Omitir"
+    },
+    "settings": {
+      "title": "Tutorial",
+      "description": "Un recorrido solo para mirar por las pantallas de Maibuk con contenido de ejemplo. Tu biblioteca nunca cambia.",
+      "startAll": "Empezar desde el principio",
+      "sectionsLabel": "Secciones del Tutorial",
+      "sectionRow": "{{section}} · {{steps}}",
+      "steps_one": "{{count}} paso",
+      "steps_other": "{{count}} pasos",
+      "done": "Hecho"
+    },
+    "help": {
+      "startForScreen": "Tutorial de esta pantalla"
+    },
+    "sections": {
+      "books": "Galería de Libros",
+      "book-editor": "Editor del Libro",
+      "cover-designer": "Diseñador de Portada",
+      "notes": "Notas",
+      "canvas-gallery": "Galería de Lienzos",
+      "canvas": "Lienzo",
+      "ephemeral": "Efímero",
+      "settings": "Ajustes"
+    },
+    "steps": {
+      "books": {
+        "gallery": {
+          "title": "Tus Libros",
+          "body": "Esta Galería muestra los Libros de tu biblioteca con la fecha de su última edición. Ahora muestra la Biblioteca del Tutorial: contenido de ejemplo que desaparece cuando termina el Tutorial. Tu propia biblioteca no se toca."
+        },
+        "new-book": {
+          "title": "Nuevo Libro",
+          "body": "Empieza un Libro aquí. Necesita un título y un nombre de autor; el género y la meta de palabras pueden ir después en sus detalles."
+        },
+        "import": {
+          "title": "Importar",
+          "body": "Trae un EPUB a tu biblioteca como un Libro nuevo. Antes de importar nada, un reporte de compatibilidad muestra qué se convertirá, qué se perderá y qué lo impediría."
+        },
+        "status": {
+          "title": "Estado del Libro",
+          "body": "Cada Libro está en Borrador, En Progreso, Completado o Archivado. Este filtro elige cuáles muestra la Galería. Los Libros archivados se ocultan por defecto y conservan todo su contenido; darle otro estado a uno lo desarchiva."
+        },
+        "nav": {
+          "title": "Notas, Lienzos y Efímero",
+          "body": "Las Notas guardan lo que escribes fuera de tus Libros. Un Lienzo reparte ideas sobre una superficie abierta. Efímero es un espacio de borrador que nunca se guarda."
+        },
+        "metrics": {
+          "title": "Métricas",
+          "body": "Métricas muestra tus sesiones de escritura, las palabras que escribiste y tu racha de días escribiendo."
+        },
+        "settings": {
+          "title": "Ajustes y sincronización",
+          "body": "Ajustes adapta Maibuk a tus costumbres. También es donde configuras la sincronización, que mantiene iguales tus Libros, Notas y Lienzos en todos tus dispositivos, cifrados para que el servidor nunca pueda leerlos."
+        },
+        "remember": {
+          "title": "Maibuk recuerda tu diseño",
+          "body": "Arrastra este borde para cambiar el ancho de la barra lateral. El tamaño de los paneles, los filtros y la pantalla en la que estabas se recuerdan en este dispositivo, y cada capítulo se vuelve a abrir en el punto donde leías."
+        }
+      },
+      "book-editor": {
+        "chapters": {
+          "title": "Capítulos",
+          "body": "Un Libro está hecho de capítulos ordenados. Cada uno tiene un tipo, como Prólogo o Parte, y un estado: Borrador, Revisado o Final. El Libro se vuelve a abrir en el último capítulo que tenías abierto."
+        },
+        "text": {
+          "title": "Tu texto",
+          "body": "Escribe aquí. Los encabezados dividen un capítulo, un salto de escena marca una pausa y una nota al pie se imprime aparte del texto corrido."
+        },
+        "outline": {
+          "title": "Esquema",
+          "body": "El esquema lista los encabezados y saltos de escena de este capítulo. Elige uno para ir directo a él."
+        },
+        "toolbar": {
+          "title": "Barra de herramientas",
+          "body": "Aquí está el formato, junto con el corrector ortográfico, Buscar palabra, Insertar símbolo y Mayúsculas y minúsculas. Cada herramienta muestra su atajo de teclado."
+        },
+        "save-status": {
+          "title": "Estado de guardado",
+          "body": "Maibuk guarda mientras escribes. El estado de guardado te dice si el capítulo abierto se está guardando, está guardado o no se guardó tras un fallo. El texto pendiente siempre se guarda antes de que una sincronización lea tu biblioteca."
+        },
+        "book-notes": {
+          "title": "Notas del Libro",
+          "body": "Las Notas del Libro son Notas unidas a este Libro. Ábrelas junto a tu texto mientras escribes."
+        },
+        "history": {
+          "title": "Historial de versiones",
+          "body": "Maibuk toma puntos de control de un Libro por su cuenta: tras un rato sin actividad, al cerrarlo y antes de recibir cambios o de una restauración. También puedes guardar una versión nombrada. Aquí puedes comparar cualquier versión con el Libro o restaurarla. El Libro que ves aquí tiene una de cada."
+        },
+        "sync": {
+          "title": "Sincronizar",
+          "body": "Sincroniza este Libro ahora. Una sincronización envía tus cambios y recibe los hechos en tus otros dispositivos. Si un Libro cambió en ambos, un conflicto de sincronización te pregunta cuál gana, y el registro de sincronización lista lo que hizo cada ejecución."
+        },
+        "export": {
+          "title": "Exportar",
+          "body": "Exporta el Libro como EPUB, PDF, Markdown o imagen. Un Libro exportado puede incluir una tabla de contenidos."
+        },
+        "focus": {
+          "title": "Modo Enfocado y atajos",
+          "body": "El Modo Enfocado oculta todo menos tu texto. Pulsa ? en cualquier pantalla para ver los atajos de teclado que funcionan ahí."
+        },
+        "cover": {
+          "title": "Portada",
+          "body": "Abre el Diseñador de Portada para crear la portada de este Libro. Ahí sigue el Tutorial."
+        }
+      },
+      "cover-designer": {
+        "templates": {
+          "title": "Plantillas de portada",
+          "body": "Este es el Diseñador de Portada. Empieza con una plantilla, un fondo listo con el título y el autor ya colocados, y luego cambia lo que quieras."
+        },
+        "size": {
+          "title": "Tamaño de portada",
+          "body": "Elige un tamaño predefinido: un formato de impresión o las medidas de una tienda de ebooks."
+        },
+        "export": {
+          "title": "Exportar la portada",
+          "body": "Guarda la portada como imagen, lista para una imprenta o una tienda de ebooks."
+        }
+      },
+      "notes": {
+        "gallery": {
+          "title": "Notas",
+          "body": "Las Notas son escritura libre fuera de tus Libros: investigación, personajes, ideas."
+        },
+        "card": {
+          "title": "Notas del Libro, etiquetas y fijadas",
+          "body": "Esta Nota pertenece a un Libro, así que es una Nota del Libro. Las etiquetas agrupan y filtran Notas. Las Notas fijadas se quedan arriba en la Galería. Haz clic derecho en una Nota, o mantenla pulsada en una pantalla táctil, para ver sus acciones."
+        },
+        "filters": {
+          "title": "Filtros",
+          "body": "Busca, exige o excluye etiquetas, o elige un rango de fechas. Tus filtros se recuerdan en este dispositivo."
+        },
+        "new": {
+          "title": "Nueva Nota",
+          "body": "Una Nota nueva empieza Sin libro, sin estar unida a ningún Libro. Puedes asignarla a un Libro cuando quieras."
+        },
+        "tree": {
+          "title": "Lista o árbol",
+          "body": "Muestra las Notas como lista, o como árbol agrupado por Libro (Notas del Libro y Sin libro), por etiqueta o por fecha. Los grupos que pliegas se quedan plegados."
+        },
+        "tags": {
+          "title": "Etiquetas",
+          "body": "Añade o quita aquí las etiquetas de esta Nota."
+        },
+        "content": {
+          "title": "Listas de tareas y enlaces",
+          "body": "Las Notas usan el mismo editor que los capítulos: encabezados, listas de tareas y más. Un enlace apunta a un Libro, capítulo, Nota o encabezado y lo abre; escribe [[ para añadir uno."
+        },
+        "backlinks": {
+          "title": "Enlazado desde",
+          "body": "Aquí aparecen las Notas que enlazan a esta, para que puedas volver a ellas."
+        }
+      },
+      "canvas-gallery": {
+        "canvas": {
+          "title": "Lienzos",
+          "body": "Un Lienzo es una superficie abierta para repartir ideas. Fija los que más usas."
+        },
+        "new": {
+          "title": "Nuevo Lienzo",
+          "body": "Empieza aquí un Lienzo en blanco."
+        }
+      },
+      "canvas": {
+        "surface": {
+          "title": "El Lienzo",
+          "body": "Arrastra para moverte y usa el zoom para ver más. Una conexión une dos elementos, con dirección y etiqueta opcionales."
+        },
+        "text-node": {
+          "title": "Nodos de texto",
+          "body": "Añade un nodo de texto: un bloque de texto enriquecido que puedes colocar en cualquier parte del Lienzo."
+        },
+        "note-ref": {
+          "title": "Referencias a Notas",
+          "body": "Una referencia a Nota representa una de tus Notas y la abre. Si esa Nota se elimina, la referencia se queda como Nota no disponible."
+        },
+        "pen": {
+          "title": "Dibujo",
+          "body": "Usa el Lápiz para dibujar a mano alzada en el Lienzo. El borrador quita un dibujo."
+        }
+      },
+      "ephemeral": {
+        "editor": {
+          "title": "Efímero",
+          "body": "Efímero es un espacio de borrador para lo que no necesitas conservar. Nunca se guarda y desaparece al cerrar Maibuk."
+        },
+        "to-note": {
+          "title": "Conservarlo como Nota",
+          "body": "¿Cambiaste de idea? Convierte lo que escribiste en una Nota."
+        }
+      },
+      "settings": {
+        "appearance": {
+          "title": "Apariencia",
+          "body": "Tema, fuente, tamaño de letra y el color principal que marca los controles activos."
+        },
+        "window": {
+          "title": "Ventana",
+          "body": "Abre Maibuk al iniciar sesión y mantenlo en la bandeja al cerrar la ventana."
+        },
+        "general": {
+          "title": "General",
+          "body": "Guardado automático, siempre visible y el idioma de Maibuk."
+        },
+        "sync": {
+          "title": "Sincronización",
+          "body": "Tu Cuenta te conecta al servidor de sincronización. Tu Frase de cifrado es un secreto aparte que cifra todo antes de salir de este dispositivo; solo tú la conoces. Sincronizar automáticamente sincroniza al abrir y poco después de que dejas de editar. Cada ejecución tiene un alcance y una dirección, y las eliminaciones esperan a que las revises.",
+          "link": "Descarga Maibuk para tus otros dispositivos"
+        },
+        "backups": {
+          "title": "Copias de seguridad",
+          "body": "Maibuk hace una copia de seguridad de tu biblioteca cada día, al cerrar y antes de pasos arriesgados como una sincronización o una restauración. La retención fija cuántas copias se guardan. Restaurar una copia recupera Libros, Notas, Lienzos e historial de versiones."
+        },
+        "metrics": {
+          "title": "Métricas",
+          "body": "Elige qué categorías de métricas recoger: volumen de escritura, registro de tiempo y participación. El umbral diario de palabras decide qué días cuentan para tu racha."
+        },
+        "editor": {
+          "title": "Editor",
+          "body": "Corrector ortográfico, tu Diccionario personalizado, las reglas de Limpieza al pegar y más opciones del editor."
+        },
+        "advanced": {
+          "title": "Avanzado",
+          "body": "Exporta o importa un archivo de base de datos, una copia de tu escritura y ajustes que se guarda aparte de las copias de seguridad, o reinicia la biblioteca en este dispositivo."
+        },
+        "tutorial": {
+          "title": "Vuelve cuando quieras",
+          "body": "Empieza el Tutorial de nuevo aquí, desde el principio o una sección cada vez. También puedes empezarlo desde Atajos de teclado (?)."
+        }
+      }
+    },
+    "sample": {
+      "authorName": "Alex Rivera",
+      "novel": {
+        "title": "El guardián del faro",
+        "description": "Una guardiana, una tormenta y una carta que llega cuarenta años tarde.",
+        "genre": "Ficción literaria",
+        "prologue": {
+          "title": "Prólogo",
+          "text": "Nadie en tierra firme recordaba quién encendió la lámpara la noche en que se hundió el ferri. Mara sí."
+        },
+        "part": {
+          "title": "Primera parte: La isla"
+        },
+        "chapterOne": {
+          "title": "La carta",
+          "headingMorning": "Mañana",
+          "morning": "La carta llegó con el barco de provisiones, doblada dos veces y suave de tanto viajar. El sello era más viejo que Mara.",
+          "footnote": "Los sellos como este se retiraron en 1984.",
+          "headingStorm": "La tormenta",
+          "storm": "Al anochecer el viento había cambiado. Mara subió los noventa escalones con la carta todavía cerrada en el abrigo.",
+          "revision": "La leyó arriba, a la luz de la lámpara que había cuidado durante cuarenta años."
+        },
+        "chapterTwo": {
+          "title": "Mapas viejos",
+          "text": "Los mapas del armario del faro no se ponían de acuerdo sobre dónde empezaba el arrecife."
+        },
+        "namedVersion": "Primer borrador completo"
+      },
+      "completed": {
+        "title": "Sal y piedra",
+        "chapter": "La cantera",
+        "text": "La cantera llevaba una década cerrada cuando los niños encontraron la puerta."
+      },
+      "archived": {
+        "title": "Primeros poemas",
+        "chapter": "Sin título",
+        "text": "Lluvia en la ventana, la tetera, la tarde larga."
+      },
+      "notes": {
+        "characters": {
+          "title": "Personajes",
+          "text": "Mara: la guardiana. Terca, paciente, le tiene miedo a los barcos."
+        },
+        "research": {
+          "title": "Investigación sobre faros",
+          "heading": "Por revisar",
+          "itemDone": "Cómo funciona una lente de Fresnel",
+          "itemOpen": "Rutas de ferri en los años ochenta"
+        },
+        "ideas": {
+          "title": "Ideas para el final",
+          "text": "¿Y si la carta es del capitán del ferri? Más en",
+          "linkLabel": "Investigación sobre faros"
+        },
+        "reading": {
+          "title": "Lista de lecturas",
+          "itemOne": "Un libro sobre faros",
+          "itemTwo": "Cartas nunca enviadas"
+        }
+      },
+      "tags": {
+        "characters": "personajes",
+        "research": "investigación",
+        "ideas": "ideas"
+      },
+      "canvas": {
+        "title": "Mapa de la trama",
+        "storm": "La tormenta",
+        "letter": "Llega la carta",
+        "connection": "lleva a"
+      },
+      "ephemeral": "El texto de Efímero nunca se guarda. Pruébalo después del Tutorial."
+    }
   }
 }

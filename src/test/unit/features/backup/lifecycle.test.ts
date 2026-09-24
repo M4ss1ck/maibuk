@@ -41,6 +41,7 @@ vi.mock("../../../../features/backup/backup-service", () => ({
 
 const { createDailyBackup, runBackgroundBackup, runDailyBackupOnce, resetBackupLifecycleForTests, scheduleDailyBackup } =
   await import("@/features/backup/lifecycle");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 describe("backup lifecycle", () => {
   beforeEach(() => {
@@ -55,6 +56,19 @@ describe("backup lifecycle", () => {
     mockPruneBackups.mockResolvedValue(undefined);
     mockHasBackupForToday.mockResolvedValue(false);
     mockHasRecentBackup.mockResolvedValue(false);
+  });
+
+  it("takes no daily or background Backup while the Tutorial Library is active", async () => {
+    librarySwitch.activateTutorialDatabase({} as never);
+    try {
+      await createDailyBackup();
+      await runBackgroundBackup();
+    } finally {
+      librarySwitch.resetLibrarySwitchForTests();
+    }
+
+    expect(mockCreateBackupAdapter).not.toHaveBeenCalled();
+    expect(mockCreateBackup).not.toHaveBeenCalled();
   });
 
   it("creates a daily backup using persisted settings", async () => {

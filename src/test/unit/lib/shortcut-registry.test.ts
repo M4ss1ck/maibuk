@@ -5,7 +5,7 @@ import { formatKeys, matchKeys, SHORTCUTS, type ShortcutDef } from "@/lib/shortc
 describe("shortcut registry", () => {
   it("contains only valid shortcut definitions", () => {
     for (const [id, definition] of Object.entries(SHORTCUTS)) {
-      expect(id).toMatch(/^(global|home|editor|canvas|cover)\./);
+      expect(id).toMatch(/^(global|home|editor|canvas|cover|tutorial)\./);
       expect(definition.labelKey).not.toBe("");
 
       if ("sequence" in definition) {

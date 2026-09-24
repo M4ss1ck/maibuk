@@ -15,6 +15,10 @@ import {
 import { createMetricsService } from "@/lib/metrics/MetricsService";
 import { useSettingsStore } from "@/features/settings/store";
 import type { WorkerRequest, WorkerResponse } from "@/lib/metrics/types";
+import {
+  activateTutorialDatabase,
+  resetLibrarySwitchForTests,
+} from "@/features/tutorial/library-switch";
 class MockWorker {
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null;
   posted: WorkerRequest[] = [];
@@ -102,6 +106,34 @@ describe("MetricsService", () => {
     await service.init();
 
     expect(worker.posted[0]).toEqual({ type: "init", id: 1, deviceId: "device-1" });
+  });
+
+  it("counts nothing from the Tutorial Library and keeps the author's buffer for later", async () => {
+    const worker = new MockWorker();
+    const service = createMetricsService({
+      createWorker: () => worker as unknown as Worker,
+      getDatabase: async () => testDb,
+      getDeviceId: () => "device-1",
+    });
+    await service.init();
+    service.recordEvents([buildEvent()]);
+
+    activateTutorialDatabase(testDb);
+    try {
+      service.markActive("tutorial-book-novel");
+      service.recordEvents([{ ...buildEvent(), id: "tutorial-typed", workId: "tutorial-book-novel" }]);
+      service.endSession();
+      await service.flushNow();
+      expect(await listEvents(testDb)).toEqual([]);
+    } finally {
+      resetLibrarySwitchForTests();
+    }
+    service.discardSession();
+    service.endSession();
+    await service.flushNow();
+
+    expect((await listEvents(testDb)).map((event) => event.id)).toEqual(["event-1"]);
+    expect(recordedEventTypes(worker)).toEqual(["writing.typed"]);
   });
 
   it("round-trips buffered worker events into SQLite on flush", async () => {

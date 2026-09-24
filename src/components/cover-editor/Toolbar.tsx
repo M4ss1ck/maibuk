@@ -213,6 +213,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         <div className="relative">
           <Button
             ref={setTriggerRef("presets")}
+            data-tutorial="cover-designer.size"
             variant="ghost"
             size="sm"
             onClick={() => toggleMenu("presets")}
@@ -245,6 +246,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         <div className="relative">
           <Button
             ref={setTriggerRef("templates")}
+            data-tutorial="cover-designer.templates"
             variant="ghost"
             size="sm"
             onClick={() => toggleMenu("templates")}
@@ -469,6 +471,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         <div className="relative">
           <Button
             ref={setTriggerRef("export")}
+            data-tutorial="cover-designer.export"
             variant="primary"
             size="sm"
             onClick={() => toggleMenu("export")}

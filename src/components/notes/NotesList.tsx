@@ -604,6 +604,7 @@ export function NotesList({
           onChange={setViewMode}
           testId="notes-view"
           className="flex-1"
+          tutorialAnchor="notes.tree"
         />
         <Tooltip content={t("notes.newNote")}>
           <button

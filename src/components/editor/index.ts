@@ -1,4 +1,4 @@
-export { Editor } from "@/components/editor/Editor";
+export { Editor, type EditorTutorialAnchors } from "@/components/editor/Editor";
 export { EditorToolbar } from "@/components/editor/EditorToolbar";
 export { SelectionToolbar } from "@/components/editor/SelectionToolbar";
 export { FormattingButtons } from "@/components/editor/FormattingButtons";

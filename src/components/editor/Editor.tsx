@@ -66,6 +66,11 @@ export interface EditorHandle {
   flush: () => void;
 }
 
+export interface EditorTutorialAnchors {
+  toolbar?: string;
+  text?: string;
+}
+
 interface EditorProps {
   /** Lets a parent drain pending keystrokes before it saves, e.g. for a sync Flush. */
   ref?: Ref<EditorHandle>;
@@ -102,6 +107,8 @@ interface EditorProps {
   onExportPdf?: () => void;
   onExportImage?: () => void;
   onEscape?: () => void;
+  /** Tutorial steps that point at this editor's toolbar and text, if any. */
+  tutorialAnchors?: EditorTutorialAnchors;
 }
 
 export function Editor({
@@ -132,6 +139,7 @@ export function Editor({
   onExportPdf,
   onExportImage,
   onEscape,
+  tutorialAnchors,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -483,6 +491,7 @@ export function Editor({
           onExportMarkdown={onExportMarkdown}
           onExportPdf={onExportPdf}
           onExportImage={onExportImage}
+          tutorialAnchor={tutorialAnchors?.toolbar}
         />
       )}
 
@@ -490,6 +499,7 @@ export function Editor({
 
       <div
         ref={setScrollContainerEl}
+        data-tutorial={tutorialAnchors?.text}
         className="flex-1 overflow-auto min-h-0"
         onClick={handleFocus}
         onKeyDown={handleFocus}
