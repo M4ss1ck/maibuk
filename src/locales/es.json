@@ -347,6 +347,7 @@
     "press": "Presiona",
     "or": "o",
     "exitFocus": "para salir del modo enfocado",
+    "exitFocusMode": "Salir del modo enfocado",
     "table": "tabla {{dimensions}}",
     "addHeaderRow": "Agregar Encabezado",
     "selectTableSize": "Selecciona el tamaño de la tabla:",

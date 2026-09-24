@@ -56,6 +56,7 @@ import { normalizeLanguage, type Language } from "@/features/settings/types";
 import {
   History,
   Menu,
+  Minimize2,
   MoreVertical,
   NotebookText,
   PanelLeftClose,
@@ -240,6 +241,14 @@ export function BookEditor() {
       return true;
     });
   }, [showMobileMenu]);
+
+  useEffect(() => {
+    if (!focusMode) return;
+    return registerBackDismiss(() => {
+      setFocusMode(false);
+      return true;
+    });
+  }, [focusMode]);
 
   useEffect(() => {
     if (!showMobileMenu) return;
@@ -1358,13 +1367,25 @@ export function BookEditor() {
           </div>
         )}
 
-        {/* Focus mode exit hint */}
+        {/* Focus mode exit hint (hover, keyboard devices) */}
         {focusMode && !hideKeyboardHints && (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm opacity-0 hover:opacity-100 transition-opacity">
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-sm opacity-0 hover:opacity-100 transition-opacity pointer-coarse:hidden">
             {t("editor.press")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">Esc</kbd>{" "}
             {t("editor.or")} <kbd className="px-2 py-0.5 bg-white/20 rounded mx-1">F11</kbd>{" "}
             {t("editor.exitFocus")}
           </div>
+        )}
+
+        {/* Touch screens have neither hover nor Esc: keep a quiet way out on screen. */}
+        {focusMode && (
+          <button
+            type="button"
+            onClick={() => setFocusMode(false)}
+            className="fixed bottom-4 right-4 hidden items-center gap-1.5 rounded-full border border-border bg-card/80 px-3 py-2 text-xs text-muted-foreground backdrop-blur-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:inline-flex"
+          >
+            <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("editor.exitFocusMode")}
+          </button>
         )}
       </main>
 

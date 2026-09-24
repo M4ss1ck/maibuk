@@ -273,6 +273,40 @@ describe("BookEditor mobile overlays", () => {
     await waitFor(() => expect(runTopBackDismiss()).toBe(false));
   });
 
+  it("leaves Focus Mode with the Android back handler instead of leaving the Book", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<BookEditor />);
+
+    screen.getAllByRole("button", { name: "nav.focusMode" })[0].focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(container.querySelector(".focus-mode")).toBeInTheDocument());
+
+    let handled = false;
+    act(() => {
+      handled = runTopBackDismiss();
+    });
+
+    expect(handled).toBe(true);
+    expect(container.querySelector(".focus-mode")).not.toBeInTheDocument();
+    await waitFor(() => expect(runTopBackDismiss()).toBe(false));
+  });
+
+  it("offers an on-screen exit from Focus Mode for touch screens", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<BookEditor />);
+
+    screen.getAllByRole("button", { name: "nav.focusMode" })[0].focus();
+    await user.keyboard("{Enter}");
+    const exit = await screen.findByRole("button", { name: "editor.exitFocusMode" });
+    expect(exit).toHaveClass("pointer-coarse:inline-flex");
+
+    exit.focus();
+    await user.keyboard("{Enter}");
+
+    expect(container.querySelector(".focus-mode")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "editor.exitFocusMode" })).not.toBeInTheDocument();
+  });
+
   it("keeps the closed drawer hidden and exposes it as a dialog only while open", async () => {
     const user = userEvent.setup();
     const { container } = render(<BookEditor />);

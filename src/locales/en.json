@@ -347,6 +347,7 @@
     "press": "Press",
     "or": "or",
     "exitFocus": "to exit focus mode",
+    "exitFocusMode": "Exit focus mode",
     "table": "{{dimensions}} table",
     "addHeaderRow": "Add Header Row",
     "selectTableSize": "Select table size:",
