@@ -182,8 +182,10 @@ export default defineConfig(() => ({
     },
   },
 
-  // Use relative paths for web builds (static hosting)
-  base: isWeb ? "./" : "/",
+  // Absolute asset URLs: with a relative base, reloading a nested route such
+  // as /book/:id resolves assets under /book/ and the SPA fallback answers
+  // the module requests with index.html.
+  base: "/",
 
   // Only apply Tauri-specific options when building for Tauri
   ...(isWeb
