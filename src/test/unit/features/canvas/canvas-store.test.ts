@@ -375,6 +375,37 @@ describe("useCanvasStore", () => {
     ]);
   });
 
+  it("connects two nodes from the picker through facing sides, once", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    const store = useCanvasStore.getState();
+    store.addNode(textNode("a", 0));
+    store.addNode(textNode("b", 400));
+
+    useCanvasStore.getState().openConnectPicker("a");
+    expect(useCanvasStore.getState()).toMatchObject({
+      connectSourceNodeId: "a",
+      selectedNodeId: "a",
+    });
+    useCanvasStore.getState().connectNodes("a", "b");
+    useCanvasStore.getState().connectNodes("b", "a");
+    useCanvasStore.getState().connectNodes("a", "a");
+    useCanvasStore.getState().connectNodes("a", "missing");
+    useCanvasStore.getState().closeConnectPicker();
+
+    expect(useCanvasStore.getState().doc.edges).toEqual([
+      expect.objectContaining({
+        source: "a",
+        target: "b",
+        sourceHandle: "right",
+        targetHandle: "left",
+        directed: false,
+      }),
+    ]);
+    expect(useCanvasStore.getState().connectSourceNodeId).toBeNull();
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().doc.edges).toEqual([]);
+  });
+
   it("deletes a node and connected edges in one undoable step", () => {
     useCanvasStore.setState({ loadState: "ready" });
     const store = useCanvasStore.getState();

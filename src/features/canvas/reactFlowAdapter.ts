@@ -93,6 +93,19 @@ export function toFlowEdges(edges: CanvasEdge[], options: ToFlowEdgesOptions): E
   }));
 }
 
+/**
+ * A Connection made without dragging a handle (from the Connect to… picker)
+ * leaves from the side facing the target and enters on the side facing back.
+ */
+export function connectionBetween(source: CanvasNode, target: CanvasNode): Connection {
+  const dx = target.position.x - source.position.x;
+  const dy = target.position.y - source.position.y;
+  const horizontal = Math.abs(dx) >= Math.abs(dy);
+  const sourceHandle: Side = horizontal ? (dx >= 0 ? "right" : "left") : dy >= 0 ? "bottom" : "top";
+  const targetHandle: Side = horizontal ? (dx >= 0 ? "left" : "right") : dy >= 0 ? "top" : "bottom";
+  return { source: source.id, target: target.id, sourceHandle, targetHandle };
+}
+
 export function fromConnection(connection: Connection): CanvasEdge | null {
   if (!connection.source || !connection.target) return null;
   return {

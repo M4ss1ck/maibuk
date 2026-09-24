@@ -9,6 +9,7 @@ import {
   updateCanvasDocRow,
   updateCanvasRow,
 } from "@/features/canvas/write";
+import { connectionBetween, fromConnection } from "@/features/canvas/reactFlowAdapter";
 import {
   isFinitePosition,
   parseCanvasDoc,
@@ -130,6 +131,7 @@ function editorResetState() {
     liveBaseDoc: null,
     externalDocNonce: 0,
     interactivityLocked: false,
+    connectSourceNodeId: null as string | null,
   };
 }
 
@@ -161,6 +163,12 @@ export interface CanvasStoreState {
   penWidth: number;
   penColor: string;
   interactivityLocked: boolean;
+  /** The node the Connect to… picker is choosing a partner for, if it is open. */
+  connectSourceNodeId: string | null;
+  openConnectPicker: (nodeId: string) => void;
+  closeConnectPicker: () => void;
+  /** Adds a Connection between two nodes unless they are already connected. */
+  connectNodes: (sourceId: string, targetId: string) => void;
   addStroke: (stroke: CanvasStroke) => void;
   removeStroke: (id: string) => void;
   eraseElements: (strokeIds: string[], nodeIds: string[], edgeIds: string[]) => void;
@@ -689,6 +697,24 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   setPenColor: (penColor) => set({ penColor }),
   toggleInteractivityLocked: () =>
     set((state) => ({ interactivityLocked: !state.interactivityLocked })),
+
+  openConnectPicker: (nodeId) =>
+    set({ connectSourceNodeId: nodeId, selectedNodeId: nodeId, selectedEdgeId: null }),
+  closeConnectPicker: () => set({ connectSourceNodeId: null }),
+  connectNodes: (sourceId, targetId) => {
+    const { doc } = get();
+    const source = doc.nodes.find((node) => node.id === sourceId);
+    const target = doc.nodes.find((node) => node.id === targetId);
+    if (!source || !target || source.id === target.id) return;
+    const alreadyConnected = doc.edges.some(
+      (edge) =>
+        (edge.source === sourceId && edge.target === targetId) ||
+        (edge.source === targetId && edge.target === sourceId)
+    );
+    if (alreadyConnected) return;
+    const edge = fromConnection(connectionBetween(source, target));
+    if (edge) get().addEdge(edge);
+  },
 
   updateEdge: (id, patch) => {
     const state = get();

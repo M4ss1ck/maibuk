@@ -30,8 +30,10 @@ import { Modal } from "@/components/ui/Modal";
 import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
+import { ConnectToDialog } from "@/features/canvas/ConnectToDialog";
 import { EdgeInspectorCard } from "@/features/canvas/EdgeInspectorCard";
 import { NodeColorPanel } from "@/features/canvas/NodeColorPanel";
+import { NodeConnectButton } from "@/features/canvas/NodeConnectButton";
 import { PenSettingsPanel } from "@/features/canvas/PenSettingsPanel";
 import { CanvasDrawingLayer } from "@/features/canvas/drawing/CanvasDrawingLayer";
 import { DrawingCaptureOverlay } from "@/features/canvas/drawing/DrawingCaptureOverlay";
@@ -550,6 +552,7 @@ function CanvasEditor() {
                 onFitView={() => reactFlow.fitView()}
               />
               {toolMode === "pen" && <PenSettingsPanel />}
+              {selectedNode && !interactivityLocked && !editorReadOnly && <NodeConnectButton />}
               {selectedNode?.kind === "text" && <NodeColorPanel />}
             </div>
           </div>
@@ -568,6 +571,8 @@ function CanvasEditor() {
           )}
         </div>
       </main>
+
+      <ConnectToDialog />
 
       <Modal
         isOpen={notePickerOpen}

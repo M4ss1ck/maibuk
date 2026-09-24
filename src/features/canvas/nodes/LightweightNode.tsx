@@ -11,6 +11,7 @@ import { FootnoteList } from "@/components/editor/FootnoteList";
 import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { NodeFormatBubble } from "@/features/canvas/nodes/NodeFormatBubble";
+import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
 import { prepareStaticCanvasHtml } from "@/features/canvas/nodes/staticRichText";
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
@@ -101,6 +102,9 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   const resizeNodeLive = useCanvasStore((state) => state.resizeNodeLive);
   const endLiveChange = useCanvasStore((state) => state.endLiveChange);
   const [editing, setEditing] = useState(false);
+  const nodeMenu = useCanvasNodeMenu(node.id, {
+    isDisabled: editorReadOnly || interactivityLocked || editing,
+  });
   const html = node.kind === "text" ? node.html : null;
   const safeHtml = useMemo(() => (html === null ? "" : prepareStaticCanvasHtml(html)), [html]);
 
@@ -110,13 +114,16 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
 
   return (
     <div
+      ref={nodeMenu.anchorRef}
+      {...nodeMenu.itemProps}
       className={`group relative min-h-24 min-w-24 transform-gpu ${node.width ? "w-full" : "max-w-72"} rounded-lg px-3 py-2 text-sm text-foreground ${
-        selected ? "ring-1 ring-primary/40" : ""
-      }`}
+        editing ? "" : "pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
+      } ${selected ? "ring-1 ring-primary/40" : ""}`}
       style={node.backgroundColor ? { backgroundColor: node.backgroundColor } : undefined}
       onDoubleClick={() => !editorReadOnly && setEditing(true)}
     >
-      <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" />
+      <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" selected={selected} />
+      {nodeMenu.menu}
       {resizable &&
         (["left", "right"] as const).map((side) => (
           <NodeResizeControl

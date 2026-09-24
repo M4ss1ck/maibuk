@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, RefObject } from "react";
 import {
   Button,
   Menu,
@@ -39,10 +39,22 @@ function itemClass(action: ItemAction) {
   return `flex cursor-pointer items-center gap-2 whitespace-nowrap px-3 py-1.5 pointer-coarse:py-2.5 text-sm ${tone} outline-none data-focused:bg-muted data-disabled:cursor-default data-disabled:opacity-50`;
 }
 
-function ActionItems({ actions, label }: { actions: ItemAction[]; label: string }) {
+function ActionItems({
+  actions,
+  label,
+  autoFocus,
+  onClose,
+}: {
+  actions: ItemAction[];
+  label: string;
+  autoFocus?: boolean;
+  onClose?: () => void;
+}) {
   return (
     <Menu
       aria-label={label}
+      autoFocus={autoFocus ? "first" : undefined}
+      onClose={onClose}
       className="outline-none"
       disabledKeys={actions.filter((action) => action.isDisabled).map((action) => action.id)}
       onAction={(key) => actions.find((action) => action.id === key)?.onAction?.()}
@@ -89,6 +101,31 @@ function ActionItems({ actions, label }: { actions: ItemAction[]; label: string 
         );
       })}
     </Menu>
+  );
+}
+
+/**
+ * The same action menu anchored to an existing element instead of a ⋯
+ * button, for surfaces where a button on every item would be clutter (Canvas
+ * nodes). Open it from `useItemContextMenu`.
+ */
+export function ItemActionsPopover({
+  triggerRef,
+  label,
+  actions,
+  isOpen,
+  onOpenChange,
+}: Omit<ItemActionsMenuProps, "className"> & { triggerRef: RefObject<Element | null> }) {
+  return (
+    <Popover
+      triggerRef={triggerRef}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      placement="bottom start"
+      className={POPOVER_CLASS}
+    >
+      <ActionItems actions={actions} label={label} autoFocus onClose={() => onOpenChange(false)} />
+    </Popover>
   );
 }
 

@@ -10,6 +10,8 @@ import { useBookStore } from "@/features/books/store";
 import { useNoteStore } from "@/features/notes";
 import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
+import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
+import { useCanvasStore } from "@/features/canvas/store";
 
 type NoteRefFlowNode = Node<CanvasFlowNodeData, "noteRef">;
 
@@ -23,6 +25,9 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
       : undefined
   );
   const books = useBookStore((state) => state.books);
+  const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
+  const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
+  const nodeMenu = useCanvasNodeMenu(node.id, { isDisabled: editorReadOnly || interactivityLocked });
 
   if (node.kind !== "noteRef") return null;
 
@@ -33,11 +38,14 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
 
   return (
     <div
-      className={`group relative flex min-h-44 w-56 flex-col rounded-xl border bg-card p-4 text-left text-foreground shadow-sm ${
+      ref={nodeMenu.anchorRef}
+      {...nodeMenu.itemProps}
+      className={`group relative flex min-h-44 w-56 flex-col rounded-xl border bg-card p-4 text-left text-foreground shadow-sm pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         selected ? "border-primary ring-2 ring-primary/20" : "border-border"
       }`}
     >
-      <CanvasNodeHandles connectedSides={data.connectedSides} variant="card" />
+      <CanvasNodeHandles connectedSides={data.connectedSides} variant="card" selected={selected} />
+      {nodeMenu.menu}
 
       <h3 className="line-clamp-2 font-medium text-foreground">{title}</h3>
 
