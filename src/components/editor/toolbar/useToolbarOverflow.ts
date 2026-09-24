@@ -7,14 +7,47 @@ export interface OverflowResult {
 interface UseToolbarOverflowParams {
   rootRef: React.RefObject<HTMLElement>;
   endRef: React.RefObject<HTMLElement>;
-  measureRef: React.RefObject<HTMLElement>; // hidden container holding all Start entries
+  // Hidden lane holding all Start entries, laid out with the same flex gap as the visible Start lane
+  measureRef: React.RefObject<HTMLElement>;
   entryCount: number; // number of Start entries to consider
   deps: unknown[]; // recompute triggers (config, locale, visibility)
 }
 
-/** Gap between adjacent entries and reserved edge padding, in pixels. */
-const GAP = 8;
-const PADDING = 8;
+// Absorbs floating-point noise in subpixel layout without admitting a visible overflow.
+const EPSILON = 0.01;
+
+function px(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Width the row gives its flex items: border box minus borders and padding. */
+function contentWidth(element: HTMLElement): number {
+  const style = getComputedStyle(element);
+  return (
+    element.getBoundingClientRect().width -
+    px(style.borderLeftWidth) -
+    px(style.borderRightWidth) -
+    px(style.paddingLeft) -
+    px(style.paddingRight)
+  );
+}
+
+/**
+ * Width that the first `count` entries of the measure lane occupy, read from
+ * the real layout so gaps, margins, and subpixel widths are all included.
+ */
+function prefixWidths(lane: HTMLElement, entryCount: number): number[] {
+  const laneLeft = lane.getBoundingClientRect().left + px(getComputedStyle(lane).paddingLeft);
+  const widths: number[] = [];
+  for (let i = 0; i < entryCount; i++) {
+    const child = lane.children[i] as HTMLElement | undefined;
+    if (!child) break;
+    const right = child.getBoundingClientRect().right + px(getComputedStyle(child).marginRight);
+    widths.push(right - laneLeft);
+  }
+  return widths;
+}
 
 /**
  * Measures how many Start entries fit alongside the End group within the
@@ -30,40 +63,43 @@ export function useToolbarOverflow({
   const [visibleCount, setVisibleCount] = useState(0);
 
   const measure = useCallback(() => {
-    const rootWidth = rootRef.current?.getBoundingClientRect().width ?? 0;
-    if (rootWidth <= 0) {
+    const root = rootRef.current;
+    const lane = measureRef.current;
+    if (!root || !lane || root.getBoundingClientRect().width <= 0) {
       setVisibleCount(0);
       return;
     }
 
     const endWidth = endRef.current?.getBoundingClientRect().width ?? 0;
-    const available = rootWidth - endWidth - PADDING;
-    const children = measureRef.current?.children;
+    // The Start lane and End lane are siblings in the row, so one column gap separates them.
+    const laneGap = px(getComputedStyle(root).columnGap);
+    const available = contentWidth(root) - endWidth - laneGap;
 
-    let used = 0;
     let count = 0;
-    for (let i = 0; i < entryCount; i++) {
-      const child = children?.[i] as HTMLElement | undefined;
-      const width = child?.offsetWidth ?? 0;
-      const next = used + (count > 0 ? GAP : 0) + width;
-      if (next > available) break;
-      used = next;
+    for (const width of prefixWidths(lane, entryCount)) {
+      if (width > available + EPSILON) break;
       count++;
     }
     setVisibleCount(count);
   }, [rootRef, endRef, measureRef, entryCount]);
 
   useEffect(() => {
-    const scheduleMeasure = () => requestAnimationFrame(measure);
+    let frame = 0;
+    const scheduleMeasure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
     scheduleMeasure();
 
     const observer = new ResizeObserver(scheduleMeasure);
-    const root = rootRef.current;
-    const end = endRef.current;
-    if (root) observer.observe(root);
-    if (end) observer.observe(end);
+    for (const element of [rootRef.current, endRef.current, measureRef.current]) {
+      if (element) observer.observe(element);
+    }
 
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
     // deps are external recompute triggers, spread intentionally alongside measure
   }, [measure, ...deps]);
 

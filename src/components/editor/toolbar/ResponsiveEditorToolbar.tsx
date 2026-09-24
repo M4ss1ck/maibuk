@@ -23,6 +23,12 @@ function visibleEntries(entries: ToolbarEntry[]): ToolbarEntry[] {
   );
 }
 
+function withoutTrailingDividers(entries: ToolbarEntry[]): ToolbarEntry[] {
+  let end = entries.length;
+  while (end > 0 && entries[end - 1].kind === "divider") end--;
+  return entries.slice(0, end);
+}
+
 function renderEntry(
   entry: ToolbarEntry,
   editor: Editor,
@@ -65,15 +71,20 @@ export function ResponsiveEditorToolbar({
     deps: [toolbarConfig, toolbarExpanded],
   });
 
-  const visibleStart = toolbarExpanded ? startEntries : startEntries.slice(0, visibleCount);
+  const visibleStart = toolbarExpanded
+    ? startEntries
+    : withoutTrailingDividers(startEntries.slice(0, visibleCount));
 
   const rowClass = toolbarExpanded
     ? "flex flex-wrap items-center justify-start gap-1 px-2 sm:px-4 py-1 sm:py-2"
     : "flex flex-nowrap items-center overflow-x-auto px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1";
 
+  const collapsedStartClass = "flex flex-nowrap items-center gap-0.5 sm:gap-1";
+  // Between a resize and the next measurement the Start lane may briefly hold one entry too
+  // many; clipping it there keeps the row from flashing a scrollbar.
   const startBlockClass = toolbarExpanded
     ? "contents"
-    : "flex flex-nowrap items-center gap-0.5 sm:gap-1";
+    : `${collapsedStartClass} min-w-0 overflow-hidden`;
 
   const endBlockClass = toolbarExpanded
     ? "flex flex-nowrap items-center shrink-0 ml-auto gap-0.5 sm:gap-1"
@@ -94,7 +105,8 @@ export function ResponsiveEditorToolbar({
           <div
             ref={measureRef}
             data-testid="toolbar-measure-lane"
-            className="absolute invisible pointer-events-none"
+            aria-hidden="true"
+            className={`${collapsedStartClass} absolute left-0 top-0 w-max invisible pointer-events-none`}
           >
             {startEntries.map((entry) => renderEntry(entry, editor, callbacks))}
           </div>
