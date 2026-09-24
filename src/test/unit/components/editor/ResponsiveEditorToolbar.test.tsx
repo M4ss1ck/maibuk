@@ -124,6 +124,38 @@ it("suppresses a leading divider at the Start lane boundary", () => {
   expect(startLane.querySelectorAll(".w-px.h-6.bg-border").length).toBe(0);
 });
 
+it("does not end the Start lane on a divider when the cut falls after one", () => {
+  mockVisibleCount = 2;
+  useSettingsStore.setState({
+    toolbarConfig: {
+      start: [
+        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+        { kind: "divider", id: "d1" },
+        { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
+      ],
+      end: [],
+    },
+  });
+  const { getByTestId } = renderToolbar();
+  const startLane = getByTestId("toolbar-start-lane");
+
+  expect(startLane.querySelector('[data-group-id="history"]')).toBeInTheDocument();
+  expect(startLane.querySelector('[data-group-id="font"]')).not.toBeInTheDocument();
+  expect(startLane.querySelectorAll(".w-px.h-6.bg-border").length).toBe(0);
+});
+
+it("collapsed: measure lane lays entries out with the Start lane's flex gap", () => {
+  const { getByTestId } = renderToolbar();
+  const startLane = getByTestId("toolbar-start-lane");
+  const measureLane = getByTestId("toolbar-measure-lane");
+
+  for (const token of ["flex", "flex-nowrap", "gap-0.5", "sm:gap-1"]) {
+    expect(startLane).toHaveClass(token);
+    expect(measureLane).toHaveClass(token);
+  }
+  expect(measureLane).toHaveClass("w-max", "absolute", "invisible");
+});
+
 it("expanded: root is wrapping and does not use justify-between", () => {
   useSettingsStore.setState({ toolbarExpanded: true });
   const { getByTestId } = renderToolbar();
