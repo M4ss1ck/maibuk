@@ -22,9 +22,17 @@ import {
 import type { Book } from "@/features/books/types";
 import type { ReorderNoteItem } from "@/features/notes";
 import { AddIcon } from "@/components/icons/AddIcon";
-import { FileDropImportStatus, ResponsiveToggleGroup, Tooltip } from "@/components/ui";
+import {
+  Button,
+  FileDropImportStatus,
+  Modal,
+  ResponsiveToggleGroup,
+  Tooltip,
+} from "@/components/ui";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { NoteListItem } from "@/components/notes/NoteListItem";
+import type { NoteMoveTarget } from "@/components/notes/NoteListItem";
+import { useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
 import { useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import type { DropPoint } from "@/hooks/useTextFileDrop";
@@ -90,6 +98,8 @@ export function NotesList({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const touchDragGuard = useTouchDragFromHandle();
   const viewMode = useSettingsStore((s) => s.notesListView);
   const setViewMode = useSettingsStore((s) => s.setNotesListView);
   const treeGroupMode = useSettingsStore((s) => s.notesTreeGroupMode);
@@ -326,6 +336,37 @@ export function NotesList({
     onReassignNoteBook?.(noteId, targetBookId);
   };
 
+  // Pinning from the item menu reuses the drag path's ordering write, over
+  // every note rather than the search-filtered sections.
+  const togglePinned = (note: NoteWithBook) => {
+    const sections = buildListNoteSections(notes, "").map((section) => ({
+      ...section,
+      notes: section.notes.filter((sectionNote) => sectionNote.id !== note.id),
+    }));
+    const pinned = sections.find((section) => section.id === "pinned");
+    const all = sections.find((section) => section.id === "all");
+    if (!pinned || !all) return;
+    if (note.pinned) all.notes.unshift(note);
+    else pinned.notes.push(note);
+    emitSectionOrder(sections);
+  };
+
+  const moveTargets: NoteMoveTarget[] =
+    onReassignNoteBook && books.length > 0
+      ? [
+          { bookId: null, label: t("notes.unfiled") },
+          ...books.map((book) => ({ bookId: book.id, label: book.title })),
+        ]
+      : [];
+  const moveNote = (note: { id: string }, bookId: string | null) =>
+    onReassignNoteBook?.(note.id, bookId);
+  const requestDelete = onDeleteNote ? (id: string) => setPendingDeleteId(id) : undefined;
+  const pendingDeleteNote = notes.find((note) => note.id === pendingDeleteId) ?? null;
+  const confirmDelete = () => {
+    if (pendingDeleteId) onDeleteNote?.(pendingDeleteId);
+    setPendingDeleteId(null);
+  };
+
   const renderDropIndicator = (note: NoteWithBook, placement: DropPlacement) => {
     if (dropTarget?.targetId !== note.id || dropTarget.placement !== placement) {
       return null;
@@ -366,9 +407,12 @@ export function NotesList({
         note={note}
         isSelected={currentNoteId === note.id}
         onSelect={activateNote}
-        onDelete={onDeleteNote}
+        onDelete={requestDelete}
         onDuplicate={onDuplicateNote}
         onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
+        onTogglePinned={() => togglePinned(note)}
+        moveTargets={moveTargets}
+        onMove={moveNote}
         draggable={viewMode === "list" && !isSearchActive ? true : undefined}
         onDragStart={(e) => handleDragStart(e, note.id)}
         onDragOver={(e) => handleNoteDragOver(e, note)}
@@ -386,9 +430,12 @@ export function NotesList({
       note={note}
       isSelected={currentNoteId === note.id}
       onSelect={activateNote}
-      onDelete={onDeleteNote}
+      onDelete={requestDelete}
       onDuplicate={onDuplicateNote}
       onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
+      onTogglePinned={() => togglePinned(note)}
+      moveTargets={moveTargets}
+      onMove={moveNote}
       draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
       onDragStart={(e) => handleDragStart(e, note.id)}
       onDragEnd={handleDragEnd}
@@ -455,7 +502,7 @@ export function NotesList({
                       type="button"
                       onClick={() => onCreateNote(group.book?.id ?? null)}
                       aria-label={t("notes.addNoteToBook")}
-                      className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-all duration-200 hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                      className="shrink-0 rounded p-0.5 pointer-coarse:p-1.5 text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground"
                     >
                       <AddIcon className="h-3.5 w-3.5" />
                     </button>
@@ -605,6 +652,7 @@ export function NotesList({
       <div
         ref={listContainerRef}
         className={`flex-1 overflow-auto transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        {...touchDragGuard}
         {...(onImportFiles ? dropHandlers : {})}
       >
         {isImportingFiles && <FileDropImportStatus />}
@@ -627,6 +675,7 @@ export function NotesList({
               onDeleteNote,
               onDuplicateNote,
               onRenameNote,
+              books,
             ]}
             selectedKeys={currentNoteId ? [currentNoteId] : []}
             selectionMode="single"
@@ -664,6 +713,28 @@ export function NotesList({
           {t("notes.pinnedCount", { count: pinnedCount })}
         </div>
       )}
+
+      <Modal
+        isOpen={pendingDeleteNote !== null}
+        onClose={() => setPendingDeleteId(null)}
+        title={t("notes.deleteConfirm")}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPendingDeleteId(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              {t("notes.delete")}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          {t("notes.deleteConfirmBody", {
+            title: pendingDeleteNote?.title || t("notes.untitled"),
+          })}
+        </p>
+      </Modal>
     </aside>
   );
 }

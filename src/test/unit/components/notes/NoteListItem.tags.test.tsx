@@ -64,6 +64,7 @@ describe("NoteListItem tags", () => {
           note={buildNote({ content: "<p>Preview text</p>" })}
           isSelected={false}
           onSelect={vi.fn()}
+          draggable
         />
       </ul>
     );

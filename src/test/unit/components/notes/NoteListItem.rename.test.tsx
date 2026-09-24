@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { NoteListItem } from "@/components/notes/NoteListItem";
@@ -43,12 +43,39 @@ describe("NoteListItem title editing", () => {
       </ul>
     );
 
-    await user.click(screen.getByRole("button", { name: "common.edit" }));
+    await user.click(screen.getByRole("button", { name: "common.moreActionsFor" }));
+    await user.click(await screen.findByRole("menuitem", { name: "common.rename" }));
     const input = screen.getByDisplayValue("Old title");
+    await waitFor(() => expect(input).toHaveFocus());
 
     await user.clear(input);
     await user.type(input, "New title{Enter}");
 
     expect(onRename).toHaveBeenCalledWith(note, "New title");
+  });
+
+  it("renames by keyboard from the item menu and keeps focus in the title field", async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn();
+    const note = buildNote();
+
+    render(
+      <ul>
+        <NoteListItem note={note} isSelected={false} onSelect={vi.fn()} onRename={onRename} />
+      </ul>
+    );
+
+    screen.getByRole("button", { name: "common.moreActionsFor" }).focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(screen.getByRole("menuitem", { name: "common.rename" })).toHaveFocus()
+    );
+    await user.keyboard("{Enter}");
+
+    const input = screen.getByDisplayValue("Old title");
+    await waitFor(() => expect(input).toHaveFocus());
+    await user.keyboard("{Control>}a{/Control}Keyboard title{Enter}");
+
+    expect(onRename).toHaveBeenCalledWith(note, "Keyboard title");
   });
 });
