@@ -16,6 +16,10 @@ _Avoid_: database, workspace, and "account" for the Library
 The browsable list of an author's Books, Notes, or Canvases.
 _Avoid_: dashboard, home (for the Book Gallery)
 
+**Item Menu**:
+The actions for one Note, Chapter, or Canvas item, opened from its ⋯ button, a long-press on touch, or a right click.
+_Avoid_: context menu, kebab menu, overflow menu
+
 ## Manuscript
 
 **Book**:
