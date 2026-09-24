@@ -1,4 +1,12 @@
-import { useCallback, useState, useEffect, useRef, type Key, type ReactNode } from "react";
+import {
+  useCallback,
+  useState,
+  useEffect,
+  useRef,
+  type Key,
+  type RefObject,
+  type ReactNode,
+} from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import type { DropItem } from "react-aria-components/useDragAndDrop";
 import { DropIndicator } from "react-aria-components";
@@ -48,15 +56,17 @@ function ChapterItemGestures({
   onOpenMenu: () => void;
   isDisabled: boolean;
   className: string;
-  children: ReactNode;
+  children: (anchorRef: RefObject<HTMLDivElement | null>) => ReactNode;
 }) {
+  const anchorRef = useRef<HTMLDivElement>(null);
   const { itemProps } = useItemContextMenu({ onOpen: onOpenMenu, isDisabled });
   return (
     <div
+      ref={anchorRef}
       {...itemProps}
       className={`${className} pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]`}
     >
-      {children}
+      {children(anchorRef)}
     </div>
   );
 }
@@ -452,164 +462,168 @@ export function ChapterList({
                       : "bg-inherit"
                   }
                 >
-                  {/* Edit form overlay */}
-                  {editingId === chapter.id ? (
-                    <div className="p-2">
-                      <input
-                        type="text"
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleUpdate();
-                          if (e.key === "Escape") cancelEditing();
-                        }}
-                      />
-                      <Select
-                        ariaLabel={t("chapters.chapterType")}
-                        value={editType}
-                        onChange={(value) => setEditType(value)}
-                        options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
-                          value: value as ChapterType,
-                          label,
-                        }))}
-                        className="mb-2"
-                      />
-                      <div className="flex gap-2">
-                        <AriaButton
-                          onPress={handleUpdate}
-                          isDisabled={!editTitle.trim()}
-                          className="flex-1 px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
-                        >
-                          {t("common.save")}
-                        </AriaButton>
-                        <AriaButton
-                          onPress={cancelEditing}
-                          className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
-                        >
-                          {t("common.cancel")}
-                        </AriaButton>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex w-full min-w-0 items-center">
-                        <AriaButton
-                          slot="drag"
-                          data-drag-handle=""
-                          aria-label={t("chapters.reorder")}
-                          className="shrink-0 cursor-grab rounded p-0.5 pointer-coarse:p-1.5 mr-1 text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        >
-                          <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
-                        </AriaButton>
-
-                        <div className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}>
-                          {/* Title line: icon, title, hover actions (mouse), item menu (touch) */}
-                          <div className="flex min-w-0 items-center gap-2 bg-inherit">
-                            <ChapterIcon
-                              className={`shrink-0 text-muted-foreground ${
-                                isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
-                              }`}
-                            />
-                            <span className="relative min-w-0 flex-1 bg-inherit">
-                              <span
-                                className={`block w-full truncate font-medium ${
-                                  isCompactView ? "text-xs" : "text-sm"
-                                }`}
-                              >
-                                {chapter.title}
-                              </span>
-
-                              {/* Edit/Delete overlay the full-width title without causing hover reflow. */}
-                              <span className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:hidden">
-                                <Tooltip content={t("chapters.editChapter")}>
-                                  <AriaButton
-                                    onPress={() => startEditing(chapter)}
-                                    className="p-1 hover:bg-muted rounded transition-colors"
-                                    aria-label={t("chapters.editChapter")}
-                                  >
-                                    <EditIcon className="w-4 h-4 text-foreground" />
-                                  </AriaButton>
-                                </Tooltip>
-                                <Tooltip content={t("chapters.deleteChapter")}>
-                                  <AriaButton
-                                    ref={(element) => {
-                                      if (element)
-                                        deleteButtonRefs.current.set(chapter.id, element);
-                                      else deleteButtonRefs.current.delete(chapter.id);
-                                    }}
-                                    onPress={() => setDeleteConfirmId(chapter.id)}
-                                    className="p-1 hover:bg-destructive/10 rounded transition-colors"
-                                    aria-label={t("chapters.deleteChapter")}
-                                  >
-                                    <DeleteIcon className="w-4 h-4 text-destructive" />
-                                  </AriaButton>
-                                </Tooltip>
-                              </span>
-                            </span>
-                            <ItemActionsMenu
-                              label={t("common.moreActionsFor", { title: chapter.title })}
-                              actions={[
-                                {
-                                  id: "edit",
-                                  label: t("chapters.editChapter"),
-                                  icon: EditIcon,
-                                  onAction: () => startEditing(chapter),
-                                },
-                                {
-                                  id: "delete",
-                                  label: t("chapters.deleteChapter"),
-                                  icon: DeleteIcon,
-                                  isDestructive: true,
-                                  onAction: () => setDeleteConfirmId(chapter.id),
-                                },
-                              ]}
-                              isOpen={menuChapterId === chapter.id}
-                              onOpenChange={(open) => setMenuChapterId(open ? chapter.id : null)}
-                              className="hidden pointer-coarse:inline-flex"
-                            />
-
-                            {/* Compact view has no metadata line: keep the toggle here */}
-                            {isCompactView && outlineToggle}
-                          </div>
-
-                          {/* Metadata line: word count, status, outline toggle */}
-                          {!isCompactView && (
-                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground truncate">
-                              <span>
-                                {chapter.wordCount.toLocaleString()} {t("common.words")}
-                              </span>
-                              <span>•</span>
-                              <span className="capitalize">{chapter.status}</span>
-                              {outlineToggle && (
-                                <span className="ml-auto flex">{outlineToggle}</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Delete confirmation */}
-                      {deleteConfirmId === chapter.id && (
-                        <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
-                          <span className="text-xs">{t("common.deleteConfirm")}</span>
+                  {(anchorRef) =>
+                    editingId === chapter.id ? (
+                      <div className="p-2">
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleUpdate();
+                            if (e.key === "Escape") cancelEditing();
+                          }}
+                        />
+                        <Select
+                          ariaLabel={t("chapters.chapterType")}
+                          value={editType}
+                          onChange={(value) => setEditType(value)}
+                          options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
+                            value: value as ChapterType,
+                            label,
+                          }))}
+                          className="mb-2"
+                        />
+                        <div className="flex gap-2">
                           <AriaButton
-                            onPress={() => handleDelete(chapter.id)}
-                            className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
+                            onPress={handleUpdate}
+                            isDisabled={!editTitle.trim()}
+                            className="flex-1 px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
                           >
-                            {t("common.yes")}
+                            {t("common.save")}
                           </AriaButton>
                           <AriaButton
-                            onPress={() => cancelDelete(chapter.id)}
+                            onPress={cancelEditing}
                             className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
                           >
-                            {t("common.no")}
+                            {t("common.cancel")}
                           </AriaButton>
                         </div>
-                      )}
-                    </>
-                  )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex w-full min-w-0 items-center">
+                          <AriaButton
+                            slot="drag"
+                            data-drag-handle=""
+                            aria-label={t("chapters.reorder")}
+                            className="shrink-0 cursor-grab rounded p-0.5 pointer-coarse:p-1.5 mr-1 text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                          >
+                            <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
+                          </AriaButton>
+
+                          <div
+                            className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}
+                          >
+                            {/* Title line: icon, title, hover actions (mouse), item menu (touch) */}
+                            <div className="flex min-w-0 items-center gap-2 bg-inherit">
+                              <ChapterIcon
+                                className={`shrink-0 text-muted-foreground ${
+                                  isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
+                                }`}
+                              />
+                              <span className="relative min-w-0 flex-1 bg-inherit">
+                                <span
+                                  className={`block w-full truncate font-medium ${
+                                    isCompactView ? "text-xs" : "text-sm"
+                                  }`}
+                                >
+                                  {chapter.title}
+                                </span>
+
+                                {/* Edit/Delete overlay the full-width title without causing hover reflow. */}
+                                <span className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:hidden">
+                                  <Tooltip content={t("chapters.editChapter")}>
+                                    <AriaButton
+                                      onPress={() => startEditing(chapter)}
+                                      className="p-1 hover:bg-muted rounded transition-colors"
+                                      aria-label={t("chapters.editChapter")}
+                                    >
+                                      <EditIcon className="w-4 h-4 text-foreground" />
+                                    </AriaButton>
+                                  </Tooltip>
+                                  <Tooltip content={t("chapters.deleteChapter")}>
+                                    <AriaButton
+                                      ref={(element) => {
+                                        if (element)
+                                          deleteButtonRefs.current.set(chapter.id, element);
+                                        else deleteButtonRefs.current.delete(chapter.id);
+                                      }}
+                                      onPress={() => setDeleteConfirmId(chapter.id)}
+                                      className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                                      aria-label={t("chapters.deleteChapter")}
+                                    >
+                                      <DeleteIcon className="w-4 h-4 text-destructive" />
+                                    </AriaButton>
+                                  </Tooltip>
+                                </span>
+                              </span>
+                              <ItemActionsMenu
+                                anchorRef={anchorRef}
+                                label={t("common.moreActionsFor", { title: chapter.title })}
+                                actions={[
+                                  {
+                                    id: "edit",
+                                    label: t("chapters.editChapter"),
+                                    icon: EditIcon,
+                                    onAction: () => startEditing(chapter),
+                                  },
+                                  {
+                                    id: "delete",
+                                    label: t("chapters.deleteChapter"),
+                                    icon: DeleteIcon,
+                                    isDestructive: true,
+                                    onAction: () => setDeleteConfirmId(chapter.id),
+                                  },
+                                ]}
+                                isOpen={menuChapterId === chapter.id}
+                                onOpenChange={(open) => setMenuChapterId(open ? chapter.id : null)}
+                                className="hidden pointer-coarse:inline-flex"
+                              />
+
+                              {/* Compact view has no metadata line: keep the toggle here */}
+                              {isCompactView && outlineToggle}
+                            </div>
+
+                            {/* Metadata line: word count, status, outline toggle */}
+                            {!isCompactView && (
+                              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground truncate">
+                                <span>
+                                  {chapter.wordCount.toLocaleString()} {t("common.words")}
+                                </span>
+                                <span>•</span>
+                                <span className="capitalize">{chapter.status}</span>
+                                {outlineToggle && (
+                                  <span className="ml-auto flex">{outlineToggle}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Delete confirmation */}
+                        {deleteConfirmId === chapter.id && (
+                          <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
+                            <span className="text-xs">{t("common.deleteConfirm")}</span>
+                            <AriaButton
+                              onPress={() => handleDelete(chapter.id)}
+                              className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
+                            >
+                              {t("common.yes")}
+                            </AriaButton>
+                            <AriaButton
+                              onPress={() => cancelDelete(chapter.id)}
+                              className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
+                            >
+                              {t("common.no")}
+                            </AriaButton>
+                          </div>
+                        )}
+                      </>
+                    )
+                  }
                 </ChapterItemGestures>
                 {isActive && editor && showChapterOutline && (
                   <div className="list-none">

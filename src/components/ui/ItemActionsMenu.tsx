@@ -29,6 +29,8 @@ interface ItemActionsMenuProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   className?: string;
+  /** Visible item anchor when the ⋯ button is hidden on desktop. */
+  anchorRef?: RefObject<Element | null>;
 }
 
 const POPOVER_CLASS =
@@ -115,7 +117,9 @@ export function ItemActionsPopover({
   actions,
   isOpen,
   onOpenChange,
-}: Omit<ItemActionsMenuProps, "className"> & { triggerRef: RefObject<Element | null> }) {
+}: Omit<ItemActionsMenuProps, "className" | "anchorRef"> & {
+  triggerRef: RefObject<Element | null>;
+}) {
   return (
     <Popover
       triggerRef={triggerRef}
@@ -130,8 +134,9 @@ export function ItemActionsPopover({
 }
 
 /**
- * Always-visible ⋯ button that opens an item's actions. Pair it with
- * `useItemContextMenu` so long-press and right-click open the same menu.
+ * ⋯ button that opens an item's actions. Pair it with `useItemContextMenu`
+ * so long-press and right-click open the same menu. Supply a visible
+ * `anchorRef` when CSS hides the button: display:none has no positioning box.
  */
 export function ItemActionsMenu({
   label,
@@ -139,6 +144,7 @@ export function ItemActionsMenu({
   isOpen,
   onOpenChange,
   className = "",
+  anchorRef,
 }: ItemActionsMenuProps) {
   return (
     <MenuTrigger isOpen={isOpen} onOpenChange={onOpenChange}>
@@ -151,7 +157,7 @@ export function ItemActionsMenu({
           <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
         </Button>
       </Tooltip>
-      <Popover placement="bottom end" className={POPOVER_CLASS}>
+      <Popover triggerRef={anchorRef} placement="bottom end" className={POPOVER_CLASS}>
         <ActionItems actions={actions} label={label} />
       </Popover>
     </MenuTrigger>

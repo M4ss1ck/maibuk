@@ -2,6 +2,7 @@ import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
 import { act, render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import { buildChapter } from "@/test/support/fixtures";
 import { installPointerEvent, touchLongPress } from "@/test/support/pointer-events";
 import type { Chapter } from "@/features/chapters/types";
@@ -504,7 +505,9 @@ describe("ChapterList", () => {
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id });
 
-      const hoverActions = screen.getByRole("button", { name: "chapters.editChapter" }).parentElement;
+      const hoverActions = screen.getByRole("button", {
+        name: "chapters.editChapter",
+      }).parentElement;
       expect(hoverActions).toHaveClass("group-hover:opacity-100", "pointer-coarse:hidden");
       expect(screen.getByRole("button", { name: "common.moreActionsFor" })).toHaveClass(
         "hidden",
@@ -586,6 +589,25 @@ describe("ChapterList", () => {
   });
 
   // ---------------------------------------------------------------------------
+  it.each([
+    "normal",
+    "compact",
+  ] as const)("positions a %s Chapter's Item Menu beside its row with the desktop button hidden", async (view) => {
+    storeState.chapterListView = view;
+    const onSelect = vi.fn();
+    renderCL({
+      chapters: [buildChapter({ id: "ch-1", title: "First", order: 1 })],
+      onSelectChapter: onSelect,
+    });
+    mockItemMenuLayout(screen.getByRole("row", { name: "First" }));
+    fireEvent.contextMenu(screen.getByText("First"), { clientX: 400, clientY: 250 });
+    const menu = await screen.findByRole("menu");
+    await waitFor(() =>
+      expect(menu.closest("[data-placement]")).toHaveStyle({ left: "380px", top: "384px" })
+    );
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   describe("touch", () => {
     beforeEach(() => {
       installPointerEvent();
@@ -748,9 +770,11 @@ describe("ChapterList", () => {
 
     it("on touch, cancelling a delete from the item menu returns focus to its ⋯ button", async () => {
       const user = userEvent.setup();
-      const matchMedia = vi.spyOn(window, "matchMedia").mockImplementation(
-        (query: string) => ({ matches: query === "(pointer: coarse)" }) as MediaQueryList
-      );
+      const matchMedia = vi
+        .spyOn(window, "matchMedia")
+        .mockImplementation(
+          (query: string) => ({ matches: query === "(pointer: coarse)" }) as MediaQueryList
+        );
       try {
         const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
         renderCL({ chapters, currentChapterId: chapters[0].id });
@@ -1161,3 +1185,5 @@ describe("ChapterList", () => {
     });
   });
 });
+
+afterEach(() => vi.restoreAllMocks());

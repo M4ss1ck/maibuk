@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NoteListItem } from "@/components/notes/NoteListItem";
+import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import type { Note } from "@/features/notes";
 
 vi.mock("react-i18next", () => ({
@@ -31,7 +32,22 @@ function buildNote(overrides: Partial<Note> = {}): Note {
   };
 }
 
+afterEach(() => vi.restoreAllMocks());
+
 describe("NoteListItem title editing", () => {
+  it("positions the Item Menu beside the Note row with its desktop button hidden", async () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <NoteListItem note={buildNote()} isSelected={false} onSelect={onSelect} onRename={vi.fn()} />
+    );
+    mockItemMenuLayout(container);
+    fireEvent.contextMenu(screen.getByText("Old title"), { clientX: 400, clientY: 250 });
+    const menu = await screen.findByRole("menu");
+    await waitFor(() =>
+      expect(menu.closest("[data-placement]")).toHaveStyle({ left: "380px", top: "384px" })
+    );
+    expect(onSelect).not.toHaveBeenCalled();
+  });
   it("saves a renamed note title from the sidebar row", async () => {
     const user = userEvent.setup();
     const onRename = vi.fn();
