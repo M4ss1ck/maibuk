@@ -38,14 +38,17 @@ export function TutorialCard({
   const { t } = useTranslation();
   const bodyId = useId();
   const dialogRef = useRef<HTMLElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
 
   // React Aria focuses a new dialog only after every CSS transition on the
   // page ends (measured 300-500 ms between steps in Chromium), leaving focus
   // on <body> meanwhile. The card mounts once per step, so it claims focus
-  // at once; FocusScope still keeps Tab inside it.
+  // at once, on Next, so Enter or Space walks through the steps; FocusScope
+  // still keeps Tab inside it.
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
-    if (dialog && !dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
+    if (!dialog || dialog.contains(document.activeElement)) return;
+    (nextRef.current ?? dialog).focus({ preventScroll: true });
   }, []);
   // Step keys are composed from the step id; the locale parity test proves they exist.
   const translate = t as unknown as (key: string) => string;
@@ -96,7 +99,7 @@ export function TutorialCard({
               {t("tutorial.card.back")}
             </Button>
           )}
-          <Button type="button" size="sm" onClick={onNext}>
+          <Button ref={nextRef} type="button" size="sm" onClick={onNext}>
             {isLast ? t("tutorial.card.finish") : t("tutorial.card.next")}
           </Button>
         </div>

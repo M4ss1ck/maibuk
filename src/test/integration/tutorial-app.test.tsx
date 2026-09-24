@@ -240,8 +240,13 @@ describe("the first-launch offer", () => {
         ).not.toBeNull();
         expect(path).toBe(step.route ?? section.route);
 
+        // Next (Finish on the last step) holds focus, so Enter alone walks on.
         const isLast = shown === total;
-        await pressCardButton(user, en(isLast ? "tutorial.card.finish" : "tutorial.card.next"));
+        const next = within(dialog).getByRole("button", {
+          name: en(isLast ? "tutorial.card.finish" : "tutorial.card.next"),
+        });
+        await waitFor(() => expect(document.activeElement).toBe(next));
+        await user.keyboard("{Enter}");
       }
     }
 
