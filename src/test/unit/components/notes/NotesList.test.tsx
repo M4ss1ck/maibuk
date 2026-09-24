@@ -1298,6 +1298,21 @@ describe("NotesList item menu", () => {
     expect(await screen.findByRole("menu")).toBeInTheDocument();
   });
 
+  it("Escape closes the item menu and keeps focus on that note", async () => {
+    const user = userEvent.setup();
+    renderMenuList();
+
+    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+    row.focus();
+    await user.tab();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("menu");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
+  });
+
   it("opens the menu on touch long-press without opening the note", () => {
     vi.useFakeTimers();
     try {

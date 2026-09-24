@@ -61,14 +61,14 @@ export function useItemContextMenu({ onOpen, isDisabled = false }: UseItemContex
 
   const itemProps = useMemo(() => {
     const gated = touchOnly(longPressProps);
-    const gatedPointerDown = gated.onPointerDown as AnyHandler | undefined;
     return {
       ...gated,
-      onPointerDown: (event: PointerEvent<HTMLElement>) => {
+      // Capture phase: nested buttons (drag handles, the ⋯ button) stop
+      // pointerdown propagation, but the gesture still has to know where it began.
+      onPointerDownCapture: (event: PointerEvent<HTMLElement>) => {
         lastPointerTypeRef.current = event.pointerType;
         pressOriginRef.current = event.target;
         suppressClickRef.current = false;
-        gatedPointerDown?.(event);
       },
       onContextMenu: (event: MouseEvent<HTMLElement>) => {
         if (isDisabled) return;
