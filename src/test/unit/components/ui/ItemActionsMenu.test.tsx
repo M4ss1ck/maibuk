@@ -35,6 +35,9 @@ function Row({
         onClick={(event) => {
           if (event.currentTarget.contains(event.target as Node)) onSelect();
         }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && event.currentTarget === event.target) onSelect();
+        }}
         {...itemProps}
       >
         <span data-testid="title">Row title</span>
