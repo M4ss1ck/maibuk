@@ -36,7 +36,9 @@ export function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [isNewBookOpen, setIsNewBookOpen] = useState(false);
-  const [focusedBookId, setFocusedBookId] = useState<string | null>(null);
+  // A ref, not state: re-rendering the grid on every focus change inside a card
+  // lets the card row take focus back from the card's open status popover.
+  const focusedBookIdRef = useRef<string | null>(null);
   const [epubImport, setEpubImport] = useState<EpubImportState | null>(null);
   const [isScanningEpub, setIsScanningEpub] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -76,14 +78,15 @@ export function Home() {
   }, [loadBooks]);
 
   useEffect(() => {
+    const focusedBookId = focusedBookIdRef.current;
     if (focusedBookId && !visibleBooks.some((book) => book.id === focusedBookId)) {
       const previousIndex = previousBookIdsRef.current.indexOf(focusedBookId);
       const fallback = visibleBooks[Math.min(Math.max(previousIndex, 0), visibleBooks.length - 1)];
-      setFocusedBookId(fallback?.id ?? null);
+      focusedBookIdRef.current = fallback?.id ?? null;
       if (fallback) focusBook(fallback.id);
     }
     previousBookIdsRef.current = visibleBooks.map((book) => book.id);
-  }, [visibleBooks, focusBook, focusedBookId]);
+  }, [visibleBooks, focusBook]);
 
   // Enter on a focused book card opens it through the card's own link.
   useBoundShortcutIds(["home.openSelected"], visibleBooks.length > 0);
@@ -100,7 +103,7 @@ export function Home() {
           actionsRef.current?.contains(activeElement);
         if (activeElement !== document.body && !isEnteringFromActions) return;
         const target =
-          visibleBooks.find((book) => book.id === focusedBookId) ??
+          visibleBooks.find((book) => book.id === focusedBookIdRef.current) ??
           (event.key === "ArrowUp" || event.key === "ArrowLeft"
             ? visibleBooks[visibleBooks.length - 1]
             : visibleBooks[0]);
@@ -322,7 +325,7 @@ export function Home() {
         <div
           onFocusCapture={(event) => {
             const row = (event.target as HTMLElement).closest<HTMLElement>("[data-key]");
-            if (row?.dataset.key) setFocusedBookId(row.dataset.key);
+            if (row?.dataset.key) focusedBookIdRef.current = row.dataset.key;
           }}
         >
           <GridList

@@ -159,8 +159,28 @@ describe("Home archiving", () => {
     await user.keyboard("{Escape}");
 
     await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    // React Aria's GridList takes focus back to the card the popover belongs to.
+    await waitFor(() => expect(screen.getByRole("row", { name: "Alpha" })).toHaveFocus());
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockUpdateBook).not.toHaveBeenCalled();
+  });
+
+  it("keeps focus on the card after picking a status by keyboard", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    screen.getAllByRole("row")[0].focus();
+    await user.keyboard("{Tab}");
+    const pill = screen.getByRole("button", { name: /Change status of Alpha$/ });
+    expect(pill).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    await screen.findByRole("listbox");
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    expect(mockUpdateBook).toHaveBeenCalledWith("alpha", { status: "in-progress" });
+    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("row", { name: "Alpha" })).toHaveFocus());
   });
 
   it("still opens a book with Enter on the card itself", async () => {

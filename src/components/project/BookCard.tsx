@@ -55,8 +55,6 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
   return (
     <GridListItem
       id={book.id}
-      // The grid row's press/focus handling otherwise closes the popover before an option renders.
-      isDisabled={isStatusOpen}
       textValue={book.title}
       onPress={onPress}
       style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
