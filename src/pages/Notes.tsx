@@ -5,6 +5,7 @@ import { useNoteStore } from "@/features/notes";
 import type { Note, ReorderNoteItem, UpdateNoteInput } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
 import { NotesList, NoteEditor, EmptyNotes } from "@/components/notes";
+import { duplicateNoteInput } from "@/components/notes/notes-list-model";
 import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage } from "@/features/settings/types";
 import { useShortcuts } from "@/lib/shortcuts";
@@ -173,14 +174,7 @@ export function Notes() {
   };
 
   const handleDuplicateNote = async (note: Note) => {
-    const duplicated = await createNote({
-      title: `${note.title} (copy)`,
-      bookId: note.bookId ?? null,
-      content: note.content,
-      language: note.language,
-      tags: [...note.tags],
-      wordCount: note.wordCount,
-    });
+    const duplicated = await createNote(duplicateNoteInput(note));
     setCurrentNote(duplicated);
     setLastNoteId(duplicated.id);
   };

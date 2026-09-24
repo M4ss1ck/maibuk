@@ -1,5 +1,5 @@
 import type { Book } from "@/features/books/types";
-import type { Note } from "@/features/notes";
+import type { CreateNoteInput, Note } from "@/features/notes";
 
 export type NotesListViewMode = "list" | "tree";
 export type NotesTreeGroupMode = "book" | "tag" | "date";
@@ -279,4 +279,16 @@ export function buildDateNoteGroups(notes: NoteWithBook[], now = new Date()): Da
   }
 
   return groups.filter((group) => group.notes.length > 0);
+}
+
+/** What Duplicate creates from a note: its content, Book, and Tags under a "(copy)" title. */
+export function duplicateNoteInput(note: Note): CreateNoteInput {
+  return {
+    title: `${note.title} (copy)`,
+    bookId: note.bookId ?? null,
+    content: note.content,
+    language: note.language,
+    tags: [...note.tags],
+    wordCount: note.wordCount,
+  };
 }

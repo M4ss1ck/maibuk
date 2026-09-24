@@ -22,14 +22,9 @@ import {
 import type { Book } from "@/features/books/types";
 import type { ReorderNoteItem } from "@/features/notes";
 import { AddIcon } from "@/components/icons/AddIcon";
-import {
-  Button,
-  FileDropImportStatus,
-  Modal,
-  ResponsiveToggleGroup,
-  Tooltip,
-} from "@/components/ui";
+import { FileDropImportStatus, ResponsiveToggleGroup, Tooltip } from "@/components/ui";
 import type { ResponsiveToggleOption } from "@/components/ui";
+import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
 import { NoteListItem } from "@/components/notes/NoteListItem";
 import type { NoteMoveTarget } from "@/components/notes/NoteListItem";
 import { useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
@@ -714,27 +709,11 @@ export function NotesList({
         </div>
       )}
 
-      <Modal
-        isOpen={pendingDeleteNote !== null}
-        onClose={() => setPendingDeleteId(null)}
-        title={t("notes.deleteConfirm")}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setPendingDeleteId(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              {t("notes.delete")}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-muted-foreground">
-          {t("notes.deleteConfirmBody", {
-            title: pendingDeleteNote?.title || t("notes.untitled"),
-          })}
-        </p>
-      </Modal>
+      <DeleteNoteDialog
+        note={pendingDeleteNote}
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={confirmDelete}
+      />
     </aside>
   );
 }
