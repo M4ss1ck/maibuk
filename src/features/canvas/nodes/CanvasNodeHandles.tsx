@@ -38,7 +38,7 @@ export function CanvasNodeHandles({
 }: {
   connectedSides: Record<Side, SideConnection>;
   variant: "text" | "card";
-  /** Touch screens have no hover: a selected node always shows its ports. */
+  /** Touch screens have no hover: there a selected node always shows its ports. */
   selected?: boolean;
 }) {
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
@@ -62,8 +62,8 @@ export function CanvasNodeHandles({
               id={side}
               type="source"
               position={SIDE_POSITION[side]}
-              className={`z-10! h-2.5! w-2.5! pointer-coarse:h-5! pointer-coarse:w-5! rounded-full! border-2! border-primary! bg-background! transition-opacity ${
-                selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              className={`z-10! h-2.5! w-2.5! pointer-coarse:h-5! pointer-coarse:w-5! rounded-full! border-2! border-primary! bg-background! opacity-0 transition-opacity group-hover:opacity-100 ${
+                selected ? "pointer-coarse:opacity-100" : ""
               } ${SIDE_OFFSET[side]}`}
             />
           ))}

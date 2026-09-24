@@ -497,7 +497,7 @@ export function NotesList({
                       type="button"
                       onClick={() => onCreateNote(group.book?.id ?? null)}
                       aria-label={t("notes.addNoteToBook")}
-                      className="shrink-0 rounded p-0.5 pointer-coarse:p-1.5 text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground"
+                      className="shrink-0 rounded p-0.5 pointer-coarse:p-1.5 text-muted-foreground opacity-0 transition-all duration-200 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
                     >
                       <AddIcon className="h-3.5 w-3.5" />
                     </button>

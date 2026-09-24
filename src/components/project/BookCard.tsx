@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GridListItem } from "react-aria-components/GridList";
 import {
   Button,
   Dialog,
-  DialogTrigger,
   ListBox,
   ListBoxItem,
   Popover,
@@ -31,6 +30,13 @@ const statusIcons = {
 export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardProps) {
   const { t, i18n } = useTranslation();
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [statusAnchor, setStatusAnchor] = useState<"corner" | "pill">("corner");
+  const cornerRef = useRef<HTMLButtonElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const openStatus = (anchor: "corner" | "pill") => {
+    setStatusAnchor(anchor);
+    setIsStatusOpen(true);
+  };
   const isArchived = book.status === "archived";
   const StatusIcon = statusIcons[book.status];
   const statusLabel = t(`common.${book.status}`);
@@ -75,6 +81,67 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
         />
       ) : null}
 
+      <Button
+        ref={cornerRef}
+        aria-label={t("books.changeStatus", { title: book.title })}
+        onPress={() => openStatus("corner")}
+        className={`absolute right-2 top-2 z-10 inline-flex items-center gap-0.5 rounded-md bg-card/80 p-1.5 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:hidden ${isStatusOpen && statusAnchor === "corner" ? "opacity-100" : ""}`}
+      >
+        <StatusIcon className="h-4 w-4" />
+        <ChevronDown className="h-3 w-3" />
+      </Button>
+
+      <Popover
+        triggerRef={statusAnchor === "pill" ? pillRef : cornerRef}
+        isOpen={isStatusOpen}
+        onOpenChange={setIsStatusOpen}
+        placement={statusAnchor === "pill" ? "bottom start" : "bottom end"}
+        className="z-50 mt-1 w-44 overflow-auto rounded-lg border border-border bg-background shadow-lg focus:outline-none"
+      >
+        <Dialog
+          aria-label={t("books.changeStatus", { title: book.title })}
+          className="outline-none"
+        >
+          <ListBox
+            autoFocus
+            aria-label={t("books.changeStatus", { title: book.title })}
+            items={BOOK_STATUSES.map((status) => ({
+              status,
+              label: t(`common.${status}`),
+            }))}
+            selectionMode="single"
+            escapeKeyBehavior="none"
+            selectedKeys={[book.status]}
+            onSelectionChange={(keys) => {
+              const status = [...keys][0] as BookStatus | undefined;
+              if (status && status !== book.status) onStatusChange(status);
+              setIsStatusOpen(false);
+            }}
+            className="outline-none"
+          >
+            {(option) => (
+              <ListBoxItem
+                id={option.status}
+                textValue={option.label}
+                className="relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted data-selected:text-primary"
+              >
+                {({ isSelected }) => (
+                  <>
+                    <Check
+                      className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                    />
+                    <span
+                      className={`flex-1 truncate ${isSelected ? "font-medium" : "font-normal"}`}
+                    >
+                      {option.label}
+                    </span>
+                  </>
+                )}
+              </ListBoxItem>
+            )}
+          </ListBox>
+        </Dialog>
+      </Popover>
 
       <div
         className={`aspect-2/3 bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center ${
@@ -93,66 +160,23 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
         <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
 
         <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-          <DialogTrigger isOpen={isStatusOpen} onOpenChange={setIsStatusOpen}>
-            <Button
-              // Starts with the visible status so voice control can target it by what it shows.
-              aria-label={`${statusLabel}, ${t("books.changeStatus", { title: book.title })}`}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 pointer-coarse:py-1.5 text-xs transition-shadow hover:ring-1 hover:ring-current/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${statusColors[book.status]}`}
-            >
-              <StatusIcon className="h-3 w-3" aria-hidden="true" />
-              <span className="capitalize">{statusLabel}</span>
-              <ChevronDown className="h-3 w-3" aria-hidden="true" />
-            </Button>
-
-            <Popover
-              placement="bottom start"
-              className="z-50 mt-1 w-44 overflow-auto rounded-lg border border-border bg-background shadow-lg focus:outline-none"
-            >
-              <Dialog
-                aria-label={t("books.changeStatus", { title: book.title })}
-                className="outline-none"
-              >
-                <ListBox
-                  autoFocus
-                  aria-label={t("books.changeStatus", { title: book.title })}
-                  items={BOOK_STATUSES.map((status) => ({
-                    status,
-                    label: t(`common.${status}`),
-                  }))}
-                  selectionMode="single"
-                  escapeKeyBehavior="none"
-                  selectedKeys={[book.status]}
-                  onSelectionChange={(keys) => {
-                    const status = [...keys][0] as BookStatus | undefined;
-                    if (status && status !== book.status) onStatusChange(status);
-                    setIsStatusOpen(false);
-                  }}
-                  className="outline-none"
-                >
-                  {(option) => (
-                    <ListBoxItem
-                      id={option.status}
-                      textValue={option.label}
-                      className="relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted data-selected:text-primary"
-                    >
-                      {({ isSelected }) => (
-                        <>
-                          <Check
-                            className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "opacity-100" : "opacity-0"}`}
-                          />
-                          <span
-                            className={`flex-1 truncate ${isSelected ? "font-medium" : "font-normal"}`}
-                          >
-                            {option.label}
-                          </span>
-                        </>
-                      )}
-                    </ListBoxItem>
-                  )}
-                </ListBox>
-              </Dialog>
-            </Popover>
-          </DialogTrigger>
+          {/* Touch has no hover to reveal the corner button: the pill itself opens the menu. */}
+          <Button
+            ref={pillRef}
+            // Starts with the visible status so voice control can target it by what it shows.
+            aria-label={`${statusLabel}, ${t("books.changeStatus", { title: book.title })}`}
+            onPress={() => openStatus("pill")}
+            className={`hidden items-center gap-1 rounded-full px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:inline-flex ${statusColors[book.status]}`}
+          >
+            <StatusIcon className="h-3 w-3" aria-hidden="true" />
+            <span className="capitalize">{statusLabel}</span>
+            <ChevronDown className="h-3 w-3" aria-hidden="true" />
+          </Button>
+          <span
+            className={`text-xs px-2 py-1 rounded-full capitalize pointer-coarse:hidden ${statusColors[book.status]}`}
+          >
+            {statusLabel}
+          </span>
           <span className="text-xs text-muted-foreground">
             {book.wordCount.toLocaleString()} {t("common.words")}
           </span>

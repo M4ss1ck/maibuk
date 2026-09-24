@@ -602,6 +602,7 @@
     "settings": {
       "actionsColumn": "Acciones",
       "actionsColumnHelp": "Eliminar o gestionar",
+      "addDivider": "Añadir separador",
       "addDividerBelow": "Añadir separador debajo",
       "close": "Cerrar",
       "description": "Elige qué herramientas aparecen en la barra de herramientas y en el menú de selección, y ordénalas.",

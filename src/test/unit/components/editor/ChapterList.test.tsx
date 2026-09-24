@@ -487,19 +487,33 @@ describe("ChapterList", () => {
 
   // ---------------------------------------------------------------------------
   describe("Tab navigation to nested controls", () => {
-    it("keeps the item menu button visible beside a truncated title", () => {
+    it("lets the title use the action area until the overlay is revealed", () => {
       const chapters = [buildChapter({ id: "ch-1", title: "A very long chapter title", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id });
 
       const title = screen.getByText("A very long chapter title");
-      const menuButton = screen.getByRole("button", { name: "common.moreActionsFor" });
+      const actions = screen.getByRole("button", { name: "chapters.editChapter" }).parentElement;
 
-      expect(title).toHaveClass("flex-1", "truncate");
-      expect(title.parentElement).toContainElement(menuButton);
-      expect(menuButton.className).not.toMatch(/opacity-0|group-hover/);
+      expect(title).toHaveClass("w-full", "truncate");
+      expect(title.parentElement).toHaveClass("flex-1", "relative");
+      expect(actions).toHaveClass("absolute", "rounded-md", "opacity-0", "transition-opacity");
+      expect(actions).not.toHaveClass("pl-3");
     });
 
-    it("Tab reaches drag handle, item menu, and outline controls", async () => {
+    it("keeps hover edit/delete for the mouse and the item menu for touch", () => {
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      const hoverActions = screen.getByRole("button", { name: "chapters.editChapter" }).parentElement;
+      expect(hoverActions).toHaveClass("group-hover:opacity-100", "pointer-coarse:hidden");
+      expect(screen.getByRole("button", { name: "common.moreActionsFor" })).toHaveClass(
+        "hidden",
+        "pointer-coarse:inline-flex"
+      );
+    });
+
+    it("Tab reaches drag handle, edit, delete, item menu, and outline controls", async () => {
+      // jsdom applies no CSS; in the app Tab skips whichever set is display:none.
       const user = userEvent.setup();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id, editor: { state: {} } });
@@ -507,14 +521,27 @@ describe("ChapterList", () => {
       const rows = screen.getAllByRole("row");
       rows[0].focus();
 
-      await user.tab();
-      expect(screen.getByRole("button", { name: "chapters.reorder" })).toHaveFocus();
+      for (const name of [
+        "chapters.reorder",
+        "chapters.editChapter",
+        "chapters.deleteChapter",
+        "common.moreActionsFor",
+        "toc.showOutline",
+      ]) {
+        await user.tab();
+        expect(screen.getByRole("button", { name })).toHaveFocus();
+      }
+    });
 
-      await user.tab();
-      expect(screen.getByRole("button", { name: "common.moreActionsFor" })).toHaveFocus();
+    it("pressing the hover delete button shows confirmation", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
 
-      await user.tab();
-      expect(screen.getByRole("button", { name: "toc.showOutline" })).toHaveFocus();
+      const delBtn = screen.getByRole("button", { name: "chapters.deleteChapter" });
+      delBtn.focus();
+      await user.keyboard("{Enter}");
+      expect(screen.getByText("common.deleteConfirm")).toBeInTheDocument();
     });
 
     it("choosing Edit from the item menu by keyboard shows the edit form", async () => {
@@ -701,23 +728,43 @@ describe("ChapterList", () => {
       await waitFor(() => expect(screen.getByRole("row", { name: "Second" })).toHaveFocus());
     });
 
-    it("cancels delete by keyboard (Tab to No, Enter) and focus returns", async () => {
+    it("cancels delete by keyboard (Tab to No, Enter) and focus returns to the hover delete", async () => {
       const user = userEvent.setup();
       const onDelete = vi.fn();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id, onDeleteChapter: onDelete });
 
-      const trigger = await openChapterMenu(user);
-      await user.keyboard("{ArrowDown}{Enter}");
+      const deleteButton = screen.getByRole("button", { name: "chapters.deleteChapter" });
+      deleteButton.focus();
+      await user.keyboard("{Enter}");
       const noButton = screen.getByRole("button", { name: "common.no" });
       await tabToControl(user, noButton);
       await user.keyboard("{Enter}");
 
       expect(onDelete).not.toHaveBeenCalled();
       expect(screen.queryByText("common.deleteConfirm")).not.toBeInTheDocument();
-      await waitFor(() => {
-        expect(trigger).toHaveFocus();
-      });
+      await waitFor(() => expect(deleteButton).toHaveFocus());
+    });
+
+    it("on touch, cancelling a delete from the item menu returns focus to its ⋯ button", async () => {
+      const user = userEvent.setup();
+      const matchMedia = vi.spyOn(window, "matchMedia").mockImplementation(
+        (query: string) => ({ matches: query === "(pointer: coarse)" }) as MediaQueryList
+      );
+      try {
+        const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+        renderCL({ chapters, currentChapterId: chapters[0].id });
+
+        const trigger = await openChapterMenu(user);
+        await user.keyboard("{ArrowDown}{Enter}");
+        const noButton = screen.getByRole("button", { name: "common.no" });
+        await tabToControl(user, noButton);
+        await user.keyboard("{Enter}");
+
+        await waitFor(() => expect(trigger).toHaveFocus());
+      } finally {
+        matchMedia.mockRestore();
+      }
     });
   });
 
@@ -761,13 +808,15 @@ describe("ChapterList", () => {
       renderCL();
       const activeRow = screen.getAllByRole("row")[0];
       expect(activeRow).toHaveClass("bg-primary/10", "border-l-2", "border-primary");
-      expect(screen.getByText("Chapter 1").parentElement?.parentElement).toHaveClass("p-3");
+      expect(screen.getByText("Chapter 1").parentElement?.parentElement?.parentElement).toHaveClass(
+        "p-3"
+      );
     });
 
     it("preserves compact density", () => {
       storeState.chapterListView = "compact";
       renderCL();
-      expect(screen.getByText("Chapter 1").parentElement?.parentElement).toHaveClass(
+      expect(screen.getByText("Chapter 1").parentElement?.parentElement?.parentElement).toHaveClass(
         "px-2",
         "py-1.5"
       );

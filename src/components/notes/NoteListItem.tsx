@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
-import { ItemActionsMenu } from "@/components/ui";
+import { ItemActionsMenu, Tooltip } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
 
@@ -193,12 +193,62 @@ export function NoteListItem({
         ) : (
           <>
             <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{title}</h3>
+            {/* Mouse devices keep one-click actions on hover; touch gets the Item Menu. */}
+            <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:hidden">
+              {onRename && (
+                <Tooltip content={t("common.edit")}>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDraftTitle(note.title);
+                      setIsEditing(true);
+                    }}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={t("common.edit")}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </Tooltip>
+              )}
+              {onDuplicate && (
+                <Tooltip content={t("notes.duplicate")}>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDuplicate(note);
+                    }}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={t("notes.duplicate")}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </Tooltip>
+              )}
+              {onDelete && (
+                <Tooltip content={t("common.delete")}>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDelete(note.id);
+                    }}
+                    className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={t("common.delete")}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </Tooltip>
+              )}
+            </div>
             {hasActions && (
               <ItemActionsMenu
                 label={t("common.moreActionsFor", { title })}
                 actions={actions}
                 isOpen={isMenuOpen}
                 onOpenChange={setIsMenuOpen}
+                className="hidden pointer-coarse:inline-flex"
               />
             )}
           </>

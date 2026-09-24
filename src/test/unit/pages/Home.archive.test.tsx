@@ -124,7 +124,7 @@ describe("Home archiving", () => {
     screen.getAllByRole("row")[0].focus();
     await user.keyboard("{Tab}");
 
-    const statusButton = screen.getByRole("button", { name: /Change status of Alpha$/ });
+    const statusButton = screen.getByRole("button", { name: "Change status of Alpha" });
     expect(statusButton).toHaveFocus();
 
     await user.keyboard("{Enter}");
@@ -139,20 +139,23 @@ describe("Home archiving", () => {
     useSettingsStore.setState({ booksStatusFilter: ["archived"] });
     render(<Home />);
 
-    await user.click(screen.getByRole("button", { name: /Change status of Gamma$/ }));
+    await user.click(screen.getByRole("button", { name: "Change status of Gamma" }));
     await user.click(await screen.findByRole("option", { name: "Draft" }));
 
     expect(mockUpdateBook).toHaveBeenCalledWith("gamma", { status: "draft" });
   });
 
-  it("offers status change on the visible pill, named by what it shows", async () => {
+  it("offers status change on the status pill for touch screens, named by what it shows", async () => {
     const user = userEvent.setup();
     render(<Home />);
 
-    const pill = screen.getByRole("button", { name: /Change status of Alpha$/ });
+    const pill = screen.getByRole("button", { name: "Draft, Change status of Alpha" });
     expect(pill).toHaveTextContent("Draft");
-    expect(pill).toHaveAccessibleName(/^Draft, /);
-    expect(pill.className).not.toMatch(/opacity-0|group-hover/);
+    // Only touch screens show it; the mouse keeps the hover-revealed corner button.
+    expect(pill).toHaveClass("hidden", "pointer-coarse:inline-flex");
+    expect(screen.getByRole("button", { name: "Change status of Alpha" })).toHaveClass(
+      "pointer-coarse:hidden"
+    );
 
     await user.click(pill);
     await screen.findByRole("listbox");
@@ -171,7 +174,7 @@ describe("Home archiving", () => {
 
     screen.getAllByRole("row")[0].focus();
     await user.keyboard("{Tab}");
-    const pill = screen.getByRole("button", { name: /Change status of Alpha$/ });
+    const pill = screen.getByRole("button", { name: "Change status of Alpha" });
     expect(pill).toHaveFocus();
 
     await user.keyboard("{Enter}");
@@ -197,7 +200,7 @@ describe("Home archiving", () => {
     const user = userEvent.setup();
     render(<Home />);
 
-    await user.click(screen.getByRole("button", { name: /Change status of Alpha$/ }));
+    await user.click(screen.getByRole("button", { name: "Change status of Alpha" }));
     await user.click(await screen.findByRole("option", { name: "Completed" }));
 
     expect(mockUpdateBook).toHaveBeenCalledWith("alpha", { status: "completed" });
@@ -208,7 +211,7 @@ describe("Home archiving", () => {
     const user = userEvent.setup();
     render(<Home />);
 
-    await user.click(screen.getByRole("button", { name: /Change status of Alpha$/ }));
+    await user.click(screen.getByRole("button", { name: "Change status of Alpha" }));
     await user.click(await screen.findByRole("option", { name: "Draft" }));
 
     expect(mockUpdateBook).not.toHaveBeenCalled();

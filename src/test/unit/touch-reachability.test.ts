@@ -28,11 +28,6 @@ const EXEMPTIONS: Exemption[] = [
     snippet: '"opacity-0 group-hover:opacity-100"',
     touchPath: "Resize lines show on the selected node; a tap selects it.",
   },
-  {
-    file: "features/canvas/nodes/CanvasNodeHandles.tsx",
-    snippet: '"opacity-0 group-hover:opacity-100"',
-    touchPath: "Connection ports show on the selected node; a tap selects it.",
-  },
 ];
 
 function sourceFiles(dir: string): string[] {

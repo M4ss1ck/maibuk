@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "@/components/notes/NotesList";
@@ -1285,14 +1285,43 @@ describe("NotesList item menu", () => {
     expect(props.onReassignNoteBook).toHaveBeenCalledWith("a", "book-a");
   });
 
+  // jsdom applies no CSS: with a mouse the ⋯ button is display:none and Tab
+  // skips it, on touch the hover icons are; both sit in the row's tab order.
+  async function tabFromFirstRowTo(user: ReturnType<typeof userEvent.setup>, name: string) {
+    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+    row.focus();
+    const target = screen.getAllByRole("button", { name })[0];
+    for (let step = 0; step < 6 && document.activeElement !== target; step++) await user.tab();
+    expect(target).toHaveFocus();
+    return row;
+  }
+
+  it("keeps one-click edit, duplicate and delete on the row for the mouse, and confirms delete", async () => {
+    const user = userEvent.setup();
+    const props = renderMenuList();
+
+    const row = await tabFromFirstRowTo(user, "common.edit");
+    const inRow = within(row);
+    expect(inRow.getByRole("button", { name: "notes.duplicate" })).toBeInTheDocument();
+    expect(inRow.getByRole("button", { name: "common.edit" }).parentElement).toHaveClass(
+      "group-hover:opacity-100",
+      "pointer-coarse:hidden"
+    );
+    expect(inRow.getByRole("button", { name: "common.moreActionsFor" })).toHaveClass(
+      "hidden",
+      "pointer-coarse:inline-flex"
+    );
+
+    await user.click(inRow.getByRole("button", { name: "common.delete" }));
+    await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
+    expect(props.onDeleteNote).not.toHaveBeenCalled();
+  });
+
   it("reaches the ⋯ button from its row with Tab and opens it with Enter", async () => {
     const user = userEvent.setup();
     renderMenuList();
 
-    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
-    row.focus();
-    await user.tab();
-    expect(screen.getAllByRole("button", { name: "common.moreActionsFor" })[0]).toHaveFocus();
+    await tabFromFirstRowTo(user, "common.moreActionsFor");
     await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("menu")).toBeInTheDocument();
@@ -1302,9 +1331,7 @@ describe("NotesList item menu", () => {
     const user = userEvent.setup();
     renderMenuList();
 
-    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
-    row.focus();
-    await user.tab();
+    const row = await tabFromFirstRowTo(user, "common.moreActionsFor");
     await user.keyboard("{Enter}");
     await screen.findByRole("menu");
     await user.keyboard("{Escape}");

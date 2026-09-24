@@ -151,26 +151,29 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByTestId("resize-right").className).toContain("z-0!");
   });
 
-  it("shows the connection ports of a selected node without hover, for touch", () => {
+  it("shows the connection ports of a selected node on touch screens, larger", () => {
     render(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
     );
     for (const handle of screen.getAllByTestId("handle")) {
-      expect(handle.className).toContain("opacity-100");
-      expect(handle.className).not.toContain("group-hover");
+      expect(handle.className).toContain("pointer-coarse:opacity-100");
       expect(handle.className).toContain("pointer-coarse:h-5!");
+      // With a mouse, ports stay a hover affordance, as before.
+      expect(handle.className).toContain("group-hover:opacity-100");
     }
   });
 
-  it("keeps the ports of an unselected node for hover", () => {
+  it("keeps the ports of an unselected node for hover only", () => {
     render(
       <LightweightNode
         {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
     );
-    expect(screen.getAllByTestId("handle")[0].className).toContain("group-hover:opacity-100");
+    const handle = screen.getAllByTestId("handle")[0];
+    expect(handle.className).toContain("group-hover:opacity-100");
+    expect(handle.className).not.toContain("pointer-coarse:opacity-100");
   });
 
   it("hides connection ports and resize grips when interactivity is locked", () => {
