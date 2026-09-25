@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-25
+
+### Added
+- Add guided Tutorial in an in-memory Tutorial Library, offered on first launch and relaunched from Settings or keyboard
+- Add bulk backup selection and deletion in Settings with confirmation and failure reporting
+- Add touch-accessible item menus for notes, chapters, Notes gallery cards, and Canvas nodes via long-press, right-click, or ⋯ button
+- Add Connect to… picker and selected-node ports for keyboard and touch Canvas connections
+- Add Exit focus mode button on touch and Android back support
+
+### Changed
+- Change Backup directory field to show the effective default, commit on Enter or blur, revert on Escape, and open the picker at the current directory
+- Change custom backup directory approval to native confirmation, store approvals outside webview-writable paths, and reject relative or ~ paths
+- Change backup Date column to follow app language and use localized 12-hour time
+- Change Book status dropdown to open from the status pill instead of the hover-only corner button
+- Change note and chapter drags on touch to start only from the visible grip; long-press on the row body opens the item menu
+- Change note deletion to ask for confirmation before removing
+- Change Add divider below to an always-visible toolbar settings action
+- Keep desktop hover actions unchanged and show touch-specific controls only on coarse pointers
+
+### Fixed
+- Fix custom backup directory so it works and persists across launches
+- Fix item menus anchoring to visible notes and chapters and switching correctly on successive right-clicks
+- Fix saved Canvas drawings not rendering in Chromium because of a 0×0 SVG
+- Fix editor toolbar overflow to measure actual layout and no longer scroll prematurely
+- Fix web route reloads so nested routes no longer open a blank page
+- Fix Tutorial cards focusing the Next button so Enter or Space advance through steps
+
 ## [0.8.1] - 2026-09-16
 
 ### Changed
