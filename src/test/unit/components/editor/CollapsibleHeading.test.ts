@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import {
@@ -212,10 +213,32 @@ describe("CollapsibleHeading", () => {
     const button = editor.view.dom.querySelector(".heading-collapse-toggle") as HTMLElement | null;
     expect(button).not.toBeNull();
 
-    button?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
 
     expect(getCollapsedSet(editor).has("h1")).toBe(true);
     editor.destroy();
+  });
+
+  it("toggles collapse when the toggle button is activated with the keyboard", async () => {
+    const user = userEvent.setup();
+    const editor = createEditor('<h2 data-heading-id="h1">Title</h2><p>Body</p>');
+    document.body.appendChild(editor.view.dom);
+
+    const button = editor.view.dom.querySelector(".heading-collapse-toggle") as HTMLElement;
+    button.focus();
+    expect(document.activeElement).toBe(button);
+
+    await user.keyboard("{Enter}");
+
+    expect(getCollapsedSet(editor).has("h1")).toBe(true);
+    expect(
+      (editor.view.dom.querySelector(".heading-collapse-toggle") as HTMLElement).getAttribute(
+        "aria-label"
+      )
+    ).toBe("Expand heading");
+    const dom = editor.view.dom;
+    editor.destroy();
+    dom.remove();
   });
 
   it("updates the decoration toggle state immediately after collapsing", () => {
@@ -226,7 +249,7 @@ describe("CollapsibleHeading", () => {
     expect(button?.getAttribute("data-collapsed")).toBe("false");
     expect(button?.getAttribute("aria-label")).toBe("Collapse heading");
 
-    button?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
 
     const updatedButton = editor.view.dom.querySelector(
       ".heading-collapse-toggle"
@@ -324,5 +347,32 @@ describe("CollapsibleHeading", () => {
 
     expect(editor.commands.revealPosition(posOfText(editor, "body"))).toBe(false);
     editor.destroy();
+  });
+
+  it("toggles the section containing the caret with the command", () => {
+    const editor = createEditor('<h2 data-heading-id="h1">Title</h2><p>body</p>');
+    editor.commands.setTextSelection(posOfText(editor, "body") + 1);
+
+    expect(editor.commands.toggleHeadingCollapse()).toBe(true);
+    expect(getCollapsedSet(editor).has("h1")).toBe(true);
+
+    expect(editor.commands.toggleHeadingCollapse()).toBe(true);
+    expect(getCollapsedSet(editor).has("h1")).toBe(false);
+    editor.destroy();
+  });
+
+  it("toggles the heading with Mod+Alt+H in the mounted editor", async () => {
+    const user = userEvent.setup();
+    const editor = createEditor('<h2 data-heading-id="h1">Title</h2><p>body</p>');
+    document.body.appendChild(editor.view.dom);
+    editor.commands.setTextSelection(posOfText(editor, "body") + 1);
+    editor.view.dom.focus();
+
+    await user.keyboard("{Control>}{Alt>}h{/Alt}{/Control}");
+
+    expect(getCollapsedSet(editor).has("h1")).toBe(true);
+    const dom = editor.view.dom;
+    editor.destroy();
+    dom.remove();
   });
 });

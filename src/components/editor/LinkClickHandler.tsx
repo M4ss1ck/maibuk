@@ -9,6 +9,8 @@ import { toast } from "@/components/ui";
 import { openExternal } from "@/lib/platform";
 import { isInternalLink } from "@/features/links/link-uri";
 import { navigateToLinkTarget } from "@/features/links/navigate";
+import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { isModKey } from "@/lib/keyboard";
 
 interface LinkClickDialogProps {
   editor: Editor;
@@ -24,8 +26,19 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
   const navigate = useNavigate();
   const [linkInfo, setLinkInfo] = useState<LinkInfo | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  // Mod+Enter is handled on the editor DOM, not through useShortcuts.
+  useBoundShortcutIds(["editor.followLink"]);
 
   useEffect(() => {
+    const activateLink = (href: string, position: { x: number; y: number }) => {
+      if (isInternalLink(href)) {
+        void navigateToLinkTarget(href, navigate);
+        return;
+      }
+      setLinkInfo({ url: href, position });
+      setShowConfirmDialog(true);
+    };
+
     const handleClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const link = target.closest("a.editor-link");
@@ -35,26 +48,34 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
         event.stopPropagation();
 
         const href = link.getAttribute("href");
-        if (href && isInternalLink(href)) {
-          void navigateToLinkTarget(href, navigate);
-          return;
-        }
         if (href) {
-          setLinkInfo({
-            url: href,
-            position: { x: event.clientX, y: event.clientY },
-          });
-          setShowConfirmDialog(true);
+          activateLink(href, { x: event.clientX, y: event.clientY });
         }
       }
+    };
+
+    // Keyboard activation of the Link the caret sits in.
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isModKey(event) || event.key !== "Enter") return;
+      const { from, to } = editor.state.selection;
+      if (from !== to) return;
+      const href = editor.getAttributes("link").href as string | undefined;
+      if (!href) return;
+      event.preventDefault();
+      event.stopPropagation();
+      activateLink(href, { x: 0, y: 0 });
     };
 
     // Attach to the editor's DOM element
     const editorElement = editor.view.dom;
     editorElement.addEventListener("click", handleClick);
+    // Capture: read the Link under the caret before ProseMirror turns Enter
+    // into a paragraph break and the caret leaves the mark.
+    editorElement.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
       editorElement.removeEventListener("click", handleClick);
+      editorElement.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [editor, navigate]);
 

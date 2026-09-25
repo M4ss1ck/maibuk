@@ -50,3 +50,18 @@ export function adjustPosition(position: { top: number; left: number }, rect: DO
     top: Math.min(Math.max(position.top, VIEWPORT_PADDING), Math.max(maxTop, VIEWPORT_PADDING)),
   };
 }
+
+/** The image node at or around `pos`; used by the image menu and insert dialog. */
+export function findImageNodeAtPos(
+  doc: PMNode,
+  pos: number
+): { node: PMNode; pos: number } | null {
+  const $pos = doc.resolve(pos);
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    const node = $pos.node(depth);
+    if (node.type.name === "image") {
+      return { node, pos: $pos.before(depth) };
+    }
+  }
+  return null;
+}

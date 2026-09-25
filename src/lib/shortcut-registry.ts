@@ -164,9 +164,15 @@ export const SHORTCUTS = {
     keys: ["Ctrl+Shift+J"],
   },
   "editor.insertLink": { labelKey: "editor.insertLink", keys: ["Ctrl+K"] },
+  "editor.followLink": { labelKey: "editor.followLink", keys: ["Ctrl+Enter"] },
   "editor.undo": { labelKey: "editor.undo", source: "editor-keymap", keys: ["Ctrl+Z"] },
   "editor.redo": { labelKey: "editor.redo", source: "editor-keymap", keys: ["Ctrl+Shift+Z"] },
   "editor.dictionary": { labelKey: "editor.dictionary", keys: ["Ctrl+Shift+D"] },
+  "editor.toggleHeadingCollapse": {
+    labelKey: "editor.toggleHeadingCollapse",
+    source: "editor-keymap",
+    keys: ["Ctrl+Alt+H"],
+  },
   "editor.insertSymbol": {
     labelKey: "shortcuts.insertSymbol",
     keys: ["Ctrl+Shift+O"],

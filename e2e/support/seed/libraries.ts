@@ -5,7 +5,8 @@
 
 import { createBookRow, updateBookRow, updateBookWordCountRow } from "@/features/books/write";
 import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
-import { SEED_BOOK, SEED_CHAPTERS, SHELF_BOOKS } from "./names";
+import { createNoteRow } from "@/features/notes/write";
+import { SEED_BOOK, SEED_CHAPTERS, SEED_NOTES, SEED_NOTE_TAGS, SHELF_BOOKS } from "./names";
 
 async function oneBookThreeChapters(): Promise<void> {
   const book = await createBookRow({ ...SEED_BOOK }, "local");
@@ -35,10 +36,52 @@ async function bookShelf(): Promise<void> {
   }
 }
 
+async function notesWithLinksAndTags(): Promise<void> {
+  const book = await createBookRow({ ...SEED_BOOK }, "local");
+  const chapter = await createChapterRow({ bookId: book.id, title: "Arrival" }, "local");
+  await updateChapterRow(
+    chapter.id,
+    { content: `<p>${SEED_CHAPTERS[0].text}</p>` },
+    "local"
+  );
+  await updateBookWordCountRow(book.id, SEED_CHAPTERS[0].text.split(/\s+/).length);
+
+  const keeperLog = await createNoteRow(
+    {
+      bookId: book.id,
+      title: SEED_NOTES.keeperLog,
+      content:
+        "<h1>Night Watch</h1><p>The lamp holds through the gale.</p><h2>Dawn</h2><p>First light on the water.</p>",
+      tags: [SEED_NOTE_TAGS.research, SEED_NOTE_TAGS.lamp],
+    },
+    "local"
+  );
+
+  await createNoteRow(
+    {
+      title: SEED_NOTES.tideTables,
+      content: "<p>High water at six. Low water at noon.</p>",
+      pinned: true,
+      tags: [SEED_NOTE_TAGS.research],
+    },
+    "local"
+  );
+
+  await createNoteRow(
+    {
+      title: SEED_NOTES.harborNotes,
+      content: `<p>See <a class="wikilink" href="maibuk://note/${keeperLog.id}">${SEED_NOTES.keeperLog}</a> for the watch.</p>`,
+      tags: [SEED_NOTE_TAGS.harbor],
+    },
+    "local"
+  );
+}
+
 export const SEED_LIBRARIES = {
   empty: async () => {},
   oneBookThreeChapters,
   bookShelf,
+  notesWithLinksAndTags,
 } satisfies Record<string, () => Promise<void>>;
 
 export type SeedName = keyof typeof SEED_LIBRARIES;

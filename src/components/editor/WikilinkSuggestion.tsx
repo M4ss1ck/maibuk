@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, useState, forwardRef } from "react";
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionOptions } from "@tiptap/suggestion";
 import type { WikilinkCandidate } from "@/features/links/wikilink-targets";
+import i18n from "@/i18n";
 
 export interface WikilinkListProps {
   items: WikilinkCandidate[];
@@ -36,20 +37,32 @@ export const WikilinkList = forwardRef<WikilinkListHandle, WikilinkListProps>(
     }));
 
     return (
-      <div className="z-50 max-h-64 w-72 max-w-[calc(100vw-1rem)] overflow-auto rounded-lg border border-border bg-background shadow-lg">
+      <div
+        role="listbox"
+        aria-label={i18n.t("editor.linkSuggestions")}
+        className="z-50 max-h-64 w-72 max-w-[calc(100vw-1rem)] overflow-auto rounded-lg border border-border bg-background shadow-lg"
+      >
         {items.length === 0 && (
-          <div className="px-3 py-2 text-sm text-muted-foreground">No matches</div>
+          <div className="px-3 py-2 text-sm text-muted-foreground">
+            {i18n.t("editor.noMatches")}
+          </div>
         )}
         {items.map((item, idx) => (
           <button
             key={`${item.kind}-${"id" in item ? item.id : item.label}`}
             type="button"
+            role="option"
+            aria-selected={idx === selected}
             onClick={() => command(item)}
             className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted ${
               idx === selected ? "bg-muted" : ""
             }`}
           >
-            <span>{item.kind === "createNote" ? `Create note "${item.label}"` : item.label}</span>
+            <span>
+              {item.kind === "createNote"
+                ? i18n.t("editor.createNoteFromWikilink", { title: item.label })
+                : item.label}
+            </span>
             <span className="text-xs text-muted-foreground">{item.kind}</span>
           </button>
         ))}

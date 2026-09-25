@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
@@ -20,12 +20,13 @@ function renderFindReplace(onClose: () => void) {
     extensions: [...createRichTextExtensions(), SearchReplace],
   });
   editors.push(editor);
-  return render(
+  const result = render(
     <div>
       <EditorContent editor={editor} />
       <FindReplace editor={editor} isOpen onClose={onClose} />
     </div>
   );
+  return { editor, ...result };
 }
 
 afterEach(() => {
@@ -64,6 +65,18 @@ describe("FindReplace", () => {
     await user.keyboard("{Escape}");
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands focus back to the editor when Escape closes it", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const { editor } = renderFindReplace(onClose);
+
+    await user.click(screen.getByPlaceholderText("editor.find"));
+    await user.keyboard("{Escape}");
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(document.activeElement).toBe(editor.view.dom));
   });
 
   it("sizes inputs from available panel width instead of fixed 224px, keeping every action", () => {

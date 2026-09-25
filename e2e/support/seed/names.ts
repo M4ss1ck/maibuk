@@ -18,3 +18,16 @@ export const SHELF_BOOKS = [
   { title: "Winter Orchard", authorName: "Lena Voss", status: "completed" },
   { title: "The Old Map", authorName: "Ada Marsh", status: "archived" },
 ] as const;
+
+/** `notesWithLinksAndTags`: a Book Note, a pinned Unfiled Note, and a linked pair. */
+export const SEED_NOTES = {
+  keeperLog: "Keeper's Log",
+  tideTables: "Tide Tables",
+  harborNotes: "Harbor Notes",
+} as const;
+
+export const SEED_NOTE_TAGS = {
+  research: "research",
+  lamp: "lamp",
+  harbor: "harbor",
+} as const;

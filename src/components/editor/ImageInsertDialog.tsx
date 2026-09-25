@@ -40,6 +40,21 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
       })
       .run();
 
+    // Leave the new image selected: Shift+F10 reaches its menu from the keyboard.
+    let imagePos = -1;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "image") return;
+      const distance = Math.abs(pos - editor.state.selection.from);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        imagePos = pos;
+      }
+    });
+    if (imagePos >= 0) {
+      editor.commands.setNodeSelection(imagePos);
+    }
+
     handleClose();
   };
 

@@ -103,10 +103,8 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
     initialContent: isOpen ? editor.getHTML() : "",
     onChange: (content) => {
       debouncedSyncToWysiwyg(content);
-      if (cmHandleRef.current) {
-        setWarningCount(cmHandleRef.current.getWarningCount());
-      }
     },
+    onDiagnosticsChange: setWarningCount,
     onFocus: () => {
       activeSourceRef.current = "html";
     },
@@ -224,7 +222,16 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
   if (!isOpen) return null;
 
   return (
-    <div className="border-t border-border bg-muted/30">
+    <div
+      className="border-t border-border bg-muted/30"
+      onKeyDown={(event) => {
+        // Escape is a bridge back to writing: the panel can stay open, but the
+        // caret returns to the Chapter text.
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        editor.commands.focus();
+      }}
+    >
       {/* Panel header */}
       <div className="flex items-center justify-between px-4 py-1.5 border-b border-border bg-background">
         <div className="flex items-center gap-2">
@@ -291,7 +298,7 @@ export function HtmlViewPanel({ editor, isOpen, onClose, onReady }: HtmlViewPane
                   ]
             }
           />
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          <Button size="sm" variant="ghost" onClick={onClose} aria-label={t("common.close")}>
             <XIcon className="w-4 h-4" />
           </Button>
         </div>

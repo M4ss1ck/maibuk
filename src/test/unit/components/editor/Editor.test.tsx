@@ -7,6 +7,8 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
+import { useBookStore } from "@/features/books/store";
+import { useNoteStore } from "@/features/notes/store";
 
 const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),
@@ -128,18 +130,22 @@ vi.mock("../../../../components/editor/LinkClickHandler", () => ({
   LinkClickHandler: () => null,
 }));
 
+const capturedLinkDialogProps: Record<string, unknown>[] = [];
+
 vi.mock("../../../../components/editor/LinkDialog", () => ({
-  LinkDialog: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? (
+  LinkDialog: (props: { isOpen: boolean; onClose: () => void }) => {
+    capturedLinkDialogProps.push(props);
+    return props.isOpen ? (
       <div
         data-testid="link-dialog"
         role="dialog"
         tabIndex={-1}
         onKeyDown={(event) => {
-          if (event.key === "Escape") onClose();
+          if (event.key === "Escape") props.onClose();
         }}
       />
-    ) : null,
+    ) : null;
+  },
 }));
 
 vi.mock("../../../../components/editor/ImageContextMenu", () => ({
@@ -170,6 +176,33 @@ describe("Editor", () => {
   beforeEach(() => {
     mockSetContentSilently.mockClear();
     capturedToolbarProps.length = 0;
+    capturedLinkDialogProps.length = 0;
+  });
+
+  it("offers Books and Notes as internal Link targets in a Book", async () => {
+    useBookStore.setState({
+      books: [{ id: "book-b", title: "Other Book" }] as never,
+    });
+    useNoteStore.setState({
+      notes: [{ id: "note-n", title: "Field Note" }] as never,
+    });
+    try {
+      render(<Editor content="<p>Hello</p>" onUpdate={vi.fn()} bookId="b1" />);
+      await waitFor(() => expect(capturedLinkDialogProps.length).toBeGreaterThan(0));
+      const targets = capturedLinkDialogProps.at(-1)?.internalTargets as {
+        type: string;
+        title: string;
+      }[];
+      expect(targets).toEqual(
+        expect.arrayContaining([
+          { type: "book", bookId: "book-b", title: "Other Book" },
+          { type: "note", noteId: "note-n", title: "Field Note" },
+        ])
+      );
+    } finally {
+      useBookStore.setState({ books: [] });
+      useNoteStore.setState({ notes: [] });
+    }
   });
 
   it("does not rerender the toolbar when typing updates parent statistics", async () => {

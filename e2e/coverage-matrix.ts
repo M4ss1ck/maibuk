@@ -685,7 +685,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-wikilink-suggest",
@@ -695,10 +695,10 @@ export const ROWS: MatrixRow[] = [
     edges: ["Esc closes list"],
     terms: ["Link"],
     shortcuts: [],
-    routes: ["/book/:bookId"],
-    fixture: "oneBookThreeChapters",
+    routes: ["/notes/:noteId"],
+    fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-follow-link",
@@ -706,11 +706,11 @@ export const ROWS: MatrixRow[] = [
     workflow: "Keyboard activation of a Link opens target (Note/Chapter); asserts: URL/editor",
     edges: ["Missing target"],
     terms: ["Link", "Note", "Chapter"],
-    shortcuts: [],
+    shortcuts: ["editor.followLink"],
     routes: ["/book/:bookId", "/notes/:noteId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-image-insert",
@@ -723,7 +723,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["filechooser"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-image-menu",
@@ -735,7 +735,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-footnote",
@@ -748,7 +748,8 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "not-accepted",
+    issue: "https://github.com/M4ss1ck/maibuk/issues/217",
   },
   {
     id: "editor-scene-break",
@@ -761,7 +762,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-outline",
@@ -774,7 +775,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-table",
@@ -787,7 +788,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-find-replace",
@@ -805,7 +806,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-symbols",
@@ -818,7 +819,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-text-case",
@@ -830,7 +831,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-spell-check",
@@ -919,7 +920,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-code-block",
@@ -931,7 +932,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-collapsible-heading",
@@ -939,11 +940,11 @@ export const ROWS: MatrixRow[] = [
     workflow: "Collapse/expand heading by keyboard; persists: collapsed state persists (Notes)",
     edges: [],
     terms: ["Heading"],
-    shortcuts: [],
-    routes: ["/book/:bookId"],
-    fixture: "oneBookThreeChapters",
+    shortcuts: ["editor.toggleHeadingCollapse"],
+    routes: ["/notes/:noteId"],
+    fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-zoom-width",

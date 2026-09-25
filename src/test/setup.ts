@@ -19,6 +19,29 @@ if (typeof Element.prototype.getClientRects !== "function") {
     }) as unknown as DOMRectList;
 }
 
+// ProseMirror's scrollIntoView wraps a Text node in a Range; jsdom's Range has
+// no layout methods, so focusing an editor there would throw unhandled.
+if (typeof Range !== "undefined" && typeof Range.prototype.getClientRects !== "function") {
+  Range.prototype.getClientRects = () =>
+    ({
+      length: 0,
+      item: () => null,
+      [Symbol.iterator]: function* () {},
+    }) as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () =>
+    ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+}
+
 // Polyfill ResizeObserver for accessible UI components in jsdom
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class ResizeObserver {

@@ -83,15 +83,8 @@ export function EditorToolbar({
     useSettingsStore((state) => state.toolbarExpanded),
     useSettingsStore((state) => state.setToolbarExpanded),
   ];
-  const showNotesChapter = useSettingsStore((state) => state.showNotesChapter);
-  const setShowNotesChapter = useSettingsStore((state) => state.setShowNotesChapter);
-  const bookSidePanelTab = useSettingsStore((state) => state.bookSidePanelTab);
-  const setBookSidePanelTab = useSettingsStore((state) => state.setBookSidePanelTab);
   const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
   const setDictionaryOpenInBrowser = useSettingsStore((state) => state.setDictionaryOpenInBrowser);
-
-  // Track editor focus with a delayed blur so toolbar clicks still read it as focused
-  const editorWasFocusedRef = useRef(false);
   const showHtmlPanelRef = useRef(showHtmlPanel);
   showHtmlPanelRef.current = showHtmlPanel;
   const htmlPanelHandleRef = useRef<{
@@ -137,23 +130,6 @@ export function EditorToolbar({
     },
     [editor]
   );
-  useEffect(() => {
-    const dom = editor.view.dom;
-    const onFocus = () => {
-      editorWasFocusedRef.current = true;
-    };
-    const onBlur = () => {
-      setTimeout(() => {
-        editorWasFocusedRef.current = false;
-      }, 150);
-    };
-    dom.addEventListener("focus", onFocus);
-    dom.addEventListener("blur", onBlur);
-    return () => {
-      dom.removeEventListener("focus", onFocus);
-      dom.removeEventListener("blur", onBlur);
-    };
-  }, [editor]);
 
   const handleOpenDictionary = () => {
     const { from, to } = editor.state.selection;
@@ -260,16 +236,7 @@ export function EditorToolbar({
     isFindReplaceOpen: showFindReplace,
     onToggleFindReplace: () => setShowFindReplace(false),
     openImageDialog: () => setShowImageDialog(true),
-    openFootnote: () => {
-      if (editorWasFocusedRef.current) {
-        setShowFootnoteDialog(true);
-      } else if (showNotesChapter && bookSidePanelTab === "footnotes") {
-        setShowNotesChapter(false);
-      } else {
-        setBookSidePanelTab("footnotes");
-        setShowNotesChapter(true);
-      }
-    },
+    openFootnote: () => setShowFootnoteDialog(true),
     openLinkDialog: () => setShowLinkDialog(true),
     openDictionary: handleOpenDictionary,
     openSymbols: () => setShowSymbolsDialog(true),

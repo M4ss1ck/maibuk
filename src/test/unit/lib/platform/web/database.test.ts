@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
-import type { SqlJsDatabase } from "sql.js";
+import type { Database as SqlJsDatabase } from "sql.js";
 import { WebDatabaseAdapter } from "@/lib/platform/web/database";
 
 const DB_NAME = "maibuk-db-storage";

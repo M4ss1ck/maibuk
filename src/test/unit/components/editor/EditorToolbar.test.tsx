@@ -189,4 +189,10 @@ describe("EditorToolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "footnote callback" }));
     expect(screen.getByText("footnote dialog open")).toBeInTheDocument();
   });
+
+  it("opens the footnote dialog from the toolbar even when the editor never had focus", () => {
+    renderToolbar();
+    fireEvent.click(screen.getByRole("button", { name: "footnote callback" }));
+    expect(screen.getByText("footnote dialog open")).toBeInTheDocument();
+  });
 });

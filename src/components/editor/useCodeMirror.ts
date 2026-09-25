@@ -29,6 +29,8 @@ type UseCodeMirrorOptions = {
   onFocus: () => void;
   onBlur: () => void;
   onSelectionChange?: (hasSelection: boolean) => void;
+  /** Fires when the linter's diagnostic count changes. */
+  onDiagnosticsChange?: (count: number) => void;
 };
 
 export function useCodeMirror(options: UseCodeMirrorOptions) {
@@ -110,7 +112,11 @@ export function useCodeMirror(options: UseCodeMirrorOptions) {
         if (update.selectionSet) {
           optionsRef.current.onSelectionChange?.(!update.state.selection.main.empty);
         }
-        warningCount = diagnosticCount(update.state);
+        const diagnostics = diagnosticCount(update.state);
+        if (diagnostics !== warningCount) {
+          warningCount = diagnostics;
+          optionsRef.current.onDiagnosticsChange?.(diagnostics);
+        }
       });
 
       const extensions = [

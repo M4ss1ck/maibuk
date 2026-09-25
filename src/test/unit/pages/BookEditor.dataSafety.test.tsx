@@ -151,7 +151,7 @@ vi.mock("../../../components/editor", async () => {
       onExternalContent?: (content: string, wordCount: number) => void;
     }) => {
       editorProps.current = props;
-      useImperativeHandle(props.ref, () => ({ flush: drainBurst }));
+      useImperativeHandle(props.ref, () => ({ flush: drainBurst, focus: () => {} }));
       useEffect(() => () => drainBurst(), []);
       return <div data-testid="editor" />;
     },

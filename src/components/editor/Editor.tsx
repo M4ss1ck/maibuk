@@ -27,6 +27,8 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Language } from "@/features/settings/types";
 import { useChapterStore } from "@/features/chapters/store";
+import { useBookStore } from "@/features/books/store";
+import { useNoteStore } from "@/features/notes/store";
 import { useReadingPosition } from "@/features/reading-position/useReadingPosition";
 import { useEditorZoomControls } from "@/components/editor/useEditorZoomControls";
 import { assignHeadingIds } from "@/features/links/heading-ids";
@@ -183,19 +185,33 @@ export function Editor({
     setPendingMarkdownPaste(text);
   }, []);
   const chapters = useChapterStore((s) => s.chapters);
+  const books = useBookStore((s) => s.books);
+  const notes = useNoteStore((s) => s.notes);
   const internalTargets = useMemo<InternalTarget[]>(
     () => [
       ...providedInternalTargets,
       ...(bookId
-        ? chapters.map((c) => ({
-            type: "chapter" as const,
-            chapterId: c.id,
-            title: c.title,
-            headingId: null,
-          }))
+        ? [
+            ...books.map((b) => ({
+              type: "book" as const,
+              bookId: b.id,
+              title: b.title,
+            })),
+            ...notes.map((n) => ({
+              type: "note" as const,
+              noteId: n.id,
+              title: n.title,
+            })),
+            ...chapters.map((c) => ({
+              type: "chapter" as const,
+              chapterId: c.id,
+              title: c.title,
+              headingId: null,
+            })),
+          ]
         : []),
     ],
-    [providedInternalTargets, bookId, chapters]
+    [providedInternalTargets, bookId, books, notes, chapters]
   );
   const loadInternalTargetChildren = useCallback<InternalTargetChildrenLoader>(
     async (target) => {
