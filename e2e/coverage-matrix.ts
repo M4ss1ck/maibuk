@@ -379,7 +379,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-navigate",
@@ -392,7 +392,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-rename-type",
@@ -405,7 +405,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-reorder-keyboard",
@@ -418,7 +418,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-delete",
@@ -431,7 +431,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-compact-view",
@@ -444,7 +444,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-toggle-sidebar",
@@ -456,7 +456,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-status-display",
@@ -468,7 +468,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-back",
@@ -481,7 +481,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId", "/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-word-count",
@@ -493,7 +493,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-type-save",

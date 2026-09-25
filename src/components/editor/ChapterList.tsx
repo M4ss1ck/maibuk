@@ -148,6 +148,7 @@ export function ChapterList({
   const [editType, setEditType] = useState<ChapterType>("chapter");
   const [menuChapterId, setMenuChapterId] = useState<string | null>(null);
   const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const cancelDeleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const touchDragGuard = useTouchDragFromHandle();
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -260,6 +261,28 @@ export function ChapterList({
     }
   };
 
+  const closeNewDialog = () => {
+    setShowNewDialog(false);
+    // The form is inline: without this the focused input unmounts to <body>.
+    requestAnimationFrame(() => addButtonRef.current?.focus());
+  };
+
+  /** Returns focus to a Chapter row after an inline form closes. */
+  const focusChapterRow = (id: string) => {
+    requestAnimationFrame(() => {
+      listContainerRef.current
+        ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(id)}"]`)
+        ?.focus();
+    });
+  };
+
+  const openDeleteConfirm = (id: string) => {
+    setDeleteConfirmId(id);
+    // The confirmation covers the row: focus its safe action, not the button
+    // it is covering.
+    requestAnimationFrame(() => cancelDeleteButtonRefs.current.get(id)?.focus());
+  };
+
   const handleDelete = (id: string) => {
     const chapterIndex = chaptersRef.current.findIndex((chapter) => chapter.id === id);
     const focusChapter =
@@ -299,15 +322,19 @@ export function ChapterList({
 
   const handleUpdate = () => {
     if (editingId && editTitle.trim()) {
-      onUpdateChapter(editingId, editTitle.trim(), editType);
+      const id = editingId;
+      onUpdateChapter(id, editTitle.trim(), editType);
       setEditingId(null);
+      focusChapterRow(id);
     }
   };
 
   const cancelEditing = () => {
+    const id = editingId;
     setEditingId(null);
     setEditTitle("");
     setEditType("chapter");
+    if (id) focusChapterRow(id);
   };
 
   return (
@@ -376,7 +403,7 @@ export function ChapterList({
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter") handleCreate();
-              if (e.key === "Escape") setShowNewDialog(false);
+              if (e.key === "Escape") closeNewDialog();
             }}
           />
           <Select
@@ -400,7 +427,7 @@ export function ChapterList({
             </button>
             <button
               type="button"
-              onClick={() => setShowNewDialog(false)}
+              onClick={closeNewDialog}
               className="px-3 py-1.5 text-sm border border-border rounded hover:bg-muted transition-colors"
             >
               {t("common.cancel")}
@@ -576,7 +603,7 @@ export function ChapterList({
                                           deleteButtonRefs.current.set(chapter.id, element);
                                         else deleteButtonRefs.current.delete(chapter.id);
                                       }}
-                                      onPress={() => setDeleteConfirmId(chapter.id)}
+                                      onPress={() => openDeleteConfirm(chapter.id)}
                                       className="p-1 hover:bg-destructive/10 rounded transition-colors"
                                       aria-label={t("chapters.deleteChapter")}
                                     >
@@ -600,7 +627,7 @@ export function ChapterList({
                                     label: t("chapters.deleteChapter"),
                                     icon: DeleteIcon,
                                     isDestructive: true,
-                                    onAction: () => setDeleteConfirmId(chapter.id),
+                                    onAction: () => openDeleteConfirm(chapter.id),
                                   },
                                 ]}
                                 isOpen={menuChapterId === chapter.id}
@@ -639,6 +666,11 @@ export function ChapterList({
                               {t("common.yes")}
                             </AriaButton>
                             <AriaButton
+                              ref={(element) => {
+                                if (element)
+                                  cancelDeleteButtonRefs.current.set(chapter.id, element);
+                                else cancelDeleteButtonRefs.current.delete(chapter.id);
+                              }}
                               onPress={() => cancelDelete(chapter.id)}
                               className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
                             >

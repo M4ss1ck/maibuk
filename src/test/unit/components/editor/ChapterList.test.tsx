@@ -757,6 +757,51 @@ describe("ChapterList", () => {
         screen.queryByPlaceholderText("chapters.chapterTitlePlaceholder")
       ).not.toBeInTheDocument();
     });
+
+    it("returns focus to Add Chapter when create is cancelled with Escape", async () => {
+      const user = userEvent.setup();
+      renderCL();
+      const addButton = screen.getByRole("button", { name: "chapters.addChapter" });
+      addButton.focus();
+      await user.keyboard("{Enter}");
+      const input = screen.getByPlaceholderText("chapters.chapterTitlePlaceholder");
+      expect(input).toHaveFocus();
+      await user.keyboard("{Escape}");
+
+      expect(
+        screen.queryByPlaceholderText("chapters.chapterTitlePlaceholder")
+      ).not.toBeInTheDocument();
+      await waitFor(() => expect(addButton).toHaveFocus());
+    });
+
+    it("returns focus to Add Chapter when create is cancelled with Cancel", async () => {
+      const user = userEvent.setup();
+      renderCL();
+      const addButton = screen.getByRole("button", { name: "chapters.addChapter" });
+      addButton.focus();
+      await user.keyboard("{Enter}");
+      const cancel = screen.getByRole("button", { name: "common.cancel" });
+      await tabToControl(user, cancel);
+      await user.keyboard("{Enter}");
+
+      expect(
+        screen.queryByPlaceholderText("chapters.chapterTitlePlaceholder")
+      ).not.toBeInTheDocument();
+      await waitFor(() => expect(addButton).toHaveFocus());
+    });
+
+    it("keeps the create form open when Enter is pressed with an empty title", async () => {
+      const user = userEvent.setup();
+      const onCreate = vi.fn();
+      renderCL({ onCreateChapter: onCreate });
+      const addButton = screen.getByRole("button", { name: "chapters.addChapter" });
+      addButton.focus();
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Enter}");
+
+      expect(onCreate).not.toHaveBeenCalled();
+      expect(screen.getByPlaceholderText("chapters.chapterTitlePlaceholder")).toBeInTheDocument();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -791,11 +836,52 @@ describe("ChapterList", () => {
       expect(screen.queryByDisplayValue("First")).not.toBeInTheDocument();
       expect(screen.getByText("First")).toBeInTheDocument();
     });
+
+    it("returns focus to the row after cancelling an edit with Escape", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.getByDisplayValue("First")).toHaveFocus());
+
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => expect(screen.getByRole("row", { name: "First" })).toHaveFocus());
+    });
+
+    it("returns focus to the row after saving an edit", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id, onUpdateChapter: vi.fn() });
+
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
+      const input = await screen.findByDisplayValue("First");
+      await user.clear(input);
+      await user.type(input, "Updated{Enter}");
+
+      await waitFor(() => expect(screen.getByRole("row", { name: "First" })).toHaveFocus());
+    });
   });
 
   // ---------------------------------------------------------------------------
   describe("delete confirmation", () => {
-    it("confirms delete by keyboard (Tab to Yes, Enter)", async () => {
+    it("focuses the safe No button when the confirmation opens", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      const deleteButton = screen.getByRole("button", { name: "chapters.deleteChapter" });
+      deleteButton.focus();
+      await user.keyboard("{Enter}");
+
+      const noButton = screen.getByRole("button", { name: "common.no" });
+      await waitFor(() => expect(noButton).toHaveFocus());
+    });
+
+    it("confirms delete by keyboard (Shift+Tab to Yes, Enter)", async () => {
       const user = userEvent.setup();
       const onDelete = vi.fn();
       const chapters = [
@@ -806,8 +892,11 @@ describe("ChapterList", () => {
 
       await openChapterMenu(user, 0);
       await user.keyboard("{ArrowDown}{Enter}");
+      const noButton = screen.getByRole("button", { name: "common.no" });
+      await waitFor(() => expect(noButton).toHaveFocus());
+      await user.tab({ shift: true });
       const yesButton = screen.getByRole("button", { name: "common.yes" });
-      await tabToControl(user, yesButton);
+      expect(yesButton).toHaveFocus();
       await user.keyboard("{Enter}");
       expect(onDelete).toHaveBeenCalledWith("ch-1");
       await waitFor(() => expect(screen.getByRole("row", { name: "Second" })).toHaveFocus());
