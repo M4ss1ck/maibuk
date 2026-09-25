@@ -4,7 +4,7 @@ import { expectTabContained, pressUntilFocused, tabTo } from "../support/keyboar
 // First harness journey: an empty Library, Mod+N, a Book, a Chapter, text,
 // Mod+S, reload. The edges each get their own test (matrix row books-create).
 
-test.describe("books-create @wf:books-create", () => {
+test.describe("books-create @wf:books-create @sc:home.newBook @sc:editor.save", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();

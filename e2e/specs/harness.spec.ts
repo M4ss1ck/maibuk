@@ -1,4 +1,5 @@
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
+import { tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
 // Self-checks for the setup helpers every other spec relies on. They assert
@@ -28,7 +29,8 @@ test.describe("harness: seed Libraries", () => {
     // Last chapter opens by default; its seeded text is there.
     const text = page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[2].title}` });
     await expect(text).toHaveText(SEED_CHAPTERS[2].text);
-    await text.press("End");
+    await tabTo(page, text, { max: 80 });
+    await page.keyboard.press("ControlOrMeta+End");
     await page.keyboard.type(" Extra.");
     await page.keyboard.press("ControlOrMeta+s");
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();

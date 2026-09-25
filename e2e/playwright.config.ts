@@ -30,7 +30,12 @@ export default defineConfig<{ macPlatform: boolean }>({
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"], ...shared } },
-    { name: "webkit", use: { ...devices["Desktop Safari"], ...shared } },
+    {
+      name: "webkit",
+      // WebKit cannot grant clipboard permissions; clipboard rows are chromium-only.
+      grepInvert: /@chromium-only/,
+      use: { ...devices["Desktop Safari"], ...shared },
+    },
     {
       // Chromium reporting a Mac navigator.platform, so isMac() and TipTap's
       // Mod resolve to ⌘. Proves the platform-dependent labels and bindings,
