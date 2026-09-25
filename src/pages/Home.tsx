@@ -161,7 +161,8 @@ export function Home() {
   ]);
 
   const handleBookCreated = (bookId: string) => {
-    navigate(`/book/${bookId}`);
+    // The Book Editor puts focus on "Add Chapter" for a Book created here.
+    navigate(`/book/${bookId}`, { state: { newBook: true } });
   };
 
   const handleStatusChange = useCallback(

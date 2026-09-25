@@ -6,5 +6,6 @@ export function isMac(): boolean {
     }
   ).userAgentData;
   const platform = ua?.platform ?? navigator.platform ?? "";
-  return /Mac|iPhone|iPad/.test(platform);
+  // Chromium reports "macOS"; Safari and the webview report "MacIntel".
+  return /mac|iphone|ipad/i.test(platform);
 }

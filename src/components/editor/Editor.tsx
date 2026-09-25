@@ -107,6 +107,10 @@ interface EditorProps {
   onExportPdf?: () => void;
   onExportImage?: () => void;
   onEscape?: () => void;
+  /** Accessible name of the text area, e.g. "Text of Arrival". Defaults to "Text". */
+  ariaLabel?: string;
+  /** Put the caret in the text on mount, e.g. for a Chapter just created. */
+  autoFocus?: boolean;
   /** Tutorial steps that point at this editor's toolbar and text, if any. */
   tutorialAnchors?: EditorTutorialAnchors;
 }
@@ -139,6 +143,8 @@ export function Editor({
   onExportPdf,
   onExportImage,
   onEscape,
+  autoFocus = false,
+  ariaLabel,
   tutorialAnchors,
 }: EditorProps) {
   const { t } = useTranslation();
@@ -328,9 +334,13 @@ export function Editor({
     ],
     content: content || "",
     editable,
+    autofocus: autoFocus ? "end" : false,
     editorProps: {
       attributes: {
         class: "editor-content outline-none min-h-[500px]",
+        // A bare contenteditable has no role or name for assistive tech.
+        role: "textbox",
+        "aria-multiline": "true",
       },
       handleKeyDown: (_view, event) => {
         if (event.key !== "Escape") return false;
@@ -406,6 +416,12 @@ export function Editor({
     // setContentSilently suppresses onUpdate, so tell the parent explicitly.
     onExternalContentRef.current?.(content, editor.storage.characterCount.words());
   }, [editor, content, runEmit]);
+
+  const textLabel = ariaLabel ?? t("editor.textLabel");
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.view.dom.setAttribute("aria-label", textLabel);
+  }, [editor, textLabel]);
 
   useReadingPosition({
     editor,

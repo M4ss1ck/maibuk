@@ -35,3 +35,6 @@ docs/superpowers/
 .kilo/
 .agents/
 .claude/
+
+# Playwright E2E output (traces, screenshots, report, seeds, web build)
+e2e/.output/

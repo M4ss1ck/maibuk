@@ -573,6 +573,28 @@ describe("Editor", () => {
     expect(focusCalls.some((args) => args.length === 0)).toBe(false);
   });
 
+  it("exposes its text as a named multi-line textbox", async () => {
+    const { rerender } = render(
+      <Editor content={"<p>hello</p>"} onUpdate={vi.fn()} ariaLabel="Text of Arrival" />
+    );
+
+    const textbox = await screen.findByRole("textbox", { name: "Text of Arrival" });
+    expect(textbox).toHaveAttribute("aria-multiline", "true");
+
+    rerender(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} ariaLabel="Text of Departure" />);
+    expect(await screen.findByRole("textbox", { name: "Text of Departure" })).toBe(textbox);
+  });
+
+  it("falls back to a generic text label", async () => {
+    render(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} />);
+    expect(await screen.findByRole("textbox", { name: "editor.textLabel" })).toBeInTheDocument();
+  });
+
+  it("puts the caret in the text on mount when autoFocus is set", async () => {
+    render(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} autoFocus ariaLabel="Text" />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Text" })).toHaveFocus());
+  });
+
   it("calls onEscape when Escape is pressed in the editor", async () => {
     const user = userEvent.setup();
     const onEscape = vi.fn();

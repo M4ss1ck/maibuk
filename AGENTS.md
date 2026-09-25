@@ -354,6 +354,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `hasLaunchAutoSyncSettled()` / `onLaunchAutoSyncSettled()` (whether this launch's Auto Sync is behind us)                                                                                                                                     | `src/features/sync/auto-sync.ts`                                       |
 | `toast.info()` (text-only hint toast)                                                                                                                                                                                                        | `src/components/ui/Toast.tsx`                                          |
 | `useModalScope(isOpen)` (LIFO modal ID registration/unregistration)                                                                                                                                                                            | `src/hooks/useModalScope.ts`                                           |
+| `useRestoreFocus(isOpen)` (returns focus to the opener after an overlay closes; call it after `useModalOverlay`, whose `inert` cleanup must run first) | `src/hooks/useRestoreFocus.ts` |
 
 ---
 

@@ -1,0 +1,44 @@
+import { useEffect, useRef } from "react";
+
+/**
+ * Returns focus to whatever had it when `isOpen` turned true, once the
+ * overlay closes or the component unmounts.
+ *
+ * The restore runs in a passive effect on purpose. React Aria's
+ * useModalOverlay makes the rest of the page `inert` while open and lifts it
+ * in a passive-effect cleanup; a layout-effect restore runs first, focuses an
+ * inert element, and focus falls to <body>. Call this after useModalOverlay
+ * so an unmount while open also lifts `inert` first. jsdom has no `inert`;
+ * e2e/specs/books-create.spec.ts proves the timing in real browsers.
+ */
+export function useRestoreFocus(
+  isOpen: boolean,
+  { skipWhenDialogFocused = false }: { skipWhenDialogFocused?: boolean } = {}
+): void {
+  const targetRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+  const skipRef = useRef(skipWhenDialogFocused);
+  skipRef.current = skipWhenDialogFocused;
+
+  if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
+    const activeElement = document.activeElement;
+    targetRef.current = activeElement instanceof HTMLElement ? activeElement : null;
+  }
+  wasOpenRef.current = isOpen;
+
+  const restoreRef = useRef(() => {});
+  restoreRef.current = () => {
+    const target = targetRef.current;
+    targetRef.current = null;
+    if (!target?.isConnected || target === document.body) return;
+    // Another dialog took focus meanwhile; leave it there.
+    if (skipRef.current && document.activeElement?.closest?.('[role="dialog"]')) return;
+    target.focus();
+  };
+
+  useEffect(() => {
+    if (!isOpen) restoreRef.current();
+  }, [isOpen]);
+
+  useEffect(() => () => restoreRef.current(), []);
+}

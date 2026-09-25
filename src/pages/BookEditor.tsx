@@ -99,6 +99,7 @@ export function BookEditor() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const isNewBook = (location.state as { newBook?: boolean } | null)?.newBook === true;
   const hasPendingHeadingScroll = Boolean(
     (location.state as { scrollToHeadingId?: string } | null)?.scrollToHeadingId
   );
@@ -127,6 +128,8 @@ export function BookEditor() {
 
   // Local state
   const [focusMode, setFocusMode] = useState(false);
+  // A Chapter the author just created opens with the caret in its text.
+  const [focusEditorForChapterId, setFocusEditorForChapterId] = useState<string | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -578,6 +581,7 @@ export function BookEditor() {
     (chapter: Chapter) => {
       metricsService.endSession();
       void metricsService.flushNow();
+      setFocusEditorForChapterId(null);
       setCurrentChapter(chapter);
       // Save as last edited chapter for this book
       if (bookId) {
@@ -597,6 +601,7 @@ export function BookEditor() {
         });
         metricsService.endSession();
         void metricsService.flushNow();
+        setFocusEditorForChapterId(newChapter.id);
         setCurrentChapter(newChapter);
         // Save as last edited chapter
         updateBook(bookId, { lastChapterId: newChapter.id });
@@ -999,6 +1004,9 @@ export function BookEditor() {
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
               onImportFiles={handleImportFiles}
+              autoFocusAddChapter={
+                isNewBook && !areChaptersLoading && chapters.length === 0
+              }
               tutorialAnchors
             />
             {showSidebar && (
@@ -1375,6 +1383,8 @@ export function BookEditor() {
             onExportPdf={handleExportPdf}
             onExportImage={handleExportImage}
             onEscape={handleEditorEscape}
+            autoFocus={focusEditorForChapterId === currentChapter.id}
+            ariaLabel={t("editor.chapterTextLabel", { title: currentChapter.title })}
           />
         ) : isChapterPreparing ? (
           <div className="flex-1 flex items-center justify-center">

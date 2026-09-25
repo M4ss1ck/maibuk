@@ -43,6 +43,8 @@ interface ChapterListProps {
   onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
   /** Marks Tutorial step targets; only the list the author can see carries them. */
   tutorialAnchors?: boolean;
+  /** Focus "Add Chapter", e.g. when a Book was just created and has no Chapters. */
+  autoFocusAddChapter?: boolean;
 }
 
 const CHAPTER_DND_TYPE = "chapter";
@@ -92,6 +94,7 @@ export function ChapterList({
   onReorderChapters,
   onImportFiles,
   tutorialAnchors = false,
+  autoFocusAddChapter = false,
 }: ChapterListProps) {
   const { t, i18n } = useTranslation();
   const chapterListView = useSettingsStore((state) => state.chapterListView);
@@ -237,6 +240,10 @@ export function ChapterList({
       />
     ),
   });
+
+  useEffect(() => {
+    if (autoFocusAddChapter) addButtonRef.current?.focus();
+  }, [autoFocusAddChapter]);
 
   const handleCreate = () => {
     if (newTitle.trim()) {

@@ -25,6 +25,20 @@ describe("isMac()", () => {
     expect(isMac()).toBe(true);
   });
 
+  it("returns true for Chromium on macOS, whose userAgentData platform is 'macOS'", () => {
+    stubNavigator("MacIntel", "macOS");
+
+    expect(isMac()).toBe(true);
+  });
+
+  it("returns false for Chromium on Windows and Linux", () => {
+    stubNavigator("Win32", "Windows");
+    expect(isMac()).toBe(false);
+
+    stubNavigator("Linux x86_64", "Linux");
+    expect(isMac()).toBe(false);
+  });
+
   it("returns false for non-Apple platforms", () => {
     stubNavigator("Win32");
 

@@ -64,6 +64,12 @@ describe("Input", () => {
       expect(input).toHaveAttribute("id", "my-field");
     });
 
+    it("labels the input and describes its error when neither id nor name is given", () => {
+      render(<Input label="Book Title" error="Title is required" />);
+      const input = screen.getByRole("textbox", { name: "Book Title" });
+      expect(input).toHaveAccessibleDescription("Title is required");
+    });
+
     it("does not render label when not provided", () => {
       const { container } = render(<Input />);
       expect(container.querySelector("label")).toBeNull();

@@ -342,6 +342,8 @@
     "edgeCount_other": "{{count}} connections"
   },
   "editor": {
+    "textLabel": "Text",
+    "chapterTextLabel": "Text of {{title}}",
     "loading": "Loading book...",
     "loadingEditor": "Loading editor...",
     "saving": "Saving...",

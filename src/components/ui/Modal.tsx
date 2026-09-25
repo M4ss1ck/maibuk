@@ -1,10 +1,10 @@
-import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, Heading } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { CloseIcon } from "@/components/icons";
 import { useModalStore } from "@/components/ui/modal-store";
-import { useModalScope } from "@/hooks";
+import { useModalScope, useRestoreFocus } from "@/hooks";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 interface ModalProps {
@@ -39,16 +39,8 @@ export function Modal({
 
   const modalId = useModalScope(isOpen);
   const modalRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-
-  if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
-    const activeElement = document.activeElement;
-    restoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
-  }
-  wasOpenRef.current = isOpen;
 
   const state = useMemo(
     () => ({
@@ -70,17 +62,8 @@ export function Modal({
     modalRef
   );
 
-  const restoreFocus = () => {
-    const target = restoreFocusRef.current;
-    restoreFocusRef.current = null;
-    if (target?.isConnected && target !== document.body) target.focus();
-  };
-
-  useLayoutEffect(() => {
-    if (!isOpen) restoreFocus();
-  }, [isOpen]);
-
-  useLayoutEffect(() => restoreFocus, []);
+  // After useModalOverlay: its inert cleanup must run before the restore.
+  useRestoreFocus(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;

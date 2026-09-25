@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog } from "react-aria-components";
 import { useTranslation } from "react-i18next";
@@ -8,7 +8,7 @@ import type { Note } from "@/features/notes";
 import { FootnotesView } from "@/components/editor/FootnotesView";
 import { BookNotesView } from "@/components/book/BookNotesView";
 import { Tooltip } from "@/components/ui";
-import { useModalScope } from "@/hooks";
+import { useModalScope, useRestoreFocus } from "@/hooks";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 export type BookSidePanelTab = "footnotes" | "notes";
@@ -46,8 +46,6 @@ export function BookSidePanel({
 }: BookSidePanelProps) {
   const { t } = useTranslation();
   const mobilePanelRef = useRef<HTMLDivElement | null>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 768
   );
@@ -61,12 +59,6 @@ export function BookSidePanel({
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
-
-  if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
-    const activeElement = document.activeElement;
-    restoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
-  }
-  wasOpenRef.current = isOpen;
 
   useModalScope(isMobile && isOpen);
 
@@ -90,19 +82,8 @@ export function BookSidePanel({
     mobilePanelRef
   );
 
-  const restoreFocus = () => {
-    const target = restoreFocusRef.current;
-    restoreFocusRef.current = null;
-    if (!target?.isConnected || target === document.body) return;
-    if (document.activeElement?.closest?.('[role="dialog"]')) return;
-    target.focus();
-  };
-
-  useLayoutEffect(() => {
-    if (!isOpen) restoreFocus();
-  }, [isOpen]);
-
-  useLayoutEffect(() => restoreFocus, []);
+  // After useModalOverlay: its inert cleanup must run before the restore.
+  useRestoreFocus(isOpen, { skipWhenDialogFocused: true });
 
   useEffect(() => {
     if (!isMobile || !isOpen) return;
