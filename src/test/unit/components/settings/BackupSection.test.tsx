@@ -7,7 +7,15 @@ import { formatBackupDate } from "@/features/backup/utils";
 import { useSettingsStore } from "@/features/settings/store";
 import type { BackupAdapter, BackupEntry, BackupPage } from "@/lib/platform/types";
 
-const { mockAdapter, mockTranslate, platformState, getDialog, i18nState } = vi.hoisted(() => ({
+const {
+  mockAdapter,
+  mockTranslate,
+  platformState,
+  getDialog,
+  i18nState,
+  mockGetDefaultBackupDirectory,
+  mockCreateBackup,
+} = vi.hoisted(() => ({
   mockAdapter: {
     saveBackup: vi.fn(),
     listBackups: vi.fn().mockResolvedValue([]),
@@ -36,14 +44,17 @@ const { mockAdapter, mockTranslate, platformState, getDialog, i18nState } = vi.h
     return key;
   }),
   i18nState: { language: "en" },
-  platformState: { isDesktop: true },
+  platformState: { isDesktop: true, defaultDirectory: "/home/author/.config/maibuk/backups" },
   getDialog: vi.fn().mockResolvedValue({ open: vi.fn().mockResolvedValue(null) }),
+  mockCreateBackup: vi.fn(),
+  mockGetDefaultBackupDirectory: vi.fn(),
 }));
 
 vi.mock("../../../../lib/platform", () => ({
-  createBackup: vi.fn().mockResolvedValue(mockAdapter),
+  createBackup: mockCreateBackup,
   getDialog,
   getOS: vi.fn().mockResolvedValue({ locale: vi.fn().mockResolvedValue("en-US") }),
+  getDefaultBackupDirectory: mockGetDefaultBackupDirectory,
   IS_TAURI: true,
   get IS_DESKTOP() {
     return platformState.isDesktop;
@@ -117,6 +128,9 @@ describe("BackupSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     i18nState.language = "en";
+    platformState.isDesktop = true;
+    mockCreateBackup.mockResolvedValue(mockAdapter);
+    mockGetDefaultBackupDirectory.mockResolvedValue(platformState.defaultDirectory);
     useSettingsStore.setState({
       backupRetention: 20,
       backupDirectory: null,
@@ -200,6 +214,202 @@ describe("BackupSection", () => {
     const row = choose.parentElement;
     expect(row).not.toBeNull();
     expect(row).toHaveClass("flex-col", "@sm:flex-row");
+  });
+
+  describe("backup directory", () => {
+    it("shows the directory backups are saved in when no custom one is set", async () => {
+      render(<BackupSection />);
+
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
+    });
+
+    it("opens the folder picker at the custom directory", async () => {
+      const open = vi.fn().mockResolvedValue(null);
+      getDialog.mockResolvedValue({ open });
+      useSettingsStore.setState({ backupDirectory: "/mnt/backups" });
+      const user = userEvent.setup();
+      render(<BackupSection />);
+
+      const choose = await screen.findByRole("button", { name: "backup.chooseDirectory" });
+      choose.focus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() =>
+        expect(open).toHaveBeenCalledWith(
+          expect.objectContaining({ directory: true, defaultPath: "/mnt/backups" })
+        )
+      );
+    });
+
+    it("opens the folder picker at the default directory when none is set", async () => {
+      const open = vi.fn().mockResolvedValue(null);
+      getDialog.mockResolvedValue({ open });
+      const user = userEvent.setup();
+      render(<BackupSection />);
+
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+      const choose = screen.getByRole("button", { name: "backup.chooseDirectory" });
+      choose.focus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() =>
+        expect(open).toHaveBeenCalledWith(
+          expect.objectContaining({ directory: true, defaultPath: platformState.defaultDirectory })
+        )
+      );
+    });
+
+    it("opens the folder picker at the path the author just typed", async () => {
+      const open = vi.fn().mockResolvedValue(null);
+      getDialog.mockResolvedValue({ open });
+      const user = userEvent.setup();
+      render(<BackupSection />);
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+
+      input.focus();
+      await user.clear(input);
+      await user.type(input, "/mnt/typed");
+      await user.click(screen.getByRole("button", { name: "backup.chooseDirectory" }));
+
+      await waitFor(() =>
+        expect(open).toHaveBeenCalledWith(
+          expect.objectContaining({ directory: true, defaultPath: "/mnt/typed" })
+        )
+      );
+    });
+
+    it("keeps focus while typing and commits the typed directory only on Enter", async () => {
+      const user = userEvent.setup();
+      render(<BackupSection />);
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+
+      input.focus();
+      await user.keyboard("x");
+      expect(input).toHaveFocus();
+
+      await user.clear(input);
+      expect(input).toHaveFocus();
+      await user.type(input, "/mnt/custom backups");
+      expect(input).toHaveFocus();
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
+      expect(mockGetDefaultBackupDirectory).toHaveBeenCalledTimes(1);
+
+      await user.keyboard("{Enter}");
+
+      await waitFor(() =>
+        expect(useSettingsStore.getState().backupDirectory).toBe("/mnt/custom backups")
+      );
+      await waitFor(() => expect(mockCreateBackup).toHaveBeenLastCalledWith("/mnt/custom backups"));
+      expect(input).toHaveFocus();
+      expect(screen.getByRole("button", { name: "backup.createBackup" })).toBeInTheDocument();
+    });
+
+    it("commits the typed directory when the field loses focus", async () => {
+      const user = userEvent.setup();
+      render(<BackupSection />);
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+
+      input.focus();
+      await user.clear(input);
+      await user.type(input, "/mnt/typed");
+      await user.tab();
+
+      await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBe("/mnt/typed"));
+    });
+
+    it("falls back to the default directory when the field is cleared", async () => {
+      useSettingsStore.setState({ backupDirectory: "/mnt/custom" });
+      const user = userEvent.setup();
+      render(<BackupSection />);
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue("/mnt/custom"));
+
+      input.focus();
+      await user.clear(input);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBeNull());
+      expect(input).toHaveValue(platformState.defaultDirectory);
+      await waitFor(() => expect(mockCreateBackup).toHaveBeenLastCalledWith(null));
+    });
+
+    it("treats the default directory typed back in as the default", async () => {
+      useSettingsStore.setState({ backupDirectory: "/mnt/custom" });
+      const user = userEvent.setup();
+      render(<BackupSection />);
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue("/mnt/custom"));
+
+      input.focus();
+      await user.clear(input);
+      await user.type(input, platformState.defaultDirectory);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBeNull());
+      await waitFor(() => expect(mockCreateBackup).toHaveBeenLastCalledWith(null));
+    });
+
+    it("reverts an uncommitted draft on Escape", async () => {
+      const user = userEvent.setup();
+      render(<BackupSection />);
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+
+      input.focus();
+      await user.clear(input);
+      await user.type(input, "/tmp/not-committed");
+      await user.keyboard("{Escape}");
+
+      expect(input).toHaveValue(platformState.defaultDirectory);
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
+    });
+
+    it("updates the field and the store when a folder is picked", async () => {
+      const open = vi.fn().mockResolvedValue("/picked/backups");
+      getDialog.mockResolvedValue({ open });
+      const user = userEvent.setup();
+      render(<BackupSection />);
+
+      await user.click(await screen.findByRole("button", { name: "backup.chooseDirectory" }));
+
+      await waitFor(() =>
+        expect(useSettingsStore.getState().backupDirectory).toBe("/picked/backups")
+      );
+      expect(await screen.findByLabelText("backup.directoryLabel")).toHaveValue("/picked/backups");
+    });
+
+    it("shows a loading state instead of unmounting the controls while the directory changes", async () => {
+      let resolvePage: (() => void) | undefined;
+      const user = userEvent.setup();
+      render(<BackupSection />);
+      const input = await screen.findByLabelText("backup.directoryLabel");
+      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+
+      mockAdapter.listBackupsPage.mockImplementationOnce(
+        () =>
+          new Promise<BackupPage>((resolve) => {
+            resolvePage = () => resolve(threeBackupPage());
+          })
+      );
+
+      input.focus();
+      await user.clear(input);
+      await user.type(input, "/mnt/slow");
+      await user.keyboard("{Enter}");
+
+      expect(await screen.findByText("common.loading")).toBeInTheDocument();
+      expect(screen.getByLabelText("backup.directoryLabel")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "backup.createBackup" })).toBeInTheDocument();
+
+      resolvePage?.();
+      await screen.findByRole("table");
+    });
   });
 
   describe("Date column", () => {

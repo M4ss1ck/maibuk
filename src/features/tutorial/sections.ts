@@ -142,7 +142,13 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
         ],
         { link: { href: DOWNLOAD_PAGE, labelKey: "tutorial.steps.settings.sync.link" } }
       ),
-      step("settings.backups", ["Backup", "Backup Trigger", "Retention", "Restore"]),
+      step("settings.backups", [
+        "Backup",
+        "Backup Trigger",
+        "Retention",
+        "Restore",
+        "Backup Directory",
+      ]),
       step("settings.metrics", ["Metrics Category", "Writing Session", "Streak"]),
       step("settings.editor", ["Spell Check", "Custom Dictionary", "Paste Cleanup"]),
       step("settings.advanced", ["Database File", "Reset"]),

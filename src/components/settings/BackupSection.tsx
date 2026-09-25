@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { createBackup, getDialog, IS_DESKTOP } from "@/lib/platform";
+import { createBackup, getDefaultBackupDirectory, getDialog, IS_DESKTOP } from "@/lib/platform";
 import { BackupService } from "@/features/backup/backup-service";
 import { formatBackupDate } from "@/features/backup/utils";
 import { Modal } from "@/components/ui/Modal";
@@ -38,11 +38,46 @@ export function BackupSection() {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // The directory field shows the effective directory until the author edits
+  // it; a draft keeps typing local, so no reload runs per keystroke.
+  const [directoryDraft, setDirectoryDraft] = useState<string | null>(null);
+  const [defaultDirectory, setDefaultDirectory] = useState<string | null>(null);
   const selectedCountId = useId();
+  const directoryInputId = useId();
   const selectAllRef = useRef<HTMLInputElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   // Set when a bulk delete removes the Delete button that had focus.
   const refocusAfterBulkDeleteRef = useRef(false);
+
+  const effectiveDirectory = backupDirectory ?? defaultDirectory;
+  const directoryValue = directoryDraft ?? effectiveDirectory ?? "";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getDefaultBackupDirectory()
+      .then((path) => {
+        if (!cancelled) setDefaultDirectory(path);
+      })
+      .catch((error) => {
+        console.warn("Failed to resolve the default backup directory:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const commitDirectoryDraft = useCallback(() => {
+    if (directoryDraft === null) return;
+    const trimmed = directoryDraft.trim();
+    // Clearing the field, or typing the default back in, means "use the
+    // default" rather than a custom directory equal to it.
+    const next = !trimmed || trimmed === defaultDirectory ? null : trimmed;
+    setDirectoryDraft(null);
+    if (next === backupDirectory) return;
+    setBackupDirectory(next);
+  }, [backupDirectory, defaultDirectory, directoryDraft, setBackupDirectory]);
 
   // Selection covers the visible page only: a different page, page size, or
   // folder starts empty.
@@ -169,11 +204,16 @@ export function BackupSection() {
 
   const handleChooseDirectory = useCallback(async () => {
     const dialog = await getDialog();
-    const path = await dialog.open({ directory: true });
+    const path = await dialog.open({
+      directory: true,
+      // A draft that has not committed yet is still where the author is looking.
+      defaultPath: directoryDraft?.trim() || effectiveDirectory || undefined,
+    });
     if (path) {
+      setDirectoryDraft(null);
       setBackupDirectory(path);
     }
-  }, [setBackupDirectory]);
+  }, [directoryDraft, effectiveDirectory, setBackupDirectory]);
 
   const handleDelete = useCallback(
     async (filename: string) => {
@@ -263,8 +303,6 @@ export function BackupSection() {
   const selectedOnPage = backups.filter((backup) => selected.has(backup.filename)).length;
   const allOnPageSelected = backups.length > 0 && selectedOnPage === backups.length;
 
-  if (loading && totalCount === 0 && backups.length === 0) return null;
-
   return (
     <div className="@container space-y-4">
       <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -289,9 +327,20 @@ export function BackupSection() {
       {IS_DESKTOP && (
         <div className="flex flex-col gap-3 @sm:flex-row @sm:items-end">
           <Input
+            id={directoryInputId}
             label={t("backup.directoryLabel")}
-            value={backupDirectory ?? ""}
-            onChange={(e) => setBackupDirectory(e.target.value || null)}
+            value={directoryValue}
+            onChange={(e) => setDirectoryDraft(e.target.value)}
+            onBlur={() => void commitDirectoryDraft()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void commitDirectoryDraft();
+              } else if (e.key === "Escape" && directoryDraft !== null) {
+                e.preventDefault();
+                setDirectoryDraft(null);
+              }
+            }}
             placeholder={t("backup.directoryPlaceholder")}
           />
           <Button
@@ -304,7 +353,7 @@ export function BackupSection() {
         </div>
       )}
 
-      <Button ref={createButtonRef} variant="primary" onClick={handleCreate}>
+      <Button ref={createButtonRef} variant="primary" onClick={handleCreate} disabled={!service}>
         {t("backup.createBackup")}
       </Button>
 
@@ -312,7 +361,11 @@ export function BackupSection() {
         <p className="text-sm text-destructive">{t("backup.sizeWarning")}</p>
       )}
 
-      {totalCount === 0 ? (
+      {loading && totalCount === 0 ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("common.loading")}
+        </p>
+      ) : totalCount === 0 ? (
         <p className="text-sm text-muted-foreground">{t("backup.noBackups")}</p>
       ) : (
         <div className="space-y-3">

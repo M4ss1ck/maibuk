@@ -196,6 +196,10 @@ A saved copy of the Library at a moment in time. Restoring it brings back Books,
 _UI_: en "Backups" / es "Copias de seguridad"
 _Avoid_: database export, dump, snapshot
 
+**Backup Directory**:
+Where Backups are kept: the app's own data folder by default, or a folder the author chooses.
+_UI_: en "Backup directory" / es "Carpeta de copias"
+
 **Database File**:
 A copy of the Library's writing and settings (not its metrics) saved to a file the author chooses, kept outside Backups and Retention; loading one adds its contents to this Library, overwriting items that already exist, instead of clearing it first.
 _UI_: en "Export Database", "Import Database"

@@ -10,6 +10,7 @@ export const tauriDialog: DialogAdapter = {
     const result = await open({
       directory: options.directory,
       multiple: options.multiple,
+      defaultPath: options.defaultPath,
       filters: options.filters,
     });
     // open() returns string | string[] | null depending on multiple option

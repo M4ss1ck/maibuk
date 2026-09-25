@@ -18,6 +18,10 @@ export const IS_DESKTOP = IS_TAURI && !IS_MOBILE;
 
 export { isMac } from "@/lib/platform/detect";
 
+function isDesktopRuntime(): boolean {
+  return IS_DESKTOP && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 // Re-export types
 export type {
   DatabaseAdapter,
@@ -83,7 +87,7 @@ export async function openExternal(url: string): Promise<void> {
 
 // Toggle main window "always on top" on supported desktop builds.
 export async function setWindowAlwaysOnTop(enabled: boolean): Promise<void> {
-  if (!IS_DESKTOP || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!isDesktopRuntime()) {
     return;
   }
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -93,7 +97,7 @@ export async function setWindowAlwaysOnTop(enabled: boolean): Promise<void> {
 // Swap the tray icon while a sync is running. No-op on web and on
 // platforms without a tray (the Rust command handles that).
 export async function setTraySyncing(syncing: boolean): Promise<void> {
-  if (!IS_DESKTOP || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!isDesktopRuntime()) {
     return;
   }
   const { invoke } = await import("@tauri-apps/api/core");
@@ -102,7 +106,7 @@ export async function setTraySyncing(syncing: boolean): Promise<void> {
 
 // Launch the app at login (hidden in the tray). No-op on web.
 export async function setLaunchOnStartup(enabled: boolean): Promise<void> {
-  if (!IS_DESKTOP || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!isDesktopRuntime()) {
     return;
   }
   const { enable, disable } = await import("@tauri-apps/plugin-autostart");
@@ -115,7 +119,7 @@ export async function setLaunchOnStartup(enabled: boolean): Promise<void> {
 
 // Whether the OS autostart entry is currently registered. False on web.
 export async function isLaunchOnStartupEnabled(): Promise<boolean> {
-  if (!IS_DESKTOP || typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+  if (!isDesktopRuntime()) {
     return false;
   }
   const { isEnabled } = await import("@tauri-apps/plugin-autostart");
@@ -139,6 +143,29 @@ export async function createBackup(customDir?: string | null): Promise<BackupAda
     const { createWebBackup } = await import("@/lib/platform/web/backup");
     return createWebBackup();
   }
+  // A custom directory restored from settings has no scope grant yet; a typed
+  // one gets it here, before the first write.
+  if (customDir) await allowBackupDirectory(customDir);
   const { createTauriBackup } = await import("@/lib/platform/tauri/backup");
   return createTauriBackup(customDir ?? undefined);
+}
+
+// The directory Backups live in when the author has not chosen one. Null on
+// the web build, where Backups live in IndexedDB and there is no folder.
+export async function getDefaultBackupDirectory(): Promise<string | null> {
+  if (IS_WEB) return null;
+  const { resolveTauriBackupDir } = await import("@/lib/platform/tauri/backup");
+  return resolveTauriBackupDir();
+}
+
+// Grant a typeable Backup directory the filesystem access its Backups need.
+// The dialog grants this for a picked folder; a typed path has no grant, and
+// Tauri's fs scope denies writes outside it. Persisted across launches by the
+// persisted-scope plugin.
+export async function allowBackupDirectory(path: string): Promise<void> {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("allow_backup_directory", { path });
 }
