@@ -734,6 +734,20 @@ Maibuk is confident, not timid. It has opinions about how writing software shoul
 4. **Tangible feedback** — Every interaction should feel responsive and real. Save status, sync state, export progress, drag-and-drop reordering — these moments are where trust is built. Invest in making them feel right.
 5. **Never generic** — Before adding any UI element, ask: "Would this look the same in a generic template?" If yes, reconsider. Maibuk's identity comes from the accumulation of small, intentional choices — a distinctive empty state, a satisfying hover effect, a well-crafted transition.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues on M4ss1ck/maibuk, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+
 <!-- headroom:rtk-instructions -->
 
 # RTK (Rust Token Killer) - Token-Optimized Commands
