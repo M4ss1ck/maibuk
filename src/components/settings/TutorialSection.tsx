@@ -14,7 +14,7 @@ interface TutorialSectionProps {
 
 /** Settings → Tutorial: start again from the beginning, or run one section. */
 export function TutorialSection({ returnTo = "/settings" }: TutorialSectionProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const sections = useTutorialStore((state) => state.progress.sections);
   // Section keys are composed from the section id; the locale parity test proves they exist.
   const translate = t as unknown as (key: string, options?: Record<string, unknown>) => string;
@@ -43,6 +43,7 @@ export function TutorialSection({ returnTo = "/settings" }: TutorialSectionProps
       <ListBox
         aria-label={t("tutorial.settings.sectionsLabel")}
         items={TUTORIAL_SECTIONS}
+        dependencies={[i18n.resolvedLanguage]}
         selectionMode="none"
         onAction={(key) => start(key as TutorialSectionId)}
         className="grid gap-1 @lg:grid-cols-2"
