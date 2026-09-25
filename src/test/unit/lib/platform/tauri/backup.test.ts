@@ -25,7 +25,7 @@ vi.mock("@tauri-apps/api/path", () => ({
   join: mockJoin,
 }));
 
-const { createTauriBackup } = await import("@/lib/platform/tauri/backup");
+const { createTauriBackup, resolveTauriBackupDir } = await import("@/lib/platform/tauri/backup");
 
 describe("TauriBackupAdapter", () => {
   beforeEach(() => {
@@ -51,6 +51,34 @@ describe("TauriBackupAdapter", () => {
 
     expect(mockJoin).toHaveBeenCalledWith("/config", "backups");
     expect(mockMkdir).toHaveBeenCalledWith("/config/backups", { recursive: true });
+  });
+
+  it("resolves the default backup directory without creating it", async () => {
+    await expect(resolveTauriBackupDir()).resolves.toBe("/config/backups");
+
+    expect(mockAppConfigDir).toHaveBeenCalledOnce();
+    expect(mockMkdir).not.toHaveBeenCalled();
+  });
+
+  it("resolves a custom backup directory without touching the config directory", async () => {
+    await expect(resolveTauriBackupDir("/mnt/custom backups")).resolves.toBe("/mnt/custom backups");
+
+    expect(mockAppConfigDir).not.toHaveBeenCalled();
+  });
+
+  it("creates a custom backup directory that does not exist yet", async () => {
+    const adapter = await createTauriBackup("/mnt/custom backups");
+    const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
+
+    await adapter.saveBackup(filename, new TextEncoder().encode("sql"));
+
+    expect(mockAppConfigDir).not.toHaveBeenCalled();
+    expect(mockMkdir).toHaveBeenCalledWith("/mnt/custom backups", { recursive: true });
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      `/mnt/custom backups/${filename}`,
+      new TextEncoder().encode("sql"),
+      { append: false }
+    );
   });
 
   it("rejects unsafe filenames", async () => {

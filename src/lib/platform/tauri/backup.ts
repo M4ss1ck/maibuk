@@ -78,12 +78,20 @@ async function cleanupOrphanMetaFiles(
   }
 }
 
-async function getBackupDir(customDir?: string): Promise<string> {
+/**
+ * The directory Backups live in: the author's custom one, or the app config
+ * folder by default. Does not touch the filesystem.
+ */
+export async function resolveTauriBackupDir(customDir?: string): Promise<string> {
   if (customDir) return customDir;
   const configDir = await appConfigDir();
-  const dir = await join(configDir, "backups");
+  return join(configDir, "backups");
+}
+
+async function getBackupDir(customDir?: string): Promise<string> {
+  const dir = await resolveTauriBackupDir(customDir);
   await mkdir(dir, { recursive: true }).catch(() => {
-    // Directory already exists
+    // Directory already exists, or cannot be created yet; writes surface the error.
   });
   return dir;
 }

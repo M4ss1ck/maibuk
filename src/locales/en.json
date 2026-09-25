@@ -1161,6 +1161,9 @@
     "description": "A daily backup is created automatically (once per day), plus before sync and before restore.",
     "directoryLabel": "Backup directory",
     "directoryPlaceholder": "Use the default app backup directory",
+    "directoryNotAbsolute": "Enter the folder's full path, for example /home/you/Backups or C:\\Backups.",
+    "directoryNeedsApproval": "Maibuk needs your permission to use this folder again. Press Enter in this field, or choose the folder, to allow it.",
+    "directoryAccessFailed": "Maibuk could not get access to this folder.",
     "chooseDirectory": "Choose folder",
     "loadFailed": "Could not load backups.",
     "retentionLimit": "Maximum backups to keep",
@@ -1444,7 +1447,7 @@
         },
         "backups": {
           "title": "Backups",
-          "body": "Maibuk Backs Up your Library every day, on close and before risky steps such as a sync or a Restore. Retention sets how many Backups are kept. Restoring a Backup brings back Books, Notes, Canvases and Version history."
+          "body": "Maibuk Backs Up your Library every day, on close and before risky steps such as a sync or a Restore. Retention sets how many Backups are kept. Restoring a Backup brings back Books, Notes, Canvases and Version history. On desktop, the Backup Directory sets which folder Backups are kept in."
         },
         "metrics": {
           "title": "Metrics",

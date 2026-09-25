@@ -25,3 +25,32 @@ export function formatBackupDate(date: Date, language: string): string {
   }
   return formatter.format(date);
 }
+
+const WINDOWS_ABSOLUTE = /^([a-z]:[\\/]|\\\\[^\\]+\\[^\\]+)/i;
+
+function isWindowsPath(path: string): boolean {
+  return WINDOWS_ABSOLUTE.test(path);
+}
+
+/**
+ * Whether a typed Backup Directory is absolute. `~` and relative paths would
+ * resolve against the app's working directory, not what the author means.
+ */
+export function isAbsoluteDirectoryPath(path: string): boolean {
+  return path.startsWith("/") || isWindowsPath(path);
+}
+
+function normalizeDirectory(path: string): string {
+  const trimmed = path.trim();
+  if (!isWindowsPath(trimmed)) return trimmed.replace(/\/+$/, "") || "/";
+  // Windows paths ignore case and accept either separator.
+  return trimmed
+    .replace(/\//g, "\\")
+    .replace(/(?<!^[a-z]:)\\+$/i, "")
+    .toLowerCase();
+}
+
+/** Same folder despite a trailing separator, or letter case on Windows. */
+export function isSameDirectory(a: string, b: string): boolean {
+  return normalizeDirectory(a) === normalizeDirectory(b);
+}

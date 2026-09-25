@@ -82,6 +82,15 @@ describe("Input", () => {
       expect(input.className).toContain("border-destructive");
     });
 
+    it("announces the error as the input's description", () => {
+      render(<Input id="folder" label="Folder" error="Use a full path" aria-describedby="hint" />);
+      const input = screen.getByRole("textbox", { name: "Folder" });
+
+      expect(input).toHaveAccessibleDescription("Use a full path");
+      expect(input).toBeInvalid();
+      expect(input.getAttribute("aria-describedby")).toBe("hint folder-error");
+    });
+
     it("does not show error message when no error", () => {
       const { container } = render(<Input />);
       expect(container.querySelector(".text-destructive")).toBeNull();

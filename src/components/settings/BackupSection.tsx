@@ -1,9 +1,21 @@
 import { useState, useEffect, useCallback, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { createBackup, getDialog, IS_DESKTOP } from "@/lib/platform";
+import {
+  BACKUP_DIRECTORY_NOT_APPROVED,
+  createBackup,
+  forgetBackupDirectory,
+  getDefaultBackupDirectory,
+  IS_DESKTOP,
+  pickBackupDirectory,
+  requestBackupDirectory,
+} from "@/lib/platform";
 import { BackupService } from "@/features/backup/backup-service";
-import { formatBackupDate } from "@/features/backup/utils";
+import {
+  formatBackupDate,
+  isAbsoluteDirectoryPath,
+  isSameDirectory,
+} from "@/features/backup/utils";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -38,11 +50,113 @@ export function BackupSection() {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // The directory field shows the effective directory until the author edits
+  // it; a draft keeps typing local, so no reload runs per keystroke.
+  const [directoryDraft, setDirectoryDraft] = useState<string | null>(null);
+  const [defaultDirectory, setDefaultDirectory] = useState<string | null>(null);
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
+  // The saved directory was never approved on this device (saved before
+  // approvals existed); Enter on the unchanged field asks for it again.
+  const [directoryNeedsApproval, setDirectoryNeedsApproval] = useState(false);
+  // Bumped to reload the adapter when the directory is approved again unchanged.
+  const [serviceGeneration, setServiceGeneration] = useState(0);
   const selectedCountId = useId();
+  const directoryInputId = useId();
+  const directoryInputRef = useRef<HTMLInputElement>(null);
+  // The native confirmation takes window focus, which blurs the field while
+  // its own commit is still waiting.
+  const committingDirectoryRef = useRef(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   // Set when a bulk delete removes the Delete button that had focus.
   const refocusAfterBulkDeleteRef = useRef(false);
+
+  const effectiveDirectory = backupDirectory ?? defaultDirectory;
+  const directoryValue = directoryDraft ?? effectiveDirectory ?? "";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getDefaultBackupDirectory()
+      .then((path) => {
+        if (!cancelled) setDefaultDirectory(path);
+      })
+      .catch((error) => {
+        console.warn("Failed to resolve the default backup directory:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyDirectory = useCallback(
+    (next: string | null) => {
+      setDirectoryDraft(null);
+      setDirectoryError(null);
+      setDirectoryNeedsApproval(false);
+      if (next === backupDirectory) {
+        setServiceGeneration((generation) => generation + 1);
+        return;
+      }
+      setBackupDirectory(next);
+      if (next === null) {
+        void forgetBackupDirectory().catch((error) => {
+          console.warn("Failed to forget the backup directory approval:", error);
+        });
+      }
+    },
+    [backupDirectory, setBackupDirectory]
+  );
+
+  const commitDirectoryDraft = useCallback(async () => {
+    const draft = directoryDraft ?? (directoryNeedsApproval ? backupDirectory : null);
+    if (draft === null || committingDirectoryRef.current) return;
+    const trimmed = draft.trim();
+    // Clearing the field, or typing the default back in, means "use the
+    // default" rather than a custom directory equal to it.
+    if (!trimmed || (defaultDirectory !== null && isSameDirectory(trimmed, defaultDirectory))) {
+      applyDirectory(null);
+      return;
+    }
+    if (
+      !directoryNeedsApproval &&
+      backupDirectory !== null &&
+      isSameDirectory(trimmed, backupDirectory)
+    ) {
+      setDirectoryDraft(null);
+      setDirectoryError(null);
+      return;
+    }
+    if (!isAbsoluteDirectoryPath(trimmed)) {
+      setDirectoryError(t("backup.directoryNotAbsolute"));
+      return;
+    }
+
+    committingDirectoryRef.current = true;
+    try {
+      if (await requestBackupDirectory(trimmed, i18n.language)) {
+        applyDirectory(trimmed);
+      } else {
+        // Declined in the native dialog: nothing changes.
+        setDirectoryDraft(null);
+        setDirectoryError(null);
+      }
+    } catch (error) {
+      console.error("Failed to approve the backup directory:", error);
+      setDirectoryError(t("backup.directoryAccessFailed"));
+    } finally {
+      committingDirectoryRef.current = false;
+    }
+  }, [
+    applyDirectory,
+    backupDirectory,
+    defaultDirectory,
+    directoryDraft,
+    directoryNeedsApproval,
+    i18n.language,
+    t,
+  ]);
 
   // Selection covers the visible page only: a different page, page size, or
   // folder starts empty.
@@ -76,9 +190,14 @@ export function BackupSection() {
         const svc = new BackupService(adapter);
         if (cancelled) return;
         setService(svc);
-      } catch {
+      } catch (error) {
         if (cancelled) return;
-        setErrorMessage(t("backup.loadFailed"));
+        if (error instanceof Error && error.message === BACKUP_DIRECTORY_NOT_APPROVED) {
+          setDirectoryNeedsApproval(true);
+          setDirectoryError(t("backup.directoryNeedsApproval"));
+        } else {
+          setErrorMessage(t("backup.loadFailed"));
+        }
         setLoading(false);
       }
     }
@@ -92,7 +211,7 @@ export function BackupSection() {
     return () => {
       cancelled = true;
     };
-  }, [backupDirectory, t]);
+  }, [backupDirectory, serviceGeneration, t]);
 
   const refresh = useCallback(async () => {
     if (!service) return;
@@ -168,12 +287,22 @@ export function BackupSection() {
   }, [service, backupRetention, refresh, t]);
 
   const handleChooseDirectory = useCallback(async () => {
-    const dialog = await getDialog();
-    const path = await dialog.open({ directory: true });
-    if (path) {
-      setBackupDirectory(path);
+    let path: string | null;
+    try {
+      // A draft that has not committed yet is still where the author is looking.
+      path = await pickBackupDirectory(directoryDraft?.trim() || effectiveDirectory || undefined);
+    } catch (error) {
+      console.error("Failed to choose the backup directory:", error);
+      setDirectoryError(t("backup.directoryAccessFailed"));
+      return;
     }
-  }, [setBackupDirectory]);
+    if (!path) {
+      // Cancelled: the uncommitted draft is still being edited.
+      if (directoryDraft !== null) directoryInputRef.current?.focus();
+      return;
+    }
+    applyDirectory(defaultDirectory && isSameDirectory(path, defaultDirectory) ? null : path);
+  }, [applyDirectory, defaultDirectory, directoryDraft, effectiveDirectory, t]);
 
   const handleDelete = useCallback(
     async (filename: string) => {
@@ -263,8 +392,6 @@ export function BackupSection() {
   const selectedOnPage = backups.filter((backup) => selected.has(backup.filename)).length;
   const allOnPageSelected = backups.length > 0 && selectedOnPage === backups.length;
 
-  if (loading && totalCount === 0 && backups.length === 0) return null;
-
   return (
     <div className="@container space-y-4">
       <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -287,16 +414,43 @@ export function BackupSection() {
       </div>
 
       {IS_DESKTOP && (
-        <div className="flex flex-col gap-3 @sm:flex-row @sm:items-end">
+        // An error below the field would pull a bottom-aligned button down
+        // with it; align the button to the field under its label instead.
+        <div
+          className={`flex flex-col gap-3 @sm:flex-row ${directoryError ? "@sm:items-start" : "@sm:items-end"}`}
+          onBlur={(e) => {
+            // Moving between the field and Choose folder keeps the draft (it
+            // is the picker's start), and so does a native picker or
+            // confirmation taking window focus. Leaving the row commits it.
+            if (e.currentTarget.contains(e.relatedTarget) || !document.hasFocus()) return;
+            void commitDirectoryDraft();
+          }}
+        >
           <Input
+            ref={directoryInputRef}
+            id={directoryInputId}
             label={t("backup.directoryLabel")}
-            value={backupDirectory ?? ""}
-            onChange={(e) => setBackupDirectory(e.target.value || null)}
+            value={directoryValue}
+            error={directoryError ?? undefined}
+            onChange={(e) => {
+              setDirectoryDraft(e.target.value);
+              if (!directoryNeedsApproval) setDirectoryError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void commitDirectoryDraft();
+              } else if (e.key === "Escape" && directoryDraft !== null) {
+                e.preventDefault();
+                setDirectoryDraft(null);
+                if (!directoryNeedsApproval) setDirectoryError(null);
+              }
+            }}
             placeholder={t("backup.directoryPlaceholder")}
           />
           <Button
             variant="secondary"
-            className="shrink-0 h-11"
+            className={`shrink-0 h-11 ${directoryError ? "@sm:mt-[1.625rem]" : ""}`}
             onClick={() => void handleChooseDirectory()}
           >
             {t("backup.chooseDirectory")}
@@ -304,7 +458,7 @@ export function BackupSection() {
         </div>
       )}
 
-      <Button ref={createButtonRef} variant="primary" onClick={handleCreate}>
+      <Button ref={createButtonRef} variant="primary" onClick={handleCreate} disabled={!service}>
         {t("backup.createBackup")}
       </Button>
 
@@ -312,7 +466,11 @@ export function BackupSection() {
         <p className="text-sm text-destructive">{t("backup.sizeWarning")}</p>
       )}
 
-      {totalCount === 0 ? (
+      {loading && totalCount === 0 ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("common.loading")}
+        </p>
+      ) : totalCount === 0 ? (
         <p className="text-sm text-muted-foreground">{t("backup.noBackups")}</p>
       ) : (
         <div className="space-y-3">

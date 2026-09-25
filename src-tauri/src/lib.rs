@@ -1,4 +1,5 @@
 mod android_exit;
+mod backup;
 mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -45,8 +46,17 @@ pub fn run() {
         ));
 
     builder
-        .invoke_handler(tauri::generate_handler![tray::set_tray_syncing, android_exit::exit_app])
+        .invoke_handler(tauri::generate_handler![
+            tray::set_tray_syncing,
+            android_exit::exit_app,
+            backup::pick_backup_directory,
+            backup::request_backup_directory,
+            backup::restore_backup_directory,
+            backup::forget_backup_directory
+        ])
         .setup(|app| {
+            backup::protect_approval(app.handle())?;
+
             #[cfg(desktop)]
             {
                 use tauri::Manager;
