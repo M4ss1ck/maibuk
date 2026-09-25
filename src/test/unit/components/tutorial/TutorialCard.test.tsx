@@ -73,6 +73,25 @@ describe("TutorialCard", () => {
     expect(props.onNext).toHaveBeenCalledTimes(1);
   });
 
+  it("opens with focus on Next, so Enter and Space walk through the steps", async () => {
+    const user = userEvent.setup();
+    const props = renderCard();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Next" }));
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+    expect(props.onNext).toHaveBeenCalledTimes(2);
+    expect(props.onBack).not.toHaveBeenCalled();
+    expect(props.onSkip).not.toHaveBeenCalled();
+  });
+
+  it("opens with focus on Finish on the last step", async () => {
+    const user = userEvent.setup();
+    const props = renderCard({ isLast: true });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Finish" }));
+    await user.keyboard("{Enter}");
+    expect(props.onNext).toHaveBeenCalledTimes(1);
+  });
+
   it("says Finish on the last step and has no Back on the first", () => {
     renderCard({ isLast: true, canGoBack: false });
     expect(screen.getByRole("button", { name: "Finish" })).toBeInTheDocument();
