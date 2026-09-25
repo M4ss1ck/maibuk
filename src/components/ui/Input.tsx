@@ -13,6 +13,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const { t } = useTranslation();
     const inputId = id || props.name;
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const errorId = error && inputId ? `${inputId}-error` : undefined;
+    const describedBy =
+      [props["aria-describedby"], errorId].filter(Boolean).join(" ") || undefined;
     const showNumberControls = type === "number" && !endAdornment;
 
     const setInputRef = (node: HTMLInputElement | null) => {
@@ -87,6 +90,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             }
             ${className}`}
             {...props}
+            aria-invalid={error ? true : props["aria-invalid"]}
+            aria-describedby={describedBy}
           />
           {showNumberControls && (
             <div className="absolute inset-y-1 right-1 flex w-6 flex-col overflow-hidden rounded-md border border-border bg-card">
@@ -114,7 +119,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             <div className="absolute inset-y-0 right-2 flex items-center">{endAdornment}</div>
           )}
         </div>
-        {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
+        {error && (
+          <p id={errorId} className="mt-1 text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </div>
     );
   }

@@ -15,20 +15,6 @@ beforeEach(() => {
 });
 
 describe("tauriDialog.open()", () => {
-  it("passes the starting directory to the folder picker", async () => {
-    mockOpen.mockResolvedValue("/mnt/backups");
-
-    await expect(
-      tauriDialog.open({ directory: true, defaultPath: "/mnt/backups" })
-    ).resolves.toBe("/mnt/backups");
-    expect(mockOpen).toHaveBeenCalledWith({
-      directory: true,
-      multiple: undefined,
-      defaultPath: "/mnt/backups",
-      filters: undefined,
-    });
-  });
-
   it("returns the first selection when multiple is set", async () => {
     mockOpen.mockResolvedValue(["/mnt/one.sql", "/mnt/two.sql"]);
 

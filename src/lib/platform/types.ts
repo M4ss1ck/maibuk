@@ -16,8 +16,6 @@ export interface SaveDialogOptions {
 export interface OpenDialogOptions {
   multiple?: boolean;
   directory?: boolean;
-  /** Directory or file the picker opens on. */
-  defaultPath?: string;
   filters?: { name: string; extensions: string[] }[];
 }
 

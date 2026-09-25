@@ -197,7 +197,7 @@ _UI_: en "Backups" / es "Copias de seguridad"
 _Avoid_: database export, dump, snapshot
 
 **Backup Directory**:
-Where Backups are kept: the app's own data folder by default, or a folder the author chooses.
+Where Backups are kept on desktop: the app's own data folder by default, or a folder the author picks or types and confirms.
 _UI_: en "Backup directory" / es "Carpeta de copias"
 
 **Database File**:

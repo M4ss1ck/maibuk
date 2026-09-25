@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackupSection } from "@/components/settings/BackupSection";
@@ -11,7 +11,9 @@ const {
   mockAdapter,
   mockTranslate,
   platformState,
-  getDialog,
+  mockPickBackupDirectory,
+  mockRequestBackupDirectory,
+  mockForgetBackupDirectory,
   i18nState,
   mockGetDefaultBackupDirectory,
   mockCreateBackup,
@@ -45,14 +47,19 @@ const {
   }),
   i18nState: { language: "en" },
   platformState: { isDesktop: true, defaultDirectory: "/home/author/.config/maibuk/backups" },
-  getDialog: vi.fn().mockResolvedValue({ open: vi.fn().mockResolvedValue(null) }),
+  mockPickBackupDirectory: vi.fn(),
+  mockRequestBackupDirectory: vi.fn(),
+  mockForgetBackupDirectory: vi.fn(),
   mockCreateBackup: vi.fn(),
   mockGetDefaultBackupDirectory: vi.fn(),
 }));
 
 vi.mock("../../../../lib/platform", () => ({
+  BACKUP_DIRECTORY_NOT_APPROVED: "BACKUP_DIRECTORY_NOT_APPROVED",
   createBackup: mockCreateBackup,
-  getDialog,
+  pickBackupDirectory: mockPickBackupDirectory,
+  requestBackupDirectory: mockRequestBackupDirectory,
+  forgetBackupDirectory: mockForgetBackupDirectory,
   getOS: vi.fn().mockResolvedValue({ locale: vi.fn().mockResolvedValue("en-US") }),
   getDefaultBackupDirectory: mockGetDefaultBackupDirectory,
   IS_TAURI: true,
@@ -131,6 +138,9 @@ describe("BackupSection", () => {
     platformState.isDesktop = true;
     mockCreateBackup.mockResolvedValue(mockAdapter);
     mockGetDefaultBackupDirectory.mockResolvedValue(platformState.defaultDirectory);
+    mockPickBackupDirectory.mockResolvedValue(null);
+    mockRequestBackupDirectory.mockResolvedValue(true);
+    mockForgetBackupDirectory.mockResolvedValue(undefined);
     useSettingsStore.setState({
       backupRetention: 20,
       backupDirectory: null,
@@ -195,7 +205,7 @@ describe("BackupSection", () => {
     });
     choose.focus();
     await user.keyboard("{Enter}");
-    expect(getDialog).toHaveBeenCalledOnce();
+    expect(mockPickBackupDirectory).toHaveBeenCalledOnce();
   });
 
   it("scrolls the backup table horizontally instead of clipping row actions", async () => {
@@ -217,17 +227,41 @@ describe("BackupSection", () => {
   });
 
   describe("backup directory", () => {
-    it("shows the directory backups are saved in when no custom one is set", async () => {
-      render(<BackupSection />);
+    beforeEach(() => {
+      // jsdom never has window focus; the app window does while the author types.
+      vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    });
 
+    async function renderWithDirectoryField() {
+      const user = userEvent.setup();
+      render(<BackupSection />);
       const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+      const shown = useSettingsStore.getState().backupDirectory ?? platformState.defaultDirectory;
+      await waitFor(() => expect(input).toHaveValue(shown));
+      // The default directory resolves once; custom-directory tests compare against it.
+      await waitFor(() => expect(mockGetDefaultBackupDirectory).toHaveBeenCalled());
+      await act(async () => {});
+      return { user, input };
+    }
+
+    async function typeDirectory(
+      user: ReturnType<typeof userEvent.setup>,
+      input: HTMLElement,
+      path: string
+    ) {
+      input.focus();
+      await user.clear(input);
+      if (path) await user.type(input, path);
+    }
+
+    it("shows the directory backups are saved in when no custom one is set", async () => {
+      const { input } = await renderWithDirectoryField();
+
+      expect(input).toHaveValue(platformState.defaultDirectory);
       expect(useSettingsStore.getState().backupDirectory).toBeNull();
     });
 
     it("opens the folder picker at the custom directory", async () => {
-      const open = vi.fn().mockResolvedValue(null);
-      getDialog.mockResolvedValue({ open });
       useSettingsStore.setState({ backupDirectory: "/mnt/backups" });
       const user = userEvent.setup();
       render(<BackupSection />);
@@ -236,71 +270,85 @@ describe("BackupSection", () => {
       choose.focus();
       await user.keyboard("{Enter}");
 
-      await waitFor(() =>
-        expect(open).toHaveBeenCalledWith(
-          expect.objectContaining({ directory: true, defaultPath: "/mnt/backups" })
-        )
-      );
+      await waitFor(() => expect(mockPickBackupDirectory).toHaveBeenCalledWith("/mnt/backups"));
     });
 
     it("opens the folder picker at the default directory when none is set", async () => {
-      const open = vi.fn().mockResolvedValue(null);
-      getDialog.mockResolvedValue({ open });
-      const user = userEvent.setup();
-      render(<BackupSection />);
-
-      const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+      const { user } = await renderWithDirectoryField();
       const choose = screen.getByRole("button", { name: "backup.chooseDirectory" });
       choose.focus();
       await user.keyboard("{Enter}");
 
       await waitFor(() =>
-        expect(open).toHaveBeenCalledWith(
-          expect.objectContaining({ directory: true, defaultPath: platformState.defaultDirectory })
-        )
+        expect(mockPickBackupDirectory).toHaveBeenCalledWith(platformState.defaultDirectory)
       );
     });
 
-    it("opens the folder picker at the path the author just typed", async () => {
-      const open = vi.fn().mockResolvedValue(null);
-      getDialog.mockResolvedValue({ open });
-      const user = userEvent.setup();
-      render(<BackupSection />);
-      const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+    it("moving from a typed path to Choose folder starts the picker there without saving it", async () => {
+      const { user, input } = await renderWithDirectoryField();
 
-      input.focus();
-      await user.clear(input);
-      await user.type(input, "/mnt/typed");
+      await typeDirectory(user, input, "/mnt/typed");
+      await user.tab();
+      expect(screen.getByRole("button", { name: "backup.chooseDirectory" })).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(mockPickBackupDirectory).toHaveBeenCalledWith("/mnt/typed"));
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
+    });
+
+    it("commits the typed path once focus leaves Choose folder too", async () => {
+      const { user, input } = await renderWithDirectoryField();
+
+      await typeDirectory(user, input, "/mnt/typed");
+      await user.tab();
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
+      await user.tab();
+
+      await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBe("/mnt/typed"));
+      expect(mockRequestBackupDirectory).toHaveBeenCalledOnce();
+    });
+
+    it("keeps the draft when a native window takes focus", async () => {
+      vi.spyOn(document, "hasFocus").mockReturnValue(false);
+      const { user, input } = await renderWithDirectoryField();
+
+      await typeDirectory(user, input, "/mnt/typed");
+      input.blur();
+
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
+      expect(input).toHaveValue("/mnt/typed");
+    });
+
+    it("returns to the typed path when the picker is cancelled", async () => {
+      const { user, input } = await renderWithDirectoryField();
+
+      await typeDirectory(user, input, "/mnt/typed");
       await user.click(screen.getByRole("button", { name: "backup.chooseDirectory" }));
 
-      await waitFor(() =>
-        expect(open).toHaveBeenCalledWith(
-          expect.objectContaining({ directory: true, defaultPath: "/mnt/typed" })
-        )
-      );
+      await waitFor(() => expect(input).toHaveFocus());
+      expect(input).toHaveValue("/mnt/typed");
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
     });
 
-    it("keeps focus while typing and commits the typed directory only on Enter", async () => {
-      const user = userEvent.setup();
-      render(<BackupSection />);
-      const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+    it("keeps focus while typing and asks for approval only on Enter", async () => {
+      i18nState.language = "es";
+      const { user, input } = await renderWithDirectoryField();
 
       input.focus();
       await user.keyboard("x");
       expect(input).toHaveFocus();
 
-      await user.clear(input);
-      expect(input).toHaveFocus();
-      await user.type(input, "/mnt/custom backups");
+      await typeDirectory(user, input, "/mnt/custom backups");
       expect(input).toHaveFocus();
       expect(useSettingsStore.getState().backupDirectory).toBeNull();
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
       expect(mockGetDefaultBackupDirectory).toHaveBeenCalledTimes(1);
 
       await user.keyboard("{Enter}");
 
+      expect(mockRequestBackupDirectory).toHaveBeenCalledWith("/mnt/custom backups", "es");
       await waitFor(() =>
         expect(useSettingsStore.getState().backupDirectory).toBe("/mnt/custom backups")
       );
@@ -309,70 +357,138 @@ describe("BackupSection", () => {
       expect(screen.getByRole("button", { name: "backup.createBackup" })).toBeInTheDocument();
     });
 
-    it("commits the typed directory when the field loses focus", async () => {
-      const user = userEvent.setup();
-      render(<BackupSection />);
-      const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+    it("asks for approval when the field loses focus", async () => {
+      const { user, input } = await renderWithDirectoryField();
 
-      input.focus();
-      await user.clear(input);
-      await user.type(input, "/mnt/typed");
-      await user.tab();
+      await typeDirectory(user, input, "/mnt/typed");
+      input.blur();
 
       await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBe("/mnt/typed"));
+      expect(mockRequestBackupDirectory).toHaveBeenCalledOnce();
     });
 
-    it("falls back to the default directory when the field is cleared", async () => {
-      useSettingsStore.setState({ backupDirectory: "/mnt/custom" });
-      const user = userEvent.setup();
-      render(<BackupSection />);
-      const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue("/mnt/custom"));
+    it("asks once when the native confirmation blurs the field mid-commit", async () => {
+      let answer: ((approved: boolean) => void) | undefined;
+      mockRequestBackupDirectory.mockImplementation(
+        () =>
+          new Promise<boolean>((resolve) => {
+            answer = resolve;
+          })
+      );
+      const { user, input } = await renderWithDirectoryField();
 
-      input.focus();
-      await user.clear(input);
+      await typeDirectory(user, input, "/mnt/typed");
+      await user.keyboard("{Enter}");
+      input.blur();
+      answer?.(true);
+
+      await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBe("/mnt/typed"));
+      expect(mockRequestBackupDirectory).toHaveBeenCalledOnce();
+    });
+
+    it("changes nothing when the author declines the native confirmation", async () => {
+      mockRequestBackupDirectory.mockResolvedValue(false);
+      useSettingsStore.setState({ backupDirectory: "/mnt/current" });
+      const { user, input } = await renderWithDirectoryField();
+
+      await typeDirectory(user, input, "/home/author/.ssh");
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(input).toHaveValue("/mnt/current"));
+      expect(useSettingsStore.getState().backupDirectory).toBe("/mnt/current");
+      expect(screen.queryByText("backup.directoryAccessFailed")).not.toBeInTheDocument();
+    });
+
+    it.each(["backups", "~/Backups", "./backups"])(
+      "rejects the relative path %s without asking or saving",
+      async (path) => {
+        const { user, input } = await renderWithDirectoryField();
+
+        await typeDirectory(user, input, path);
+        await user.keyboard("{Enter}");
+
+        expect(input).toHaveAccessibleDescription("backup.directoryNotAbsolute");
+        expect(input).toBeInvalid();
+        expect(input).toHaveValue(path);
+        expect(input).toHaveFocus();
+        expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
+        expect(useSettingsStore.getState().backupDirectory).toBeNull();
+
+        await typeDirectory(user, input, "/mnt/fixed");
+        expect(input).not.toBeInvalid();
+      }
+    );
+
+    it("shows an error when approval fails", async () => {
+      mockRequestBackupDirectory.mockRejectedValue(new Error("BACKUP_DIRECTORY_INVALID"));
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const { user, input } = await renderWithDirectoryField();
+
+      await typeDirectory(user, input, "/");
+      await user.keyboard("{Enter}");
+
+      await waitFor(() =>
+        expect(input).toHaveAccessibleDescription("backup.directoryAccessFailed")
+      );
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
+    });
+
+    it("falls back to the default directory and forgets the approval when the field is cleared", async () => {
+      useSettingsStore.setState({ backupDirectory: "/mnt/custom" });
+      const { user, input } = await renderWithDirectoryField();
+      expect(input).toHaveValue("/mnt/custom");
+
+      await typeDirectory(user, input, "");
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBeNull());
       expect(input).toHaveValue(platformState.defaultDirectory);
       await waitFor(() => expect(mockCreateBackup).toHaveBeenLastCalledWith(null));
+      expect(mockForgetBackupDirectory).toHaveBeenCalledOnce();
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
     });
 
-    it("treats the default directory typed back in as the default", async () => {
+    it.each([
+      ["typed back in", (dir: string) => dir],
+      ["with a trailing slash", (dir: string) => `${dir}/`],
+    ])("treats the default directory %s as the default", async (_label, variant) => {
       useSettingsStore.setState({ backupDirectory: "/mnt/custom" });
-      const user = userEvent.setup();
-      render(<BackupSection />);
-      const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue("/mnt/custom"));
+      const { user, input } = await renderWithDirectoryField();
 
-      input.focus();
-      await user.clear(input);
-      await user.type(input, platformState.defaultDirectory);
+      await typeDirectory(user, input, variant(platformState.defaultDirectory));
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBeNull());
       await waitFor(() => expect(mockCreateBackup).toHaveBeenLastCalledWith(null));
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
     });
 
-    it("reverts an uncommitted draft on Escape", async () => {
-      const user = userEvent.setup();
-      render(<BackupSection />);
-      const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+    it("does not ask again for the current directory with a trailing slash", async () => {
+      useSettingsStore.setState({ backupDirectory: "/mnt/custom" });
+      const { user, input } = await renderWithDirectoryField();
 
-      input.focus();
-      await user.clear(input);
-      await user.type(input, "/tmp/not-committed");
+      await typeDirectory(user, input, "/mnt/custom/");
+      await user.keyboard("{Enter}");
+
+      expect(input).toHaveValue("/mnt/custom");
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
+    });
+
+    it("reverts an uncommitted draft and its error on Escape", async () => {
+      const { user, input } = await renderWithDirectoryField();
+
+      await typeDirectory(user, input, "relative");
+      await user.keyboard("{Enter}");
+      expect(input).toBeInvalid();
       await user.keyboard("{Escape}");
 
       expect(input).toHaveValue(platformState.defaultDirectory);
+      expect(input).not.toBeInvalid();
       expect(useSettingsStore.getState().backupDirectory).toBeNull();
     });
 
     it("updates the field and the store when a folder is picked", async () => {
-      const open = vi.fn().mockResolvedValue("/picked/backups");
-      getDialog.mockResolvedValue({ open });
+      mockPickBackupDirectory.mockResolvedValue("/picked/backups");
       const user = userEvent.setup();
       render(<BackupSection />);
 
@@ -382,14 +498,60 @@ describe("BackupSection", () => {
         expect(useSettingsStore.getState().backupDirectory).toBe("/picked/backups")
       );
       expect(await screen.findByLabelText("backup.directoryLabel")).toHaveValue("/picked/backups");
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
+    });
+
+    it("picking the default folder goes back to the default", async () => {
+      useSettingsStore.setState({ backupDirectory: "/mnt/custom" });
+      mockPickBackupDirectory.mockResolvedValue(platformState.defaultDirectory);
+      const { user } = await renderWithDirectoryField();
+
+      await user.click(screen.getByRole("button", { name: "backup.chooseDirectory" }));
+
+      await waitFor(() => expect(useSettingsStore.getState().backupDirectory).toBeNull());
+      expect(mockForgetBackupDirectory).toHaveBeenCalledOnce();
+    });
+
+    describe("a saved directory this device never approved", () => {
+      beforeEach(() => {
+        useSettingsStore.setState({ backupDirectory: "/mnt/old" });
+        mockCreateBackup.mockImplementation(async (dir: string | null) => {
+          if (dir === "/mnt/old" && !mockRequestBackupDirectory.mock.calls.length) {
+            throw new Error("BACKUP_DIRECTORY_NOT_APPROVED");
+          }
+          return mockAdapter;
+        });
+      });
+
+      it("says so on the field and disables Create", async () => {
+        const { input } = await renderWithDirectoryField();
+
+        await waitFor(() =>
+          expect(input).toHaveAccessibleDescription("backup.directoryNeedsApproval")
+        );
+        expect(screen.getByRole("button", { name: "backup.createBackup" })).toBeDisabled();
+        expect(screen.queryByText("backup.loadFailed")).not.toBeInTheDocument();
+      });
+
+      it("asks again on Enter in the unchanged field, then reloads the Backups", async () => {
+        const { user, input } = await renderWithDirectoryField();
+        await waitFor(() => expect(input).toBeInvalid());
+
+        input.focus();
+        await user.keyboard("{Enter}");
+
+        expect(mockRequestBackupDirectory).toHaveBeenCalledWith("/mnt/old", "en");
+        await waitFor(() => expect(input).not.toBeInvalid());
+        await waitFor(() =>
+          expect(screen.getByRole("button", { name: "backup.createBackup" })).toBeEnabled()
+        );
+        expect(useSettingsStore.getState().backupDirectory).toBe("/mnt/old");
+      });
     });
 
     it("shows a loading state instead of unmounting the controls while the directory changes", async () => {
       let resolvePage: (() => void) | undefined;
-      const user = userEvent.setup();
-      render(<BackupSection />);
-      const input = await screen.findByLabelText("backup.directoryLabel");
-      await waitFor(() => expect(input).toHaveValue(platformState.defaultDirectory));
+      const { user, input } = await renderWithDirectoryField();
 
       mockAdapter.listBackupsPage.mockImplementationOnce(
         () =>
@@ -398,9 +560,7 @@ describe("BackupSection", () => {
           })
       );
 
-      input.focus();
-      await user.clear(input);
-      await user.type(input, "/mnt/slow");
+      await typeDirectory(user, input, "/mnt/slow");
       await user.keyboard("{Enter}");
 
       expect(await screen.findByText("common.loading")).toBeInTheDocument();

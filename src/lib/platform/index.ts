@@ -143,9 +143,9 @@ export async function createBackup(customDir?: string | null): Promise<BackupAda
     const { createWebBackup } = await import("@/lib/platform/web/backup");
     return createWebBackup();
   }
-  // A custom directory restored from settings has no scope grant yet; a typed
-  // one gets it here, before the first write.
-  if (customDir) await allowBackupDirectory(customDir);
+  // Every launch starts with an empty fs scope; the Rust side grants the
+  // approved directory again and refuses any other path.
+  if (customDir) await restoreBackupDirectory(customDir);
   const { createTauriBackup } = await import("@/lib/platform/tauri/backup");
   return createTauriBackup(customDir ?? undefined);
 }
@@ -158,14 +158,47 @@ export async function getDefaultBackupDirectory(): Promise<string | null> {
   return resolveTauriBackupDir();
 }
 
-// Grant a typeable Backup directory the filesystem access its Backups need.
-// The dialog grants this for a picked folder; a typed path has no grant, and
-// Tauri's fs scope denies writes outside it. Persisted across launches by the
-// persisted-scope plugin.
-export async function allowBackupDirectory(path: string): Promise<void> {
-  if (!isDesktopRuntime()) {
-    return;
-  }
+// A custom Backup Directory enters the fs scope only through native UI the
+// webview cannot fake (ADR 0010). Outside the desktop app there is no fs scope
+// and no custom directory, so these do nothing.
+export const BACKUP_DIRECTORY_NOT_APPROVED = "BACKUP_DIRECTORY_NOT_APPROVED";
+
+async function invokeBackupCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("allow_backup_directory", { path });
+  try {
+    return await invoke<T>(command, args);
+  } catch (error) {
+    // Commands reject with a bare string; callers match on the message.
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+// Open the native folder picker; the folder picked is approved. Null when the
+// picker is cancelled.
+export async function pickBackupDirectory(defaultPath?: string): Promise<string | null> {
+  if (!isDesktopRuntime()) return null;
+  return invokeBackupCommand<string | null>("pick_backup_directory", {
+    defaultPath: defaultPath || null,
+  });
+}
+
+// Ask the author, in a native dialog, to confirm a typed directory. False when
+// they decline.
+export async function requestBackupDirectory(path: string, locale: string): Promise<boolean> {
+  if (!isDesktopRuntime()) return true;
+  return invokeBackupCommand<boolean>("request_backup_directory", { path, locale });
+}
+
+// Grant the approved directory again. Rejects with
+// BACKUP_DIRECTORY_NOT_APPROVED for a directory the author never approved,
+// such as one saved before approvals existed.
+export async function restoreBackupDirectory(path: string): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  await invokeBackupCommand<void>("restore_backup_directory", { path });
+}
+
+// Drop the approval once the author is back on the default directory.
+export async function forgetBackupDirectory(): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  await invokeBackupCommand<void>("forget_backup_directory");
 }

@@ -1161,6 +1161,9 @@
     "description": "Se crea una copia diaria automáticamente (una vez al día), además de antes de sincronizar y antes de restaurar.",
     "directoryLabel": "Carpeta de copias",
     "directoryPlaceholder": "Usar la carpeta predeterminada de la app",
+    "directoryNotAbsolute": "Escribe la ruta completa de la carpeta, por ejemplo /home/tu-usuario/Copias o C:\\Copias.",
+    "directoryNeedsApproval": "Maibuk necesita tu permiso para volver a usar esta carpeta. Pulsa Intro en este campo, o elige la carpeta, para permitirlo.",
+    "directoryAccessFailed": "Maibuk no pudo acceder a esta carpeta.",
     "chooseDirectory": "Elegir carpeta",
     "loadFailed": "No se pudieron cargar las copias de seguridad.",
     "retentionLimit": "Máximo de copias a conservar",
@@ -1444,7 +1447,7 @@
         },
         "backups": {
           "title": "Copias de seguridad",
-          "body": "Maibuk hace una copia de seguridad de tu biblioteca cada día, al cerrar y antes de pasos arriesgados como una sincronización o una restauración. La retención fija cuántas copias se guardan. Restaurar una copia recupera Libros, Notas, Lienzos e historial de versiones."
+          "body": "Maibuk hace una copia de seguridad de tu biblioteca cada día, al cerrar y antes de pasos arriesgados como una sincronización o una restauración. La retención fija cuántas copias se guardan. Restaurar una copia recupera Libros, Notas, Lienzos e historial de versiones. En escritorio, la carpeta de copias indica dónde se guardan las copias."
         },
         "metrics": {
           "title": "Métricas",

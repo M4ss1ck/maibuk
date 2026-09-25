@@ -48,18 +48,28 @@ describe("getDefaultBackupDirectory()", () => {
 });
 
 describe("createBackup()", () => {
-  it("grants scope for a custom directory before creating its adapter", async () => {
+  it("restores the approved custom directory before creating its adapter", async () => {
     const { createBackup } = await loadPlatform("tauri", "linux");
 
     await createBackup("/mnt/custom backups");
 
-    expect(mockInvoke).toHaveBeenCalledWith("allow_backup_directory", {
+    expect(mockInvoke).toHaveBeenCalledWith("restore_backup_directory", {
       path: "/mnt/custom backups",
     });
     expect(mockCreateTauriBackup).toHaveBeenCalledWith("/mnt/custom backups");
     expect(mockInvoke.mock.invocationCallOrder[0]).toBeLessThan(
       mockCreateTauriBackup.mock.invocationCallOrder[0]
     );
+  });
+
+  it("fails without an adapter when the directory was never approved", async () => {
+    mockInvoke.mockRejectedValue("BACKUP_DIRECTORY_NOT_APPROVED");
+    const { createBackup, BACKUP_DIRECTORY_NOT_APPROVED } = await loadPlatform("tauri", "linux");
+
+    await expect(createBackup("/home/author/.ssh")).rejects.toThrow(
+      BACKUP_DIRECTORY_NOT_APPROVED
+    );
+    expect(mockCreateTauriBackup).not.toHaveBeenCalled();
   });
 
   it("does not touch the filesystem scope for the default directory", async () => {
@@ -72,29 +82,74 @@ describe("createBackup()", () => {
   });
 });
 
-describe("allowBackupDirectory()", () => {
-  it("grants the typed path to the filesystem scope on desktop Tauri", async () => {
-    const { allowBackupDirectory } = await loadPlatform("tauri", "linux");
+describe("pickBackupDirectory()", () => {
+  it("opens the native picker at the given folder and returns the approved pick", async () => {
+    mockInvoke.mockResolvedValue("/mnt/picked");
+    const { pickBackupDirectory } = await loadPlatform("tauri", "linux");
 
-    await allowBackupDirectory("/mnt/custom backups");
-
-    expect(mockInvoke).toHaveBeenCalledWith("allow_backup_directory", {
-      path: "/mnt/custom backups",
+    await expect(pickBackupDirectory("/mnt/start")).resolves.toBe("/mnt/picked");
+    expect(mockInvoke).toHaveBeenCalledWith("pick_backup_directory", {
+      defaultPath: "/mnt/start",
     });
   });
 
-  it("does nothing on web", async () => {
-    const { allowBackupDirectory } = await loadPlatform("web");
+  it("returns null when the picker is cancelled", async () => {
+    mockInvoke.mockResolvedValue(null);
+    const { pickBackupDirectory } = await loadPlatform("tauri", "linux");
 
-    await allowBackupDirectory("/mnt/custom backups");
+    await expect(pickBackupDirectory()).resolves.toBeNull();
+    expect(mockInvoke).toHaveBeenCalledWith("pick_backup_directory", { defaultPath: null });
+  });
+});
 
-    expect(mockInvoke).not.toHaveBeenCalled();
+describe("requestBackupDirectory()", () => {
+  it("asks the Rust side to confirm the typed path in the app language", async () => {
+    mockInvoke.mockResolvedValue(false);
+    const { requestBackupDirectory } = await loadPlatform("tauri", "linux");
+
+    await expect(requestBackupDirectory("/mnt/typed", "es")).resolves.toBe(false);
+    expect(mockInvoke).toHaveBeenCalledWith("request_backup_directory", {
+      path: "/mnt/typed",
+      locale: "es",
+    });
   });
 
-  it("does nothing on Android, which has no custom directory picker", async () => {
-    const { allowBackupDirectory } = await loadPlatform("tauri", "android");
+  it("turns a string rejection into an Error", async () => {
+    mockInvoke.mockRejectedValue("BACKUP_DIRECTORY_INVALID");
+    const { requestBackupDirectory } = await loadPlatform("tauri", "linux");
 
-    await allowBackupDirectory("/mnt/custom backups");
+    await expect(requestBackupDirectory("backups", "en")).rejects.toThrow(
+      "BACKUP_DIRECTORY_INVALID"
+    );
+  });
+});
+
+describe("forgetBackupDirectory()", () => {
+  it("drops the approval on desktop Tauri", async () => {
+    const { forgetBackupDirectory } = await loadPlatform("tauri", "linux");
+
+    await forgetBackupDirectory();
+
+    expect(mockInvoke).toHaveBeenCalledWith("forget_backup_directory", undefined);
+  });
+});
+
+describe.each([
+  ["web", "linux"],
+  ["tauri", "android"],
+] as const)("outside the desktop app (%s, %s)", (target, platform) => {
+  it("never invokes a Backup Directory command", async () => {
+    const {
+      forgetBackupDirectory,
+      pickBackupDirectory,
+      requestBackupDirectory,
+      restoreBackupDirectory,
+    } = await loadPlatform(target, platform);
+
+    await expect(pickBackupDirectory("/mnt")).resolves.toBeNull();
+    await expect(requestBackupDirectory("/mnt", "en")).resolves.toBe(true);
+    await restoreBackupDirectory("/mnt");
+    await forgetBackupDirectory();
 
     expect(mockInvoke).not.toHaveBeenCalled();
   });

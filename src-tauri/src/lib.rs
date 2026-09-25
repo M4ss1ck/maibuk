@@ -25,8 +25,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
-        // Must be registered after fs to persist the scopes fs hands out.
-        .plugin(tauri_plugin_persisted_scope::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
@@ -51,9 +49,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tray::set_tray_syncing,
             android_exit::exit_app,
-            backup::allow_backup_directory
+            backup::pick_backup_directory,
+            backup::request_backup_directory,
+            backup::restore_backup_directory,
+            backup::forget_backup_directory
         ])
         .setup(|app| {
+            backup::protect_approval(app.handle())?;
+
             #[cfg(desktop)]
             {
                 use tauri::Manager;
