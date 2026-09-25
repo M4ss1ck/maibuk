@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Editor } from "@tiptap/react";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
@@ -45,6 +46,18 @@ describe("MarkdownPasteDialog", () => {
     expect(chainApi.focus).toHaveBeenCalled();
     expect(chainApi.insertContent).toHaveBeenCalledWith(markdownToEditorHtml(markdown));
     expect(chainApi.run).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("Escape keeps the pasted text as plain content", async () => {
+    const user = userEvent.setup();
+    const { editor, chainApi } = createEditorStub();
+    const onClose = vi.fn();
+    render(<MarkdownPasteDialog editor={editor} markdown={markdown} onClose={onClose} />);
+
+    await user.keyboard("{Escape}");
+
+    expect(chainApi.insertContent).toHaveBeenCalledWith(plainTextToEditorHtml(markdown));
     expect(onClose).toHaveBeenCalled();
   });
 

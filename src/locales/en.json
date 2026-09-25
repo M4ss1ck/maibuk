@@ -554,6 +554,7 @@
     "addCleanupRule": "Add cleanup rule from selection",
     "editorTheme": "Editor Theme",
     "inspectInHtml": "Inspect",
+    "contextMenu": "Editor options",
     "lookUp": "Look up \"{{word}}\"",
     "warnings_one": "{{count}} warning",
     "warnings_other": "{{count}} warnings",

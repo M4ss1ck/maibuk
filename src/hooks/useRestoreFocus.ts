@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 
 /**
  * Returns focus to whatever had it when `isOpen` turned true, once the
- * overlay closes or the component unmounts.
+ * overlay closes or the component unmounts. Pass `getTarget` when the action
+ * belongs to a control other than the opener (a dialog opened from another
+ * dialog, whose opener is already gone): the target wins when it returns one.
  *
  * The restore runs in a passive effect on purpose. React Aria's
  * useModalOverlay makes the rest of the page `inert` while open and lifts it
@@ -13,16 +15,23 @@ import { useEffect, useRef } from "react";
  */
 export function useRestoreFocus(
   isOpen: boolean,
-  { skipWhenDialogFocused = false }: { skipWhenDialogFocused?: boolean } = {}
+  {
+    skipWhenDialogFocused = false,
+    getTarget,
+  }: { skipWhenDialogFocused?: boolean; getTarget?: () => HTMLElement | null } = {}
 ): void {
   const targetRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
   const skipRef = useRef(skipWhenDialogFocused);
   skipRef.current = skipWhenDialogFocused;
+  const getTargetRef = useRef(getTarget);
+  getTargetRef.current = getTarget;
 
   if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
+    const provided = getTargetRef.current?.() ?? null;
     const activeElement = document.activeElement;
-    targetRef.current = activeElement instanceof HTMLElement ? activeElement : null;
+    targetRef.current =
+      provided ?? (activeElement instanceof HTMLElement ? activeElement : null);
   }
   wasOpenRef.current = isOpen;
 

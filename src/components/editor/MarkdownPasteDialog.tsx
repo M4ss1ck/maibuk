@@ -23,10 +23,20 @@ export function MarkdownPasteDialog({ editor, markdown, onClose }: MarkdownPaste
     onClose();
   };
 
+  // Escape and backdrop dismissal keep the pasted text as plain content
+  // instead of silently dropping the paste.
+  const handleDismiss = () => {
+    if (markdown !== null) {
+      insert(plainTextToEditorHtml(markdown));
+      return;
+    }
+    onClose();
+  };
+
   return (
     <Modal
       isOpen={markdown !== null}
-      onClose={onClose}
+      onClose={handleDismiss}
       title={t("editor.markdownDetectedTitle")}
       footer={
         <>

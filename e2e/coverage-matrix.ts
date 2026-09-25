@@ -659,7 +659,8 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "not-accepted",
+    issue: "https://github.com/M4ss1ck/maibuk/issues/218",
   },
   {
     id: "editor-context-menu",
@@ -672,7 +673,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-link-dialog",
@@ -844,7 +845,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-custom-dictionary",
@@ -857,7 +858,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId", "/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-word-lookup",
@@ -869,7 +870,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["simulated"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-paste-cleanup",
@@ -882,7 +883,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["chromium-only"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-markdown-paste",
@@ -895,7 +896,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["chromium-only"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-copy",
@@ -907,7 +908,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["chromium-only"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-html-view",
@@ -983,7 +984,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["download"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "editor-reading-position",

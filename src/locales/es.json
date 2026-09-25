@@ -554,6 +554,7 @@
     "addCleanupRule": "Añadir regla de limpieza desde la selección",
     "editorTheme": "Tema del editor",
     "inspectInHtml": "Ver código",
+    "contextMenu": "Opciones del editor",
     "lookUp": "Buscar \"{{word}}\"",
     "warnings_one": "{{count}} advertencia",
     "warnings_other": "{{count}} advertencias",

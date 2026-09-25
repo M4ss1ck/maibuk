@@ -345,6 +345,7 @@ export function EditorToolbar({
           word={dictionaryWord}
           language={spellCheckLanguage}
           onClose={() => setShowDictionaryDialog(false)}
+          restoreFocusTarget={() => editor?.view?.dom ?? null}
         />
         <DictionaryPromptDialog
           isOpen={showDictionaryPrompt}

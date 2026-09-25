@@ -6,6 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
+import { PASTE_CLEANUP_PRESETS, type PasteCleanupPreset } from "@/features/settings/types";
 import type { SeedName } from "./seed/libraries";
 import { SEED_DIR } from "./seed/seeds";
 
@@ -81,14 +82,27 @@ export async function seedSettings(page: Page, state: Record<string, unknown>): 
   await page.addInitScript((partial) => {
     const key = "maibuk-settings";
     const raw = localStorage.getItem(key);
-    const parsed = raw ? (JSON.parse(raw) as { state: Record<string, unknown>; version: number }) : { state: {}, version: 0 };
+    const parsed = raw
+      ? (JSON.parse(raw) as { state: Record<string, unknown>; version: number })
+      : { state: {}, version: 0 };
     parsed.state = { ...parsed.state, ...partial };
     localStorage.setItem(key, JSON.stringify(parsed));
   }, state);
 }
 
+/** Persists a Paste Cleanup preset so paste rows do not have to walk Settings. */
+export async function seedPasteCleanupPreset(
+  page: Page,
+  preset: Exclude<PasteCleanupPreset, "custom">
+): Promise<void> {
+  await seedSettings(page, {
+    pasteCleanup: { preset, options: { ...PASTE_CLEANUP_PRESETS[preset] }, rules: [] },
+  });
+}
+
 /** The raw Library bytes the web adapter persisted, for byte-identity checks. */
-export async function readLibraryBytes(page: Page): Promise<string | null> {  return page.evaluate(
+export async function readLibraryBytes(page: Page): Promise<string | null> {
+  return page.evaluate(
     () =>
       new Promise<string | null>((resolve, reject) => {
         const open = indexedDB.open("maibuk-db-storage", 1);

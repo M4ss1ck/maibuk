@@ -37,6 +37,12 @@ interface ModalProps {
   panelStyle?: CSSProperties;
   titleClassName?: string;
   unstyled?: boolean;
+  /**
+   * Where focus returns when the Modal closes, when that is not the opener
+   * (e.g. a dialog opened from another dialog). Returning null falls back to
+   * the element focused when the Modal opened.
+   */
+  restoreFocusTarget?: () => HTMLElement | null;
 }
 
 export function Modal({
@@ -51,6 +57,7 @@ export function Modal({
   panelStyle,
   titleClassName,
   unstyled = false,
+  restoreFocusTarget,
 }: ModalProps) {
   const { t } = useTranslation();
   const sizeClass = size === "wide" ? "sm:max-w-5xl" : "sm:max-w-md";
@@ -81,7 +88,7 @@ export function Modal({
   );
 
   // After useModalOverlay: its inert cleanup must run before the restore.
-  useRestoreFocus(isOpen);
+  useRestoreFocus(isOpen, { getTarget: restoreFocusTarget });
 
   useEffect(() => {
     if (!isOpen) return;
