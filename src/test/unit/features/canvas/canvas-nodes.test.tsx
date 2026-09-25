@@ -1,3 +1,4 @@
+import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -193,6 +194,84 @@ describe("Canvas custom nodes", () => {
       vi.useRealTimers();
     });
 
+    it.each([
+      "text",
+      "noteRef",
+    ])("positions the %s node Item Menu beside the visible node", async (kind) => {
+      const { container } = render(
+        kind === "text" ? (
+          <LightweightNode
+            {...({ selected: false, data: textNodeData() } as Parameters<
+              typeof LightweightNode
+            >[0])}
+          />
+        ) : (
+          <NoteRefNode
+            {...({
+              selected: false,
+              data: {
+                ...textNodeData(),
+                node: {
+                  id: "ref",
+                  kind: "noteRef",
+                  noteId: "n1",
+                  label: "Linked",
+                  position: { x: 0, y: 0 },
+                },
+              },
+            } as unknown as Parameters<typeof NoteRefNode>[0])}
+          />
+        ),
+        { wrapper: MemoryRouter }
+      );
+      mockItemMenuLayout(container);
+      fireEvent.contextMenu(screen.getByText(kind === "text" ? "Idea" : "Linked"), {
+        clientX: 400,
+        clientY: 250,
+      });
+      const menu = await screen.findByRole("menu");
+      await waitFor(() =>
+        expect(menu.closest("[data-placement]")).toHaveStyle({ left: "300px", top: "384px" })
+      );
+    });
+
+    it("hands off a Text Node's Item Menu to a Note Reference", async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <LightweightNode
+            {...({ selected: false, data: textNodeData() } as Parameters<
+              typeof LightweightNode
+            >[0])}
+          />
+          <NoteRefNode
+            {...({
+              selected: false,
+              data: {
+                ...textNodeData(),
+                node: {
+                  id: "ref",
+                  kind: "noteRef",
+                  noteId: "n1",
+                  label: "Linked",
+                  position: { x: 0, y: 0 },
+                },
+              },
+            } as unknown as Parameters<typeof NoteRefNode>[0])}
+          />
+        </>,
+        { wrapper: MemoryRouter }
+      );
+      await user.pointer({ target: screen.getByText("Idea"), keys: "[MouseRight]" });
+      await screen.findByRole("menu");
+      expect(screen.getByText("Linked").closest("[inert], [aria-hidden='true']")).toBeNull();
+      await user.pointer({ target: screen.getByText("Linked"), keys: "[MouseRight]" });
+      expect(screen.getAllByRole("menu")).toHaveLength(1);
+      await user.click(screen.getByRole("menuitem", { name: "common.delete" }));
+      expect(mocks.removeNode).toHaveBeenCalledWith("ref");
+      expect(mocks.removeNode).toHaveBeenCalledTimes(1);
+    });
+
     it("opens on touch long-press, selects the node, and connects from it", async () => {
       vi.useFakeTimers();
       render(
@@ -214,7 +293,16 @@ describe("Canvas custom nodes", () => {
         <NoteRefNode
           {...({
             selected: false,
-            data: { ...textNodeData(), node: { id: "ref", kind: "noteRef", noteId: "n1", label: "Linked", position: { x: 0, y: 0 } } },
+            data: {
+              ...textNodeData(),
+              node: {
+                id: "ref",
+                kind: "noteRef",
+                noteId: "n1",
+                label: "Linked",
+                position: { x: 0, y: 0 },
+              },
+            },
           } as unknown as Parameters<typeof NoteRefNode>[0])}
         />,
         { wrapper: MemoryRouter }
@@ -480,3 +568,5 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByText("A long linked note preview")).toHaveClass("line-clamp-3");
   });
 });
+
+afterEach(() => vi.restoreAllMocks());

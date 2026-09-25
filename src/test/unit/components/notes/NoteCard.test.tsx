@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { GridList } from "react-aria-components/GridList";
 import { NoteCard } from "@/components/notes/NoteCard";
+import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import type { Note } from "@/features/notes";
 
 vi.mock("react-i18next", () => ({
@@ -32,7 +33,31 @@ function buildNote(overrides: Partial<Note>): Note {
   };
 }
 
+afterEach(() => vi.restoreAllMocks());
+
 describe("NoteCard", () => {
+  it("anchors the Item Menu beside the Note when the desktop actions button is hidden", async () => {
+    const onClick = vi.fn();
+    render(
+      <GridList aria-label="Notes" selectionMode="none">
+        <NoteCard
+          note={buildNote({})}
+          onClick={onClick}
+          actions={[{ id: "delete", label: "Delete", onAction: vi.fn() }]}
+        />
+      </GridList>
+    );
+
+    mockItemMenuLayout(screen.getByRole("row"));
+    fireEvent.contextMenu(screen.getByText("My note"), { clientX: 400, clientY: 250 });
+
+    const menu = await screen.findByRole("menu");
+    await waitFor(() => {
+      const popover = menu.closest("[data-rac][data-placement]");
+      expect(popover).toHaveStyle({ left: "380px", top: "384px" });
+    });
+    expect(onClick).not.toHaveBeenCalled();
+  });
   it("renders title, stripped content preview and tags, and fires onClick", async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();

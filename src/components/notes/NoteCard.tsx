@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GridListItem } from "react-aria-components/GridList";
 import { BookOpen } from "lucide-react";
@@ -20,12 +20,19 @@ interface NoteCardProps {
   tutorialAnchor?: string;
 }
 
-export function NoteCard({ note, bookTitle, onClick, actions = [], tutorialAnchor }: NoteCardProps) {
+export function NoteCard({
+  note,
+  bookTitle,
+  onClick,
+  actions = [],
+  tutorialAnchor,
+}: NoteCardProps) {
   const { t, i18n } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = note.title || t("notes.untitled");
   const preview = notePlainText(note.content);
   const hasActions = actions.length > 0;
+  const menuAnchorRef = useRef<HTMLDivElement>(null);
   const { itemProps } = useItemContextMenu({
     onOpen: () => setIsMenuOpen(true),
     isDisabled: !hasActions,
@@ -44,6 +51,7 @@ export function NoteCard({ note, bookTitle, onClick, actions = [], tutorialAncho
       }
     >
       <div
+        ref={menuAnchorRef}
         {...itemProps}
         className="flex h-full flex-col p-4 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
       >
@@ -72,6 +80,7 @@ export function NoteCard({ note, bookTitle, onClick, actions = [], tutorialAncho
       </div>
       {hasActions && (
         <ItemActionsMenu
+          anchorRef={menuAnchorRef}
           label={t("common.moreActionsFor", { title })}
           actions={actions}
           isOpen={isMenuOpen}

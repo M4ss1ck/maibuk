@@ -1,5 +1,5 @@
 import type { DragEvent, KeyboardEvent } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
@@ -122,6 +122,7 @@ export function NoteListItem({
     });
   }
   const hasActions = actions.length > 0;
+  const menuAnchorRef = useRef<HTMLDivElement>(null);
   const { itemProps } = useItemContextMenu({
     onOpen: () => setIsMenuOpen(true),
     isDisabled: !hasActions || isEditing,
@@ -159,6 +160,7 @@ export function NoteListItem({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
+      ref={menuAnchorRef}
       {...itemProps}
       className={`group relative border-l-2 py-3 pl-2 pr-3 transition-colors pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
@@ -244,6 +246,7 @@ export function NoteListItem({
             </div>
             {hasActions && (
               <ItemActionsMenu
+                anchorRef={menuAnchorRef}
                 label={t("common.moreActionsFor", { title })}
                 actions={actions}
                 isOpen={isMenuOpen}
