@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { ItemActionsMenu } from "@/components/ui/ItemActionsMenu";
+import { ItemActionsMenu, ItemActionsPopover } from "@/components/ui/ItemActionsMenu";
 import type { ItemAction } from "@/components/ui/ItemActionsMenu";
 import { useItemContextMenu, useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
 import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
@@ -56,6 +56,43 @@ function Row({
   );
 }
 
+function MenuSurface({
+  name,
+  kind,
+  onAction,
+}: {
+  name: string;
+  kind: "button" | "popover";
+  onAction: () => void;
+}) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const { itemProps } = useItemContextMenu({ onOpen: () => setIsOpen(true) });
+  const props = {
+    label: `${name} actions`,
+    isOpen,
+    onOpenChange: setIsOpen,
+    actions: [
+      { id: "run", label: `Run ${name}`, onAction },
+      {
+        id: "move",
+        label: `Move ${name}`,
+        children: [{ id: "book", label: `Book for ${name}`, onAction }],
+      },
+    ],
+  };
+  return (
+    <div ref={anchorRef} {...itemProps}>
+      <span>{name}</span>
+      {kind === "button" ? (
+        <ItemActionsMenu {...props} anchorRef={anchorRef} />
+      ) : (
+        <ItemActionsPopover {...props} triggerRef={anchorRef} />
+      )}
+    </div>
+  );
+}
+
 function buildActions(overrides: Partial<Record<string, () => void>> = {}): ItemAction[] {
   return [
     { id: "rename", label: "Rename", onAction: overrides.rename ?? vi.fn() },
@@ -98,6 +135,19 @@ describe("ItemActionsMenu keyboard", () => {
     expect(duplicate).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+  });
+
+  it("toggles closed from its touch button and opens the last action with ArrowUp", async () => {
+    const user = userEvent.setup();
+    render(<Row actions={buildActions()} onSelect={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "More actions for Row title" });
+    await user.pointer({ target: trigger, keys: "[TouchA]" });
+    await screen.findByRole("menu");
+    await user.pointer({ target: trigger, keys: "[TouchA]" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    trigger.focus();
+    await user.keyboard("{ArrowUp}");
+    await waitFor(() => expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveFocus());
   });
 
   it("Escape closes the menu and returns focus to the ⋯ button", async () => {
@@ -259,5 +309,101 @@ describe("useTouchDragFromHandle", () => {
     fireEvent.dragStart(screen.getByTestId("row"));
 
     expect(onDragStart).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe.each(["button", "popover"] as const)("%s Item Menu handoff", (kind) => {
+  it("replaces the open menu, then switches back without invoking either item", async () => {
+    const user = userEvent.setup();
+    const first = vi.fn();
+    const second = vi.fn();
+    render(
+      <>
+        <MenuSurface name="First" kind={kind} onAction={first} />
+        <MenuSurface name="Second" kind={kind} onAction={second} />
+      </>
+    );
+
+    for (const name of ["First", "Second", "First"]) {
+      const target = screen.getByText(name);
+      expect(target.closest("[inert], [aria-hidden='true']")).toBeNull();
+      fireEvent.pointerDown(target, { button: 2, pointerType: "mouse" });
+      expect(fireEvent.contextMenu(target)).toBe(false);
+      fireEvent.pointerUp(target, { button: 2, pointerType: "mouse" });
+      const menu = await screen.findByRole("menu", { name: `${name} actions` });
+      expect(screen.getAllByRole("menu")).toHaveLength(1);
+      await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
+    }
+    expect(first).not.toHaveBeenCalled();
+    expect(second).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("closes on a blank-area click or right-click while leaving native menus outside items available", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <MenuSurface name="First" kind={kind} onAction={vi.fn()} />
+        <div data-testid="blank">Blank area</div>
+      </>
+    );
+    await user.pointer({ target: screen.getByText("First"), keys: "[MouseRight]" });
+    await screen.findByRole("menu");
+    await user.click(screen.getByTestId("blank"));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    await user.pointer({ target: screen.getByText("First"), keys: "[MouseRight]" });
+    await screen.findByRole("menu");
+    fireEvent.pointerDown(screen.getByTestId("blank"), { button: 2, pointerType: "mouse" });
+    expect(fireEvent.contextMenu(screen.getByTestId("blank"))).toBe(true);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("keeps a touch long-press menu open after the browser's trailing contextmenu event", () => {
+    vi.useFakeTimers();
+    render(
+      <>
+        <MenuSurface name="First" kind={kind} onAction={vi.fn()} />
+        <MenuSurface name="Second" kind={kind} onAction={vi.fn()} />
+      </>
+    );
+    touchLongPress(screen.getByText("First"));
+    expect(screen.getByRole("menu", { name: "First actions" })).toBeInTheDocument();
+    touchLongPress(screen.getByText("Second"));
+    expect(screen.getByRole("menu", { name: "Second actions" })).toBeInTheDocument();
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+  });
+});
+
+describe("Item Menu submenus during handoff", () => {
+  it("replaces the entire menu while a submenu is open", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <MenuSurface name="First" kind="button" onAction={vi.fn()} />
+        <MenuSurface name="Second" kind="button" onAction={vi.fn()} />
+      </>
+    );
+    screen.getByRole("button", { name: "First actions" }).focus();
+    await user.keyboard("{Enter}{ArrowDown}{ArrowRight}");
+    await screen.findByRole("menuitem", { name: "Book for First" });
+    const second = screen.getByText("Second");
+    expect(second.closest("[inert], [aria-hidden='true']")).toBeNull();
+    await user.pointer({ target: second, keys: "[MouseRight]" });
+    await screen.findByRole("menu", { name: "Second actions" });
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    expect(screen.queryByRole("menuitem", { name: "Book for First" })).not.toBeInTheDocument();
+  });
+
+  it("does not dismiss before a portaled submenu action runs", async () => {
+    const user = userEvent.setup();
+    const onAction = vi.fn();
+    render(<MenuSurface name="First" kind="button" onAction={onAction} />);
+    screen.getByRole("button", { name: "First actions" }).focus();
+    await user.keyboard("{Enter}{ArrowDown}{ArrowRight}");
+    await user.click(await screen.findByRole("menuitem", { name: "Book for First" }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 });

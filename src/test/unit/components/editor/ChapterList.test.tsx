@@ -313,6 +313,30 @@ describe("ChapterList", () => {
     textFileDropOptions.current = null;
   });
 
+  it.each([
+    "normal",
+    "compact",
+  ] as const)("hands off a %s Chapter Item Menu to another Chapter", async (view) => {
+    const user = userEvent.setup();
+    storeState.chapterListView = view;
+    const onSelect = vi.fn();
+    renderCL({
+      chapters: [
+        buildChapter({ id: "ch-1", title: "First", order: 1 }),
+        buildChapter({ id: "ch-2", title: "Second", order: 2 }),
+      ],
+      onSelectChapter: onSelect,
+    });
+    await user.pointer({ target: screen.getByText("First"), keys: "[MouseRight]" });
+    await screen.findByRole("menu");
+    expect(screen.getByText("Second").closest("[inert], [aria-hidden='true']")).toBeNull();
+    await user.pointer({ target: screen.getByText("Second"), keys: "[MouseRight]" });
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    await user.click(screen.getByRole("menuitem", { name: "chapters.editChapter" }));
+    expect(await screen.findByDisplayValue("Second")).toHaveFocus();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   // ---------------------------------------------------------------------------
   describe("keyboard DnD reorder", () => {
     it("cancels keyboard reorder with Escape", async () => {

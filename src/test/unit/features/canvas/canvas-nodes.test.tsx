@@ -235,6 +235,43 @@ describe("Canvas custom nodes", () => {
       );
     });
 
+    it("hands off a Text Node's Item Menu to a Note Reference", async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <LightweightNode
+            {...({ selected: false, data: textNodeData() } as Parameters<
+              typeof LightweightNode
+            >[0])}
+          />
+          <NoteRefNode
+            {...({
+              selected: false,
+              data: {
+                ...textNodeData(),
+                node: {
+                  id: "ref",
+                  kind: "noteRef",
+                  noteId: "n1",
+                  label: "Linked",
+                  position: { x: 0, y: 0 },
+                },
+              },
+            } as unknown as Parameters<typeof NoteRefNode>[0])}
+          />
+        </>,
+        { wrapper: MemoryRouter }
+      );
+      await user.pointer({ target: screen.getByText("Idea"), keys: "[MouseRight]" });
+      await screen.findByRole("menu");
+      expect(screen.getByText("Linked").closest("[inert], [aria-hidden='true']")).toBeNull();
+      await user.pointer({ target: screen.getByText("Linked"), keys: "[MouseRight]" });
+      expect(screen.getAllByRole("menu")).toHaveLength(1);
+      await user.click(screen.getByRole("menuitem", { name: "common.delete" }));
+      expect(mocks.removeNode).toHaveBeenCalledWith("ref");
+      expect(mocks.removeNode).toHaveBeenCalledTimes(1);
+    });
+
     it("opens on touch long-press, selects the node, and connects from it", async () => {
       vi.useFakeTimers();
       render(

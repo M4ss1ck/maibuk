@@ -103,6 +103,26 @@ describe("Notes gallery Item Menu (how phones reach note actions)", () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  it("replaces the first Note's Item Menu when a different Note is right-clicked", async () => {
+    const user = userEvent.setup();
+    render(<NotesGallery />);
+    await user.pointer({ target: screen.getByText("First"), keys: "[MouseRight]" });
+    await screen.findByRole("menu");
+
+    // Other Notes must remain interactive while an Item Menu is open. jsdom
+    // cannot hit-test inert content, which browsers exclude from pointer events.
+    const second = screen.getByRole("row", { name: "Second" });
+    expect(second.closest("[inert]")).toBeNull();
+    await user.pointer({ target: within(second).getByText("Second"), keys: "[MouseRight]" });
+
+    await waitFor(() => expect(screen.getAllByRole("menu")).toHaveLength(1));
+    await user.click(screen.getByRole("menuitem", { name: "notes.duplicate" }));
+    expect(noteState.createNote).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Second (copy)", bookId: null })
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it("deletes only after confirmation and forgets it as the last opened note", async () => {
     const user = userEvent.setup();
     render(<NotesGallery />);
