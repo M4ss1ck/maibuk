@@ -18,4 +18,10 @@ export const tauriDialog: DialogAdapter = {
     }
     return result;
   },
+
+  async openMany(options: OpenDialogOptions): Promise<string[]> {
+    const result = await open({ multiple: true, filters: options.filters });
+    if (Array.isArray(result)) return result;
+    return result ? [result] : [];
+  },
 };

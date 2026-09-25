@@ -160,6 +160,7 @@
     }
   },
   "chapters": {
+    "importFiles": "Import chapters from files",
     "title": "Chapters",
     "newChapter": "New Chapter",
     "editChapter": "Edit Chapter",
@@ -1057,6 +1058,7 @@
     "syncStatus": "Sync status"
   },
   "errors": {
+    "targetWordCountInvalid": "Enter a whole number of words, 0 or more",
     "titleRequired": "Title is required",
     "authorNameRequired": "Author name is required",
     "URLRequired": "URL is required"

@@ -232,7 +232,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-create",
@@ -263,7 +263,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-jump-number",
@@ -275,7 +275,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-status-filter",
@@ -288,7 +288,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-change-status",
@@ -301,7 +301,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-archive-unarchive",
@@ -314,7 +314,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-settings-dialog",
@@ -327,7 +327,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-delete",
@@ -340,7 +340,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId", "/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-import-epub",
@@ -353,7 +353,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "oneBookThreeChapters",
     tags: ["filechooser"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-import-md-txt",
@@ -366,7 +366,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["filechooser"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "chapters-add",

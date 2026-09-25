@@ -35,7 +35,7 @@ import {
   markdownFilename,
   saveMarkdownFile,
 } from "@/features/markdown";
-import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
+import { pickTextFiles, type DroppedTextFile } from "@/hooks/useTextFileDrop";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { useTranslation } from "react-i18next";
 import {
@@ -680,6 +680,12 @@ export function BookEditor() {
     [bookId, createChapter, updateChapter, reorderChapters, setCurrentChapter, updateBook, t]
   );
 
+  // Keyboard path to the same import a file drop does; new Chapters go last.
+  const handleImportFromFiles = useCallback(async () => {
+    const files = await pickTextFiles();
+    if (files.length > 0) await handleImportFiles(files, null);
+  }, [handleImportFiles]);
+
   const handleDeleteChapter = useCallback(
     async (id: string) => {
       await deleteChapter(id);
@@ -797,7 +803,7 @@ export function BookEditor() {
   const handleDeleteBook = useCallback(async () => {
     if (bookId) {
       await deleteBook(bookId);
-      navigate("/");
+      navigate("/", { state: { focusGallery: true } });
     }
   }, [bookId, deleteBook, navigate]);
 
@@ -980,6 +986,7 @@ export function BookEditor() {
                 onDeleteChapter={handleDeleteChapter}
                 onReorderChapters={handleReorderChapters}
                 onImportFiles={handleImportFiles}
+                onImportFromFiles={handleImportFromFiles}
               />
             </div>
           </FocusScope>
@@ -1006,6 +1013,7 @@ export function BookEditor() {
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
               onImportFiles={handleImportFiles}
+              onImportFromFiles={handleImportFromFiles}
               autoFocusAddChapter={
                 !areChaptersLoading && currentBook?.id === bookId && chapters.length === 0
               }

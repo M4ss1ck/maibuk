@@ -160,6 +160,7 @@
     }
   },
   "chapters": {
+    "importFiles": "Importar capítulos desde archivos",
     "title": "Capítulos",
     "newChapter": "Nuevo Capítulo",
     "editChapter": "Editar Capítulo",
@@ -1057,6 +1058,7 @@
     "syncStatus": "Estado de sincronización"
   },
   "errors": {
+    "targetWordCountInvalid": "Escribe un número entero de palabras, 0 o más",
     "titleRequired": "El título es obligatorio",
     "authorNameRequired": "El nombre del autor es obligatorio",
     "URLRequired": "La URL es obligatoria"

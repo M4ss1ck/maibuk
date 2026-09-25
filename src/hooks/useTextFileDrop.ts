@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, RefObject } from "react";
 import { toast } from "@/components/ui/Toast";
-import { textDropExtension, textDropStem } from "@/features/markdown/dropped-file";
+import {
+  TEXT_DROP_EXTENSIONS,
+  textDropExtension,
+  textDropStem,
+} from "@/features/markdown/dropped-file";
 import i18n from "@/i18n";
-import { IS_TAURI, getFileSystem } from "@/lib/platform";
+import { IS_TAURI, getDialog, getFileSystem, getWebDialog } from "@/lib/platform";
 
 /**
  * Drag-and-drop support for importing text files (.md/.markdown/.txt) onto a
@@ -257,4 +261,21 @@ export async function readDroppedTauriPaths(paths: string[]): Promise<DroppedTex
     }
   }
   return results;
+}
+
+/**
+ * The keyboard path to the same import a drop does: a file picker for
+ * Markdown and text files, read with the drop readers (same toasts for
+ * unsupported or unreadable files). Resolves with [] when cancelled.
+ */
+export async function pickTextFiles(): Promise<DroppedTextFile[]> {
+  const filters = [
+    { name: "Text", extensions: TEXT_DROP_EXTENSIONS.map((extension) => extension.slice(1)) },
+  ];
+  if (IS_TAURI) {
+    const paths = await (await getDialog()).openMany({ filters });
+    return paths.length > 0 ? readDroppedTauriPaths(paths) : [];
+  }
+  const files = await (await getWebDialog()).openFiles({ filters });
+  return files.length > 0 ? readDroppedWebFiles(files) : [];
 }

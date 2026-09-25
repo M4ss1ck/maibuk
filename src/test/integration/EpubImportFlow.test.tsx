@@ -33,6 +33,7 @@ vi.mock("react-router-dom", async () => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
+    useLocation: () => ({ pathname: "/", state: null }),
   };
 });
 vi.mock("react-i18next", () => ({

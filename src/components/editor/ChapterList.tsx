@@ -14,7 +14,7 @@ import type { Chapter, ChapterType } from "@/features/chapters/types";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { Select } from "@/components/ui/Select";
 import { useTranslation } from "react-i18next";
-import { List, ListTree, Rows3, GripVertical } from "lucide-react";
+import { FileUp, List, ListTree, Rows3, GripVertical } from "lucide-react";
 import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
@@ -43,6 +43,8 @@ interface ChapterListProps {
   onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
   /** Marks Tutorial step targets; only the list the author can see carries them. */
   tutorialAnchors?: boolean;
+  /** Opens a file picker for Markdown/text Chapters: the keyboard path to what a file drop does. */
+  onImportFromFiles?: () => void;
   /** Focus "Add Chapter" when focus was lost to <body>, e.g. a Book with no Chapters just opened. */
   autoFocusAddChapter?: boolean;
 }
@@ -95,6 +97,7 @@ export function ChapterList({
   onImportFiles,
   tutorialAnchors = false,
   autoFocusAddChapter = false,
+  onImportFromFiles,
 }: ChapterListProps) {
   const { t, i18n } = useTranslation();
   const chapterListView = useSettingsStore((state) => state.chapterListView);
@@ -346,6 +349,18 @@ export function ChapterList({
               <AddIcon className="w-5 h-5" />
             </button>
           </Tooltip>
+          {onImportFromFiles && (
+            <Tooltip content={t("chapters.importFiles")}>
+              <button
+                type="button"
+                onClick={onImportFromFiles}
+                className="p-1 hover:bg-muted rounded transition-colors"
+                aria-label={t("chapters.importFiles")}
+              >
+                <FileUp className="w-5 h-5" aria-hidden="true" />
+              </button>
+            </Tooltip>
+          )}
         </div>
       </div>
 

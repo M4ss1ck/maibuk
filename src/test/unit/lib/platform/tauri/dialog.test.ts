@@ -27,3 +27,22 @@ describe("tauriDialog.open()", () => {
     await expect(tauriDialog.open({ directory: true })).resolves.toBeNull();
   });
 });
+
+describe("tauriDialog.openMany()", () => {
+  it("returns every selected path", async () => {
+    mockOpen.mockResolvedValue(["/mnt/one.md", "/mnt/two.txt"]);
+
+    await expect(tauriDialog.openMany({ filters: [] })).resolves.toEqual([
+      "/mnt/one.md",
+      "/mnt/two.txt",
+    ]);
+    expect(mockOpen).toHaveBeenCalledWith(expect.objectContaining({ multiple: true }));
+  });
+
+  it("wraps a single path and returns [] when cancelled", async () => {
+    mockOpen.mockResolvedValueOnce("/mnt/one.md").mockResolvedValueOnce(null);
+
+    await expect(tauriDialog.openMany({})).resolves.toEqual(["/mnt/one.md"]);
+    await expect(tauriDialog.openMany({})).resolves.toEqual([]);
+  });
+});

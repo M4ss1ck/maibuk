@@ -688,6 +688,28 @@ describe("ChapterList", () => {
   });
 
   // ---------------------------------------------------------------------------
+  describe("import from files", () => {
+    it("offers a keyboard path to import Markdown and text files", async () => {
+      const user = userEvent.setup();
+      const onImportFromFiles = vi.fn();
+      renderCL({ onImportFromFiles });
+      const add = screen.getByRole("button", { name: "chapters.addChapter" });
+
+      add.focus();
+      await user.keyboard("{Tab}");
+      const importButton = screen.getByRole("button", { name: "chapters.importFiles" });
+      expect(importButton).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      expect(onImportFromFiles).toHaveBeenCalledTimes(1);
+    });
+
+    it("is absent where importing is not wired", () => {
+      renderCL();
+      expect(screen.queryByRole("button", { name: "chapters.importFiles" })).toBeNull();
+    });
+  });
+
   describe("autoFocusAddChapter", () => {
     it("focuses Add Chapter when focus was lost to <body>", () => {
       (document.activeElement as HTMLElement | null)?.blur();

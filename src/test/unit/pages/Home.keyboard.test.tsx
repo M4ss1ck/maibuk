@@ -13,7 +13,11 @@ const { mockCreateBook, mockLoadBooks, mockNavigate, storeState } = vi.hoisted((
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return { ...actual, useNavigate: () => mockNavigate };
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useLocation: () => ({ pathname: "/", state: null }),
+  };
 });
 
 vi.mock("@/features/books/store", () => ({

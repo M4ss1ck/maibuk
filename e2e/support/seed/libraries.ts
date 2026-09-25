@@ -5,7 +5,7 @@
 
 import { createBookRow, updateBookRow, updateBookWordCountRow } from "@/features/books/write";
 import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
-import { SEED_BOOK, SEED_CHAPTERS } from "./names";
+import { SEED_BOOK, SEED_CHAPTERS, SHELF_BOOKS } from "./names";
 
 async function oneBookThreeChapters(): Promise<void> {
   const book = await createBookRow({ ...SEED_BOOK }, "local");
@@ -24,9 +24,21 @@ async function oneBookThreeChapters(): Promise<void> {
   await updateBookRow(book.id, { status: "in-progress" }, "local");
 }
 
+async function bookShelf(): Promise<void> {
+  await oneBookThreeChapters();
+  for (const { title, authorName, status } of SHELF_BOOKS) {
+    const book = await createBookRow({ title, authorName }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "One" }, "local");
+    await updateChapterRow(chapter.id, { content: `<p>${title} begins.</p>` }, "local");
+    await updateBookWordCountRow(book.id, 3);
+    await updateBookRow(book.id, { status }, "local");
+  }
+}
+
 export const SEED_LIBRARIES = {
   empty: async () => {},
   oneBookThreeChapters,
+  bookShelf,
 } satisfies Record<string, () => Promise<void>>;
 
 export type SeedName = keyof typeof SEED_LIBRARIES;

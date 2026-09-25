@@ -11,3 +11,10 @@ export const SEED_CHAPTERS = [
   { title: "The Lamp", text: "Every night the lamp needed oil and a steady hand." },
   { title: "Storm", text: "The storm came in from the west without warning." },
 ] as const;
+
+/** `bookShelf`: the seed Book above plus one Book per other Book Status. */
+export const SHELF_BOOKS = [
+  { title: "Salt and Iron", authorName: "Ada Marsh", status: "draft" },
+  { title: "Winter Orchard", authorName: "Lena Voss", status: "completed" },
+  { title: "The Old Map", authorName: "Ada Marsh", status: "archived" },
+] as const;
