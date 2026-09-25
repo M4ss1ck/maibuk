@@ -1,4 +1,5 @@
 export { Button } from "@/components/ui/Button";
+export { Checkbox } from "@/components/ui/Checkbox";
 export { Combobox } from "@/components/ui/Combobox";
 export { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 export { Input } from "@/components/ui/Input";

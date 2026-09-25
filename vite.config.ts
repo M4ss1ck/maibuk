@@ -65,6 +65,7 @@ export default defineConfig(() => ({
         "src/components/ui/Modal.tsx",
         "src/components/ui/Select.tsx",
         "src/components/ui/Switch.tsx",
+        "src/components/ui/Checkbox.tsx",
         "src/components/ui/Toast.tsx",
         "src/components/ui/Combobox.tsx",
         "src/components/ui/MultiSelectCombobox.tsx",
@@ -79,6 +80,7 @@ export default defineConfig(() => ({
         "src/components/RouteAnnouncer.tsx",
         // Phase 5: Backup + sync safety
         "src/features/backup/backup-service.ts",
+        "src/features/backup/utils.ts",
         "src/features/backup/generate-sql-dump.ts",
         "src/features/backup/lifecycle.ts",
         "src/lib/window/androidLifecycle.ts",

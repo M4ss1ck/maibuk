@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createBackup, getDialog, IS_DESKTOP } from "@/lib/platform";
 import { BackupService } from "@/features/backup/backup-service";
+import { formatBackupDate } from "@/features/backup/utils";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { toast } from "@/components/ui/Toast";
@@ -15,7 +17,7 @@ import { BACKUP_LIST_PAGE_SIZE_OPTIONS } from "@/features/settings/types";
 const SIZE_WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
 
 export function BackupSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const {
     backupRetention,
     backupDirectory,
@@ -33,6 +35,36 @@ export function BackupSection() {
   const [loading, setLoading] = useState(true);
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const selectedCountId = useId();
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const createButtonRef = useRef<HTMLButtonElement>(null);
+  // Set when a bulk delete removes the Delete button that had focus.
+  const refocusAfterBulkDeleteRef = useRef(false);
+
+  // Selection covers the visible page only: a different page, page size, or
+  // folder starts empty.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [backupListPage, backupListPageSize, service]);
+
+  // A refresh can move a selected backup off this page; it must not stay
+  // selected where it cannot be seen.
+  useEffect(() => {
+    setSelected((previous) => {
+      const onPage = new Set(backups.map((backup) => backup.filename));
+      const kept = [...previous].filter((filename) => onPage.has(filename));
+      return kept.length === previous.size ? previous : new Set(kept);
+    });
+  }, [backups]);
+
+  useEffect(() => {
+    if (!refocusAfterBulkDeleteRef.current || selected.size > 0) return;
+    refocusAfterBulkDeleteRef.current = false;
+    (selectAllRef.current ?? createButtonRef.current)?.focus();
+  }, [selected, backups]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +191,33 @@ export function BackupSection() {
     [service, refresh, t]
   );
 
+  const handleBulkDelete = useCallback(async () => {
+    if (!service) return;
+    setErrorMessage(null);
+    setBulkDeleting(true);
+    const { deleted, failed } = await service.deleteBackups([...selected]);
+    setBulkDeleting(false);
+    setConfirmBulkDelete(false);
+    setSelected(new Set(failed));
+    refocusAfterBulkDeleteRef.current = failed.length === 0;
+    if (deleted.length > 0) {
+      toast.success(t("backup.deletedCount", { count: deleted.length }));
+    }
+    await refresh().catch(() => {});
+    if (failed.length > 0) {
+      setErrorMessage(t("backup.deleteSomeFailed", { count: failed.length }));
+    }
+  }, [refresh, selected, service, t]);
+
+  const toggleSelected = useCallback((filename: string, isSelected: boolean) => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (isSelected) next.add(filename);
+      else next.delete(filename);
+      return next;
+    });
+  }, []);
+
   const handleRestore = useCallback(
     async (filename: string) => {
       if (!service) return;
@@ -201,6 +260,9 @@ export function BackupSection() {
     label: String(size),
   }));
 
+  const selectedOnPage = backups.filter((backup) => selected.has(backup.filename)).length;
+  const allOnPageSelected = backups.length > 0 && selectedOnPage === backups.length;
+
   if (loading && totalCount === 0 && backups.length === 0) return null;
 
   return (
@@ -242,7 +304,7 @@ export function BackupSection() {
         </div>
       )}
 
-      <Button variant="primary" onClick={handleCreate}>
+      <Button ref={createButtonRef} variant="primary" onClick={handleCreate}>
         {t("backup.createBackup")}
       </Button>
 
@@ -254,10 +316,44 @@ export function BackupSection() {
         <p className="text-sm text-muted-foreground">{t("backup.noBackups")}</p>
       ) : (
         <div className="space-y-3">
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
+              <span id={selectedCountId} role="status" className="font-medium text-foreground">
+                {t("backup.selectedCount", { count: selected.size })}
+              </span>
+              <Button
+                variant="destructive"
+                size="sm"
+                aria-describedby={selectedCountId}
+                onClick={() => setConfirmBulkDelete(true)}
+                disabled={bulkDeleting}
+              >
+                {t("backup.deleteBackup")}
+              </Button>
+            </div>
+          )}
+
           <div className="rounded-md border border-border overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
+            <table className="w-full min-w-[600px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
+                  <th className="w-10 px-3 py-2">
+                    <div className="flex items-center justify-center">
+                      <Checkbox
+                        inputRef={selectAllRef}
+                        label={t("backup.selectAllOnPage")}
+                        checked={allOnPageSelected}
+                        indeterminate={selectedOnPage > 0 && !allOnPageSelected}
+                        onChange={(isSelected) =>
+                          setSelected(
+                            isSelected
+                              ? new Set(backups.map((backup) => backup.filename))
+                              : new Set()
+                          )
+                        }
+                      />
+                    </div>
+                  </th>
                   <th className="px-3 py-2 text-left font-medium text-foreground">
                     {t("backup.columnDate")}
                   </th>
@@ -273,38 +369,54 @@ export function BackupSection() {
                 </tr>
               </thead>
               <tbody>
-                {backups.map((backup) => (
-                  <tr key={backup.filename} className="border-b border-border last:border-0">
-                    <td className="px-3 py-2 text-foreground">
-                      {backup.createdAt.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {t(`backup.trigger.${backup.trigger}`)}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {backup.sizeBytes < 1024
-                        ? `${backup.sizeBytes} B`
-                        : `${(backup.sizeBytes / 1024).toFixed(0)} KB`}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConfirmRestore(backup.filename)}
-                      >
-                        {t("backup.restoreBackup")}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(backup.filename)}
-                        className="text-destructive"
-                      >
-                        {t("backup.deleteBackup")}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {backups.map((backup) => {
+                  const createdAt = formatBackupDate(backup.createdAt, i18n.language);
+                  const isSelected = selected.has(backup.filename);
+                  return (
+                    <tr
+                      key={backup.filename}
+                      className={`border-b border-border last:border-0 ${
+                        isSelected ? "bg-primary/5" : ""
+                      }`}
+                    >
+                      <td className="w-10 px-3 py-2">
+                        <div className="flex items-center justify-center">
+                          <Checkbox
+                            label={t("backup.selectRow", { date: createdAt })}
+                            checked={isSelected}
+                            onChange={(next) => toggleSelected(backup.filename, next)}
+                          />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-foreground tabular-nums">{createdAt}</td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {t(`backup.trigger.${backup.trigger}`)}
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {backup.sizeBytes < 1024
+                          ? `${backup.sizeBytes} B`
+                          : `${(backup.sizeBytes / 1024).toFixed(0)} KB`}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setConfirmRestore(backup.filename)}
+                        >
+                          {t("backup.restoreBackup")}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(backup.filename)}
+                          className="text-destructive"
+                        >
+                          {t("backup.deleteBackup")}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -378,6 +490,36 @@ export function BackupSection() {
         }
       >
         <p className="text-sm text-muted-foreground">{t("backup.restoreConfirm")}</p>
+      </Modal>
+
+      <Modal
+        isOpen={confirmBulkDelete}
+        onClose={() => {
+          if (!bulkDeleting) setConfirmBulkDelete(false);
+        }}
+        title={t("backup.deleteSelectedTitle")}
+        footer={
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              onClick={() => void handleBulkDelete()}
+              disabled={bulkDeleting}
+            >
+              {t("backup.deleteBackup")}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmBulkDelete(false)}
+              disabled={bulkDeleting}
+            >
+              {t("backup.cancel")}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          {t("backup.deleteSelectedConfirm", { count: selected.size })}
+        </p>
       </Modal>
 
       {/* Error modal — used instead of toast for error messages since toast only has a success variant */}

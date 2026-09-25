@@ -172,6 +172,11 @@ async function replaceRestoreData(
   }
 }
 
+export interface BulkDeleteResult {
+  deleted: string[];
+  failed: string[];
+}
+
 export class BackupService {
   constructor(private adapter: BackupAdapter) {}
 
@@ -225,6 +230,21 @@ export class BackupService {
 
   async deleteBackup(filename: string): Promise<void> {
     return backupQueue.enqueue(() => this.adapter.deleteBackup(filename));
+  }
+
+  /** Deletes each backup in turn; one failure does not stop the rest. */
+  async deleteBackups(filenames: string[]): Promise<BulkDeleteResult> {
+    const result: BulkDeleteResult = { deleted: [], failed: [] };
+    for (const filename of filenames) {
+      try {
+        await this.deleteBackup(filename);
+        result.deleted.push(filename);
+      } catch (error) {
+        console.error("Failed to delete backup:", error);
+        result.failed.push(filename);
+      }
+    }
+    return result;
   }
 
   async restoreBackup(filename: string): Promise<void> {

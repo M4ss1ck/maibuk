@@ -225,6 +225,52 @@ describe("BackupService", () => {
     });
   });
 
+  describe("deleteBackups", () => {
+    const sql = new TextEncoder().encode("sql");
+    const a = "maibuk-backup-manual-2026-03-15T10-00-00.sql";
+    const b = "maibuk-backup-daily-2026-03-15T10-00-01.sql";
+    const c = "maibuk-backup-close-2026-03-15T10-00-02.sql";
+
+    it("deletes every named backup and leaves the rest", async () => {
+      await mockAdapter.saveBackup(a, sql);
+      await mockAdapter.saveBackup(b, sql);
+      await mockAdapter.saveBackup(c, sql);
+
+      const result = await service.deleteBackups([a, c]);
+
+      expect(result).toEqual({ deleted: [a, c], failed: [] });
+      const list = await mockAdapter.listBackups();
+      expect(list.map((entry) => entry.filename)).toEqual([b]);
+    });
+
+    it("keeps deleting after a failure and reports which backups failed", async () => {
+      await mockAdapter.saveBackup(a, sql);
+      await mockAdapter.saveBackup(b, sql);
+      await mockAdapter.saveBackup(c, sql);
+      const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+      const realDelete = vi.mocked(mockAdapter.deleteBackup).getMockImplementation()!;
+      vi.mocked(mockAdapter.deleteBackup).mockImplementation(async (filename) => {
+        if (filename === b) throw new Error("EACCES");
+        await realDelete(filename);
+      });
+
+      const result = await service.deleteBackups([a, b, c]);
+
+      expect(result).toEqual({ deleted: [a, c], failed: [b] });
+      expect(logged).toHaveBeenCalledOnce();
+      logged.mockRestore();
+      const list = await mockAdapter.listBackups();
+      expect(list.map((entry) => entry.filename)).toEqual([b]);
+    });
+
+    it("does nothing for an empty selection", async () => {
+      const result = await service.deleteBackups([]);
+
+      expect(result).toEqual({ deleted: [], failed: [] });
+      expect(mockAdapter.deleteBackup).not.toHaveBeenCalled();
+    });
+  });
+
   describe("pruneBackups", () => {
     it("deletes oldest backup when over limit", async () => {
       // Use deterministic filenames via direct adapter calls
