@@ -19,13 +19,23 @@ function isVisiblePane(pane: HTMLElement): boolean {
 }
 
 function cyclePanes(forward: boolean) {
-  const panes = [...document.querySelectorAll<HTMLElement>("[data-focus-pane]")].filter(
+  const visible = [...document.querySelectorAll<HTMLElement>("[data-focus-pane]")].filter(
     isVisiblePane
+  );
+  // Panes nest (the Book Editor's chapter wrapper holds the Chapter list).
+  // Only the innermost ones are stops: the outer one is the same region.
+  const panes = visible.filter(
+    (pane) => !visible.some((other) => other !== pane && pane.contains(other))
   );
   if (panes.length === 0) return;
 
   const active = document.activeElement;
-  const currentIndex = panes.findIndex((pane) => pane === active || pane.contains(active));
+  let currentIndex = panes.findIndex((pane) => pane === active || pane.contains(active));
+  if (currentIndex < 0) {
+    // Focus on an outer pane itself counts as being in its first inner one.
+    const outer = visible.find((pane) => pane === active);
+    if (outer) currentIndex = panes.findIndex((pane) => outer.contains(pane));
+  }
   const nextIndex =
     currentIndex < 0
       ? forward

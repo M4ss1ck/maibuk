@@ -43,7 +43,7 @@ interface ChapterListProps {
   onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
   /** Marks Tutorial step targets; only the list the author can see carries them. */
   tutorialAnchors?: boolean;
-  /** Focus "Add Chapter", e.g. when a Book was just created and has no Chapters. */
+  /** Focus "Add Chapter" when focus was lost to <body>, e.g. a Book with no Chapters just opened. */
   autoFocusAddChapter?: boolean;
 }
 
@@ -242,7 +242,10 @@ export function ChapterList({
   });
 
   useEffect(() => {
-    if (autoFocusAddChapter) addButtonRef.current?.focus();
+    if (!autoFocusAddChapter) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    addButtonRef.current?.focus();
   }, [autoFocusAddChapter]);
 
   const handleCreate = () => {

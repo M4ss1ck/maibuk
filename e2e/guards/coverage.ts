@@ -197,7 +197,8 @@ const BANNED_IN_SPECS: { pattern: RegExp; why: string; view?: "text" }[] = [
     why: "page script can reach app state; setup belongs in e2e/support/",
   },
   {
-    pattern: /from\s*["']@playwright\/test["']/g,
+    // A type-only import cannot bypass the fixtures, so `import type` is fine.
+    pattern: /\bimport\s+(?!type\b)[^;]*?from\s*["']@playwright\/test["']/g,
     why: 'import test/expect from "../support/test" so every test gets its prepared device',
     // The module name is a string, which the code view blanks.
     view: "text",

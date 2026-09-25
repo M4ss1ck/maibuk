@@ -305,6 +305,11 @@ describe("checkCoverage", () => {
     ]);
   });
 
+  it("allows a type-only import from @playwright/test", () => {
+    const spec = `import type { Page } from "@playwright/test";\n${GOOD_SPEC}`;
+    assert.deepEqual(codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: spec }] }), []);
+  });
+
   it("rejects retries in a spec", () => {
     assert.deepEqual(codes(specWith("test.describe.configure({ retries: 2 });")), [
       "keyboard-contract",

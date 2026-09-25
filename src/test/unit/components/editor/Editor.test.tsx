@@ -595,6 +595,27 @@ describe("Editor", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Text" })).toHaveFocus());
   });
 
+  it('takes focus on mount with autoFocus="if-unfocused" when focus was lost to <body>', async () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    render(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} autoFocus="if-unfocused" ariaLabel="Text" />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Text" })).toHaveFocus());
+  });
+
+  it('does not steal focus with autoFocus="if-unfocused" when something else has it', async () => {
+    const { rerender } = render(<button type="button">Tutorial card</button>);
+    const other = screen.getByRole("button", { name: "Tutorial card" });
+    other.focus();
+    rerender(
+      <>
+        <button type="button">Tutorial card</button>
+        <Editor content={"<p>hello</p>"} onUpdate={vi.fn()} autoFocus="if-unfocused" ariaLabel="Text" />
+      </>
+    );
+    await screen.findByRole("textbox", { name: "Text" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(other).toHaveFocus();
+  });
+
   it("calls onEscape when Escape is pressed in the editor", async () => {
     const user = userEvent.setup();
     const onEscape = vi.fn();

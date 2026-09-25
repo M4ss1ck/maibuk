@@ -99,7 +99,6 @@ export function BookEditor() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const isNewBook = (location.state as { newBook?: boolean } | null)?.newBook === true;
   const hasPendingHeadingScroll = Boolean(
     (location.state as { scrollToHeadingId?: string } | null)?.scrollToHeadingId
   );
@@ -128,7 +127,8 @@ export function BookEditor() {
 
   // Local state
   const [focusMode, setFocusMode] = useState(false);
-  // A Chapter the author just created opens with the caret in its text.
+  // A Chapter the author just created opens with the caret in its text; any
+  // other Chapter takes focus only when it was lost (the Book just opened).
   const [focusEditorForChapterId, setFocusEditorForChapterId] = useState<string | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
@@ -296,7 +296,9 @@ export function BookEditor() {
         setSidebarWidth(256);
       }
       requestAnimationFrame(() => {
-        chapterPaneRef.current?.focus();
+        // The named Chapter list inside the wrapper, which F6 also stops on.
+        const pane = chapterPaneRef.current;
+        (pane?.querySelector<HTMLElement>('[data-focus-pane="chapter-list"]') ?? pane)?.focus();
       });
     }
   }, []);
@@ -1005,7 +1007,7 @@ export function BookEditor() {
               onReorderChapters={handleReorderChapters}
               onImportFiles={handleImportFiles}
               autoFocusAddChapter={
-                isNewBook && !areChaptersLoading && chapters.length === 0
+                !areChaptersLoading && currentBook?.id === bookId && chapters.length === 0
               }
               tutorialAnchors
             />
@@ -1383,7 +1385,7 @@ export function BookEditor() {
             onExportPdf={handleExportPdf}
             onExportImage={handleExportImage}
             onEscape={handleEditorEscape}
-            autoFocus={focusEditorForChapterId === currentChapter.id}
+            autoFocus={focusEditorForChapterId === currentChapter.id ? true : "if-unfocused"}
             ariaLabel={t("editor.chapterTextLabel", { title: currentChapter.title })}
           />
         ) : isChapterPreparing ? (

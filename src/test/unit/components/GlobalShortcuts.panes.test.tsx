@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -123,6 +123,55 @@ describe("GlobalShortcuts pane cycling", () => {
 
     await user.keyboard("{F6}");
     expect(pane("last")).toHaveFocus();
+  });
+
+  describe("nested panes (the Book Editor's chapter wrapper holds the Chapter list)", () => {
+    function NestedFixture() {
+      return (
+        <>
+          <GlobalShortcuts />
+          <div data-focus-pane="wrapper" tabIndex={-1}>
+            <aside data-focus-pane="inner" tabIndex={-1} aria-label="Chapter list">
+              <button type="button">Row</button>
+            </aside>
+          </div>
+          <main data-focus-pane="editor" tabIndex={-1} aria-label="Editor" />
+        </>
+      );
+    }
+
+    it("stops on the inner, named pane and never on the wrapper", async () => {
+      const user = userEvent.setup();
+      render(<NestedFixture />);
+      pane("editor").focus();
+
+      await user.keyboard("{F6}");
+      expect(pane("inner")).toHaveFocus();
+      await user.keyboard("{F6}");
+      expect(pane("editor")).toHaveFocus();
+      await user.keyboard("{F6}");
+      expect(pane("inner")).toHaveFocus();
+    });
+
+    it("moves on from focus inside the inner pane instead of staying there", async () => {
+      const user = userEvent.setup();
+      render(<NestedFixture />);
+      screen.getByRole("button", { name: "Row" }).focus();
+
+      await user.keyboard("{F6}");
+      expect(pane("editor")).toHaveFocus();
+      await user.keyboard("{Shift>}{F6}{/Shift}");
+      expect(pane("inner")).toHaveFocus();
+    });
+
+    it("treats focus on the wrapper as being in its inner pane", async () => {
+      const user = userEvent.setup();
+      render(<NestedFixture />);
+      pane("wrapper").focus();
+
+      await user.keyboard("{F6}");
+      expect(pane("editor")).toHaveFocus();
+    });
   });
 
   it("works while a contenteditable typing target has focus", async () => {

@@ -109,7 +109,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/notes", "/canvas", "/ephemeral", "/metrics", "/settings"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "shell-goto-sequences",
@@ -128,7 +128,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/notes", "/canvas", "/ephemeral", "/metrics", "/settings"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "shell-cycle-panes",
@@ -141,7 +141,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "shell-toggle-theme",
@@ -154,7 +154,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/settings"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "shell-shortcut-hints",
@@ -167,7 +167,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "shell-help-dialog",
@@ -180,7 +180,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/book/:bookId"],
     fixture: "empty",
     tags: ["mac-platform"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "shell-help-bound-per-screen",
@@ -193,7 +193,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/", "/book/:bookId", "/canvas/:canvasId", "/book/:bookId/cover", "/notes/:noteId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "shell-help-start-tutorial",
@@ -206,7 +206,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "shell-restore-last-path",
@@ -219,7 +219,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes/:noteId", "/"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "books-empty-state",

@@ -42,6 +42,16 @@ export async function pressUntilFocused(
   throw new Error(`${key} never reached ${target}. Visited:\n  ${visited.join("\n  ")}`);
 }
 
+/** Whether focus is on `region` or inside it (a pane container or its content). */
+export async function isFocusWithin(region: Locator): Promise<boolean> {
+  return region.evaluate((el) => el.contains(document.activeElement)).catch(() => false);
+}
+
+/** Focus lands on `region` or inside it; retries like any expect. */
+export async function expectFocusWithin(region: Locator): Promise<void> {
+  await expect.poll(() => isFocusWithin(region), { message: `focus within ${region}` }).toBe(true);
+}
+
 async function isFocused(target: Locator): Promise<boolean> {
   return target.evaluate((el) => el === document.activeElement).catch(() => false);
 }

@@ -220,40 +220,26 @@ export function Settings() {
                 <p className="font-medium">{t("settings.theme")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.themeDescription")}</p>
               </div>
-              <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
-                <button
-                  type="button"
-                  onClick={() => setTheme("light")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                    theme === "light"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {t("settings.light")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTheme("dark")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                    theme === "dark"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {t("settings.dark")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTheme("system")}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                    theme === "system"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {t("settings.system")}
-                </button>
+              <div
+                role="group"
+                aria-label={t("settings.theme")}
+                className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit"
+              >
+                {(["light", "dark", "system"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTheme(value)}
+                    aria-pressed={theme === value}
+                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      theme === value
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t(`settings.${value}`)}
+                  </button>
+                ))}
               </div>
             </div>
 

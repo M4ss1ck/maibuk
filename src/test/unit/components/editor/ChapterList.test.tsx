@@ -688,6 +688,23 @@ describe("ChapterList", () => {
   });
 
   // ---------------------------------------------------------------------------
+  describe("autoFocusAddChapter", () => {
+    it("focuses Add Chapter when focus was lost to <body>", () => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      renderCL({ chapters: [], autoFocusAddChapter: true });
+      expect(screen.getByRole("button", { name: "chapters.addChapter" })).toHaveFocus();
+    });
+
+    it("does not steal focus from an element that has it", () => {
+      const other = document.createElement("button");
+      document.body.appendChild(other);
+      other.focus();
+      renderCL({ chapters: [], autoFocusAddChapter: true });
+      expect(other).toHaveFocus();
+      other.remove();
+    });
+  });
+
   describe("inline create", () => {
     it("opens create form from the keyboard", async () => {
       const user = userEvent.setup();

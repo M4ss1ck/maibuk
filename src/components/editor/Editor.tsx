@@ -109,8 +109,12 @@ interface EditorProps {
   onEscape?: () => void;
   /** Accessible name of the text area, e.g. "Text of Arrival". Defaults to "Text". */
   ariaLabel?: string;
-  /** Put the caret in the text on mount, e.g. for a Chapter just created. */
-  autoFocus?: boolean;
+  /**
+   * Put the caret in the text on mount: `true` always (a Chapter just
+   * created), `"if-unfocused"` only when focus was lost to <body> (a screen
+   * just opened), so it never takes focus from a dialog or the Tutorial.
+   */
+  autoFocus?: boolean | "if-unfocused";
   /** Tutorial steps that point at this editor's toolbar and text, if any. */
   tutorialAnchors?: EditorTutorialAnchors;
 }
@@ -334,7 +338,7 @@ export function Editor({
     ],
     content: content || "",
     editable,
-    autofocus: autoFocus ? "end" : false,
+    autofocus: autoFocus === true ? "end" : false,
     editorProps: {
       attributes: {
         class: "editor-content outline-none min-h-[500px]",
@@ -429,6 +433,15 @@ export function Editor({
     storageKey: restoreKey,
     suppressRestore,
   });
+
+  const autoFocusIfUnfocused = autoFocus === "if-unfocused";
+  useEffect(() => {
+    if (!autoFocusIfUnfocused || !editor || editor.isDestroyed) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    // view.focus keeps the selection the Reading Position just restored.
+    editor.view.focus();
+  }, [editor, autoFocusIfUnfocused]);
 
   useEffect(() => {
     if (!editor?.commands?.setSpellCheckEnabled) return;

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -138,6 +138,25 @@ describe("Settings page — container-aware layout", () => {
     expect(section).not.toBeNull();
     expect(section).toHaveClass("p-4", "@lg:p-5", "mb-6", "@lg:mb-8");
     expect(section).not.toHaveClass("sm:p-5");
+  });
+
+  it("marks the current theme as pressed and switches it from the keyboard", async () => {
+    const user = userEvent.setup();
+    const { useThemeStore } = await import("@/features/theme/store");
+    useThemeStore.setState({ theme: "system" });
+    render(<Settings />);
+
+    const group = screen.getByRole("group", { name: "settings.theme" });
+    const button = (name: string) => within(group).getByRole("button", { name });
+    expect(button("settings.system")).toHaveAttribute("aria-pressed", "true");
+    expect(button("settings.dark")).toHaveAttribute("aria-pressed", "false");
+
+    button("settings.light").focus();
+    await user.keyboard("{Tab}{Enter}");
+
+    expect(useThemeStore.getState().theme).toBe("dark");
+    expect(button("settings.dark")).toHaveAttribute("aria-pressed", "true");
+    expect(button("settings.system")).toHaveAttribute("aria-pressed", "false");
   });
 
   it("uses container variants for setting rows", () => {

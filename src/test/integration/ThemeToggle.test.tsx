@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { i18nState } = vi.hoisted(() => ({
@@ -85,6 +85,77 @@ describe("ThemeToggle", () => {
     });
   });
 
+  describe("inline variant: current theme", () => {
+    it("marks only the current theme's button as pressed", async () => {
+      const user = userEvent.setup();
+      render(<ThemeToggle />);
+      expect(screen.getByRole("button", { name: "System" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "false");
+
+      await user.tab();
+      await user.tab();
+      await user.keyboard("{Enter}");
+
+      expect(useThemeStore.getState().theme).toBe("dark");
+      expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "System" })).toHaveAttribute("aria-pressed", "false");
+    });
+  });
+
+  describe("dropdown variant: keyboard", () => {
+    it("opens a menu with Enter on the current theme, and arrows move between themes", async () => {
+      const user = userEvent.setup();
+      render(<ThemeToggle variant="dropdown" />);
+      const trigger = screen.getByRole("button", { name: "Theme: System" });
+
+      await user.tab();
+      expect(trigger).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      const menu = await screen.findByRole("menu", { name: "Theme: System" });
+      expect(menu).toBeInTheDocument();
+      expect(screen.getByRole("menuitemradio", { name: "System" })).toHaveAttribute(
+        "aria-checked",
+        "true"
+      );
+      expect(screen.getByRole("menuitemradio", { name: "System" })).toHaveFocus();
+      await user.keyboard("{ArrowUp}");
+      expect(screen.getByRole("menuitemradio", { name: "Dark" })).toHaveFocus();
+    });
+
+    it("Enter picks a theme, closes the menu, and returns focus to the trigger", async () => {
+      const user = userEvent.setup();
+      render(<ThemeToggle variant="dropdown" />);
+
+      await user.tab();
+      await user.keyboard("{Enter}");
+      await screen.findByRole("menu");
+      await user.keyboard("{ArrowUp}{Enter}");
+
+      expect(useThemeStore.getState().theme).toBe("dark");
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Theme: Dark" })).toHaveFocus()
+      );
+    });
+
+    it("Escape closes the menu without changing the theme and returns focus", async () => {
+      const user = userEvent.setup();
+      render(<ThemeToggle variant="dropdown" />);
+
+      await user.tab();
+      await user.keyboard("{Enter}");
+      await screen.findByRole("menu");
+      await user.keyboard("{ArrowUp}{Escape}");
+
+      expect(useThemeStore.getState().theme).toBe("system");
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Theme: System" })).toHaveFocus()
+      );
+    });
+  });
+
   describe("dropdown variant", () => {
     it("renders a single toggle button with English interpolated label when closed", () => {
       render(<ThemeToggle variant="dropdown" />);
@@ -105,18 +176,18 @@ describe("ThemeToggle", () => {
       const user = userEvent.setup();
       render(<ThemeToggle variant="dropdown" />);
       await user.click(screen.getByRole("button"));
-      expect(screen.getByText("Light")).toBeInTheDocument();
-      expect(screen.getByText("Dark")).toBeInTheDocument();
-      expect(screen.getByText("System")).toBeInTheDocument();
+      expect(await screen.findByRole("menuitemradio", { name: "Light" })).toBeInTheDocument();
+      expect(screen.getByRole("menuitemradio", { name: "Dark" })).toBeInTheDocument();
+      expect(screen.getByRole("menuitemradio", { name: "System" })).toBeInTheDocument();
     });
 
     it("selects theme and closes dropdown", async () => {
       const user = userEvent.setup();
       render(<ThemeToggle variant="dropdown" />);
       await user.click(screen.getByRole("button"));
-      await user.click(screen.getByText("Dark"));
+      await user.click(await screen.findByRole("menuitemradio", { name: "Dark" }));
       expect(useThemeStore.getState().theme).toBe("dark");
-      expect(screen.queryByText("Light")).not.toBeInTheDocument();
+      expect(screen.queryByRole("menu")).toBeNull();
     });
   });
 });
