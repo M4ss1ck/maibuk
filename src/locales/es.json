@@ -69,7 +69,8 @@
     "quickPlaceholder": "Escribe una nota rápida...",
     "add": "Añadir nota",
     "empty": "Aún no hay notas para este libro",
-    "formatting": "Formato"
+    "formatting": "Formato",
+    "quickNoteLabel": "Nota del libro"
   },
   "bookSidePanel": {
     "footnotes": "Notas al pie",

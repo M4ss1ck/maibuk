@@ -47,7 +47,13 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
     ],
     content: "",
     editorProps: {
-      attributes: { class: "editor-content outline-none min-h-20" },
+      attributes: {
+        class: "editor-content outline-none min-h-20",
+        // A bare contenteditable has no role or name for assistive tech.
+        role: "textbox",
+        "aria-multiline": "true",
+        "aria-label": t("bookNotes.quickNoteLabel"),
+      },
     },
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
   });

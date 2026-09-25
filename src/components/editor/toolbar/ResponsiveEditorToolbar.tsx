@@ -1,5 +1,7 @@
 import { useRef, type ReactNode, type RefObject } from "react";
 import type { Editor } from "@tiptap/react";
+import { Toolbar } from "react-aria-components/Toolbar";
+import { useTranslation } from "react-i18next";
 import { TooltipGroup } from "@/components/ui";
 import { Divider } from "@/components/editor/ToolbarButton";
 import {
@@ -15,6 +17,8 @@ interface ResponsiveEditorToolbarProps {
   callbacks: ToolbarGroupCallbacks;
   fixedUtilities: ReactNode;
   utilityCluster: ReactNode;
+  /** Esc inside the toolbar hands focus back to the Chapter text. */
+  onExitToolbar?: () => void;
 }
 
 function visibleEntries(entries: ToolbarEntry[]): ToolbarEntry[] {
@@ -52,7 +56,9 @@ export function ResponsiveEditorToolbar({
   callbacks,
   fixedUtilities,
   utilityCluster,
+  onExitToolbar,
 }: ResponsiveEditorToolbarProps) {
+  const { t } = useTranslation();
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const toolbarExpanded = useSettingsStore((state) => state.toolbarExpanded);
 
@@ -92,8 +98,19 @@ export function ResponsiveEditorToolbar({
 
   return (
     <TooltipGroup>
-      <div className="border-b border-border bg-background sticky top-0 z-10">
-        <div ref={rootRef} className={rowClass}>
+      <div
+        className="border-b border-border bg-background sticky top-0 z-10"
+        onKeyDownCapture={(event) => {
+          if (event.key !== "Escape") return;
+          // An open combobox listbox owns Escape first (and closes itself).
+          const openCombo = (event.target as HTMLElement).closest(
+            '[role="combobox"][aria-expanded="true"]'
+          );
+          if (openCombo) return;
+          onExitToolbar?.();
+        }}
+      >
+        <Toolbar ref={rootRef} aria-label={t("editor.toolbar")} className={rowClass}>
           <div data-testid="toolbar-start-lane" className={startBlockClass}>
             {visibleStart.map((entry) => renderEntry(entry, editor, callbacks, toolbarExpanded))}
           </div>
@@ -110,7 +127,7 @@ export function ResponsiveEditorToolbar({
           >
             {startEntries.map((entry) => renderEntry(entry, editor, callbacks))}
           </div>
-        </div>
+        </Toolbar>
       </div>
     </TooltipGroup>
   );

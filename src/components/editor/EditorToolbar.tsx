@@ -43,6 +43,8 @@ interface EditorToolbarProps {
   onExportMarkdown?: () => void;
   onExportPdf?: () => void;
   onExportImage?: () => void;
+  /** Esc inside the toolbar hands focus back to the Chapter text. */
+  onExitToolbar?: () => void;
   /** The Tutorial step that points at this toolbar, if any. */
   tutorialAnchor?: string;
 }
@@ -58,6 +60,7 @@ export function EditorToolbar({
   onExportMarkdown,
   onExportPdf,
   onExportImage,
+  onExitToolbar,
   tutorialAnchor,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
@@ -285,6 +288,7 @@ export function EditorToolbar({
         <ResponsiveEditorToolbar
           editor={editor}
           callbacks={callbacks}
+          onExitToolbar={onExitToolbar}
           utilityCluster={
             <>
               <ToolbarButton onClick={openShortcutsHelp} label={t("shortcuts.title")}>

@@ -69,7 +69,8 @@
     "quickPlaceholder": "Write a quick note...",
     "add": "Add note",
     "empty": "No notes for this book yet",
-    "formatting": "Formatting"
+    "formatting": "Formatting",
+    "quickNoteLabel": "Book note"
   },
   "bookSidePanel": {
     "footnotes": "Footnotes",

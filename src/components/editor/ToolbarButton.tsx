@@ -27,6 +27,7 @@ export function ToolbarButton({
         onClick={onClick}
         disabled={disabled}
         aria-label={label}
+        aria-pressed={isActive}
         className={`p-2 rounded transition-colors ${
           isActive ? "bg-primary text-white" : "hover:bg-muted"
         } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}

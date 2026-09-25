@@ -275,6 +275,11 @@ export function BookEditor() {
   }, [showMobileMenu, moreMenuModalId]);
 
   const handleEditorEscape = useCallback(() => {
+    // Esc in the toolbar hands focus back to the text, not the Chapter list.
+    if (document.activeElement?.closest('[role="toolbar"]')) {
+      editorHandleRef.current?.focus();
+      return;
+    }
     if (focusModeRef.current) {
       setFocusMode(false);
       return;

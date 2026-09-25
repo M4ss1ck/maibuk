@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
@@ -70,13 +71,14 @@ beforeEach(() => {
   });
 });
 
-function renderToolbar() {
+function renderToolbar(onExitToolbar?: () => void) {
   return render(
     <ResponsiveEditorToolbar
       editor={makeToolbarEditor()}
       callbacks={callbacks}
       fixedUtilities={<div>fixed</div>}
       utilityCluster={<div>utils</div>}
+      onExitToolbar={onExitToolbar}
     />
   );
 }
@@ -215,4 +217,56 @@ it("collapsed: retains nowrap overflow layout and End priority", () => {
   expect(endLane.classList.contains("flex-nowrap")).toBe(true);
   expect(endLane.classList.contains("shrink-0")).toBe(true);
   expect(endLane.classList.contains("ml-auto")).toBe(true);
+});
+
+it("is a single toolbar stop whose arrow keys move focus between controls", async () => {
+  const user = userEvent.setup();
+  mockVisibleCount = 5;
+  useSettingsStore.setState({ toolbarExpanded: true });
+  renderToolbar();
+
+  const toolbar = screen.getByRole("toolbar", { name: "editor.toolbar" });
+  const controls = within(toolbar).getAllByRole("combobox");
+  expect(controls.length).toBeGreaterThan(1);
+
+  controls[0].focus();
+  await user.keyboard("{ArrowRight}");
+
+  expect(document.activeElement).not.toBe(controls[0]);
+  expect(toolbar.contains(document.activeElement)).toBe(true);
+});
+
+it("leaves arrow keys to a nested combobox so its list opens", async () => {
+  const user = userEvent.setup();
+  mockVisibleCount = 5;
+  useSettingsStore.setState({ toolbarExpanded: true });
+  renderToolbar();
+
+  const toolbar = screen.getByRole("toolbar", { name: "editor.toolbar" });
+  const combo = within(toolbar).getAllByRole("combobox")[0];
+  combo.focus();
+
+  await user.keyboard("{ArrowDown}");
+
+  expect(combo).toHaveFocus();
+});
+
+it("hands Escape to the exit callback, but not while a combobox list is open", async () => {
+  const user = userEvent.setup();
+  const onExitToolbar = vi.fn();
+  mockVisibleCount = 5;
+  useSettingsStore.setState({ toolbarExpanded: true });
+  renderToolbar(onExitToolbar);
+
+  const toolbar = screen.getByRole("toolbar", { name: "editor.toolbar" });
+  const combo = within(toolbar).getAllByRole("combobox")[0];
+  combo.focus();
+
+  await user.keyboard("{Escape}");
+  expect(onExitToolbar).toHaveBeenCalledTimes(1);
+
+  onExitToolbar.mockClear();
+  combo.setAttribute("aria-expanded", "true");
+  await user.keyboard("{Escape}");
+  expect(onExitToolbar).not.toHaveBeenCalled();
 });

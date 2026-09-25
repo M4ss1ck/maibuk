@@ -73,9 +73,22 @@ export async function prepareDevice(
   await page.unroute(`**${BLANK_PATH}`);
 }
 
+/**
+ * Seeds persisted Settings (localStorage `maibuk-settings`) before the app
+ * boots, e.g. a toolbar already expanded so a spec need not navigate there.
+ */
+export async function seedSettings(page: Page, state: Record<string, unknown>): Promise<void> {
+  await page.addInitScript((partial) => {
+    const key = "maibuk-settings";
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? (JSON.parse(raw) as { state: Record<string, unknown>; version: number }) : { state: {}, version: 0 };
+    parsed.state = { ...parsed.state, ...partial };
+    localStorage.setItem(key, JSON.stringify(parsed));
+  }, state);
+}
+
 /** The raw Library bytes the web adapter persisted, for byte-identity checks. */
-export async function readLibraryBytes(page: Page): Promise<string | null> {
-  return page.evaluate(
+export async function readLibraryBytes(page: Page): Promise<string | null> {  return page.evaluate(
     () =>
       new Promise<string | null>((resolve, reject) => {
         const open = indexedDB.open("maibuk-db-storage", 1);

@@ -64,6 +64,8 @@ export interface EditorStats {
 export interface EditorHandle {
   /** Hand the typing burst still being coalesced to `onUpdate`, synchronously. */
   flush: () => void;
+  /** Return focus to the chapter text, keeping the current selection. */
+  focus: () => void;
 }
 
 export interface EditorTutorialAnchors {
@@ -175,6 +177,7 @@ export function Editor({
   useEffect(() => {
     onEscapeRef.current = onEscape;
   }, [onEscape]);
+  const handleExitToolbar = useCallback(() => onEscapeRef.current?.(), []);
   useEditorZoomControls(scrollContainerEl);
   const handleMarkdownPaste = useCallback((text: string) => {
     setPendingMarkdownPaste(text);
@@ -299,7 +302,18 @@ export function Editor({
     [runEmit]
   );
 
-  useImperativeHandle(ref, () => ({ flush: runEmit }), [runEmit]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      flush: runEmit,
+      focus: () => {
+        const editor = editorInstanceRef.current;
+        if (!editor || editor.isDestroyed) return;
+        editor.commands.focus();
+      },
+    }),
+    [runEmit]
+  );
 
   // Anything that reads the saved document must see the newest keystrokes, so
   // drain the pending burst before the editor goes away or loses focus.
@@ -512,6 +526,7 @@ export function Editor({
         <MemoizedEditorToolbar
           editor={editor}
           onContextMenuOpenChange={setIsContextMenuOpen}
+          onExitToolbar={handleExitToolbar}
           bookId={bookId}
           spellCheckLanguage={activeSpellCheckLanguage}
           onSpellCheckLanguageChange={onSpellCheckLanguageChange}

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
+import { Dialog as AriaDialog, Popover } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "@/components/icons";
 import { Tooltip } from "@/components/ui";
@@ -53,65 +53,18 @@ export function ColorPicker({
 }: ColorPickerProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
-
-  const handleDropdownToggle = () => {
-    if (!isOpen && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const dropdownWidth = 192; // w-48 = 12rem = 192px
-      const viewportWidth = window.innerWidth;
-      const padding = 8;
-
-      // Ensure dropdown doesn't overflow right edge of viewport
-      let left = rect.left;
-      if (left + dropdownWidth > viewportWidth - padding) {
-        left = viewportWidth - dropdownWidth - padding;
-      }
-      // Ensure dropdown doesn't overflow left edge
-      if (left < padding) {
-        left = padding;
-      }
-
-      setPosition({
-        top: rect.bottom + 4,
-        left,
-      });
-    }
-    setIsOpen(!isOpen);
-  };
+  const dropdownTriggerRef = useRef<HTMLButtonElement>(null);
 
   return (
     <>
-      <div ref={containerRef} className="flex items-center">
+      <div className="flex items-center">
         {/* Main button - triggers toggle action */}
         <Tooltip content={label} shortcut={shortcut} markdown={markdownHint}>
           <button
             type="button"
             onClick={onToggle}
             aria-label={label}
+            aria-pressed={isActive}
             className={`p-2 rounded-l transition-colors ${
               isActive ? "bg-primary text-white" : "hover:bg-muted"
             }`}
@@ -130,9 +83,11 @@ export function ColorPicker({
         {/* Dropdown arrow button - opens color picker */}
         <Tooltip content={t("editor.colorOptions", { label })}>
           <button
+            ref={dropdownTriggerRef}
             type="button"
-            onClick={handleDropdownToggle}
+            onClick={() => setIsOpen((open) => !open)}
             aria-label={t("editor.colorOptions", { label })}
+            aria-expanded={isOpen}
             className={`px-1 py-2 rounded-r transition-colors border-l border-border/50 ${
               isOpen ? "bg-muted" : "hover:bg-muted"
             }`}
@@ -142,61 +97,65 @@ export function ColorPicker({
         </Tooltip>
       </div>
 
-      {isOpen &&
-        createPortal(
-          <div
-            ref={dropdownRef}
-            className="fixed p-2 bg-background border border-border rounded-lg shadow-lg z-50 w-48"
-            style={{ top: position.top, left: position.left }}
-          >
-            <div className="grid grid-cols-5 gap-1 mb-2">
-              {PRESET_COLORS.map((color) => (
-                <Tooltip key={color} content={color}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange(color);
-                      setIsOpen(false);
-                    }}
-                    className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${
-                      value === color ? "border-primary" : "border-transparent"
-                    }`}
-                    style={{ backgroundColor: color }}
-                    aria-label={color}
-                  />
-                </Tooltip>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t border-border">
-              <Tooltip content={t("editor.customColor")}>
-                <input
-                  type="color"
-                  value={value || "#000000"}
-                  onChange={(e) => {
-                    onChange(e.target.value);
-                  }}
-                  className="w-8 h-8 cursor-pointer rounded border border-border"
-                  aria-label={t("editor.customColor")}
-                />
-              </Tooltip>
-              <span className="text-xs text-muted-foreground flex-1">{t("cover.custom")}</span>
-              {onClear && (
+      {/* A React Aria popover: focus moves into the palette, Tab stays, Esc closes. */}
+      <Popover
+        triggerRef={dropdownTriggerRef}
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        placement="bottom start"
+        className="z-50 rounded-lg border border-border bg-background p-2 shadow-lg"
+      >
+        <AriaDialog
+          aria-label={t("editor.colorOptions", { label })}
+          className="w-48 outline-none"
+        >
+          <div className="mb-2 grid grid-cols-5 gap-1">
+            {PRESET_COLORS.map((color) => (
+              <Tooltip key={color} content={color}>
                 <button
                   type="button"
                   onClick={() => {
-                    onClear();
+                    onChange(color);
                     setIsOpen(false);
                   }}
-                  className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted"
-                >
-                  {t("editor.clear")}
-                </button>
-              )}
-            </div>
-          </div>,
-          document.body
-        )}
+                  className={`h-7 w-7 rounded border-2 transition-transform hover:scale-110 ${
+                    value === color ? "border-primary" : "border-transparent"
+                  }`}
+                  style={{ backgroundColor: color }}
+                  aria-label={color}
+                />
+              </Tooltip>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 border-t border-border pt-2">
+            <Tooltip content={t("editor.customColor")}>
+              <input
+                type="color"
+                value={value || "#000000"}
+                onChange={(e) => {
+                  onChange(e.target.value);
+                }}
+                className="h-8 w-8 cursor-pointer rounded border border-border"
+                aria-label={t("editor.customColor")}
+              />
+            </Tooltip>
+            <span className="flex-1 text-xs text-muted-foreground">{t("cover.custom")}</span>
+            {onClear && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClear();
+                  setIsOpen(false);
+                }}
+                className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                {t("editor.clear")}
+              </button>
+            )}
+          </div>
+        </AriaDialog>
+      </Popover>
     </>
   );
 }
