@@ -140,6 +140,21 @@ describe("Settings page — container-aware layout", () => {
     expect(section).not.toHaveClass("sm:p-5");
   });
 
+  it("changes the primary color by keyboard without a native color input", async () => {
+    const user = userEvent.setup();
+    render(<Settings />);
+    const trigger = screen.getByRole("button", { name: "settings.primaryColor" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    await user.clear(field);
+    await user.type(field, "#f50{Enter}");
+    expect(useSettingsStore.getState().primaryColor).toBe("#FF5500");
+    expect(
+      screen.queryByLabelText("settings.primaryColor", { selector: 'input[type="color"]' })
+    ).toBeNull();
+  });
+
   it("marks the current theme as pressed and switches it from the keyboard", async () => {
     const user = userEvent.setup();
     const { useThemeStore } = await import("@/features/theme/store");

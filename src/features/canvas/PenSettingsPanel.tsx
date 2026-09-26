@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
 import { useCanvasStore } from "@/features/canvas/store";
 
 const PEN_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
@@ -23,19 +24,16 @@ export function PenSettingsPanel() {
           className="flex-1"
         />
       </label>
-      <div className="flex items-center gap-1">
-        {PEN_COLORS.map((color) => (
-          <button
-            key={color}
-            type="button"
-            aria-label={`${t("canvas.penColor")} ${color}`}
-            onClick={() => setPenColor(color)}
-            className={`size-5 rounded-full border ${
-              penColor === color ? "ring-2 ring-primary" : "border-border"
-            }`}
-            style={{ backgroundColor: color }}
-          />
-        ))}
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>{t("canvas.penColor")}</span>
+        <ColorPickerControl
+          label={t("canvas.penColor")}
+          value={penColor}
+          presets={PEN_COLORS}
+          onCommit={setPenColor}
+          contrastKind="non-text"
+          showUnknownContrast
+        />
       </div>
     </div>
   );

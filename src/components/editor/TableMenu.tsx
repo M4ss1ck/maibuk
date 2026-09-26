@@ -68,7 +68,7 @@ export function TableMenu({ editor, wrapItems = false }: TableMenuProps) {
             aria-label={t("editor.insertTable")}
             aria-expanded={showMenu}
             className={`p-2 rounded transition-colors ${
-              showMenu ? "bg-primary text-white" : "hover:bg-muted"
+              showMenu ? "bg-primary text-primary-foreground" : "hover:bg-muted"
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <Table className="w-4 h-4" />

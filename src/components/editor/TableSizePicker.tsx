@@ -47,8 +47,8 @@ export function TableSizePicker({ onSelect }: TableSizePickerProps) {
                 onFocus={() => setActiveCell({ row, col })}
                 className={`flex h-6 w-full cursor-pointer items-center justify-center rounded border text-xs outline-none data-focus-visible:ring-2 data-focus-visible:ring-primary ${
                   isActive
-                    ? "border-primary bg-primary text-white"
-                    : "border-muted hover:border-primary hover:bg-primary hover:text-white"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-muted hover:border-primary hover:bg-primary hover:text-primary-foreground"
                 }`}
               />
             );

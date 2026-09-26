@@ -115,6 +115,7 @@ function editorResetState() {
     current: null,
     doc: createDefaultCanvasDoc(),
     selectedNodeId: null,
+    colorPreview: null,
     selectedEdgeId: null,
     editingNodeId: null,
     loadState: "idle" as CanvasLoadState,
@@ -144,6 +145,13 @@ export interface CanvasStoreState {
   current: Canvas | null;
   doc: CanvasDoc;
   selectedNodeId: string | null;
+  colorPreview:
+    | ({ nodeId: string } & Pick<UpdateTextNodePatch, "textColor" | "backgroundColor">)
+    | null;
+  previewNodeColor: (
+    nodeId: string,
+    patch: Pick<UpdateTextNodePatch, "textColor" | "backgroundColor"> | null
+  ) => void;
   selectedEdgeId: string | null;
   /** The Text Node whose rich-text editor is open, if any (keyboard F2 or a double click). */
   editingNodeId: string | null;
@@ -236,6 +244,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   toolMode: "select",
   penWidth: 3,
   penColor: "#ef4444",
+  previewNodeColor: (nodeId, patch) => set({ colorPreview: patch ? { nodeId, ...patch } : null }),
   interactivityLocked: false,
 
   loadCanvases: async () => {
@@ -419,6 +428,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const past = capHistory([...state.past, cloneDoc(state.doc)]);
     set({
       doc: next,
+      colorPreview: null,
       past,
       future: [],
       dirty: true,

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { normalizeHexColor } from "@/lib/color";
 import i18n, { detectSystemLocale } from "@/i18n";
 import {
   DEFAULT_SCENE_BREAK,
@@ -223,18 +224,6 @@ const defaultSettings: Settings = {
   autoSync: true,
 };
 
-function normalizeHexColor(color: string): string {
-  const normalized = color.trim().toUpperCase();
-  if (/^#[0-9A-F]{6}$/.test(normalized)) {
-    return normalized;
-  }
-  if (/^#[0-9A-F]{3}$/.test(normalized)) {
-    const [r, g, b] = normalized.slice(1);
-    return `#${r}${r}${g}${g}${b}${b}`;
-  }
-  return DEFAULT_PRIMARY_COLOR;
-}
-
 /**
  * Coerce a persisted `pasteCleanup` blob into a valid PasteCleanupSettings.
  * Older or malformed shapes (e.g. a pre-strip-list blob with no
@@ -320,7 +309,8 @@ export const useSettingsStore = create<SettingsStore>()(
       lastNoteId: null,
       setAppFontSize: (appFontSize) => set({ appFontSize }),
       setAppFont: (appFont) => set({ appFont }),
-      setPrimaryColor: (primaryColor) => set({ primaryColor: normalizeHexColor(primaryColor) }),
+      setPrimaryColor: (primaryColor) =>
+        set({ primaryColor: normalizeHexColor(primaryColor) ?? DEFAULT_PRIMARY_COLOR }),
       setAutoSave: (autoSave) => set({ autoSave }),
       setAlwaysOnTop: (alwaysOnTop) => set({ alwaysOnTop }),
       setLaunchOnStartup: (launchOnStartup) => {

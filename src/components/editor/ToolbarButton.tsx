@@ -29,7 +29,7 @@ export function ToolbarButton({
         aria-label={label}
         aria-pressed={isActive}
         className={`p-2 rounded transition-colors ${
-          isActive ? "bg-primary text-white" : "hover:bg-muted"
+          isActive ? "bg-primary text-primary-foreground" : "hover:bg-muted"
         } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
       >
         {children}

@@ -26,7 +26,7 @@ export function ZoomControl() {
           onClick={() => setShowMenu((open) => !open)}
           aria-expanded={showMenu}
           className={`px-2 py-1 rounded text-sm transition-colors ${
-            showMenu ? "bg-primary text-white" : "hover:bg-muted"
+            showMenu ? "bg-primary text-primary-foreground" : "hover:bg-muted"
           }`}
         >
           {editorZoom}%

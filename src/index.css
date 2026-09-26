@@ -4,6 +4,8 @@
   /* Semantic colors for light mode (default) */
   --color-primary: #3b82f6;
   --color-primary-hover: #2563eb;
+  --color-primary-foreground: #000000;
+  --color-primary-hover-foreground: #ffffff;
   --color-secondary: #78716c;
   --color-background: #fafaf9;
   --color-foreground: #1c1917;
@@ -62,6 +64,8 @@
 .dark {
   --color-primary: #60a5fa;
   --color-primary-hover: #3b82f6;
+  --color-primary-foreground: #000000;
+  --color-primary-hover-foreground: #000000;
   --color-secondary: #a8a29e;
   --color-background: #1c1917;
   --color-foreground: #fafaf9;
@@ -411,8 +415,8 @@ option {
   content: "";
   width: 0.28rem;
   height: 0.5rem;
-  border-right: 2px solid #fff;
-  border-bottom: 2px solid #fff;
+  border-right: 2px solid var(--color-primary-foreground);
+  border-bottom: 2px solid var(--color-primary-foreground);
   transform: rotate(45deg) scale(0);
   transition: transform 120ms ease-out;
 }
@@ -1095,7 +1099,7 @@ option {
 
 .image-floating-toolbar button.active {
   background-color: var(--color-primary);
-  color: white;
+  color: var(--color-primary-foreground);
 }
 
 .image-floating-toolbar .toolbar-divider {
@@ -1567,4 +1571,13 @@ option {
   border-left: 2px solid var(--color-primary);
   margin-left: -1px;
   pointer-events: none;
+}
+
+/* Show a selected editor range while a color adjustment is still uncommitted. */
+.ProseMirror[data-color-preview="text"] *::selection {
+  color: var(--editor-color-preview);
+}
+
+.ProseMirror[data-color-preview="highlight"] *::selection {
+  background-color: var(--editor-color-preview);
 }

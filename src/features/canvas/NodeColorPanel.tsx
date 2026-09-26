@@ -2,6 +2,7 @@ import { Ban, Palette } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { Tooltip } from "@/components/ui";
+import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
 import { useCanvasStore } from "@/features/canvas/store";
 
 const NODE_COLORS = [
@@ -28,25 +29,6 @@ const COLOR_PAIRS = [
   { id: "violet", textColor: "#4c1d95", backgroundColor: "#ede9fe" },
 ] as const;
 
-type ColorSwatchProps = {
-  color: string;
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-};
-
-function ColorSwatch({ color, label, selected, onPress }: ColorSwatchProps) {
-  return (
-    <Button
-      aria-label={`${label}: ${color}`}
-      aria-pressed={selected}
-      onPress={onPress}
-      className="size-6 rounded-full border border-border outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-primary"
-      style={{ backgroundColor: color }}
-    />
-  );
-}
-
 export function NodeColorPanel() {
   const { t } = useTranslation();
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
@@ -54,6 +36,7 @@ export function NodeColorPanel() {
     state.doc.nodes.find((node) => node.id === state.selectedNodeId && node.kind === "text")
   );
   const updateTextNode = useCanvasStore((state) => state.updateTextNode);
+  const previewNodeColor = useCanvasStore((state) => state.previewNodeColor);
 
   if (!selectedNodeId || selectedNode?.kind !== "text") return null;
 
@@ -98,9 +81,9 @@ export function NodeColorPanel() {
             </div>
           </fieldset>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-xs text-muted-foreground">{t("canvas.textColor")}</legend>
-            <div className="grid grid-cols-7 gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">{t("canvas.textColor")}</span>
+            <div className="flex items-center gap-2">
               <Button
                 aria-label={t("canvas.automaticTextColor")}
                 aria-pressed={!selectedNode.textColor}
@@ -112,33 +95,24 @@ export function NodeColorPanel() {
                   <span className="h-full w-1/2 bg-white" />
                 </span>
               </Button>
-              {NODE_COLORS.map((color) => (
-                <ColorSwatch
-                  key={color}
-                  color={color}
-                  label={t("canvas.textColor")}
-                  selected={selectedNode.textColor === color}
-                  onPress={() => updateTextNode(selectedNodeId, { textColor: color })}
-                />
-              ))}
-            </div>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="color"
-                aria-label={t("canvas.customTextColor")}
-                value={selectedNode.textColor ?? "#1c1917"}
-                onChange={(event) =>
-                  updateTextNode(selectedNodeId, { textColor: event.currentTarget.value })
+              <ColorPickerControl
+                label={t("canvas.customTextColor")}
+                value={selectedNode.textColor ?? ""}
+                fallbackColor="#1c1917"
+                presets={NODE_COLORS}
+                onPreview={(color) =>
+                  previewNodeColor(selectedNodeId, color ? { textColor: color } : null)
                 }
-                className="size-7 cursor-pointer rounded border border-border bg-transparent p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onCommit={(color) => updateTextNode(selectedNodeId, { textColor: color })}
+                contrastAgainst={selectedNode.backgroundColor ?? null}
+                showUnknownContrast={!selectedNode.backgroundColor}
               />
-              {t("canvas.customColor")}
-            </label>
-          </fieldset>
+            </div>
+          </div>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-xs text-muted-foreground">{t("canvas.backgroundColor")}</legend>
-            <div className="grid grid-cols-7 gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">{t("canvas.backgroundColor")}</span>
+            <div className="flex items-center gap-2">
               <Button
                 aria-label={t("canvas.transparentBackground")}
                 aria-pressed={!selectedNode.backgroundColor}
@@ -147,29 +121,20 @@ export function NodeColorPanel() {
               >
                 <Ban className="size-4" aria-hidden="true" />
               </Button>
-              {NODE_COLORS.map((color) => (
-                <ColorSwatch
-                  key={color}
-                  color={color}
-                  label={t("canvas.backgroundColor")}
-                  selected={selectedNode.backgroundColor === color}
-                  onPress={() => updateTextNode(selectedNodeId, { backgroundColor: color })}
-                />
-              ))}
-            </div>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="color"
-                aria-label={t("canvas.customBackgroundColor")}
-                value={selectedNode.backgroundColor ?? "#ffffff"}
-                onChange={(event) =>
-                  updateTextNode(selectedNodeId, { backgroundColor: event.currentTarget.value })
+              <ColorPickerControl
+                label={t("canvas.customBackgroundColor")}
+                value={selectedNode.backgroundColor ?? ""}
+                fallbackColor="#ffffff"
+                presets={NODE_COLORS}
+                onPreview={(color) =>
+                  previewNodeColor(selectedNodeId, color ? { backgroundColor: color } : null)
                 }
-                className="size-7 cursor-pointer rounded border border-border bg-transparent p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onCommit={(color) => updateTextNode(selectedNodeId, { backgroundColor: color })}
+                contrastAgainst={selectedNode.textColor ?? null}
+                showUnknownContrast={!selectedNode.textColor}
               />
-              {t("canvas.customColor")}
-            </label>
-          </fieldset>
+            </div>
+          </div>
         </Dialog>
       </Popover>
     </DialogTrigger>

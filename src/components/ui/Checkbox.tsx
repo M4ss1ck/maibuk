@@ -43,7 +43,7 @@ export function Checkbox({
             aria-hidden="true"
             className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors pointer-coarse:size-5 ${
               filled
-                ? "border-primary bg-primary text-white"
+                ? "border-primary bg-primary text-primary-foreground"
                 : "border-muted-foreground bg-card"
             } ${isFocusVisible ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
           >

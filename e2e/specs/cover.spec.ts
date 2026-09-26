@@ -8,7 +8,12 @@ import { readFile } from "node:fs/promises";
 import type { Download, Locator, Page } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
 import { DOT_PNG, IMAGE_FIXTURE_DIR } from "../support/fixtures/images";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  expectTabContained,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -168,13 +173,26 @@ test.describe("Cover background @wf:cover-background", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByText("Background", { exact: true })).toBeVisible();
 
-    await tabTo(page, page.getByRole("button", { name: "#e94560", exact: true }), { max: 60 });
+    const color = page.getByRole("button", { name: "Color", exact: true });
+    await tabTo(page, color, { max: 60 });
     await page.keyboard.press("Enter");
-    await expect(page.getByLabel("Color")).toHaveValue("#e94560");
-
+    const picker = page.getByRole("dialog", { name: "Color" });
+    await expectFocusWithin(picker);
+    await expectTabContained(page, picker);
+    const option = picker.getByRole("option", { name: "#e94560" });
+    await tabTo(page, picker.getByRole("option", { name: "#1a1a2e" }), { max: 25 });
+    await pressUntilFocused(page, "ArrowRight", option, { max: 15 });
+    await page.keyboard.press("Enter");
+    await expect(color.locator("span")).toHaveAttribute("style", /233, 69, 96|#E94560/i);
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    await expect(color).toBeFocused();
     await saveCover(page);
     await page.reload();
-    await expect(page.getByLabel("Color")).toHaveValue("#e94560");
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("button", { name: "Color", exact: true }).locator("span")
+    ).toHaveAttribute("style", /233, 69, 96|#E94560/i);
   });
 
   test("a background image is added through the file chooser and removed again", async ({

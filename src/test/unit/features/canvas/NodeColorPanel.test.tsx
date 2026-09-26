@@ -1,9 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { contrastRatio } from "@/lib/color";
 
 const mocks = vi.hoisted(() => ({
   updateTextNode: vi.fn(),
+  previewNodeColor: vi.fn(),
   state: {
     selectedNodeId: "node",
     doc: {
@@ -21,7 +23,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../../../features/canvas/store", () => ({
   useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ ...mocks.state, updateTextNode: mocks.updateTextNode }),
+    selector({
+      ...mocks.state,
+      updateTextNode: mocks.updateTextNode,
+      previewNodeColor: mocks.previewNodeColor,
+    }),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -29,21 +35,6 @@ vi.mock("react-i18next", () => ({
 }));
 
 const { NodeColorPanel } = await import("@/features/canvas/NodeColorPanel");
-
-const COLORS = [
-  "#7f1d1d",
-  "#ef4444",
-  "#92400e",
-  "#f59e0b",
-  "#065f46",
-  "#10b981",
-  "#1e3a8a",
-  "#3b82f6",
-  "#4c1d95",
-  "#8b5cf6",
-  "#831843",
-  "#ec4899",
-];
 
 const COLOR_PAIRS = [
   { id: "slate", textColor: "#1e293b", backgroundColor: "#e2e8f0" },
@@ -53,22 +44,6 @@ const COLOR_PAIRS = [
   { id: "blue", textColor: "#1e3a8a", backgroundColor: "#dbeafe" },
   { id: "violet", textColor: "#4c1d95", backgroundColor: "#ede9fe" },
 ];
-
-function luminance(hex: string): number {
-  const channels = hex
-    .slice(1)
-    .match(/.{2}/g)
-    ?.map((value) => Number.parseInt(value, 16) / 255)
-    .map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
-  if (!channels) return 0;
-  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-}
-
-function contrastRatio(foreground: string, background: string): number {
-  const lighter = Math.max(luminance(foreground), luminance(background));
-  const darker = Math.min(luminance(foreground), luminance(background));
-  return (lighter + 0.05) / (darker + 0.05);
-}
 
 async function openPanel() {
   const user = userEvent.setup();
@@ -109,46 +84,50 @@ describe("NodeColorPanel", () => {
     );
   });
 
-  it("applies every text color from the keyboard and accepts a custom color", async () => {
+  it("keeps automatic text and selects a custom text color by keyboard", async () => {
     const user = await openPanel();
-
     await activateInOrder(user, [
       {
         button: screen.getByRole("button", { name: "canvas.automaticTextColor" }),
         patch: { textColor: "" },
       },
-      ...COLORS.map((color) => ({
-        button: screen.getByRole("button", { name: `canvas.textColor: ${color}` }),
-        patch: { textColor: color },
-      })),
     ]);
-
-    const customTextColor = screen.getByLabelText("canvas.customTextColor");
-    while (document.activeElement !== customTextColor) await user.tab();
-    fireEvent.change(customTextColor, { target: { value: "#123456" } });
+    const trigger = screen.getByRole("button", { name: "canvas.customTextColor" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    await user.clear(field);
+    await user.type(field, "#123456{Enter}");
     expect(mocks.updateTextNode).toHaveBeenLastCalledWith("node", { textColor: "#123456" });
   });
 
-  it("applies every background color from the keyboard and accepts a custom color", async () => {
+  it("can choose the displayed text fallback as an explicit color", async () => {
     const user = await openPanel();
+    const trigger = screen.getByRole("button", { name: "canvas.customTextColor" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    expect(field).toHaveValue("#1C1917");
+    await user.click(field);
+    await user.keyboard("{Enter}");
+    expect(mocks.updateTextNode).toHaveBeenLastCalledWith("node", { textColor: "#1C1917" });
+  });
 
+  it("keeps transparent background and selects a custom background by keyboard", async () => {
+    const user = await openPanel();
     await activateInOrder(user, [
       {
         button: screen.getByRole("button", { name: "canvas.transparentBackground" }),
         patch: { backgroundColor: "" },
       },
-      ...COLORS.map((color) => ({
-        button: screen.getByRole("button", { name: `canvas.backgroundColor: ${color}` }),
-        patch: { backgroundColor: color },
-      })),
     ]);
-
-    const customBackgroundColor = screen.getByLabelText("canvas.customBackgroundColor");
-    while (document.activeElement !== customBackgroundColor) await user.tab();
-    fireEvent.change(customBackgroundColor, { target: { value: "#abcdef" } });
-    expect(mocks.updateTextNode).toHaveBeenLastCalledWith("node", {
-      backgroundColor: "#abcdef",
-    });
+    const trigger = screen.getByRole("button", { name: "canvas.customBackgroundColor" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    await user.clear(field);
+    await user.type(field, "#abcdef{Enter}");
+    expect(mocks.updateTextNode).toHaveBeenLastCalledWith("node", { backgroundColor: "#ABCDEF" });
   });
 
   it("offers preset pairs that meet enhanced text contrast", () => {

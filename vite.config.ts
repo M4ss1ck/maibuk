@@ -53,6 +53,8 @@ export default defineConfig(() => ({
         "src/features/chapters/store.ts",
         "src/features/notes/store.ts",
         "src/features/settings/store.ts",
+        "src/features/settings/accent-color.ts",
+        "src/lib/color.ts",
         "src/features/settings/toolbar-config.ts",
         "src/features/theme/store.ts",
         "src/features/sync/store.ts",
@@ -61,6 +63,8 @@ export default defineConfig(() => ({
         "src/features/version/useVersionCheck.ts",
         // Phase 3: UI components
         "src/components/ui/Button.tsx",
+        "src/components/ui/ColorPickerControl.tsx",
+        "src/components/cover-editor/panels/PaintControl.tsx",
         "src/components/ui/Input.tsx",
         "src/components/ui/Modal.tsx",
         "src/components/ui/Select.tsx",

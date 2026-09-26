@@ -102,6 +102,8 @@ export function ResponsiveEditorToolbar({
         className="border-b border-border bg-background sticky top-0 z-10"
         onKeyDownCapture={(event) => {
           if (event.key !== "Escape") return;
+          // A portaled popover (color picker, menu) bubbles here through React; it owns its Escape.
+          if (!event.currentTarget.contains(event.target as Node)) return;
           // An open combobox listbox owns Escape first (and closes itself).
           const openCombo = (event.target as HTMLElement).closest(
             '[role="combobox"][aria-expanded="true"]'

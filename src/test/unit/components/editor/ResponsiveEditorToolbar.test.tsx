@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -71,12 +72,12 @@ beforeEach(() => {
   });
 });
 
-function renderToolbar(onExitToolbar?: () => void) {
+function renderToolbar(onExitToolbar?: () => void, fixedUtilities = <div>fixed</div>) {
   return render(
     <ResponsiveEditorToolbar
       editor={makeToolbarEditor()}
       callbacks={callbacks}
-      fixedUtilities={<div>fixed</div>}
+      fixedUtilities={fixedUtilities}
       utilityCluster={<div>utils</div>}
       onExitToolbar={onExitToolbar}
     />
@@ -267,6 +268,20 @@ it("hands Escape to the exit callback, but not while a combobox list is open", a
 
   onExitToolbar.mockClear();
   combo.setAttribute("aria-expanded", "true");
+  await user.keyboard("{Escape}");
+  expect(onExitToolbar).not.toHaveBeenCalled();
+});
+
+it("leaves Escape to a portaled popover opened from the toolbar", async () => {
+  const user = userEvent.setup();
+  const onExitToolbar = vi.fn();
+  // Popovers render in a portal, but React still bubbles their events through the toolbar.
+  renderToolbar(
+    onExitToolbar,
+    createPortal(<input aria-label="Hex color" />, document.body)
+  );
+
+  screen.getByRole("textbox", { name: "Hex color" }).focus();
   await user.keyboard("{Escape}");
   expect(onExitToolbar).not.toHaveBeenCalled();
 });

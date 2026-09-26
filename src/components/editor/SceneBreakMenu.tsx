@@ -124,7 +124,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
           aria-label={t("editor.sceneBreakOptions")}
           aria-expanded={open}
           className={`px-1 py-2 rounded-r transition-colors ${
-            open ? "bg-primary text-white" : "hover:bg-muted"
+            open ? "bg-primary text-primary-foreground" : "hover:bg-muted"
           }`}
         >
           <span className="text-xs">▾</span>
@@ -223,7 +223,7 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
               <button
                 type="button"
                 onClick={() => insert(customDescriptor())}
-                className="flex-1 py-1 rounded bg-primary text-white text-sm"
+                className="flex-1 py-1 rounded bg-primary text-primary-foreground text-sm"
               >
                 {t("common.insert")}
               </button>

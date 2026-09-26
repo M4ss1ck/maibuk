@@ -8,6 +8,22 @@ const freshTitle = () =>
 describe("useCoverStore", () => {
   beforeEach(() => useCoverStore.getState().setScene(createDefaultScene("6x9")));
 
+  it("previews a color without dirtying or adding undo history", () => {
+    const state = useCoverStore.getState();
+    const original = state.scene;
+    state.previewColorScene({ ...original, background: { type: "solid", color: "#FF5500" } });
+    expect(useCoverStore.getState().previewScene?.background).toEqual({
+      type: "solid",
+      color: "#FF5500",
+    });
+    expect(useCoverStore.getState().scene).toBe(original);
+    expect(useCoverStore.getState().past).toHaveLength(0);
+    expect(useCoverStore.getState().dirty).toBe(false);
+    state.setBackground({ type: "solid", color: "#FF5500" });
+    expect(useCoverStore.getState().previewScene).toBeNull();
+    expect(useCoverStore.getState().past).toHaveLength(1);
+  });
+
   it("adds a layer and selects it", () => {
     const layer = freshTitle();
     useCoverStore.getState().addLayer(layer);

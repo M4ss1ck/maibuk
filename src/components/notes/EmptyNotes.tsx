@@ -31,7 +31,7 @@ export function EmptyNotes({ onCreateNote, onBack }: EmptyNotesProps) {
         <button
           type="button"
           onClick={onCreateNote}
-          className="mt-6 px-4 py-2 text-sm bg-primary text-white rounded hover:bg-primary-hover transition-colors"
+          className="mt-6 px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary-hover hover:text-primary-hover-foreground transition-colors"
         >
           {t("notes.newNote")}
         </button>

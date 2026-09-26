@@ -139,6 +139,22 @@ describe("useCanvasStore", () => {
     expect(storedContent).toEqual(defaultContent);
   });
 
+  it("previews a node color without a revision or undo entry", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    useCanvasStore.getState().addNode(textNode("a"));
+    const before = useCanvasStore.getState();
+    before.previewNodeColor("a", { backgroundColor: "#FF5500" });
+    expect(useCanvasStore.getState().colorPreview).toEqual({
+      nodeId: "a",
+      backgroundColor: "#FF5500",
+    });
+    expect(useCanvasStore.getState().revision).toBe(before.revision);
+    expect(useCanvasStore.getState().past).toHaveLength(before.past.length);
+    before.updateTextNode("a", { backgroundColor: "#FF5500" });
+    expect(useCanvasStore.getState().colorPreview).toBeNull();
+    expect(useCanvasStore.getState().past).toHaveLength(before.past.length + 1);
+  });
+
   it("commits node edits with one history entry and a revision", () => {
     useCanvasStore.setState({ loadState: "ready" });
     useCanvasStore.getState().addNode(textNode("a"));

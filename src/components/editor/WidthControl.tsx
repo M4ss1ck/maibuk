@@ -98,7 +98,7 @@ export function WidthControl() {
           aria-label={t("editor.contentWidth")}
           aria-expanded={showMenu}
           className={`px-2 py-1 rounded transition-colors ${
-            showMenu ? "bg-primary text-white" : "hover:bg-muted"
+            showMenu ? "bg-primary text-primary-foreground" : "hover:bg-muted"
           }`}
         >
           <MoveHorizontal className="w-4 h-4" />

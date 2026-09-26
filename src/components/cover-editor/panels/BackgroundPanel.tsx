@@ -1,10 +1,8 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useCoverStore } from "@/features/covers/store";
-import { PRESET_COLORS } from "@/features/covers/scene/defaults";
 import type { Background, Paint } from "@/features/covers/scene/schema";
 import { PaintControl } from "@/components/cover-editor/panels/PaintControl";
-import { Tooltip } from "@/components/ui";
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -25,6 +23,8 @@ export function BackgroundPanel() {
   const { t } = useTranslation();
   const background = useCoverStore((s) => s.scene.background);
   const setBackground = useCoverStore((s) => s.setBackground);
+  const scene = useCoverStore((s) => s.scene);
+  const previewColorScene = useCoverStore((s) => s.previewColorScene);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,26 +46,11 @@ export function BackgroundPanel() {
       </p>
 
       {background.type !== "image" && (
-        <>
-          <div className="grid grid-cols-8 gap-1">
-            {PRESET_COLORS.map((color) => (
-              <Tooltip key={color} content={color}>
-                <button
-                  type="button"
-                  onClick={() => setBackground({ type: "solid", color })}
-                  aria-label={color}
-                  className={`w-6 h-6 rounded border transition-transform hover:scale-110 ${
-                    background.type === "solid" && background.color === color
-                      ? "border-primary"
-                      : "border-border"
-                  }`}
-                  style={{ backgroundColor: color }}
-                />
-              </Tooltip>
-            ))}
-          </div>
-          <PaintControl paint={asPaint} onChange={(p) => setBackground(p as Background)} />
-        </>
+        <PaintControl
+          paint={asPaint}
+          onChange={(paint) => setBackground(paint as Background)}
+          onPreview={(paint) => previewColorScene(paint ? { ...scene, background: paint } : null)}
+        />
       )}
 
       {background.type === "image" && (
@@ -76,7 +61,7 @@ export function BackgroundPanel() {
               <button
                 key={f.id}
                 type="button"
-                className={`flex-1 px-2 py-1 rounded text-xs ${background.fit === f.id ? "bg-primary text-white" : "bg-muted"}`}
+                className={`flex-1 px-2 py-1 rounded text-xs ${background.fit === f.id ? "bg-primary text-primary-foreground" : "bg-muted"}`}
                 onClick={() => setBackground({ ...background, fit: f.id })}
               >
                 {t(f.key)}
