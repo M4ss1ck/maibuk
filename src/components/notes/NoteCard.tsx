@@ -48,7 +48,7 @@ export function NoteCard({
       className={({ isFocusVisible, isHovered, isPressed }) =>
         `relative h-44 overflow-hidden rounded-xl border bg-card text-left transition-all duration-200 ${
           isFocusVisible ? "border-primary ring-2 ring-primary ring-offset-2" : "border-border"
-        } ${isHovered || isPressed ? "-translate-y-1 shadow-lg" : ""}`
+        } ${isHovered || isPressed ? "shadow-lg" : ""}`
       }
     >
       <div
