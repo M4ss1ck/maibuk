@@ -192,7 +192,10 @@ option {
 .editor-content {
   font-family: var(--editor-font-family, var(--font-serif));
   font-size: var(--editor-font-size, 18px);
-  line-height: 1.75;
+  /* List item spacing below is derived from it, and block nodes with a line
+     height set also set it. */
+  --line-height: 1.75;
+  line-height: var(--line-height);
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -349,7 +352,15 @@ option {
 }
 
 .editor-content li {
-  margin: 0.25em 0;
+  margin-block: 0;
+}
+
+/* (L - 1) * 4/3 em: exactly 1em at the default 1.75, 0 at 1, so a list at
+   line height 1 spaces items like Shift+Enter lines. */
+.editor-content li > p,
+.editor-content li > ul,
+.editor-content li > ol {
+  margin-block: calc((var(--line-height) - 1) * 4 / 3 * 1em);
 }
 
 .editor-content ul[data-type="taskList"] {

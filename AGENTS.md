@@ -753,6 +753,7 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 - **Platform branching**: `IS_WEB` and `IS_TAURI` are build-time constants. Test both targets when touching platform code
 - **Database migrations**: Schema changes in `src/lib/db/index.ts` use `ALTER TABLE ... ADD COLUMN` wrapped in `.catch()` to handle "column already exists" — follow this pattern for new columns
 - **TipTap content**: Chapter content is stored as TipTap JSON string in the database, not raw HTML. The export pipeline converts it via `processChapterHtml()`
+- **Line height**: a block attribute on paragraph, heading, listItem, and taskItem (`src/components/editor/extensions/LineHeight.ts`), rendered as `line-height: X; --line-height: X`. Inside a list it goes on the closest list item so the marker follows. `.editor-content` derives list item spacing from `--line-height` (`(L - 1) * 4/3 em`, exactly 1em at the default 1.75), so do not give `li > p` a fixed margin. Older documents store inline `<span style="line-height">` on the `textStyle` mark: it still parses and renders byte for byte, but nothing writes it, and it can only make a line taller than its block. Do not use the CSS `lh` unit for this spacing: WebKit computed a stale value.
 - **Word count**: Computed by stripping HTML tags and counting whitespace-separated tokens — see chapter store's `updateChapter`
 - **Session restoration**: `StartupRedirect` restores the last visited path on app launch. If you add new routes, they will be automatically tracked by `PathTracker`
 

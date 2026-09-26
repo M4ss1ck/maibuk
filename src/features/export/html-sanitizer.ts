@@ -124,6 +124,26 @@ export function sanitizeHtmlForEpub(html: string): SanitizeResult {
     return "";
   });
 
+  // Remove CSS custom property declarations (--name: value) from inline styles;
+  // EPUB validators reject them. Drop the whole style attribute if nothing remains.
+  sanitized = sanitized.replace(
+    /(\s*style=")([^"]*)(")/gi,
+    (_match: string, open: string, declarations: string, close: string) => {
+      const kept = declarations
+        .split(";")
+        .map((declaration) => declaration.trim())
+        .filter(Boolean)
+        .filter((declaration) => {
+          const colonIdx = declaration.indexOf(":");
+          if (colonIdx < 0) return true;
+          return !declaration.substring(0, colonIdx).trim().startsWith("--");
+        });
+
+      if (kept.length === 0) return "";
+      return `${open}${kept.join("; ")}${close}`;
+    }
+  );
+
   // Convert highlight marks to standard mark element
   sanitized = sanitized.replace(
     /<mark[^>]*data-color="([^"]*)"[^>]*>(.*?)<\/mark>/gi,
