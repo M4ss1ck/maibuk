@@ -448,6 +448,33 @@ test.describe("toolbar selects @wf:editor-toolbar-selects", () => {
     await expect(lineHeight).toHaveValue("2");
   });
 
+  test("line height 1 spaces paragraphs made with Enter one line apart", async ({ page }) => {
+    await seedSettings(page, { toolbarExpanded: true });
+    await openEditor(page);
+    await page.keyboard.press("End");
+
+    const size = toolbar(page).getByRole("combobox", { name: "Size" });
+    const lineHeight = toolbar(page).getByRole("combobox", { name: "Line height" });
+    await focusToolbarControl(page, size);
+    await pressUntilFocused(page, "ArrowRight", lineHeight, { max: 80 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("1");
+    await page.keyboard.press("Enter");
+    await expect(editorText(page)).toBeFocused();
+
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Tight line");
+    await expect(lineHeight).toHaveValue("1");
+
+    // Read-only geometry: the new paragraph must start where the previous
+    // line ends, like a Shift+Enter line, not one paragraph margin below.
+    const next = editorText(page).locator("p", { hasText: "Tight line" });
+    const previous = next.locator("xpath=preceding-sibling::p[1]");
+    const [above, below] = [await previous.boundingBox(), await next.boundingBox()];
+    expect(below!.y - (above!.y + above!.height)).toBeCloseTo(0, 0);
+  });
+
   test("text color applies to the selection and persists", async ({ page }) => {
     await seedSettings(page, { toolbarExpanded: true });
     await openEditor(page);

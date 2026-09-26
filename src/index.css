@@ -192,8 +192,8 @@ option {
 .editor-content {
   font-family: var(--editor-font-family, var(--font-serif));
   font-size: var(--editor-font-size, 18px);
-  /* List item spacing below is derived from it, and block nodes with a line
-     height set also set it. */
+  /* Paragraph and list spacing below derive from it; blocks with their own
+     line height set it too. */
   --line-height: 1.75;
   line-height: var(--line-height);
   overflow-wrap: anywhere;
@@ -312,8 +312,12 @@ option {
 }
 
 /* Tiptap editor styles */
-.editor-content p {
-  margin: 1em 0;
+/* (L - 1) * 4/3 em: exactly 1em at the default 1.75, 0 at 1, so Enter at line
+   height 1 spaces paragraphs and list items like Shift+Enter lines. */
+.editor-content p,
+.editor-content li > ul,
+.editor-content li > ol {
+  margin-block: calc((var(--line-height) - 1) * 4 / 3 * 1em);
 }
 
 .editor-content h1 {
@@ -353,14 +357,6 @@ option {
 
 .editor-content li {
   margin-block: 0;
-}
-
-/* (L - 1) * 4/3 em: exactly 1em at the default 1.75, 0 at 1, so a list at
-   line height 1 spaces items like Shift+Enter lines. */
-.editor-content li > p,
-.editor-content li > ul,
-.editor-content li > ol {
-  margin-block: calc((var(--line-height) - 1) * 4 / 3 * 1em);
 }
 
 .editor-content ul[data-type="taskList"] {
