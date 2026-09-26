@@ -1592,7 +1592,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "checkpointHistory",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "versions-open-history",
@@ -1605,7 +1605,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "checkpointHistory",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "versions-checkpoint-idle",
@@ -1617,7 +1617,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "checkpointHistory",
     tags: ["clock"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "versions-checkpoint-close",
@@ -1629,7 +1629,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "checkpointHistory",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "versions-preview",
@@ -1641,7 +1641,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "checkpointHistory",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "versions-compare",
@@ -1653,7 +1653,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "checkpointHistory",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "versions-restore",
@@ -1669,7 +1669,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "checkpointHistory",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "versions-rename-delete",
@@ -1681,7 +1681,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "checkpointHistory",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "export-book-epub",

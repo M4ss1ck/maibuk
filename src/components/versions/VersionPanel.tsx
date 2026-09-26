@@ -1,6 +1,7 @@
-import { lazy, Suspense, useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Eye,
   GitCompareArrows,
   RotateCcw,
   Pencil,
@@ -20,6 +21,7 @@ import { useVersionStore, DEFAULT_VERSIONS_PAGE_SIZE } from "@/features/versions
 import type { BookVersion } from "@/features/versions/types";
 import type { BookSnapshot } from "@/features/sync/types";
 import { serializeBook } from "@/features/sync/serializer";
+import { VersionPreview } from "@/components/versions/VersionPreview";
 
 const VersionCompare = lazy(() =>
   import("@/components/versions/VersionCompare").then((module) => ({
@@ -73,6 +75,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     current: BookSnapshot;
     target: BookSnapshot;
   } | null>(null);
+  const [previewSnapshot, setPreviewSnapshot] = useState<BookSnapshot | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -82,6 +85,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     if (isOpen) {
       loadVersions(bookId, 1, DEFAULT_VERSIONS_PAGE_SIZE);
       setCompare(null);
+      setPreviewSnapshot(null);
       setFocusedIndex(0);
       setRenamingId(null);
       setConfirmAction(null);
@@ -100,6 +104,29 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
       void setPage(clamped);
     },
     [setPage, totalPages, currentPage]
+  );
+
+  const focusRow = useCallback((index: number) => {
+    document.getElementById(`version-row-${index}`)?.focus();
+  }, []);
+
+  // Closes the inline confirm and hands focus back to the Version row it was
+  // opened from, so the keyboard stays on the row the author was acting on.
+  const cancelConfirm = useCallback(() => {
+    setConfirmAction(null);
+    focusRow(focusedIndex);
+  }, [focusRow, focusedIndex]);
+
+  const handlePreview = useCallback(
+    async (version: BookVersion) => {
+      try {
+        const snapshot = JSON.parse(await getVersionSnapshot(version.id)) as BookSnapshot;
+        setPreviewSnapshot(snapshot);
+      } catch {
+        toast.error(t("common.error"));
+      }
+    },
+    [getVersionSnapshot, t]
   );
 
   const handleCompare = useCallback(
@@ -164,9 +191,24 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
 
   // Keyboard shortcuts
   useEffect(() => {
-    if (!isOpen || compare) return;
+    if (!isOpen) return;
 
     const handler = (e: KeyboardEvent) => {
+      if (previewSnapshot) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setPreviewSnapshot(null);
+        }
+        return;
+      }
+      if (compare) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setCompare(null);
+        }
+        return;
+      }
+
       if (renamingId) {
         if (e.key === "Escape") {
           e.preventDefault();
@@ -176,14 +218,20 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
       }
 
       switch (e.key) {
-        case "ArrowDown":
+        case "ArrowDown": {
           e.preventDefault();
-          setFocusedIndex((i) => Math.min(i + 1, visibleVersions.length - 1));
+          const next = Math.min(focusedIndex + 1, visibleVersions.length - 1);
+          setFocusedIndex(next);
+          document.getElementById(`version-row-${next}`)?.focus();
           break;
-        case "ArrowUp":
+        }
+        case "ArrowUp": {
           e.preventDefault();
-          setFocusedIndex((i) => Math.max(i - 1, 0));
+          const next = Math.max(focusedIndex - 1, 0);
+          setFocusedIndex(next);
+          document.getElementById(`version-row-${next}`)?.focus();
           break;
+        }
         case "PageDown":
           if (currentPage < totalPages) {
             e.preventDefault();
@@ -197,6 +245,11 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
           }
           break;
         case "Enter": {
+          // Only a Version row opens Compare. When focus is on one of the row's
+          // action buttons (or the confirm controls) Enter must press that
+          // control, not the row.
+          const active = document.activeElement;
+          if (!(active instanceof HTMLElement) || !active.id.startsWith("version-row-")) break;
           e.preventDefault();
           const v = visibleVersions[focusedIndex];
           if (v) void handleCompare(v);
@@ -224,7 +277,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
         case "Escape":
           if (confirmAction) {
             e.preventDefault();
-            setConfirmAction(null);
+            cancelConfirm();
           }
           break;
       }
@@ -235,6 +288,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
   }, [
     isOpen,
     compare,
+    previewSnapshot,
     visibleVersions,
     focusedIndex,
     renamingId,
@@ -244,14 +298,51 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     currentPage,
     totalPages,
     goToPage,
+    cancelConfirm,
   ]);
+
+  // Opening the panel lands focus on the first Version row, so arrow keys move
+  // through the list right away. It never yanks focus once the author has moved
+  // into a row (or its actions).
+  useEffect(() => {
+    if (!isOpen || compare || previewSnapshot) return;
+    if (visibleVersions.length === 0) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest('[id^="version-row-"]')) return;
+    document.getElementById("version-row-0")?.focus();
+  }, [isOpen, compare, previewSnapshot, visibleVersions]);
+
+  // Preview and Compare replace the list. Focus moves onto their Back control
+  // so Escape/Tab act there, and returns to the Version row when it is closed.
+  const showingSubview = Boolean(compare || previewSnapshot);
+  const previousShowingSubview = useRef(false);
+  useEffect(() => {
+    if (!isOpen) {
+      previousShowingSubview.current = false;
+      return;
+    }
+    if (showingSubview) {
+      document.getElementById("version-back")?.focus();
+      previousShowingSubview.current = true;
+    } else if (previousShowingSubview.current) {
+      previousShowingSubview.current = false;
+      focusRow(focusedIndex);
+    }
+  }, [isOpen, showingSubview, focusRow, focusedIndex]);
+
+  // An inline restore/delete confirmation takes focus on its confirm control so
+  // Enter confirms and Escape (cancelConfirm) returns the row.
+  useEffect(() => {
+    if (!isOpen || !confirmAction) return;
+    document.getElementById("version-confirm")?.focus();
+  }, [isOpen, confirmAction]);
 
   // Scroll focused row into view
   useEffect(() => {
-    if (!isOpen || compare) return;
+    if (!isOpen || compare || previewSnapshot) return;
     const el = document.getElementById(`version-row-${focusedIndex}`);
     el?.scrollIntoView({ block: "nearest" });
-  }, [focusedIndex, isOpen, compare]);
+  }, [focusedIndex, isOpen, compare, previewSnapshot]);
 
   const isInitialLoading = isLoading && visibleVersions.length === 0 && totalCount === 0;
 
@@ -265,6 +356,20 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     >
       {isInitialLoading ? (
         <div className="text-center py-8 text-muted-foreground">{t("common.loading")}</div>
+      ) : previewSnapshot ? (
+        <div className="flex flex-col gap-3 h-full min-h-0">
+          <Button
+            id="version-back"
+            variant="ghost"
+            size="sm"
+            onClick={() => setPreviewSnapshot(null)}
+            className="self-start shrink-0"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            {t("common.back")}
+          </Button>
+          <VersionPreview snapshot={previewSnapshot} />
+        </div>
       ) : compare ? (
         <div
           data-testid="version-compare-layout"
@@ -272,6 +377,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
           style={{ height: "calc(90dvh - 9rem)" }}
         >
           <Button
+            id="version-back"
             variant="ghost"
             size="sm"
             onClick={() => setCompare(null)}
@@ -296,6 +402,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
       ) : (
         <div className="flex flex-col gap-3">
           <ul
+            aria-label={t("versions.title")}
             className={`flex flex-col gap-1 transition-opacity ${isLoading ? "opacity-60" : ""}`}
             aria-busy={isLoading}
           >
@@ -308,9 +415,12 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                 <li
                   key={version.id}
                   id={`version-row-${index}`}
-                  className={`flex items-center gap-2 px-2 py-2 rounded-lg transition-colors ${
+                  tabIndex={-1}
+                  aria-label={version.name ?? t("versions.autoCheckpoint")}
+                  className={`flex items-center gap-2 px-2 py-2 rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
                     isFocused ? "bg-muted ring-1 ring-primary/30" : "hover:bg-muted/50"
                   }`}
+                  onFocus={() => setFocusedIndex(index)}
                   onMouseEnter={() => setFocusedIndex(index)}
                 >
                   {isRenaming ? (
@@ -326,6 +436,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                           if (e.key === "Escape") {
                             e.preventDefault();
                             setRenamingId(null);
+                            focusRow(focusedIndex);
                           }
                         }}
                         autoFocus
@@ -338,7 +449,14 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                       >
                         <Check className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setRenamingId(null)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setRenamingId(null);
+                          focusRow(focusedIndex);
+                        }}
+                      >
                         <X className="w-4 h-4" />
                       </Button>
                     </div>
@@ -349,12 +467,23 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                           ? t("versions.restoreConfirm")
                           : t("versions.deleteConfirm")}
                       </span>
-                      <Button variant="ghost" size="sm" onClick={() => setConfirmAction(null)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={cancelConfirm}
+                        aria-label={t("common.cancel")}
+                      >
                         <X className="w-4 h-4" />
                       </Button>
                       <Button
+                        id="version-confirm"
                         variant={confirmAction?.type === "restore" ? "primary" : "destructive"}
                         size="sm"
+                        aria-label={
+                          confirmAction?.type === "restore"
+                            ? t("versions.restore")
+                            : t("versions.delete")
+                        }
                         onClick={() => {
                           if (confirmAction?.type === "restore") {
                             void handleRestore(version);
@@ -385,6 +514,17 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
 
                       <TooltipGroup>
                         <div className="flex items-center gap-0.5 shrink-0">
+                          <Tooltip content={t("versions.preview")}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void handlePreview(version)}
+                              aria-label={t("versions.preview")}
+                              className="px-1.5"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </Tooltip>
                           <Tooltip content={t("versions.compare")}>
                             <Button
                               variant="ghost"
