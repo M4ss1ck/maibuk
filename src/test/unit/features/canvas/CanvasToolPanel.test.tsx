@@ -76,6 +76,22 @@ describe("CanvasToolPanel", () => {
     expect(selectButton.parentElement?.parentElement).toHaveClass("w-11", "md:w-9");
   });
 
+  it("exposes the active tool as a pressed toggle and plain actions without aria-pressed", () => {
+    render(<CanvasToolPanel {...callbacks()} />);
+
+    expect(screen.getByRole("button", { name: "canvas.toolSelect" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.getByRole("button", { name: "canvas.toolPen" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "canvas.addTextNode" })).not.toHaveAttribute(
+      "aria-pressed"
+    );
+  });
+
   it("moves focus vertically and activates the focused canvas tool", async () => {
     const user = userEvent.setup();
     render(<CanvasToolPanel {...callbacks()} />);

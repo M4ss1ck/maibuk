@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { Network, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Canvas } from "@/features/canvas/types";
@@ -30,6 +30,16 @@ export function CanvasCard({
   const saveRename = () => {
     if (draft !== canvas.title) onRename(draft);
     setRenaming(false);
+  };
+
+  // A card action must not read as activating the whole card: React Aria's
+  // GridListItem treats a bubbled Enter/Space (or the click it produces) as the
+  // row's action, so a nested button would navigate instead of acting.
+  const stopRowActionKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+  };
+  const stopRowActionClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
   };
 
   const handleRenameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -92,7 +102,9 @@ export function CanvasCard({
               variant="destructive"
               size="sm"
               className="flex-1"
-              onClick={() => {
+              onKeyDown={stopRowActionKey}
+              onClick={(event) => {
+                stopRowActionClick(event);
                 setConfirmingDelete(false);
                 onDelete();
               }}
@@ -103,7 +115,11 @@ export function CanvasCard({
               variant="ghost"
               size="sm"
               className="flex-1"
-              onClick={() => setConfirmingDelete(false)}
+              onKeyDown={stopRowActionKey}
+              onClick={(event) => {
+                stopRowActionClick(event);
+                setConfirmingDelete(false);
+              }}
             >
               {t("common.cancel")}
             </Button>
@@ -115,7 +131,11 @@ export function CanvasCard({
             variant="ghost"
             size="sm"
             aria-label={canvas.pinned ? t("canvas.unpinCanvas") : t("canvas.pinCanvas")}
-            onClick={onTogglePinned}
+            onKeyDown={stopRowActionKey}
+            onClick={(event) => {
+              stopRowActionClick(event);
+              onTogglePinned();
+            }}
           >
             {canvas.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
           </Button>
@@ -123,7 +143,11 @@ export function CanvasCard({
             variant="ghost"
             size="sm"
             aria-label={t("canvas.renameCanvas")}
-            onClick={() => setRenaming(true)}
+            onKeyDown={stopRowActionKey}
+            onClick={(event) => {
+              stopRowActionClick(event);
+              setRenaming(true);
+            }}
           >
             <Pencil className="size-4" />
           </Button>
@@ -131,7 +155,11 @@ export function CanvasCard({
             variant="ghost"
             size="sm"
             aria-label={t("canvas.deleteCanvas")}
-            onClick={() => setConfirmingDelete(true)}
+            onKeyDown={stopRowActionKey}
+            onClick={(event) => {
+              stopRowActionClick(event);
+              setConfirmingDelete(true);
+            }}
           >
             <Trash2 className="size-4" />
           </Button>

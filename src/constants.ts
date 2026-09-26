@@ -4,6 +4,10 @@ export const APP_VERSION = __APP_VERSION__;
 export const DOWNLOAD_PAGE = "https://github.com/M4ss1ck/maibuk/releases";
 
 export const CANVAS_TEXT_NODE_DEFAULT_WIDTH = 288;
+// Matches the Text Node's `min-h-24` (6rem). Used only to give React Flow a
+// starting height so a Text Node renders visible before it is measured; a
+// hidden node cannot receive focus when its editor opens.
+export const CANVAS_TEXT_NODE_MIN_HEIGHT = 96;
 
 // Long enough to read "Settings → Tutorial" and "Keyboard shortcuts" after a dismiss.
 export const TUTORIAL_RELAUNCH_HINT_DURATION_MS = 8000;

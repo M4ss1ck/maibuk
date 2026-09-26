@@ -210,6 +210,7 @@ export const SHORTCUTS = {
   "canvas.toolEraser": { labelKey: "canvas.toolEraser", keys: ["E"] },
   "canvas.addTextNode": { labelKey: "canvas.addTextNode", keys: ["T"] },
   "canvas.addNoteRef": { labelKey: "canvas.addNoteRef", keys: ["N"] },
+  "canvas.editTextNode": { labelKey: "canvas.editTextNode", keys: ["F2"] },
   "canvas.zoomIn": { labelKey: "canvas.zoomIn", keys: ["Ctrl++"] },
   "canvas.zoomOut": { labelKey: "canvas.zoomOut", keys: ["Ctrl+-"] },
   "canvas.fitView": { labelKey: "canvas.fitView", keys: ["Shift+1"] },

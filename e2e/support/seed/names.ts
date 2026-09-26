@@ -31,3 +31,17 @@ export const SEED_NOTE_TAGS = {
   lamp: "lamp",
   harbor: "harbor",
 } as const;
+
+/** `canvasWithNodes`: two Canvases, a text-node pair with a Connection, and a Note Reference. */
+export const SEED_CANVASES = {
+  map: "Map",
+  ideas: "Ideas",
+  broken: "Broken map",
+} as const;
+
+export const SEED_CANVAS_NODES = {
+  storm: "Storm watch",
+  second: "Second idea",
+  note: "Keeper's Log",
+  connection: "leads to",
+} as const;

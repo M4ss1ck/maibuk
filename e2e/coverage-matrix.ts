@@ -1261,7 +1261,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas", "/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-tools",
@@ -1280,7 +1280,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-text-node",
@@ -1289,11 +1289,11 @@ export const ROWS: MatrixRow[] = [
       "T adds Text Node; type rich text with formatting shortcuts; Esc leaves text editing, node stays selected; asserts: Node focus; persists: yes",
     edges: ["Empty node"],
     terms: ["Text Node", "Canvas"],
-    shortcuts: [],
+    shortcuts: ["canvas.editTextNode"],
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-note-ref",
@@ -1304,9 +1304,9 @@ export const ROWS: MatrixRow[] = [
     terms: ["Note Reference", "Missing Note Reference", "Note", "Canvas"],
     shortcuts: ["canvas.addNoteRef"],
     routes: ["/canvas/:canvasId", "/notes/:noteId"],
-    fixture: "notesWithLinksAndTags",
+    fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-node-select-move",
@@ -1319,7 +1319,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-connect",
@@ -1332,7 +1332,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-edge-inspector",
@@ -1345,7 +1345,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-node-colors",
@@ -1357,7 +1357,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-delete-undo",
@@ -1369,7 +1369,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-zoom-fit-lock",
@@ -1382,7 +1382,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-save-status",
@@ -1394,7 +1394,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-rename-back",
@@ -1406,7 +1406,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId", "/canvas"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-missing",
@@ -1418,7 +1418,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-open",

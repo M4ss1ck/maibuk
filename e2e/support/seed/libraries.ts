@@ -6,7 +6,17 @@
 import { createBookRow, updateBookRow, updateBookWordCountRow } from "@/features/books/write";
 import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
 import { createNoteRow, updateNoteRow } from "@/features/notes/write";
-import { SEED_BOOK, SEED_CHAPTERS, SEED_NOTES, SEED_NOTE_TAGS, SHELF_BOOKS } from "./names";
+import { createCanvasRow, updateCanvasDocRow } from "@/features/canvas/write";
+import { CURRENT_CANVAS_SCHEMA_VERSION, type CanvasDoc } from "@/features/canvas/types";
+import {
+  SEED_BOOK,
+  SEED_CANVAS_NODES,
+  SEED_CANVASES,
+  SEED_CHAPTERS,
+  SEED_NOTES,
+  SEED_NOTE_TAGS,
+  SHELF_BOOKS,
+} from "./names";
 
 async function oneBookThreeChapters(): Promise<void> {
   const book = await createBookRow({ ...SEED_BOOK }, "local");
@@ -77,11 +87,94 @@ async function notesWithLinksAndTags(): Promise<void> {
   await updateNoteRow({ id: harborNotes.id, content: harborNotes.content }, "local");
 }
 
+// A Canvas library with two Text Nodes connected, a Note Reference, a dangling
+// Note Reference that reads "Missing note", a second Canvas, and a Canvas whose
+// stored doc cannot be parsed (the recovery path's seed).
+export async function canvasWithNodes(): Promise<void> {
+  // A Note the Canvas references, so the Note Reference has a live target.
+  const note = await createNoteRow(
+    { title: SEED_CANVAS_NODES.note, content: "<p>Watch the lamp through the gale.</p>" },
+    "local"
+  );
+
+  const map = await createCanvasRow({ title: SEED_CANVASES.map }, "local");
+  await updateCanvasDocRow(
+    map.id,
+    {
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+      nodes: [
+        {
+          id: "text-storm",
+          kind: "text",
+          html: `<p>${SEED_CANVAS_NODES.storm}</p>`,
+          position: { x: 0, y: 0 },
+          width: 288,
+        },
+        {
+          id: "text-second",
+          kind: "text",
+          html: `<p>${SEED_CANVAS_NODES.second}</p>`,
+          position: { x: 460, y: 0 },
+          width: 288,
+        },
+        {
+          id: "ref-log",
+          kind: "noteRef",
+          noteId: note.id,
+          label: SEED_CANVAS_NODES.note,
+          position: { x: 0, y: 320 },
+        },
+        {
+          // No label, so a note deleted elsewhere reads as "Missing note".
+          id: "ref-missing",
+          kind: "noteRef",
+          noteId: "missing-note-id",
+          position: { x: 460, y: 320 },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-1",
+          source: "text-storm",
+          target: "text-second",
+          sourceHandle: "right",
+          targetHandle: "left",
+          label: SEED_CANVAS_NODES.connection,
+        },
+      ],
+      strokes: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    },
+    "local"
+  );
+
+  // A second Canvas so the Gallery has a searchable, pinnable list.
+  await createCanvasRow({ title: SEED_CANVASES.ideas }, "local");
+
+  // A Canvas whose stored doc cannot be read: the recovery path is reachable.
+  // `nodes` as a string is tolerated by the migration (it coerces to []), so the
+  // doc also carries an invalid schema version, which normalizeParsedCanvasDoc
+  // rejects as an invalid shape.
+  const broken = await createCanvasRow({ title: SEED_CANVASES.broken }, "local");
+  await updateCanvasDocRow(
+    broken.id,
+    {
+      schemaVersion: "unreadable",
+      nodes: "not-an-array",
+      edges: [],
+      strokes: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    } as unknown as CanvasDoc,
+    "local"
+  );
+}
+
 export const SEED_LIBRARIES = {
   empty: async () => {},
   oneBookThreeChapters,
   bookShelf,
   notesWithLinksAndTags,
+  canvasWithNodes,
 } satisfies Record<string, () => Promise<void>>;
 
 export type SeedName = keyof typeof SEED_LIBRARIES;
