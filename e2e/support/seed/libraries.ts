@@ -19,6 +19,7 @@ import {
   SHELF_BOOKS,
 } from "./names";
 import { checkpointHistory } from "./checkpoint-history";
+import { metricsHistory } from "./metrics-history";
 
 async function oneBookThreeChapters(): Promise<void> {
   const book = await createBookRow({ ...SEED_BOOK }, "local");
@@ -179,6 +180,7 @@ export const SEED_LIBRARIES = {
   canvasWithNodes,
   checkpointHistory,
   backupsPresent,
+  metricsHistory,
 } satisfies Record<string, () => Promise<void>>;
 
 export type SeedName = keyof typeof SEED_LIBRARIES;

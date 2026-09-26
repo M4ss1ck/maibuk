@@ -1809,7 +1809,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "settings-primary-color",
@@ -1821,7 +1821,8 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "not-accepted",
+    issue: "https://github.com/M4ss1ck/maibuk/issues/220",
   },
   {
     id: "settings-language",
@@ -1834,7 +1835,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "settings-editor-defaults",
@@ -1847,7 +1848,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "settings-paste-cleanup",
@@ -1860,7 +1861,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "settings-metrics",
@@ -1873,7 +1874,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "metrics-collect",
@@ -1886,7 +1887,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/metrics"],
     fixture: "metricsHistory",
     tags: ["clock"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "metrics-streak-break",
@@ -1898,7 +1899,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/metrics"],
     fixture: "metricsHistory",
     tags: ["clock"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "metrics-heatmap",
@@ -1911,7 +1912,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/metrics"],
     fixture: "metricsHistory",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-offer",
