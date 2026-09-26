@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Feather, Pin, Trash2 } from "lucide-react";
@@ -40,6 +40,15 @@ export function Ephemeral() {
     [t]
   );
 
+  const createNoteRef = useRef<HTMLButtonElement>(null);
+
+  // Tab indents inside the editor, so Escape is the way out. Without a handler
+  // a keyboard author would be trapped in the text and never reach the header
+  // actions; leaving lands on the primary one, Create note.
+  const handleEditorEscape = useCallback(() => {
+    createNoteRef.current?.focus();
+  }, []);
+
   const handleCreateNote = async () => {
     const note = await useNoteStore.getState().createNote({ title: "", content });
     reset();
@@ -65,6 +74,7 @@ export function Ephemeral() {
         </Tooltip>
 
         <button
+          ref={createNoteRef}
           type="button"
           onClick={handleCreateNote}
           disabled={isEmpty}
@@ -104,6 +114,7 @@ export function Ephemeral() {
         onWordCountChange={setWordCount}
         restoreKey={null}
         placeholder={t("ephemeral.placeholder")}
+        onEscape={handleEditorEscape}
         extraExtensions={ephemeralExtensions}
         tutorialAnchors={EPHEMERAL_TUTORIAL_ANCHORS}
       />

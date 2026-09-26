@@ -47,10 +47,12 @@ vi.mock("@/components/editor", () => ({
   Editor: ({
     onUpdate,
     onWordCountChange,
+    onEscape,
     placeholder,
   }: {
     onUpdate: (html: string) => void;
     onWordCountChange: (n: number) => void;
+    onEscape?: () => void;
     placeholder?: string;
   }) => (
     <textarea
@@ -60,6 +62,9 @@ vi.mock("@/components/editor", () => ({
         const value = e.target.value;
         onUpdate(`<p>${value}</p>`);
         onWordCountChange(value.trim() ? value.trim().split(/\s+/).length : 0);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onEscape?.();
       }}
     />
   ),
@@ -105,6 +110,18 @@ describe("Ephemeral page", () => {
     await user.click(screen.getByRole("button", { name: "ephemeral.clear" }));
     expect(useEphemeralStore.getState().content).toBe("");
     expect(useEphemeralStore.getState().wordCount).toBe(0);
+  });
+
+  it("moves focus from the editor to Create note on Escape", async () => {
+    useEphemeralStore.getState().setContent("<p>keep</p>");
+    useEphemeralStore.getState().setWordCount(1);
+    const user = userEvent.setup();
+    render(<Ephemeral />);
+
+    screen.getByLabelText("editor").focus();
+    await user.keyboard("{Escape}");
+
+    expect(screen.getByRole("button", { name: "ephemeral.createNote" })).toHaveFocus();
   });
 
   it("focuses Clear by keyboard and activates it with Enter", async () => {

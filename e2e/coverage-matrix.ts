@@ -1224,7 +1224,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/ephemeral"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "ephemeral-to-note",
@@ -1236,7 +1236,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/ephemeral", "/notes/:noteId"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "ephemeral-clear",
@@ -1248,7 +1248,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/ephemeral"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "canvas-gallery",
@@ -2050,6 +2050,6 @@ export const ROWS: MatrixRow[] = [
     routes: ["/embed"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
 ];

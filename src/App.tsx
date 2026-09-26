@@ -27,15 +27,12 @@ import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { installAuthKeepAlive } from "@/features/sync/auth-keep-alive";
 import { installAutoSync } from "@/features/sync/auto-sync";
 import { installViewRefresh } from "@/features/sync/view-refresh";
+import { isEmbedPath } from "@/lib/embed";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
 import { installAndroidBackHandler } from "@/lib/window/androidBack";
 import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
-
-function isEmbedPath(pathname: string): boolean {
-  return pathname === "/embed";
-}
 
 function App() {
   const { pathname } = useLocation();
