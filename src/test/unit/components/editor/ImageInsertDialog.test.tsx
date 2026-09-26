@@ -50,11 +50,7 @@ describe("ImageInsertDialog", () => {
   it.each([
     ["at the start of a short paragraph before an image", '<p>x</p><img src="old.png">', 1],
     ["right after an existing image", '<img src="old.png"><p>x</p>', 3],
-    [
-      "between two existing images",
-      '<img src="before.png"><p>ab</p><img src="after.png">',
-      3,
-    ],
+    ["between two existing images", '<img src="before.png"><p>ab</p><img src="after.png">', 3],
   ])("selects the inserted image, not a neighbour, %s", async (_case, content, caret) => {
     const user = userEvent.setup();
     const editor = renderDialog(content, caret);
@@ -66,7 +62,9 @@ describe("ImageInsertDialog", () => {
     await user.click(screen.getByRole("button", { name: "common.insert" }));
 
     const selected = (
-      editor.state.selection as unknown as { node?: { type: { name: string }; attrs: { src: string } } }
+      editor.state.selection as unknown as {
+        node?: { type: { name: string }; attrs: { src: string } };
+      }
     ).node;
     expect(selected?.type.name).toBe("image");
     expect(selected?.attrs.src).toBe("data:image/png;base64,AAAA");

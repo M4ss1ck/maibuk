@@ -178,9 +178,7 @@ function declaredTags(
   text: string
 ): { wf: Set<string>; sc: Set<string>; titleRanges: [number, number][] } {
   const declarations = [
-    ...code.matchAll(
-      /\btest(\.describe(?:\.(?:serial|parallel))?|\.fail)?\s*\(\s*(["'`])/g
-    ),
+    ...code.matchAll(/\btest(\.describe(?:\.(?:serial|parallel))?|\.fail)?\s*\(\s*(["'`])/g),
   ].map((m) => {
     const titleStart = (m.index ?? 0) + m[0].length;
     const titleEnd = code.indexOf(m[2], titleStart);

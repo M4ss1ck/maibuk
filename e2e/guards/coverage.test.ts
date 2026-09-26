@@ -231,7 +231,10 @@ test.describe("books-create @wf:books-create @sc:home.newBook @sc:editor.save", 
     const spec = GOOD_SPEC.replace(
       "books-create @wf:books-create @sc:home.newBook @sc:editor.save",
       "books-create"
-    ).replace('test("creates"', 'test("creates", { annotation: { type: "x", description: "@wf:books-create" } }');
+    ).replace(
+      'test("creates"',
+      'test("creates", { annotation: { type: "x", description: "@wf:books-create" } }'
+    );
     const result = codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: spec }] });
     assert.ok(result.includes("row-no-spec"), result.join());
   });
@@ -243,10 +246,12 @@ test("creates @wf:books-create @sc:home.newBook @sc:editor.save", async ({ page 
 });
 `;
     assert.deepEqual(codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: onTest }] }), []);
-    const onFail = onTest.replace('test("creates', 'test.fail("creates').replace(
-      "async ({ page })",
-      `{ annotation: { type: "issue", description: "${ISSUE}" } }, async ({ page })`
-    );
+    const onFail = onTest
+      .replace('test("creates', 'test.fail("creates')
+      .replace(
+        "async ({ page })",
+        `{ annotation: { type: "issue", description: "${ISSUE}" } }, async ({ page })`
+      );
     assert.deepEqual(codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: onFail }] }), []);
     const nested = `import { expect, test } from "../support/test";
 test.describe.serial("outer @wf:books-create @sc:home.newBook", () => {
