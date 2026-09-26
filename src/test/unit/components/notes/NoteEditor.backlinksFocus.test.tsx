@@ -58,6 +58,7 @@ vi.mock("@/components/sync/SyncStatusButton", () => ({ SyncStatusButton: () => n
 // same contract so the NoteEditor's own focus move is what the test proves.
 vi.mock("@/components/editor", () => ({
   Editor: ({ onEscape }: { onEscape?: () => void }) => (
+    // biome-ignore lint/a11y/useSemanticElements: stands in for the contenteditable editor surface.
     <div
       role="textbox"
       aria-label="Text"

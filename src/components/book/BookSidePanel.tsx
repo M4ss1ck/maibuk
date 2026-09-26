@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FocusScope, Overlay, useModalOverlay } from "react-aria";
+import { FocusScope, Overlay, useModalOverlay, useMove } from "react-aria";
 import { Dialog, Tab, TabList, TabPanel, TabPanels, Tabs } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
@@ -12,6 +12,9 @@ import { useModalScope, useRestoreFocus } from "@/hooks";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 export type BookSidePanelTab = "footnotes" | "notes";
+
+/** One keyboard resize press moves the panel this many pixels. */
+const KEYBOARD_RESIZE_STEP = 16;
 
 interface BookSidePanelProps {
   isOpen: boolean;
@@ -90,6 +93,17 @@ export function BookSidePanel({
 
   // After useModalOverlay: its inert cleanup must run before the restore.
   useRestoreFocus(isOpen, { skipWhenDialogFocused: true });
+
+  // React Aria owns the separator's keyboard handling. It reports ArrowLeft as
+  // deltaX -1 and ArrowRight as +1; the panel sits on the right, so a leftward
+  // move widens it, matching the pointer drag direction. Ignore the vertical
+  // arrows useMove also reports.
+  const { moveProps } = useMove({
+    onMove: (event) => {
+      if (event.deltaX === 0) return;
+      onResizeKey?.(-event.deltaX * KEYBOARD_RESIZE_STEP);
+    },
+  });
 
   useEffect(() => {
     if (!isMobile || !isOpen) return;
@@ -218,6 +232,7 @@ export function BookSidePanel({
       }}
     >
       <Tooltip content={t("bookSidePanel.resize")}>
+        {/* biome-ignore lint/a11y/useSemanticElements: a focusable window-splitter separator; <hr> cannot take focus or a value. */}
         <div
           role="separator"
           tabIndex={0}
@@ -226,16 +241,9 @@ export function BookSidePanel({
           aria-valuenow={width}
           aria-valuemin={200}
           aria-valuemax={480}
+          aria-valuetext={t("bookSidePanel.widthValue", { width })}
           onMouseDown={onResizeStart}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowLeft") {
-              event.preventDefault();
-              onResizeKey?.(16);
-            } else if (event.key === "ArrowRight") {
-              event.preventDefault();
-              onResizeKey?.(-16);
-            }
-          }}
+          onKeyDown={moveProps.onKeyDown}
           className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
       </Tooltip>

@@ -124,6 +124,18 @@ describe("Ephemeral page", () => {
     expect(screen.getByRole("button", { name: "ephemeral.createNote" })).toHaveFocus();
   });
 
+  it("falls back to an enabled header control on Escape when the buffer is empty", async () => {
+    platformState.isDesktop = true;
+    const user = userEvent.setup();
+    render(<Ephemeral />);
+
+    expect(screen.getByRole("button", { name: "ephemeral.createNote" })).toBeDisabled();
+    screen.getByLabelText("editor").focus();
+    await user.keyboard("{Escape}");
+
+    expect(screen.getByRole("button", { name: "settings.alwaysOnTop" })).toHaveFocus();
+  });
+
   it("focuses Clear by keyboard and activates it with Enter", async () => {
     useEphemeralStore.getState().setContent("<p>scratch</p>");
     useEphemeralStore.getState().setWordCount(1);

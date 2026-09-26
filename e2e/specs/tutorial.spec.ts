@@ -10,7 +10,7 @@ import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
 // The Tutorial (issue #215, ADR 0008/0009): the first-launch offer, a full
-// keyboard run, Esc skips, the desktop shortcut, the Settings launch points,
+// keyboard run, Esc skips, the Tutorial shortcut, the Settings launch points,
 // a reload mid-run, and the Tutorial Library's isolation from the author's
 // Library — all by keyboard alone. Every Settings launch and the reload case
 // compare the author's IndexedDB bytes before and after.
@@ -195,23 +195,36 @@ test.describe("Tutorial skip @wf:tutorial-skip-esc @sc:tutorial.skip", () => {
 test.describe("Tutorial shortcut @wf:tutorial-shortcut @sc:global.startTutorial", () => {
   test.use({ library: "oneBookThreeChapters" });
 
-  test.fail(
-    "Mod+Shift+T starts the Tutorial",
-    {
-      annotation: {
-        type: "issue",
-        description: "https://github.com/M4ss1ck/maibuk/issues/221",
-      },
-    },
-    async ({ page }) => {
+  test("g u starts the Tutorial from Home", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await page.keyboard.press("g");
+    await page.keyboard.press("u");
+
+    await expect(card(page)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test.describe("inside a text field", () => {
+    test.use({ library: "notesWithLinksAndTags" });
+
+    test("typing g u does not start it", async ({ page }) => {
       await page.goto("/");
       await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
-      await page.keyboard.press("ControlOrMeta+Shift+T");
+      await page.keyboard.press("g");
+      await page.keyboard.press("n");
+      await expect(page.getByRole("heading", { name: "Notes", level: 1 })).toBeVisible();
 
-      await expect(card(page)).toBeVisible({ timeout: 3_000 });
-    }
-  );
+      const search = page.getByRole("searchbox");
+      await tabTo(page, search, { max: 20 });
+      await page.keyboard.press("g");
+      await page.keyboard.press("u");
+
+      await expect(search).toHaveValue("gu");
+      await expect(card(page)).toHaveCount(0);
+    });
+  });
 });
 
 test.describe("Tutorial from Settings @wf:tutorial-settings-start-all", () => {

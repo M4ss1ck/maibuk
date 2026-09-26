@@ -42,7 +42,6 @@ export async function allowIndexedDbWrites(page: Page): Promise<void> {
 export async function failBlobDownloads(page: Page): Promise<void> {
   await page.evaluate(() => {
     URL.createObjectURL = () => {
-      // biome-ignore lint/style/useThrowOnlyError: the dialog surfaces t() for non-Errors.
       throw "blob download blocked by the e2e fault";
     };
   });

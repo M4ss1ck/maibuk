@@ -35,11 +35,10 @@ import {
 } from "@/features/tutorial/sections";
 import { useTutorialStore, type TutorialRun } from "@/features/tutorial/store";
 import type { TutorialExitReason, TutorialOrigin } from "@/features/tutorial/types";
-import { IS_DESKTOP } from "@/lib/platform";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { TUTORIAL_RELAUNCH_HINT_DURATION_MS } from "@/constants";
 import { useShortcuts } from "@/lib/shortcuts";
-import { matchKeys } from "@/lib/shortcut-registry";
+import { SHORTCUTS } from "@/lib/shortcut-registry";
 
 // Runs the Tutorial across screens (ADR 0009). React Joyride only draws the
 // spotlight and places the card; the card is our React Aria dialog, and this
@@ -341,9 +340,8 @@ export function TutorialRunner() {
   useShortcuts([
     {
       id: "global.startTutorial",
-      keys: matchKeys("global.startTutorial"),
-      // Browsers keep Ctrl+Shift+T for reopening a tab.
-      enabled: IS_DESKTOP && status === "idle",
+      sequence: SHORTCUTS["global.startTutorial"].sequence,
+      enabled: status === "idle",
       onTrigger: () => {
         requestTutorial({ origin: "shortcut", returnTo: location.pathname + location.search });
       },

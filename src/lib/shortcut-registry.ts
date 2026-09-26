@@ -56,7 +56,7 @@ export const SHORTCUTS = {
   },
   "global.startTutorial": {
     labelKey: "shortcuts.startTutorial",
-    keys: ["Ctrl+Shift+T"],
+    sequence: ["g", "u"],
   },
 
   "tutorial.skip": { labelKey: "shortcuts.skipTutorial", keys: ["Esc"] },

@@ -225,7 +225,6 @@ test.describe("following a link @wf:editor-follow-link @sc:editor.followLink", (
 
   test("Mod+Enter on a Link whose Chapter was deleted returns to the Gallery", async ({ page }) => {
     await openEditor(page);
-    const grid = page.getByRole("grid", { name: "Chapters" });
     // Create a Chapter to link to.
     await page.keyboard.press("Escape");
     await tabTo(page, page.getByRole("button", { name: "Add Chapter" }), { max: 40 });
@@ -436,9 +435,12 @@ test.describe("footnotes @wf:editor-footnote", () => {
 
     const panel = page.getByRole("complementary", { name: "Book side panel" });
     await expect(panel).toBeVisible();
-    await pressUntilFocused(page, "F6", panel, { max: 6 });
-    await tabTo(page, panel.getByRole("button", { name: "Footnotes" }), { max: 6 });
-    await page.keyboard.press("Enter");
+    // The panel opens with its active tab (Notes) focused. Its tabs are a
+    // React Aria tab list, so an arrow key moves between them and switches the
+    // visible panel automatically.
+    await expect(panel.getByRole("tab", { name: "Notes", exact: true })).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(panel.getByRole("tab", { name: "Footnotes", exact: true })).toBeFocused();
     await expect(panel).toContainText("The lamp was trimmed at midnight.");
   });
 
@@ -636,11 +638,15 @@ test.describe("tables @wf:editor-table", () => {
     await page.keyboard.press("Enter");
     await expect(editorText(page).getByRole("columnheader")).toHaveCount(3);
 
+    // Each toolbar action hands focus back to the text; the next Escape only
+    // reaches the toolbar path once it has.
+    await expect(editorText(page)).toBeFocused();
     await expect(page.getByRole("button", { name: "Add Row After" })).toBeEnabled();
     await focusToolbarControl(page, page.getByRole("button", { name: "Add Row After" }));
     await page.keyboard.press("Enter");
     await expect(editorText(page).getByRole("row")).toHaveCount(3);
 
+    await expect(editorText(page)).toBeFocused();
     await focusToolbarControl(page, page.getByRole("button", { name: "Delete Table" }));
     await page.keyboard.press("Enter");
     await expect(editorText(page).getByRole("table")).toHaveCount(0);

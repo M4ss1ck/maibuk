@@ -13,12 +13,22 @@ import { registerBackDismiss } from "@/lib/platform/backDismiss";
  * CSS transitions end, and drops it once the inert page has blurred the
  * trigger, stranding focus on <body>. Rendered after the dialog content, so a
  * control the content focused itself wins; otherwise the first tabbable one.
+ *
+ * A field that asked for autofocus always wins: a dialog opened from a closing
+ * React Aria overlay (a menu) loses that focus to the overlay's restoration and
+ * to the dialog's own container focus, so the field is re-focused here.
  */
 function FocusFirstIfOutside({ containerRef }: { containerRef: RefObject<HTMLElement | null> }) {
   const focusManager = useFocusManager();
   useEffect(() => {
     const container = containerRef.current;
-    if (container && !container.contains(document.activeElement)) {
+    if (!container) return;
+    const preferred = container.querySelector<HTMLElement>("[data-autofocus]");
+    if (preferred) {
+      preferred.focus();
+      return;
+    }
+    if (!container.contains(document.activeElement)) {
       focusManager?.focusFirst({ tabbable: true });
     }
   }, [containerRef, focusManager]);

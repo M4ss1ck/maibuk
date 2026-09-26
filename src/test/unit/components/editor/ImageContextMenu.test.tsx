@@ -89,4 +89,23 @@ describe("ImageContextMenu", () => {
 
     expect(screen.queryByRole("menu", { name: "editor.imageOptions" })).not.toBeInTheDocument();
   });
+
+  it("focuses the Alt Text field when Edit Alt Text opens from the menu", async () => {
+    const user = userEvent.setup();
+    renderMenu();
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    const menu = screen.getByRole("menu", { name: "editor.imageOptions" });
+    await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "editor.imageEditAlt" })).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+
+    // Closing the menu must not pull focus back to the editor, or the dialog's
+    // focus containment lands on its Close button instead of the field.
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "editor.imageAltText" })).toHaveFocus()
+    );
+  });
 });

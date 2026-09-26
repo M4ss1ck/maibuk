@@ -41,12 +41,19 @@ export function Ephemeral() {
   );
 
   const createNoteRef = useRef<HTMLButtonElement>(null);
+  const pinRef = useRef<HTMLButtonElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
 
   // Tab indents inside the editor, so Escape is the way out. Without a handler
   // a keyboard author would be trapped in the text and never reach the header
-  // actions; leaving lands on the primary one, Create note.
+  // actions; leaving lands on the primary one, Create note. While the buffer is
+  // empty Create note is disabled, so focus falls through to the next enabled
+  // header control instead of staying trapped in the editor.
   const handleEditorEscape = useCallback(() => {
-    createNoteRef.current?.focus();
+    const preferred = [createNoteRef.current, pinRef.current];
+    const firstEnabled = preferred.find((element) => element !== null && !element.disabled);
+    const fallback = headerRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])");
+    (firstEnabled ?? fallback)?.focus();
   }, []);
 
   const handleCreateNote = async () => {
@@ -60,7 +67,10 @@ export function Ephemeral() {
       <h1 data-route-heading className="sr-only">
         {t("common.ephemeral")}
       </h1>
-      <div className="@container px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
+      <div
+        ref={headerRef}
+        className="@container px-4 py-1 border-b border-border flex items-center gap-2 shrink-0"
+      >
         <Tooltip content={t("ephemeral.clear")}>
           <button
             type="button"
@@ -95,6 +105,7 @@ export function Ephemeral() {
         {IS_DESKTOP && (
           <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
             <button
+              ref={pinRef}
               type="button"
               onClick={() => setAlwaysOnTop(!alwaysOnTop)}
               className={`rounded p-1 transition-colors ${

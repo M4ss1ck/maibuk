@@ -137,9 +137,19 @@ test.describe("marks @wf:editor-keymap-marks @sc:editor.bold @sc:editor.italic @
     // mark stops applying after the first character.
     const code = marks[marks.length - 1];
     await page.keyboard.type(code.word);
+    // Wait for the typed word to land before selecting it: a selection started
+    // against a paragraph the editor has not settled can drop a Shift+Arrow
+    // step and mark only part of the word.
+    const codeLine = editorText(page).locator("p").last();
+    await expect(codeLine).toHaveText(code.word);
+    await page.keyboard.press("End");
     await page.keyboard.down("Shift");
-    for (let i = 0; i < code.word.length; i++) await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("Home");
     await page.keyboard.up("Shift");
+    // Shift+Home is a native selection change that ProseMirror reads on the
+    // async selectionchange event. The floating toolbar renders only once the
+    // editor's own selection is non-empty, so wait for it before the shortcut.
+    await expect(page.locator(".selection-toolbar-enter")).toBeVisible();
     await page.keyboard.press(code.keys);
     await expect(mark(page, code.name)).toHaveAttribute("aria-pressed", "true");
 

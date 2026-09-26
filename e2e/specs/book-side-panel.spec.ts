@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { tabTo } from "../support/keyboard";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 

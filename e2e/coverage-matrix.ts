@@ -6,7 +6,7 @@
 import type { Exclusion, MatrixRow } from "./guards/types";
 
 const SYNC_FOLLOW_UP =
-  "Vitest sync suites; follow-up issue: E2E Sync lane (local PocketBase 0.25.0 + maibuk-sync migrations)";
+  "Vitest sync suites; follow-up issue: E2E Sync lane (local PocketBase 0.25.0 + maibuk-sync migrations) https://github.com/M4ss1ck/maibuk/issues/222";
 
 export const EXCLUSIONS: Exclusion[] = [
   {
@@ -75,7 +75,8 @@ export const EXCLUSIONS: Exclusion[] = [
     kind: "behavior",
     items: ["phone viewport", "touch", "Item Menu long-press", "mobile navigation menu"],
     reason: "Desktop viewport only in this delivery (decision 11)",
-    owner: "src/test/unit/touch-reachability.test.ts; follow-up issue: phone/touch E2E project",
+    owner:
+      "src/test/unit/touch-reachability.test.ts; follow-up issue: phone/touch E2E project https://github.com/M4ss1ck/maibuk/issues/223",
   },
   {
     kind: "behavior",
@@ -1955,15 +1956,14 @@ export const ROWS: MatrixRow[] = [
   {
     id: "tutorial-shortcut",
     area: "tutorial",
-    workflow: "Mod+Shift+T starts it",
+    workflow: "g u starts it",
     edges: [],
     terms: ["Tutorial"],
     shortcuts: ["global.startTutorial"],
     routes: ["/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    issue: "https://github.com/M4ss1ck/maibuk/issues/221",
-    status: "not-accepted",
+    status: "accepted",
   },
   {
     id: "tutorial-settings-start-all",

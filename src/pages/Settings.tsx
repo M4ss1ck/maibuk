@@ -220,6 +220,7 @@ export function Settings() {
                 <p className="font-medium">{t("settings.theme")}</p>
                 <p className="text-sm text-muted-foreground">{t("settings.themeDescription")}</p>
               </div>
+              {/* biome-ignore lint/a11y/useSemanticElements: a labelled group of toggle buttons, not a form fieldset. */}
               <div
                 role="group"
                 aria-label={t("settings.theme")}

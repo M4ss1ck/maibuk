@@ -284,6 +284,48 @@ test.describe("Note Links and Backlinks @wf:notes-links-backlinks", () => {
     await expect(page.getByRole("heading", { name: "Linked from" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: SEED_NOTES.harborNotes })).toHaveCount(0);
   });
+
+  test("a typed Wikilink creates the Backlink on its target and it persists", async ({ page }) => {
+    // Tide Tables links to nothing yet; write a Link to Harbor Notes from its body.
+    await openNote(page, SEED_NOTES.tideTables);
+    await focusNoteEditor(page);
+    await page.keyboard.press("End");
+    await page.keyboard.type(" [[Harbor");
+
+    // The suggestion list opens on the typed text; its first option is the target.
+    const listbox = page.getByRole("listbox", { name: "Link suggestions" });
+    await expect(listbox).toBeVisible();
+    const option = listbox.getByRole("option").first();
+    await expect(option).toHaveText(/Harbor Notes/);
+    await expect(option).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Enter");
+    await expect(listbox).toBeHidden();
+    await expect(noteText(page).locator("a.wikilink")).toHaveText("Harbor Notes");
+
+    // The Link is indexed on save, which is what the Backlink reads.
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+
+    // Reach the target Note the way an author does: through the Gallery.
+    await openNote(page, SEED_NOTES.harborNotes);
+    await expect(page.getByRole("heading", { name: "Linked from" })).toBeVisible();
+    const source = page.getByRole("button", { name: SEED_NOTES.tideTables });
+    await expect(source).toBeVisible();
+
+    // Escape is the way out of the writing surface; it lands on the Backlink.
+    await focusNoteEditor(page);
+    await page.keyboard.press("Escape");
+    await expect(source).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { name: SEED_NOTES.tideTables, level: 1 })
+    ).toBeVisible();
+    await expect(noteText(page).locator("a.wikilink")).toHaveText("Harbor Notes");
+
+    // The URL stayed on Harbor Notes, so a reload shows its Backlink again.
+    await page.reload();
+    await expect(page.getByRole("button", { name: SEED_NOTES.tideTables })).toBeVisible();
+  });
 });
 
 test.describe("Note Last Edited @wf:notes-last-edited", () => {

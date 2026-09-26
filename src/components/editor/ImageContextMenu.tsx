@@ -36,6 +36,11 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [altModal, setAltModal] = useState<{ pos: number; alt: string } | null>(null);
   const isOpen = !!menu;
+  // Choosing Edit Alt Text closes the menu and opens a dialog in the same
+  // interaction. Returning focus to the editor here would pull it out of the
+  // dialog before the dialog's fields settle, so the dialog's focus containment
+  // would land on its Close button instead of the Alt Text field.
+  const keepFocusInDialogRef = useRef(false);
 
   const openMenu = (
     pos: number,
@@ -125,6 +130,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
 
   const handleEditAlt = () => {
     if (!menu) return;
+    keepFocusInDialogRef.current = true;
     setAltModal({ pos: menu.pos, alt: (menu.nodeAttrs.alt as string) || "" });
     closeMenu();
   };
@@ -235,7 +241,13 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
         onOpenChange={(open) => {
           if (!open) {
             closeMenu();
-            editor.commands.focus();
+            // The dialog owns focus now; restoring it to the editor would
+            // strand the dialog's own autofocus.
+            if (keepFocusInDialogRef.current) {
+              keepFocusInDialogRef.current = false;
+            } else {
+              editor.commands.focus();
+            }
           }
         }}
       >

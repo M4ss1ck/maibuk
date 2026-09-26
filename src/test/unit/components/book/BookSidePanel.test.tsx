@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -5,7 +6,8 @@ import { BookSidePanel } from "@/components/book/BookSidePanel";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, options?: { width?: number }) => {
+      if (key === "bookSidePanel.widthValue") return `${options?.width} pixels`;
       const map: Record<string, string> = {
         "bookSidePanel.footnotes": "Footnotes",
         "bookSidePanel.notes": "Notes",
@@ -139,5 +141,31 @@ describe("BookSidePanel", () => {
 
     fireEvent.keyDown(handle, { key: "ArrowRight" });
     expect(onResizeKey).toHaveBeenCalledWith(-16);
+  });
+
+  it("exposes a localized width value that updates after a keyboard resize", async () => {
+    const user = userEvent.setup();
+    const Harness = () => {
+      const [width, setWidth] = useState(280);
+      return (
+        <BookSidePanel
+          {...baseProps}
+          isOpen
+          activeTab="footnotes"
+          width={width}
+          onResizeKey={(delta) => setWidth((current) => current + delta)}
+        />
+      );
+    };
+    render(<Harness />);
+
+    const handle = screen.getByRole("separator", { name: "Resize panel" });
+    expect(handle).toHaveAttribute("aria-valuetext", "280 pixels");
+
+    handle.focus();
+    await user.keyboard("{ArrowLeft}");
+
+    expect(handle).toHaveAttribute("aria-valuenow", "296");
+    expect(handle).toHaveAttribute("aria-valuetext", "296 pixels");
   });
 });

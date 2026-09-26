@@ -75,7 +75,8 @@
   "bookSidePanel": {
     "footnotes": "Footnotes",
     "notes": "Notes",
-    "resize": "Resize panel"
+    "resize": "Resize panel",
+    "widthValue": "{{width}} pixels"
   },
   "metrics": {
     "title": "Metrics",

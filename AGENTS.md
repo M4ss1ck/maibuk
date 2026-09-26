@@ -356,6 +356,13 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `toast.info()` (text-only hint toast)                                                                                                                                                                                                        | `src/components/ui/Toast.tsx`                                          |
 | `useModalScope(isOpen)` (LIFO modal ID registration/unregistration)                                                                                                                                                                            | `src/hooks/useModalScope.ts`                                           |
 | `useRestoreFocus(isOpen)` (returns focus to the opener after an overlay closes; call it after `useModalOverlay`, whose `inert` cleanup must run first) | `src/hooks/useRestoreFocus.ts` |
+| `tabTo(page, target)` / `pressUntilFocused(page, key, target)` / `isFocusWithin(region)` / `expectFocusWithin(region)` / `describeFocus(page)` / `expectTabContained(page, dialog)` (E2E keyboard-only navigation and focus assertions)                                                                                                        | `e2e/support/keyboard.ts`                                              |
+| `test` / `expect` (the E2E fixture: fresh context, seed Library, Tutorial progress, hermetic network, `mod` fixture; specs import these, never `@playwright/test`)                                                                                                            | `e2e/support/test.ts`                                                  |
+| `prepareDevice(page, { library, tutorial })` / `seedSettings(page, state)` / `seedPasteCleanupPreset(page, preset)` / `readStorageValue(page, key)` / `countBackups(page)` / `readLibraryBytes(page)` (E2E setup-only storage helpers)                                        | `e2e/support/storage.ts`                                               |
+| `writeClipboard(page, data)` / `readClipboard(page)` (E2E clipboard helpers for `@chromium-only` rows)                                                                                                                                                                       | `e2e/support/clipboard.ts`                                             |
+| `failIndexedDbWrites(page)` / `allowIndexedDbWrites(page)` / `failBlobDownloads(page)` / `tamperBackupChecksums(page)` (E2E fault injection at the storage and browser-API boundary)                                                                                          | `e2e/support/fault.ts`                                                 |
+| `SEED_LIBRARIES` / `SeedName` (named E2E seed Libraries; each builder uses the real write paths)                                                                                                                                                                             | `e2e/support/seed/libraries.ts`                                        |
+| `buildSeed(name)` / `buildAllSeeds()` (build seed Libraries into database bytes through the real write paths)                                                                                                                                                                | `e2e/support/seed/build-seeds.ts`                                      |
 
 ---
 
@@ -607,7 +614,60 @@ Any change that adds or modifies interactive UI is **not done** until behavioral
    - Dialogs: Escape closes, and focus returns to the trigger element.
    - Lists / menus / toolbars: arrow keys move focus — assert `document.activeElement` changed, not that a handler is attached.
    - Reordering / drag-and-drop: the keyboard reorder path is tested end-to-end.
-3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected, are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`), and the screen's test asserts their id is bound (`useBoundShortcutStore`).
+3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected, are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`), and the screen's test asserts its id is bound (`useBoundShortcutStore`).
+
+### E2E (keyboard-first Playwright suite)
+
+```bash
+pnpm test:e2e                                     # guard, guard self-tests, e2e typecheck, web build, Playwright
+pnpm test:e2e --project=chromium                  # one browser
+pnpm test:e2e specs/books-create.spec.ts          # one file
+pnpm test:e2e --grep @wf:books-create             # one matrix workflow
+pnpm test:e2e --repeat-each=3                     # the acceptance run
+```
+
+Specs live in `e2e/specs/`. The suite drives the production web build in
+Chromium and WebKit, runs locally, and is invisible to `pnpm test`,
+`pnpm test:run`, `pnpm test:coverage`, the builds, release scripts, CI, and
+hooks. It never runs in CI. `e2e/README.md` documents install, the full run,
+single file/test/tag runs, headed, debug and UI mode, trace viewing, and
+troubleshooting.
+
+**Keyboard contract (every spec).** Enter each workflow through keyboard-reachable
+UI and drive it with Tab, Shift+Tab, arrows, Enter, Space, Escape, and registered
+shortcuts only. No spec uses `click`, `dblclick`, `hover`, `tap`, `dragTo`,
+`check`, `fill`, `clear`, element `.focus()`, `locator.press`, `mouse`,
+`touchscreen`, `dispatchEvent`, `evaluate`, or any other pointer or programmatic
+API; the pre-run guard fails a spec that does. Locate elements by role and
+accessible name, and assert the focused element and visible outcomes, never
+component internals or store state. Every dialog spec asserts focus entry, Tab
+containment (tabbing past the last control stays inside), Escape dismissal, and
+focus restored to the trigger. Collection, menu, and toolbar specs assert that
+the focused element changes on arrow keys. `data-testid` is allowed only where no
+accessible name can exist, with a comment saying why. Press `ControlOrMeta` for
+Mod; a spec that also runs in `mac-platform` presses the `mod` fixture.
+
+**Adding a matrix row.** `e2e/coverage-matrix.ts` is the frozen minimum: one row
+per workflow in `ROWS`, plus `EXCLUSIONS`. A row carries its `id`, `area`,
+`workflow`, `edges` (each edge gets its own test), `terms`, `shortcuts`,
+`routes`, `fixture`, `tags`, and `status`. Add it with `status: "planned"`,
+write the spec, then set `status: "accepted"` once each edge passes in both
+engines with `--repeat-each=3`. Specs declare coverage with `@wf:<id>` and
+`@sc:<registry id>` tags in test or describe titles. A gap whose right
+interaction is undecided stays `not-accepted` with an `issue` field (the GitHub
+issue URL) and a test kept as
+`test.fail(title, { annotation: { type: "issue", description: url } }, fn)`
+citing that same URL. The guard fails an expected failure whose URL is missing
+or not a real issue, and it fails a `test.fail()` that starts passing. Never add
+`test.skip`, `test.fixme`, or `.only`, and never enable retries.
+
+**Seed fixtures.** Named seed Libraries live in `e2e/support/seed/`, one file per
+fixture, each registered in `SEED_LIBRARIES` (`e2e/support/seed/libraries.ts`).
+A builder runs in Node through the app's real per-entity write paths against an
+in-memory Library, and the file also exports the visible names its spec locates
+by. `empty` is a fresh device and is the default; Tutorial specs set
+`tutorialProgress: "clean"`. Only `e2e/support/storage.ts` and
+`e2e/support/fault.ts` may touch IndexedDB or localStorage.
 
 ### Linting & Formatting
 
