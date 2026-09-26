@@ -32,3 +32,49 @@ export async function allowIndexedDbWrites(page: Page): Promise<void> {
     (window as unknown as { __e2eFailPuts?: boolean }).__e2eFailPuts = false;
   });
 }
+
+/**
+ * Makes the web adapters' blob download fail (a browser-API boundary fault):
+ * the anchor `downloadFile` builds cannot get an object URL, so the caller's
+ * error path runs. Throws a non-Error on purpose, so the Export dialog shows
+ * its localized failure message instead of a raw exception string.
+ */
+export async function failBlobDownloads(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    URL.createObjectURL = () => {
+      // biome-ignore lint/style/useThrowOnlyError: the dialog surfaces t() for non-Errors.
+      throw "blob download blocked by the e2e fault";
+    };
+  });
+}
+
+/**
+ * Flips the stored checksum of every web Backup, so the next restore must
+ * refuse it. Leaves the SQL bytes alone: only the verification fails, exactly
+ * like a Backup whose file changed after it was written (decision 19).
+ */
+export async function tamperBackupChecksums(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open("maibuk-backups", 2);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction("backups", "readwrite");
+          const store = tx.objectStore("backups");
+          const request = store.getAll();
+          request.onsuccess = () => {
+            for (const entry of request.result as { filename: string; checksum: string }[]) {
+              store.put({ ...entry, checksum: `tampered-${entry.checksum}` });
+            }
+          };
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      })
+  );
+}

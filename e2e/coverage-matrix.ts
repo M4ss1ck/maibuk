@@ -1694,7 +1694,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["download"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "export-book-pdf",
@@ -1706,7 +1706,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["download"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "backup-create-list",
@@ -1719,7 +1719,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "backupsPresent",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "backup-select-delete",
@@ -1732,7 +1732,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "backupsPresent",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "backup-restore",
@@ -1747,7 +1747,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "backupsPresent",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "backup-retention",
@@ -1759,7 +1759,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "backupsPresent",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "database-export",
@@ -1771,7 +1771,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "backupsPresent",
     tags: ["download"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "database-import",
@@ -1784,20 +1784,20 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "backupsPresent",
     tags: ["filechooser"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "library-reset",
     area: "library-data",
     workflow:
-      "Reset Library (type confirm?) clears Books/Notes/Canvases/history/metrics; settings kept; asserts: Confirm dialog focus lands on Cancel; persists: yes",
+      "Reset Library (type confirm?) clears Books/Notes/Canvases/history/metrics; settings kept; asserts: Confirm dialog focus inside; persists: yes",
     edges: ["Cancel"],
     terms: ["Reset", "Library", "Book", "Note", "Canvas"],
     shortcuts: [],
     routes: ["/settings"],
     fixture: "backupsPresent",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "settings-theme",

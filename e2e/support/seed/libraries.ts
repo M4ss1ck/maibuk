@@ -8,6 +8,7 @@ import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
 import { createNoteRow, updateNoteRow } from "@/features/notes/write";
 import { createCanvasRow, updateCanvasDocRow } from "@/features/canvas/write";
 import { CURRENT_CANVAS_SCHEMA_VERSION, type CanvasDoc } from "@/features/canvas/types";
+import { backupsPresent } from "./backups-present";
 import {
   SEED_BOOK,
   SEED_CANVAS_NODES,
@@ -177,6 +178,7 @@ export const SEED_LIBRARIES = {
   notesWithLinksAndTags,
   canvasWithNodes,
   checkpointHistory,
+  backupsPresent,
 } satisfies Record<string, () => Promise<void>>;
 
 export type SeedName = keyof typeof SEED_LIBRARIES;
