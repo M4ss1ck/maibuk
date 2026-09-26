@@ -69,6 +69,29 @@ describe("useShortcuts modal blocking", () => {
     expect(onTrigger).toHaveBeenCalledTimes(1);
   });
 
+  it("fires a modifier shortcut even when a pressable stops keydown propagation", async () => {
+    useModalStore.setState({ modalIds: [], openCount: 0 });
+
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+
+    renderHook(() => useShortcuts([{ keys: ["ctrl+s"], onTrigger }]));
+
+    // React Spectrum pressables (React Aria menus, listboxes, toolbars) stop
+    // keydown propagation, which would otherwise hide shortcut keys.
+    const pressable = document.createElement("button");
+    pressable.addEventListener("keydown", (event) => event.stopPropagation());
+    document.body.appendChild(pressable);
+    pressable.focus();
+
+    pressable.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+    );
+
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+    pressable.remove();
+  });
+
   it("preserves sequence matching when no modal is open", async () => {
     useModalStore.setState({ modalIds: [], openCount: 0 });
 

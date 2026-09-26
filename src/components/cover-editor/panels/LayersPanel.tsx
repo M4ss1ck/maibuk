@@ -99,6 +99,7 @@ export function LayersPanel() {
                 <button
                   type="button"
                   aria-label={t("cover.layers.toggleVisible")}
+                  aria-pressed={layer.hidden}
                   className="p-1 text-muted-foreground hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -116,6 +117,7 @@ export function LayersPanel() {
                 <button
                   type="button"
                   aria-label={t("cover.layers.toggleLock")}
+                  aria-pressed={layer.locked}
                   className="p-1 text-muted-foreground hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation();

@@ -1430,7 +1430,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId", "/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-templates",
@@ -1443,7 +1443,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-size-preset",
@@ -1455,7 +1455,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-add-objects",
@@ -1468,7 +1468,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: ["filechooser"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-select-layer",
@@ -1481,7 +1481,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-properties",
@@ -1494,7 +1494,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-nudge-position",
@@ -1507,7 +1507,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-align",
@@ -1519,7 +1519,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-shortcuts",
@@ -1531,7 +1531,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-background",
@@ -1543,7 +1543,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-overlays-snapping",
@@ -1555,7 +1555,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-export",
@@ -1567,7 +1567,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover"],
     fixture: "oneBookThreeChapters",
     tags: ["download"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "cover-back-unsaved",
@@ -1579,7 +1579,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId/cover", "/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "versions-save-named",

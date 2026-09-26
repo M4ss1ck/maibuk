@@ -927,6 +927,7 @@
     "backgroundColor": "Color",
     "addShape": "Add Shape",
     "templates": "Templates",
+    "sizePreset": "Cover Size Preset",
     "toggleOverlays": "Toggle margin guides",
     "toggleSnapping": "Toggle snapping",
     "align": {

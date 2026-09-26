@@ -927,6 +927,7 @@
     "backgroundColor": "Color",
     "addShape": "Añadir Forma",
     "templates": "Plantillas",
+    "sizePreset": "Preajuste de tamaño de portada",
     "toggleOverlays": "Alternar guías de margen",
     "toggleSnapping": "Alternar ajuste",
     "align": {
