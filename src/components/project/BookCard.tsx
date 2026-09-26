@@ -71,7 +71,7 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
             : isFocused
               ? "border-primary ring-1 ring-primary/30"
               : "border-border"
-        } ${isHovered || isPressed ? "shadow-lg -translate-y-1" : ""}`
+        } ${isHovered || isPressed ? "shadow-lg" : ""}`
       }
     >
       {indexHint ? (
