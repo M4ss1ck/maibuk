@@ -100,26 +100,63 @@ export async function seedPasteCleanupPreset(
   });
 }
 
-/** The raw Library bytes the web adapter persisted, for byte-identity checks. */
-export async function readLibraryBytes(page: Page): Promise<string | null> {
+/** Reads one localStorage value, e.g. a device-local store a run must not touch. */
+export async function readStorageValue(page: Page, key: string): Promise<string | null> {
+  return page.evaluate((k) => localStorage.getItem(k), key);
+}
+
+/** How many Backups the web adapter holds; a Tutorial run must add none. */
+export async function countBackups(page: Page): Promise<number> {
   return page.evaluate(
     () =>
-      new Promise<string | null>((resolve, reject) => {
-        const open = indexedDB.open("maibuk-db-storage", 1);
-        open.onupgradeneeded = () => open.result.createObjectStore("database");
+      new Promise<number>((resolve, reject) => {
+        const open = indexedDB.open("maibuk-backups");
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
-          const get = open.result
-            .transaction("database", "readonly")
-            .objectStore("database")
-            .get("main");
-          get.onsuccess = () => {
-            open.result.close();
-            const value = get.result as Uint8Array | undefined;
-            resolve(value ? btoa(String.fromCharCode(...value)) : null);
+          const db = open.result;
+          if (!db.objectStoreNames.contains("backups")) {
+            db.close();
+            resolve(0);
+            return;
+          }
+          const count = db.transaction("backups", "readonly").objectStore("backups").count();
+          count.onsuccess = () => {
+            db.close();
+            resolve(count.result);
           };
-          get.onerror = () => reject(get.error);
+          count.onerror = () => reject(count.error);
         };
       })
   );
+}
+
+/** The raw Library bytes the web adapter persisted, for byte-identity checks. */
+export async function readLibraryBytes(page: Page): Promise<string | null> {
+  return page.evaluate(async () => {
+    // Chunked: a spread of a multi-hundred-KB dump would overflow the stack
+    // and leave the promise pending.
+    const toBase64 = (value: Uint8Array): string => {
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < value.length; i += chunk) {
+        binary += String.fromCharCode(...value.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    };
+
+    const open = indexedDB.open("maibuk-db-storage", 1);
+    open.onupgradeneeded = () => open.result.createObjectStore("database");
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    const store = database.transaction("database", "readonly").objectStore("database");
+    const value = await new Promise<Uint8Array | undefined>((resolve, reject) => {
+      const get = store.get("main");
+      get.onsuccess = () => resolve(get.result as Uint8Array | undefined);
+      get.onerror = () => reject(get.error);
+    });
+    database.close();
+    return value ? toBase64(value) : null;
+  });
 }

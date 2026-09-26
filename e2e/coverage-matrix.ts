@@ -1925,7 +1925,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-full-run",
@@ -1938,7 +1938,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-skip-esc",
@@ -1950,7 +1950,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "empty",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-shortcut",
@@ -1962,7 +1962,8 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    issue: "https://github.com/M4ss1ck/maibuk/issues/221",
+    status: "not-accepted",
   },
   {
     id: "tutorial-settings-start-all",
@@ -1975,7 +1976,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings", "/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-settings-section",
@@ -1988,7 +1989,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-settings-esc",
@@ -2000,7 +2001,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-settings-restart-done",
@@ -2012,7 +2013,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-reload-mid-run",
@@ -2025,7 +2026,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "tutorial-isolation",
@@ -2038,7 +2039,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "embed-editor",
