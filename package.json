@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "test:release": "bash scripts/test-changelog.sh",
     "test:e2e": "node e2e/run.mjs",
+    "test:e2e:headed": "bash scripts/e2e-headed.sh",
     "preview": "vite preview",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
