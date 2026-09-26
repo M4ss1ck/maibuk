@@ -127,7 +127,10 @@ CONTEXT.md `terms` and shortcut-registry `shortcuts` it exercises, the App.tsx
 | `not-accepted` | An undecided-interaction gap. Needs `issue` (a GitHub issue URL) and a spec that keeps the test as `test.fail()` citing that URL. |
 | Excluded | A row is not the only way to cover something, so an `EXCLUSIONS` entry names the reason and its `owner` (a Vitest suite, manual QA, or a follow-up issue URL). |
 
-Specs declare what they cover with tags in test or describe titles:
+Specs declare what they cover with tags in test or describe titles. A tag
+counts only in the title of a `test(...)` or `test.fail(...)` declaration, or of
+a `test.describe(...)` whose body declares at least one test; a tag anywhere
+else (a comment, a variable, an annotation) covers nothing:
 
 - `@wf:<row id>` marks the tests of a row.
 - `@sc:<registry id>` marks the shortcuts they press. Every shortcut a row
@@ -145,7 +148,8 @@ the reason, when:
   (`row-shortcut-untagged`);
 - an App.tsx route has no row (`route-uncovered`);
 - an accepted or not-accepted row is carried by no spec (`row-no-spec`), a spec
-  tags a row that does not exist (`unknown-row-tag`), or a row is still
+  tags a row that does not exist (`unknown-row-tag`), a spec has a `@wf:` or
+  `@sc:` tag outside a counted title (`orphan-tag`), or a row is still
   `planned` (`row-planned`);
 - a spec uses `test.skip`, `test.fixme`, or `.only` (`skip-fixme-only`), or
   `test.fail()` without a `https://github.com/M4ss1ck/maibuk/issues/N` URL

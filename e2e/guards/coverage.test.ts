@@ -207,6 +207,59 @@ describe("checkCoverage", () => {
     );
   });
 
+  // Audit of #225: a spec reduced to `const orphan = "@wf:books-create ..."`
+  // declared no test yet passed the guard.
+  it("does not count tags in a string that titles no test", () => {
+    const spec = `const orphan = "@wf:books-create @sc:home.newBook @sc:editor.save";\n`;
+    const result = codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: spec }] });
+    assert.ok(result.includes("row-no-spec"), result.join());
+    assert.ok(result.includes("orphan-tag"), result.join());
+  });
+
+  it("does not count tags on a describe that declares no test", () => {
+    const spec = `import { test } from "../support/test";
+test.describe("books-create @wf:books-create @sc:home.newBook @sc:editor.save", () => {
+  const steps = ["test(" + "x" + ")"];
+});
+`;
+    const result = codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: spec }] });
+    assert.ok(result.includes("row-no-spec"), result.join());
+    assert.ok(result.includes("orphan-tag"), result.join());
+  });
+
+  it("does not count tags in a string argument that is not the title", () => {
+    const spec = GOOD_SPEC.replace(
+      "books-create @wf:books-create @sc:home.newBook @sc:editor.save",
+      "books-create"
+    ).replace('test("creates"', 'test("creates", { annotation: { type: "x", description: "@wf:books-create" } }');
+    const result = codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: spec }] });
+    assert.ok(result.includes("row-no-spec"), result.join());
+  });
+
+  it("counts tags on a test title, a test.fail title, and a nested describe", () => {
+    const onTest = `import { expect, test } from "../support/test";
+test("creates @wf:books-create @sc:home.newBook @sc:editor.save", async ({ page }) => {
+  await expect(page).toBeTruthy();
+});
+`;
+    assert.deepEqual(codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: onTest }] }), []);
+    const onFail = onTest.replace('test("creates', 'test.fail("creates').replace(
+      "async ({ page })",
+      `{ annotation: { type: "issue", description: "${ISSUE}" } }, async ({ page })`
+    );
+    assert.deepEqual(codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: onFail }] }), []);
+    const nested = `import { expect, test } from "../support/test";
+test.describe.serial("outer @wf:books-create @sc:home.newBook", () => {
+  test.describe("inner @sc:editor.save", () => {
+    test("creates", async ({ page }) => {
+      await expect(page).toBeTruthy();
+    });
+  });
+});
+`;
+    assert.deepEqual(codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: nested }] }), []);
+  });
+
   it("rejects planned rows unless --allow-planned", () => {
     const planned = { rows: [row({ status: "planned" })], specs: [] };
     assert.deepEqual(codes(planned), ["row-planned"]);

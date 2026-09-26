@@ -22,7 +22,8 @@ export type ProblemCode =
   | "skip-fixme-only"
   | "fail-without-issue"
   | "keyboard-contract"
-  | "storage-outside-support";
+  | "storage-outside-support"
+  | "orphan-tag";
 
 export interface Problem {
   code: ProblemCode;
@@ -151,8 +152,60 @@ export function sourceViews(source: string): { code: string; text: string } {
   return { code, text };
 }
 
-function tagsIn(text: string, prefix: "wf" | "sc"): Set<string> {
-  return new Set([...text.matchAll(new RegExp(`@${prefix}:([\\w.-]+)`, "g"))].map((m) => m[1]));
+const TAG = /@(wf|sc):([\w.-]+)/g;
+
+/** Index just past the `)` closing the call whose `(` sits at `open - 1`. */
+function callEnd(code: string, open: number): number {
+  let depth = 1;
+  let i = open;
+  while (i < code.length && depth > 0) {
+    if (code[i] === "(") depth++;
+    else if (code[i] === ")") depth--;
+    i++;
+  }
+  return i;
+}
+
+/**
+ * Tags that declare coverage: those in the title (first argument) of a
+ * `test(...)` or `test.fail(...)` declaration, or of a `test.describe(...)`
+ * whose body declares at least one test. A tag anywhere else is inert, so a
+ * spec cannot claim a row with a string that runs nothing. `code` and `text`
+ * are the aligned views from `sourceViews`.
+ */
+function declaredTags(
+  code: string,
+  text: string
+): { wf: Set<string>; sc: Set<string>; titleRanges: [number, number][] } {
+  const declarations = [
+    ...code.matchAll(
+      /\btest(\.describe(?:\.(?:serial|parallel))?|\.fail)?\s*\(\s*(["'`])/g
+    ),
+  ].map((m) => {
+    const titleStart = (m.index ?? 0) + m[0].length;
+    const titleEnd = code.indexOf(m[2], titleStart);
+    const open = code.indexOf("(", m.index ?? 0) + 1;
+    return {
+      isDescribe: m[1]?.startsWith(".describe") ?? false,
+      titleStart,
+      titleEnd,
+      end: callEnd(code, open),
+      start: m.index ?? 0,
+    };
+  });
+  const tests = declarations.filter((d) => !d.isDescribe);
+  const counted = declarations.filter(
+    (d) => !d.isDescribe || tests.some((t) => t.start > d.start && t.start < d.end)
+  );
+
+  const wf = new Set<string>();
+  const sc = new Set<string>();
+  for (const d of counted) {
+    for (const m of text.slice(d.titleStart, d.titleEnd).matchAll(TAG)) {
+      (m[1] === "wf" ? wf : sc).add(m[2]);
+    }
+  }
+  return { wf, sc, titleRanges: counted.map((d) => [d.titleStart, d.titleEnd]) };
 }
 
 /** Argument text of every `test.fail(` call, up to its body. */
@@ -254,8 +307,15 @@ export function checkCoverage(input: GuardInput): Problem[] {
         );
       }
     }
-    const wf = tagsIn(text, "wf");
-    const sc = tagsIn(text, "sc");
+    const { wf, sc, titleRanges } = declaredTags(code, text);
+    for (const m of text.matchAll(TAG)) {
+      const at = m.index ?? 0;
+      if (titleRanges.some(([from, to]) => at >= from && at < to)) continue;
+      add(
+        "orphan-tag",
+        `${spec.path}:${lineOf(text, at)} has \`${m[0]}\` outside the title of a declared test or of a describe that declares one; it counts as no coverage`
+      );
+    }
     for (const id of sc) {
       if (!shortcutSet.has(id))
         add("unknown-shortcut", `${spec.path} tags @sc:${id}, not a registry id`);
