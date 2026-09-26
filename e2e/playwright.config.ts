@@ -4,6 +4,12 @@ import { defineConfig, devices } from "@playwright/test";
 
 export const E2E_PORT = Number(process.env.E2E_PORT ?? 4317);
 const OUTPUT = resolve(import.meta.dirname, ".output");
+// Personal headed watch loop (scripts/e2e-headed.sh). Unset keeps Playwright's
+// default speed for every existing command.
+const slowMo = Number(process.env.E2E_SLOW_MO ?? 0);
+if (Number.isNaN(slowMo)) {
+  throw new Error(`E2E_SLOW_MO must be milliseconds, got "${process.env.E2E_SLOW_MO}"`);
+}
 
 const shared = {
   locale: "en-US",
@@ -26,6 +32,7 @@ export default defineConfig<{ macPlatform: boolean }>({
     baseURL: `http://127.0.0.1:${E2E_PORT}`,
     trace: "retain-on-first-failure",
     screenshot: "only-on-failure",
+    ...(slowMo > 0 ? { launchOptions: { slowMo } } : {}),
     ...shared,
   },
   projects: [
