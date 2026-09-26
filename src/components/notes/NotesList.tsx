@@ -66,7 +66,7 @@ interface NotesListProps {
   onCreateNote: (bookId?: string | null) => void;
   onReorderNotes: (items: string[] | ReorderNoteItem[]) => Promise<void>;
   onReassignNoteBook?: (noteId: string, bookId: string | null) => void;
-  onDeleteNote?: (id: string) => void;
+  onDeleteNote?: (id: string) => void | Promise<void>;
   onDuplicateNote?: (note: NoteWithBook) => void;
   onRenameNote?: (id: string, title: string) => void;
   onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
@@ -87,6 +87,7 @@ export function NotesList({
 }: NotesListProps) {
   const { t } = useTranslation();
   const listContainerRef = useRef<HTMLDivElement>(null);
+  const newNoteButtonRef = useRef<HTMLButtonElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
   const autoScroll = useDragAutoScroll(listContainerRef);
   const [search, setSearch] = useState("");
@@ -94,6 +95,12 @@ export function NotesList({
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  // The row a Delete was confirmed from, and the row that should take focus
+  // once it is gone (next, else previous, else the create control).
+  const deleteFocusRef = useRef<{ row: HTMLElement | null; neighbor: HTMLElement | null }>({
+    row: null,
+    neighbor: null,
+  });
   const touchDragGuard = useTouchDragFromHandle();
   const viewMode = useSettingsStore((s) => s.notesListView);
   const setViewMode = useSettingsStore((s) => s.setNotesListView);
@@ -355,10 +362,36 @@ export function NotesList({
       : [];
   const moveNote = (note: { id: string }, bookId: string | null) =>
     onReassignNoteBook?.(note.id, bookId);
-  const requestDelete = onDeleteNote ? (id: string) => setPendingDeleteId(id) : undefined;
+  const requestDelete = onDeleteNote
+    ? (id: string) => {
+        const rows = [
+          ...(listContainerRef.current?.querySelectorAll<HTMLElement>("[data-key]") ?? []),
+        ];
+        const index = rows.findIndex((row) => row.dataset.key === id);
+        deleteFocusRef.current = {
+          row: index === -1 ? null : rows[index],
+          neighbor: index === -1 ? null : (rows[index + 1] ?? rows[index - 1] ?? null),
+        };
+        setPendingDeleteId(id);
+      }
+    : undefined;
   const pendingDeleteNote = notes.find((note) => note.id === pendingDeleteId) ?? null;
-  const confirmDelete = () => {
-    if (pendingDeleteId) onDeleteNote?.(pendingDeleteId);
+
+  // The row that opened the dialog on cancel; the surviving neighbour (or the
+  // create control) once a confirmed delete has removed it.
+  const getDeleteRestoreTarget = () => {
+    const { row, neighbor } = deleteFocusRef.current;
+    if (row?.isConnected) return row;
+    if (neighbor?.isConnected) return neighbor;
+    return newNoteButtonRef.current;
+  };
+
+  const confirmDelete = async () => {
+    const id = pendingDeleteId;
+    if (!id) return;
+    // The dialog closes when the Note leaves the list, so focus restoration
+    // already sees the row gone and can land on its neighbour.
+    await onDeleteNote?.(id);
     setPendingDeleteId(null);
   };
 
@@ -608,6 +641,7 @@ export function NotesList({
         />
         <Tooltip content={t("notes.newNote")}>
           <button
+            ref={newNoteButtonRef}
             type="button"
             onClick={() => onCreateNote(null)}
             aria-label={t("notes.newNote")}
@@ -713,7 +747,8 @@ export function NotesList({
       <DeleteNoteDialog
         note={pendingDeleteNote}
         onCancel={() => setPendingDeleteId(null)}
-        onConfirm={confirmDelete}
+        onConfirm={() => void confirmDelete()}
+        restoreFocusTarget={getDeleteRestoreTarget}
       />
     </aside>
   );

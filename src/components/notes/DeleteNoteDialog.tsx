@@ -6,9 +6,20 @@ interface DeleteNoteDialogProps {
   note: { title: string } | null;
   onCancel: () => void;
   onConfirm: () => void;
+  /**
+   * Where focus returns when the dialog closes: the note's row on cancel, or
+   * the row that survived a confirmed delete. Falls back to the opener when
+   * omitted.
+   */
+  restoreFocusTarget?: () => HTMLElement | null;
 }
 
-export function DeleteNoteDialog({ note, onCancel, onConfirm }: DeleteNoteDialogProps) {
+export function DeleteNoteDialog({
+  note,
+  onCancel,
+  onConfirm,
+  restoreFocusTarget,
+}: DeleteNoteDialogProps) {
   const { t } = useTranslation();
 
   return (
@@ -16,6 +27,7 @@ export function DeleteNoteDialog({ note, onCancel, onConfirm }: DeleteNoteDialog
       isOpen={note !== null}
       onClose={onCancel}
       title={t("notes.deleteConfirm")}
+      restoreFocusTarget={restoreFocusTarget}
       footer={
         <>
           <Button variant="ghost" onClick={onCancel}>

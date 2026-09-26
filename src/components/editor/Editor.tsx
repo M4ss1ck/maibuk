@@ -42,6 +42,7 @@ import { useEditorFileDrop } from "@/components/editor/useEditorFileDrop";
 import { IS_TAURI } from "@/lib/platform";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
+import { hasActiveSuggestion } from "@/components/editor/suggestion-state";
 
 /**
  * How long a burst of keystrokes coalesces into one serialization. Serializing
@@ -376,8 +377,12 @@ export function Editor({
         role: "textbox",
         "aria-multiline": "true",
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         if (event.key !== "Escape") return false;
+        // Editor props run before plugin key handlers, so an open suggestion
+        // popup (Wikilink, symbols) would never see the Escape that dismisses
+        // it. Let the plugin have it.
+        if (hasActiveSuggestion(view.state)) return false;
         if (showBubbleLinkDialogRef.current || pendingMarkdownPasteRef.current) {
           return false;
         }

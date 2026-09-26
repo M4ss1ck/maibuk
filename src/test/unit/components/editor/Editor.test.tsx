@@ -3,7 +3,8 @@ import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import userEvent from "@testing-library/user-event";
 import { createRef, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Editor as TiptapEditor } from "@tiptap/core";
+import { Extension, type Editor as TiptapEditor } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
@@ -674,6 +675,46 @@ describe("Editor", () => {
     await user.keyboard("{Escape}");
 
     expect(onEscape).toHaveBeenCalled();
+  });
+
+  it("defers Escape to an open suggestion popup and does not call onEscape", async () => {
+    const user = userEvent.setup();
+    const onEscape = vi.fn();
+    const suggestionPluginKey = new PluginKey("testActiveSuggestion");
+    // Mirrors @tiptap/suggestion's state while its popup is open.
+    const ActiveSuggestion = Extension.create({
+      name: "testActiveSuggestion",
+      addProseMirrorPlugins() {
+        return [
+          new Plugin({
+            key: suggestionPluginKey,
+            state: {
+              init: () => ({ active: true, range: { from: 1, to: 2 } }),
+              apply: (_tr, prev) => prev,
+            },
+          }),
+        ];
+      },
+    });
+
+    const { container } = render(
+      <Editor
+        content={"<p>hello</p>"}
+        onUpdate={vi.fn()}
+        onEscape={onEscape}
+        extraExtensions={[ActiveSuggestion]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('[contenteditable="true"]')).not.toBeNull();
+    });
+
+    const editorEl = container.querySelector('[contenteditable="true"]') as HTMLElement;
+    editorEl.focus();
+    await user.keyboard("{Escape}");
+
+    expect(onEscape).not.toHaveBeenCalled();
   });
 
   it("does not call onEscape when non-Escape key is pressed", async () => {

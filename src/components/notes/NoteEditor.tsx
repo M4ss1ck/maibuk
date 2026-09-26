@@ -239,6 +239,8 @@ export function NoteEditor({
   const titleRef = useRef(title);
   titleRef.current = title;
   const editorHandleRef = useRef<EditorHandle>(null);
+  const backlinksRef = useRef<HTMLDivElement>(null);
+  const backButtonRef = useRef<HTMLButtonElement>(null);
   // Content saves and tag or language saves share one queue: the store rewrites
   // the whole row, so two writes to this note must never overlap.
   const [saveQueue] = useState(createAsyncQueue);
@@ -576,11 +578,25 @@ export function NoteEditor({
     [saveNoteFields]
   );
 
+  // The editor keeps Tab for indentation, so Escape is the keyboard way out of
+  // the writing surface. It lands on the first Backlink when other Notes link
+  // here (the content that follows the text); else on Back. Escaping the
+  // toolbar hands focus back to the text, as in the Book editor.
+  const handleEditorEscape = useCallback(() => {
+    if (document.activeElement?.closest?.('[role="toolbar"]')) {
+      editorHandleRef.current?.focus();
+      return;
+    }
+    const backlink = backlinksRef.current?.querySelector<HTMLElement>("button");
+    (backlink ?? backButtonRef.current)?.focus();
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Header */}
       <div className="@container px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
         <button
+          ref={backButtonRef}
           type="button"
           onClick={onReturnToBook ?? (() => navigate("/notes"))}
           className="inline-flex min-w-0 items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -689,8 +705,10 @@ export function NoteEditor({
         onEditorReady={handleEditorReady}
         loadInternalTargetChildren={loadInternalTargetChildren}
         tutorialAnchors={NOTE_EDITOR_TUTORIAL_ANCHORS}
+        onEscape={handleEditorEscape}
       />
       <NoteBacklinks
+        ref={backlinksRef}
         noteId={note.id}
         onOpen={(sourceId) => {
           void useNoteStore.getState().loadNote(sourceId);

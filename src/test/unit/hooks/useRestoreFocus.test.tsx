@@ -60,6 +60,43 @@ function Dialog({
 }
 
 /**
+ * A dialog whose action removes the element it was opened from: the target
+ * must be resolved again on close, landing on whatever survives. Models
+ * deleting a Note, where focus moves to the next row.
+ */
+function RemovedTargetHarness() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [showFirst, setShowFirst] = useState(true);
+  const firstRef = useRef<HTMLButtonElement>(null);
+  const secondRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <>
+      <button type="button" onClick={() => setIsOpen(true)}>
+        Open
+      </button>
+      {showFirst && (
+        <button ref={firstRef} type="button">
+          First
+        </button>
+      )}
+      <button ref={secondRef} type="button">
+        Second
+      </button>
+      <Dialog
+        triggerRef={secondRef}
+        isOpen={isOpen}
+        onClose={() => {
+          setShowFirst(false);
+          setIsOpen(false);
+        }}
+        getTarget={() => (showFirst ? firstRef.current : secondRef.current)}
+      />
+    </>
+  );
+}
+
+/**
  * A dialog that opens from one control but whose action belongs to the editor:
  * focus must return to the editor, not the (now unmounted) opener. Models the
  * Word Lookup prompt handing off to the definition dialog in the Book Editor.
@@ -114,6 +151,20 @@ describe("useRestoreFocus", () => {
 
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(trigger).toHaveFocus();
+  });
+
+  it("resolves the target again when the one captured on open is gone", async () => {
+    const user = userEvent.setup();
+    render(<RemovedTargetHarness />);
+
+    await user.tab();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "First" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Second" })).toHaveFocus();
   });
 
   it("restores focus when the dialog component itself unmounts", async () => {

@@ -63,10 +63,14 @@ function ChapterItemGestures({
   children: (anchorRef: RefObject<HTMLDivElement | null>) => ReactNode;
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
-  const { itemProps } = useItemContextMenu({ onOpen: onOpenMenu, isDisabled });
+  const { itemProps, setOwnerRef } = useItemContextMenu({
+    onOpen: onOpenMenu,
+    isDisabled,
+    anchorRef,
+  });
   return (
     <div
-      ref={anchorRef}
+      ref={setOwnerRef}
       {...itemProps}
       className={`${className} pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]`}
     >

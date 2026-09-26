@@ -1,5 +1,5 @@
-import { useMemo, useRef } from "react";
-import type { DragEvent, MouseEvent, PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent, MouseEvent, PointerEvent, RefObject } from "react";
 import { useLongPress } from "react-aria";
 
 export const DRAG_HANDLE_SELECTOR = "[data-drag-handle]";
@@ -32,21 +32,74 @@ function touchOnly(props: object): Record<string, unknown> {
 interface UseItemContextMenuOptions {
   onOpen: () => void;
   isDisabled?: boolean;
+  /**
+   * The item's visible element, kept for positioning the menu's popover. When
+   * set, its focusable row (or the element itself when no row wraps it) also
+   * opens the menu on the keyboard Context Menu gesture: the Context Menu key
+   * and Shift+F10. React Aria puts focus on the row, so the handler must live
+   * there; the inner element's onContextMenu never sees a keyboard contextmenu
+   * event.
+   */
+  anchorRef?: RefObject<HTMLElement | null>;
 }
 
 /**
  * Opens an item's action menu on touch long-press and on the context-menu
- * gesture (right click, the ContextMenu key, Shift+F10). Long-presses that
+ * gesture (right click, the Context Menu key, Shift+F10). Long-presses that
  * start on a drag handle are left to drag-and-drop, and the click that ends a
  * long-press is swallowed so the item is not also opened.
+ *
+ * The returned `setOwnerRef` is the item element's `ref`; React Aria mounts
+ * collection rows after the first effect, so a state callback ref is what
+ * reliably tells us when the focusable row exists.
  */
-export function useItemContextMenu({ onOpen, isDisabled = false }: UseItemContextMenuOptions) {
+export function useItemContextMenu({
+  onOpen,
+  isDisabled = false,
+  anchorRef,
+}: UseItemContextMenuOptions) {
   const onOpenRef = useRef(onOpen);
   onOpenRef.current = onOpen;
+  const [owner, setOwner] = useState<HTMLElement | null>(null);
   const suppressClickRef = useRef(false);
   const lastPointerTypeRef = useRef<string | null>(null);
   // usePress reports the pressed element, not where the finger landed.
   const pressOriginRef = useRef<EventTarget | null>(null);
+
+  const setOwnerRef = useCallback(
+    (node: HTMLElement | null) => {
+      if (anchorRef) anchorRef.current = node;
+      setOwner(node);
+    },
+    [anchorRef]
+  );
+
+  useEffect(() => {
+    const row = owner?.closest<HTMLElement>('[role="row"]') ?? owner ?? null;
+    if (!row) return;
+
+    const openFromKeyboard = (event: Event) => {
+      if (isDisabled) return;
+      if (event.target instanceof Element && closestFrom(event.target, EDITABLE_SELECTOR)) return;
+      // A drag handle owns its own gesture: a native contextmenu bubbling out
+      // of it (touch long-press or right click) must not open the item menu.
+      if (event.target instanceof Element && closestFrom(event.target, DRAG_HANDLE_SELECTOR)) return;
+      event.preventDefault();
+      onOpenRef.current();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+        openFromKeyboard(event);
+      }
+    };
+
+    row.addEventListener("contextmenu", openFromKeyboard);
+    row.addEventListener("keydown", onKeyDown);
+    return () => {
+      row.removeEventListener("contextmenu", openFromKeyboard);
+      row.removeEventListener("keydown", onKeyDown);
+    };
+  }, [owner, isDisabled]);
 
   const { longPressProps } = useLongPress({
     isDisabled,
@@ -92,7 +145,7 @@ export function useItemContextMenu({ onOpen, isDisabled = false }: UseItemContex
     };
   }, [longPressProps, isDisabled]);
 
-  return { itemProps };
+  return { itemProps, setOwnerRef };
 }
 
 /**

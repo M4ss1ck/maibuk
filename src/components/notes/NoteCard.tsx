@@ -33,9 +33,10 @@ export function NoteCard({
   const preview = notePlainText(note.content);
   const hasActions = actions.length > 0;
   const menuAnchorRef = useRef<HTMLDivElement>(null);
-  const { itemProps } = useItemContextMenu({
+  const { itemProps, setOwnerRef } = useItemContextMenu({
     onOpen: () => setIsMenuOpen(true),
     isDisabled: !hasActions,
+    anchorRef: menuAnchorRef,
   });
 
   return (
@@ -51,7 +52,7 @@ export function NoteCard({
       }
     >
       <div
-        ref={menuAnchorRef}
+        ref={setOwnerRef}
         {...itemProps}
         className="flex h-full flex-col p-4 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
       >

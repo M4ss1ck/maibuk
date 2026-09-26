@@ -85,8 +85,16 @@ export function NotesGallery() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tagFilterInputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const newNoteButtonRef = useRef<HTMLButtonElement>(null);
   const galleryDropRef = useRef<HTMLDivElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
+  // The row a Note Item Menu's Delete was confirmed from, and the row that
+  // should take focus once it is gone (next, else previous, else the create
+  // control). Captured before the store removes the Note.
+  const deleteFocusRef = useRef<{ row: HTMLElement | null; neighbor: HTMLElement | null }>({
+    row: null,
+    neighbor: null,
+  });
 
   const handleImportFiles = async (files: DroppedTextFile[]) => {
     const minOrder = notes.reduce((min, note) => Math.min(min, note.order), 0);
@@ -206,16 +214,39 @@ export function NotesGallery() {
       label: t("common.delete"),
       icon: Trash2,
       isDestructive: true,
-      onAction: () => setPendingDeleteId(note.id),
+      onAction: () => requestDelete(note.id),
     },
   ];
 
   const pendingDeleteNote = notes.find((note) => note.id === pendingDeleteId) ?? null;
+
+  /** Remembers the row a delete started from and its neighbour before it goes. */
+  const requestDelete = (noteId: string) => {
+    const rows = [...(gridRef.current?.querySelectorAll<HTMLElement>("[data-key]") ?? [])];
+    const index = rows.findIndex((row) => row.dataset.key === noteId);
+    deleteFocusRef.current = {
+      row: index === -1 ? null : rows[index],
+      neighbor: index === -1 ? null : (rows[index + 1] ?? rows[index - 1] ?? null),
+    };
+    setPendingDeleteId(noteId);
+  };
+
+  // The row that opened the dialog on cancel; the surviving neighbour (or the
+  // create control) once a confirmed delete has removed it.
+  const getDeleteRestoreTarget = () => {
+    const { row, neighbor } = deleteFocusRef.current;
+    if (row?.isConnected) return row;
+    if (neighbor?.isConnected) return neighbor;
+    return newNoteButtonRef.current;
+  };
+
   const confirmDelete = async () => {
     const id = pendingDeleteId;
-    setPendingDeleteId(null);
     if (!id) return;
+    // Delete first: the dialog closes when the Note leaves the store, so focus
+    // restoration already sees the row gone.
     await deleteNote(id);
+    setPendingDeleteId(null);
     if (lastNoteId === id) setLastNoteId(null);
   };
 
@@ -426,7 +457,12 @@ export function NotesGallery() {
 
         <div className="row-start-2 flex items-center gap-2 @xl:col-start-2 @xl:row-start-1 @xl:ml-auto">
           {notes.length > 0 && <NotesSortMenu value={sort} onChange={setSort} />}
-          <Button onClick={handleCreateNote} className="text-sm" data-tutorial="notes.new">
+          <Button
+            ref={newNoteButtonRef}
+            onClick={handleCreateNote}
+            className="text-sm"
+            data-tutorial="notes.new"
+          >
             <AddIcon className="w-5 h-5" />
             <span>{t("notes.newNote")}</span>
           </Button>
@@ -487,6 +523,7 @@ export function NotesGallery() {
         note={pendingDeleteNote}
         onCancel={() => setPendingDeleteId(null)}
         onConfirm={() => void confirmDelete()}
+        restoreFocusTarget={getDeleteRestoreTarget}
       />
     </div>
   );

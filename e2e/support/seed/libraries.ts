@@ -5,7 +5,7 @@
 
 import { createBookRow, updateBookRow, updateBookWordCountRow } from "@/features/books/write";
 import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
-import { createNoteRow } from "@/features/notes/write";
+import { createNoteRow, updateNoteRow } from "@/features/notes/write";
 import { SEED_BOOK, SEED_CHAPTERS, SEED_NOTES, SEED_NOTE_TAGS, SHELF_BOOKS } from "./names";
 
 async function oneBookThreeChapters(): Promise<void> {
@@ -39,11 +39,7 @@ async function bookShelf(): Promise<void> {
 async function notesWithLinksAndTags(): Promise<void> {
   const book = await createBookRow({ ...SEED_BOOK }, "local");
   const chapter = await createChapterRow({ bookId: book.id, title: "Arrival" }, "local");
-  await updateChapterRow(
-    chapter.id,
-    { content: `<p>${SEED_CHAPTERS[0].text}</p>` },
-    "local"
-  );
+  await updateChapterRow(chapter.id, { content: `<p>${SEED_CHAPTERS[0].text}</p>` }, "local");
   await updateBookWordCountRow(book.id, SEED_CHAPTERS[0].text.split(/\s+/).length);
 
   const keeperLog = await createNoteRow(
@@ -67,7 +63,7 @@ async function notesWithLinksAndTags(): Promise<void> {
     "local"
   );
 
-  await createNoteRow(
+  const harborNotes = await createNoteRow(
     {
       title: SEED_NOTES.harborNotes,
       content: `<p>See <a class="wikilink" href="maibuk://note/${keeperLog.id}">${SEED_NOTES.keeperLog}</a> for the watch.</p>`,
@@ -75,6 +71,10 @@ async function notesWithLinksAndTags(): Promise<void> {
     },
     "local"
   );
+  // The create path stores content without indexing it; a Note written through
+  // the editor indexes its Links on save. Reproduce that save so the seeded
+  // Backlink exists on Keeper's Log.
+  await updateNoteRow({ id: harborNotes.id, content: harborNotes.content }, "local");
 }
 
 export const SEED_LIBRARIES = {

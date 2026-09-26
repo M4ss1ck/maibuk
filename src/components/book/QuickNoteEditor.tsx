@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEditor, EditorContent } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -24,12 +24,20 @@ import {
 interface QuickNoteEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
+  /**
+   * Called when Escape is pressed in the editor. The contenteditable keeps Tab
+   * for indentation, so this is the keyboard path out of it to the controls
+   * that follow (the Add note button).
+   */
+  onEscape?: () => void;
 }
 
-export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps) {
+export function QuickNoteEditor({ onChange, placeholder, onEscape }: QuickNoteEditorProps) {
   const { t } = useTranslation();
   const [showToolbar, setShowToolbar] = useState(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
+  const onEscapeRef = useRef(onEscape);
+  onEscapeRef.current = onEscape;
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
   const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
@@ -53,6 +61,16 @@ export function QuickNoteEditor({ onChange, placeholder }: QuickNoteEditorProps)
         role: "textbox",
         "aria-multiline": "true",
         "aria-label": t("bookNotes.quickNoteLabel"),
+      },
+      handleKeyDown: (_view, event) => {
+        if (event.key !== "Escape") return false;
+        const handler = onEscapeRef.current;
+        if (!handler) return false;
+        // Escape is the editor's own key: stop it here so an enclosing panel
+        // does not also treat it as a dismissal.
+        event.stopPropagation();
+        handler();
+        return true;
       },
     },
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),

@@ -123,9 +123,10 @@ export function NoteListItem({
   }
   const hasActions = actions.length > 0;
   const menuAnchorRef = useRef<HTMLDivElement>(null);
-  const { itemProps } = useItemContextMenu({
+  const { itemProps, setOwnerRef } = useItemContextMenu({
     onOpen: () => setIsMenuOpen(true),
     isDisabled: !hasActions || isEditing,
+    anchorRef: menuAnchorRef,
   });
 
   const commitTitle = () => {
@@ -160,7 +161,7 @@ export function NoteListItem({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      ref={menuAnchorRef}
+      ref={setOwnerRef}
       {...itemProps}
       className={`group relative border-l-2 py-3 pl-2 pr-3 transition-colors pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"

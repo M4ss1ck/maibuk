@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { getBacklinksForNote, type BacklinkEntry } from "@/features/links/link-index";
 
 interface NoteBacklinksProps {
   noteId: string;
   onOpen: (noteId: string) => void;
+  /** The section element, so a caller can move focus into the Backlink list. */
+  ref?: Ref<HTMLDivElement>;
 }
 
-export function NoteBacklinks({ noteId, onOpen }: NoteBacklinksProps) {
+export function NoteBacklinks({ noteId, onOpen, ref }: NoteBacklinksProps) {
   const { t } = useTranslation();
   const [entries, setEntries] = useState<BacklinkEntry[]>([]);
 
@@ -25,6 +27,7 @@ export function NoteBacklinks({ noteId, onOpen }: NoteBacklinksProps) {
 
   return (
     <div
+      ref={ref}
       data-tutorial="notes.backlinks"
       className="border-t border-border px-8 py-4 editor-content-surface mx-auto w-full"
     >

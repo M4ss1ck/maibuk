@@ -1,5 +1,6 @@
 import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "@/components/notes/NotesList";
 import { useSettingsStore } from "@/features/settings/store";
@@ -1193,6 +1194,42 @@ describe("NotesList item menu", () => {
     return trigger;
   }
 
+  /** A controlled list whose Delete actually removes the Note. */
+  function DeleteHarness() {
+    const [notes, setNotes] = useState([
+      buildNote({ id: "a", title: "Alpha", order: 0 }),
+      buildNote({ id: "b", title: "Beta", order: 1 }),
+    ]);
+    return (
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn(async () => {})}
+        onDeleteNote={(id) => setNotes((current) => current.filter((note) => note.id !== id))}
+      />
+    );
+  }
+
+  async function openDeleteDialog(user: ReturnType<typeof userEvent.setup>, row: HTMLElement) {
+    row.focus();
+    fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    await screen.findByRole("menu");
+    const remove = screen.getByRole("menuitem", { name: "common.delete" });
+    while (document.activeElement !== remove) await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Enter}");
+    await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
+  }
+
+  async function confirmDelete(user: ReturnType<typeof userEvent.setup>) {
+    const confirm = screen.getByRole("button", { name: "notes.delete" });
+    for (let step = 0; step < 4 && document.activeElement !== confirm; step++) {
+      await user.keyboard("{Tab}");
+    }
+    await user.keyboard("{Enter}");
+  }
+
   it("asks before deleting and deletes only after confirmation", async () => {
     const user = userEvent.setup();
     const props = renderMenuList();
@@ -1222,6 +1259,33 @@ describe("NotesList item menu", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(props.onDeleteNote).not.toHaveBeenCalled();
+  });
+
+  it("returns focus to the note's row when the delete is cancelled", async () => {
+    const user = userEvent.setup();
+    renderMenuList();
+    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+
+    await openDeleteDialog(user, row);
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
+  });
+
+  it("moves focus to the next row after a confirmed delete", async () => {
+    const user = userEvent.setup();
+    render(<DeleteHarness />);
+    const rows = () => screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"));
+    const first = rows()[0];
+
+    await openDeleteDialog(user, first);
+    await confirmDelete(user);
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Alpha")).not.toBeInTheDocument());
+    await waitFor(() => expect(rows()[0].contains(document.activeElement)).toBe(true));
+    expect(rows()[0]).toHaveTextContent("Beta");
   });
 
   it("pins a note from the menu through the ordering write", async () => {
@@ -1325,6 +1389,25 @@ describe("NotesList item menu", () => {
     await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("menu")).toBeInTheDocument();
+  });
+
+  it("opens from the focused row with Shift+F10 and closes back to it with Escape", async () => {
+    const user = userEvent.setup();
+    renderMenuList();
+    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+    row.focus();
+
+    fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+
+    const menu = await screen.findByRole("menu");
+    await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "common.rename" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
   });
 
   it("Escape closes the item menu and keeps focus on that note", async () => {

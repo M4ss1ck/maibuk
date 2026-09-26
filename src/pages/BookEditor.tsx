@@ -787,6 +787,12 @@ export function BookEditor() {
     [notesSidebarWidth, setNotesSidebarWidth]
   );
 
+  // Keyboard resize: the panel sits on the right, so ArrowLeft widens it.
+  const handleNotesResizeKey = useCallback(
+    (delta: number) => setNotesSidebarWidth(notesSidebarWidth + delta),
+    [notesSidebarWidth, setNotesSidebarWidth]
+  );
+
   // Handle book info update
   const handleUpdateBookInfo = useCallback(
     async (input: Parameters<typeof updateBook>[1]) => {
@@ -1448,6 +1454,7 @@ export function BookEditor() {
         onClose={() => setShowNotesChapter(false)}
         width={notesSidebarWidth}
         onResizeStart={handleNotesResizeStart}
+        onResizeKey={handleNotesResizeKey}
         chapters={chapters}
         currentChapterId={currentChapter?.id ?? null}
         onSelectChapter={handleSelectChapter}

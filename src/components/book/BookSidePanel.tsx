@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
-import { Dialog } from "react-aria-components";
+import { Dialog, Tab, TabList, TabPanel, TabPanels, Tabs } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import type { Chapter } from "@/features/chapters/types";
@@ -20,6 +20,8 @@ interface BookSidePanelProps {
   onClose: () => void;
   width: number;
   onResizeStart: (e: React.MouseEvent) => void;
+  /** Keyboard resize: a positive delta widens the panel, negative narrows it. */
+  onResizeKey?: (delta: number) => void;
   // footnotes
   chapters: Chapter[];
   currentChapterId: string | null;
@@ -37,6 +39,7 @@ export function BookSidePanel({
   onClose,
   width,
   onResizeStart,
+  onResizeKey,
   chapters,
   currentChapterId,
   onSelectChapter,
@@ -46,6 +49,9 @@ export function BookSidePanel({
 }: BookSidePanelProps) {
   const { t } = useTranslation();
   const mobilePanelRef = useRef<HTMLDivElement | null>(null);
+  const activeTabRef = useRef<HTMLDivElement | null>(null);
+  const focusActiveTabRef = useRef(false);
+  const wasOpenRef = useRef(false);
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 768
   );
@@ -93,30 +99,54 @@ export function BookSidePanel({
     });
   }, [isMobile, isOpen, onClose]);
 
+  // Opening the panel must land focus inside it, not on <body>: the trigger
+  // that opened it disables itself while its tab is active. The mobile overlay
+  // already autofocuses through FocusScope, so the desktop panel focuses its
+  // active tab. React Aria mounts its collection items after the first commit,
+  // so the ref callback, not an effect, is what focuses the tab when it lands.
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current && !isMobile) {
+      focusActiveTabRef.current = true;
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen, isMobile]);
+
+  const setActiveTabRef = useCallback((node: HTMLDivElement | null) => {
+    activeTabRef.current = node;
+    if (node && focusActiveTabRef.current) {
+      focusActiveTabRef.current = false;
+      node.focus();
+    }
+  }, []);
+
   if (!isOpen) return null;
 
-  const tab = (value: BookSidePanelTab, label: string) => (
-    <button
-      type="button"
-      aria-pressed={activeTab === value}
-      onClick={() => onTabChange(value)}
-      className={`rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${
-        activeTab === value
-          ? "bg-muted text-foreground"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {label}
-    </button>
-  );
+  const tabClassName =
+    "rounded-md px-2.5 py-1 text-sm font-medium transition-colors outline-none text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary data-[selected]:bg-muted data-[selected]:text-foreground";
 
   const content = (
-    <>
+    <Tabs
+      selectedKey={activeTab}
+      onSelectionChange={(key) => onTabChange(key as BookSidePanelTab)}
+      className="flex min-h-0 flex-1 flex-col"
+    >
       <div className="notes-panel-header">
-        <div className="flex items-center gap-1">
-          {tab("footnotes", t("bookSidePanel.footnotes"))}
-          {tab("notes", t("bookSidePanel.notes"))}
-        </div>
+        <TabList aria-label={t("panes.bookSidePanel")} className="flex items-center gap-1">
+          <Tab
+            id="footnotes"
+            ref={activeTab === "footnotes" ? setActiveTabRef : undefined}
+            className={tabClassName}
+          >
+            {t("bookSidePanel.footnotes")}
+          </Tab>
+          <Tab
+            id="notes"
+            ref={activeTab === "notes" ? setActiveTabRef : undefined}
+            className={tabClassName}
+          >
+            {t("bookSidePanel.notes")}
+          </Tab>
+        </TabList>
         <Tooltip content={t("common.close")}>
           <button
             type="button"
@@ -129,18 +159,19 @@ export function BookSidePanel({
         </Tooltip>
       </div>
 
-      {activeTab === "footnotes" ? (
-        <div className="notes-panel-content">
+      <TabPanels className="flex min-h-0 flex-1 flex-col">
+        <TabPanel id="footnotes" className="notes-panel-content">
           <FootnotesView
             chapters={chapters}
             currentChapterId={currentChapterId}
             onSelectChapter={onSelectChapter}
           />
-        </div>
-      ) : (
-        <BookNotesView notes={notes} onCreateNote={onCreateNote} onOpenNote={onOpenNote} />
-      )}
-    </>
+        </TabPanel>
+        <TabPanel id="notes" className="flex min-h-0 flex-1 flex-col">
+          <BookNotesView notes={notes} onCreateNote={onCreateNote} onOpenNote={onOpenNote} />
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
   );
 
   if (isMobile) {
@@ -177,11 +208,35 @@ export function BookSidePanel({
       data-focus-pane="book-side-panel"
       tabIndex={-1}
       aria-label={t("panes.bookSidePanel")}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        // The Quick Note editor stops Escape propagation while it handles it,
+        // so reaching here means the panel itself owns the dismissal.
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
     >
       <Tooltip content={t("bookSidePanel.resize")}>
         <div
+          role="separator"
+          tabIndex={0}
+          aria-orientation="vertical"
+          aria-label={t("bookSidePanel.resize")}
+          aria-valuenow={width}
+          aria-valuemin={200}
+          aria-valuemax={480}
           onMouseDown={onResizeStart}
-          className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              onResizeKey?.(16);
+            } else if (event.key === "ArrowRight") {
+              event.preventDefault();
+              onResizeKey?.(-16);
+            }
+          }}
+          className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
       </Tooltip>
       {content}

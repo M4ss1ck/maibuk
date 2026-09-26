@@ -1010,7 +1010,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "sidepanel-resize",
@@ -1022,7 +1022,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "booknotes-add-quick",
@@ -1035,7 +1035,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "booknotes-open-full",
@@ -1047,7 +1047,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId", "/notes/:noteId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-gallery-browse",
@@ -1059,7 +1059,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-create",
@@ -1072,7 +1072,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes", "/notes/:noteId"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-search-filter",
@@ -1085,7 +1085,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-list-group-sort",
@@ -1095,10 +1095,10 @@ export const ROWS: MatrixRow[] = [
     edges: [],
     terms: ["Note", "Book", "Tag"],
     shortcuts: [],
-    routes: ["/notes"],
+    routes: ["/notes", "/notes/:noteId"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-item-menu",
@@ -1108,10 +1108,10 @@ export const ROWS: MatrixRow[] = [
     edges: ["Delete confirm Cancel"],
     terms: ["Note", "Item Menu", "Pinned", "Book Note"],
     shortcuts: [],
-    routes: ["/notes"],
+    routes: ["/notes", "/notes/:noteId"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-pin-order",
@@ -1124,7 +1124,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-move-to-book",
@@ -1137,7 +1137,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-reorder-keyboard",
@@ -1149,7 +1149,8 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "not-accepted",
+    issue: "https://github.com/M4ss1ck/maibuk/issues/219",
   },
   {
     id: "notes-tags-edit",
@@ -1161,7 +1162,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-links-backlinks",
@@ -1173,7 +1174,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes/:noteId", "/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-delete",
@@ -1185,7 +1186,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-last-edited",
@@ -1198,7 +1199,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: ["clock"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "notes-export",
@@ -1210,7 +1211,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/notes/:noteId"],
     fixture: "notesWithLinksAndTags",
     tags: ["download"],
-    status: "planned",
+    status: "accepted",
   },
   {
     id: "ephemeral-write",
