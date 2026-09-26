@@ -525,11 +525,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.drop(screen.getByTestId("notes-section-pinned"), { dataTransfer });
@@ -561,11 +557,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.dragOver(screen.getByTestId("notes-section-pinned"), { dataTransfer });
@@ -596,11 +588,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.dragOver(screen.getByTestId("notes-section-pinned"), { dataTransfer });
@@ -621,11 +609,7 @@ describe("NotesList", () => {
       />
     );
     const file = new File(["# First"], "first.md");
-    const dataTransfer = {
-      files: [file],
-      items: [{ kind: "file", type: file.type }],
-      dropEffect: "",
-    } as unknown as DataTransfer;
+    const dataTransfer = createFileDataTransfer(file);
     const container = document.querySelector(".overflow-auto");
     if (!container) throw new Error("Expected list container to exist");
 
@@ -658,11 +642,7 @@ describe("NotesList", () => {
       />
     );
     const file = new File(["draft"], "draft.txt");
-    const dataTransfer = {
-      files: [file],
-      items: [{ kind: "file", type: file.type }],
-      dropEffect: "",
-    } as unknown as DataTransfer;
+    const dataTransfer = createFileDataTransfer(file);
     const container = document.querySelector(".overflow-auto");
     if (!container) throw new Error("Expected list container to exist");
 
@@ -697,11 +677,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.drop(screen.getByTestId("notes-section-all"), { dataTransfer });
@@ -744,11 +720,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.dragOver(targetGroup, { dataTransfer });
@@ -781,11 +753,7 @@ describe("NotesList", () => {
     if (!source) {
       throw new Error("Expected note row to exist");
     }
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     // Drop on the same group -> no-op
     fireEvent.dragStart(source, { dataTransfer });

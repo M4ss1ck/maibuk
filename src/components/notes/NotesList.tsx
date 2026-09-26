@@ -49,6 +49,7 @@ import {
   buildListNoteSections,
   buildTagNoteGroups,
   filterNotes,
+  placeNote,
 } from "@/components/notes/notes-list-model";
 import type {
   NoteWithBook,
@@ -287,26 +288,14 @@ export function NotesList({
     // section, and crossing sections is how a drag pins or unpins.
     onMove: (e) => {
       const key = String([...e.keys][0] ?? "");
-      const targetKey = String(e.target.key);
-      if (!key || key === targetKey) return;
       const sections = listSectionsRef.current;
       const dragged = sections.flatMap((section) => section.notes).find((n) => n.id === key);
-      if (!dragged) return;
-      const nextSections = sections.map((section) => ({
-        ...section,
-        notes: section.notes.filter((note) => note.id !== key),
-      }));
-      const targetSection = nextSections.find((section) =>
-        section.notes.some((note) => note.id === targetKey)
-      );
-      if (!targetSection) return;
-      const targetIndex = targetSection.notes.findIndex((note) => note.id === targetKey);
-      targetSection.notes.splice(
-        e.target.dropPosition === "after" ? targetIndex + 1 : targetIndex,
-        0,
-        dragged
-      );
-      emitSectionOrder(nextSections);
+      if (!dragged || e.target.dropPosition === "on") return;
+      const nextSections = placeNote(sections, dragged, {
+        noteId: String(e.target.key),
+        placement: e.target.dropPosition,
+      });
+      if (nextSections) emitSectionOrder(nextSections);
     },
     getDropOperation: (target, types, allowedOperations) => {
       // Notes do not nest: only the gaps between rows take a drop.
@@ -342,17 +331,10 @@ export function NotesList({
     if (isSearchActive) return;
 
     const draggedNote = notes.find((note) => note.id === draggedId);
-    if (!draggedNote) return;
-
-    const nextSections = listSections.map((section) => ({
-      ...section,
-      notes: section.notes.filter((note) => note.id !== draggedId),
-    }));
-    const targetSection = nextSections.find((section) => section.id === targetSectionId);
-    if (!targetSection) return;
-
-    targetSection.notes.push(draggedNote);
-    emitSectionOrder(nextSections);
+    const nextSections =
+      draggedNote &&
+      placeNote(listSections, draggedNote, { sectionId: targetSectionId, at: "end" });
+    if (nextSections) emitSectionOrder(nextSections);
     setDraggedId(null);
     setDropTarget(null);
   };
@@ -393,16 +375,12 @@ export function NotesList({
   // Pinning from the item menu reuses the drag path's ordering write, over
   // every note rather than the search-filtered sections.
   const togglePinned = (note: NoteWithBook) => {
-    const sections = buildListNoteSections(notes, "").map((section) => ({
-      ...section,
-      notes: section.notes.filter((sectionNote) => sectionNote.id !== note.id),
-    }));
-    const pinned = sections.find((section) => section.id === "pinned");
-    const all = sections.find((section) => section.id === "all");
-    if (!pinned || !all) return;
-    if (note.pinned) all.notes.unshift(note);
-    else pinned.notes.push(note);
-    emitSectionOrder(sections);
+    const sections = placeNote(
+      buildListNoteSections(notes, ""),
+      note,
+      note.pinned ? { sectionId: "all", at: "start" } : { sectionId: "pinned", at: "end" }
+    );
+    if (sections) emitSectionOrder(sections);
   };
 
   const moveTargets: NoteMoveTarget[] =
