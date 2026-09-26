@@ -5,6 +5,11 @@ using the keyboard only. It is a separate, local command: nothing in `pnpm test`
 `pnpm test:run`, `pnpm test:coverage`, the builds, the release scripts, CI, or
 git hooks runs it.
 
+The coverage guard is browser-free, so it also runs inside Vitest, which CI
+already runs (`src/test/unit/e2e-coverage-guard.test.ts`): CI fails when a
+route, shortcut, or CONTEXT.md term has no matrix row, or a row has no tagged
+spec. Playwright itself stays a local command and never runs in CI.
+
 ## Install
 
 ```bash

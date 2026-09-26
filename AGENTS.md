@@ -71,6 +71,7 @@ Every new or modified UI feature ships keyboard-operable and screen-reader-corre
 5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) with the registry `id` on the entry. That id is what makes it a Bound Shortcut listed under "On this screen" in the help. A key handled elsewhere (a component's own `onKeyDown`, a native control) declares its id with `useBoundShortcutIds`; TipTap formatting keys are tagged `source: "editor-keymap"` and listed from each editor's real keymap. `shortcut-bindings.test.ts` fails when a registry id is bound nowhere.
 6. **Proven by behavioral tests** — see the Keyboard & Accessibility Test Gate in section 6.
 7. **Reachable by touch** — Android and phone browsers have no hover, and Tailwind 4 only applies `hover:`/`group-hover:` where hover exists. Mouse devices keep their hover-revealed one-click actions; the same element gets `pointer-coarse:hidden`, and touch screens get the actions another way: an item's actions go in a ⋯ `ItemActionsMenu` shown with `hidden pointer-coarse:inline-flex` (or an `ItemActionsPopover` for Canvas nodes), opened also by long-press through `useItemContextMenu`; a single action becomes a visible control on coarse pointers. `src/test/unit/touch-reachability.test.ts` fails on a hover reveal with no `pointer-coarse:` class unless it is listed there with its touch path. Long-press opens the Item Menu, so on touch a drag starts only from a `data-drag-handle` (wrap the list in `useTouchDragFromHandle`). Remember where phones actually browse: on a phone the Notes gallery, not the notes list, is how notes are reached.
+8. **Covered in the E2E suite**: new interactive UI is not done until it has a row in `e2e/coverage-matrix.ts` and a spec tagged `@wf:<row-id>`. See "Definition of done" in the E2E section of section 6.
 
 Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and `tabIndex` wiring looked correct while the widget was inoperable by keyboard, and attribute-level tests stayed green. Attributes are not accessibility; behavior is.
 
@@ -632,6 +633,17 @@ Chromium and WebKit, runs locally, and is invisible to `pnpm test`,
 hooks. It never runs in CI. `e2e/README.md` documents install, the full run,
 single file/test/tag runs, headed, debug and UI mode, trace viewing, and
 troubleshooting.
+
+**Definition of done.** A new feature or new interactive UI is not done until it
+has a row in `e2e/coverage-matrix.ts`, and a spec tagged `@wf:<row-id>` (and
+`@sc:<id>` for each new shortcut) that passes locally with `pnpm test:e2e`; a
+single file is fine while iterating (`pnpm test:e2e specs/<file>`). A gap whose
+right interaction is undecided may stay `not-accepted` with a real GitHub issue
+and `test.fail` citing it. Playwright never runs in CI (timing). CI runs only the
+coverage guard through Vitest (`src/test/unit/e2e-coverage-guard.test.ts`),
+which fails when a route, registry shortcut, or CONTEXT.md term has no row, or a
+row has no tagged spec. Running the specs is the author's local pre-PR check and
+the first diagnosis tool when behavior breaks.
 
 **Keyboard contract (every spec).** Enter each workflow through keyboard-reachable
 UI and drive it with Tab, Shift+Tab, arrows, Enter, Space, Escape, and registered
