@@ -355,8 +355,16 @@ option {
   list-style-type: decimal;
 }
 
+/* The marker sits on the item's first line with the li's own line height, so a
+   shorter value set on the paragraph inside would be propped open. Keep the li
+   at 1 and hand its content the real value. */
 .editor-content li {
   margin-block: 0;
+  line-height: 1;
+}
+
+.editor-content li > :where(p, ul, ol, div) {
+  line-height: var(--line-height);
 }
 
 .editor-content ul[data-type="taskList"] {
