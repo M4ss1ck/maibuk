@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { Download, Locator, Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { expectTabContained, pressUntilFocused, tabTo } from "../support/keyboard";
 import { failBlobDownloads } from "../support/fault";
 import { BACKUPS_CHAPTERS } from "../support/seed/backups-present";
 import { expect, test } from "../support/test";
@@ -98,9 +98,32 @@ test.describe("Book export @wf:export-book-epub", () => {
     await expect(dialog).toBeHidden();
     await expect(page.getByRole("button", { name: "Export Book" })).toBeFocused();
   });
+
+  test("Tab stays inside the dialog and Escape closes it, returning focus to Export Book", async ({
+    page,
+  }) => {
+    const dialog = await openExportDialog(page);
+    await expectTabContained(page, dialog);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("button", { name: "Export Book" })).toBeFocused();
+  });
 });
 
 test.describe("Book export @wf:export-book-pdf", () => {
+  test("with PDF chosen, Tab stays inside the dialog and Escape closes it", async ({ page }) => {
+    const dialog = await openExportDialog(page);
+    await tabTo(page, dialog.getByRole("button", { name: "PDF", exact: true }), { max: 6 });
+    await page.keyboard.press("Enter");
+    await expect(dialog.getByRole("switch", { name: "Include page numbers" })).toBeVisible();
+    await expectTabContained(page, dialog);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("button", { name: "Export Book" })).toBeFocused();
+  });
+
   test("PDF uses the chosen page size, margins, and page numbers", async ({ page }) => {
     const dialog = await openExportDialog(page);
     await tabTo(page, dialog.getByRole("button", { name: "PDF", exact: true }), { max: 6 });
