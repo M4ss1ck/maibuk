@@ -192,7 +192,10 @@ option {
 .editor-content {
   font-family: var(--editor-font-family, var(--font-serif));
   font-size: var(--editor-font-size, 18px);
-  line-height: 1.75;
+  /* Paragraph and list spacing below derive from it; blocks with their own
+     line height set it too. */
+  --line-height: 1.75;
+  line-height: var(--line-height);
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -309,8 +312,12 @@ option {
 }
 
 /* Tiptap editor styles */
-.editor-content p {
-  margin: 1em 0;
+/* (L - 1) * 4/3 em: exactly 1em at the default 1.75, 0 at 1, so Enter at line
+   height 1 spaces paragraphs and list items like Shift+Enter lines. */
+.editor-content p,
+.editor-content li > ul,
+.editor-content li > ol {
+  margin-block: calc((var(--line-height) - 1) * 4 / 3 * 1em);
 }
 
 .editor-content h1 {
@@ -348,8 +355,16 @@ option {
   list-style-type: decimal;
 }
 
+/* The marker sits on the item's first line with the li's own line height, so a
+   shorter value set on the paragraph inside would be propped open. Keep the li
+   at 1 and hand its content the real value. */
 .editor-content li {
-  margin: 0.25em 0;
+  margin-block: 0;
+  line-height: 1;
+}
+
+.editor-content li > :where(p, ul, ol, div) {
+  line-height: var(--line-height);
 }
 
 .editor-content ul[data-type="taskList"] {

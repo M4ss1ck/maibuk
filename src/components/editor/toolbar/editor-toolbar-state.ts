@@ -1,5 +1,9 @@
 import type { Editor } from "@tiptap/react";
 import type { EditorState } from "@tiptap/pm/state";
+import {
+  DEFAULT_LINE_HEIGHT,
+  normalizeLineHeight,
+} from "@/components/editor/extensions/LineHeight";
 
 export interface EditorToolbarState {
   fontSize: string;
@@ -37,6 +41,46 @@ export interface EditorToolbarState {
 
 const DEFAULT_FONT_SIZE = "18";
 
+// CSS line-height inherits, so the effective value is the closest ancestor
+// block (paragraph, heading, list item) that carries one. A legacy inline span
+// can only make a line taller, so it wins only when it is larger.
+function effectiveLineHeight(editor: Editor): string {
+  const { selection, doc } = editor.state;
+  let $from = selection.$from;
+  // Select all (and node selections) start above any textblock, so read the
+  // first textblock the selection covers instead.
+  if ($from && !$from.parent.isTextblock) {
+    let firstTextblock: number | null = null;
+    doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+      if (firstTextblock !== null) return false;
+      if (node.isTextblock) {
+        firstTextblock = pos + 1;
+        return false;
+      }
+      return true;
+    });
+    if (firstTextblock !== null) $from = doc.resolve(firstTextblock);
+  }
+  let blockValue: string | null = null;
+  if ($from) {
+    for (let depth = $from.depth; depth >= 0; depth -= 1) {
+      const node = $from.node(depth);
+      const isBlock =
+        node.isTextblock || node.type.name === "listItem" || node.type.name === "taskItem";
+      if (isBlock && node.attrs.lineHeight != null) {
+        blockValue = String(node.attrs.lineHeight);
+        break;
+      }
+    }
+  }
+  const fallback = blockValue ?? DEFAULT_LINE_HEIGHT;
+  const legacy = normalizeLineHeight(editor.getAttributes("textStyle").lineHeight);
+  if (legacy !== null && Number(legacy) > Number(fallback)) {
+    return legacy;
+  }
+  return fallback;
+}
+
 // Visible, floating, and width-measurement groups share one calculation. Keep
 // only the latest immutable ProseMirror state, without retaining edit history.
 const snapshotCache = new WeakMap<Editor, { state: EditorState; snapshot: EditorToolbarState }>();
@@ -51,7 +95,7 @@ export function getEditorToolbarState(editor: Editor): EditorToolbarState {
   const can = editor.can();
   const snapshot: EditorToolbarState = {
     fontSize: attrs.fontSize ? attrs.fontSize.replace("px", "") : DEFAULT_FONT_SIZE,
-    lineHeight: attrs.lineHeight || "1.5",
+    lineHeight: effectiveLineHeight(editor),
     fontFamily: attrs.fontFamily || "Literata, serif",
     color: attrs.color || "",
     highlightColor: highlightAttrs.color || "",

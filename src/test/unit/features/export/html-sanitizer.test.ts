@@ -116,6 +116,27 @@ describe("sanitizeHtmlForEpub()", () => {
     expect(result.html).not.toContain("data-test");
     expect(result.html).not.toContain("data-scene-break");
   });
+
+  it("removes CSS custom property declarations from inline styles", () => {
+    const result = sanitizeHtmlForEpub('<p style="line-height: 1.3; --line-height: 1.3">Text</p>');
+
+    expect(result.html).toContain('<p style="line-height: 1.3">Text</p>');
+    expect(result.html).not.toContain("--line-height");
+  });
+
+  it("removes the style attribute when only custom properties remain", () => {
+    const result = sanitizeHtmlForEpub('<p style="--line-height: 2">Text</p>');
+
+    expect(result.html).toContain("<p>Text</p>");
+    expect(result.html).not.toContain("style=");
+  });
+
+  it("keeps standard declarations when a custom property sits in the middle", () => {
+    const result = sanitizeHtmlForEpub('<p style="color: red; --x: 1; font-size: 12px">Text</p>');
+
+    expect(result.html).toContain('<p style="color: red; font-size: 12px">Text</p>');
+    expect(result.html).not.toContain("--x");
+  });
 });
 
 describe("generateEndnotesHtml()", () => {

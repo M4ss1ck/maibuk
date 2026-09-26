@@ -359,3 +359,82 @@ describe("renderHtmlContent() inline style preservation", () => {
     assertNoDuplicateSiblingKeys(nodes);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Block-level line height
+// ---------------------------------------------------------------------------
+
+describe("renderHtmlContent() block line height", () => {
+  /** First list item View rendered for a list node. */
+  function getListItem(nodes: unknown[]): { props?: { style?: unknown; children?: unknown } } {
+    const list = nodes[0] as { props?: { children?: unknown } };
+    const rawItems = list?.props?.children;
+    const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
+    return items[0] as { props?: { style?: unknown; children?: unknown } };
+  }
+
+  /** The content Text (key "text") of the first list item. */
+  function getListItemContent(nodes: unknown[]): { props?: { style?: unknown } } {
+    const item = getListItem(nodes);
+    const rawChildren = item.props?.children;
+    const children = Array.isArray(rawChildren) ? rawChildren : rawChildren ? [rawChildren] : [];
+    return children.find(
+      (c) =>
+        c !== null &&
+        typeof c === "object" &&
+        "props" in c &&
+        (c as { key?: unknown }).key === "text"
+    ) as { props?: { style?: unknown } };
+  }
+
+  it("layers line-height 1 over styles.paragraph for a paragraph with inline line-height", () => {
+    const nodes = renderHtmlContent('<p style="line-height: 1">Text</p>', styles);
+    const paragraph = nodes[0] as { props?: { style?: unknown } };
+    expect(paragraph.props?.style).toEqual([styles.paragraph, { lineHeight: 1 }]);
+  });
+
+  it("keeps exactly styles.paragraph when no line-height is present", () => {
+    const nodes = renderHtmlContent("<p>Text</p>", styles);
+    const paragraph = nodes[0] as { props?: { style?: unknown } };
+    expect(paragraph.props?.style).toBe(styles.paragraph);
+  });
+
+  it("applies a list item's own inline line-height to its content only", () => {
+    const nodes = renderHtmlContent('<ul><li style="line-height: 1.15">Item</li></ul>', styles);
+    const content = getListItemContent(nodes);
+    expect(content.props?.style).toEqual([styles.listItemContent, { lineHeight: 1.15 }]);
+  });
+
+  it("falls back to the first direct child paragraph's line-height", () => {
+    const nodes = renderHtmlContent('<ul><li><p style="line-height: 2">Item</p></li></ul>', styles);
+    const content = getListItemContent(nodes);
+    expect(content.props?.style).toEqual([styles.listItemContent, { lineHeight: 2 }]);
+  });
+
+  it("applies line-height to headings", () => {
+    const nodes = renderHtmlContent('<h1 style="line-height: 1">Title</h1>', styles);
+    const heading = nodes[0] as { props?: { style?: unknown } };
+    expect(heading.props?.style).toEqual([styles.heading1, { lineHeight: 1 }]);
+  });
+
+  it("ignores px and normal line heights", () => {
+    const px = renderHtmlContent('<p style="line-height: 24px">Text</p>', styles);
+    expect((px[0] as { props?: { style?: unknown } }).props?.style).toBe(styles.paragraph);
+
+    const normal = renderHtmlContent('<p style="line-height: normal">Text</p>', styles);
+    expect((normal[0] as { props?: { style?: unknown } }).props?.style).toBe(styles.paragraph);
+  });
+
+  it("converts percentage line heights to a unitless ratio", () => {
+    const nodes = renderHtmlContent('<p style="line-height: 150%">Text</p>', styles);
+    const paragraph = nodes[0] as { props?: { style?: unknown } };
+    expect(paragraph.props?.style).toEqual([styles.paragraph, { lineHeight: 1.5 }]);
+  });
+
+  it("leaves legacy inline span line-heights unchanged", () => {
+    const nodes = renderHtmlContent('<p><span style="line-height: 2">x</span></p>', styles);
+    const paragraph = nodes[0] as { props?: { style?: unknown } };
+    expect(paragraph.props?.style).toBe(styles.paragraph);
+    expect(collectText(nodes).join("")).toBe("x");
+  });
+});

@@ -100,6 +100,37 @@ function parseInlineStyles(el: Element): ParsedInlineStyles {
 }
 
 /**
+ * Reads an element's own inline `line-height` from its style attribute.
+ * Returns a finite positive unitless number, converting a percentage
+ * ("150%") to 1.5. Missing values, px, and "normal" return undefined.
+ */
+function blockLineHeight(el: Element): number | undefined {
+  const styleStr = el.getAttribute("style");
+  if (!styleStr) return undefined;
+
+  const props = styleStr
+    .split(";")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  for (const prop of props) {
+    const colonIdx = prop.indexOf(":");
+    if (colonIdx < 0) continue;
+
+    const name = prop.substring(0, colonIdx).trim().toLowerCase();
+    if (name !== "line-height") continue;
+
+    const value = prop.substring(colonIdx + 1).trim();
+    const percentMatch = value.match(/^(\d+(?:\.\d+)?)%$/);
+    const numeric = percentMatch ? parseFloat(percentMatch[1]) / 100 : Number(value);
+
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+  }
+
+  return undefined;
+}
+
+/**
  * Converts a ParsedInlineStyles object into a react-pdf style object,
  * omitting undefined values.
  */
@@ -218,7 +249,10 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
 // ---------------------------------------------------------------------------
 
 function renderParagraph(el: Element, styles: PdfStyles, key: string): ReactNode {
-  return createElement(Text, { key, style: styles.paragraph }, ...renderInlineChildren(el, styles));
+  const lineHeight = blockLineHeight(el);
+  const style =
+    lineHeight !== undefined ? [styles.paragraph, { lineHeight }] : styles.paragraph;
+  return createElement(Text, { key, style }, ...renderInlineChildren(el, styles));
 }
 
 function renderHeading(
@@ -228,9 +262,11 @@ function renderHeading(
   key: string
 ): ReactNode {
   const headingId = el.getAttribute("id");
+  const lineHeight = blockLineHeight(el);
+  const style = lineHeight !== undefined ? [styles[level], { lineHeight }] : styles[level];
   return createElement(
     Text,
-    { key, id: headingId ?? undefined, style: styles[level] },
+    { key, id: headingId ?? undefined, style },
     ...renderInlineChildren(el, styles)
   );
 }
@@ -249,6 +285,15 @@ function renderList(
     if (li.tagName.toLowerCase() === "li") {
       counter++;
       const marker = type === "unordered" ? "•  " : `${counter}.  `;
+      const childParagraph = Array.from(li.children).find(
+        (child) => child.tagName.toLowerCase() === "p"
+      );
+      const lineHeight =
+        blockLineHeight(li) ?? (childParagraph ? blockLineHeight(childParagraph) : undefined);
+      const contentStyle =
+        lineHeight !== undefined
+          ? [styles.listItemContent, { lineHeight }]
+          : styles.listItemContent;
       items.push(
         createElement(
           View,
@@ -256,7 +301,7 @@ function renderList(
           createElement(Text, { key: "marker", style: styles.bullet }, marker),
           createElement(
             Text,
-            { key: "text", style: styles.listItemContent },
+            { key: "text", style: contentStyle },
             ...renderInlineChildren(el.children[i], styles)
           )
         )

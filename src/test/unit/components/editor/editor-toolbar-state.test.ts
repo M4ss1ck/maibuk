@@ -27,7 +27,7 @@ describe("getEditorToolbarState", () => {
     const snapshot = getEditorToolbarState(editor);
 
     expect(snapshot.fontSize).toBe("18");
-    expect(snapshot.lineHeight).toBe("1.5");
+    expect(snapshot.lineHeight).toBe("1.75");
     expect(snapshot.fontFamily).toBe("Literata, serif");
     expect(snapshot.color).toBe("");
     expect(snapshot.highlightColor).toBe("");
@@ -117,6 +117,48 @@ describe("getEditorToolbarState", () => {
     const redone = getEditorToolbarState(editor);
     expect(redone).not.toBe(undone);
     expect(redone.canUndo).toBe(true);
+  });
+
+  it("shows a block line height from a paragraph at the cursor", () => {
+    const editor = makeEditor('<p style="line-height: 1">Hello</p>');
+    editor.commands.setTextSelection(1);
+    expect(getEditorToolbarState(editor).lineHeight).toBe("1");
+  });
+
+  it("shows the first block's line height when everything is selected", () => {
+    const editor = makeEditor('<p style="line-height: 2">Hello</p><p>World</p>');
+    editor.commands.selectAll();
+    expect(getEditorToolbarState(editor).lineHeight).toBe("2");
+  });
+
+  it("shows the list item line height when everything in a list is selected", () => {
+    const editor = makeEditor('<ul><li style="line-height: 1"><p>Item</p></li></ul>');
+    editor.commands.selectAll();
+    expect(getEditorToolbarState(editor).lineHeight).toBe("1");
+  });
+
+  it("shows the list item line height at the cursor", () => {
+    const editor = makeEditor('<ul><li style="line-height: 1.15"><p>Item</p></li></ul>');
+    editor.commands.setTextSelection(4);
+    expect(getEditorToolbarState(editor).lineHeight).toBe("1.15");
+  });
+
+  it("shows a larger legacy span line height over the default", () => {
+    const editor = makeEditor('<p><span style="line-height: 2">Hello</span></p>');
+    editor.commands.setTextSelection(2);
+    expect(getEditorToolbarState(editor).lineHeight).toBe("2");
+  });
+
+  it("keeps the default when the legacy span is smaller", () => {
+    const editor = makeEditor('<p><span style="line-height: 1.5">Hello</span></p>');
+    editor.commands.setTextSelection(2);
+    expect(getEditorToolbarState(editor).lineHeight).toBe("1.75");
+  });
+
+  it("shows a larger legacy span line height over a block value", () => {
+    const editor = makeEditor('<p style="line-height: 1"><span style="line-height: 2">Hello</span></p>');
+    editor.commands.setTextSelection(2);
+    expect(getEditorToolbarState(editor).lineHeight).toBe("2");
   });
 
   it("does not share cached results between separate editors", () => {

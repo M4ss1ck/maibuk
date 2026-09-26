@@ -448,6 +448,68 @@ test.describe("toolbar selects @wf:editor-toolbar-selects", () => {
     await expect(lineHeight).toHaveValue("2");
   });
 
+  test("line height 1 spaces paragraphs made with Enter one line apart", async ({ page }) => {
+    await seedSettings(page, { toolbarExpanded: true });
+    await openEditor(page);
+    await page.keyboard.press("End");
+
+    const size = toolbar(page).getByRole("combobox", { name: "Size" });
+    const lineHeight = toolbar(page).getByRole("combobox", { name: "Line height" });
+    await focusToolbarControl(page, size);
+    await pressUntilFocused(page, "ArrowRight", lineHeight, { max: 80 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("1");
+    await page.keyboard.press("Enter");
+    await expect(editorText(page)).toBeFocused();
+
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Tight line");
+    await expect(lineHeight).toHaveValue("1");
+
+    // Read-only geometry: the new paragraph must start where the previous
+    // line ends, like a Shift+Enter line, not one paragraph margin below.
+    const next = editorText(page).locator("p", { hasText: "Tight line" });
+    const previous = next.locator("xpath=preceding-sibling::p[1]");
+    const [above, below] = [await previous.boundingBox(), await next.boundingBox()];
+    expect(below!.y - (above!.y + above!.height)).toBeCloseTo(0, 0);
+  });
+
+  test("a list started after setting line height 1 spaces items one line apart", async ({
+    page,
+  }) => {
+    await seedSettings(page, { toolbarExpanded: true });
+    await openEditor(page);
+    await page.keyboard.press("End");
+
+    const size = toolbar(page).getByRole("combobox", { name: "Size" });
+    const lineHeight = toolbar(page).getByRole("combobox", { name: "Line height" });
+    await focusToolbarControl(page, size);
+    await pressUntilFocused(page, "ArrowRight", lineHeight, { max: 80 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("1");
+    await page.keyboard.press("Enter");
+    await expect(editorText(page)).toBeFocused();
+
+    // Enter carries the value to the new paragraph, and the list then wraps
+    // that paragraph, so the value sits on the <p> inside each <li>.
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("- First item");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Second item");
+
+    const list = editorText(page).getByRole("list");
+    const first = list.getByRole("listitem").filter({ hasText: "First item" });
+    const second = list.getByRole("listitem").filter({ hasText: "Second item" });
+    await expect(second).toBeVisible();
+    const [above, below] = [await first.boundingBox(), await second.boundingBox()];
+    const line = await first.locator("p").boundingBox();
+    // One line per item, like Shift+Enter lines: no gap and no taller first line.
+    expect(line!.height).toBeCloseTo(18, 0);
+    expect(below!.y - above!.y).toBeCloseTo(line!.height, 0);
+  });
+
   test("text color applies to the selection and persists", async ({ page }) => {
     await seedSettings(page, { toolbarExpanded: true });
     await openEditor(page);
