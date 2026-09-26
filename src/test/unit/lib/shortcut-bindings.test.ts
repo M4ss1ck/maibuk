@@ -5,6 +5,7 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { CollapsibleHeading } from "@/components/editor/extensions/CollapsibleHeading";
 import { SHORTCUTS, type ShortcutDef, type ShortcutId } from "@/lib/shortcut-registry";
 
 vi.mock("@/components/editor/extensions/SpellCheck", async () => {
@@ -69,7 +70,11 @@ describe("every registry shortcut is really bound", () => {
 
   it("finds every editor-keymap shortcut in the keymap of an editor the app builds", () => {
     const chapterEditor = buildEditor();
-    const noteEditor = buildEditor([TaskList, TaskItem.configure({ nested: true })]);
+    const noteEditor = buildEditor([
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      CollapsibleHeading,
+    ]);
     editors.push(chapterEditor, noteEditor);
     const handled = new Set([
       ...editorKeymapShortcutIds(chapterEditor),

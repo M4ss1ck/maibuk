@@ -56,7 +56,7 @@ export const SHORTCUTS = {
   },
   "global.startTutorial": {
     labelKey: "shortcuts.startTutorial",
-    keys: ["Ctrl+Shift+T"],
+    sequence: ["g", "u"],
   },
 
   "tutorial.skip": { labelKey: "shortcuts.skipTutorial", keys: ["Esc"] },
@@ -164,9 +164,15 @@ export const SHORTCUTS = {
     keys: ["Ctrl+Shift+J"],
   },
   "editor.insertLink": { labelKey: "editor.insertLink", keys: ["Ctrl+K"] },
+  "editor.followLink": { labelKey: "editor.followLink", keys: ["Ctrl+Enter"] },
   "editor.undo": { labelKey: "editor.undo", source: "editor-keymap", keys: ["Ctrl+Z"] },
   "editor.redo": { labelKey: "editor.redo", source: "editor-keymap", keys: ["Ctrl+Shift+Z"] },
   "editor.dictionary": { labelKey: "editor.dictionary", keys: ["Ctrl+Shift+D"] },
+  "editor.toggleHeadingCollapse": {
+    labelKey: "editor.toggleHeadingCollapse",
+    source: "editor-keymap",
+    keys: ["Ctrl+Alt+H"],
+  },
   "editor.insertSymbol": {
     labelKey: "shortcuts.insertSymbol",
     keys: ["Ctrl+Shift+O"],
@@ -204,6 +210,7 @@ export const SHORTCUTS = {
   "canvas.toolEraser": { labelKey: "canvas.toolEraser", keys: ["E"] },
   "canvas.addTextNode": { labelKey: "canvas.addTextNode", keys: ["T"] },
   "canvas.addNoteRef": { labelKey: "canvas.addNoteRef", keys: ["N"] },
+  "canvas.editTextNode": { labelKey: "canvas.editTextNode", keys: ["F2"] },
   "canvas.zoomIn": { labelKey: "canvas.zoomIn", keys: ["Ctrl++"] },
   "canvas.zoomOut": { labelKey: "canvas.zoomOut", keys: ["Ctrl+-"] },
   "canvas.fitView": { labelKey: "canvas.fitView", keys: ["Shift+1"] },

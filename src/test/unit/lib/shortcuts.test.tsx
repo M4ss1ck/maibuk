@@ -69,6 +69,29 @@ describe("useShortcuts modal blocking", () => {
     expect(onTrigger).toHaveBeenCalledTimes(1);
   });
 
+  it("fires a modifier shortcut even when a pressable stops keydown propagation", async () => {
+    useModalStore.setState({ modalIds: [], openCount: 0 });
+
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+
+    renderHook(() => useShortcuts([{ keys: ["ctrl+s"], onTrigger }]));
+
+    // React Spectrum pressables (React Aria menus, listboxes, toolbars) stop
+    // keydown propagation, which would otherwise hide shortcut keys.
+    const pressable = document.createElement("button");
+    pressable.addEventListener("keydown", (event) => event.stopPropagation());
+    document.body.appendChild(pressable);
+    pressable.focus();
+
+    pressable.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+    );
+
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+    pressable.remove();
+  });
+
   it("preserves sequence matching when no modal is open", async () => {
     useModalStore.setState({ modalIds: [], openCount: 0 });
 
@@ -121,5 +144,62 @@ describe("useShortcuts modal blocking", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "p", bubbles: true }));
 
     expect(onTrigger).not.toHaveBeenCalled();
+  });
+});
+
+describe("useShortcuts capture phase and typing targets", () => {
+  beforeEach(() => {
+    useModalStore.setState({ modalIds: [], openCount: 0 });
+  });
+
+  it("does not fire a Mod shortcut without allowInInput while focus is in a textbox", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+
+    renderHook(() => useShortcuts([{ keys: ["ctrl+s"], onTrigger }]));
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+    );
+
+    expect(onTrigger).not.toHaveBeenCalled();
+    input.remove();
+  });
+
+  it("does not fire a Mod shortcut without allowInInput while focus is in a contenteditable", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+
+    renderHook(() => useShortcuts([{ keys: ["ctrl+s"], onTrigger }]));
+
+    const editable = document.createElement("div");
+    editable.setAttribute("contenteditable", "true");
+    document.body.appendChild(editable);
+
+    editable.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+    );
+
+    expect(onTrigger).not.toHaveBeenCalled();
+    editable.remove();
+  });
+
+  it("fires a shortcut exactly once when both capture and bubble listeners see the event", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+
+    renderHook(() => useShortcuts([{ keys: ["ctrl+s"], onTrigger }]));
+
+    // A modifier combo reaches both the capture listener and the bubble
+    // listener; the shared handled set keeps it from triggering twice.
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
+    );
+
+    expect(onTrigger).toHaveBeenCalledTimes(1);
   });
 });

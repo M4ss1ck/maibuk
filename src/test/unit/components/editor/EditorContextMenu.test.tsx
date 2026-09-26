@@ -1,14 +1,21 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Editor } from "@tiptap/core";
+import { EditorContent } from "@tiptap/react";
 import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+  initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
 vi.mock("../../../../components/editor/useClipboardProbe", () => ({
   fallbackPaste: vi.fn(),
-  useClipboardProbe: () => vi.fn().mockResolvedValue(false),
+  pasteWithoutFormatting: vi.fn(),
+  probeClipboard: vi.fn().mockResolvedValue({ canPaste: false, hasFormatting: false }),
+  useClipboardProbe: () => vi.fn().mockResolvedValue({ canPaste: false, hasFormatting: false }),
 }));
 
 vi.mock("../../../../lib/spellcheck", () => ({
@@ -52,7 +59,56 @@ function buildEditor(href: string) {
   };
 }
 
+const realEditors: Editor[] = [];
+
+afterEach(() => {
+  for (const editor of realEditors.splice(0)) editor.destroy();
+});
+
+function renderRealEditor(content: string) {
+  const editor = new Editor({ extensions: createRichTextExtensions(), content });
+  realEditors.push(editor);
+  render(
+    <>
+      <EditorContent editor={editor} />
+      <EditorContextMenu editor={editor} onInspect={vi.fn()} onLookup={vi.fn()} />
+    </>
+  );
+  editor.view.dom.focus();
+  return editor;
+}
+
 describe("EditorContextMenu", () => {
+  it("Shift+F10 opens the menu at the caret and Esc returns focus to the editor", async () => {
+    const user = userEvent.setup();
+    const editor = renderRealEditor("<p>Plain text</p>");
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    const menu = screen.getByRole("menu", { name: "editor.contextMenu" });
+    expect(menu).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "editor.inspectInHtml" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(document.activeElement).toBe(editor.view.dom));
+  });
+
+  it("replaces a misspelled word from the keyboard", async () => {
+    const { spellCheckService } = await import("@/lib/spellcheck");
+    vi.mocked(spellCheckService.suggest).mockResolvedValue(["receive"]);
+    const user = userEvent.setup();
+    const editor = renderRealEditor("<p>recieve</p>");
+    editor.storage.spellCheck = {
+      getMisspellingAt: () => ({ from: 1, to: 8, word: "recieve" }),
+    } as never;
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    const suggestion = await screen.findByRole("menuitem", { name: "receive" });
+    suggestion.focus();
+    await user.keyboard("{Enter}");
+
+    expect(editor.getHTML()).toContain("receive");
+  });
+
   it("opens link editing instead of the generic context menu when right-clicking an internal link", async () => {
     const setup = buildEditor("maibuk://chapter/c1");
     const onEditLink = vi.fn();

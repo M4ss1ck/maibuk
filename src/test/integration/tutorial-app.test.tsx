@@ -399,7 +399,7 @@ describe("running the Tutorial again", () => {
     const user = userEvent.setup();
     renderApp("/");
     await screen.findByRole("heading", { level: 1, name: en("books.title") });
-    await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
+    await user.keyboard("gu");
 
     const books = TUTORIAL_SECTIONS[0];
     for (const step of books.steps) {
@@ -414,31 +414,24 @@ describe("running the Tutorial again", () => {
     expect(path).toBe("/");
   }, 60_000);
 
-  it("Ctrl+Shift+T starts it, but not while the author types in a field", async () => {
+  it("g u starts it on the web, but not while the author types in a field", async () => {
     dismissOffer();
+    platform.desktop = false;
     const user = userEvent.setup();
     renderApp("/notes");
     await screen.findByRole("heading", { level: 1, name: en("notes.title") });
     expect(useBoundShortcutStore.getState().counts["global.startTutorial"]).toBeGreaterThan(0);
 
     screen.getByRole("textbox", { name: "Probe field" }).focus();
-    await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
+    await user.keyboard("gu");
     await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
     expect(useTutorialStore.getState().status).toBe("idle");
 
     (document.activeElement as HTMLElement).blur();
-    await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
+    await user.keyboard("gu");
     await findCard("books.gallery");
     expect(useBoundShortcutStore.getState().counts["tutorial.skip"]).toBeGreaterThan(0);
   }, 60_000);
-
-  it("is not bound on the web, where browsers keep Ctrl+Shift+T", async () => {
-    dismissOffer();
-    platform.desktop = false;
-    renderApp("/");
-    await screen.findByRole("heading", { level: 1, name: en("books.title") });
-    expect(useBoundShortcutStore.getState().counts["global.startTutorial"]).toBeUndefined();
-  });
 
   it("starts this screen's section from the Keyboard shortcuts help", async () => {
     dismissOffer();
@@ -467,7 +460,7 @@ describe("running the Tutorial again", () => {
     const user = userEvent.setup();
     renderApp("/");
     await screen.findByRole("heading", { level: 1, name: en("books.title") });
-    await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
+    await user.keyboard("gu");
     const dialog = await findCard("books.gallery");
 
     // g then s would open Settings; Ctrl+N would open New Book.
@@ -496,7 +489,7 @@ describe("running the Tutorial again", () => {
     const user = userEvent.setup();
     renderApp("/");
     await screen.findByRole("heading", { level: 1, name: en("books.title") });
-    await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
+    await user.keyboard("gu");
     await findCard("books.gallery");
     await pressCardButton(user, en("tutorial.card.next"));
     await findCard("books.new-book");
@@ -521,7 +514,7 @@ describe("the Android back button", () => {
     const { runTopBackDismiss } = await import("@/lib/platform/backDismiss");
     renderApp("/");
     await screen.findByRole("heading", { level: 1, name: en("books.title") });
-    await user.keyboard("{Control>}{Shift>}t{/Shift}{/Control}");
+    await user.keyboard("gu");
     await findCard("books.gallery");
 
     act(() => {

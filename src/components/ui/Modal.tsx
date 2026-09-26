@@ -1,11 +1,39 @@
-import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { FocusScope, Overlay, useModalOverlay } from "react-aria";
+import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef } from "react";
+import { FocusScope, Overlay, useFocusManager, useModalOverlay } from "react-aria";
 import { Dialog, Heading } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { CloseIcon } from "@/components/icons";
 import { useModalStore } from "@/components/ui/modal-store";
-import { useModalScope } from "@/hooks";
+import { useModalScope, useRestoreFocus } from "@/hooks";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
+
+/**
+ * Enter on a native <button> fires a click React Aria reads as virtual (a
+ * screen reader's); for those it defers the dialog's autofocus until running
+ * CSS transitions end, and drops it once the inert page has blurred the
+ * trigger, stranding focus on <body>. Rendered after the dialog content, so a
+ * control the content focused itself wins; otherwise the first tabbable one.
+ *
+ * A field that asked for autofocus always wins: a dialog opened from a closing
+ * React Aria overlay (a menu) loses that focus to the overlay's restoration and
+ * to the dialog's own container focus, so the field is re-focused here.
+ */
+function FocusFirstIfOutside({ containerRef }: { containerRef: RefObject<HTMLElement | null> }) {
+  const focusManager = useFocusManager();
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const preferred = container.querySelector<HTMLElement>("[data-autofocus]");
+    if (preferred) {
+      preferred.focus();
+      return;
+    }
+    if (!container.contains(document.activeElement)) {
+      focusManager?.focusFirst({ tabbable: true });
+    }
+  }, [containerRef, focusManager]);
+  return null;
+}
 
 interface ModalProps {
   isOpen: boolean;
@@ -19,6 +47,12 @@ interface ModalProps {
   panelStyle?: CSSProperties;
   titleClassName?: string;
   unstyled?: boolean;
+  /**
+   * Where focus returns when the Modal closes, when that is not the opener
+   * (e.g. a dialog opened from another dialog). Returning null falls back to
+   * the element focused when the Modal opened.
+   */
+  restoreFocusTarget?: () => HTMLElement | null;
 }
 
 export function Modal({
@@ -33,22 +67,15 @@ export function Modal({
   panelStyle,
   titleClassName,
   unstyled = false,
+  restoreFocusTarget,
 }: ModalProps) {
   const { t } = useTranslation();
   const sizeClass = size === "wide" ? "sm:max-w-5xl" : "sm:max-w-md";
 
   const modalId = useModalScope(isOpen);
   const modalRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-
-  if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
-    const activeElement = document.activeElement;
-    restoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
-  }
-  wasOpenRef.current = isOpen;
 
   const state = useMemo(
     () => ({
@@ -70,17 +97,8 @@ export function Modal({
     modalRef
   );
 
-  const restoreFocus = () => {
-    const target = restoreFocusRef.current;
-    restoreFocusRef.current = null;
-    if (target?.isConnected && target !== document.body) target.focus();
-  };
-
-  useLayoutEffect(() => {
-    if (!isOpen) restoreFocus();
-  }, [isOpen]);
-
-  useLayoutEffect(() => restoreFocus, []);
+  // After useModalOverlay: its inert cleanup must run before the restore.
+  useRestoreFocus(isOpen, { getTarget: restoreFocusTarget });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -169,6 +187,7 @@ export function Modal({
             <div className="h-[env(safe-area-inset-bottom)] shrink-0" aria-hidden="true" />
           </div>
         </div>
+        <FocusFirstIfOutside containerRef={modalRef} />
       </FocusScope>
     </Overlay>
   );

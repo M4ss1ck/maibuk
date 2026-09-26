@@ -22,6 +22,8 @@ declare module "@tiptap/core" {
     collapsibleHeading: {
       /** Expands any collapsed headings whose section contains the given position. */
       revealPosition: (pos: number) => ReturnType;
+      /** Toggles the heading whose section contains the caret. */
+      toggleHeadingCollapse: () => ReturnType;
     };
   }
 }
@@ -114,6 +116,32 @@ export const CollapsibleHeading = Extension.create<CollapsibleHeadingOptions>({
           }
           return true;
         },
+      toggleHeadingCollapse:
+        () =>
+        ({ state, dispatch }) => {
+          const { from } = state.selection;
+          let headingId: string | null = null;
+          state.doc.forEach((node, offset) => {
+            if (offset > from) return;
+            if (node.type.name === "heading" && node.attrs.headingId) {
+              headingId = node.attrs.headingId as string;
+            }
+          });
+
+          if (!headingId) return false;
+          if (dispatch) {
+            dispatch(state.tr.setMeta(collapsibleHeadingPluginKey, { toggle: headingId }));
+          }
+          return true;
+        },
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      // The collapse widget is not Tab-reachable inside the contenteditable;
+      // the caret's section toggles from the keyboard instead.
+      "Mod-Alt-h": () => this.editor.commands.toggleHeadingCollapse(),
     };
   },
 
@@ -223,6 +251,26 @@ export const CollapsibleHeading = Extension.create<CollapsibleHeadingOptions>({
                       button.setAttribute("data-heading-id", headingId);
                       button.innerHTML = CHEVRON_SVG;
                       button.addEventListener("mousedown", (event) => {
+                        // Keep the editor selection while the button is used.
+                        event.preventDefault();
+                        event.stopPropagation();
+                      });
+                      button.addEventListener("click", (event) => {
+                        // detail 0 is a keyboard-driven click, already handled
+                        // on keydown; toggle once per activation.
+                        if (event.detail === 0) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        view.dispatch(
+                          view.state.tr.setMeta(collapsibleHeadingPluginKey, {
+                            toggle: headingId,
+                          })
+                        );
+                      });
+                      // ProseMirror owns Enter keydown at the editor root, so
+                      // the button's own keyboard activation runs here first.
+                      button.addEventListener("keydown", (event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
                         event.preventDefault();
                         event.stopPropagation();
                         view.dispatch(

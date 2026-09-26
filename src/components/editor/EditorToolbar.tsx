@@ -43,6 +43,8 @@ interface EditorToolbarProps {
   onExportMarkdown?: () => void;
   onExportPdf?: () => void;
   onExportImage?: () => void;
+  /** Esc inside the toolbar hands focus back to the Chapter text. */
+  onExitToolbar?: () => void;
   /** The Tutorial step that points at this toolbar, if any. */
   tutorialAnchor?: string;
 }
@@ -58,6 +60,7 @@ export function EditorToolbar({
   onExportMarkdown,
   onExportPdf,
   onExportImage,
+  onExitToolbar,
   tutorialAnchor,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
@@ -80,15 +83,8 @@ export function EditorToolbar({
     useSettingsStore((state) => state.toolbarExpanded),
     useSettingsStore((state) => state.setToolbarExpanded),
   ];
-  const showNotesChapter = useSettingsStore((state) => state.showNotesChapter);
-  const setShowNotesChapter = useSettingsStore((state) => state.setShowNotesChapter);
-  const bookSidePanelTab = useSettingsStore((state) => state.bookSidePanelTab);
-  const setBookSidePanelTab = useSettingsStore((state) => state.setBookSidePanelTab);
   const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
   const setDictionaryOpenInBrowser = useSettingsStore((state) => state.setDictionaryOpenInBrowser);
-
-  // Track editor focus with a delayed blur so toolbar clicks still read it as focused
-  const editorWasFocusedRef = useRef(false);
   const showHtmlPanelRef = useRef(showHtmlPanel);
   showHtmlPanelRef.current = showHtmlPanel;
   const htmlPanelHandleRef = useRef<{
@@ -134,23 +130,6 @@ export function EditorToolbar({
     },
     [editor]
   );
-  useEffect(() => {
-    const dom = editor.view.dom;
-    const onFocus = () => {
-      editorWasFocusedRef.current = true;
-    };
-    const onBlur = () => {
-      setTimeout(() => {
-        editorWasFocusedRef.current = false;
-      }, 150);
-    };
-    dom.addEventListener("focus", onFocus);
-    dom.addEventListener("blur", onBlur);
-    return () => {
-      dom.removeEventListener("focus", onFocus);
-      dom.removeEventListener("blur", onBlur);
-    };
-  }, [editor]);
 
   const handleOpenDictionary = () => {
     const { from, to } = editor.state.selection;
@@ -257,16 +236,7 @@ export function EditorToolbar({
     isFindReplaceOpen: showFindReplace,
     onToggleFindReplace: () => setShowFindReplace(false),
     openImageDialog: () => setShowImageDialog(true),
-    openFootnote: () => {
-      if (editorWasFocusedRef.current) {
-        setShowFootnoteDialog(true);
-      } else if (showNotesChapter && bookSidePanelTab === "footnotes") {
-        setShowNotesChapter(false);
-      } else {
-        setBookSidePanelTab("footnotes");
-        setShowNotesChapter(true);
-      }
-    },
+    openFootnote: () => setShowFootnoteDialog(true),
     openLinkDialog: () => setShowLinkDialog(true),
     openDictionary: handleOpenDictionary,
     openSymbols: () => setShowSymbolsDialog(true),
@@ -285,6 +255,7 @@ export function EditorToolbar({
         <ResponsiveEditorToolbar
           editor={editor}
           callbacks={callbacks}
+          onExitToolbar={onExitToolbar}
           utilityCluster={
             <>
               <ToolbarButton onClick={openShortcutsHelp} label={t("shortcuts.title")}>
@@ -374,6 +345,7 @@ export function EditorToolbar({
           word={dictionaryWord}
           language={spellCheckLanguage}
           onClose={() => setShowDictionaryDialog(false)}
+          restoreFocusTarget={() => editor?.view?.dom ?? null}
         />
         <DictionaryPromptDialog
           isOpen={showDictionaryPrompt}

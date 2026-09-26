@@ -217,6 +217,13 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
   const findNext = useCallback(() => goToMatch(activeIndex + 1), [goToMatch, activeIndex]);
   const findPrev = useCallback(() => goToMatch(activeIndex - 1), [goToMatch, activeIndex]);
 
+  // Escape is a bridge back to writing: close the panel and put the caret back
+  // in the Chapter text, where the search was reading from.
+  const closeAndReturnFocus = useCallback(() => {
+    onClose();
+    editor.commands.focus();
+  }, [editor, onClose]);
+
   const replaceRange = useCallback(
     (match: SearchMatch) => {
       const tr = editor.state.tr;
@@ -283,7 +290,7 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
   const handleFindKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (handleUndoRedo(e)) return;
     if (e.key === "Escape") {
-      onClose();
+      closeAndReturnFocus();
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (e.shiftKey) findPrev();
@@ -294,7 +301,7 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
   const handleReplaceKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (handleUndoRedo(e)) return;
     if (e.key === "Escape") {
-      onClose();
+      closeAndReturnFocus();
     } else if (e.key === "Enter") {
       e.preventDefault();
       replaceCurrent();
@@ -381,7 +388,7 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
             <ChevronDown className="h-4 w-4" />
           </IconButton>
           <IconButton
-            onClick={onClose}
+            onClick={closeAndReturnFocus}
             label={t("editor.closeFindReplace")}
             shortcut="editor.closeFindReplace"
           >

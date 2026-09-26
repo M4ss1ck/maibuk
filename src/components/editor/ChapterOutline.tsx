@@ -95,7 +95,9 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
     const dom = editor.view.nodeDOM(pos);
     const el = dom instanceof HTMLElement ? dom : (dom?.parentElement ?? null);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    editor.commands.setTextSelection(pos + 1);
+    // Enter on an outline item is a jump, not just a scroll: the caret lands
+    // in the editor so the author keeps typing there.
+    editor.chain().focus(pos + 1).run();
   };
 
   return (

@@ -22,10 +22,12 @@ interface ToolbarButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
-  ({ className = "", active = false, children, ...props }, ref) => (
+  ({ className = "", active, children, ...props }, ref) => (
     <button
       ref={ref}
       type="button"
+      // Only the toggle tools (and lock) carry it; plain actions must not.
+      aria-pressed={active}
       className={`inline-flex size-9 md:size-7 items-center justify-center rounded-md border text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-40 ${
         active
           ? "border-primary bg-primary/10 text-primary"

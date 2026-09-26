@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildBook } from "@/test/support/fixtures";
 
-const { mockLoadBooks, mockNavigate, mockUpdateBook, storeState } = vi.hoisted(() => ({
+const { mockLoadBooks, mockNavigate, mockUpdateBook, storeState, locationState } = vi.hoisted(() => ({
+  locationState: { current: null as unknown },
   mockLoadBooks: vi.fn(),
   mockNavigate: vi.fn(),
   mockUpdateBook: vi.fn(),
@@ -12,7 +13,11 @@ const { mockLoadBooks, mockNavigate, mockUpdateBook, storeState } = vi.hoisted((
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return { ...actual, useNavigate: () => mockNavigate };
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useLocation: () => ({ pathname: "/", state: locationState.current }),
+  };
 });
 
 vi.mock("@/features/books/store", () => ({
@@ -89,6 +94,7 @@ describe("Home archiving", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     storeState.books = [alpha, beta, gamma];
+    locationState.current = null;
     useSettingsStore.setState({ booksStatusFilter: DEFAULT_STATUS_FILTER });
   });
 
@@ -184,6 +190,55 @@ describe("Home archiving", () => {
     expect(mockUpdateBook).toHaveBeenCalledWith("alpha", { status: "in-progress" });
     await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("row", { name: "Alpha" })).toHaveFocus());
+  });
+
+  it("keeps focus on that card, not the first one, after picking another card's status", async () => {
+    const user = userEvent.setup();
+    // Like the real store: the update hands the Gallery a new books array.
+    const view = render(<Home />);
+    mockUpdateBook.mockImplementationOnce(async (id: string, input: { status: string }) => {
+      storeState.books = storeState.books.map((book) =>
+        book.id === id ? { ...book, status: input.status as typeof book.status } : book
+      );
+      view.rerender(<Home />);
+    });
+
+    screen.getAllByRole("row")[1].focus();
+    await user.keyboard("{Tab}");
+    expect(screen.getByRole("button", { name: "Change status of Beta" })).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    await screen.findByRole("listbox");
+    await user.keyboard("{ArrowUp}{Enter}");
+
+    expect(mockUpdateBook).toHaveBeenCalledWith("beta", { status: "in-progress" });
+    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("row", { name: "Beta" })).toHaveFocus());
+  });
+
+  it("focuses the first card when it arrives after a Book was deleted and focus was lost", async () => {
+    locationState.current = { focusGallery: true };
+    (document.activeElement as HTMLElement | null)?.blur();
+    render(<Home />);
+
+    await waitFor(() => expect(screen.getByRole("row", { name: "Alpha" })).toHaveFocus());
+    expect(mockNavigate).toHaveBeenCalledWith("/", { replace: true, state: null });
+  });
+
+  it("focuses Start writing when the deleted Book was the last one", async () => {
+    storeState.books = [];
+    locationState.current = { focusGallery: true };
+    (document.activeElement as HTMLElement | null)?.blur();
+    render(<Home />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create a book" })).toHaveFocus());
+  });
+
+  it("leaves focus alone on an ordinary visit", async () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    render(<Home />);
+    await screen.findByRole("row", { name: "Alpha" });
+    expect(document.body).toHaveFocus();
   });
 
   it("still opens a book with Enter on the card itself", async () => {

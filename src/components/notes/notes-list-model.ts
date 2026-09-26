@@ -68,6 +68,41 @@ export interface NoteSection {
   notes: NoteWithBook[];
 }
 
+/** Where a moved Note lands: a section's start or end, or beside another Note. */
+export type NotePlacement =
+  | { sectionId: NoteSection["id"]; at: "start" | "end" }
+  | { noteId: string; placement: "before" | "after" };
+
+/**
+ * The sections with `note` taken out of wherever it was and placed at
+ * `where`; the section it lands in decides whether it is Pinned. Null when
+ * the target is not in the sections (for example, the Note itself).
+ */
+export function placeNote(
+  sections: NoteSection[],
+  note: NoteWithBook,
+  where: NotePlacement
+): NoteSection[] | null {
+  const next = sections.map((section) => ({
+    ...section,
+    notes: section.notes.filter((sectionNote) => sectionNote.id !== note.id),
+  }));
+  if ("sectionId" in where) {
+    const section = next.find((candidate) => candidate.id === where.sectionId);
+    if (!section) return null;
+    if (where.at === "start") section.notes.unshift(note);
+    else section.notes.push(note);
+    return next;
+  }
+  for (const section of next) {
+    const index = section.notes.findIndex((sectionNote) => sectionNote.id === where.noteId);
+    if (index === -1) continue;
+    section.notes.splice(where.placement === "after" ? index + 1 : index, 0, note);
+    return next;
+  }
+  return null;
+}
+
 export interface BookNoteGroup {
   id: string;
   title: string;

@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 import { Type, Copy, Download, AlignLeft, AlignCenter, AlignRight, Trash2 } from "lucide-react";
+import {
+  Header,
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuTrigger,
+  Popover,
+  Separator,
+} from "react-aria-components";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui";
 import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
+import { findImageNodeAtPos } from "@/components/editor/editor-context-menu-utils";
 
 interface ImageContextMenuProps {
   editor: Editor;
@@ -16,54 +26,27 @@ interface ImageContextMenuProps {
 type MenuState = {
   pos: number;
   nodeAttrs: Record<string, unknown>;
-  position: { top: number; left: number };
+  /** Viewport point the popover anchors to. */
+  anchor: { top: number; left: number };
 };
 
 export function ImageContextMenu({ editor }: ImageContextMenuProps) {
   const { t } = useTranslation();
-  const menuRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [altModal, setAltModal] = useState<{ pos: number; alt: string } | null>(null);
   const isOpen = !!menu;
+  // Choosing Edit Alt Text closes the menu and opens a dialog in the same
+  // interaction. Returning focus to the editor here would pull it out of the
+  // dialog before the dialog's fields settle, so the dialog's focus containment
+  // would land on its Close button instead of the Alt Text field.
+  const keepFocusInDialogRef = useRef(false);
 
-  // Close on click outside
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleOutsideInteraction = (event: MouseEvent | TouchEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenu(null);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMenu(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleOutsideInteraction);
-    document.addEventListener("touchstart", handleOutsideInteraction);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideInteraction);
-      document.removeEventListener("touchstart", handleOutsideInteraction);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen]);
-
-  // Adjust position if overflowing viewport
-  useEffect(() => {
-    if (!isOpen || !menuRef.current || !menu) return;
-
-    const rect = menuRef.current.getBoundingClientRect();
-    const adjusted = adjustPosition(menu.position, rect);
-
-    if (adjusted.left !== menu.position.left || adjusted.top !== menu.position.top) {
-      setMenu((prev) => (prev ? { ...prev, position: adjusted } : prev));
-    }
-  }, [isOpen, menu]);
+  const openMenu = (
+    pos: number,
+    nodeAttrs: Record<string, unknown>,
+    anchor: { top: number; left: number }
+  ) => setMenu({ pos, nodeAttrs, anchor });
 
   // Context menu handler (capture phase to run before SpellCheckPopover)
   useEffect(() => {
@@ -84,29 +67,70 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
       })?.pos;
       const posFromDom = editor.view.posAtDOM(figureEl, 0);
       const resolvedPos = editor.state.doc.resolve(posFromCoords ?? posFromDom);
-      const imageInfo = findImageNodeAtPos(editor, resolvedPos.pos);
+      const imageInfo = findImageNodeAtPos(editor.state.doc, resolvedPos.pos);
       if (!imageInfo) {
         setMenu(null);
         return;
       }
 
-      setMenu({
-        pos: imageInfo.pos,
-        nodeAttrs: imageInfo.node.attrs,
-        position: clampPosition(event.clientX, event.clientY),
+      const rect = figureEl.getBoundingClientRect();
+      openMenu(imageInfo.pos, imageInfo.node.attrs, {
+        top: rect.bottom + 4,
+        left: rect.left,
       });
     };
 
-    editor.view.dom.addEventListener("contextmenu", handleContextMenu, true);
-    return () => {
-      editor.view.dom.removeEventListener("contextmenu", handleContextMenu, true);
+    const dom = editor.view.dom;
+    dom.addEventListener("contextmenu", handleContextMenu, true);
+    return () => dom.removeEventListener("contextmenu", handleContextMenu, true);
+  }, [editor]);
+
+  // Keyboard context menu: Shift+F10 / the ContextMenu key opens the same menu
+  // when the selection sits on an image.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isContextMenuKey = event.key === "ContextMenu";
+      const isShiftF10 = event.shiftKey && event.key === "F10";
+      if (!isContextMenuKey && !isShiftF10) return;
+
+      const selection = editor.state.selection;
+      let imageInfo: { node: { attrs: Record<string, unknown> }; pos: number } | null = null;
+      if (selection instanceof NodeSelection && selection.node.type.name === "image") {
+        imageInfo = findImageNodeAtPos(editor.state.doc, selection.from + 1);
+      } else {
+        imageInfo = findImageNodeAtPos(editor.state.doc, selection.from);
+      }
+      if (!imageInfo) return;
+
+      event.preventDefault();
+
+      const dom = editor.view.nodeDOM(imageInfo.pos);
+      const el = dom instanceof HTMLElement ? dom : (dom?.parentElement ?? null);
+      const rect = el?.getBoundingClientRect();
+      let anchor = { top: 0, left: 0 };
+      if (rect && (rect.width > 0 || rect.height > 0 || rect.top !== 0 || rect.left !== 0)) {
+        anchor = { top: rect.bottom + 4, left: rect.left };
+      } else {
+        try {
+          const coords = editor.view.coordsAtPos(imageInfo.pos);
+          anchor = { top: coords.bottom + 4, left: coords.left };
+        } catch {
+          // jsdom has no layout; the popover still opens for the keyboard.
+        }
+      }
+      openMenu(imageInfo.pos, imageInfo.node.attrs as Record<string, unknown>, anchor);
     };
+
+    const dom = editor.view.dom;
+    dom.addEventListener("keydown", handleKeyDown);
+    return () => dom.removeEventListener("keydown", handleKeyDown);
   }, [editor]);
 
   const closeMenu = () => setMenu(null);
 
   const handleEditAlt = () => {
     if (!menu) return;
+    keepFocusInDialogRef.current = true;
     setAltModal({ pos: menu.pos, alt: (menu.nodeAttrs.alt as string) || "" });
     closeMenu();
   };
@@ -182,71 +206,154 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
     closeMenu();
   };
 
+  const handleAction = (key: React.Key) => {
+    switch (key) {
+      case "edit-alt":
+        handleEditAlt();
+        break;
+      case "copy":
+        void handleCopyImage();
+        break;
+      case "save":
+        void handleSaveImage();
+        break;
+      case "align-left":
+        handleSetAlignment("left");
+        break;
+      case "align-center":
+        handleSetAlignment("center");
+        break;
+      case "align-right":
+        handleSetAlignment("right");
+        break;
+      case "delete":
+        handleDelete();
+        break;
+    }
+  };
+
   return (
     <>
-      {isOpen &&
-        createPortal(
-          <div
-            ref={menuRef}
-            className="fixed z-50 w-48 rounded-lg border border-border bg-card shadow-lg py-1"
-            style={{ top: menu.position.top, left: menu.position.left }}
+      {/* A zero-size anchor at the caret/image: MenuTrigger positions the menu
+          from it, and focus returns to the editor from onOpenChange below. */}
+      <MenuTrigger
+        isOpen={isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeMenu();
+            // The dialog owns focus now; restoring it to the editor would
+            // strand the dialog's own autofocus.
+            if (keepFocusInDialogRef.current) {
+              keepFocusInDialogRef.current = false;
+            } else {
+              editor.commands.focus();
+            }
+          }
+        }}
+      >
+        <button
+          ref={anchorRef}
+          type="button"
+          tabIndex={-1}
+          aria-label={t("editor.imageOptions")}
+          className="pointer-events-none fixed h-px w-px opacity-0"
+          style={{ top: menu?.anchor.top ?? 0, left: menu?.anchor.left ?? 0 }}
+        />
+        <Popover placement="bottom start" className="z-50">
+          <Menu
+            aria-label={t("editor.imageOptions")}
+            onAction={handleAction}
+            className="w-48 rounded-lg border border-border bg-card py-1 shadow-lg outline-none"
           >
-            <MenuItem onClick={handleEditAlt} icon={<Type className="w-4 h-4" />}>
-              {t("editor.imageEditAlt")}
-            </MenuItem>
-            <MenuItem onClick={handleCopyImage} icon={<Copy className="w-4 h-4" />}>
-              {t("editor.imageCopy")}
-            </MenuItem>
-            <MenuItem onClick={handleSaveImage} icon={<Download className="w-4 h-4" />}>
-              {t("editor.imageSave")}
-            </MenuItem>
+          <MenuItem
+            id="edit-alt"
+            textValue={t("editor.imageEditAlt")}
+            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
+          >
+            <Type className="w-4 h-4 shrink-0" />
+            {t("editor.imageEditAlt")}
+          </MenuItem>
+          <MenuItem
+            id="copy"
+            textValue={t("editor.imageCopy")}
+            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
+          >
+            <Copy className="w-4 h-4 shrink-0" />
+            {t("editor.imageCopy")}
+          </MenuItem>
+          <MenuItem
+            id="save"
+            textValue={t("editor.imageSave")}
+            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
+          >
+            <Download className="w-4 h-4 shrink-0" />
+            {t("editor.imageSave")}
+          </MenuItem>
 
-            <div className="border-t border-border my-1" />
+          <Separator className="my-1 border-t border-border" />
 
-            <div className="px-3 py-1 text-xs text-muted-foreground">
+          <MenuSection className="outline-none">
+            <Header className="px-3 py-1 text-xs text-muted-foreground">
               {t("editor.imageAlignment")}
-            </div>
+            </Header>
             <MenuItem
-              onClick={() => handleSetAlignment("left")}
-              icon={<AlignLeft className="w-4 h-4" />}
+              id="align-left"
+              textValue={t("editor.alignLeft")}
+              className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
+              <AlignLeft className="w-4 h-4 shrink-0" />
               {t("editor.alignLeft")}
             </MenuItem>
             <MenuItem
-              onClick={() => handleSetAlignment("center")}
-              icon={<AlignCenter className="w-4 h-4" />}
+              id="align-center"
+              textValue={t("editor.alignCenter")}
+              className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
+              <AlignCenter className="w-4 h-4 shrink-0" />
               {t("editor.alignCenter")}
             </MenuItem>
             <MenuItem
-              onClick={() => handleSetAlignment("right")}
-              icon={<AlignRight className="w-4 h-4" />}
+              id="align-right"
+              textValue={t("editor.alignRight")}
+              className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
+              <AlignRight className="w-4 h-4 shrink-0" />
               {t("editor.alignRight")}
             </MenuItem>
+          </MenuSection>
 
-            <div className="border-t border-border my-1" />
+          <Separator className="my-1 border-t border-border" />
 
-            <MenuItem
-              onClick={handleDelete}
-              icon={<Trash2 className="w-4 h-4" />}
-              variant="destructive"
-            >
-              {t("common.delete")}
-            </MenuItem>
-          </div>,
-          document.body
-        )}
+          <MenuItem
+            id="delete"
+            textValue={t("common.delete")}
+            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-destructive outline-none data-focused:bg-muted"
+          >
+            <Trash2 className="w-4 h-4 shrink-0" />
+            {t("common.delete")}
+          </MenuItem>
+          </Menu>
+        </Popover>
+      </MenuTrigger>
 
       {/* Alt text edit modal */}
       {altModal && (
         <Modal
           isOpen={true}
-          onClose={() => setAltModal(null)}
+          onClose={() => {
+            setAltModal(null);
+            editor.commands.focus();
+          }}
           title={t("editor.imageEditAlt")}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setAltModal(null)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setAltModal(null);
+                  editor.commands.focus();
+                }}
+              >
                 {t("common.cancel")}
               </Button>
               <Button onClick={handleSaveAlt}>{t("common.save")}</Button>
@@ -266,65 +373,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
   );
 }
 
-function findImageNodeAtPos(editor: Editor, pos: number) {
-  const $pos = editor.state.doc.resolve(pos);
-  for (let depth = $pos.depth; depth > 0; depth -= 1) {
-    const node = $pos.node(depth);
-    if (node.type.name === "image") {
-      return { node, pos: $pos.before(depth) };
-    }
-  }
-  return null;
-}
-
-function MenuItem({
-  onClick,
-  icon,
-  children,
-  variant,
-}: {
-  onClick: () => void;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  variant?: "destructive";
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors ${
-        variant === "destructive" ? "text-destructive" : ""
-      }`}
-      type="button"
-    >
-      <span className="w-4 h-4 shrink-0">{icon}</span>
-      {children}
-    </button>
-  );
-}
-
 // --- Helpers ---
-
-function clampPosition(clientX: number, clientY: number) {
-  const width = 192;
-  const height = 320;
-  const padding = 8;
-  const maxLeft = window.innerWidth - width - padding;
-  const maxTop = window.innerHeight - height - padding;
-  return {
-    left: Math.min(Math.max(clientX, padding), Math.max(maxLeft, padding)),
-    top: Math.min(Math.max(clientY, padding), Math.max(maxTop, padding)),
-  };
-}
-
-function adjustPosition(position: { top: number; left: number }, rect: DOMRect) {
-  const padding = 8;
-  const maxLeft = window.innerWidth - rect.width - padding;
-  const maxTop = window.innerHeight - rect.height - padding;
-  return {
-    left: Math.min(Math.max(position.left, padding), Math.max(maxLeft, padding)),
-    top: Math.min(Math.max(position.top, padding), Math.max(maxTop, padding)),
-  };
-}
 
 async function srcToBlob(src: string): Promise<Blob> {
   if (src.startsWith("data:")) {

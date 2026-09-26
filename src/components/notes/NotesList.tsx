@@ -8,6 +8,8 @@ import {
   GridListItem,
   GridListSection,
 } from "react-aria-components/GridList";
+import { DropIndicator } from "react-aria-components";
+import { useDragAndDrop } from "react-aria-components/useDragAndDrop";
 import {
   BookOpen,
   CalendarDays,
@@ -23,12 +25,17 @@ import type { Book } from "@/features/books/types";
 import type { ReorderNoteItem } from "@/features/notes";
 import { AddIcon } from "@/components/icons/AddIcon";
 import { FileDropImportStatus, ResponsiveToggleGroup, Tooltip } from "@/components/ui";
+import {
+  SectionDropIndicators,
+  SectionedDropTargetDelegate,
+} from "@/components/ui/SectionedGridListDnd";
+import { toast } from "@/components/ui/Toast";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
 import { NoteListItem } from "@/components/notes/NoteListItem";
 import type { NoteMoveTarget } from "@/components/notes/NoteListItem";
 import { useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
-import { useTextFileDrop } from "@/hooks/useTextFileDrop";
+import { readDroppedItems, useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import type { DropPoint } from "@/hooks/useTextFileDrop";
 import { dropTargetFromPoint } from "@/lib/drop-target";
@@ -42,6 +49,7 @@ import {
   buildListNoteSections,
   buildTagNoteGroups,
   filterNotes,
+  placeNote,
 } from "@/components/notes/notes-list-model";
 import type {
   NoteWithBook,
@@ -49,6 +57,8 @@ import type {
   NotesListViewMode,
   NotesTreeGroupMode,
 } from "@/components/notes/notes-list-model";
+
+const NOTE_DND_TYPE = "note";
 
 type DropPlacement = "before" | "after";
 
@@ -66,7 +76,7 @@ interface NotesListProps {
   onCreateNote: (bookId?: string | null) => void;
   onReorderNotes: (items: string[] | ReorderNoteItem[]) => Promise<void>;
   onReassignNoteBook?: (noteId: string, bookId: string | null) => void;
-  onDeleteNote?: (id: string) => void;
+  onDeleteNote?: (id: string) => void | Promise<void>;
   onDuplicateNote?: (note: NoteWithBook) => void;
   onRenameNote?: (id: string, title: string) => void;
   onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
@@ -87,6 +97,7 @@ export function NotesList({
 }: NotesListProps) {
   const { t } = useTranslation();
   const listContainerRef = useRef<HTMLDivElement>(null);
+  const newNoteButtonRef = useRef<HTMLButtonElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
   const autoScroll = useDragAutoScroll(listContainerRef);
   const [search, setSearch] = useState("");
@@ -94,6 +105,17 @@ export function NotesList({
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [activeReactAriaImports, setActiveReactAriaImports] = useState(0);
+  const onImportFilesRef = useRef(onImportFiles);
+  onImportFilesRef.current = onImportFiles;
+  const onReorderNotesRef = useRef(onReorderNotes);
+  onReorderNotesRef.current = onReorderNotes;
+  // The row a Delete was confirmed from, and the row that should take focus
+  // once it is gone (next, else previous, else the create control).
+  const deleteFocusRef = useRef<{ row: HTMLElement | null; neighbor: HTMLElement | null }>({
+    row: null,
+    neighbor: null,
+  });
   const touchDragGuard = useTouchDragFromHandle();
   const viewMode = useSettingsStore((s) => s.notesListView);
   const setViewMode = useSettingsStore((s) => s.setNotesListView);
@@ -156,6 +178,9 @@ export function NotesList({
   listSectionsRef.current = listSections;
   const pinnedCount = notes.filter((note) => note.pinned).length;
   const isSearchActive = query.length > 0;
+  // The list view reorders through React Aria drag-and-drop, which is also its
+  // keyboard path. Search hides Notes, so an order written then would be partial.
+  const canReorder = viewMode === "list" && !isSearchActive && filtered.length > 0;
 
   const resolveFileDropTarget = useCallback(
     (point: DropPoint | null): ListDropTarget | null => {
@@ -167,6 +192,8 @@ export function NotesList({
   );
 
   const { isDraggingFile, isImportingFiles, dropHandlers } = useTextFileDrop(listContainerRef, {
+    // React Aria owns web drops over a reorderable list (it stops dragover).
+    disableWeb: canReorder,
     onImport: async (files, point) => {
       setDropTarget(null);
       await onImportFiles?.(files, resolveFileDropTarget(point));
@@ -206,66 +233,18 @@ export function NotesList({
     autoScroll.onDragOver(e.clientY);
   };
 
+  // A section header takes a dragged Note at the section's end, which is the
+  // only way to drop into an empty section. React Aria does not see the event.
   const handleSectionDragOver = (e: DragEvent<HTMLElement>, sectionId: NoteSection["id"]) => {
     if (!draggedId) return;
+    e.stopPropagation();
     handleDragOver(e);
     if (isSearchActive) return;
     setDropTarget({ sectionId, targetId: null, placement: "after" });
   };
 
-  const handleNoteDragOver = (e: DragEvent<HTMLDivElement>, note: NoteWithBook) => {
-    if (!draggedId) return;
-    e.stopPropagation();
-    handleDragOver(e);
-    if (draggedId === note.id || isSearchActive) return;
-
-    const sectionId = listSections.find((section) =>
-      section.notes.some((sectionNote) => sectionNote.id === note.id)
-    )?.id;
-    if (!sectionId) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const placement: DropPlacement = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
-    setDropTarget({ sectionId, targetId: note.id, placement });
-  };
-
-  const handleDrop = (e: DragEvent<HTMLDivElement>, targetId: string) => {
-    if (!draggedId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    autoScroll.stop();
-    if (draggedId === targetId || isSearchActive) return;
-
-    const draggedNote = notes.find((note) => note.id === draggedId);
-    if (!draggedNote) return;
-
-    const targetSectionId = listSections.find((section) =>
-      section.notes.some((note) => note.id === targetId)
-    )?.id;
-    if (!targetSectionId) return;
-
-    const nextSections = listSections.map((section) => ({
-      ...section,
-      notes: section.notes.filter((note) => note.id !== draggedId),
-    }));
-    const targetSection = nextSections.find((section) => section.id === targetSectionId);
-    if (!targetSection) return;
-
-    const targetIndex = targetSection.notes.findIndex((note) => note.id === targetId);
-    if (targetIndex === -1) return;
-
-    const insertIndex =
-      dropTarget?.targetId === targetId && dropTarget.placement === "after"
-        ? targetIndex + 1
-        : targetIndex;
-    targetSection.notes.splice(insertIndex, 0, draggedNote);
-    emitSectionOrder(nextSections);
-    setDraggedId(null);
-    setDropTarget(null);
-  };
-
   const emitSectionOrder = (sections: NoteSection[]) => {
-    void onReorderNotes(
+    void onReorderNotesRef.current(
       sections.flatMap((section) =>
         section.notes.map((note) => ({
           id: note.id,
@@ -275,6 +254,75 @@ export function NotesList({
     );
   };
 
+  const importDroppedItems = async (
+    items: Parameters<typeof readDroppedItems>[0],
+    target: ListDropTarget | null
+  ) => {
+    setActiveReactAriaImports((active) => active + 1);
+    try {
+      const files = await readDroppedItems(items);
+      if (files.length > 0) await onImportFilesRef.current?.(files, target);
+    } catch (error) {
+      console.error("Failed to import dropped files:", error);
+      toast.error(t("dropImport.importFailed"));
+    } finally {
+      setActiveReactAriaImports((active) => Math.max(0, active - 1));
+    }
+  };
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [dropTargetDelegate] = useState(() => new SectionedDropTargetDelegate(gridRef));
+  const { dragAndDropHooks } = useDragAndDrop({
+    // Always passed to the GridList (swapping hooks on a mounted list breaks
+    // React's hook order), and off while a search hides Notes.
+    isDisabled: !canReorder,
+    dropTargetDelegate,
+    getItems: (keys) => [...keys].map((key) => ({ [NOTE_DND_TYPE]: String(key) })),
+    onDragStart: (e) => setDraggedId(String([...e.keys][0] ?? "") || null),
+    onDragEnd: () => {
+      setDraggedId(null);
+      setDropTarget(null);
+    },
+    // Dropping among the Pinned Notes pins; among the rest unpins. `onMove`,
+    // not `onReorder`: React Aria limits a reorder to the dragged row's own
+    // section, and crossing sections is how a drag pins or unpins.
+    onMove: (e) => {
+      const key = String([...e.keys][0] ?? "");
+      const sections = listSectionsRef.current;
+      const dragged = sections.flatMap((section) => section.notes).find((n) => n.id === key);
+      if (!dragged || e.target.dropPosition === "on") return;
+      const nextSections = placeNote(sections, dragged, {
+        noteId: String(e.target.key),
+        placement: e.target.dropPosition,
+      });
+      if (nextSections) emitSectionOrder(nextSections);
+    },
+    getDropOperation: (target, types, allowedOperations) => {
+      // Notes do not nest: only the gaps between rows take a drop.
+      if (target.type === "item" && target.dropPosition === "on") return "cancel";
+      if (types.has(NOTE_DND_TYPE)) {
+        return allowedOperations.includes("move") ? "move" : "cancel";
+      }
+      return onImportFilesRef.current ? "copy" : "cancel";
+    },
+    onInsert: (e) =>
+      void importDroppedItems([...e.items], {
+        id: String(e.target.key),
+        placement: e.target.dropPosition === "after" ? "after" : "before",
+      }),
+    onRootDrop: (e) => void importDroppedItems([...e.items], null),
+    renderDropIndicator: (target) => (
+      <DropIndicator
+        target={target}
+        className={({ isDropTarget }) =>
+          isDropTarget
+            ? "mx-2 my-1 block h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
+            : "h-0"
+        }
+      />
+    ),
+  });
+
   const handleSectionDrop = (e: DragEvent<HTMLElement>, targetSectionId: NoteSection["id"]) => {
     if (!draggedId) return;
     e.preventDefault();
@@ -283,17 +331,10 @@ export function NotesList({
     if (isSearchActive) return;
 
     const draggedNote = notes.find((note) => note.id === draggedId);
-    if (!draggedNote) return;
-
-    const nextSections = listSections.map((section) => ({
-      ...section,
-      notes: section.notes.filter((note) => note.id !== draggedId),
-    }));
-    const targetSection = nextSections.find((section) => section.id === targetSectionId);
-    if (!targetSection) return;
-
-    targetSection.notes.push(draggedNote);
-    emitSectionOrder(nextSections);
+    const nextSections =
+      draggedNote &&
+      placeNote(listSections, draggedNote, { sectionId: targetSectionId, at: "end" });
+    if (nextSections) emitSectionOrder(nextSections);
     setDraggedId(null);
     setDropTarget(null);
   };
@@ -334,16 +375,12 @@ export function NotesList({
   // Pinning from the item menu reuses the drag path's ordering write, over
   // every note rather than the search-filtered sections.
   const togglePinned = (note: NoteWithBook) => {
-    const sections = buildListNoteSections(notes, "").map((section) => ({
-      ...section,
-      notes: section.notes.filter((sectionNote) => sectionNote.id !== note.id),
-    }));
-    const pinned = sections.find((section) => section.id === "pinned");
-    const all = sections.find((section) => section.id === "all");
-    if (!pinned || !all) return;
-    if (note.pinned) all.notes.unshift(note);
-    else pinned.notes.push(note);
-    emitSectionOrder(sections);
+    const sections = placeNote(
+      buildListNoteSections(notes, ""),
+      note,
+      note.pinned ? { sectionId: "all", at: "start" } : { sectionId: "pinned", at: "end" }
+    );
+    if (sections) emitSectionOrder(sections);
   };
 
   const moveTargets: NoteMoveTarget[] =
@@ -355,10 +392,36 @@ export function NotesList({
       : [];
   const moveNote = (note: { id: string }, bookId: string | null) =>
     onReassignNoteBook?.(note.id, bookId);
-  const requestDelete = onDeleteNote ? (id: string) => setPendingDeleteId(id) : undefined;
+  const requestDelete = onDeleteNote
+    ? (id: string) => {
+        const rows = [
+          ...(listContainerRef.current?.querySelectorAll<HTMLElement>("[data-key]") ?? []),
+        ];
+        const index = rows.findIndex((row) => row.dataset.key === id);
+        deleteFocusRef.current = {
+          row: index === -1 ? null : rows[index],
+          neighbor: index === -1 ? null : (rows[index + 1] ?? rows[index - 1] ?? null),
+        };
+        setPendingDeleteId(id);
+      }
+    : undefined;
   const pendingDeleteNote = notes.find((note) => note.id === pendingDeleteId) ?? null;
-  const confirmDelete = () => {
-    if (pendingDeleteId) onDeleteNote?.(pendingDeleteId);
+
+  // The row that opened the dialog on cancel; the surviving neighbour (or the
+  // create control) once a confirmed delete has removed it.
+  const getDeleteRestoreTarget = () => {
+    const { row, neighbor } = deleteFocusRef.current;
+    if (row?.isConnected) return row;
+    if (neighbor?.isConnected) return neighbor;
+    return newNoteButtonRef.current;
+  };
+
+  const confirmDelete = async () => {
+    const id = pendingDeleteId;
+    if (!id) return;
+    // The dialog closes when the Note leaves the list, so focus restoration
+    // already sees the row gone and can land on its neighbour.
+    await onDeleteNote?.(id);
     setPendingDeleteId(null);
   };
 
@@ -408,11 +471,7 @@ export function NotesList({
         onTogglePinned={() => togglePinned(note)}
         moveTargets={moveTargets}
         onMove={moveNote}
-        draggable={viewMode === "list" && !isSearchActive ? true : undefined}
-        onDragStart={(e) => handleDragStart(e, note.id)}
-        onDragOver={(e) => handleNoteDragOver(e, note)}
-        onDrop={(e) => handleDrop(e, note.id)}
-        onDragEnd={handleDragEnd}
+        reorderLabel={canReorder ? t("notes.reorder") : undefined}
         isDragging={draggedId === note.id}
       />
       {renderDropIndicator(note, "after")}
@@ -608,6 +667,7 @@ export function NotesList({
         />
         <Tooltip content={t("notes.newNote")}>
           <button
+            ref={newNoteButtonRef}
             type="button"
             onClick={() => onCreateNote(null)}
             aria-label={t("notes.newNote")}
@@ -651,7 +711,7 @@ export function NotesList({
         {...touchDragGuard}
         {...(onImportFiles ? dropHandlers : {})}
       >
-        {isImportingFiles && <FileDropImportStatus />}
+        {(isImportingFiles || activeReactAriaImports > 0) && <FileDropImportStatus />}
         {filtered.length === 0 &&
         (viewMode !== "tree" || treeGroupMode !== "book" || books.length === 0) ? (
           <div className="text-center py-8 px-4 text-muted-foreground text-sm">
@@ -660,47 +720,55 @@ export function NotesList({
         ) : viewMode === "tree" ? (
           <div className="pb-2">{renderTreeGroups()}</div>
         ) : (
-          <GridList
-            aria-label={t("notes.title")}
-            keyboardNavigationBehavior="tab"
-            dependencies={[
-              currentNoteId,
-              draggedId,
-              dropTarget,
-              isSearchActive,
-              onDeleteNote,
-              onDuplicateNote,
-              onRenameNote,
-              books,
-            ]}
-            selectedKeys={currentNoteId ? [currentNoteId] : []}
-            selectionMode="single"
-            selectionBehavior="replace"
-            disallowEmptySelection
-            className="p-2"
-          >
-            {listSections.map((section) => (
-              <GridListSection key={section.id} id={section.id} className="mb-3 min-h-8 last:mb-0">
-                <GridListHeader>
-                  <div
-                    data-testid={`notes-section-${section.id}`}
-                    data-drop-active={dropTarget?.sectionId === section.id ? "true" : undefined}
-                    onDragOver={(e) => handleSectionDragOver(e, section.id)}
-                    onDrop={(e) => handleSectionDrop(e, section.id)}
-                    className={`min-h-8 rounded-md px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors ${
-                      dropTarget?.sectionId === section.id
-                        ? "bg-primary/10 ring-1 ring-inset ring-primary/40"
-                        : ""
-                    }`}
-                  >
-                    {section.id === "pinned" ? t("notes.sectionPinned") : t("notes.sectionAll")}
-                    {renderSectionAppendIndicator(section.id)}
-                  </div>
-                </GridListHeader>
-                <Collection items={section.notes}>{renderNote}</Collection>
-              </GridListSection>
-            ))}
-          </GridList>
+          <SectionDropIndicators>
+            <GridList
+              ref={gridRef}
+              aria-label={t("notes.title")}
+              keyboardNavigationBehavior="tab"
+              dependencies={[
+                currentNoteId,
+                draggedId,
+                dropTarget,
+                canReorder,
+                onDeleteNote,
+                onDuplicateNote,
+                onRenameNote,
+                books,
+              ]}
+              selectedKeys={currentNoteId ? [currentNoteId] : []}
+              selectionMode="single"
+              selectionBehavior="replace"
+              disallowEmptySelection
+              className="p-2"
+              dragAndDropHooks={dragAndDropHooks}
+            >
+              {listSections.map((section) => (
+                <GridListSection
+                  key={section.id}
+                  id={section.id}
+                  className="mb-3 min-h-8 last:mb-0"
+                >
+                  <GridListHeader>
+                    <div
+                      data-testid={`notes-section-${section.id}`}
+                      data-drop-active={dropTarget?.sectionId === section.id ? "true" : undefined}
+                      onDragOver={(e) => handleSectionDragOver(e, section.id)}
+                      onDrop={(e) => handleSectionDrop(e, section.id)}
+                      className={`min-h-8 rounded-md px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors ${
+                        dropTarget?.sectionId === section.id
+                          ? "bg-primary/10 ring-1 ring-inset ring-primary/40"
+                          : ""
+                      }`}
+                    >
+                      {section.id === "pinned" ? t("notes.sectionPinned") : t("notes.sectionAll")}
+                      {renderSectionAppendIndicator(section.id)}
+                    </div>
+                  </GridListHeader>
+                  <Collection items={section.notes}>{renderNote}</Collection>
+                </GridListSection>
+              ))}
+            </GridList>
+          </SectionDropIndicators>
         )}
       </div>
 
@@ -713,7 +781,8 @@ export function NotesList({
       <DeleteNoteDialog
         note={pendingDeleteNote}
         onCancel={() => setPendingDeleteId(null)}
-        onConfirm={confirmDelete}
+        onConfirm={() => void confirmDelete()}
+        restoreFocusTarget={getDeleteRestoreTarget}
       />
     </aside>
   );

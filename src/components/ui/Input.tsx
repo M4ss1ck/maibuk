@@ -1,4 +1,4 @@
-import { InputHTMLAttributes, ReactNode, forwardRef, useRef } from "react";
+import { InputHTMLAttributes, ReactNode, forwardRef, useId, useRef } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -11,7 +11,10 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className = "", label, error, endAdornment, id, type, disabled, readOnly, ...props }, ref) => {
     const { t } = useTranslation();
-    const inputId = id || props.name;
+    // Without an id the <label> and error message point at nothing, and the
+    // field is announced by its placeholder instead of its label.
+    const generatedId = useId();
+    const inputId = id || props.name || generatedId;
     const inputRef = useRef<HTMLInputElement | null>(null);
     const errorId = error && inputId ? `${inputId}-error` : undefined;
     const describedBy =
@@ -90,6 +93,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             }
             ${className}`}
             {...props}
+            // React handles `autoFocus` itself and strips the attribute from the
+            // DOM, which leaves overlays no way to tell a field asked for focus.
+            // Mirror it as a data attribute so a dialog can re-focus the field
+            // after React Aria's own dialog autofocus or a closing overlay has
+            // moved focus elsewhere.
+            data-autofocus={props.autoFocus ? "" : undefined}
             aria-invalid={error ? true : props["aria-invalid"]}
             aria-describedby={describedBy}
           />

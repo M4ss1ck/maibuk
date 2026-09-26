@@ -4,7 +4,11 @@ import { act, render, screen, within, fireEvent, waitFor } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import { buildChapter } from "@/test/support/fixtures";
-import { installPointerEvent, touchLongPress } from "@/test/support/pointer-events";
+import {
+  installPointerEvent,
+  pointerHitTarget,
+  touchLongPress,
+} from "@/test/support/pointer-events";
 import type { Chapter } from "@/features/chapters/types";
 import type { DropItem } from "react-aria-components/useDragAndDrop";
 
@@ -81,7 +85,14 @@ vi.mock("@/features/settings/store", () => ({
   },
 }));
 
-import { ChapterList, readChapterDropItems } from "@/components/editor/ChapterList";
+import { ChapterList } from "@/components/editor/ChapterList";
+import { readDroppedItems } from "@/hooks/useTextFileDrop";
+import {
+  createDataTransfer,
+  createFileDataTransfer,
+  dispatchDragEvent,
+  mockRect,
+} from "@/test/support/drag-events";
 
 function fileDropItem(name: string, text: string): DropItem {
   return {
@@ -198,87 +209,6 @@ async function arrowToDropTarget(user: ReturnType<typeof userEvent.setup>, acces
   expect(document.activeElement).toHaveAccessibleName(accessibleName);
 }
 
-function createDataTransfer(): DataTransfer {
-  const values = new Map<string, string>();
-  const items: Array<{ kind: "string"; type: string }> & {
-    add: (value: string, type: string) => void;
-    clear: () => void;
-    remove: (index: number) => void;
-  } = Object.assign([], {
-    add(value: string, type: string) {
-      values.set(type, value);
-      if (!items.some((item) => item.type === type)) items.push({ kind: "string", type });
-    },
-    clear() {
-      items.splice(0);
-      values.clear();
-    },
-    remove(index: number) {
-      const [item] = items.splice(index, 1);
-      if (item) values.delete(item.type);
-    },
-  });
-
-  return {
-    dropEffect: "none",
-    effectAllowed: "all",
-    files: [] as unknown as FileList,
-    items: items as unknown as DataTransferItemList,
-    get types() {
-      return items.map((item) => item.type);
-    },
-    clearData(type?: string) {
-      if (type) {
-        const index = items.findIndex((item) => item.type === type);
-        if (index >= 0) items.remove(index);
-      } else {
-        items.clear();
-      }
-    },
-    getData(type: string) {
-      return values.get(type) ?? "";
-    },
-    setData(type: string, value: string) {
-      items.add(value, type);
-    },
-    setDragImage() {},
-  } as DataTransfer;
-}
-
-function createFileDataTransfer(file: File): DataTransfer {
-  const item = {
-    kind: "file",
-    type: file.type,
-    getAsFile: () => file,
-  } as DataTransferItem;
-
-  return {
-    dropEffect: "none",
-    effectAllowed: "all",
-    files: [file] as unknown as FileList,
-    items: [item] as unknown as DataTransferItemList,
-    types: ["Files"],
-    clearData() {},
-    getData: () => "",
-    setData() {},
-    setDragImage() {},
-  } as DataTransfer;
-}
-
-function mockRect(element: HTMLElement, top: number, bottom: number) {
-  vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
-    top,
-    bottom,
-    left: 0,
-    right: 400,
-    width: 400,
-    height: bottom - top,
-    x: 0,
-    y: top,
-    toJSON: () => ({}),
-  } as DOMRect);
-}
-
 function mockGridLayout() {
   const grid = screen.getByRole("grid");
   const rows = screen.getAllByRole("row");
@@ -287,20 +217,6 @@ function mockGridLayout() {
     mockRect(row, index * 50, index * 50 + 40);
   });
   return { grid, rows };
-}
-
-function dispatchDragEvent(element: Element, type: string, dt: DataTransfer, clientY: number) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
-    dataTransfer: { value: dt },
-    clientX: { value: 10 },
-    clientY: { value: clientY },
-    altKey: { value: false },
-    ctrlKey: { value: false },
-    metaKey: { value: false },
-    shiftKey: { value: false },
-  });
-  fireEvent(element, event);
 }
 
 describe("ChapterList", () => {
@@ -679,15 +595,56 @@ describe("ChapterList", () => {
         fireEvent.dragStart(row);
         return reachedRow.mock.calls.length > 0;
       };
-      const handle = screen.getByRole("button", { name: "chapters.reorder" });
+      // React Aria makes its drag button ignore pointers: a touch on the grip
+      // reaches whatever is under it, which must still count as the handle.
+      const grip = screen.getByRole("button", { name: "chapters.reorder" }).querySelector("svg")!;
 
       expect(dragFrom(screen.getByText("First"), "touch")).toBe(false);
-      expect(dragFrom(handle, "touch")).toBe(true);
+      expect(dragFrom(pointerHitTarget(grip), "touch")).toBe(true);
       expect(dragFrom(screen.getByText("First"), "mouse")).toBe(true);
     });
   });
 
   // ---------------------------------------------------------------------------
+  describe("import from files", () => {
+    it("offers a keyboard path to import Markdown and text files", async () => {
+      const user = userEvent.setup();
+      const onImportFromFiles = vi.fn();
+      renderCL({ onImportFromFiles });
+      const add = screen.getByRole("button", { name: "chapters.addChapter" });
+
+      add.focus();
+      await user.keyboard("{Tab}");
+      const importButton = screen.getByRole("button", { name: "chapters.importFiles" });
+      expect(importButton).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      expect(onImportFromFiles).toHaveBeenCalledTimes(1);
+    });
+
+    it("is absent where importing is not wired", () => {
+      renderCL();
+      expect(screen.queryByRole("button", { name: "chapters.importFiles" })).toBeNull();
+    });
+  });
+
+  describe("autoFocusAddChapter", () => {
+    it("focuses Add Chapter when focus was lost to <body>", () => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      renderCL({ chapters: [], autoFocusAddChapter: true });
+      expect(screen.getByRole("button", { name: "chapters.addChapter" })).toHaveFocus();
+    });
+
+    it("does not steal focus from an element that has it", () => {
+      const other = document.createElement("button");
+      document.body.appendChild(other);
+      other.focus();
+      renderCL({ chapters: [], autoFocusAddChapter: true });
+      expect(other).toHaveFocus();
+      other.remove();
+    });
+  });
+
   describe("inline create", () => {
     it("opens create form from the keyboard", async () => {
       const user = userEvent.setup();
@@ -717,6 +674,51 @@ describe("ChapterList", () => {
       expect(
         screen.queryByPlaceholderText("chapters.chapterTitlePlaceholder")
       ).not.toBeInTheDocument();
+    });
+
+    it("returns focus to Add Chapter when create is cancelled with Escape", async () => {
+      const user = userEvent.setup();
+      renderCL();
+      const addButton = screen.getByRole("button", { name: "chapters.addChapter" });
+      addButton.focus();
+      await user.keyboard("{Enter}");
+      const input = screen.getByPlaceholderText("chapters.chapterTitlePlaceholder");
+      expect(input).toHaveFocus();
+      await user.keyboard("{Escape}");
+
+      expect(
+        screen.queryByPlaceholderText("chapters.chapterTitlePlaceholder")
+      ).not.toBeInTheDocument();
+      await waitFor(() => expect(addButton).toHaveFocus());
+    });
+
+    it("returns focus to Add Chapter when create is cancelled with Cancel", async () => {
+      const user = userEvent.setup();
+      renderCL();
+      const addButton = screen.getByRole("button", { name: "chapters.addChapter" });
+      addButton.focus();
+      await user.keyboard("{Enter}");
+      const cancel = screen.getByRole("button", { name: "common.cancel" });
+      await tabToControl(user, cancel);
+      await user.keyboard("{Enter}");
+
+      expect(
+        screen.queryByPlaceholderText("chapters.chapterTitlePlaceholder")
+      ).not.toBeInTheDocument();
+      await waitFor(() => expect(addButton).toHaveFocus());
+    });
+
+    it("keeps the create form open when Enter is pressed with an empty title", async () => {
+      const user = userEvent.setup();
+      const onCreate = vi.fn();
+      renderCL({ onCreateChapter: onCreate });
+      const addButton = screen.getByRole("button", { name: "chapters.addChapter" });
+      addButton.focus();
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Enter}");
+
+      expect(onCreate).not.toHaveBeenCalled();
+      expect(screen.getByPlaceholderText("chapters.chapterTitlePlaceholder")).toBeInTheDocument();
     });
   });
 
@@ -752,11 +754,52 @@ describe("ChapterList", () => {
       expect(screen.queryByDisplayValue("First")).not.toBeInTheDocument();
       expect(screen.getByText("First")).toBeInTheDocument();
     });
+
+    it("returns focus to the row after cancelling an edit with Escape", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.getByDisplayValue("First")).toHaveFocus());
+
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => expect(screen.getByRole("row", { name: "First" })).toHaveFocus());
+    });
+
+    it("returns focus to the row after saving an edit", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id, onUpdateChapter: vi.fn() });
+
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
+      const input = await screen.findByDisplayValue("First");
+      await user.clear(input);
+      await user.type(input, "Updated{Enter}");
+
+      await waitFor(() => expect(screen.getByRole("row", { name: "First" })).toHaveFocus());
+    });
   });
 
   // ---------------------------------------------------------------------------
   describe("delete confirmation", () => {
-    it("confirms delete by keyboard (Tab to Yes, Enter)", async () => {
+    it("focuses the safe No button when the confirmation opens", async () => {
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      const deleteButton = screen.getByRole("button", { name: "chapters.deleteChapter" });
+      deleteButton.focus();
+      await user.keyboard("{Enter}");
+
+      const noButton = screen.getByRole("button", { name: "common.no" });
+      await waitFor(() => expect(noButton).toHaveFocus());
+    });
+
+    it("confirms delete by keyboard (Shift+Tab to Yes, Enter)", async () => {
       const user = userEvent.setup();
       const onDelete = vi.fn();
       const chapters = [
@@ -767,8 +810,11 @@ describe("ChapterList", () => {
 
       await openChapterMenu(user, 0);
       await user.keyboard("{ArrowDown}{Enter}");
+      const noButton = screen.getByRole("button", { name: "common.no" });
+      await waitFor(() => expect(noButton).toHaveFocus());
+      await user.tab({ shift: true });
       const yesButton = screen.getByRole("button", { name: "common.yes" });
-      await tabToControl(user, yesButton);
+      expect(yesButton).toHaveFocus();
       await user.keyboard("{Enter}");
       expect(onDelete).toHaveBeenCalledWith("ch-1");
       await waitFor(() => expect(screen.getByRole("row", { name: "Second" })).toHaveFocus());
@@ -924,7 +970,7 @@ describe("ChapterList", () => {
         fileDropItem("skip.png", "binary"),
         fileDropItem("two.txt", "plain"),
       ];
-      const files = await readChapterDropItems(items);
+      const files = await readDroppedItems(items);
       expect(files.map((file) => file.stem)).toEqual(["one", "two"]);
     });
 

@@ -116,6 +116,7 @@ function editorResetState() {
     doc: createDefaultCanvasDoc(),
     selectedNodeId: null,
     selectedEdgeId: null,
+    editingNodeId: null,
     loadState: "idle" as CanvasLoadState,
     saveState: "idle" as CanvasSaveState,
     editorError: null,
@@ -144,6 +145,8 @@ export interface CanvasStoreState {
   doc: CanvasDoc;
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
+  /** The Text Node whose rich-text editor is open, if any (keyboard F2 or a double click). */
+  editingNodeId: string | null;
   loadState: CanvasLoadState;
   saveState: CanvasSaveState;
   editorError: string | null;
@@ -204,6 +207,9 @@ export interface CanvasStoreState {
   removeEdge: (id: string) => void;
   selectNode: (id: string | null) => void;
   selectEdge: (id: string | null) => void;
+  /** Open the Text Node's editor (the keyboard path to the double-click action). */
+  beginNodeEdit: (id: string) => void;
+  endNodeEdit: () => void;
   clearSelection: () => void;
   deleteSelection: () => void;
   setViewport: (viewport: CanvasViewport) => void;
@@ -612,6 +618,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     });
     set({
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+      editingNodeId: state.editingNodeId === id ? null : state.editingNodeId,
       selectedEdgeId:
         state.selectedEdgeId && removedEdgeIds.has(state.selectedEdgeId)
           ? null
@@ -678,6 +685,8 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     set({
       selectedNodeId:
         state.selectedNodeId && nodeIdSet.has(state.selectedNodeId) ? null : state.selectedNodeId,
+      editingNodeId:
+        state.editingNodeId && nodeIdSet.has(state.editingNodeId) ? null : state.editingNodeId,
       selectedEdgeId:
         state.selectedEdgeId &&
         (edgeIdSet.has(state.selectedEdgeId) ||
@@ -745,9 +754,24 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     if (state.selectedEdgeId === id) set({ selectedEdgeId: null });
   },
 
-  selectNode: (id) => set({ selectedNodeId: id, selectedEdgeId: null }),
-  selectEdge: (id) => set({ selectedEdgeId: id, selectedNodeId: null }),
-  clearSelection: () => set({ selectedNodeId: null, selectedEdgeId: null }),
+  selectNode: (id) =>
+    set((state) => ({
+      selectedNodeId: id,
+      selectedEdgeId: null,
+      // Editing follows selection: choosing another node (or nothing) closes the editor.
+      editingNodeId: state.editingNodeId === id ? state.editingNodeId : null,
+    })),
+  selectEdge: (id) => set({ selectedEdgeId: id, selectedNodeId: null, editingNodeId: null }),
+  beginNodeEdit: (id) =>
+    set((state) => {
+      const node = state.doc.nodes.find((candidate) => candidate.id === id);
+      if (!node || node.kind !== "text" || state.editorReadOnly || state.interactivityLocked) {
+        return {};
+      }
+      return { editingNodeId: id, selectedNodeId: id, selectedEdgeId: null };
+    }),
+  endNodeEdit: () => set({ editingNodeId: null }),
+  clearSelection: () => set({ selectedNodeId: null, selectedEdgeId: null, editingNodeId: null }),
   deleteSelection: () => {
     const { selectedNodeId, selectedEdgeId } = get();
     if (selectedNodeId) get().removeNode(selectedNodeId);

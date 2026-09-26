@@ -61,7 +61,13 @@ export function EdgeInspectorCard({
         onChange={(event) => onLabelChange(event.target.value)}
         onBlur={onLabelCommit}
         onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
+          // Commit in place instead of blurring: losing focus resets WebKit's
+          // Tab order to the top of the page, so the next Tab never reaches
+          // the controls below (the directed switch).
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onLabelCommit();
+          }
         }}
       />
       <div className="flex items-center gap-2 text-sm">

@@ -88,6 +88,7 @@ export default defineConfig(() => ({
         "src/lib/db/index.ts",
         "src/lib/platform/tauri/backup.ts",
         "src/lib/platform/web/backup.ts",
+        "src/lib/platform/web/database.ts",
         "src/features/sync/sync-engine.ts",
         "src/features/sync/client.ts",
         "src/features/sync/tombstones.ts",

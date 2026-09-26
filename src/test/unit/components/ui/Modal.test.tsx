@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
@@ -563,5 +563,47 @@ describe("Modal", () => {
       );
       expect(screen.getByRole("button", { name: "Cerrar" })).toBeInTheDocument();
     });
+  });
+});
+
+describe("Modal initial focus", () => {
+  // Enter on a native <button> fires a click with detail 0, which React Aria
+  // reads as a virtual (screen reader) click; it then defers the dialog's
+  // autofocus until running CSS transitions end, and in a real browser gives
+  // up once the inert page blurs the trigger. Focus must still enter.
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          Open settings
+        </button>
+        <Modal isOpen={open} onClose={() => setOpen(false)} title="Settings" unstyled>
+          <label>
+            Name
+            <input />
+          </label>
+        </Modal>
+      </>
+    );
+  }
+
+  it("puts focus in the dialog even while a CSS transition is running", async () => {
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: "Open settings" });
+    const animating = document.createElement("div");
+    document.body.appendChild(animating);
+    animating.dispatchEvent(
+      Object.assign(new Event("transitionrun", { bubbles: true }), { propertyName: "opacity" })
+    );
+
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Name" })).toHaveFocus());
+    animating.dispatchEvent(
+      Object.assign(new Event("transitionend", { bubbles: true }), { propertyName: "opacity" })
+    );
+    animating.remove();
   });
 });

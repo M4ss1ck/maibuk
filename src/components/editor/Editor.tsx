@@ -27,6 +27,8 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Language } from "@/features/settings/types";
 import { useChapterStore } from "@/features/chapters/store";
+import { useBookStore } from "@/features/books/store";
+import { useNoteStore } from "@/features/notes/store";
 import { useReadingPosition } from "@/features/reading-position/useReadingPosition";
 import { useEditorZoomControls } from "@/components/editor/useEditorZoomControls";
 import { assignHeadingIds } from "@/features/links/heading-ids";
@@ -40,6 +42,7 @@ import { useEditorFileDrop } from "@/components/editor/useEditorFileDrop";
 import { IS_TAURI } from "@/lib/platform";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
+import { hasActiveSuggestion } from "@/components/editor/suggestion-state";
 
 /**
  * How long a burst of keystrokes coalesces into one serialization. Serializing
@@ -64,6 +67,8 @@ export interface EditorStats {
 export interface EditorHandle {
   /** Hand the typing burst still being coalesced to `onUpdate`, synchronously. */
   flush: () => void;
+  /** Return focus to the chapter text, keeping the current selection. */
+  focus: () => void;
 }
 
 export interface EditorTutorialAnchors {
@@ -107,6 +112,14 @@ interface EditorProps {
   onExportPdf?: () => void;
   onExportImage?: () => void;
   onEscape?: () => void;
+  /** Accessible name of the text area, e.g. "Text of Arrival". Defaults to "Text". */
+  ariaLabel?: string;
+  /**
+   * Put the caret in the text on mount: `true` always (a Chapter just
+   * created), `"if-unfocused"` only when focus was lost to <body> (a screen
+   * just opened), so it never takes focus from a dialog or the Tutorial.
+   */
+  autoFocus?: boolean | "if-unfocused";
   /** Tutorial steps that point at this editor's toolbar and text, if any. */
   tutorialAnchors?: EditorTutorialAnchors;
 }
@@ -139,6 +152,8 @@ export function Editor({
   onExportPdf,
   onExportImage,
   onEscape,
+  autoFocus = false,
+  ariaLabel,
   tutorialAnchors,
 }: EditorProps) {
   const { t } = useTranslation();
@@ -165,24 +180,39 @@ export function Editor({
   useEffect(() => {
     onEscapeRef.current = onEscape;
   }, [onEscape]);
+  const handleExitToolbar = useCallback(() => onEscapeRef.current?.(), []);
   useEditorZoomControls(scrollContainerEl);
   const handleMarkdownPaste = useCallback((text: string) => {
     setPendingMarkdownPaste(text);
   }, []);
   const chapters = useChapterStore((s) => s.chapters);
+  const books = useBookStore((s) => s.books);
+  const notes = useNoteStore((s) => s.notes);
   const internalTargets = useMemo<InternalTarget[]>(
     () => [
       ...providedInternalTargets,
       ...(bookId
-        ? chapters.map((c) => ({
-            type: "chapter" as const,
-            chapterId: c.id,
-            title: c.title,
-            headingId: null,
-          }))
+        ? [
+            ...books.map((b) => ({
+              type: "book" as const,
+              bookId: b.id,
+              title: b.title,
+            })),
+            ...notes.map((n) => ({
+              type: "note" as const,
+              noteId: n.id,
+              title: n.title,
+            })),
+            ...chapters.map((c) => ({
+              type: "chapter" as const,
+              chapterId: c.id,
+              title: c.title,
+              headingId: null,
+            })),
+          ]
         : []),
     ],
-    [providedInternalTargets, bookId, chapters]
+    [providedInternalTargets, bookId, books, notes, chapters]
   );
   const loadInternalTargetChildren = useCallback<InternalTargetChildrenLoader>(
     async (target) => {
@@ -289,7 +319,18 @@ export function Editor({
     [runEmit]
   );
 
-  useImperativeHandle(ref, () => ({ flush: runEmit }), [runEmit]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      flush: runEmit,
+      focus: () => {
+        const editor = editorInstanceRef.current;
+        if (!editor || editor.isDestroyed) return;
+        editor.commands.focus();
+      },
+    }),
+    [runEmit]
+  );
 
   // Anything that reads the saved document must see the newest keystrokes, so
   // drain the pending burst before the editor goes away or loses focus.
@@ -328,12 +369,20 @@ export function Editor({
     ],
     content: content || "",
     editable,
+    autofocus: autoFocus === true ? "end" : false,
     editorProps: {
       attributes: {
         class: "editor-content outline-none min-h-[500px]",
+        // A bare contenteditable has no role or name for assistive tech.
+        role: "textbox",
+        "aria-multiline": "true",
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         if (event.key !== "Escape") return false;
+        // Editor props run before plugin key handlers, so an open suggestion
+        // popup (Wikilink, symbols) would never see the Escape that dismisses
+        // it. Let the plugin have it.
+        if (hasActiveSuggestion(view.state)) return false;
         if (showBubbleLinkDialogRef.current || pendingMarkdownPasteRef.current) {
           return false;
         }
@@ -407,12 +456,27 @@ export function Editor({
     onExternalContentRef.current?.(content, editor.storage.characterCount.words());
   }, [editor, content, runEmit]);
 
+  const textLabel = ariaLabel ?? t("editor.textLabel");
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.view.dom.setAttribute("aria-label", textLabel);
+  }, [editor, textLabel]);
+
   useReadingPosition({
     editor,
     scrollEl: scrollContainerEl,
     storageKey: restoreKey,
     suppressRestore,
   });
+
+  const autoFocusIfUnfocused = autoFocus === "if-unfocused";
+  useEffect(() => {
+    if (!autoFocusIfUnfocused || !editor || editor.isDestroyed) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    // view.focus keeps the selection the Reading Position just restored.
+    editor.view.focus();
+  }, [editor, autoFocusIfUnfocused]);
 
   useEffect(() => {
     if (!editor?.commands?.setSpellCheckEnabled) return;
@@ -483,6 +547,7 @@ export function Editor({
         <MemoizedEditorToolbar
           editor={editor}
           onContextMenuOpenChange={setIsContextMenuOpen}
+          onExitToolbar={handleExitToolbar}
           bookId={bookId}
           spellCheckLanguage={activeSpellCheckLanguage}
           onSpellCheckLanguageChange={onSpellCheckLanguageChange}

@@ -24,6 +24,7 @@ vi.mock("react-router-dom", async () => {
   return {
     ...actual,
     useNavigate: () => mockNavigate,
+    useLocation: () => ({ pathname: "/", state: null }),
   };
 });
 
@@ -105,6 +106,45 @@ describe("Home EPUB import", () => {
     });
     expect(mockScanEpubForImport).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
     expect(await screen.findByText("Imported Book")).toBeInTheDocument();
+  });
+
+  it("keeps focus on Import EPUB while it scans, so closing the report returns there", async () => {
+    const user = userEvent.setup();
+    let finishScan: () => void = () => {};
+    mockScanEpubForImport.mockImplementation(
+      (bytes: Uint8Array) =>
+        new Promise((resolve) => {
+          finishScan = () =>
+            resolve({
+              report: { issues: [], summary: { blocking: 0, lossy: 0, converted: 0, info: 0 } },
+              preview: {
+                title: "Imported Book",
+                author: "Author",
+                language: "en",
+                chapterCount: 1,
+                assetCount: 0,
+                styleCount: 0,
+                metadataCount: 3,
+              },
+              bytes,
+            });
+        })
+    );
+    render(<Home />);
+    const trigger = screen.getByRole("button", { name: /Import EPUB/i });
+    trigger.focus();
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(mockScanEpubForImport).toHaveBeenCalled());
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    await user.keyboard("{Enter}");
+    expect(mockOpenWithData).toHaveBeenCalledTimes(1);
+
+    finishScan();
+    expect(await screen.findByText("Imported Book")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: /Import EPUB/i })).toHaveFocus());
   });
 
   it("navigates to the imported book after successful import", async () => {

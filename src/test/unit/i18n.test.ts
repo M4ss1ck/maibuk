@@ -86,4 +86,9 @@ describe("locale key coverage", () => {
     expect(en.backup.trigger.close).toBeTruthy();
     expect(es.backup.trigger.close).toBeTruthy();
   });
+
+  it("defines the side panel width value interpolation key in both locales", () => {
+    expect(en.bookSidePanel.widthValue).toContain("{{width}}");
+    expect(es.bookSidePanel.widthValue).toContain("{{width}}");
+  });
 });

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Editor } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -26,17 +27,42 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
       return;
     }
 
-    // Insert image using insertContent since setImage may not be available
+    // Leave the new image selected: Shift+F10 reaches its menu from the keyboard.
+    // Only the ranges this insertion changed are searched, so an existing image
+    // next to the caret is never picked instead.
+    const src = url.trim();
+    let firstStep = 0;
     editor
       .chain()
       .focus()
+      .command(({ tr }) => {
+        firstStep = tr.steps.length;
+        return true;
+      })
       .insertContent({
         type: "image",
         attrs: {
-          src: url.trim(),
+          src,
           alt: alt.trim() || null,
           title: alt.trim() || null,
         },
+      })
+      .command(({ tr }) => {
+        let imagePos = -1;
+        for (let i = firstStep; i < tr.steps.length; i++) {
+          const later = tr.mapping.slice(i + 1);
+          tr.mapping.maps[i].forEach((_oldStart, _oldEnd, newStart, newEnd) => {
+            const from = later.map(newStart, -1);
+            const to = later.map(newEnd, 1);
+            tr.doc.nodesBetween(from, to, (node, pos) => {
+              if (pos >= from && node.type.name === "image" && node.attrs.src === src) {
+                imagePos = pos;
+              }
+            });
+          });
+        }
+        if (imagePos >= 0) tr.setSelection(NodeSelection.create(tr.doc, imagePos));
+        return true;
       })
       .run();
 

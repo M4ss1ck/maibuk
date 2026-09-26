@@ -21,7 +21,7 @@ export interface ClipboardProbe {
  * formatting. Must run inside a user-activation window (e.g. a pointerdown
  * handler) — WebKitGTK rejects clipboard reads in the contextmenu event itself.
  */
-async function probeClipboard(): Promise<ClipboardProbe> {
+export async function probeClipboard(): Promise<ClipboardProbe> {
   const snap = await readClipboardSnapshot();
   const canPaste = Boolean(snap.text) || Boolean(snap.html) || snap.hasImage;
   const hasFormatting =

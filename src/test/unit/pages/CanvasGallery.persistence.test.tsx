@@ -48,6 +48,18 @@ describe("CanvasGallery search persistence", () => {
     useSettingsStore.setState({ canvasSearch: "" });
   });
 
+  it("activates a card action button without opening the canvas", async () => {
+    const user = userEvent.setup();
+    render(<CanvasGallery />);
+
+    const pin = (await screen.findAllByRole("button", { name: "canvas.pinCanvas" }))[0];
+    pin.focus();
+    await user.keyboard("{Enter}");
+
+    expect(canvasState.updateCanvas).toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it("keeps the search query when the page is left and reopened", async () => {
     const user = userEvent.setup();
     const first = render(<CanvasGallery />);
@@ -75,5 +87,22 @@ describe("CanvasGallery search persistence", () => {
       "@5xl:grid-cols-4"
     );
     expect(grid).not.toHaveClass("lg:grid-cols-3", "xl:grid-cols-4");
+  });
+
+  it("moves between cards with the arrow keys and opens the focused card with Enter", async () => {
+    const user = userEvent.setup();
+    render(<CanvasGallery />);
+
+    const rows = await screen.findAllByRole("row");
+    expect(rows).toHaveLength(2);
+
+    rows[0].focus();
+    expect(rows[0]).toHaveFocus();
+
+    await user.keyboard("{ArrowRight}");
+    expect(rows[1]).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(mockNavigate).toHaveBeenCalledWith("/canvas/c2");
   });
 });

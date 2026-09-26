@@ -69,12 +69,14 @@
     "quickPlaceholder": "Write a quick note...",
     "add": "Add note",
     "empty": "No notes for this book yet",
-    "formatting": "Formatting"
+    "formatting": "Formatting",
+    "quickNoteLabel": "Book note"
   },
   "bookSidePanel": {
     "footnotes": "Footnotes",
     "notes": "Notes",
-    "resize": "Resize panel"
+    "resize": "Resize panel",
+    "widthValue": "{{width}} pixels"
   },
   "metrics": {
     "title": "Metrics",
@@ -160,6 +162,7 @@
     }
   },
   "chapters": {
+    "importFiles": "Import chapters from files",
     "title": "Chapters",
     "newChapter": "New Chapter",
     "editChapter": "Edit Chapter",
@@ -237,6 +240,7 @@
     "pin": "Pin",
     "unpin": "Unpin",
     "moveToBook": "Move to book",
+    "reorder": "Reorder",
     "addTag": "Add tag",
     "tags": "Tags",
     "delete": "Delete note",
@@ -257,12 +261,14 @@
   },
   "canvas": {
     "title": "Canvas",
+    "collectionLabel": "Canvases",
     "newCanvas": "New canvas",
     "untitled": "Untitled canvas",
     "empty": "No canvases yet",
     "emptyDescription": "Create a canvas to map notes, ideas, and relationships.",
     "addTextNode": "Add text node",
     "addNoteRef": "Add note reference",
+    "editTextNode": "Edit text node",
     "searchPlaceholder": "Search canvases…",
     "searchNotesPlaceholder": "Search notes…",
     "missingCanvas": "Canvas not found",
@@ -342,6 +348,8 @@
     "edgeCount_other": "{{count}} connections"
   },
   "editor": {
+    "textLabel": "Text",
+    "chapterTextLabel": "Text of {{title}}",
     "loading": "Loading book...",
     "loadingEditor": "Loading editor...",
     "saving": "Saving...",
@@ -384,6 +392,9 @@
     "findReplace": "Find & Replace",
     "insertImage": "Insert Image",
     "insertLink": "Insert Link",
+    "linkSuggestions": "Link suggestions",
+    "createNoteFromWikilink": "Create note \"{{title}}\"",
+    "followLink": "Follow Link",
     "linkText": "Link Text",
     "footnote": "Add Footnote",
     "footnoteTextPlaceholder": "Enter the footnote text...",
@@ -456,6 +467,7 @@
     "spellCheck": "Spell Check",
     "spellCheckLanguage": "Spell check language",
     "dictionary": "Look up word",
+    "toggleHeadingCollapse": "Collapse or expand the heading",
     "symbols": "Symbols",
     "addToDictionary": "Add to Dictionary",
     "noSuggestions": "No suggestions",
@@ -540,11 +552,13 @@
     "imageCopy": "Copy Image",
     "imageSave": "Save Image",
     "imageAlignment": "Alignment",
+    "imageOptions": "Image options",
     "prettify": "Prettify",
     "wordWrap": "Word Wrap",
     "addCleanupRule": "Add cleanup rule from selection",
     "editorTheme": "Editor Theme",
     "inspectInHtml": "Inspect",
+    "contextMenu": "Editor options",
     "lookUp": "Look up \"{{word}}\"",
     "warnings_one": "{{count}} warning",
     "warnings_other": "{{count}} warnings",
@@ -915,6 +929,7 @@
     "backgroundColor": "Color",
     "addShape": "Add Shape",
     "templates": "Templates",
+    "sizePreset": "Cover Size Preset",
     "toggleOverlays": "Toggle margin guides",
     "toggleSnapping": "Toggle snapping",
     "align": {
@@ -1055,6 +1070,7 @@
     "syncStatus": "Sync status"
   },
   "errors": {
+    "targetWordCountInvalid": "Enter a whole number of words, 0 or more",
     "titleRequired": "Title is required",
     "authorNameRequired": "Author name is required",
     "URLRequired": "URL is required"

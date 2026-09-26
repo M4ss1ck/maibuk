@@ -59,3 +59,19 @@ export function touchTap(element: Element) {
     fireEvent.click(element);
   });
 }
+
+/**
+ * The element a real pointer at `element` reaches. jsdom dispatches to any
+ * target, but a browser skips an element with `pointer-events: none` (and its
+ * descendants, which inherit it) and hits what lies beneath: here, the nearest
+ * ancestor that takes pointer events.
+ */
+export function pointerHitTarget(element: Element): Element {
+  let target = element;
+  let blocked = target.closest('[style*="pointer-events: none"]');
+  while (blocked?.parentElement) {
+    target = blocked.parentElement;
+    blocked = target.closest('[style*="pointer-events: none"]');
+  }
+  return target;
+}

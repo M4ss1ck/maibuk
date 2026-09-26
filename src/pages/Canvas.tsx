@@ -6,6 +6,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { flushSync } from "react-dom";
 import {
   ConnectionMode,
   ReactFlow,
@@ -14,6 +15,7 @@ import {
   useStore,
   type Connection,
   type Edge,
+  type EdgeChange,
   type Node,
   type NodeChange,
   type OnSelectionChangeParams,
@@ -27,6 +29,7 @@ import { maibukArt } from "@/assets/ascii/maibuk";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
@@ -165,6 +168,7 @@ function CanvasEditor() {
   const endLiveChange = useCanvasStore((state) => state.endLiveChange);
   const selectNode = useCanvasStore((state) => state.selectNode);
   const selectEdge = useCanvasStore((state) => state.selectEdge);
+  const beginNodeEdit = useCanvasStore((state) => state.beginNodeEdit);
   const clearSelection = useCanvasStore((state) => state.clearSelection);
   const deleteSelection = useCanvasStore((state) => state.deleteSelection);
   const setViewport = useCanvasStore((state) => state.setViewport);
@@ -292,15 +296,42 @@ function CanvasEditor() {
 
   const handleAddTextNode = () => {
     const id = crypto.randomUUID();
-    addNode({
-      id,
-      kind: "text",
-      html: `<p>${t("canvas.newTextNode")}</p>`,
-      position: viewportCenter(),
-      width: CANVAS_TEXT_NODE_DEFAULT_WIDTH,
+    // The store lives outside React's event system (the T shortcut is a native
+    // listener), so without a synchronous flush the node's editor mounts after
+    // the key event returns. In WebKit the next keystroke then arrives first and
+    // hits the canvas instead of the text. flushSync commits, and the editor's
+    // layout effect focuses, before the shortcut handler returns.
+    flushSync(() => {
+      addNode({
+        id,
+        kind: "text",
+        html: `<p>${t("canvas.newTextNode")}</p>`,
+        position: viewportCenter(),
+        width: CANVAS_TEXT_NODE_DEFAULT_WIDTH,
+      });
+      selectNode(id);
+      // The new node opens straight into its editor, so the letters that follow
+      // the shortcut type text instead of switching tools.
+      beginNodeEdit(id);
     });
-    selectNode(id);
   };
+
+  const handleAddNoteRef = useCallback(
+    (noteId: string) => {
+      const note = notes.find((candidate) => candidate.id === noteId);
+      if (!note) return;
+      addNode({
+        id: crypto.randomUUID(),
+        kind: "noteRef",
+        noteId: note.id,
+        label: note.title,
+        position: viewportCenter(),
+      });
+      setNotePickerOpen(false);
+      setNoteQuery("");
+    },
+    [addNode, notes, viewportCenter]
+  );
 
   const handleConnect = useCallback(
     (connection: Connection) => {
@@ -316,12 +347,29 @@ function CanvasEditor() {
   const handleNodeChanges = useCallback(
     (changes: NodeChange[]) => {
       for (const change of changes) {
+        if (change.type === "select") {
+          // React Flow reports keyboard selection (Space on a focused node) as
+          // a select change, not a click. The store is the selection source of
+          // truth, so mirror it here the way a click already does.
+          if (change.selected) selectNode(change.id);
+          else if (useCanvasStore.getState().selectedNodeId === change.id) clearSelection();
+          continue;
+        }
         if (change.type === "position" && change.position) {
+          // A keyboard nudge arrives as one position change without a drag
+          // around it (pointer drags open one through beginLiveChange). Record
+          // it as a single history step so arrow keys move and persist, too.
+          if (!useCanvasStore.getState().liveBaseDoc) {
+            beginLiveChange();
+            moveNodeLive(change.id, change.position);
+            endLiveChange();
+            continue;
+          }
           moveNodeLive(change.id, change.position);
         }
       }
     },
-    [moveNodeLive]
+    [beginLiveChange, clearSelection, endLiveChange, moveNodeLive, selectNode]
   );
 
   const handleNodeClick = useCallback(
@@ -361,7 +409,18 @@ function CanvasEditor() {
     [setViewport]
   );
 
-  const noopEdgesChange = useCallback(() => undefined, []);
+  const handleEdgeChanges = useCallback(
+    (changes: EdgeChange[]) => {
+      for (const change of changes) {
+        if (change.type === "select") {
+          // Same as a node: keyboard selection on an edge must reach the store.
+          if (change.selected) selectEdge(change.id);
+          else if (useCanvasStore.getState().selectedEdgeId === change.id) clearSelection();
+        }
+      }
+    },
+    [clearSelection, selectEdge]
+  );
 
   useShortcuts(
     [
@@ -375,6 +434,21 @@ function CanvasEditor() {
       { id: "canvas.toolEraser", keys: "e", onTrigger: () => setToolMode("eraser") },
       { id: "canvas.addTextNode", keys: "t", onTrigger: handleAddTextNode },
       { id: "canvas.addNoteRef", keys: "n", onTrigger: () => setNotePickerOpen(true) },
+      {
+        id: "canvas.editTextNode",
+        keys: "f2",
+        onTrigger: () => {
+          const active = document.activeElement;
+          const nodeElement =
+            active instanceof HTMLElement
+              ? active.closest<HTMLElement>(".react-flow__node-text")
+              : null;
+          const nodeId = nodeElement?.dataset.id;
+          // Same reason as adding a node: flush so the editor mounts and takes
+          // focus before this native key handler returns.
+          if (nodeId) flushSync(() => beginNodeEdit(nodeId));
+        },
+      },
       {
         id: "canvas.zoomIn",
         keys: ["ctrl+=", "meta+=", "ctrl++", "meta++"],
@@ -513,7 +587,7 @@ function CanvasEditor() {
           nodeTypes={nodeTypes}
           connectionMode={ConnectionMode.Loose}
           onNodesChange={handleNodeChanges}
-          onEdgesChange={noopEdgesChange}
+          onEdgesChange={handleEdgeChanges}
           onSelectionChange={handleSelectionChange}
           onNodeClick={handleNodeClick}
           onEdgeClick={handleEdgeClick}
@@ -585,32 +659,27 @@ function CanvasEditor() {
           onChange={(event) => setNoteQuery(event.target.value)}
           placeholder={t("canvas.searchNotesPlaceholder")}
         />
-        <div className="mt-4 max-h-80 space-y-2 overflow-auto">
-          {filteredNotes.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t("canvas.noNotes")}</p>
-          ) : (
-            filteredNotes.map((note) => (
-              <Button
-                key={note.id}
-                variant="ghost"
-                className="w-full justify-start"
-                onClick={() => {
-                  addNode({
-                    id: crypto.randomUUID(),
-                    kind: "noteRef",
-                    noteId: note.id,
-                    label: note.title,
-                    position: viewportCenter(),
-                  });
-                  setNotePickerOpen(false);
-                  setNoteQuery("");
-                }}
+        {filteredNotes.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">{t("canvas.noNotes")}</p>
+        ) : (
+          <ListBox
+            aria-label={t("canvas.addNoteRef")}
+            items={filteredNotes}
+            selectionMode="none"
+            onAction={(key) => handleAddNoteRef(String(key))}
+            className="mt-4 max-h-80 overflow-auto outline-none"
+          >
+            {(note) => (
+              <ListBoxItem
+                id={note.id}
+                textValue={note.title || t("notes.untitled")}
+                className="cursor-default rounded-lg px-3 py-2 text-sm outline-none data-focused:bg-muted"
               >
                 {note.title || t("notes.untitled")}
-              </Button>
-            ))
-          )}
-        </div>
+              </ListBoxItem>
+            )}
+          </ListBox>
+        )}
       </Modal>
     </div>
   );

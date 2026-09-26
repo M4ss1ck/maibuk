@@ -8,22 +8,21 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
-import type { DropItem } from "react-aria-components/useDragAndDrop";
 import { DropIndicator } from "react-aria-components";
 import type { Chapter, ChapterType } from "@/features/chapters/types";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { Select } from "@/components/ui/Select";
 import { useTranslation } from "react-i18next";
-import { List, ListTree, Rows3, GripVertical } from "lucide-react";
+import { FileUp, List, ListTree, Rows3 } from "lucide-react";
 import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
-import { readDroppedWebFiles, useTextFileDrop } from "@/hooks/useTextFileDrop";
+import { readDroppedItems, useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
-import { ItemActionsMenu, Tooltip } from "@/components/ui";
+import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { toast } from "@/components/ui/Toast";
 import { GridList, GridListItem } from "react-aria-components/GridList";
@@ -43,6 +42,10 @@ interface ChapterListProps {
   onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
   /** Marks Tutorial step targets; only the list the author can see carries them. */
   tutorialAnchors?: boolean;
+  /** Opens a file picker for Markdown/text Chapters: the keyboard path to what a file drop does. */
+  onImportFromFiles?: () => void;
+  /** Focus "Add Chapter" when focus was lost to <body>, e.g. a Book with no Chapters just opened. */
+  autoFocusAddChapter?: boolean;
 }
 
 const CHAPTER_DND_TYPE = "chapter";
@@ -59,26 +62,20 @@ function ChapterItemGestures({
   children: (anchorRef: RefObject<HTMLDivElement | null>) => ReactNode;
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
-  const { itemProps } = useItemContextMenu({ onOpen: onOpenMenu, isDisabled });
+  const { itemProps, setOwnerRef } = useItemContextMenu({
+    onOpen: onOpenMenu,
+    isDisabled,
+    anchorRef,
+  });
   return (
     <div
-      ref={anchorRef}
+      ref={setOwnerRef}
       {...itemProps}
       className={`${className} pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]`}
     >
       {children(anchorRef)}
     </div>
   );
-}
-
-/** Reads supported text files out of react-aria drop items, preserving order. */
-export async function readChapterDropItems(items: DropItem[]): Promise<DroppedTextFile[]> {
-  const files: File[] = [];
-  for (const item of items) {
-    if (item.kind !== "file") continue;
-    files.push(await item.getFile());
-  }
-  return readDroppedWebFiles(files);
 }
 
 export function ChapterList({
@@ -92,6 +89,8 @@ export function ChapterList({
   onReorderChapters,
   onImportFiles,
   tutorialAnchors = false,
+  autoFocusAddChapter = false,
+  onImportFromFiles,
 }: ChapterListProps) {
   const { t, i18n } = useTranslation();
   const chapterListView = useSettingsStore((state) => state.chapterListView);
@@ -142,6 +141,7 @@ export function ChapterList({
   const [editType, setEditType] = useState<ChapterType>("chapter");
   const [menuChapterId, setMenuChapterId] = useState<string | null>(null);
   const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const cancelDeleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const touchDragGuard = useTouchDragFromHandle();
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -198,7 +198,7 @@ export function ChapterList({
       void (async () => {
         setActiveReactAriaImports((active) => active + 1);
         try {
-          const files = await readChapterDropItems([...e.items]);
+          const files = await readDroppedItems([...e.items]);
           if (files.length === 0) return;
           await onImportFilesRef.current?.(files, {
             id: String(e.target.key),
@@ -216,7 +216,7 @@ export function ChapterList({
       void (async () => {
         setActiveReactAriaImports((active) => active + 1);
         try {
-          const files = await readChapterDropItems([...e.items]);
+          const files = await readDroppedItems([...e.items]);
           if (files.length > 0) await onImportFilesRef.current?.(files, null);
         } catch (error) {
           console.error("Failed to import dropped files:", error);
@@ -238,6 +238,13 @@ export function ChapterList({
     ),
   });
 
+  useEffect(() => {
+    if (!autoFocusAddChapter) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    addButtonRef.current?.focus();
+  }, [autoFocusAddChapter]);
+
   const handleCreate = () => {
     if (newTitle.trim()) {
       onCreateChapter(newTitle.trim(), newType);
@@ -245,6 +252,28 @@ export function ChapterList({
       setNewType("chapter");
       setShowNewDialog(false);
     }
+  };
+
+  const closeNewDialog = () => {
+    setShowNewDialog(false);
+    // The form is inline: without this the focused input unmounts to <body>.
+    requestAnimationFrame(() => addButtonRef.current?.focus());
+  };
+
+  /** Returns focus to a Chapter row after an inline form closes. */
+  const focusChapterRow = (id: string) => {
+    requestAnimationFrame(() => {
+      listContainerRef.current
+        ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(id)}"]`)
+        ?.focus();
+    });
+  };
+
+  const openDeleteConfirm = (id: string) => {
+    setDeleteConfirmId(id);
+    // The confirmation covers the row: focus its safe action, not the button
+    // it is covering.
+    requestAnimationFrame(() => cancelDeleteButtonRefs.current.get(id)?.focus());
   };
 
   const handleDelete = (id: string) => {
@@ -286,15 +315,19 @@ export function ChapterList({
 
   const handleUpdate = () => {
     if (editingId && editTitle.trim()) {
-      onUpdateChapter(editingId, editTitle.trim(), editType);
+      const id = editingId;
+      onUpdateChapter(id, editTitle.trim(), editType);
       setEditingId(null);
+      focusChapterRow(id);
     }
   };
 
   const cancelEditing = () => {
+    const id = editingId;
     setEditingId(null);
     setEditTitle("");
     setEditType("chapter");
+    if (id) focusChapterRow(id);
   };
 
   return (
@@ -336,6 +369,18 @@ export function ChapterList({
               <AddIcon className="w-5 h-5" />
             </button>
           </Tooltip>
+          {onImportFromFiles && (
+            <Tooltip content={t("chapters.importFiles")}>
+              <button
+                type="button"
+                onClick={onImportFromFiles}
+                className="p-1 hover:bg-muted rounded transition-colors"
+                aria-label={t("chapters.importFiles")}
+              >
+                <FileUp className="w-5 h-5" aria-hidden="true" />
+              </button>
+            </Tooltip>
+          )}
         </div>
       </div>
 
@@ -351,7 +396,7 @@ export function ChapterList({
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter") handleCreate();
-              if (e.key === "Escape") setShowNewDialog(false);
+              if (e.key === "Escape") closeNewDialog();
             }}
           />
           <Select
@@ -375,7 +420,7 @@ export function ChapterList({
             </button>
             <button
               type="button"
-              onClick={() => setShowNewDialog(false)}
+              onClick={closeNewDialog}
               className="px-3 py-1.5 text-sm border border-border rounded hover:bg-muted transition-colors"
             >
               {t("common.cancel")}
@@ -505,14 +550,10 @@ export function ChapterList({
                     ) : (
                       <>
                         <div className="flex w-full min-w-0 items-center">
-                          <AriaButton
-                            slot="drag"
-                            data-drag-handle=""
-                            aria-label={t("chapters.reorder")}
-                            className="shrink-0 cursor-grab rounded p-0.5 pointer-coarse:p-1.5 mr-1 text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                          >
-                            <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
-                          </AriaButton>
+                          <ReorderHandle
+                            label={t("chapters.reorder")}
+                            className="mr-1 p-0.5 pointer-coarse:p-1.5"
+                          />
 
                           <div
                             className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}
@@ -551,7 +592,7 @@ export function ChapterList({
                                           deleteButtonRefs.current.set(chapter.id, element);
                                         else deleteButtonRefs.current.delete(chapter.id);
                                       }}
-                                      onPress={() => setDeleteConfirmId(chapter.id)}
+                                      onPress={() => openDeleteConfirm(chapter.id)}
                                       className="p-1 hover:bg-destructive/10 rounded transition-colors"
                                       aria-label={t("chapters.deleteChapter")}
                                     >
@@ -575,7 +616,7 @@ export function ChapterList({
                                     label: t("chapters.deleteChapter"),
                                     icon: DeleteIcon,
                                     isDestructive: true,
-                                    onAction: () => setDeleteConfirmId(chapter.id),
+                                    onAction: () => openDeleteConfirm(chapter.id),
                                   },
                                 ]}
                                 isOpen={menuChapterId === chapter.id}
@@ -614,6 +655,11 @@ export function ChapterList({
                               {t("common.yes")}
                             </AriaButton>
                             <AriaButton
+                              ref={(element) => {
+                                if (element)
+                                  cancelDeleteButtonRefs.current.set(chapter.id, element);
+                                else cancelDeleteButtonRefs.current.delete(chapter.id);
+                              }}
                               onPress={() => cancelDelete(chapter.id)}
                               className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
                             >

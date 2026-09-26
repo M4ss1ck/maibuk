@@ -7,6 +7,7 @@ import {
   ToolbarSettingsDialog,
 } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import { useSettingsStore } from "@/features/settings/store";
+import { createDataTransfer, dispatchDragEvent, mockRect } from "@/test/support/drag-events";
 import { ALL_GROUP_IDS, type ToolbarConfig } from "@/features/settings/toolbar-config";
 
 const { i18nTestState } = vi.hoisted(() => ({
@@ -93,67 +94,6 @@ async function arrowToDropTarget(user: ReturnType<typeof userEvent.setup>, acces
   expect(document.activeElement).toHaveAccessibleName(accessibleName);
 }
 
-function createDataTransfer(): DataTransfer {
-  const values = new Map<string, string>();
-  const items: Array<{ kind: "string"; type: string }> & {
-    add: (value: string, type: string) => void;
-    clear: () => void;
-    remove: (index: number) => void;
-  } = Object.assign([], {
-    add(value: string, type: string) {
-      values.set(type, value);
-      if (!items.some((item) => item.type === type)) items.push({ kind: "string", type });
-    },
-    clear() {
-      items.splice(0);
-      values.clear();
-    },
-    remove(index: number) {
-      const [item] = items.splice(index, 1);
-      if (item) values.delete(item.type);
-    },
-  });
-
-  return {
-    dropEffect: "none",
-    effectAllowed: "all",
-    files: [] as unknown as FileList,
-    items: items as unknown as DataTransferItemList,
-    get types() {
-      return items.map((item) => item.type);
-    },
-    clearData(type?: string) {
-      if (type) {
-        const index = items.findIndex((item) => item.type === type);
-        if (index >= 0) items.remove(index);
-      } else {
-        items.clear();
-      }
-    },
-    getData(type: string) {
-      return values.get(type) ?? "";
-    },
-    setData(type: string, value: string) {
-      items.add(value, type);
-    },
-    setDragImage() {},
-  } as DataTransfer;
-}
-
-function mockRect(element: HTMLElement, top: number, bottom: number) {
-  vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
-    top,
-    bottom,
-    left: 0,
-    right: 400,
-    width: 400,
-    height: bottom - top,
-    x: 0,
-    y: top,
-    toJSON: () => ({}),
-  } as DOMRect);
-}
-
 function mockStartGridLayout() {
   const startGrid = findStartGrid();
   mockRect(startGrid, 0, 140);
@@ -161,25 +101,6 @@ function mockStartGridLayout() {
   mockRect(findRowByName(/toolbar\.settings\.dividerLabel/), 50, 90);
   mockRect(findRowByName(/toolbar\.groups\.basicMarks/), 100, 140);
   return startGrid;
-}
-
-function dispatchDragEvent(
-  element: HTMLElement,
-  type: "dragstart" | "dragenter" | "dragover" | "drop" | "dragend",
-  dataTransfer: DataTransfer,
-  clientY: number
-) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
-    clientX: { value: 10 },
-    clientY: { value: clientY },
-    dataTransfer: { value: dataTransfer },
-    altKey: { value: false },
-    ctrlKey: { value: false },
-    metaKey: { value: false },
-    shiftKey: { value: false },
-  });
-  fireEvent(element, event);
 }
 
 // ─── rendering ────────────────────────────────────────────────────────
@@ -377,10 +298,9 @@ describe("add divider below (touch)", () => {
     });
     renderDialog();
 
-    const button = within(screen.getByTestId("toolbar-divider-below-start-1")).getByRole(
-      "button",
-      { name: "toolbar.settings.addDividerBelow" }
-    );
+    const button = within(screen.getByTestId("toolbar-divider-below-start-1")).getByRole("button", {
+      name: "toolbar.settings.addDividerBelow",
+    });
     button.focus();
     await user.keyboard("{Enter}");
 
@@ -391,9 +311,7 @@ describe("add divider below (touch)", () => {
 
   it("hides the between-rows control on touch screens", () => {
     renderDialog();
-    expect(screen.getByTestId("toolbar-add-divider-start-3")).toHaveClass(
-      "pointer-coarse:hidden"
-    );
+    expect(screen.getByTestId("toolbar-add-divider-start-3")).toHaveClass("pointer-coarse:hidden");
   });
 });
 

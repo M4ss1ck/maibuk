@@ -69,12 +69,14 @@
     "quickPlaceholder": "Escribe una nota rápida...",
     "add": "Añadir nota",
     "empty": "Aún no hay notas para este libro",
-    "formatting": "Formato"
+    "formatting": "Formato",
+    "quickNoteLabel": "Nota del libro"
   },
   "bookSidePanel": {
     "footnotes": "Notas al pie",
     "notes": "Notas",
-    "resize": "Redimensionar panel"
+    "resize": "Redimensionar panel",
+    "widthValue": "{{width}} píxeles"
   },
   "metrics": {
     "title": "Métricas",
@@ -160,6 +162,7 @@
     }
   },
   "chapters": {
+    "importFiles": "Importar capítulos desde archivos",
     "title": "Capítulos",
     "newChapter": "Nuevo Capítulo",
     "editChapter": "Editar Capítulo",
@@ -237,6 +240,7 @@
     "pin": "Fijar",
     "unpin": "Quitar fijado",
     "moveToBook": "Mover al libro",
+    "reorder": "Reordenar",
     "addTag": "Agregar etiqueta",
     "tags": "Etiquetas",
     "delete": "Eliminar nota",
@@ -257,12 +261,14 @@
   },
   "canvas": {
     "title": "Lienzos",
+    "collectionLabel": "Lienzos",
     "newCanvas": "Nuevo lienzo",
     "untitled": "Lienzo sin título",
     "empty": "Aún no hay lienzos",
     "emptyDescription": "Crea un lienzo para conectar notas, ideas y relaciones.",
     "addTextNode": "Añadir nodo de texto",
     "addNoteRef": "Añadir referencia a nota",
+    "editTextNode": "Editar nodo de texto",
     "searchPlaceholder": "Buscar lienzos…",
     "searchNotesPlaceholder": "Buscar notas…",
     "missingCanvas": "Lienzo no encontrado",
@@ -342,6 +348,8 @@
     "edgeCount_other": "{{count}} conexiones"
   },
   "editor": {
+    "textLabel": "Texto",
+    "chapterTextLabel": "Texto de {{title}}",
     "loading": "Cargando libro...",
     "loadingEditor": "Cargando editor...",
     "saving": "Guardando...",
@@ -384,6 +392,9 @@
     "findReplace": "Buscar y Reemplazar",
     "insertImage": "Insertar Imagen",
     "insertLink": "Insertar Enlace",
+    "linkSuggestions": "Sugerencias de enlace",
+    "createNoteFromWikilink": "Crear nota \"{{title}}\"",
+    "followLink": "Seguir enlace",
     "linkText": "Texto del Enlace",
     "footnote": "Añadir Nota al Pie",
     "footnoteTextPlaceholder": "Ingresa el texto de la nota al pie...",
@@ -456,6 +467,7 @@
     "spellCheck": "Corrector ortográfico",
     "spellCheckLanguage": "Idioma del corrector ortográfico",
     "dictionary": "Buscar palabra",
+    "toggleHeadingCollapse": "Contraer o expandir el título",
     "symbols": "Símbolos",
     "addToDictionary": "Agregar al diccionario",
     "noSuggestions": "Sin sugerencias",
@@ -540,11 +552,13 @@
     "imageCopy": "Copiar imagen",
     "imageSave": "Guardar imagen",
     "imageAlignment": "Alineación",
+    "imageOptions": "Opciones de imagen",
     "prettify": "Formatear",
     "wordWrap": "Ajuste de línea",
     "addCleanupRule": "Añadir regla de limpieza desde la selección",
     "editorTheme": "Tema del editor",
     "inspectInHtml": "Ver código",
+    "contextMenu": "Opciones del editor",
     "lookUp": "Buscar \"{{word}}\"",
     "warnings_one": "{{count}} advertencia",
     "warnings_other": "{{count}} advertencias",
@@ -915,6 +929,7 @@
     "backgroundColor": "Color",
     "addShape": "Añadir Forma",
     "templates": "Plantillas",
+    "sizePreset": "Preajuste de tamaño de portada",
     "toggleOverlays": "Alternar guías de margen",
     "toggleSnapping": "Alternar ajuste",
     "align": {
@@ -1055,6 +1070,7 @@
     "syncStatus": "Estado de sincronización"
   },
   "errors": {
+    "targetWordCountInvalid": "Escribe un número entero de palabras, 0 o más",
     "titleRequired": "El título es obligatorio",
     "authorNameRequired": "El nombre del autor es obligatorio",
     "URLRequired": "La URL es obligatoria"

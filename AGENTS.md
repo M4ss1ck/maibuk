@@ -70,7 +70,8 @@ Every new or modified UI feature ships keyboard-operable and screen-reader-corre
 4. **Labels are localized** — every `aria-label` goes through i18n like any other user-visible string.
 5. **Shortcuts are registered, not inlined** — new shortcuts go in `src/lib/shortcut-registry.ts` and bind via `useShortcuts` (`src/lib/shortcuts.ts`) with the registry `id` on the entry. That id is what makes it a Bound Shortcut listed under "On this screen" in the help. A key handled elsewhere (a component's own `onKeyDown`, a native control) declares its id with `useBoundShortcutIds`; TipTap formatting keys are tagged `source: "editor-keymap"` and listed from each editor's real keymap. `shortcut-bindings.test.ts` fails when a registry id is bound nowhere.
 6. **Proven by behavioral tests** — see the Keyboard & Accessibility Test Gate in section 6.
-7. **Reachable by touch** — Android and phone browsers have no hover, and Tailwind 4 only applies `hover:`/`group-hover:` where hover exists. Mouse devices keep their hover-revealed one-click actions; the same element gets `pointer-coarse:hidden`, and touch screens get the actions another way: an item's actions go in a ⋯ `ItemActionsMenu` shown with `hidden pointer-coarse:inline-flex` (or an `ItemActionsPopover` for Canvas nodes), opened also by long-press through `useItemContextMenu`; a single action becomes a visible control on coarse pointers. `src/test/unit/touch-reachability.test.ts` fails on a hover reveal with no `pointer-coarse:` class unless it is listed there with its touch path. Long-press opens the Item Menu, so on touch a drag starts only from a `data-drag-handle` (wrap the list in `useTouchDragFromHandle`). Remember where phones actually browse: on a phone the Notes gallery, not the notes list, is how notes are reached.
+7. **Reachable by touch** — Android and phone browsers have no hover, and Tailwind 4 only applies `hover:`/`group-hover:` where hover exists. Mouse devices keep their hover-revealed one-click actions; the same element gets `pointer-coarse:hidden`, and touch screens get the actions another way: an item's actions go in a ⋯ `ItemActionsMenu` shown with `hidden pointer-coarse:inline-flex` (or an `ItemActionsPopover` for Canvas nodes), opened also by long-press through `useItemContextMenu`; a single action becomes a visible control on coarse pointers. `src/test/unit/touch-reachability.test.ts` fails on a hover reveal with no `pointer-coarse:` class unless it is listed there with its touch path. Long-press opens the Item Menu, so on touch a drag starts only from a `data-drag-handle` (wrap the list in `useTouchDragFromHandle`); a React Aria drag button goes through `ReorderHandle`, because React Aria makes the button itself ignore pointers. Remember where phones actually browse: on a phone the Notes gallery, not the notes list, is how notes are reached.
+8. **Covered in the E2E suite**: new interactive UI is not done until it has a row in `e2e/coverage-matrix.ts` and a spec tagged `@wf:<row-id>`. See "Definition of done" in the E2E section of section 6.
 
 Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and `tabIndex` wiring looked correct while the widget was inoperable by keyboard, and attribute-level tests stayed green. Attributes are not accessibility; behavior is.
 
@@ -320,13 +321,18 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useReadingPositionStore` / `useReadingPosition()`                                                                                                                                                                                             | `src/features/reading-position/`                                       |
 | `toast.success()` / `ToastViewport`                                                                                                                                                                                                            | `src/components/ui/Toast.tsx`                                          |
 | `FileDropImportStatus` (localized file-import progress overlay)                                                                                                                                                                                | `src/components/ui/FileDropImportStatus.tsx`                           |
+| `pickTextFiles()` (keyboard path to import Markdown/text Chapters; the drop gesture stays pointer-only)                                                                                                                                        | `src/hooks/useTextFileDrop.ts`                                         |
 | `KeyboardShortcut` (`<kbd>` hint renderer)                                                                                                                                                                                                     | `src/components/ui/KeyboardShortcut.tsx`                               |
 | `ResponsiveToggleGroup` (measured segmented toggle; labels collapse to icons only when full labels do not fit)                                                                                                                                 | `src/components/ui/ResponsiveToggleGroup.tsx`                          |
 | `MultiSelectCombobox` (multi-select chips, checkbox dropdown, optional custom values)                                                                                                                                                          | `src/components/ui/MultiSelectCombobox.tsx`                            |
 | `Checkbox` (React Aria checkbox with mixed state; `label` is its accessible name, `inputRef` for focus) | `src/components/ui/Checkbox.tsx` |
 | `ItemActionsMenu` / `ItemActionsPopover` (always-visible ⋯ button, or a popover anchored to the item, with a React Aria menu of its actions; submenus via `children`) | `src/components/ui/ItemActionsMenu.tsx`                                |
 | `useItemContextMenu({ onOpen })` / `useTouchDragFromHandle()` (touch long-press and right-click open the item menu; touch drags start only from `data-drag-handle`)                                                                            | `src/hooks/useItemContextMenu.ts`                                      |
-| `installPointerEvent()` / `touchLongPress()` / `touchTap()` (jsdom touch-gesture test helpers)                                                                                                                                                 | `src/test/support/pointer-events.ts`                                   |
+| `installPointerEvent()` / `touchLongPress()` / `touchTap()` / `pointerHitTarget()` (jsdom touch-gesture test helpers; `pointerHitTarget` resolves `pointer-events: none` the way a browser does)                                                                                                                                                 | `src/test/support/pointer-events.ts`                                   |
+| `createDataTransfer()` / `createFileDataTransfer()` / `dispatchDragEvent()` / `mockRect()` (drive React Aria drag-and-drop in jsdom) | `src/test/support/drag-events.ts` |
+| `ReorderHandle` (React Aria drag button of a GridList row; `data-drag-handle` sits on its wrapper so a touch on the grip starts the drag) | `src/components/ui/ReorderHandle.tsx` |
+| `SectionDropIndicators` / `SectionedDropTargetDelegate` (drag-and-drop for a GridList split into GridListSections; see the Notes list) | `src/components/ui/SectionedGridListDnd.tsx` |
+| `readDroppedItems()` (supported text files from React Aria drop items) | `src/hooks/useTextFileDrop.ts` |
 | `buildBook()` / `buildChapter()` (test fixtures)                                                                                                                                                                                               | `src/test/support/fixtures.ts`                                         |
 | `createTestDatabase()` (in-memory sql.js for store tests)                                                                                                                                                                                      | `src/test/support/db-test-context.ts`                                  |
 | `isTypingTarget()` / `isModKey()`                                                                                                                                                                                                              | `src/lib/keyboard.ts`                                                  |
@@ -354,6 +360,14 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `hasLaunchAutoSyncSettled()` / `onLaunchAutoSyncSettled()` (whether this launch's Auto Sync is behind us)                                                                                                                                     | `src/features/sync/auto-sync.ts`                                       |
 | `toast.info()` (text-only hint toast)                                                                                                                                                                                                        | `src/components/ui/Toast.tsx`                                          |
 | `useModalScope(isOpen)` (LIFO modal ID registration/unregistration)                                                                                                                                                                            | `src/hooks/useModalScope.ts`                                           |
+| `useRestoreFocus(isOpen)` (returns focus to the opener after an overlay closes; call it after `useModalOverlay`, whose `inert` cleanup must run first) | `src/hooks/useRestoreFocus.ts` |
+| `tabTo(page, target)` / `pressUntilFocused(page, key, target)` / `isFocusWithin(region)` / `expectFocusWithin(region)` / `describeFocus(page)` / `expectTabContained(page, dialog)` (E2E keyboard-only navigation and focus assertions)                                                                                                        | `e2e/support/keyboard.ts`                                              |
+| `test` / `expect` (the E2E fixture: fresh context, seed Library, Tutorial progress, hermetic network, `mod` fixture; specs import these, never `@playwright/test`)                                                                                                            | `e2e/support/test.ts`                                                  |
+| `prepareDevice(page, { library, tutorial })` / `seedSettings(page, state)` / `seedPasteCleanupPreset(page, preset)` / `readStorageValue(page, key)` / `countBackups(page)` / `readLibraryBytes(page)` (E2E setup-only storage helpers)                                        | `e2e/support/storage.ts`                                               |
+| `writeClipboard(page, data)` / `readClipboard(page)` (E2E clipboard helpers for `@chromium-only` rows)                                                                                                                                                                       | `e2e/support/clipboard.ts`                                             |
+| `failIndexedDbWrites(page)` / `allowIndexedDbWrites(page)` / `failBlobDownloads(page)` / `tamperBackupChecksums(page)` (E2E fault injection at the storage and browser-API boundary)                                                                                          | `e2e/support/fault.ts`                                                 |
+| `SEED_LIBRARIES` / `SeedName` (named E2E seed Libraries; each builder uses the real write paths)                                                                                                                                                                             | `e2e/support/seed/libraries.ts`                                        |
+| `buildSeed(name)` / `buildAllSeeds()` (build seed Libraries into database bytes through the real write paths)                                                                                                                                                                | `e2e/support/seed/build-seeds.ts`                                      |
 
 ---
 
@@ -605,7 +619,71 @@ Any change that adds or modifies interactive UI is **not done** until behavioral
    - Dialogs: Escape closes, and focus returns to the trigger element.
    - Lists / menus / toolbars: arrow keys move focus — assert `document.activeElement` changed, not that a handler is attached.
    - Reordering / drag-and-drop: the keyboard reorder path is tested end-to-end.
-3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected, are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`), and the screen's test asserts their id is bound (`useBoundShortcutStore`).
+3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected, are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`), and the screen's test asserts its id is bound (`useBoundShortcutStore`).
+
+### E2E (keyboard-first Playwright suite)
+
+```bash
+pnpm test:e2e                                     # guard, guard self-tests, e2e typecheck, web build, Playwright
+pnpm test:e2e --project=chromium                  # one browser
+pnpm test:e2e specs/books-create.spec.ts          # one file
+pnpm test:e2e --grep @wf:books-create             # one matrix workflow
+pnpm test:e2e --repeat-each=3                     # the acceptance run
+```
+
+Specs live in `e2e/specs/`. The suite drives the production web build in
+Chromium and WebKit, runs locally, and is invisible to `pnpm test`,
+`pnpm test:run`, `pnpm test:coverage`, the builds, release scripts, CI, and
+hooks. It never runs in CI. `e2e/README.md` documents install, the full run,
+single file/test/tag runs, headed, debug and UI mode, trace viewing, and
+troubleshooting.
+
+**Definition of done.** A new feature or new interactive UI is not done until it
+has a row in `e2e/coverage-matrix.ts`, and a spec tagged `@wf:<row-id>` (and
+`@sc:<id>` for each new shortcut) that passes locally with `pnpm test:e2e`; a
+single file is fine while iterating (`pnpm test:e2e specs/<file>`). A gap whose
+right interaction is undecided may stay `not-accepted` with a real GitHub issue
+and `test.fail` citing it. Playwright never runs in CI (timing). CI runs only the
+coverage guard through Vitest (`src/test/unit/e2e-coverage-guard.test.ts`),
+which fails when a route, registry shortcut, or CONTEXT.md term has no row, or a
+row has no tagged spec. Running the specs is the author's local pre-PR check and
+the first diagnosis tool when behavior breaks.
+
+**Keyboard contract (every spec).** Enter each workflow through keyboard-reachable
+UI and drive it with Tab, Shift+Tab, arrows, Enter, Space, Escape, and registered
+shortcuts only. No spec uses `click`, `dblclick`, `hover`, `tap`, `dragTo`,
+`check`, `fill`, `clear`, element `.focus()`, `locator.press`, `mouse`,
+`touchscreen`, `dispatchEvent`, `evaluate`, or any other pointer or programmatic
+API; the pre-run guard fails a spec that does. Locate elements by role and
+accessible name, and assert the focused element and visible outcomes, never
+component internals or store state. Every dialog spec asserts focus entry, Tab
+containment (tabbing past the last control stays inside), Escape dismissal, and
+focus restored to the trigger. Collection, menu, and toolbar specs assert that
+the focused element changes on arrow keys. `data-testid` is allowed only where no
+accessible name can exist, with a comment saying why. Press `ControlOrMeta` for
+Mod; a spec that also runs in `mac-platform` presses the `mod` fixture.
+
+**Adding a matrix row.** `e2e/coverage-matrix.ts` is the frozen minimum: one row
+per workflow in `ROWS`, plus `EXCLUSIONS`. A row carries its `id`, `area`,
+`workflow`, `edges` (each edge gets its own test), `terms`, `shortcuts`,
+`routes`, `fixture`, `tags`, and `status`. Add it with `status: "planned"`,
+write the spec, then set `status: "accepted"` once each edge passes in both
+engines with `--repeat-each=3`. Specs declare coverage with `@wf:<id>` and
+`@sc:<registry id>` tags in test or describe titles. A gap whose right
+interaction is undecided stays `not-accepted` with an `issue` field (the GitHub
+issue URL) and a test kept as
+`test.fail(title, { annotation: { type: "issue", description: url } }, fn)`
+citing that same URL. The guard fails an expected failure whose URL is missing
+or not a real issue, and it fails a `test.fail()` that starts passing. Never add
+`test.skip`, `test.fixme`, or `.only`, and never enable retries.
+
+**Seed fixtures.** Named seed Libraries live in `e2e/support/seed/`, one file per
+fixture, each registered in `SEED_LIBRARIES` (`e2e/support/seed/libraries.ts`).
+A builder runs in Node through the app's real per-entity write paths against an
+in-memory Library, and the file also exports the visible names its spec locates
+by. `empty` is a fresh device and is the default; Tutorial specs set
+`tutorialProgress: "clean"`. Only `e2e/support/storage.ts` and
+`e2e/support/fault.ts` may touch IndexedDB or localStorage.
 
 ### Linting & Formatting
 
@@ -733,6 +811,20 @@ Maibuk is confident, not timid. It has opinions about how writing software shoul
 3. **Confident restraint** — Bold doesn't mean loud. The interface should feel decisive — clear hierarchy, strong primary actions, no ambiguity about what to do next. But it achieves this through restraint: fewer elements with more purpose, not more elements with less.
 4. **Tangible feedback** — Every interaction should feel responsive and real. Save status, sync state, export progress, drag-and-drop reordering — these moments are where trust is built. Invest in making them feel right.
 5. **Never generic** — Before adding any UI element, ask: "Would this look the same in a generic template?" If yes, reconsider. Maibuk's identity comes from the accumulation of small, intentional choices — a distinctive empty state, a satisfying hover effect, a well-crafted transition.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues on M4ss1ck/maibuk, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
 
 <!-- headroom:rtk-instructions -->
 

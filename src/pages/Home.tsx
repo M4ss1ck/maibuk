@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { GridList } from "react-aria-components/GridList";
 import { Toolbar } from "react-aria-components/Toolbar";
 import { useBookStore } from "@/features/books/store";
@@ -35,6 +35,10 @@ interface EpubImportState {
 export function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const focusGalleryOnArrival =
+    (location.state as { focusGallery?: boolean } | null)?.focusGallery === true;
+  const startWritingRef = useRef<HTMLButtonElement>(null);
   const [isNewBookOpen, setIsNewBookOpen] = useState(false);
   // A ref, not state: re-rendering the grid on every focus change inside a card
   // lets the card row take focus back from the card's open status popover.
@@ -76,6 +80,24 @@ export function Home() {
   useEffect(() => {
     loadBooks();
   }, [loadBooks]);
+
+  // Arriving after the open Book was deleted: its screen is gone and focus
+  // with it. Put focus back in the Gallery unless something else took it.
+  useEffect(() => {
+    if (!focusGalleryOnArrival || isLoading) return;
+    const firstBookId = visibleBooks[0]?.id;
+    // The grid renders its rows a frame after the collection is built.
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (!active || active === document.body) {
+        if (firstBookId) focusBook(firstBookId);
+        else startWritingRef.current?.focus();
+      }
+      // Once: a reload or Back must not move focus again.
+      navigate(location.pathname, { replace: true, state: null });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusGalleryOnArrival, isLoading, visibleBooks, focusBook, navigate, location.pathname]);
 
   useEffect(() => {
     const focusedBookId = focusedBookIdRef.current;
@@ -182,6 +204,7 @@ export function Home() {
   );
 
   const handleImportEpub = async () => {
+    if (isScanningEpub) return;
     setImportError(null);
     setIsScanningEpub(true);
     try {
@@ -266,8 +289,10 @@ export function Home() {
           <Button
             variant="secondary"
             onClick={handleImportEpub}
-            className="text-sm"
-            disabled={isScanningEpub}
+            // aria-disabled, not disabled: a disabled button drops focus while
+            // the EPUB scans, and the report would then close onto <body>.
+            className={`text-sm ${isScanningEpub ? "opacity-50 cursor-progress" : ""}`}
+            aria-disabled={isScanningEpub || undefined}
             data-tutorial="books.import"
           >
             <FileUp className="w-5 h-5" />
@@ -304,7 +329,7 @@ export function Home() {
           <p className="text-muted-foreground mb-8 max-w-sm leading-relaxed">
             {t("books.noBooksFull")}
           </p>
-          <Button size="lg" onClick={() => setIsNewBookOpen(true)}>
+          <Button ref={startWritingRef} size="lg" onClick={() => setIsNewBookOpen(true)}>
             <AddIcon className="w-5 h-5" />
             {t("books.noBooksButton")}
           </Button>
@@ -330,8 +355,12 @@ export function Home() {
         <div
           data-tutorial="books.gallery"
           onFocusCapture={(event) => {
-            const row = (event.target as HTMLElement).closest<HTMLElement>("[data-key]");
-            if (row?.dataset.key) focusedBookIdRef.current = row.dataset.key;
+            // React focus events bubble through portals: a card's status
+            // popover options also carry data-key. Only this grid's rows count.
+            const row = (event.target as HTMLElement).closest<HTMLElement>('[role="row"][data-key]');
+            if (row?.dataset.key && gridRef.current?.contains(row)) {
+              focusedBookIdRef.current = row.dataset.key;
+            }
           }}
         >
           <GridList

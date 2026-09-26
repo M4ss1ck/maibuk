@@ -5,7 +5,7 @@ import { exportSqlDump } from "@/lib/db/sql-export";
 
 const DB_STORAGE_KEY = "maibuk-database";
 
-class WebDatabaseAdapter implements DatabaseAdapter {
+export class WebDatabaseAdapter implements DatabaseAdapter {
   // Serializes IndexedDB writes so overlapping persists don't race on the same
   // transaction. Each persist enqueues a write of its own snapshot.
   private writeChain: Promise<void> = Promise.resolve();
@@ -14,7 +14,9 @@ class WebDatabaseAdapter implements DatabaseAdapter {
 
   async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
     this.db.run(sql, params as (string | number | null | Uint8Array)[]);
-    this.persist();
+    // Resolve once the write is durable. A failed persist must reject the
+    // write: the Edit Session surfaces it as "Not saved" instead of "Saved".
+    await this.persist();
     return { rowsAffected: this.db.getRowsModified() };
   }
 
@@ -33,8 +35,7 @@ class WebDatabaseAdapter implements DatabaseAdapter {
   }
 
   async close(): Promise<void> {
-    this.persist();
-    await this.writeChain;
+    await this.persist();
     this.db.close();
   }
 
@@ -53,27 +54,25 @@ class WebDatabaseAdapter implements DatabaseAdapter {
       }
     }
 
-    this.persist();
+    await this.persist();
   }
 
-  private persist(): void {
+  private persist(): Promise<void> {
     // Always persist to IndexedDB. localStorage is avoided entirely: books can
     // be metadata-heavy and base64-in-localStorage blows the ~5MB quota,
     // surfacing as "Failed to persist database". IndexedDB stores the binary
     // directly with a far larger quota.
     const data = this.db.export();
     this.writeChain = this.writeChain
+      // A previous failed write must not stop the next attempt.
       .catch(() => {})
-      .then(() => this.persistToIndexedDB(data))
-      .catch((error) => {
-        console.error("Failed to persist database:", error);
-      });
+      .then(() => this.persistToIndexedDB(data));
+    return this.writeChain;
   }
 
   /** One-time migration of a database previously persisted in localStorage. */
   async migrateLegacyStorage(): Promise<void> {
-    this.persist();
-    await this.writeChain;
+    await this.persist();
     localStorage.removeItem(DB_STORAGE_KEY);
   }
 
@@ -92,11 +91,17 @@ class WebDatabaseAdapter implements DatabaseAdapter {
 
       request.onsuccess = () => {
         const db = request.result;
-        const transaction = db.transaction("database", "readwrite");
-        const store = transaction.objectStore("database");
-        store.put(data, "main");
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
+        try {
+          const transaction = db.transaction("database", "readwrite");
+          const store = transaction.objectStore("database");
+          store.put(data, "main");
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+          transaction.onabort = () => reject(transaction.error);
+        } catch (error) {
+          // A synchronous put failure (quota, DataError) must reject too.
+          reject(error);
+        }
       };
     });
   }

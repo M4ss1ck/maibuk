@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { QuickNoteEditor } from "@/components/book/QuickNoteEditor";
 import type { Note } from "@/features/notes";
@@ -17,6 +17,7 @@ export function BookNotesView({ notes, onCreateNote, onOpenNote }: BookNotesView
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
   const [editorKey, setEditorKey] = useState(0);
+  const addButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const handleAdd = () => {
     if (!hasText(draft)) return;
@@ -24,6 +25,10 @@ export function BookNotesView({ notes, onCreateNote, onOpenNote }: BookNotesView
     setDraft("");
     setEditorKey((key) => key + 1);
   };
+
+  // The Quick Note editor keeps Tab for indentation; Escape is the way out to
+  // the Add note button that follows it.
+  const handleEditorEscape = () => addButtonRef.current?.focus();
 
   return (
     <div className="flex h-full flex-col">
@@ -33,10 +38,12 @@ export function BookNotesView({ notes, onCreateNote, onOpenNote }: BookNotesView
             key={editorKey}
             onChange={setDraft}
             placeholder={t("bookNotes.quickPlaceholder")}
+            onEscape={handleEditorEscape}
           />
         </div>
         <div className="mt-2 flex justify-end">
           <button
+            ref={addButtonRef}
             type="button"
             onClick={handleAdd}
             className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"

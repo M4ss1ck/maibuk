@@ -50,6 +50,24 @@ export const webDialog: WebDialogAdapter = {
     });
   },
 
+  async openMany(): Promise<string[]> {
+    // The web build cannot read a file by name; callers use openFiles.
+    console.warn("[DialogAdapter] openMany is not supported on the web platform; use openFiles.");
+    return [];
+  },
+
+  async openFiles(options: OpenDialogOptions): Promise<File[]> {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.multiple = true;
+      input.accept = getAcceptString(options.filters);
+      input.addEventListener("change", () => resolve([...(input.files ?? [])]), { once: true });
+      input.addEventListener("cancel", () => resolve([]), { once: true });
+      input.click();
+    });
+  },
+
   async openWithData(options: OpenDialogOptions): Promise<FileWithData | null> {
     return new Promise((resolve) => {
       const input = document.createElement("input");

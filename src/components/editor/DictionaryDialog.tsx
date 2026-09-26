@@ -10,9 +10,17 @@ interface DictionaryDialogProps {
   word: string;
   language: Language;
   onClose: () => void;
+  /** Focus returns here when the dialog closes (the editor, usually). */
+  restoreFocusTarget?: () => HTMLElement | null;
 }
 
-export function DictionaryDialog({ isOpen, word, language, onClose }: DictionaryDialogProps) {
+export function DictionaryDialog({
+  isOpen,
+  word,
+  language,
+  onClose,
+  restoreFocusTarget,
+}: DictionaryDialogProps) {
   const { t } = useTranslation();
   const [html, setHtml] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -64,6 +72,7 @@ export function DictionaryDialog({ isOpen, word, language, onClose }: Dictionary
       onClose={onClose}
       title={normalizedWord ?? t("dictionary.title")}
       size="wide"
+      restoreFocusTarget={restoreFocusTarget}
       footer={
         wiktionaryUrl ? (
           <button

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { TableSizePicker } from "@/components/editor/TableSizePicker";
 
@@ -19,8 +20,25 @@ describe("TableSizePicker", () => {
   it("reflects toggling the header-row switch off", () => {
     const onSelect = vi.fn();
     render(<TableSizePicker onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole("switch"));
+    fireEvent.click(screen.getByRole("switch", { name: "editor.addHeaderRow" }));
     fireEvent.click(screen.getByTestId("table-size-2-2"));
     expect(onSelect).toHaveBeenCalledWith(2, 2, false);
+  });
+
+  it("names every cell and inserts from the keyboard", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<TableSizePicker onSelect={onSelect} />);
+
+    const first = screen.getAllByRole("option")[0];
+    expect(first).toBe(screen.getByTestId("table-size-1-1"));
+    expect(screen.getAllByRole("option")).toHaveLength(25);
+
+    first.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByTestId("table-size-1-2")).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(onSelect).toHaveBeenCalledWith(1, 2, true);
   });
 });

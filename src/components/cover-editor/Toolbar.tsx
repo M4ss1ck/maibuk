@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  Button as AriaButton,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+} from "react-aria-components";
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,
@@ -41,13 +48,21 @@ import {
 
 export type ExportChoice = "png" | "jpeg" | "pdf";
 
-type MenuKey = "presets" | "templates" | "text" | "shape" | "export";
-
 interface ToolbarProps {
   onExport: (format: ExportChoice) => void;
   bookTitle: string;
   bookAuthor: string;
 }
+
+// The menus follow the app's React Aria menu pattern (see TextCaseMenu): a
+// menu trigger, a popover and a Menu. Arrow keys, typeahead, Escape and focus
+// restoration are React Aria's, not hand-rolled.
+const TRIGGER_CLASS =
+  "inline-flex items-center justify-center gap-1 sm:gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium bg-transparent text-foreground transition-colors hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-muted data-pressed:bg-muted";
+const POPOVER_CLASS =
+  "z-50 mt-1 rounded-lg border border-border bg-card py-1 shadow-lg outline-none";
+const ITEM_CLASS =
+  "flex cursor-pointer items-center gap-2 px-4 py-2 text-left text-sm text-foreground outline-none data-focused:bg-muted";
 
 function loadImageSize(src: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
@@ -93,47 +108,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
     { edge: "bottom", Icon: AlignEndHorizontal, label: t("cover.align.bottom") },
   ];
 
-  const [openMenu, setOpenMenu] = useState<MenuKey | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRefs = useRef<Partial<Record<MenuKey, HTMLButtonElement | null>>>({});
-  const openMenuRef = useRef<MenuKey | null>(null);
-  openMenuRef.current = openMenu;
-
-  const toggleMenu = (key: MenuKey) => setOpenMenu((cur) => (cur === key ? null : key));
-  const closeMenu = useCallback((restoreFocus = false) => {
-    setOpenMenu(null);
-    if (restoreFocus) {
-      const key = openMenuRef.current;
-      if (key) triggerRefs.current[key]?.focus();
-    }
-  }, []);
-
-  const setTriggerRef =
-    (key: MenuKey) =>
-    (node: HTMLButtonElement | null) => {
-      triggerRefs.current[key] = node;
-    };
-
-  // Dismiss any open dropdown on outside pointer-down or Escape. Escape
-  // restores focus to the trigger; selection handlers do the same.
-  useEffect(() => {
-    if (openMenu === null) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closeMenu();
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.stopPropagation();
-      closeMenu(true);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [openMenu, closeMenu]);
 
   const applyTemplate = (templateId: string) => {
     replaceScene(
@@ -143,12 +118,10 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         presetId: scene.doc.presetId ?? "6x9",
       })
     );
-    closeMenu(true);
   };
 
   const addShape = (shape: "rect" | "ellipse" | "line") => {
     addLayer(createShapeLayer({ shape, docWidth: scene.doc.width, docHeight: scene.doc.height }));
-    closeMenu(true);
   };
 
   const currentPreset = PRESETS.find((p) => p.id === scene.doc.presetId) ?? PRESETS[0];
@@ -169,7 +142,6 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         docHeight: scene.doc.height,
       })
     );
-    closeMenu(true);
   };
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,121 +172,95 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
       safeMargin: Math.round(p.width * 0.05),
       presetId: p.id,
     });
-    closeMenu(true);
   };
 
   return (
     <TooltipGroup>
-      <div
-        ref={rootRef}
-        className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2"
-      >
+      <div className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2">
         {/* Preset selector */}
-        <div className="relative">
-          <Button
-            ref={setTriggerRef("presets")}
-            data-tutorial="cover-designer.size"
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleMenu("presets")}
-            aria-expanded={openMenu === "presets"}
-            aria-haspopup="menu"
-            className="gap-1 sm:gap-2 text-xs sm:text-sm"
-          >
-            <DimensionIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">{currentPreset.name}</span>
-            <ChevronDownIcon className="w-3 h-3" />
-          </Button>
-          {openMenu === "presets" && (
-            <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
+        <MenuTrigger>
+          <Tooltip content={t("cover.sizePreset")}>
+            <AriaButton
+              data-tutorial="cover-designer.size"
+              className={TRIGGER_CLASS}
+            >
+              <DimensionIcon className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{currentPreset.name}</span>
+              <ChevronDownIcon className="w-3 h-3" aria-hidden="true" />
+            </AriaButton>
+          </Tooltip>
+          <Popover placement="bottom start" className={`${POPOVER_CLASS} w-56`}>
+            <Menu
+              aria-label={t("cover.sizePreset")}
+              onAction={(key) => changePreset(String(key))}
+              className="outline-none"
+            >
               {PRESETS.map((p) => (
-                <button
-                  type="button"
+                <MenuItem
                   key={p.id}
-                  onClick={() => changePreset(p.id)}
-                  className={`w-full px-4 py-2 text-left hover:bg-muted flex justify-between items-center ${p.id === currentPreset.id ? "bg-muted" : ""}`}
+                  id={p.id}
+                  textValue={p.name}
+                  className={`${ITEM_CLASS} justify-between`}
                 >
                   <span className="font-medium">{p.name}</span>
                   <span className="text-xs text-muted-foreground">{p.description}</span>
-                </button>
+                </MenuItem>
               ))}
-            </div>
-          )}
-        </div>
+            </Menu>
+          </Popover>
+        </MenuTrigger>
 
         {/* Templates */}
-        <div className="relative">
-          <Button
-            ref={setTriggerRef("templates")}
-            data-tutorial="cover-designer.templates"
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleMenu("templates")}
-            aria-expanded={openMenu === "templates"}
-            aria-haspopup="menu"
-            className="gap-1 sm:gap-2 text-xs sm:text-sm"
-          >
-            <LayoutTemplate className="w-4 h-4" />
-            <span className="hidden sm:inline">{t("cover.templates")}</span>
-          </Button>
-          {openMenu === "templates" && (
-            <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
+        <MenuTrigger>
+          <Tooltip content={t("cover.templates")}>
+            <AriaButton data-tutorial="cover-designer.templates" className={TRIGGER_CLASS}>
+              <LayoutTemplate className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t("cover.templates")}</span>
+            </AriaButton>
+          </Tooltip>
+          <Popover placement="bottom start" className={`${POPOVER_CLASS} w-56`}>
+            <Menu
+              aria-label={t("cover.templates")}
+              onAction={(key) => applyTemplate(String(key))}
+              className="outline-none"
+            >
               {TEMPLATES.map((tpl) => (
-                <button
-                  key={tpl.id}
-                  type="button"
-                  onClick={() => applyTemplate(tpl.id)}
-                  className="w-full px-4 py-2 text-left hover:bg-muted"
-                >
+                <MenuItem key={tpl.id} id={tpl.id} textValue={tpl.name} className={ITEM_CLASS}>
                   {tpl.name}
-                </button>
+                </MenuItem>
               ))}
-            </div>
-          )}
-        </div>
+            </Menu>
+          </Popover>
+        </MenuTrigger>
 
         <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
         {/* Add text */}
-        <div className="relative">
-          <Button
-            ref={setTriggerRef("text")}
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleMenu("text")}
-            aria-expanded={openMenu === "text"}
-            aria-haspopup="menu"
-            className="gap-1 sm:gap-2 text-xs sm:text-sm"
-          >
-            <TextIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">{t("cover.addText")}</span>
-          </Button>
-          {openMenu === "text" && (
-            <div className="absolute top-full left-0 mt-1 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
-              <button
-                type="button"
-                onClick={() => addText("title")}
-                className="w-full px-4 py-2 text-left hover:bg-muted"
-              >
+        <MenuTrigger>
+          <Tooltip content={t("cover.addText")}>
+            <AriaButton className={TRIGGER_CLASS}>
+              <TextIcon className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t("cover.addText")}</span>
+            </AriaButton>
+          </Tooltip>
+          <Popover placement="bottom start" className={`${POPOVER_CLASS} w-48`}>
+            <Menu
+              aria-label={t("cover.addText")}
+              onAction={(key) => addText(key as "title" | "subtitle" | "author")}
+              className="outline-none"
+            >
+              <MenuItem id="title" textValue={t("cover.toolbar.title")} className={ITEM_CLASS}>
                 {t("cover.toolbar.title")}
-              </button>
-              <button
-                type="button"
-                onClick={() => addText("subtitle")}
-                className="w-full px-4 py-2 text-left hover:bg-muted"
-              >
+              </MenuItem>
+              <MenuItem id="subtitle" textValue={t("cover.toolbar.subtitle")} className={ITEM_CLASS}>
                 {t("cover.toolbar.subtitle")}
-              </button>
-              <button
-                type="button"
-                onClick={() => addText("author")}
-                className="w-full px-4 py-2 text-left hover:bg-muted"
-              >
+              </MenuItem>
+              <MenuItem id="author" textValue={t("cover.toolbar.author")} className={ITEM_CLASS}>
                 {t("cover.toolbar.author")}
-              </button>
-            </div>
-          )}
-        </div>
+              </MenuItem>
+            </Menu>
+          </Popover>
+        </MenuTrigger>
 
         {/* Add image */}
         <Tooltip content={t("cover.addImage")}>
@@ -325,7 +271,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
             className="gap-1 sm:gap-2 text-xs sm:text-sm"
             aria-label={t("cover.addImage")}
           >
-            <ImageIcon className="w-4 h-4" />
+            <ImageIcon className="w-4 h-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t("cover.addImage")}</span>
           </Button>
         </Tooltip>
@@ -339,48 +285,31 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         />
 
         {/* Add shape */}
-        <div className="relative">
+        <MenuTrigger>
           <Tooltip content={t("cover.addShape")}>
-            <Button
-              ref={setTriggerRef("shape")}
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleMenu("shape")}
-              aria-expanded={openMenu === "shape"}
-              aria-haspopup="menu"
-              className="gap-1 sm:gap-2 text-xs sm:text-sm"
-              aria-label={t("cover.addShape")}
-            >
-              <Shapes className="w-4 h-4" />
+            <AriaButton aria-label={t("cover.addShape")} className={TRIGGER_CLASS}>
+              <Shapes className="w-4 h-4" aria-hidden="true" />
               <span className="hidden sm:inline">{t("cover.addShape")}</span>
-            </Button>
+            </AriaButton>
           </Tooltip>
-          {openMenu === "shape" && (
-            <div className="absolute top-full left-0 mt-1 w-44 bg-card border border-border rounded-lg shadow-lg z-50">
-              <button
-                type="button"
-                onClick={() => addShape("rect")}
-                className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-              >
-                <Square className="w-4 h-4" /> {t("cover.shape.rect")}
-              </button>
-              <button
-                type="button"
-                onClick={() => addShape("ellipse")}
-                className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-              >
-                <Circle className="w-4 h-4" /> {t("cover.shape.ellipse")}
-              </button>
-              <button
-                type="button"
-                onClick={() => addShape("line")}
-                className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-              >
-                <Minus className="w-4 h-4" /> {t("cover.shape.line")}
-              </button>
-            </div>
-          )}
-        </div>
+          <Popover placement="bottom start" className={`${POPOVER_CLASS} w-44`}>
+            <Menu
+              aria-label={t("cover.addShape")}
+              onAction={(key) => addShape(key as "rect" | "ellipse" | "line")}
+              className="outline-none"
+            >
+              <MenuItem id="rect" textValue={t("cover.shape.rect")} className={ITEM_CLASS}>
+                <Square className="w-4 h-4" aria-hidden="true" /> {t("cover.shape.rect")}
+              </MenuItem>
+              <MenuItem id="ellipse" textValue={t("cover.shape.ellipse")} className={ITEM_CLASS}>
+                <Circle className="w-4 h-4" aria-hidden="true" /> {t("cover.shape.ellipse")}
+              </MenuItem>
+              <MenuItem id="line" textValue={t("cover.shape.line")} className={ITEM_CLASS}>
+                <Minus className="w-4 h-4" aria-hidden="true" /> {t("cover.shape.line")}
+              </MenuItem>
+            </Menu>
+          </Popover>
+        </MenuTrigger>
 
         <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
@@ -450,6 +379,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
             size="sm"
             onClick={() => setOverlays(!overlays)}
             aria-label={t("cover.toggleOverlays")}
+            aria-pressed={overlays}
           >
             <Ruler className="w-4 h-4" />
           </Button>
@@ -460,6 +390,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
             size="sm"
             onClick={() => setSnapping(!snapping)}
             aria-label={t("cover.toggleSnapping")}
+            aria-pressed={snapping}
           >
             <Magnet className="w-4 h-4" />
           </Button>
@@ -468,55 +399,34 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         <div className="flex-1 min-w-2" />
 
         {/* Export */}
-        <div className="relative">
-          <Button
-            ref={setTriggerRef("export")}
-            data-tutorial="cover-designer.export"
-            variant="primary"
-            size="sm"
-            onClick={() => toggleMenu("export")}
-            aria-expanded={openMenu === "export"}
-            aria-haspopup="menu"
-            className="gap-1 sm:gap-2 text-xs sm:text-sm"
-          >
-            <ExportIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">{t("cover.export")}</span>
-          </Button>
-          {openMenu === "export" && (
-            <div className="absolute top-full right-0 mt-1 w-40 bg-card border border-border rounded-lg shadow-lg z-50">
-              <button
-                type="button"
-                onClick={() => {
-                  onExport("png");
-                  closeMenu(true);
-                }}
-                className="w-full px-4 py-2 text-left hover:bg-muted"
-              >
+        <MenuTrigger>
+          <Tooltip content={t("cover.export")}>
+            <AriaButton
+              data-tutorial="cover-designer.export"
+              className={`${TRIGGER_CLASS} bg-primary text-white hover:bg-primary-hover`}
+            >
+              <ExportIcon className="w-4 h-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t("cover.export")}</span>
+            </AriaButton>
+          </Tooltip>
+          <Popover placement="bottom end" className={`${POPOVER_CLASS} w-40`}>
+            <Menu
+              aria-label={t("cover.export")}
+              onAction={(key) => onExport(key as ExportChoice)}
+              className="outline-none"
+            >
+              <MenuItem id="png" textValue={t("cover.pngExport")} className={ITEM_CLASS}>
                 {t("cover.pngExport")}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onExport("jpeg");
-                  closeMenu(true);
-                }}
-                className="w-full px-4 py-2 text-left hover:bg-muted"
-              >
+              </MenuItem>
+              <MenuItem id="jpeg" textValue={t("cover.jpgExport")} className={ITEM_CLASS}>
                 {t("cover.jpgExport")}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onExport("pdf");
-                  closeMenu(true);
-                }}
-                className="w-full px-4 py-2 text-left hover:bg-muted"
-              >
+              </MenuItem>
+              <MenuItem id="pdf" textValue={t("cover.pdfExport")} className={ITEM_CLASS}>
                 {t("cover.pdfExport")}
-              </button>
-            </div>
-          )}
-        </div>
+              </MenuItem>
+            </Menu>
+          </Popover>
+        </MenuTrigger>
       </div>
     </TooltipGroup>
   );

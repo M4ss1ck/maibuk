@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
@@ -8,6 +8,7 @@ import { BarChart3, Feather, Menu, NotebookPen, Workflow } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { KeyboardShortcut } from "@/components/ui";
+import { useRestoreFocus } from "@/hooks";
 import { APP_VERSION, DOWNLOAD_PAGE } from "@/constants";
 import { useSettingsStore } from "@/features/settings/store";
 import { useVersionCheck } from "@/features/version";
@@ -32,8 +33,6 @@ export function Layout() {
   const setMainSidebarWidth = useSettingsStore((s) => s.setMainSidebarWidth);
   const isResizing = useRef(false);
   const mobileDialogRef = useRef<HTMLDivElement>(null);
-  const mobileMenuRestoreFocusRef = useRef<HTMLElement | null>(null);
-  const wasMobileMenuOpenRef = useRef(false);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
   const mobileMenuState = useMemo(
@@ -52,23 +51,8 @@ export function Layout() {
     mobileDialogRef
   );
 
-  if (isMobileMenuOpen && !wasMobileMenuOpenRef.current && typeof document !== "undefined") {
-    const activeElement = document.activeElement;
-    mobileMenuRestoreFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
-  }
-  wasMobileMenuOpenRef.current = isMobileMenuOpen;
-
-  const restoreMobileMenuFocus = () => {
-    const target = mobileMenuRestoreFocusRef.current;
-    mobileMenuRestoreFocusRef.current = null;
-    if (target?.isConnected && target !== document.body) target.focus();
-  };
-
-  useLayoutEffect(() => {
-    if (!isMobileMenuOpen) restoreMobileMenuFocus();
-  }, [isMobileMenuOpen]);
-
-  useLayoutEffect(() => restoreMobileMenuFocus, []);
+  // After useModalOverlay: its inert cleanup must run before the restore.
+  useRestoreFocus(isMobileMenuOpen);
 
   useEffect(() => {
     if (!isMobileMenuOpen) return;

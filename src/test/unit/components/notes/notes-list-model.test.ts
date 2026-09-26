@@ -8,6 +8,7 @@ import {
   buildTagNoteGroups,
   filterNotes,
   notePlainText,
+  placeNote,
   sortNotesBy,
 } from "@/components/notes/notes-list-model";
 
@@ -269,6 +270,60 @@ describe("notes list model", () => {
       { id: "today", title: "Today", notes: [today] },
       { id: "this-week", title: "This week", notes: [thisWeek] },
       { id: "2025", title: "2025", notes: [lastYear] },
+    ]);
+  });
+});
+
+describe("placeNote()", () => {
+  const a = note({ id: "a", title: "A", pinned: true });
+  const b = note({ id: "b", title: "B", pinned: true });
+  const c = note({ id: "c", title: "C" });
+  const d = note({ id: "d", title: "D" });
+  const sections = () => buildListNoteSections([a, b, c, d], "");
+  const ids = (result: ReturnType<typeof placeNote>) =>
+    result?.map((section) => [section.id, section.notes.map((n) => n.id)]);
+
+  it("moves a Note beside another in its own section", () => {
+    expect(ids(placeNote(sections(), d, { noteId: "c", placement: "before" }))).toEqual([
+      ["pinned", ["a", "b"]],
+      ["all", ["d", "c"]],
+    ]);
+  });
+
+  it("moves a Note across sections, which is what pins or unpins it", () => {
+    expect(ids(placeNote(sections(), c, { noteId: "a", placement: "after" }))).toEqual([
+      ["pinned", ["a", "c", "b"]],
+      ["all", ["d"]],
+    ]);
+    expect(ids(placeNote(sections(), a, { noteId: "d", placement: "after" }))).toEqual([
+      ["pinned", ["b"]],
+      ["all", ["c", "d", "a"]],
+    ]);
+  });
+
+  it("places a Note at a section's start or end, including an empty section", () => {
+    expect(ids(placeNote(sections(), b, { sectionId: "all", at: "start" }))).toEqual([
+      ["pinned", ["a"]],
+      ["all", ["b", "c", "d"]],
+    ]);
+    const unpinned = buildListNoteSections([c, d], "");
+    expect(ids(placeNote(unpinned, d, { sectionId: "pinned", at: "end" }))).toEqual([
+      ["pinned", ["d"]],
+      ["all", ["c"]],
+    ]);
+  });
+
+  it("returns null when the target is missing or is the Note itself", () => {
+    expect(placeNote(sections(), c, { noteId: "c", placement: "before" })).toBeNull();
+    expect(placeNote(sections(), c, { noteId: "zz", placement: "after" })).toBeNull();
+  });
+
+  it("leaves the input sections untouched", () => {
+    const input = sections();
+    placeNote(input, d, { noteId: "a", placement: "before" });
+    expect(ids(input)).toEqual([
+      ["pinned", ["a", "b"]],
+      ["all", ["c", "d"]],
     ]);
   });
 });

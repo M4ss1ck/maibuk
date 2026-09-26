@@ -137,6 +137,15 @@ describe("Button", () => {
   });
 
   describe("HTML attributes", () => {
+    it("is not a submit button unless asked, so Enter in a form never presses it", () => {
+      render(
+        <form>
+          <Button>Cancel</Button>
+        </form>
+      );
+      expect(screen.getByRole("button")).toHaveAttribute("type", "button");
+    });
+
     it("passes through type attribute", () => {
       render(<Button type="submit">Submit</Button>);
       expect(screen.getByRole("button")).toHaveAttribute("type", "submit");

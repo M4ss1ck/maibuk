@@ -77,4 +77,40 @@ describe("QuickNoteEditor", () => {
 
     expect(editor).toHaveTextContent("()");
   });
+
+  it("Escape leaves the editor so focus can reach the controls after it", async () => {
+    const onEscape = vi.fn();
+    const { container } = render(<QuickNoteEditor onChange={vi.fn()} onEscape={onEscape} />);
+    const editor = await waitFor(() => {
+      const el = container.querySelector("[contenteditable='true']");
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    editor.focus();
+
+    fireEvent.keyDown(editor, { key: "Escape" });
+
+    expect(onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Escape inside the editor so an enclosing panel does not also dismiss", async () => {
+    const onEscape = vi.fn();
+    const onAncestorKeyDown = vi.fn();
+    const { container } = render(
+      <div onKeyDown={onAncestorKeyDown}>
+        <QuickNoteEditor onChange={vi.fn()} onEscape={onEscape} />
+      </div>
+    );
+    const editor = await waitFor(() => {
+      const el = container.querySelector("[contenteditable='true']");
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    editor.focus();
+
+    fireEvent.keyDown(editor, { key: "Escape" });
+
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    expect(onAncestorKeyDown).not.toHaveBeenCalled();
+  });
 });

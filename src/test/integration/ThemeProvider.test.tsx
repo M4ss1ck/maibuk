@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useThemeStore } from "@/features/theme/store";
+
+function renderProvider(children: React.ReactNode, path = "/") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <ThemeProvider>{children}</ThemeProvider>
+    </MemoryRouter>
+  );
+}
 
 describe("ThemeProvider", () => {
   beforeEach(() => {
@@ -11,32 +20,20 @@ describe("ThemeProvider", () => {
   });
 
   it("renders children", () => {
-    render(
-      <ThemeProvider>
-        <div>child content</div>
-      </ThemeProvider>
-    );
+    renderProvider(<div>child content</div>);
     expect(screen.getByText("child content")).toBeInTheDocument();
   });
 
   it("adds dark class when theme is dark", () => {
     useThemeStore.setState({ theme: "dark" });
-    render(
-      <ThemeProvider>
-        <div>content</div>
-      </ThemeProvider>
-    );
+    renderProvider(<div>content</div>);
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
   it("removes dark class when theme is light", () => {
     document.documentElement.classList.add("dark");
     useThemeStore.setState({ theme: "light" });
-    render(
-      <ThemeProvider>
-        <div>content</div>
-      </ThemeProvider>
-    );
+    renderProvider(<div>content</div>);
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 
@@ -53,11 +50,7 @@ describe("ThemeProvider", () => {
     }));
 
     useThemeStore.setState({ theme: "system" });
-    render(
-      <ThemeProvider>
-        <div>content</div>
-      </ThemeProvider>
-    );
+    renderProvider(<div>content</div>);
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
@@ -76,13 +69,18 @@ describe("ThemeProvider", () => {
     }));
 
     useThemeStore.setState({ theme: "system" });
-    const { unmount } = render(
-      <ThemeProvider>
-        <div>content</div>
-      </ThemeProvider>
-    );
+    const { unmount } = renderProvider(<div>content</div>);
     expect(addEventListenerMock).toHaveBeenCalledWith("change", expect.any(Function));
     unmount();
     expect(removeEventListenerMock).toHaveBeenCalledWith("change", expect.any(Function));
+  });
+
+  it("leaves the document theme to the Embed route", () => {
+    // /embed?theme=dark has already set the class; the app theme (light here)
+    // must not win.
+    document.documentElement.classList.add("dark");
+    useThemeStore.setState({ theme: "light" });
+    renderProvider(<div>content</div>, "/embed?theme=dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 });

@@ -3,10 +3,13 @@ import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import userEvent from "@testing-library/user-event";
 import { createRef, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Editor as TiptapEditor } from "@tiptap/core";
+import { Extension, type Editor as TiptapEditor } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
+import { useBookStore } from "@/features/books/store";
+import { useNoteStore } from "@/features/notes/store";
 
 const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),
@@ -128,18 +131,22 @@ vi.mock("../../../../components/editor/LinkClickHandler", () => ({
   LinkClickHandler: () => null,
 }));
 
+const capturedLinkDialogProps: Record<string, unknown>[] = [];
+
 vi.mock("../../../../components/editor/LinkDialog", () => ({
-  LinkDialog: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? (
+  LinkDialog: (props: { isOpen: boolean; onClose: () => void }) => {
+    capturedLinkDialogProps.push(props);
+    return props.isOpen ? (
       <div
         data-testid="link-dialog"
         role="dialog"
         tabIndex={-1}
         onKeyDown={(event) => {
-          if (event.key === "Escape") onClose();
+          if (event.key === "Escape") props.onClose();
         }}
       />
-    ) : null,
+    ) : null;
+  },
 }));
 
 vi.mock("../../../../components/editor/ImageContextMenu", () => ({
@@ -170,6 +177,33 @@ describe("Editor", () => {
   beforeEach(() => {
     mockSetContentSilently.mockClear();
     capturedToolbarProps.length = 0;
+    capturedLinkDialogProps.length = 0;
+  });
+
+  it("offers Books and Notes as internal Link targets in a Book", async () => {
+    useBookStore.setState({
+      books: [{ id: "book-b", title: "Other Book" }] as never,
+    });
+    useNoteStore.setState({
+      notes: [{ id: "note-n", title: "Field Note" }] as never,
+    });
+    try {
+      render(<Editor content="<p>Hello</p>" onUpdate={vi.fn()} bookId="b1" />);
+      await waitFor(() => expect(capturedLinkDialogProps.length).toBeGreaterThan(0));
+      const targets = capturedLinkDialogProps.at(-1)?.internalTargets as {
+        type: string;
+        title: string;
+      }[];
+      expect(targets).toEqual(
+        expect.arrayContaining([
+          { type: "book", bookId: "book-b", title: "Other Book" },
+          { type: "note", noteId: "note-n", title: "Field Note" },
+        ])
+      );
+    } finally {
+      useBookStore.setState({ books: [] });
+      useNoteStore.setState({ notes: [] });
+    }
   });
 
   it("does not rerender the toolbar when typing updates parent statistics", async () => {
@@ -573,6 +607,49 @@ describe("Editor", () => {
     expect(focusCalls.some((args) => args.length === 0)).toBe(false);
   });
 
+  it("exposes its text as a named multi-line textbox", async () => {
+    const { rerender } = render(
+      <Editor content={"<p>hello</p>"} onUpdate={vi.fn()} ariaLabel="Text of Arrival" />
+    );
+
+    const textbox = await screen.findByRole("textbox", { name: "Text of Arrival" });
+    expect(textbox).toHaveAttribute("aria-multiline", "true");
+
+    rerender(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} ariaLabel="Text of Departure" />);
+    expect(await screen.findByRole("textbox", { name: "Text of Departure" })).toBe(textbox);
+  });
+
+  it("falls back to a generic text label", async () => {
+    render(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} />);
+    expect(await screen.findByRole("textbox", { name: "editor.textLabel" })).toBeInTheDocument();
+  });
+
+  it("puts the caret in the text on mount when autoFocus is set", async () => {
+    render(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} autoFocus ariaLabel="Text" />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Text" })).toHaveFocus());
+  });
+
+  it('takes focus on mount with autoFocus="if-unfocused" when focus was lost to <body>', async () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    render(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} autoFocus="if-unfocused" ariaLabel="Text" />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Text" })).toHaveFocus());
+  });
+
+  it('does not steal focus with autoFocus="if-unfocused" when something else has it', async () => {
+    const { rerender } = render(<button type="button">Tutorial card</button>);
+    const other = screen.getByRole("button", { name: "Tutorial card" });
+    other.focus();
+    rerender(
+      <>
+        <button type="button">Tutorial card</button>
+        <Editor content={"<p>hello</p>"} onUpdate={vi.fn()} autoFocus="if-unfocused" ariaLabel="Text" />
+      </>
+    );
+    await screen.findByRole("textbox", { name: "Text" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(other).toHaveFocus();
+  });
+
   it("calls onEscape when Escape is pressed in the editor", async () => {
     const user = userEvent.setup();
     const onEscape = vi.fn();
@@ -598,6 +675,46 @@ describe("Editor", () => {
     await user.keyboard("{Escape}");
 
     expect(onEscape).toHaveBeenCalled();
+  });
+
+  it("defers Escape to an open suggestion popup and does not call onEscape", async () => {
+    const user = userEvent.setup();
+    const onEscape = vi.fn();
+    const suggestionPluginKey = new PluginKey("testActiveSuggestion");
+    // Mirrors @tiptap/suggestion's state while its popup is open.
+    const ActiveSuggestion = Extension.create({
+      name: "testActiveSuggestion",
+      addProseMirrorPlugins() {
+        return [
+          new Plugin({
+            key: suggestionPluginKey,
+            state: {
+              init: () => ({ active: true, range: { from: 1, to: 2 } }),
+              apply: (_tr, prev) => prev,
+            },
+          }),
+        ];
+      },
+    });
+
+    const { container } = render(
+      <Editor
+        content={"<p>hello</p>"}
+        onUpdate={vi.fn()}
+        onEscape={onEscape}
+        extraExtensions={[ActiveSuggestion]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('[contenteditable="true"]')).not.toBeNull();
+    });
+
+    const editorEl = container.querySelector('[contenteditable="true"]') as HTMLElement;
+    editorEl.focus();
+    await user.keyboard("{Escape}");
+
+    expect(onEscape).not.toHaveBeenCalled();
   });
 
   it("does not call onEscape when non-Escape key is pressed", async () => {

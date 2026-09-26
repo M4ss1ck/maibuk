@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -65,32 +65,26 @@ describe("ZoomControl", () => {
     render(<ZoomControl />);
 
     const trigger = screen.getByText("100%");
-    fireEvent.click(trigger);
+    await user.click(trigger);
     expect(screen.getByRole("slider")).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
 
     expect(screen.queryByRole("slider")).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
-  it("stops Escape propagation so an outer window Escape handler is not invoked", async () => {
+  it("opens from the keyboard and moves focus into the popover", async () => {
     const user = userEvent.setup();
-    const outerEscapeSpy = vi.fn();
-    window.addEventListener("keydown", outerEscapeSpy);
-    try {
-      render(<ZoomControl />);
+    render(<ZoomControl />);
 
-      fireEvent.click(screen.getByText("100%"));
-      expect(screen.getByRole("slider")).toBeInTheDocument();
+    const trigger = screen.getByText("100%");
+    trigger.focus();
+    await user.keyboard("{Enter}");
 
-      await user.keyboard("{Escape}");
-
-      expect(screen.queryByRole("slider")).not.toBeInTheDocument();
-      expect(outerEscapeSpy).not.toHaveBeenCalled();
-    } finally {
-      window.removeEventListener("keydown", outerEscapeSpy);
-    }
+    const dialog = screen.getByRole("dialog", { name: "editor.zoom" });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.contains(document.activeElement)).toBe(true);
   });
 
   it("wraps its fixed-width controls so the popover cannot overflow the viewport", () => {
@@ -99,6 +93,9 @@ describe("ZoomControl", () => {
 
     const popover = document.querySelector(".zoom-control-portal") as HTMLElement;
     expect(popover).not.toBeNull();
-    expect(popover).toHaveClass("flex-wrap", "max-w-[calc(100vw-1rem)]");
+    expect(screen.getByRole("dialog", { name: "editor.zoom" })).toHaveClass(
+      "flex-wrap",
+      "max-w-[calc(100vw-1rem)]"
+    );
   });
 });

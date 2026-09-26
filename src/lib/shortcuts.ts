@@ -77,7 +77,12 @@ export function useShortcuts(shortcuts: Shortcut[], options: UseShortcutsOptions
 
     const timeout = options.sequenceTimeout ?? 600;
 
+    // A shortcut already handled from the capture pass must not fire twice when
+    // the same event also reaches the bubble listener.
+    const handled = new WeakSet<KeyboardEvent>();
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (handled.has(event)) return;
       if (event.isComposing) return;
 
       const isTyping = isTypingTarget(event.target);
@@ -136,6 +141,7 @@ export function useShortcuts(shortcuts: Shortcut[], options: UseShortcutsOptions
       });
 
       if (match) {
+        handled.add(event);
         if (match.preventDefault !== false) {
           event.preventDefault();
         }
@@ -143,8 +149,20 @@ export function useShortcuts(shortcuts: Shortcut[], options: UseShortcutsOptions
       }
     };
 
+    // React Spectrum pressables (React Aria menus, listboxes, toolbars) call
+    // stopPropagation() on keydown, which hides modifier shortcuts while one of
+    // their controls has focus. Those combos are handled in the capture phase,
+    // where that cannot reach. Bare keys stay on the bubble listener so those
+    // controls keep their arrow, Enter, Space, and typeahead keys.
+    const handleCaptureKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey && !event.metaKey && !event.altKey) return;
+      handleKeyDown(event);
+    };
+
+    window.addEventListener("keydown", handleCaptureKeyDown, true);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.removeEventListener("keydown", handleCaptureKeyDown, true);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [options.enabled, options.sequenceTimeout, modalIdsLen]);

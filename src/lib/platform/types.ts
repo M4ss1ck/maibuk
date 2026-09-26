@@ -28,6 +28,8 @@ export interface FileSystemAdapter {
 export interface DialogAdapter {
   save(options: SaveDialogOptions): Promise<string | null>;
   open(options: OpenDialogOptions): Promise<string | null>;
+  /** Every path the author picked; [] when cancelled. */
+  openMany(options: OpenDialogOptions): Promise<string[]>;
 }
 
 // Web-specific: open file and get data in one operation
@@ -38,6 +40,8 @@ export interface FileWithData {
 
 export interface WebDialogAdapter extends DialogAdapter {
   openWithData(options: OpenDialogOptions): Promise<FileWithData | null>;
+  /** Every file the author picked, as browser Files; [] when cancelled. */
+  openFiles(options: OpenDialogOptions): Promise<File[]>;
 }
 
 export interface OSAdapter {

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
-import { ItemActionsMenu, Tooltip } from "@/components/ui";
+import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
 
@@ -24,6 +24,12 @@ interface NoteListItemProps {
   moveTargets?: NoteMoveTarget[];
   onMove?: (note: Note, bookId: string | null) => void;
   draggable?: boolean;
+  /**
+   * Accessible name of a React Aria drag button (`slot="drag"`). Set only when
+   * the row sits in a GridList with drag-and-drop hooks, which gives the button
+   * its keyboard path: Enter lifts, arrows move, Enter drops, Escape cancels.
+   */
+  reorderLabel?: string;
   isDragging?: boolean;
   onDragStart?: (e: DragEvent<HTMLDivElement>) => void;
   onDragOver?: (e: DragEvent<HTMLDivElement>) => void;
@@ -56,6 +62,7 @@ export function NoteListItem({
   moveTargets = [],
   onMove,
   draggable = false,
+  reorderLabel,
   isDragging = false,
   onDragStart,
   onDragOver,
@@ -123,9 +130,10 @@ export function NoteListItem({
   }
   const hasActions = actions.length > 0;
   const menuAnchorRef = useRef<HTMLDivElement>(null);
-  const { itemProps } = useItemContextMenu({
+  const { itemProps, setOwnerRef } = useItemContextMenu({
     onOpen: () => setIsMenuOpen(true),
     isDisabled: !hasActions || isEditing,
+    anchorRef: menuAnchorRef,
   });
 
   const commitTitle = () => {
@@ -160,7 +168,7 @@ export function NoteListItem({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      ref={menuAnchorRef}
+      ref={setOwnerRef}
       {...itemProps}
       className={`group relative border-l-2 py-3 pl-2 pr-3 transition-colors pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
@@ -261,13 +269,22 @@ export function NoteListItem({
       {/* Line 2: description + drag handle */}
       <div className="mt-1 flex min-h-4 min-w-0 items-center gap-1">
         <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{preview}</p>
-        {draggable && (
-          <GripVertical
-            data-testid="note-drag-handle"
-            data-drag-handle=""
-            aria-hidden="true"
-            className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:h-5 pointer-coarse:w-5 pointer-coarse:opacity-100"
+        {reorderLabel ? (
+          <ReorderHandle
+            label={reorderLabel}
+            testId="note-drag-handle"
+            className="p-0.5 opacity-0 transition-opacity group-hover:opacity-100 has-[:focus-visible]:opacity-100 pointer-coarse:p-1 pointer-coarse:opacity-100"
+            iconClassName="h-3.5 w-3.5 pointer-coarse:h-5 pointer-coarse:w-5"
           />
+        ) : (
+          draggable && (
+            <GripVertical
+              data-testid="note-drag-handle"
+              data-drag-handle=""
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:h-5 pointer-coarse:w-5 pointer-coarse:opacity-100"
+            />
+          )
         )}
       </div>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -17,6 +17,9 @@ export function NewBookDialog({ isOpen, onClose, onSuccess }: NewBookDialogProps
   const [authorName, setAuthorName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; authorName?: string }>({});
+  const formId = useId();
+  const titleRef = useRef<HTMLInputElement>(null);
+  const authorNameRef = useRef<HTMLInputElement>(null);
 
   const createBook = useBookStore((state) => state.createBook);
 
@@ -34,6 +37,9 @@ export function NewBookDialog({ isOpen, onClose, onSuccess }: NewBookDialogProps
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      // Enter from the title field must not leave focus away from the field
+      // that needs fixing.
+      (newErrors.title ? titleRef : authorNameRef).current?.focus();
       return;
     }
 
@@ -69,14 +75,17 @@ export function NewBookDialog({ isOpen, onClose, onSuccess }: NewBookDialogProps
           <Button variant="secondary" onClick={handleClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={handleSubmit} disabled={isLoading}>
+          {/* Outside the <form> in the Modal footer; `form` makes it the form's
+              submit button, which is what lets Enter in a field submit. */}
+          <Button type="submit" form={formId} disabled={isLoading}>
             {isLoading ? t("common.loading") : t("books.createBook")}
           </Button>
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form id={formId} onSubmit={handleSubmit} className="space-y-4">
         <Input
+          ref={titleRef}
           label={t("books.bookTitle")}
           placeholder={t("books.bookTitlePlaceholder")}
           value={title}
@@ -89,6 +98,7 @@ export function NewBookDialog({ isOpen, onClose, onSuccess }: NewBookDialogProps
         />
 
         <Input
+          ref={authorNameRef}
           label={t("books.authorName")}
           placeholder={t("books.authorNamePlaceholder")}
           value={authorName}

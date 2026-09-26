@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { Network, Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { GridList, GridListItem } from "react-aria-components/GridList";
 import { CanvasCard } from "@/components/canvas/CanvasCard";
 import { Button } from "@/components/ui/Button";
 import { useCanvasStore } from "@/features/canvas/store";
@@ -84,19 +85,33 @@ export function CanvasGallery() {
       ) : filteredCanvases.length === 0 ? (
         <p className="py-16 text-center text-muted-foreground">{t("canvas.noMatches")}</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 @sm:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
-          {filteredCanvases.map((canvas, index) => (
-            <CanvasCard
-              key={canvas.id}
-              tutorialAnchor={index === 0 ? "canvas-gallery.canvas" : undefined}
-              canvas={canvas}
-              onOpen={() => navigate(`/canvas/${canvas.id}`)}
-              onRename={(title) => void renameCanvas(canvas.id, title)}
-              onTogglePinned={() => void updateCanvas(canvas.id, { pinned: !canvas.pinned })}
-              onDelete={() => void deleteCanvas(canvas.id)}
-            />
-          ))}
-        </div>
+        <GridList
+          aria-label={t("canvas.collectionLabel")}
+          items={filteredCanvases}
+          layout="grid"
+          selectionMode="none"
+          onAction={(key) => navigate(`/canvas/${key}`)}
+          className="grid grid-cols-1 gap-4 @sm:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4"
+        >
+          {(canvas) => (
+            <GridListItem
+              id={canvas.id}
+              textValue={canvas.title || t("canvas.untitled")}
+              className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <CanvasCard
+                tutorialAnchor={
+                  canvas.id === filteredCanvases[0]?.id ? "canvas-gallery.canvas" : undefined
+                }
+                canvas={canvas}
+                onOpen={() => navigate(`/canvas/${canvas.id}`)}
+                onRename={(title) => void renameCanvas(canvas.id, title)}
+                onTogglePinned={() => void updateCanvas(canvas.id, { pinned: !canvas.pinned })}
+                onDelete={() => void deleteCanvas(canvas.id)}
+              />
+            </GridListItem>
+          )}
+        </GridList>
       )}
     </div>
   );

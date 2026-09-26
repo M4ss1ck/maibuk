@@ -1,4 +1,5 @@
 import { MarkerType, type Connection, type Edge, type Node } from "@xyflow/react";
+import { CANVAS_TEXT_NODE_DEFAULT_WIDTH, CANVAS_TEXT_NODE_MIN_HEIGHT } from "@/constants";
 import type { CanvasEdge, CanvasNode } from "@/features/canvas/types";
 
 export type Side = "top" | "right" | "bottom" | "left";
@@ -71,6 +72,14 @@ export function toFlowNodes(
     position: node.position,
     selected: node.id === options.selectedNodeId,
     style: node.kind === "text" && node.width ? { width: node.width } : undefined,
+    // React Flow keeps a node hidden until it has dimensions. A Text Node's
+    // editor mounts inside it, and a hidden element cannot take focus, so a
+    // brand-new node's editor would open unfocused (its keystrokes then hit the
+    // canvas). Seed the dimensions so the node is visible the moment its
+    // editor mounts; React Flow refines the height after measuring.
+    initialWidth:
+      node.kind === "text" ? (node.width ?? CANVAS_TEXT_NODE_DEFAULT_WIDTH) : undefined,
+    initialHeight: node.kind === "text" ? CANVAS_TEXT_NODE_MIN_HEIGHT : undefined,
     data: {
       node,
       canvasId: options.canvasId,

@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
+import { Check } from "lucide-react";
 import { useTheme } from "@/features/theme";
 import { useTranslation } from "react-i18next";
 import { SunIcon, MoonIcon, MonitorIcon } from "@/components/icons";
@@ -11,8 +12,6 @@ interface ThemeToggleProps {
 export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const themes = [
     { value: "light" as const, label: t("settings.light"), icon: SunIcon },
@@ -27,58 +26,52 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
   const currentTheme = themes.find((t) => t.value === theme) || themes[0];
   const CurrentIcon = currentTheme.icon;
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
-
-  // Dropdown variant - single button with menu
+  // Dropdown variant - single button with a menu of themes
   if (variant === "dropdown") {
+    const label = t("settings.themeDropdown", { theme: currentTheme.label });
     return (
-      <div className="relative" ref={dropdownRef}>
-        <Tooltip content={`Theme: ${currentTheme.label}`}>
-          <button
-            type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="p-2 hover:bg-muted rounded transition-colors"
-            aria-label={t("settings.themeDropdown", { theme: currentTheme.label })}
+      <MenuTrigger>
+        <Tooltip content={label}>
+          <Button
+            className="p-2 hover:bg-muted rounded transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={label}
           >
             <CurrentIcon className="w-5 h-5" />
-          </button>
+          </Button>
         </Tooltip>
-
-        {isOpen && (
-          <div className="absolute right-0 top-full mt-1 bg-background border border-border rounded-lg shadow-lg py-1 min-w-30 z-50 dropdown-enter">
-            {themes.map(({ value, label, icon: Icon }) => (
-              <button
-                type="button"
+        <Popover
+          placement="bottom end"
+          className="bg-background border border-border rounded-lg shadow-lg py-1 min-w-30 z-50 dropdown-enter outline-none"
+        >
+          <Menu
+            aria-label={label}
+            selectionMode="single"
+            selectedKeys={[theme]}
+            onAction={(key) => setTheme(key as (typeof themes)[number]["value"])}
+            className="outline-none"
+          >
+            {themes.map(({ value, label: themeLabel, icon: Icon }) => (
+              <MenuItem
                 key={value}
-                onClick={() => {
-                  setTheme(value);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
-                  theme === value
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                id={value}
+                textValue={themeLabel}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm cursor-pointer outline-none text-muted-foreground data-focused:bg-muted data-focused:text-foreground data-selected:text-foreground"
               >
-                <Icon className="w-4 h-4" />
-                {label}
-              </button>
+                {({ isSelected }) => (
+                  <>
+                    <Icon className="w-4 h-4" />
+                    <span className="flex-1">{themeLabel}</span>
+                    <Check
+                      className={`w-4 h-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                      aria-hidden="true"
+                    />
+                  </>
+                )}
+              </MenuItem>
             ))}
-          </div>
-        )}
-      </div>
+          </Menu>
+        </Popover>
+      </MenuTrigger>
     );
   }
 
@@ -96,6 +89,7 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
                 : "text-muted-foreground hover:text-foreground"
             }`}
             aria-label={label}
+            aria-pressed={theme === value}
           >
             <Icon className="w-4 h-4" />
           </button>

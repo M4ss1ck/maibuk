@@ -76,6 +76,19 @@ describe("SceneBreakMenu", () => {
     });
   });
 
+  it("moves focus into the menu when it opens", async () => {
+    const user = userEvent.setup();
+    render(<SceneBreakMenu editor={createEditorMock()} />);
+
+    const trigger = screen.getByRole("button", { name: "editor.sceneBreakOptions" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+
+    const menu = document.querySelector(".scene-break-menu-portal") as HTMLElement;
+    expect(menu).not.toBeNull();
+    await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
+  });
+
   it("closes the menu on Escape and restores focus to the trigger", async () => {
     const user = userEvent.setup();
     render(<SceneBreakMenu editor={createEditorMock()} />);
@@ -87,7 +100,7 @@ describe("SceneBreakMenu", () => {
     await user.keyboard("{Escape}");
 
     expect(document.querySelector(".scene-break-menu-portal")).toBeNull();
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("keeps the popup bounded to the viewport height with internal scrolling", async () => {
@@ -96,8 +109,7 @@ describe("SceneBreakMenu", () => {
 
     await user.click(screen.getByRole("button", { name: "editor.sceneBreakOptions" }));
 
-    const menu = document.querySelector(".scene-break-menu-portal") as HTMLElement;
-    expect(menu).not.toBeNull();
+    const menu = screen.getByRole("dialog", { name: "editor.sceneBreakOptions" });
     expect(menu).toHaveClass("max-h-[calc(100vh-1rem)]", "overflow-y-auto");
     expect(menu.style.maxHeight).toBe("calc(100dvh - 1rem)");
   });

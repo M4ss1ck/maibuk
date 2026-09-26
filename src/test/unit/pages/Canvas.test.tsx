@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     endLiveChange: vi.fn(),
     selectNode: vi.fn(),
     selectEdge: vi.fn(),
+    beginNodeEdit: vi.fn(),
     clearSelection: vi.fn(),
     deleteSelection: vi.fn(),
     setViewport: vi.fn(),
@@ -130,6 +131,8 @@ function readyState() {
     externalDocNonce: 0,
     past: [],
     future: [],
+    liveBaseDoc: null,
+    editingNodeId: null,
     selectedNodeId: null,
     selectedEdgeId: "edge",
     toolMode: "select",
@@ -177,6 +180,7 @@ describe("Canvas page", () => {
         "canvas.toolEraser",
         "canvas.addTextNode",
         "canvas.addNoteRef",
+        "canvas.editTextNode",
         "canvas.zoomIn",
         "canvas.zoomOut",
         "canvas.fitView",
@@ -217,6 +221,61 @@ describe("Canvas page", () => {
       })
     );
     expect(mocks.actions.selectNode).toHaveBeenCalledWith(addedNode.id);
+    expect(mocks.actions.beginNodeEdit).toHaveBeenCalledWith(addedNode.id);
+  });
+
+  it("records a keyboard arrow key as one live move so the node persists", () => {
+    renderCanvas();
+    mocks.actions.beginLiveChange.mockClear();
+    mocks.actions.endLiveChange.mockClear();
+
+    act(() => {
+      const onNodesChange = mocks.flowProps.current?.onNodesChange as (
+        changes: Record<string, unknown>[]
+      ) => void;
+      onNodesChange([
+        { type: "position", id: "node", position: { x: 5, y: 0 }, dragging: false },
+      ]);
+    });
+
+    expect(mocks.actions.beginLiveChange).toHaveBeenCalledTimes(1);
+    expect(mocks.actions.moveNodeLive).toHaveBeenCalledWith("node", { x: 5, y: 0 });
+    expect(mocks.actions.endLiveChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a pointer drag bracketed by its own begin and end", () => {
+    renderCanvas();
+    mocks.actions.beginLiveChange.mockClear();
+    mocks.actions.endLiveChange.mockClear();
+    mocks.state.liveBaseDoc = { nodes: [] };
+
+    act(() => {
+      const onNodesChange = mocks.flowProps.current?.onNodesChange as (
+        changes: Record<string, unknown>[]
+      ) => void;
+      onNodesChange([
+        { type: "position", id: "node", position: { x: 30, y: 0 }, dragging: true },
+      ]);
+    });
+
+    expect(mocks.actions.beginLiveChange).not.toHaveBeenCalled();
+    expect(mocks.actions.endLiveChange).not.toHaveBeenCalled();
+    expect(mocks.actions.moveNodeLive).toHaveBeenCalledWith("node", { x: 30, y: 0 });
+  });
+
+  it("opens the focused Text Node for editing from the F2 shortcut", () => {
+    renderCanvas();
+    const node = document.createElement("div");
+    node.className = "react-flow__node react-flow__node-text";
+    node.dataset.id = "node";
+    node.tabIndex = 0;
+    document.body.append(node);
+    node.focus();
+
+    fireEvent.keyDown(window, { key: "F2" });
+
+    expect(mocks.actions.beginNodeEdit).toHaveBeenCalledWith("node");
+    node.remove();
   });
 
   describe("Connect to…", () => {
@@ -298,6 +357,36 @@ describe("Canvas page", () => {
       expect(mocks.actions.closeConnectPicker).toHaveBeenCalled();
       expect(mocks.actions.connectNodes).not.toHaveBeenCalled();
     });
+  });
+
+  it("turns a React Flow keyboard node selection into a store selection", () => {
+    renderCanvas();
+    const onNodesChange = mocks.flowProps.current?.onNodesChange as (
+      changes: Record<string, unknown>[]
+    ) => void;
+
+    act(() => {
+      onNodesChange([{ type: "select", id: "node", selected: true }]);
+    });
+    expect(mocks.actions.selectNode).toHaveBeenCalledWith("node");
+
+    mocks.state.selectedNodeId = "node";
+    act(() => {
+      onNodesChange([{ type: "select", id: "node", selected: false }]);
+    });
+    expect(mocks.actions.clearSelection).toHaveBeenCalled();
+  });
+
+  it("turns a React Flow keyboard edge selection into a store selection", () => {
+    renderCanvas();
+    const onEdgesChange = mocks.flowProps.current?.onEdgesChange as (
+      changes: Record<string, unknown>[]
+    ) => void;
+
+    act(() => {
+      onEdgesChange([{ type: "select", id: "edge", selected: true }]);
+    });
+    expect(mocks.actions.selectEdge).toHaveBeenCalledWith("edge");
   });
 
   it("selects a node on click", () => {

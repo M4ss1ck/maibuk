@@ -35,7 +35,7 @@ import {
   markdownFilename,
   saveMarkdownFile,
 } from "@/features/markdown";
-import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
+import { pickTextFiles, type DroppedTextFile } from "@/hooks/useTextFileDrop";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { useTranslation } from "react-i18next";
 import {
@@ -127,6 +127,9 @@ export function BookEditor() {
 
   // Local state
   const [focusMode, setFocusMode] = useState(false);
+  // A Chapter the author just created opens with the caret in its text; any
+  // other Chapter takes focus only when it was lost (the Book just opened).
+  const [focusEditorForChapterId, setFocusEditorForChapterId] = useState<string | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -272,6 +275,11 @@ export function BookEditor() {
   }, [showMobileMenu, moreMenuModalId]);
 
   const handleEditorEscape = useCallback(() => {
+    // Esc in the toolbar hands focus back to the text, not the Chapter list.
+    if (document.activeElement?.closest('[role="toolbar"]')) {
+      editorHandleRef.current?.focus();
+      return;
+    }
     if (focusModeRef.current) {
       setFocusMode(false);
       return;
@@ -293,7 +301,9 @@ export function BookEditor() {
         setSidebarWidth(256);
       }
       requestAnimationFrame(() => {
-        chapterPaneRef.current?.focus();
+        // The named Chapter list inside the wrapper, which F6 also stops on.
+        const pane = chapterPaneRef.current;
+        (pane?.querySelector<HTMLElement>('[data-focus-pane="chapter-list"]') ?? pane)?.focus();
       });
     }
   }, []);
@@ -578,6 +588,7 @@ export function BookEditor() {
     (chapter: Chapter) => {
       metricsService.endSession();
       void metricsService.flushNow();
+      setFocusEditorForChapterId(null);
       setCurrentChapter(chapter);
       // Save as last edited chapter for this book
       if (bookId) {
@@ -597,6 +608,7 @@ export function BookEditor() {
         });
         metricsService.endSession();
         void metricsService.flushNow();
+        setFocusEditorForChapterId(newChapter.id);
         setCurrentChapter(newChapter);
         // Save as last edited chapter
         updateBook(bookId, { lastChapterId: newChapter.id });
@@ -672,6 +684,12 @@ export function BookEditor() {
     },
     [bookId, createChapter, updateChapter, reorderChapters, setCurrentChapter, updateBook, t]
   );
+
+  // Keyboard path to the same import a file drop does; new Chapters go last.
+  const handleImportFromFiles = useCallback(async () => {
+    const files = await pickTextFiles();
+    if (files.length > 0) await handleImportFiles(files, null);
+  }, [handleImportFiles]);
 
   const handleDeleteChapter = useCallback(
     async (id: string) => {
@@ -769,6 +787,12 @@ export function BookEditor() {
     [notesSidebarWidth, setNotesSidebarWidth]
   );
 
+  // Keyboard resize: the panel sits on the right, so ArrowLeft widens it.
+  const handleNotesResizeKey = useCallback(
+    (delta: number) => setNotesSidebarWidth(notesSidebarWidth + delta),
+    [notesSidebarWidth, setNotesSidebarWidth]
+  );
+
   // Handle book info update
   const handleUpdateBookInfo = useCallback(
     async (input: Parameters<typeof updateBook>[1]) => {
@@ -790,7 +814,7 @@ export function BookEditor() {
   const handleDeleteBook = useCallback(async () => {
     if (bookId) {
       await deleteBook(bookId);
-      navigate("/");
+      navigate("/", { state: { focusGallery: true } });
     }
   }, [bookId, deleteBook, navigate]);
 
@@ -973,6 +997,7 @@ export function BookEditor() {
                 onDeleteChapter={handleDeleteChapter}
                 onReorderChapters={handleReorderChapters}
                 onImportFiles={handleImportFiles}
+                onImportFromFiles={handleImportFromFiles}
               />
             </div>
           </FocusScope>
@@ -999,6 +1024,10 @@ export function BookEditor() {
               onDeleteChapter={handleDeleteChapter}
               onReorderChapters={handleReorderChapters}
               onImportFiles={handleImportFiles}
+              onImportFromFiles={handleImportFromFiles}
+              autoFocusAddChapter={
+                !areChaptersLoading && currentBook?.id === bookId && chapters.length === 0
+              }
               tutorialAnchors
             />
             {showSidebar && (
@@ -1375,6 +1404,8 @@ export function BookEditor() {
             onExportPdf={handleExportPdf}
             onExportImage={handleExportImage}
             onEscape={handleEditorEscape}
+            autoFocus={focusEditorForChapterId === currentChapter.id ? true : "if-unfocused"}
+            ariaLabel={t("editor.chapterTextLabel", { title: currentChapter.title })}
           />
         ) : isChapterPreparing ? (
           <div className="flex-1 flex items-center justify-center">
@@ -1423,6 +1454,7 @@ export function BookEditor() {
         onClose={() => setShowNotesChapter(false)}
         width={notesSidebarWidth}
         onResizeStart={handleNotesResizeStart}
+        onResizeKey={handleNotesResizeKey}
         chapters={chapters}
         currentChapterId={currentChapter?.id ?? null}
         onSelectChapter={handleSelectChapter}

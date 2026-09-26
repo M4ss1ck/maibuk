@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => {
     PRESETS,
     getPreset: (id: string) => PRESETS.find((p) => p.id === id) ?? PRESETS[0],
     buildTemplateScene: vi.fn(),
+    createTextLayer: vi.fn(() => ({ id: "text", type: "text" })),
+    createShapeLayer: vi.fn(() => ({ id: "shape", type: "shape" })),
+    createImageLayer: vi.fn(),
     store: {
       scene: {
         doc: {
@@ -51,14 +54,17 @@ vi.mock("../../../../features/covers/store", () => ({
 
 vi.mock("../../../../features/covers/scene/defaults", () => ({
   PRESETS: mocks.PRESETS,
-  createImageLayer: vi.fn(),
-  createShapeLayer: vi.fn(),
-  createTextLayer: vi.fn(),
+  createImageLayer: mocks.createImageLayer,
+  createShapeLayer: mocks.createShapeLayer,
+  createTextLayer: mocks.createTextLayer,
   getPreset: mocks.getPreset,
 }));
 
 vi.mock("../../../../features/covers/scene/templates", () => ({
-  TEMPLATES: [{ id: "t1", name: "Template 1" }],
+  TEMPLATES: [
+    { id: "t1", name: "Template 1" },
+    { id: "t2", name: "Template 2" },
+  ],
   buildTemplateScene: mocks.buildTemplateScene,
 }));
 
@@ -68,88 +74,131 @@ vi.mock("../../../../components/ui", () => ({
 }));
 
 import { Toolbar } from "@/components/cover-editor/Toolbar";
-import type { ExportChoice } from "@/components/cover-editor/Toolbar";
 
 function renderToolbar() {
   const onExport = vi.fn();
-  const view = render(
-    <Toolbar onExport={onExport} bookTitle="Book" bookAuthor="Author" />
-  );
+  const view = render(<Toolbar onExport={onExport} bookTitle="Book" bookAuthor="Author" />);
   return { onExport, ...view };
+}
+
+async function openMenu(label: string) {
+  const user = userEvent.setup();
+  const trigger = screen.getByRole("button", { name: label });
+  trigger.focus();
+  await user.keyboard("{Enter}");
+  await screen.findByRole("menu");
+  return { user, trigger };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("Cover Toolbar dropdowns", () => {
-  it("exposes expanded state and closes on Escape with focus on the trigger", async () => {
-    const user = userEvent.setup();
+describe("Cover toolbar menus (keyboard)", () => {
+  it("advertises a menu on every dropdown trigger", () => {
     renderToolbar();
-
-    const trigger = screen.getByRole("button", { name: "6x9" });
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(trigger);
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("button", { name: /5x8/ })).toBeInTheDocument();
-
-    await user.keyboard("{Escape}");
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: /5x8/ })).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
+    for (const name of [
+      "6x9",
+      "cover.templates",
+      "cover.addText",
+      "cover.addShape",
+      "cover.export",
+    ]) {
+      // React Aria reports the menu as `aria-haspopup="true"` (a menu).
+      expect(screen.getByRole("button", { name })).toHaveAttribute("aria-haspopup", "true");
+    }
   });
 
-  it("restores focus to the trigger after selecting a menu item", async () => {
-    const user = userEvent.setup();
+  it("moves through the Templates menu with arrows and applies the focused template", async () => {
     renderToolbar();
+    const { user } = await openMenu("cover.templates");
 
-    const trigger = screen.getByRole("button", { name: "6x9" });
-    await user.click(trigger);
-    const fiveByEight = screen.getByRole("button", { name: /5x8/ });
-    await user.click(fiveByEight);
+    const first = screen.getByRole("menuitem", { name: "Template 1" });
+    expect(first).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    const second = screen.getByRole("menuitem", { name: "Template 2" });
+    expect(second).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(mocks.buildTemplateScene).toHaveBeenCalledWith(
+      "t2",
+      expect.objectContaining({ title: "Book", author: "Author", presetId: "6x9" })
+    );
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("selects a Cover Size Preset by arrow key", async () => {
+    renderToolbar();
+    const { user } = await openMenu("6x9");
+
+    expect(screen.getByRole("menuitem", { name: /6x9/ })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: /5x8/ })).toHaveFocus();
+    await user.keyboard("{Enter}");
 
     expect(mocks.store.setDoc).toHaveBeenCalledWith(
-      expect.objectContaining({ presetId: "5x8" })
+      expect.objectContaining({ presetId: "5x8", width: 1500, height: 2400, dpi: 300 })
     );
-    expect(screen.queryByRole("button", { name: /5x8/ })).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
   });
 
-  it("closes on outside pointer-down and triggers export callbacks", () => {
+  it("adds a text and a shape layer from their menus", async () => {
+    renderToolbar();
+
+    const text = await openMenu("cover.addText");
+    expect(screen.getByRole("menuitem", { name: "cover.toolbar.title" })).toHaveFocus();
+    await text.user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "cover.toolbar.subtitle" })).toHaveFocus();
+    await text.user.keyboard("{Enter}");
+    expect(mocks.createTextLayer).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "subtitle" })
+    );
+    expect(mocks.store.addLayer).toHaveBeenCalledWith({ id: "text", type: "text" });
+
+    const shape = await openMenu("cover.addShape");
+    expect(screen.getByRole("menuitem", { name: "cover.shape.rect" })).toHaveFocus();
+    await shape.user.keyboard("{Enter}");
+    expect(mocks.createShapeLayer).toHaveBeenCalledWith(
+      expect.objectContaining({ shape: "rect", docWidth: 1800, docHeight: 2700 })
+    );
+  });
+
+  it("exports the format the arrow keys land on", async () => {
     const { onExport } = renderToolbar();
+    const { user } = await openMenu("cover.export");
 
-    const exportTrigger = screen.getByRole("button", { name: "cover.export" });
-    fireEvent.click(exportTrigger);
-    expect(exportTrigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("menuitem", { name: "cover.pngExport" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
 
-    fireEvent.click(screen.getByRole("button", { name: "cover.pngExport" }));
-    expect(onExport).toHaveBeenCalledWith("png" as ExportChoice);
-    expect(exportTrigger).toHaveFocus();
-
-    fireEvent.click(exportTrigger);
-    fireEvent.pointerDown(document.body);
-    expect(screen.queryByRole("button", { name: "cover.pngExport" })).not.toBeInTheDocument();
+    expect(onExport).toHaveBeenCalledWith("pdf");
   });
 
-  it("exposes expanded state on every dropdown trigger", async () => {
+  it("closes with Escape and restores focus to the trigger", async () => {
+    renderToolbar();
+    const { user, trigger } = await openMenu("cover.templates");
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+});
+
+describe("Cover layout aid toggles", () => {
+  it("exposes and flips the pressed state of the overlays and snapping toggles", async () => {
     const user = userEvent.setup();
     renderToolbar();
 
-    const triggers = [
-      screen.getByRole("button", { name: "6x9" }),
-      screen.getByRole("button", { name: "cover.templates" }),
-      screen.getByRole("button", { name: "cover.addText" }),
-      screen.getByRole("button", { name: "cover.addShape" }),
-      screen.getByRole("button", { name: "cover.export" }),
-    ];
-    for (const trigger of triggers) {
-      expect(trigger).toHaveAttribute("aria-haspopup", "menu");
-      expect(trigger).toHaveAttribute("aria-expanded", "false");
-      await user.click(trigger);
-      expect(trigger).toHaveAttribute("aria-expanded", "true");
-      await user.keyboard("{Escape}");
-      expect(trigger).toHaveAttribute("aria-expanded", "false");
-    }
+    const overlays = screen.getByRole("button", { name: "cover.toggleOverlays" });
+    const snapping = screen.getByRole("button", { name: "cover.toggleSnapping" });
+    expect(overlays).toHaveAttribute("aria-pressed", "false");
+    expect(snapping).toHaveAttribute("aria-pressed", "false");
+
+    overlays.focus();
+    await user.keyboard("{Enter}");
+    expect(mocks.store.setOverlays).toHaveBeenCalledWith(true);
+
+    snapping.focus();
+    await user.keyboard(" ");
+    expect(mocks.store.setSnapping).toHaveBeenCalledWith(true);
   });
 });

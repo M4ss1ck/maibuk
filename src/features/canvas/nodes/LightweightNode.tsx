@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { NodeResizeControl, ResizeControlVariant, type Node, type NodeProps } from "@xyflow/react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useCanvasStore } from "@/features/canvas/store";
@@ -19,11 +20,12 @@ type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
 function ActiveNodeEditor({
   node,
   onDone,
-  onCancel,
+  onExit,
 }: {
   node: LightweightCanvasNode;
   onDone: () => void;
-  onCancel: () => void;
+  /** Leave editing and hand focus back to the node (the Escape path). */
+  onExit: () => void;
 }) {
   const updateTextNode = useCanvasStore((state) => state.updateTextNode);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -40,20 +42,33 @@ function ActiveNodeEditor({
     }),
     content: node.html,
     editable: true,
+    // The node opens from a keyboard shortcut (F2) or a double click; TipTap's
+    // autofocus is the reliable path that lands the caret in the new editor.
+    autofocus: "end",
     editorProps: {
       attributes: { class: "outline-none" },
     },
   });
 
-  useEffect(() => {
+  // Focus during the commit that opens the editor, not in a passive effect:
+  // a keyboard author's next keystroke (T then typing, F2 then Control+a)
+  // arrives before a passive effect runs in WebKit, so the node wrapper would
+  // still hold focus and the keys would hit the canvas instead of the text.
+  // TipTap's focus command defers to requestAnimationFrame, which lands after
+  // the keyboard author's next keystroke in WebKit (T then typing, F2 then
+  // Control+a): the node wrapper would still be focused and the keys would hit
+  // the canvas instead of the text. Focus the view synchronously during the
+  // commit, then let the command's rAF settle the caret and scroll.
+  useLayoutEffect(() => {
+    editor?.view?.focus();
     editor?.commands.focus("end");
   }, [editor]);
 
   if (!editor) return null;
 
-  const commit = () => {
+  const commit = (leave: () => void = onDone) => {
     updateTextNode(node.id, { html: editor.getHTML() });
-    onDone();
+    leave();
   };
 
   return (
@@ -72,7 +87,11 @@ function ActiveNodeEditor({
             event.stopPropagation();
             if (event.key === "Escape") {
               event.preventDefault();
-              onCancel();
+              // Tab indents inside the editor and a pointer is the only way to
+              // blur, so a keyboard-only author could never save their text.
+              // Escape is the commit path: persist, then leave editing and
+              // return focus to the node so the next Tab continues from there.
+              commit(onExit);
             }
           }}
         />
@@ -101,7 +120,10 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   const beginLiveChange = useCanvasStore((state) => state.beginLiveChange);
   const resizeNodeLive = useCanvasStore((state) => state.resizeNodeLive);
   const endLiveChange = useCanvasStore((state) => state.endLiveChange);
-  const [editing, setEditing] = useState(false);
+  const editingNodeId = useCanvasStore((state) => state.editingNodeId);
+  const beginNodeEdit = useCanvasStore((state) => state.beginNodeEdit);
+  const endNodeEdit = useCanvasStore((state) => state.endNodeEdit);
+  const editing = editingNodeId === node.id;
   const nodeMenu = useCanvasNodeMenu(node.id, {
     isDisabled: editorReadOnly || interactivityLocked || editing,
   });
@@ -120,7 +142,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
         editing ? "" : "pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
       } ${selected ? "ring-1 ring-primary/40" : ""}`}
       style={node.backgroundColor ? { backgroundColor: node.backgroundColor } : undefined}
-      onDoubleClick={() => !editorReadOnly && setEditing(true)}
+      onDoubleClick={() => !editorReadOnly && beginNodeEdit(node.id)}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" selected={selected} />
       {nodeMenu.menu}
@@ -148,8 +170,14 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       {editing ? (
         <ActiveNodeEditor
           node={node}
-          onDone={() => setEditing(false)}
-          onCancel={() => setEditing(false)}
+          onDone={endNodeEdit}
+          onExit={() => {
+            // Unmount the editor first, then focus the node it lived in, so
+            // Escape leaves the keyboard author on the node rather than on the
+            // document body.
+            flushSync(endNodeEdit);
+            nodeMenu.anchorRef.current?.focus();
+          }}
         />
       ) : (
         <div

@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
@@ -171,7 +171,7 @@ describe("TableMenu", () => {
     await user.keyboard("{Escape}");
 
     expect(screen.queryByTestId("table-size-5-5")).not.toBeInTheDocument();
-    expect(insertButton).toHaveFocus();
+    await waitFor(() => expect(insertButton).toHaveFocus());
   });
 
   it("stops Escape propagation so an outer window Escape handler is not invoked", async () => {

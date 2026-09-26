@@ -1,11 +1,31 @@
-import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "@/components/notes/NotesList";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
-import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
+import {
+  createDataTransfer,
+  createFileDataTransfer,
+  dispatchDragEvent,
+  mockRect,
+} from "@/test/support/drag-events";
+import {
+  installPointerEvent,
+  pointerHitTarget,
+  touchLongPress,
+  touchTap,
+} from "@/test/support/pointer-events";
 
 installPointerEvent();
 
@@ -40,6 +60,7 @@ vi.mock("react-i18next", () => ({
         "notes.addNoteToBook": "Add note",
         "notes.today": "Today",
         "notes.thisWeek": "This week",
+        "notes.reorder": "Reorder",
       };
 
       if (key === "notes.noteCount") return `${params?.count ?? 0} notes`;
@@ -96,27 +117,6 @@ function buildBook(overrides: Partial<Book>): Book {
     contentUpdatedAt:
       overrides.contentUpdatedAt ?? overrides.updatedAt ?? new Date("2026-01-01T00:00:00Z"),
   };
-}
-
-function setRowRect(row: Element, rect: Pick<DOMRect, "top" | "bottom" | "height">) {
-  row.getBoundingClientRect = () =>
-    ({
-      top: rect.top,
-      bottom: rect.bottom,
-      left: 0,
-      right: 100,
-      width: 100,
-      height: rect.height,
-      x: 0,
-      y: rect.top,
-      toJSON: () => ({}),
-    }) as DOMRect;
-}
-
-function dragOverAt(target: Element, dataTransfer: DataTransfer, clientY: number) {
-  const event = createEvent.dragOver(target, { dataTransfer });
-  Object.defineProperty(event, "clientY", { value: clientY });
-  fireEvent(target, event);
 }
 
 function dropAt(target: Element, dataTransfer: DataTransfer, clientY: number) {
@@ -503,152 +503,6 @@ describe("NotesList", () => {
     expect(screen.getAllByText("Shared")).toHaveLength(2);
   });
 
-  it("sorts all notes within the all-notes section on row drop", () => {
-    const onReorderNotes = vi.fn();
-    const notes = [
-      buildNote({ id: "a", title: "Alpha", order: 0 }),
-      buildNote({ id: "b", title: "Bravo", order: 1 }),
-      buildNote({ id: "c", title: "Charlie", order: 2 }),
-    ];
-
-    render(
-      <NotesList
-        notes={notes}
-        currentNoteId={null}
-        onSelectNote={vi.fn()}
-        onCreateNote={vi.fn()}
-        onReorderNotes={onReorderNotes}
-      />
-    );
-
-    const source = screen.getByText("Charlie").closest("[data-note-row]");
-    const target = screen.getByText("Alpha").closest("[data-note-row]");
-
-    expect(source).not.toBeNull();
-    expect(target).not.toBeNull();
-
-    if (!source || !target) {
-      throw new Error("Expected note rows to exist");
-    }
-
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
-
-    fireEvent.dragStart(source, { dataTransfer });
-    const activeTarget = screen.getByText("Alpha").closest("[data-note-row]");
-    if (!activeTarget) {
-      throw new Error("Expected active target row to exist");
-    }
-    setRowRect(activeTarget, { top: 100, bottom: 140, height: 40 });
-    dragOverAt(activeTarget, dataTransfer, 110);
-    fireEvent.drop(activeTarget, { dataTransfer });
-
-    expect(onReorderNotes).toHaveBeenCalledWith([
-      { id: "c", pinned: false },
-      { id: "a", pinned: false },
-      { id: "b", pinned: false },
-    ]);
-  });
-
-  it("sorts pinned notes within the pinned section on row drop", () => {
-    const onReorderNotes = vi.fn();
-    const notes = [
-      buildNote({ id: "a", title: "Alpha", pinned: true, order: 0 }),
-      buildNote({ id: "b", title: "Bravo", pinned: true, order: 1 }),
-      buildNote({ id: "c", title: "Charlie", pinned: false, order: 2 }),
-    ];
-
-    render(
-      <NotesList
-        notes={notes}
-        currentNoteId={null}
-        onSelectNote={vi.fn()}
-        onCreateNote={vi.fn()}
-        onReorderNotes={onReorderNotes}
-      />
-    );
-
-    const source = screen.getByText("Bravo").closest("[data-note-row]");
-    const target = screen.getByText("Alpha").closest("[data-note-row]");
-
-    expect(source).not.toBeNull();
-    expect(target).not.toBeNull();
-
-    if (!source || !target) {
-      throw new Error("Expected note rows to exist");
-    }
-
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
-
-    fireEvent.dragStart(source, { dataTransfer });
-    const activeTarget = screen.getByText("Alpha").closest("[data-note-row]");
-    if (!activeTarget) {
-      throw new Error("Expected active target row to exist");
-    }
-    setRowRect(activeTarget, { top: 100, bottom: 140, height: 40 });
-    dragOverAt(activeTarget, dataTransfer, 110);
-    fireEvent.drop(activeTarget, { dataTransfer });
-
-    expect(onReorderNotes).toHaveBeenCalledWith([
-      { id: "b", pinned: true },
-      { id: "a", pinned: true },
-      { id: "c", pinned: false },
-    ]);
-  });
-
-  it("drops after the target row when the after-row indicator is active", () => {
-    const onReorderNotes = vi.fn();
-    const notes = [
-      buildNote({ id: "a", title: "Alpha", order: 0 }),
-      buildNote({ id: "b", title: "Bravo", order: 1 }),
-      buildNote({ id: "c", title: "Charlie", order: 2 }),
-    ];
-
-    render(
-      <NotesList
-        notes={notes}
-        currentNoteId={null}
-        onSelectNote={vi.fn()}
-        onCreateNote={vi.fn()}
-        onReorderNotes={onReorderNotes}
-      />
-    );
-
-    const source = screen.getByText("Alpha").closest("[data-note-row]");
-    if (!source) {
-      throw new Error("Expected source row to exist");
-    }
-
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
-
-    fireEvent.dragStart(source, { dataTransfer });
-    const target = screen.getByText("Bravo").closest("[data-note-row]");
-    if (!target) {
-      throw new Error("Expected target row to exist");
-    }
-
-    setRowRect(target, { top: 100, bottom: 140, height: 40 });
-    dragOverAt(target, dataTransfer, 130);
-    fireEvent.drop(target, { dataTransfer });
-
-    expect(onReorderNotes).toHaveBeenCalledWith([
-      { id: "b", pinned: false },
-      { id: "a", pinned: false },
-      { id: "c", pinned: false },
-    ]);
-  });
-
   it("pins an all-note when dropped on the pinned section", () => {
     const onReorderNotes = vi.fn();
     const notes = [
@@ -671,11 +525,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.drop(screen.getByTestId("notes-section-pinned"), { dataTransfer });
@@ -707,11 +557,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.dragOver(screen.getByTestId("notes-section-pinned"), { dataTransfer });
@@ -742,164 +588,12 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.dragOver(screen.getByTestId("notes-section-pinned"), { dataTransfer });
 
     expect(screen.getByTestId("note-drop-indicator-section-pinned")).toBeInTheDocument();
-  });
-
-  it("shows an insertion indicator before a row when dragging over its top half", () => {
-    const notes = [
-      buildNote({ id: "a", title: "Alpha", order: 0 }),
-      buildNote({ id: "b", title: "Bravo", order: 1 }),
-    ];
-
-    render(
-      <NotesList
-        notes={notes}
-        currentNoteId={null}
-        onSelectNote={vi.fn()}
-        onCreateNote={vi.fn()}
-        onReorderNotes={vi.fn()}
-      />
-    );
-
-    const source = screen.getByText("Bravo").closest("[data-note-row]");
-    const target = screen.getByText("Alpha").closest("[data-note-row]");
-    if (!source || !target) {
-      throw new Error("Expected note rows to exist");
-    }
-
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
-
-    fireEvent.dragStart(source, { dataTransfer });
-    const activeTarget = screen.getByText("Alpha").closest("[data-note-row]");
-    if (!activeTarget) {
-      throw new Error("Expected active target row to exist");
-    }
-    setRowRect(activeTarget, { top: 100, bottom: 140, height: 40 });
-    dragOverAt(activeTarget, dataTransfer, 110);
-
-    expect(screen.getByTestId("note-drop-indicator-before-a")).toBeInTheDocument();
-  });
-
-  it("shows an insertion indicator after a row when dragging over its bottom half", () => {
-    const notes = [
-      buildNote({ id: "a", title: "Alpha", order: 0 }),
-      buildNote({ id: "b", title: "Bravo", order: 1 }),
-    ];
-
-    render(
-      <NotesList
-        notes={notes}
-        currentNoteId={null}
-        onSelectNote={vi.fn()}
-        onCreateNote={vi.fn()}
-        onReorderNotes={vi.fn()}
-      />
-    );
-
-    const source = screen.getByText("Bravo").closest("[data-note-row]");
-    const target = screen.getByText("Alpha").closest("[data-note-row]");
-    if (!source || !target) {
-      throw new Error("Expected note rows to exist");
-    }
-
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
-
-    fireEvent.dragStart(source, { dataTransfer });
-    const activeTarget = screen.getByText("Alpha").closest("[data-note-row]");
-    if (!activeTarget) {
-      throw new Error("Expected active target row to exist");
-    }
-    setRowRect(activeTarget, { top: 100, bottom: 140, height: 40 });
-    dragOverAt(activeTarget, dataTransfer, 130);
-
-    expect(screen.getByTestId("note-drop-indicator-after-a")).toBeInTheDocument();
-  });
-
-  it("shows the insertion indicator for a file drag over a note row", () => {
-    const notes = [
-      buildNote({ id: "a", title: "Alpha", order: 0 }),
-      buildNote({ id: "b", title: "Bravo", order: 1 }),
-    ];
-    render(
-      <NotesList
-        notes={notes}
-        currentNoteId={null}
-        onSelectNote={vi.fn()}
-        onCreateNote={vi.fn()}
-        onReorderNotes={vi.fn()}
-        onImportFiles={vi.fn()}
-      />
-    );
-    const target = screen.getByText("Bravo").closest("[data-note-row]");
-    if (!target) throw new Error("Expected note row to exist");
-    setRowRect(target, { top: 100, bottom: 140, height: 40 });
-    const file = new File(["# Bravo"], "bravo.md");
-    const dataTransfer = {
-      files: [file],
-      items: [{ kind: "file", type: file.type }],
-      dropEffect: "",
-    } as unknown as DataTransfer;
-
-    const container = document.querySelector(".overflow-auto");
-    if (!container) throw new Error("Expected list container to exist");
-    dragOverAt(container, dataTransfer, 110);
-
-    expect(screen.getByTestId("note-drop-indicator-before-b")).toBeInTheDocument();
-  });
-
-  it("imports a file batch at the indicated note position", async () => {
-    const onImportFiles = vi.fn();
-    const notes = [
-      buildNote({ id: "a", title: "Alpha", order: 0 }),
-      buildNote({ id: "b", title: "Bravo", order: 1 }),
-    ];
-    render(
-      <NotesList
-        notes={notes}
-        currentNoteId={null}
-        onSelectNote={vi.fn()}
-        onCreateNote={vi.fn()}
-        onReorderNotes={vi.fn()}
-        onImportFiles={onImportFiles}
-      />
-    );
-    const target = screen.getByText("Bravo").closest("[data-note-row]");
-    if (!target) throw new Error("Expected note row to exist");
-    setRowRect(target, { top: 100, bottom: 140, height: 40 });
-    const file = new File(["# Bravo"], "bravo.md");
-    const dataTransfer = {
-      files: [file],
-      items: [{ kind: "file", type: file.type }],
-      dropEffect: "",
-    } as unknown as DataTransfer;
-
-    const container = document.querySelector(".overflow-auto");
-    if (!container) throw new Error("Expected list container to exist");
-    dropAt(container, dataTransfer, 110);
-
-    await waitFor(() =>
-      expect(onImportFiles).toHaveBeenCalledWith(
-        [{ text: "# Bravo", stem: "bravo", extension: ".md" }],
-        { id: "b", placement: "before" }
-      )
-    );
   });
 
   it("imports a supported file batch into an empty list without a target", async () => {
@@ -915,11 +609,7 @@ describe("NotesList", () => {
       />
     );
     const file = new File(["# First"], "first.md");
-    const dataTransfer = {
-      files: [file],
-      items: [{ kind: "file", type: file.type }],
-      dropEffect: "",
-    } as unknown as DataTransfer;
+    const dataTransfer = createFileDataTransfer(file);
     const container = document.querySelector(".overflow-auto");
     if (!container) throw new Error("Expected list container to exist");
 
@@ -952,11 +642,7 @@ describe("NotesList", () => {
       />
     );
     const file = new File(["draft"], "draft.txt");
-    const dataTransfer = {
-      files: [file],
-      items: [{ kind: "file", type: file.type }],
-      dropEffect: "",
-    } as unknown as DataTransfer;
+    const dataTransfer = createFileDataTransfer(file);
     const container = document.querySelector(".overflow-auto");
     if (!container) throw new Error("Expected list container to exist");
 
@@ -967,43 +653,6 @@ describe("NotesList", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
     resolveImport?.();
     await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
-  });
-
-  it("keeps internal reorder separate from file import", () => {
-    const onImportFiles = vi.fn();
-    const onReorderNotes = vi.fn();
-    const notes = [
-      buildNote({ id: "a", title: "Alpha", order: 0 }),
-      buildNote({ id: "b", title: "Bravo", order: 1 }),
-    ];
-    render(
-      <NotesList
-        notes={notes}
-        currentNoteId={null}
-        onSelectNote={vi.fn()}
-        onCreateNote={vi.fn()}
-        onReorderNotes={onReorderNotes}
-        onImportFiles={onImportFiles}
-      />
-    );
-    const source = screen.getByText("Alpha").closest("[data-note-row]");
-    const target = screen.getByText("Bravo").closest("[data-note-row]");
-    if (!source || !target) throw new Error("Expected note rows to exist");
-    const dataTransfer = {
-      files: [],
-      items: [],
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
-
-    fireEvent.dragStart(source, { dataTransfer });
-    setRowRect(target, { top: 100, bottom: 140, height: 40 });
-    dragOverAt(target, dataTransfer, 110);
-    fireEvent.drop(target, { dataTransfer });
-
-    expect(onReorderNotes).toHaveBeenCalled();
-    expect(onImportFiles).not.toHaveBeenCalled();
   });
 
   it("unpins a pinned note when dropped on the all-notes section", () => {
@@ -1028,11 +677,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.drop(screen.getByTestId("notes-section-all"), { dataTransfer });
@@ -1075,11 +720,7 @@ describe("NotesList", () => {
       throw new Error("Expected note row to exist");
     }
 
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(source, { dataTransfer });
     fireEvent.dragOver(targetGroup, { dataTransfer });
@@ -1112,11 +753,7 @@ describe("NotesList", () => {
     if (!source) {
       throw new Error("Expected note row to exist");
     }
-    const dataTransfer = {
-      effectAllowed: "",
-      dropEffect: "",
-      setData: vi.fn(),
-    } as unknown as DataTransfer;
+    const dataTransfer = createDataTransfer();
 
     // Drop on the same group -> no-op
     fireEvent.dragStart(source, { dataTransfer });
@@ -1164,6 +801,325 @@ describe("NotesList", () => {
   });
 });
 
+describe("NotesList reorder", () => {
+  function renderReorderList(
+    notes: Note[],
+    overrides: Partial<Parameters<typeof NotesList>[0]> = {}
+  ) {
+    const props = {
+      notes,
+      currentNoteId: null,
+      onSelectNote: vi.fn(),
+      onCreateNote: vi.fn(),
+      onReorderNotes: vi.fn(),
+      ...overrides,
+    };
+    render(<NotesList {...props} />);
+    return props;
+  }
+
+  const noteRow = (id: string) => {
+    const row = document.querySelector<HTMLElement>(`[role="row"][data-key="${id}"]`);
+    if (!row) throw new Error(`no row for ${id}`);
+    return row;
+  };
+  const handleOf = (id: string) => within(noteRow(id)).getByRole("button", { name: "Reorder" });
+
+  /** Tab from the row into its controls until its reorder button has focus. */
+  async function tabToHandle(user: ReturnType<typeof userEvent.setup>, id: string) {
+    noteRow(id).focus();
+    const handle = handleOf(id);
+    for (let i = 0; i < 8 && document.activeElement !== handle; i++) await user.tab();
+    expect(handle).toHaveFocus();
+  }
+
+  async function arrowTo(
+    user: ReturnType<typeof userEvent.setup>,
+    name: string,
+    key = "{ArrowUp}"
+  ) {
+    for (let i = 0; i < 10 && document.activeElement?.getAttribute("aria-label") !== name; i++) {
+      await user.keyboard(key);
+    }
+    expect(document.activeElement).toHaveAccessibleName(name);
+  }
+
+  /** Drops (Enter) or cancels (Escape), then waits for React Aria to end the drag. */
+  async function endDrag(user: ReturnType<typeof userEvent.setup>, key: "{Enter}" | "{Escape}") {
+    await user.keyboard(key);
+    // A keyboard drag hides everything but its drop targets until it ends.
+    await waitFor(() =>
+      expect(screen.getByRole("grid").closest('[aria-hidden="true"]')).toBeNull()
+    );
+  }
+
+  /** Rows 40px tall, 50px apart, in document order. */
+  function mockNoteLayout() {
+    const grid = screen.getByRole("grid");
+    const rows = [...document.querySelectorAll<HTMLElement>('[role="row"][data-key]')];
+    mockRect(grid, 0, rows.length * 50);
+    rows.forEach((row, index) => {
+      mockRect(row, index * 50, index * 50 + 40);
+    });
+    return { grid, rows };
+  }
+
+  describe("by keyboard", () => {
+    it("moves a Note within its section: Enter lifts, arrows pick the gap, Enter drops", async () => {
+      const user = userEvent.setup();
+      const props = renderReorderList([
+        buildNote({ id: "a", title: "Alpha" }),
+        buildNote({ id: "b", title: "Bravo" }),
+        buildNote({ id: "c", title: "Charlie" }),
+      ]);
+
+      await tabToHandle(user, "c");
+      await user.keyboard("{Enter}");
+      await arrowTo(user, "Insert before Alpha");
+      await endDrag(user, "{Enter}");
+
+      expect(props.onReorderNotes).toHaveBeenCalledTimes(1);
+      expect(props.onReorderNotes).toHaveBeenCalledWith([
+        { id: "c", pinned: false },
+        { id: "a", pinned: false },
+        { id: "b", pinned: false },
+      ]);
+      expect(props.onSelectNote).not.toHaveBeenCalled();
+    });
+
+    it("pins a Note dropped among the Pinned Notes", async () => {
+      const user = userEvent.setup();
+      const props = renderReorderList([
+        buildNote({ id: "a", title: "Alpha", pinned: true }),
+        buildNote({ id: "b", title: "Bravo" }),
+        buildNote({ id: "c", title: "Charlie" }),
+      ]);
+
+      await tabToHandle(user, "c");
+      await user.keyboard("{Enter}");
+      await arrowTo(user, "Insert before Alpha");
+      await endDrag(user, "{Enter}");
+
+      expect(props.onReorderNotes).toHaveBeenCalledWith([
+        { id: "c", pinned: true },
+        { id: "a", pinned: true },
+        { id: "b", pinned: false },
+      ]);
+    });
+
+    it("unpins a Pinned Note dropped among the other Notes", async () => {
+      const user = userEvent.setup();
+      const props = renderReorderList([
+        buildNote({ id: "a", title: "Alpha", pinned: true }),
+        buildNote({ id: "b", title: "Bravo", pinned: true }),
+        buildNote({ id: "c", title: "Charlie" }),
+      ]);
+
+      await tabToHandle(user, "a");
+      await user.keyboard("{Enter}");
+      await arrowTo(user, "Insert after Charlie", "{ArrowDown}");
+      await endDrag(user, "{Enter}");
+
+      expect(props.onReorderNotes).toHaveBeenCalledWith([
+        { id: "b", pinned: true },
+        { id: "c", pinned: false },
+        { id: "a", pinned: false },
+      ]);
+    });
+
+    it("treats the gap between the sections as the top of the other Notes", async () => {
+      const user = userEvent.setup();
+      const props = renderReorderList([
+        buildNote({ id: "a", title: "Alpha", pinned: true }),
+        buildNote({ id: "b", title: "Bravo", pinned: true }),
+        buildNote({ id: "c", title: "Charlie" }),
+      ]);
+
+      await tabToHandle(user, "a");
+      await user.keyboard("{Enter}");
+      await arrowTo(user, "Insert before Charlie", "{ArrowDown}");
+      await endDrag(user, "{Enter}");
+
+      expect(props.onReorderNotes).toHaveBeenCalledWith([
+        { id: "b", pinned: true },
+        { id: "a", pinned: false },
+        { id: "c", pinned: false },
+      ]);
+    });
+
+    it("offers no drop on a Note, only the gaps between Notes", async () => {
+      const user = userEvent.setup();
+      renderReorderList([
+        buildNote({ id: "a", title: "Alpha" }),
+        buildNote({ id: "b", title: "Bravo" }),
+      ]);
+
+      await tabToHandle(user, "b");
+      await user.keyboard("{Enter}");
+      // React Aria moves focus to the first drop target once the drag starts.
+      await waitFor(() => expect(handleOf("b")).not.toHaveFocus());
+      const seen = new Set<string>();
+      for (let i = 0; i < 6; i++) {
+        seen.add(document.activeElement?.getAttribute("aria-label") ?? "");
+        await user.keyboard("{ArrowDown}");
+      }
+      expect([...seen].sort()).toEqual([
+        "Insert after Bravo",
+        "Insert before Alpha",
+        "Insert between Alpha and Bravo",
+      ]);
+      await endDrag(user, "{Escape}");
+    });
+
+    it("Escape cancels the drag: nothing is written and focus returns to the handle", async () => {
+      const user = userEvent.setup();
+      const props = renderReorderList([
+        buildNote({ id: "a", title: "Alpha" }),
+        buildNote({ id: "b", title: "Bravo" }),
+      ]);
+
+      await tabToHandle(user, "b");
+      await user.keyboard("{Enter}");
+      await arrowTo(user, "Insert before Alpha");
+      await endDrag(user, "{Escape}");
+
+      expect(props.onReorderNotes).not.toHaveBeenCalled();
+      await waitFor(() => expect(handleOf("b")).toHaveFocus());
+    });
+
+    it("a touch drag starts from the grip, never from the row body", () => {
+      renderReorderList([buildNote({ id: "a", title: "Alpha" })]);
+      const row = noteRow("a");
+      // A native listener on the row only hears drags the touch guard lets through.
+      const reachedRow = vi.fn();
+      row.addEventListener("dragstart", reachedRow);
+      const touchDragFrom = (origin: Element) => {
+        reachedRow.mockClear();
+        fireEvent.pointerDown(origin, { pointerType: "touch" });
+        fireEvent.dragStart(row);
+        return reachedRow.mock.calls.length > 0;
+      };
+      // React Aria makes its drag button ignore pointers: a touch on the grip
+      // reaches whatever is under it, which must still count as the handle.
+      const grip = handleOf("a").querySelector("svg")!;
+
+      expect(touchDragFrom(screen.getByText("Alpha"))).toBe(false);
+      expect(touchDragFrom(pointerHitTarget(grip))).toBe(true);
+    });
+
+    it("offers no reorder handle while searching, and none in the tree view", async () => {
+      const user = userEvent.setup();
+      renderReorderList([
+        buildNote({ id: "a", title: "Alpha" }),
+        buildNote({ id: "b", title: "Bravo" }),
+      ]);
+      expect(screen.getAllByRole("button", { name: "Reorder" })).toHaveLength(2);
+
+      await user.type(screen.getByPlaceholderText("Search notes..."), "alp");
+      expect(screen.queryByRole("button", { name: "Reorder" })).not.toBeInTheDocument();
+
+      await user.clear(screen.getByPlaceholderText("Search notes..."));
+      act(() => useSettingsStore.setState({ notesListView: "tree" }));
+      expect(screen.queryByRole("button", { name: "Reorder" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("by mouse", () => {
+    it.each([
+      ["top half", 5, [{ id: "c" }, { id: "a" }, { id: "b" }]],
+      ["bottom half", 35, [{ id: "a" }, { id: "c" }, { id: "b" }]],
+    ] as const)("drops a Note beside the row under the pointer's %s", async (_half, y, order) => {
+      const props = renderReorderList([
+        buildNote({ id: "a", title: "Alpha" }),
+        buildNote({ id: "b", title: "Bravo" }),
+        buildNote({ id: "c", title: "Charlie" }),
+      ]);
+      const { grid, rows } = mockNoteLayout();
+      const dt = createDataTransfer();
+
+      dispatchDragEvent(rows[2], "dragstart", dt, 110);
+      expect(dt.types).toContain("note");
+      dispatchDragEvent(grid, "dragenter", dt, y);
+      dispatchDragEvent(grid, "dragover", dt, y);
+      await waitFor(() => expect(document.querySelectorAll("[data-drop-target]")).toHaveLength(1));
+      dispatchDragEvent(grid, "drop", dt, y);
+
+      await waitFor(() =>
+        expect(props.onReorderNotes).toHaveBeenCalledWith(
+          order.map(({ id }) => ({ id, pinned: false }))
+        )
+      );
+      dispatchDragEvent(rows[2], "dragend", dt, y);
+    });
+
+    it("reorders within the Pinned section and keeps the other Notes", async () => {
+      const props = renderReorderList([
+        buildNote({ id: "a", title: "Alpha", pinned: true }),
+        buildNote({ id: "b", title: "Bravo", pinned: true }),
+        buildNote({ id: "c", title: "Charlie" }),
+      ]);
+      const { grid, rows } = mockNoteLayout();
+      const dt = createDataTransfer();
+
+      dispatchDragEvent(rows[1], "dragstart", dt, 60);
+      dispatchDragEvent(grid, "dragenter", dt, 5);
+      dispatchDragEvent(grid, "dragover", dt, 5);
+      dispatchDragEvent(grid, "drop", dt, 5);
+
+      await waitFor(() =>
+        expect(props.onReorderNotes).toHaveBeenCalledWith([
+          { id: "b", pinned: true },
+          { id: "a", pinned: true },
+          { id: "c", pinned: false },
+        ])
+      );
+      dispatchDragEvent(rows[1], "dragend", dt, 5);
+    });
+
+    it("imports dropped files at the gap under the pointer, never as a reorder", async () => {
+      const onImportFiles = vi.fn();
+      const props = renderReorderList(
+        [buildNote({ id: "a", title: "Alpha" }), buildNote({ id: "b", title: "Bravo" })],
+        { onImportFiles }
+      );
+      const { grid } = mockNoteLayout();
+      const dt = createFileDataTransfer(
+        new File(["# Bravo"], "bravo.md", { type: "text/markdown" })
+      );
+
+      dispatchDragEvent(grid, "dragenter", dt, 55);
+      dispatchDragEvent(grid, "dragover", dt, 55);
+      await waitFor(() => expect(document.querySelectorAll("[data-drop-target]")).toHaveLength(1));
+      dispatchDragEvent(grid, "drop", dt, 55);
+
+      await waitFor(() =>
+        expect(onImportFiles).toHaveBeenCalledWith(
+          [{ text: "# Bravo", stem: "bravo", extension: ".md" }],
+          { id: "b", placement: "before" }
+        )
+      );
+      expect(props.onReorderNotes).not.toHaveBeenCalled();
+    });
+
+    it("shows import status until a file dropped on the list is persisted", async () => {
+      let finish: (() => void) | undefined;
+      const onImportFiles = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+      renderReorderList([buildNote({ id: "a", title: "Alpha" })], { onImportFiles });
+      const { grid } = mockNoteLayout();
+      const dt = createFileDataTransfer(new File(["draft"], "draft.txt", { type: "text/plain" }));
+
+      dispatchDragEvent(grid, "dragenter", dt, 35);
+      dispatchDragEvent(grid, "dragover", dt, 35);
+      dispatchDragEvent(grid, "drop", dt, 35);
+
+      await waitFor(() => expect(onImportFiles).toHaveBeenCalledOnce());
+      expect(screen.getByRole("status")).toBeInTheDocument();
+      act(() => finish?.());
+      await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+    });
+  });
+});
+
 describe("NotesList item menu", () => {
   function renderMenuList(overrides: Partial<Parameters<typeof NotesList>[0]> = {}) {
     const props = {
@@ -1191,6 +1147,42 @@ describe("NotesList item menu", () => {
     await user.click(trigger);
     await screen.findByRole("menu");
     return trigger;
+  }
+
+  /** A controlled list whose Delete actually removes the Note. */
+  function DeleteHarness() {
+    const [notes, setNotes] = useState([
+      buildNote({ id: "a", title: "Alpha", order: 0 }),
+      buildNote({ id: "b", title: "Beta", order: 1 }),
+    ]);
+    return (
+      <NotesList
+        notes={notes}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn(async () => {})}
+        onDeleteNote={(id) => setNotes((current) => current.filter((note) => note.id !== id))}
+      />
+    );
+  }
+
+  async function openDeleteDialog(user: ReturnType<typeof userEvent.setup>, row: HTMLElement) {
+    row.focus();
+    fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    await screen.findByRole("menu");
+    const remove = screen.getByRole("menuitem", { name: "common.delete" });
+    while (document.activeElement !== remove) await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Enter}");
+    await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
+  }
+
+  async function confirmDelete(user: ReturnType<typeof userEvent.setup>) {
+    const confirm = screen.getByRole("button", { name: "notes.delete" });
+    for (let step = 0; step < 4 && document.activeElement !== confirm; step++) {
+      await user.keyboard("{Tab}");
+    }
+    await user.keyboard("{Enter}");
   }
 
   it("asks before deleting and deletes only after confirmation", async () => {
@@ -1222,6 +1214,33 @@ describe("NotesList item menu", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(props.onDeleteNote).not.toHaveBeenCalled();
+  });
+
+  it("returns focus to the note's row when the delete is cancelled", async () => {
+    const user = userEvent.setup();
+    renderMenuList();
+    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+
+    await openDeleteDialog(user, row);
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
+  });
+
+  it("moves focus to the next row after a confirmed delete", async () => {
+    const user = userEvent.setup();
+    render(<DeleteHarness />);
+    const rows = () => screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"));
+    const first = rows()[0];
+
+    await openDeleteDialog(user, first);
+    await confirmDelete(user);
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Alpha")).not.toBeInTheDocument());
+    await waitFor(() => expect(rows()[0].contains(document.activeElement)).toBe(true));
+    expect(rows()[0]).toHaveTextContent("Beta");
   });
 
   it("pins a note from the menu through the ordering write", async () => {
@@ -1325,6 +1344,25 @@ describe("NotesList item menu", () => {
     await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("menu")).toBeInTheDocument();
+  });
+
+  it("opens from the focused row with Shift+F10 and closes back to it with Escape", async () => {
+    const user = userEvent.setup();
+    renderMenuList();
+    const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+    row.focus();
+
+    fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+
+    const menu = await screen.findByRole("menu");
+    await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "common.rename" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
   });
 
   it("Escape closes the item menu and keeps focus on that note", async () => {
