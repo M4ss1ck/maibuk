@@ -171,7 +171,7 @@ export function Layout() {
                 className={({ isFocusVisible }) =>
                   `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                     location.pathname === item.id
-                      ? "bg-primary text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "hover:bg-muted text-foreground"
                   } ${isFocusVisible ? "outline-2 outline-offset-2 outline-primary" : "outline-none"}`
                 }

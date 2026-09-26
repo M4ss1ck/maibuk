@@ -1,10 +1,26 @@
 import { useTranslation } from "react-i18next";
 import { useCoverStore } from "@/features/covers/store";
 import { DEFAULT_FILTERS, FONT_FAMILIES } from "@/features/covers/scene/defaults";
-import type { ImageLayer, ShapeLayer, TextLayer } from "@/features/covers/scene/schema";
+import type { ImageLayer, Layer, ShapeLayer, TextLayer } from "@/features/covers/scene/schema";
 import { Select } from "@/components/ui/Select";
 import { BackgroundPanel } from "@/components/cover-editor/panels/BackgroundPanel";
 import { PaintControl } from "@/components/cover-editor/panels/PaintControl";
+import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
+import { PRESET_COLORS } from "@/features/covers/scene/defaults";
+
+function previewLayerColor(id: string, patch: Partial<Layer> | null): void {
+  const state = useCoverStore.getState();
+  state.previewColorScene(
+    patch
+      ? {
+          ...state.scene,
+          layers: state.scene.layers.map((layer) =>
+            layer.id === id ? ({ ...layer, ...patch } as Layer) : layer
+          ),
+        }
+      : null
+  );
+}
 
 function NumberField({
   label,
@@ -74,14 +90,14 @@ function TextProperties({ layer }: { layer: TextLayer }) {
       <div className="flex gap-1">
         <button
           type="button"
-          className={`flex-1 px-2 py-1 rounded text-sm font-bold ${layer.font.weight === "bold" ? "bg-primary text-white" : "bg-muted"}`}
+          className={`flex-1 px-2 py-1 rounded text-sm font-bold ${layer.font.weight === "bold" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
           onClick={() => patchFont({ weight: layer.font.weight === "bold" ? "normal" : "bold" })}
         >
           B
         </button>
         <button
           type="button"
-          className={`flex-1 px-2 py-1 rounded text-sm italic ${layer.font.style === "italic" ? "bg-primary text-white" : "bg-muted"}`}
+          className={`flex-1 px-2 py-1 rounded text-sm italic ${layer.font.style === "italic" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
           onClick={() => patchFont({ style: layer.font.style === "italic" ? "normal" : "italic" })}
         >
           I
@@ -93,7 +109,7 @@ function TextProperties({ layer }: { layer: TextLayer }) {
           <button
             key={align}
             type="button"
-            className={`flex-1 px-2 py-1 rounded text-xs capitalize ${layer.align === align ? "bg-primary text-white" : "bg-muted"}`}
+            className={`flex-1 px-2 py-1 rounded text-xs capitalize ${layer.align === align ? "bg-primary text-primary-foreground" : "bg-muted"}`}
             onClick={() => updateLayer(layer.id, { align })}
           >
             {align}
@@ -103,7 +119,11 @@ function TextProperties({ layer }: { layer: TextLayer }) {
 
       <div className="space-y-1">
         <span className="text-sm text-muted-foreground">{t("cover.props.fill")}</span>
-        <PaintControl paint={layer.fill} onChange={(fill) => updateLayer(layer.id, { fill })} />
+        <PaintControl
+          paint={layer.fill}
+          onChange={(fill) => updateLayer(layer.id, { fill })}
+          onPreview={(fill) => previewLayerColor(layer.id, fill ? { fill } : null)}
+        />
       </div>
 
       <div className="space-y-1 pt-2 border-t border-border">
@@ -121,15 +141,26 @@ function TextProperties({ layer }: { layer: TextLayer }) {
         </label>
         {layer.stroke && (
           <div className="flex items-center gap-2">
-            <input
-              type="color"
+            <ColorPickerControl
+              label={t("cover.props.strokeColor")}
               value={layer.stroke.color}
-              onChange={(e) =>
+              presets={PRESET_COLORS}
+              onPreview={(color) =>
+                previewLayerColor(
+                  layer.id,
+                  color
+                    ? {
+                        stroke: { color, width: layer.stroke?.width ?? 2 },
+                      }
+                    : null
+                )
+              }
+              onCommit={(color) =>
                 updateLayer(layer.id, {
-                  stroke: { color: e.target.value, width: layer.stroke?.width ?? 2 },
+                  stroke: { color, width: layer.stroke?.width ?? 2 },
                 })
               }
-              className="w-8 h-8 cursor-pointer rounded border border-border"
+              showUnknownContrast
             />
             <input
               type="number"
@@ -205,7 +236,11 @@ function ShapeProperties({ layer }: { layer: ShapeLayer }) {
       {layer.shape !== "line" && (
         <div className="space-y-1">
           <span className="text-sm text-muted-foreground">{t("cover.props.fill")}</span>
-          <PaintControl paint={layer.fill} onChange={(fill) => updateLayer(layer.id, { fill })} />
+          <PaintControl
+            paint={layer.fill}
+            onChange={(fill) => updateLayer(layer.id, { fill })}
+            onPreview={(fill) => previewLayerColor(layer.id, fill ? { fill } : null)}
+          />
         </div>
       )}
       {layer.shape === "rect" && (
@@ -231,15 +266,26 @@ function ShapeProperties({ layer }: { layer: ShapeLayer }) {
         </label>
         {layer.stroke && (
           <div className="flex items-center gap-2">
-            <input
-              type="color"
+            <ColorPickerControl
+              label={t("cover.props.strokeColor")}
               value={layer.stroke.color}
-              onChange={(e) =>
+              presets={PRESET_COLORS}
+              onPreview={(color) =>
+                previewLayerColor(
+                  layer.id,
+                  color
+                    ? {
+                        stroke: { color, width: layer.stroke?.width ?? 2 },
+                      }
+                    : null
+                )
+              }
+              onCommit={(color) =>
                 updateLayer(layer.id, {
-                  stroke: { color: e.target.value, width: layer.stroke?.width ?? 2 },
+                  stroke: { color, width: layer.stroke?.width ?? 2 },
                 })
               }
-              className="w-8 h-8 cursor-pointer rounded border border-border"
+              showUnknownContrast
             />
             <input
               type="number"

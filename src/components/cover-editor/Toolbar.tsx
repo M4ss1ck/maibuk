@@ -403,7 +403,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
           <Tooltip content={t("cover.export")}>
             <AriaButton
               data-tutorial="cover-designer.export"
-              className={`${TRIGGER_CLASS} bg-primary text-white hover:bg-primary-hover`}
+              className={`${TRIGGER_CLASS} bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-hover-foreground`}
             >
               <ExportIcon className="w-4 h-4" aria-hidden="true" />
               <span className="hidden sm:inline">{t("cover.export")}</span>

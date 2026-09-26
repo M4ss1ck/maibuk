@@ -1,7 +1,13 @@
 import type { Locator, Page } from "@playwright/test";
 import { allowIndexedDbWrites, failIndexedDbWrites } from "../support/fault";
 import { seedSettings } from "../support/storage";
-import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  expectTabContained,
+  isFocusWithin,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { test, expect } from "../support/test";
 
 // The editor slice (issue #205): typing and saving, the editor keymap,
@@ -521,16 +527,50 @@ test.describe("toolbar selects @wf:editor-toolbar-selects", () => {
     await pressUntilFocused(page, "ArrowRight", colorOptions, { max: 80 });
     await page.keyboard.press("Enter");
     const palette = page.getByRole("dialog", { name: "Text Color options" });
-    await expect(palette).toBeVisible();
-    await tabTo(page, page.getByRole("button", { name: "#EF4444" }));
+    await expectFocusWithin(palette);
+    await expectTabContained(page, palette);
+    await expect(palette.getByRole("status")).toContainText("Contrast cannot be checked");
+    await tabTo(page, palette.getByRole("option", { name: "#000000" }));
+    await pressUntilFocused(page, "ArrowRight", palette.getByRole("option", { name: "#EF4444" }), {
+      max: 20,
+    });
     await page.keyboard.press("Enter");
     await expect(palette).toBeHidden();
+    await expect(colorOptions).toBeFocused();
     await expect(mark(page, "Text Color")).toHaveAttribute("aria-pressed", "true");
 
     await saveNow(page);
     await page.reload();
     await expect(editorText(page)).toBeFocused();
     await expect(editorText(page).locator('span[style*="color"]').first()).toBeVisible();
+  });
+
+  test("highlight color applies to the selection and persists", async ({ page }) => {
+    await seedSettings(page, { toolbarExpanded: true });
+    await openEditor(page);
+    await selectRange(page, 8);
+
+    const size = toolbar(page).getByRole("combobox", { name: "Size" });
+    const options = toolbar(page).getByRole("button", { name: "Highlight options" });
+    await focusToolbarControl(page, size);
+    await pressUntilFocused(page, "ArrowRight", options, { max: 80 });
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("dialog", { name: "Highlight options" });
+    await expectFocusWithin(picker);
+    await expectTabContained(page, picker);
+    const hex = picker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, hex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#ABC123");
+    await page.keyboard.press("Enter");
+    await expect(mark(page, "Highlight")).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    await expect(options).toBeFocused();
+
+    await saveNow(page);
+    await page.reload();
+    await expect(editorText(page).locator('mark[style*="background-color"]').first()).toBeVisible();
   });
 });
 

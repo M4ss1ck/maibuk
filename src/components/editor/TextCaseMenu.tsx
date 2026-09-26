@@ -31,7 +31,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
         <Tooltip content={t("editor.textCase")}>
           <Button
             aria-label={t("editor.textCase")}
-            className="flex items-center gap-0.5 rounded p-2 transition-colors hover:bg-muted data-pressed:bg-primary data-pressed:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex items-center gap-0.5 rounded p-2 transition-colors hover:bg-muted data-pressed:bg-primary data-pressed:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <CaseSensitive className="w-4 h-4" />
             <ChevronDown className="w-3 h-3" />

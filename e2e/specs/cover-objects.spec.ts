@@ -9,7 +9,12 @@
 
 import type { Locator, Page } from "@playwright/test";
 import { DOT_PNG, IMAGE_FIXTURE_DIR } from "../support/fixtures/images";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  expectTabContained,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -241,6 +246,21 @@ test.describe("editing properties @wf:cover-properties", () => {
     await tabTo(page, stroke, { max: 70 });
     await page.keyboard.press(" ");
     await expect(stroke).toBeChecked();
+    const strokeColor = page.getByRole("button", { name: "Stroke color" });
+    await tabTo(page, strokeColor, { max: 8 });
+    await page.keyboard.press("Enter");
+    const strokePicker = page.getByRole("dialog", { name: "Stroke color" });
+    await expectFocusWithin(strokePicker);
+    await expectTabContained(page, strokePicker);
+    const strokeHex = strokePicker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, strokeHex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#123456");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
+    await expect(strokePicker).toBeHidden();
+    await expect(strokeColor).toBeFocused();
+    await expect(strokeColor.locator("span")).toHaveAttribute("style", /18, 52, 86|#123456/i);
     await page.keyboard.press("Tab");
     const shadow = field(page, "Shadow");
     await tabTo(page, shadow, { max: 4 });
@@ -264,6 +284,9 @@ test.describe("editing properties @wf:cover-properties", () => {
     await expect(field(page, "Rotation")).toHaveValue("15");
     await expect(field(page, "Opacity")).toHaveValue("0.9");
     await expect(field(page, "Stroke")).toBeChecked();
+    await expect(
+      page.getByRole("button", { name: "Stroke color" }).locator("span")
+    ).toHaveAttribute("style", /18, 52, 86|#123456/i);
     await expect(field(page, "Shadow")).toBeChecked();
     await expect(field(page, "Curve text")).toBeChecked();
     await expect(page.getByRole("slider", { name: /°/ })).toHaveValue("61");
@@ -283,9 +306,27 @@ test.describe("editing properties @wf:cover-properties", () => {
     await expect(angle(page)).toHaveValue("91");
 
     await expect(page.getByRole("button", { name: "Remove stop" })).toHaveCount(2);
+    const firstStop = page.getByRole("button", { name: "Stop 1 color" });
+    await tabTo(page, firstStop, { max: 12 });
+    await page.keyboard.press("Enter");
+    const stopPicker = page.getByRole("dialog", { name: "Stop 1 color" });
+    await expectFocusWithin(stopPicker);
+    await expectTabContained(page, stopPicker);
+    const stopHex = stopPicker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, stopHex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#123456");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
+    await expect(stopPicker).toBeHidden();
+    await expect(firstStop).toBeFocused();
+    await expect(firstStop.locator("span")).toHaveAttribute("style", /18, 52, 86|#123456/i);
     await tabTo(page, page.getByRole("button", { name: "Add stop", exact: true }), { max: 30 });
     await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: "Remove stop" })).toHaveCount(3);
+    await expect(
+      page.getByRole("button", { name: "Stop 1 color" }).locator("span")
+    ).toHaveAttribute("style", /18, 52, 86|#123456/i);
     await expect(page.getByRole("button", { name: "Remove stop" }).first()).toBeEnabled();
 
     await saveCover(page);

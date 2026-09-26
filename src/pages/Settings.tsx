@@ -42,6 +42,8 @@ import { PasteCleanupSection } from "@/components/settings/PasteCleanupSection";
 import { TutorialSection } from "@/components/settings/TutorialSection";
 import { AsciiBanner } from "@/components/settings/AsciiBanner";
 import { AsciiFieldBackground } from "@/components/settings/AsciiFieldBackground";
+import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
+import { applyAccentColor } from "@/features/settings/accent-color";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -278,12 +280,11 @@ export function Settings() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <input
-                  type="color"
+                <ColorPickerControl
+                  label={t("settings.primaryColor")}
                   value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  aria-label={t("settings.primaryColor")}
-                  className="h-9 w-12 p-1 rounded-lg border border-border bg-background cursor-pointer"
+                  onPreview={(color) => applyAccentColor(color ?? primaryColor)}
+                  onCommit={setPrimaryColor}
                 />
                 <Button
                   variant="ghost"

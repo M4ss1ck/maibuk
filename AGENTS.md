@@ -326,6 +326,9 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `ResponsiveToggleGroup` (measured segmented toggle; labels collapse to icons only when full labels do not fit)                                                                                                                                 | `src/components/ui/ResponsiveToggleGroup.tsx`                          |
 | `MultiSelectCombobox` (multi-select chips, checkbox dropdown, optional custom values)                                                                                                                                                          | `src/components/ui/MultiSelectCombobox.tsx`                            |
 | `Checkbox` (React Aria checkbox with mixed state; `label` is its accessible name, `inputRef` for focus) | `src/components/ui/Checkbox.tsx` |
+| `ColorPickerControl` (the one color picker, ADR 0011: area, hue, context presets, hex; `onPreview` while adjusting, one `onCommit` per adjustment, Escape discards; contrast warning via `contrastAgainst`, `showUnknownContrast` for variable backgrounds) | `src/components/ui/ColorPickerControl.tsx` |
+| `normalizeHexColor()` / `contrastRatio()` / `readableForeground()` (hex parsing that returns null on invalid input; WCAG contrast) | `src/lib/color.ts` |
+| `applyAccentColor(color)` (sets `--color-primary`, hover, and their readable foregrounds without writing settings; used for commit and preview) | `src/features/settings/accent-color.ts` |
 | `ItemActionsMenu` / `ItemActionsPopover` (always-visible ⋯ button, or a popover anchored to the item, with a React Aria menu of its actions; submenus via `children`) | `src/components/ui/ItemActionsMenu.tsx`                                |
 | `useItemContextMenu({ onOpen })` / `useTouchDragFromHandle()` (touch long-press and right-click open the item menu; touch drags start only from `data-drag-handle`)                                                                            | `src/hooks/useItemContextMenu.ts`                                      |
 | `installPointerEvent()` / `touchLongPress()` / `touchTap()` / `pointerHitTarget()` (jsdom touch-gesture test helpers; `pointerHitTarget` resolves `pointer-events: none` the way a browser does)                                                                                                                                                 | `src/test/support/pointer-events.ts`                                   |
@@ -382,6 +385,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 | Token                 | Light     | Dark      | Usage                        |
 | --------------------- | --------- | --------- | ---------------------------- |
 | `--color-primary`     | `#3b82f6` | `#60a5fa` | `bg-primary`, `text-primary` |
+| `--color-primary-foreground` | `#000000` | `#000000` | `text-primary-foreground` on any `bg-primary` fill (derived from the accent at runtime; never `text-white`) |
 | `--color-background`  | `#fafaf9` | `#1c1917` | `bg-background`              |
 | `--color-foreground`  | `#1c1917` | `#fafaf9` | `text-foreground`            |
 | `--color-muted`       | `#7a6f63` | `#44403c` | `bg-muted`                   |

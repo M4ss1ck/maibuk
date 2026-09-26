@@ -664,7 +664,7 @@ function DateFilter({
                   }}
                   className={`h-8 rounded-md text-sm transition-colors ${
                     value === dateToValue(day)
-                      ? "bg-primary text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "text-foreground hover:bg-muted"
                   }`}
                 >

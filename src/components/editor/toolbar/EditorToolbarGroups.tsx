@@ -113,6 +113,19 @@ interface EditorToolbarGroupsProps {
   wrapItems?: boolean;
 }
 
+/** Tints the selected range with an uncommitted color; index.css reads these. */
+function previewSelectionColor(editor: Editor, kind: "text" | "highlight", color: string | null) {
+  const dom = editor.view?.dom;
+  if (!dom) return;
+  if (color) {
+    dom.dataset.colorPreview = kind;
+    dom.style.setProperty("--editor-color-preview", color);
+  } else {
+    delete dom.dataset.colorPreview;
+    dom.style.removeProperty("--editor-color-preview");
+  }
+}
+
 export function EditorToolbarGroups({
   editor,
   groupIds,
@@ -270,11 +283,13 @@ export function EditorToolbarGroups({
       case "line-height":
         return <LineHeightSelect editor={editor} value={editorState.lineHeight} />;
       case "highlight":
+        // Color commits leave focus in the open picker; closing it returns focus to its trigger.
         return (
           <ColorPicker
             value={editorState.highlightColor}
-            onChange={(color) => editor.chain().focus().setHighlight({ color }).run()}
-            onClear={() => editor.chain().focus().unsetHighlight().run()}
+            onChange={(color) => editor.chain().setHighlight({ color }).run()}
+            onPreview={(color) => previewSelectionColor(editor, "highlight", color)}
+            onClear={() => editor.chain().unsetHighlight().run()}
             onToggle={() =>
               editor
                 .chain()
@@ -314,8 +329,9 @@ export function EditorToolbarGroups({
         return (
           <ColorPicker
             value={editorState.color}
-            onChange={(color) => editor.chain().focus().setColor(color).run()}
-            onClear={() => editor.chain().focus().unsetColor().run()}
+            onChange={(color) => editor.chain().setColor(color).run()}
+            onPreview={(color) => previewSelectionColor(editor, "text", color)}
+            onClear={() => editor.chain().unsetColor().run()}
             onToggle={() =>
               editorState.color
                 ? editor.chain().focus().unsetColor().run()
@@ -662,7 +678,7 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
           onClick={toggle}
           aria-label={label}
           className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${
-            open ? "bg-primary text-white" : "hover:bg-muted"
+            open ? "bg-primary text-primary-foreground" : "hover:bg-muted"
           }`}
         >
           <span className="uppercase">{selected.value}</span>

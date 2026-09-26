@@ -3,20 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, options?: { color?: string }) =>
+      options?.color ? `${key} ${options.color}` : key,
+  }),
 }));
 
 const { ColorPicker } = await import("@/components/editor/ColorPicker");
 
 function renderPicker(onChange = vi.fn()) {
-  render(
-    <ColorPicker
-      value=""
-      onChange={onChange}
-      label="Text color"
-      icon={<span>icon</span>}
-    />
-  );
+  render(<ColorPicker value="" onChange={onChange} label="Text color" icon={<span>icon</span>} />);
   return onChange;
 }
 
@@ -57,12 +53,25 @@ describe("ColorPicker", () => {
     const trigger = screen.getByRole("button", { name: "editor.colorOptions" });
     trigger.focus();
     await user.keyboard("{Enter}");
-    const swatch = screen.getByRole("button", { name: "#EF4444" });
+    const swatch = screen.getByRole("option", { name: "colorPicker.preset #EF4444" });
     swatch.focus();
     await user.keyboard("{Enter}");
 
     expect(onChange).toHaveBeenCalledWith("#EF4444");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("applies black explicitly when the selected text has no color mark", async () => {
+    const user = userEvent.setup();
+    const onChange = renderPicker();
+    const trigger = screen.getByRole("button", { name: "editor.colorOptions" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const black = screen.getByRole("option", { name: "colorPicker.preset #000000" });
+    black.focus();
+    await user.keyboard("{Enter}");
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith("#000000");
   });
 
   it("closes on Escape and returns focus to the trigger", async () => {

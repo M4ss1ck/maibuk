@@ -966,6 +966,7 @@
       "toggleLock": "Toggle lock"
     },
     "props": {
+      "strokeColor": "Stroke color",
       "title": "Properties",
       "fontFamily": "Font",
       "size": "Size",
@@ -982,6 +983,7 @@
       "curve": "Curve text"
     },
     "paint": {
+      "stopColor": "Stop {{index}} color",
       "solid": "Solid",
       "linear": "Linear",
       "radial": "Radial",
@@ -1556,5 +1558,16 @@
       },
       "ephemeral": "Ephemeral text is never saved. Try it after the Tutorial."
     }
+  },
+  "colorPicker": {
+    "clear": "Clear",
+    "area": "Color area",
+    "hue": "Hue",
+    "presets": "Preset colors",
+    "preset": "Preset color {{color}}",
+    "hexValue": "Hex color",
+    "invalidHex": "Enter a 3- or 6-digit hex color.",
+    "lowContrast": "This color has low contrast with its background.",
+    "unknownContrast": "Contrast cannot be checked against this background."
   }
 }

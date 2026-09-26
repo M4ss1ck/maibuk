@@ -414,7 +414,7 @@ export function ChapterList({
               type="button"
               onClick={handleCreate}
               disabled={!newTitle.trim()}
-              className="flex-1 px-3 py-1.5 text-sm bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50 transition-colors"
+              className="flex-1 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded hover:bg-primary-hover hover:text-primary-hover-foreground disabled:opacity-50 transition-colors"
             >
               {t("common.create")}
             </button>
@@ -535,7 +535,7 @@ export function ChapterList({
                           <AriaButton
                             onPress={handleUpdate}
                             isDisabled={!editTitle.trim()}
-                            className="flex-1 px-2 py-1 text-xs bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50"
+                            className="flex-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-hover hover:text-primary-hover-foreground disabled:opacity-50"
                           >
                             {t("common.save")}
                           </AriaButton>

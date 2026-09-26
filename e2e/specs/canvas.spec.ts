@@ -1,5 +1,10 @@
 import type { Locator, Page } from "@playwright/test";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  expectTabContained,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { expect, test } from "../support/test";
 
 // The Canvas editor (issue #210): tools, Text Nodes, Note References, moving
@@ -81,6 +86,34 @@ test.describe("tools @wf:canvas-tools @sc:canvas.toolSelect @sc:canvas.toolPen @
     await expect(page.getByRole("button", { name: "Pen", exact: true })).toBeFocused();
     await page.keyboard.press("ArrowUp");
     await expect(select).toBeFocused();
+  });
+
+  test("the pen color picker accepts a precise keyboard choice", async ({ page }) => {
+    await openMap(page);
+    await expect(page.getByRole("button", { name: "Select", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    await page.keyboard.press("p");
+    await expect(page.getByRole("button", { name: "Pen", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    const color = page.getByRole("button", { name: "Pen color" });
+    await tabTo(page, color, { max: 60 });
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("dialog", { name: "Pen color" });
+    await expectFocusWithin(picker);
+    await expectTabContained(page, picker);
+    const hex = picker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, hex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#123456");
+    await page.keyboard.press("Enter");
+    await expect(color.locator("span")).toHaveAttribute("style", /18, 52, 86|#123456/i);
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    await expect(color).toBeFocused();
   });
 });
 
@@ -368,6 +401,22 @@ test.describe("Node colors @wf:canvas-node-colors", () => {
     await page.keyboard.press("Enter");
     await expect(nodeBody(page, "text-storm")).toHaveAttribute("style", /254, 226, 226/);
 
+    const textColor = dialog.getByRole("button", { name: "Custom text color" });
+    await tabTo(page, textColor, { max: 20 });
+    await page.keyboard.press("Enter");
+    const textPicker = page.getByRole("dialog", { name: "Custom text color" });
+    await expectFocusWithin(textPicker);
+    await expectTabContained(page, textPicker);
+    const textHex = textPicker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, textHex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#FEE2E2");
+    await page.keyboard.press("Enter");
+    await expect(textPicker.getByRole("status")).toContainText("low contrast");
+    await page.keyboard.press("Escape");
+    await expect(textPicker).toBeHidden();
+    await expect(textColor).toBeFocused();
+
     const transparent = dialog.getByRole("button", {
       name: "Transparent background",
       exact: true,
@@ -376,20 +425,30 @@ test.describe("Node colors @wf:canvas-node-colors", () => {
     await page.keyboard.press("Enter");
     await expect(nodeBody(page, "text-storm")).not.toHaveAttribute("style", /254, 226, 226/);
 
-    // The custom pickers are reachable by keyboard even though the native
-    // color chooser itself needs a pointer.
-    const custom = dialog.getByLabel("Custom background color");
+    const custom = dialog.getByRole("button", { name: "Custom background color" });
     await tabTo(page, custom, { max: 20 });
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("dialog", { name: "Custom background color" });
+    await expectFocusWithin(picker);
+    await expectTabContained(page, picker);
+    const hex = picker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, hex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#123456");
+    await page.keyboard.press("Enter");
+    await expect(nodeBody(page, "text-storm")).toHaveAttribute("style", /18, 52, 86/);
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
     await expect(custom).toBeFocused();
-
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
+    await expect(colors).toBeFocused();
 
     // The color change is saved by the debounced Edit Session; reload only
     // once it has landed, as the other persistence specs do.
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();
     await page.reload();
-    await expect(nodeBody(page, "text-storm")).not.toHaveAttribute("style", /254, 226, 226/);
+    await expect(nodeBody(page, "text-storm")).toHaveAttribute("style", /18, 52, 86/);
   });
 });
 

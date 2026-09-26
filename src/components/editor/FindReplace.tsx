@@ -59,7 +59,7 @@ function IconButton({
         disabled={disabled}
         aria-label={label}
         className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
-          active ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"
+          active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
         } ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
       >
         {children}

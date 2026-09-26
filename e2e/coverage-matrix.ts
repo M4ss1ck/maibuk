@@ -1821,8 +1821,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "not-accepted",
-    issue: "https://github.com/M4ss1ck/maibuk/issues/220",
+    status: "accepted",
   },
   {
     id: "settings-language",

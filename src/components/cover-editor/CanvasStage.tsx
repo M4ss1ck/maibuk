@@ -38,7 +38,7 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
   // events fired during the rebuild don't write back into the store.
   const applyingRef = useRef(false);
 
-  const scene = useCoverStore((s) => s.scene);
+  const scene = useCoverStore((s) => s.previewScene ?? s.scene);
   const selectedId = useCoverStore((s) => s.selectedId);
   const overlays = useCoverStore((s) => s.overlays);
   // Transient snap-guide lines shown during a drag.

@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { GradientStop, Paint } from "@/features/covers/scene/schema";
+import { PRESET_COLORS } from "@/features/covers/scene/defaults";
+import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
 import { Tooltip } from "@/components/ui";
 
 type PaintType = Paint["type"];
@@ -21,7 +23,15 @@ function withType(paint: Paint, type: PaintType): Paint {
   return { type: "radial-gradient", cx: 0.5, cy: 0.5, r: 0.5, stops };
 }
 
-export function PaintControl({ paint, onChange }: { paint: Paint; onChange: (p: Paint) => void }) {
+export function PaintControl({
+  paint,
+  onChange,
+  onPreview,
+}: {
+  paint: Paint;
+  onChange: (p: Paint) => void;
+  onPreview?: (p: Paint | null) => void;
+}) {
   const { t } = useTranslation();
 
   const types: { id: PaintType; label: string }[] = [
@@ -53,7 +63,7 @@ export function PaintControl({ paint, onChange }: { paint: Paint; onChange: (p: 
           <button
             key={ty.id}
             type="button"
-            className={`flex-1 px-2 py-1 rounded text-xs ${paint.type === ty.id ? "bg-primary text-white" : "bg-muted"}`}
+            className={`flex-1 px-2 py-1 rounded text-xs ${paint.type === ty.id ? "bg-primary text-primary-foreground" : "bg-muted"}`}
             onClick={() => onChange(withType(paint, ty.id))}
           >
             {ty.label}
@@ -62,12 +72,13 @@ export function PaintControl({ paint, onChange }: { paint: Paint; onChange: (p: 
       </div>
 
       {paint.type === "solid" && (
-        <input
-          type="color"
-          aria-label={t("cover.paint.color")}
+        <ColorPickerControl
+          label={t("cover.paint.color")}
           value={paint.color}
-          onChange={(e) => onChange({ type: "solid", color: e.target.value })}
-          className="w-full h-8 cursor-pointer rounded border border-border"
+          presets={PRESET_COLORS}
+          onPreview={(color) => onPreview?.(color ? { type: "solid", color } : null)}
+          onCommit={(color) => onChange({ type: "solid", color })}
+          showUnknownContrast
         />
       )}
 
@@ -109,11 +120,24 @@ export function PaintControl({ paint, onChange }: { paint: Paint; onChange: (p: 
         <div className="space-y-1">
           {paint.stops.map((stop, i) => (
             <div key={i} className="flex items-center gap-1">
-              <input
-                type="color"
+              <ColorPickerControl
+                label={t("cover.paint.stopColor", { index: i + 1 })}
                 value={stop.color}
-                onChange={(e) => updateStop(i, { color: e.target.value })}
-                className="w-7 h-7 cursor-pointer rounded border border-border"
+                presets={PRESET_COLORS}
+                onPreview={(color) =>
+                  onPreview?.(
+                    color
+                      ? {
+                          ...paint,
+                          stops: paint.stops.map((candidate, index) =>
+                            index === i ? { ...candidate, color } : candidate
+                          ),
+                        }
+                      : null
+                  )
+                }
+                onCommit={(color) => updateStop(i, { color })}
+                showUnknownContrast
               />
               <input
                 type="number"

@@ -17,6 +17,17 @@ import { prepareStaticCanvasHtml } from "@/features/canvas/nodes/staticRichText"
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
 
+/** An uncommitted color picker choice for this node, shown until it commits or is discarded. */
+function useNodeColorPreview(nodeId: string) {
+  return useCanvasStore((state) =>
+    state.colorPreview?.nodeId === nodeId ? state.colorPreview : null
+  );
+}
+
+function textColorStyle(color: string | undefined) {
+  return color ? { color } : undefined;
+}
+
 function ActiveNodeEditor({
   node,
   onDone,
@@ -28,6 +39,7 @@ function ActiveNodeEditor({
   onExit: () => void;
 }) {
   const updateTextNode = useCanvasStore((state) => state.updateTextNode);
+  const colorPreview = useNodeColorPreview(node.id);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
   const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
@@ -75,7 +87,7 @@ function ActiveNodeEditor({
     <>
       <div
         className="canvas-node-content max-w-none"
-        style={node.textColor ? { color: node.textColor } : undefined}
+        style={textColorStyle(colorPreview?.textColor ?? node.textColor)}
       >
         <EditorContent
           editor={editor}
@@ -115,6 +127,7 @@ function ActiveNodeEditor({
 
 export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNode>) {
   const node = data.node;
+  const colorPreview = useNodeColorPreview(node.id);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
   const beginLiveChange = useCanvasStore((state) => state.beginLiveChange);
@@ -133,6 +146,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   if (node.kind !== "text") return null;
 
   const resizable = !editorReadOnly && !interactivityLocked && !editing;
+  const backgroundColor = colorPreview?.backgroundColor ?? node.backgroundColor;
 
   return (
     <div
@@ -141,7 +155,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       className={`group relative min-h-24 min-w-24 transform-gpu ${node.width ? "w-full" : "max-w-72"} rounded-lg px-3 py-2 text-sm text-foreground ${
         editing ? "" : "pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
       } ${selected ? "ring-1 ring-primary/40" : ""}`}
-      style={node.backgroundColor ? { backgroundColor: node.backgroundColor } : undefined}
+      style={backgroundColor ? { backgroundColor } : undefined}
       onDoubleClick={() => !editorReadOnly && beginNodeEdit(node.id)}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" selected={selected} />
@@ -182,7 +196,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       ) : (
         <div
           className="canvas-node-content max-w-none"
-          style={node.textColor ? { color: node.textColor } : undefined}
+          style={textColorStyle(colorPreview?.textColor ?? node.textColor)}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
           dangerouslySetInnerHTML={{ __html: safeHtml }}
         />

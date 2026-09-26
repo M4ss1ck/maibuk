@@ -966,6 +966,7 @@
       "toggleLock": "Alternar bloqueo"
     },
     "props": {
+      "strokeColor": "Color del contorno",
       "title": "Propiedades",
       "fontFamily": "Fuente",
       "size": "Tamaño",
@@ -982,6 +983,7 @@
       "curve": "Curvar texto"
     },
     "paint": {
+      "stopColor": "Color de parada {{index}}",
       "solid": "Sólido",
       "linear": "Lineal",
       "radial": "Radial",
@@ -1556,5 +1558,16 @@
       },
       "ephemeral": "El texto de Efímero nunca se guarda. Pruébalo después del Tutorial."
     }
+  },
+  "colorPicker": {
+    "clear": "Borrar",
+    "area": "Área de color",
+    "hue": "Tono",
+    "presets": "Colores predefinidos",
+    "preset": "Color predefinido {{color}}",
+    "hexValue": "Color hexadecimal",
+    "invalidHex": "Introduce un color hexadecimal de 3 o 6 dígitos.",
+    "lowContrast": "Este color tiene poco contraste con su fondo.",
+    "unknownContrast": "No se puede comprobar el contraste con este fondo."
   }
 }

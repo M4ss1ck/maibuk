@@ -20,6 +20,8 @@ export type AlignEdge = "left" | "hcenter" | "right" | "top" | "vcenter" | "bott
 
 interface CoverStore {
   scene: CoverScene;
+  previewScene: CoverScene | null;
+  previewColorScene: (scene: CoverScene | null) => void;
   selectedId: string | null;
   dirty: boolean;
   past: CoverScene[];
@@ -65,7 +67,7 @@ export const useCoverStore = create<CoverStore>((set, get) => {
     const { scene, past } = get();
     const trimmed =
       past.length >= HISTORY_LIMIT ? past.slice(past.length - HISTORY_LIMIT + 1) : past;
-    set({ scene: next, past: [...trimmed, scene], future: [], dirty: true });
+    set({ scene: next, previewScene: null, past: [...trimmed, scene], future: [], dirty: true });
   }
 
   function patchLayers(mutate: (layers: Layer[]) => Layer[]): void {
@@ -75,6 +77,8 @@ export const useCoverStore = create<CoverStore>((set, get) => {
 
   return {
     scene: EMPTY_SCENE,
+    previewScene: null,
+    previewColorScene: (previewScene) => set({ previewScene }),
     selectedId: null,
     dirty: false,
     past: [],
@@ -103,7 +107,8 @@ export const useCoverStore = create<CoverStore>((set, get) => {
       );
     },
 
-    setScene: (scene) => set({ scene, selectedId: null, dirty: false, past: [], future: [] }),
+    setScene: (scene) =>
+      set({ scene, previewScene: null, selectedId: null, dirty: false, past: [], future: [] }),
 
     select: (id) => set({ selectedId: id }),
 
@@ -187,6 +192,7 @@ export const useCoverStore = create<CoverStore>((set, get) => {
       const previous = past[past.length - 1];
       set({
         scene: previous,
+        previewScene: null,
         past: past.slice(0, -1),
         future: [scene, ...future],
         dirty: true,

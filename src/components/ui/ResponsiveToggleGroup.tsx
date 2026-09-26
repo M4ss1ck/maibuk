@@ -43,7 +43,7 @@ function ToggleButton<T extends string>({
       tabIndex={measureOnly ? -1 : undefined}
       className={`${toggleButtonBaseClass} ${
         isActive
-          ? "bg-primary text-white"
+          ? "bg-primary text-primary-foreground"
           : "text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >

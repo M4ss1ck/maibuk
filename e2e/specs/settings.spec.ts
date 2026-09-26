@@ -68,28 +68,50 @@ test.describe("Settings theme @wf:settings-theme", () => {
 });
 
 test.describe("Settings primary colour @wf:settings-primary-color", () => {
-  test.fail(
-    "the native colour input has no keyboard path to change the accent",
-    {
-      annotation: {
-        type: "issue",
-        description: "https://github.com/M4ss1ck/maibuk/issues/220",
-      },
-    },
-    async ({ page }) => {
-      await openSettings(page);
-      const color = settingsMain(page).getByLabel("Primary Color");
-      const reset = color.locator("..").getByRole("button", { name: "Reset", exact: true });
-      // Default accent: Reset is disabled until the colour changes.
-      await expect(reset).toBeDisabled();
+  test("keyboard changes the accent and persists it", async ({ page }) => {
+    await openSettings(page);
+    const color = settingsMain(page).getByRole("button", { name: "Primary Color" });
+    const reset = settingsMain(page).getByRole("button", { name: "Reset", exact: true });
+    await expect(reset).toBeDisabled();
+    await tabTo(page, color);
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("dialog", { name: "Primary Color" });
+    await expectFocusWithin(picker);
+    await expectTabContained(page, picker);
+    const hex = picker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, hex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#123456");
+    await page.keyboard.press("Enter");
+    await expect(reset).toBeEnabled();
+    await expect(page.locator("html")).toHaveCSS("--color-primary", "#123456");
+    await expect(page.locator("html")).toHaveCSS("--color-primary-foreground", "#FFFFFF");
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    await expect(color).toBeFocused();
+    await page.reload();
+    await expect(page.locator("html")).toHaveCSS("--color-primary", "#123456");
+    await expect(page.locator("html")).toHaveCSS("--color-primary-foreground", "#FFFFFF");
+  });
 
-      await tabTo(page, color);
-      await page.keyboard.press("ArrowRight");
-      await page.keyboard.press("ArrowUp");
-      // A keyboard-operable picker would change the accent here, enabling Reset.
-      await expect(reset).toBeEnabled();
-    }
-  );
+  test("Escape discards an uncommitted hex edit", async ({ page }) => {
+    await openSettings(page);
+    const color = settingsMain(page).getByRole("button", { name: "Primary Color" });
+    const reset = settingsMain(page).getByRole("button", { name: "Reset", exact: true });
+    await tabTo(page, color);
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("dialog", { name: "Primary Color" });
+    const hex = picker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, hex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#123456");
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    await expect(color).toBeFocused();
+    // Closing moves focus out of the field; that blur must not commit the draft.
+    await expect(reset).toBeDisabled();
+    await expect(page.locator("html")).not.toHaveCSS("--color-primary", "#123456");
+  });
 });
 
 test.describe("Settings language @wf:settings-language", () => {
