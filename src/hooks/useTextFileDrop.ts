@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, RefObject } from "react";
+import type { DropItem } from "react-aria-components/useDragAndDrop";
 import { toast } from "@/components/ui/Toast";
 import {
   TEXT_DROP_EXTENSIONS,
@@ -234,6 +235,16 @@ export async function readDroppedWebFiles(all: File[]): Promise<DroppedTextFile[
     }
   }
   return results;
+}
+
+/** Reads supported text files out of react-aria drop items, preserving order. */
+export async function readDroppedItems(items: DropItem[]): Promise<DroppedTextFile[]> {
+  const files: File[] = [];
+  for (const item of items) {
+    if (item.kind !== "file") continue;
+    files.push(await item.getFile());
+  }
+  return readDroppedWebFiles(files);
 }
 
 /** Reads Tauri file paths from disk in order; same toast rules as the web reader. */

@@ -240,6 +240,7 @@
     "pin": "Fijar",
     "unpin": "Quitar fijado",
     "moveToBook": "Mover al libro",
+    "reorder": "Reordenar",
     "addTag": "Agregar etiqueta",
     "tags": "Etiquetas",
     "delete": "Eliminar nota",

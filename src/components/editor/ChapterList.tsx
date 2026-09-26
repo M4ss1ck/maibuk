@@ -8,22 +8,21 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
-import type { DropItem } from "react-aria-components/useDragAndDrop";
 import { DropIndicator } from "react-aria-components";
 import type { Chapter, ChapterType } from "@/features/chapters/types";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { Select } from "@/components/ui/Select";
 import { useTranslation } from "react-i18next";
-import { FileUp, List, ListTree, Rows3, GripVertical } from "lucide-react";
+import { FileUp, List, ListTree, Rows3 } from "lucide-react";
 import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
-import { readDroppedWebFiles, useTextFileDrop } from "@/hooks/useTextFileDrop";
+import { readDroppedItems, useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
-import { ItemActionsMenu, Tooltip } from "@/components/ui";
+import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { toast } from "@/components/ui/Toast";
 import { GridList, GridListItem } from "react-aria-components/GridList";
@@ -77,16 +76,6 @@ function ChapterItemGestures({
       {children(anchorRef)}
     </div>
   );
-}
-
-/** Reads supported text files out of react-aria drop items, preserving order. */
-export async function readChapterDropItems(items: DropItem[]): Promise<DroppedTextFile[]> {
-  const files: File[] = [];
-  for (const item of items) {
-    if (item.kind !== "file") continue;
-    files.push(await item.getFile());
-  }
-  return readDroppedWebFiles(files);
 }
 
 export function ChapterList({
@@ -209,7 +198,7 @@ export function ChapterList({
       void (async () => {
         setActiveReactAriaImports((active) => active + 1);
         try {
-          const files = await readChapterDropItems([...e.items]);
+          const files = await readDroppedItems([...e.items]);
           if (files.length === 0) return;
           await onImportFilesRef.current?.(files, {
             id: String(e.target.key),
@@ -227,7 +216,7 @@ export function ChapterList({
       void (async () => {
         setActiveReactAriaImports((active) => active + 1);
         try {
-          const files = await readChapterDropItems([...e.items]);
+          const files = await readDroppedItems([...e.items]);
           if (files.length > 0) await onImportFilesRef.current?.(files, null);
         } catch (error) {
           console.error("Failed to import dropped files:", error);
@@ -561,14 +550,10 @@ export function ChapterList({
                     ) : (
                       <>
                         <div className="flex w-full min-w-0 items-center">
-                          <AriaButton
-                            slot="drag"
-                            data-drag-handle=""
-                            aria-label={t("chapters.reorder")}
-                            className="shrink-0 cursor-grab rounded p-0.5 pointer-coarse:p-1.5 mr-1 text-muted-foreground hover:bg-muted active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                          >
-                            <GripVertical className="w-3.5 h-3.5" aria-hidden="true" />
-                          </AriaButton>
+                          <ReorderHandle
+                            label={t("chapters.reorder")}
+                            className="mr-1 p-0.5 pointer-coarse:p-1.5"
+                          />
 
                           <div
                             className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}

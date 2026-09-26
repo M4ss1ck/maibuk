@@ -4,7 +4,11 @@ import { act, render, screen, within, fireEvent, waitFor } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import { buildChapter } from "@/test/support/fixtures";
-import { installPointerEvent, touchLongPress } from "@/test/support/pointer-events";
+import {
+  installPointerEvent,
+  pointerHitTarget,
+  touchLongPress,
+} from "@/test/support/pointer-events";
 import type { Chapter } from "@/features/chapters/types";
 import type { DropItem } from "react-aria-components/useDragAndDrop";
 
@@ -81,7 +85,14 @@ vi.mock("@/features/settings/store", () => ({
   },
 }));
 
-import { ChapterList, readChapterDropItems } from "@/components/editor/ChapterList";
+import { ChapterList } from "@/components/editor/ChapterList";
+import { readDroppedItems } from "@/hooks/useTextFileDrop";
+import {
+  createDataTransfer,
+  createFileDataTransfer,
+  dispatchDragEvent,
+  mockRect,
+} from "@/test/support/drag-events";
 
 function fileDropItem(name: string, text: string): DropItem {
   return {
@@ -198,87 +209,6 @@ async function arrowToDropTarget(user: ReturnType<typeof userEvent.setup>, acces
   expect(document.activeElement).toHaveAccessibleName(accessibleName);
 }
 
-function createDataTransfer(): DataTransfer {
-  const values = new Map<string, string>();
-  const items: Array<{ kind: "string"; type: string }> & {
-    add: (value: string, type: string) => void;
-    clear: () => void;
-    remove: (index: number) => void;
-  } = Object.assign([], {
-    add(value: string, type: string) {
-      values.set(type, value);
-      if (!items.some((item) => item.type === type)) items.push({ kind: "string", type });
-    },
-    clear() {
-      items.splice(0);
-      values.clear();
-    },
-    remove(index: number) {
-      const [item] = items.splice(index, 1);
-      if (item) values.delete(item.type);
-    },
-  });
-
-  return {
-    dropEffect: "none",
-    effectAllowed: "all",
-    files: [] as unknown as FileList,
-    items: items as unknown as DataTransferItemList,
-    get types() {
-      return items.map((item) => item.type);
-    },
-    clearData(type?: string) {
-      if (type) {
-        const index = items.findIndex((item) => item.type === type);
-        if (index >= 0) items.remove(index);
-      } else {
-        items.clear();
-      }
-    },
-    getData(type: string) {
-      return values.get(type) ?? "";
-    },
-    setData(type: string, value: string) {
-      items.add(value, type);
-    },
-    setDragImage() {},
-  } as DataTransfer;
-}
-
-function createFileDataTransfer(file: File): DataTransfer {
-  const item = {
-    kind: "file",
-    type: file.type,
-    getAsFile: () => file,
-  } as DataTransferItem;
-
-  return {
-    dropEffect: "none",
-    effectAllowed: "all",
-    files: [file] as unknown as FileList,
-    items: [item] as unknown as DataTransferItemList,
-    types: ["Files"],
-    clearData() {},
-    getData: () => "",
-    setData() {},
-    setDragImage() {},
-  } as DataTransfer;
-}
-
-function mockRect(element: HTMLElement, top: number, bottom: number) {
-  vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
-    top,
-    bottom,
-    left: 0,
-    right: 400,
-    width: 400,
-    height: bottom - top,
-    x: 0,
-    y: top,
-    toJSON: () => ({}),
-  } as DOMRect);
-}
-
 function mockGridLayout() {
   const grid = screen.getByRole("grid");
   const rows = screen.getAllByRole("row");
@@ -287,20 +217,6 @@ function mockGridLayout() {
     mockRect(row, index * 50, index * 50 + 40);
   });
   return { grid, rows };
-}
-
-function dispatchDragEvent(element: Element, type: string, dt: DataTransfer, clientY: number) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
-    dataTransfer: { value: dt },
-    clientX: { value: 10 },
-    clientY: { value: clientY },
-    altKey: { value: false },
-    ctrlKey: { value: false },
-    metaKey: { value: false },
-    shiftKey: { value: false },
-  });
-  fireEvent(element, event);
 }
 
 describe("ChapterList", () => {
@@ -679,10 +595,12 @@ describe("ChapterList", () => {
         fireEvent.dragStart(row);
         return reachedRow.mock.calls.length > 0;
       };
-      const handle = screen.getByRole("button", { name: "chapters.reorder" });
+      // React Aria makes its drag button ignore pointers: a touch on the grip
+      // reaches whatever is under it, which must still count as the handle.
+      const grip = screen.getByRole("button", { name: "chapters.reorder" }).querySelector("svg")!;
 
       expect(dragFrom(screen.getByText("First"), "touch")).toBe(false);
-      expect(dragFrom(handle, "touch")).toBe(true);
+      expect(dragFrom(pointerHitTarget(grip), "touch")).toBe(true);
       expect(dragFrom(screen.getByText("First"), "mouse")).toBe(true);
     });
   });
@@ -1052,7 +970,7 @@ describe("ChapterList", () => {
         fileDropItem("skip.png", "binary"),
         fileDropItem("two.txt", "plain"),
       ];
-      const files = await readChapterDropItems(items);
+      const files = await readDroppedItems(items);
       expect(files.map((file) => file.stem)).toEqual(["one", "two"]);
     });
 

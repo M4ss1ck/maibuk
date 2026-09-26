@@ -169,29 +169,94 @@ test.describe("Moving a Note to a Book @wf:notes-move-to-book", () => {
 });
 
 test.describe("Notes list keyboard reorder @wf:notes-reorder-keyboard", () => {
-  test.fail(
-    "Space lifts a Note and arrows move it in the list",
-    {
-      annotation: {
-        type: "issue",
-        description: "https://github.com/M4ss1ck/maibuk/issues/219",
-      },
-    },
-    async ({ page }) => {
-      await openNote(page, SEED_NOTES.keeperLog);
-      await tabTo(page, notesListRow(page, SEED_NOTES.harborNotes), { max: 60 });
+  const listGrid = (page: Page) => page.getByRole("grid", { name: "Notes" }).first();
+  /** The Note rows of the list, in order (section headers and drop targets excluded). */
+  const noteRows = (page: Page) =>
+    listGrid(page).getByRole("row", {
+      name: new RegExp(`^(${Object.values(SEED_NOTES).join("|")})$`),
+    });
+  const dropTarget = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
+  /** Row text starts with the title; previews and Tags follow it. */
+  const inOrder = (...titles: string[]) =>
+    titles.map((title) => new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 
-      // Native HTML5 drag has no keyboard path: there is no lift.
-      await page.keyboard.press("Space");
-      await page.keyboard.press("ArrowUp");
-      await page.keyboard.press("Enter");
+  /** From the open Note's row, arrows to `title` and Tabs into its Reorder button. */
+  async function focusReorder(page: Page, title: string) {
+    await tabTo(page, notesListRow(page, SEED_NOTES.keeperLog), { max: 60 });
+    await pressUntilFocused(page, "ArrowDown", notesListRow(page, title), { max: 5 });
+    const handle = notesListRow(page, title).getByRole("button", { name: "Reorder" });
+    await pressUntilFocused(page, "Tab", handle, { max: 6 });
+    return handle;
+  }
 
-      // Harbor Notes would lead the unpinned list if the move had landed.
-      await tabTo(page, notesListRow(page, SEED_NOTES.tideTables), { max: 20 });
-      await page.keyboard.press("ArrowDown");
-      await expect(notesListRow(page, SEED_NOTES.harborNotes)).toBeFocused();
-    }
-  );
+  test("Enter lifts a Note, arrows pick the gap, Enter drops; a reload keeps the order", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await expect(noteRows(page)).toHaveText(
+      inOrder(SEED_NOTES.tideTables, SEED_NOTES.keeperLog, SEED_NOTES.harborNotes)
+    );
+
+    await focusReorder(page, SEED_NOTES.harborNotes);
+    await page.keyboard.press("Enter");
+    const target = dropTarget(page, `Insert before ${SEED_NOTES.keeperLog}`);
+    await pressUntilFocused(page, "ArrowUp", target, { max: 6 });
+    await page.keyboard.press("Enter");
+
+    await expect(notesListRow(page, SEED_NOTES.harborNotes)).toBeFocused();
+    const moved = inOrder(SEED_NOTES.tideTables, SEED_NOTES.harborNotes, SEED_NOTES.keeperLog);
+    await expect(noteRows(page)).toHaveText(moved);
+    await expect(page.getByText("1 pinned")).toBeVisible();
+
+    await page.reload();
+    await expect(noteRows(page)).toHaveText(moved);
+  });
+
+  test("dropping a Note among the Pinned Notes pins it, and a reload keeps it pinned", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await expect(page.getByText("1 pinned")).toBeVisible();
+
+    await focusReorder(page, SEED_NOTES.harborNotes);
+    await page.keyboard.press("Enter");
+    await pressUntilFocused(
+      page,
+      "ArrowUp",
+      dropTarget(page, `Insert before ${SEED_NOTES.tideTables}`),
+      { max: 8 }
+    );
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByText("2 pinned")).toBeVisible();
+    const pinned = inOrder(SEED_NOTES.harborNotes, SEED_NOTES.tideTables, SEED_NOTES.keeperLog);
+    await expect(noteRows(page)).toHaveText(pinned);
+
+    await page.reload();
+    await expect(page.getByText("2 pinned")).toBeVisible();
+    await expect(noteRows(page)).toHaveText(pinned);
+  });
+
+  test("Escape cancels the drag, leaves the order, and returns focus to Reorder", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    const handle = await focusReorder(page, SEED_NOTES.harborNotes);
+    await page.keyboard.press("Enter");
+    await pressUntilFocused(
+      page,
+      "ArrowUp",
+      dropTarget(page, `Insert before ${SEED_NOTES.keeperLog}`),
+      { max: 6 }
+    );
+
+    await page.keyboard.press("Escape");
+
+    await expect(handle).toBeFocused();
+    await expect(noteRows(page)).toHaveText(
+      inOrder(SEED_NOTES.tideTables, SEED_NOTES.keeperLog, SEED_NOTES.harborNotes)
+    );
+  });
 });
 
 test.describe("Editing Note Tags @wf:notes-tags-edit", () => {

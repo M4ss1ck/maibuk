@@ -240,6 +240,7 @@
     "pin": "Pin",
     "unpin": "Unpin",
     "moveToBook": "Move to book",
+    "reorder": "Reorder",
     "addTag": "Add tag",
     "tags": "Tags",
     "delete": "Delete note",
