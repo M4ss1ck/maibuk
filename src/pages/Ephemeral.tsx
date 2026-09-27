@@ -11,6 +11,7 @@ import { useEphemeralStore } from "@/features/ephemeral";
 import { useNoteStore } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
 import { IS_DESKTOP } from "@/lib/platform";
+import { useShortcuts } from "@/lib/shortcuts";
 
 const EPHEMERAL_TUTORIAL_ANCHORS: EditorTutorialAnchors = { text: "ephemeral.editor" };
 
@@ -61,6 +62,11 @@ export function Ephemeral() {
     reset();
     navigate(`/notes/${note.id}`);
   };
+
+  useShortcuts([
+    { id: "ephemeral.clear", enabled: !isEmpty, onTrigger: reset },
+    { id: "ephemeral.createNote", enabled: !isEmpty, onTrigger: () => void handleCreateNote() },
+  ]);
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">

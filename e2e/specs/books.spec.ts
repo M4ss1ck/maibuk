@@ -98,7 +98,7 @@ test.describe("empty Gallery @wf:books-empty-state", () => {
   });
 });
 
-test.describe("moving between Books @wf:books-navigate-collection @sc:home.moveSelection @sc:home.openSelected", () => {
+test.describe("moving between Books @wf:books-navigate-collection @sc:bookList.moveSelectionNext @sc:bookList.moveSelectionPrevious @sc:bookList.openSelected", () => {
   test.use({ library: "bookShelf" });
 
   test("arrows and j/k move between cards; Enter opens the focused Book", async ({ page }) => {
@@ -136,7 +136,7 @@ test.describe("moving between Books @wf:books-navigate-collection @sc:home.moveS
   });
 });
 
-test.describe("number keys @wf:books-jump-number @sc:home.jumpBooks", () => {
+test.describe("number keys @wf:books-jump-number @sc:bookList.jumpBooks", () => {
   test.use({ library: "bookShelf" });
 
   test("1-9 jump to the Nth Book; Enter opens it", async ({ page }) => {

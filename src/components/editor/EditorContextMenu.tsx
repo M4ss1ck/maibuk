@@ -20,6 +20,7 @@ import {
 } from "react-aria-components";
 import { spellCheckService } from "@/lib/spellcheck";
 import { looksLikeMarkdown, markdownToEditorHtml } from "@/features/markdown";
+import { useShortcuts } from "@/lib/shortcuts";
 import {
   clampPosition,
   getWordAtPosition,
@@ -335,6 +336,44 @@ export function EditorContextMenu({
   const topSuggestions = menu?.suggestions.slice(0, 5) ?? [];
   const hasMisspelling = !!menu?.misspelling;
 
+  useShortcuts([
+    {
+      id: "editor.pasteWithoutFormatting",
+      enabled: !!menu?.hasFormatting,
+      onTrigger: () => void pasteWithoutFormatting(editor),
+    },
+    {
+      id: "editor.formatAsMarkdown",
+      enabled: !!menu?.markdown,
+      onTrigger: () => {
+        if (!menu?.markdown) return;
+        const { from, to, text } = menu.markdown;
+        editor.chain().focus().insertContentAt({ from, to }, markdownToEditorHtml(text)).run();
+      },
+    },
+    {
+      id: "editor.inspectInHtml",
+      enabled: !!menu,
+      onTrigger: () => {
+        if (menu) onInspect(menu.blockIndex);
+      },
+    },
+    {
+      id: "editor.addToDictionary",
+      enabled: !!menu?.misspelling,
+      onTrigger: () => {
+        if (menu?.misspelling) editor.commands.addToDictionary(menu.misspelling.word);
+      },
+    },
+    {
+      id: "editor.lookUp",
+      enabled: !!menu?.wordUnderCursor,
+      onTrigger: () => {
+        if (menu?.wordUnderCursor) onLookup(menu.wordUnderCursor);
+      },
+    },
+  ]);
+
   return (
     <>
       {/* A zero-size anchor at the pointer/caret: MenuTrigger positions the menu
@@ -363,12 +402,18 @@ export function EditorContextMenu({
             className="flex max-h-[60vh] w-56 flex-col overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg outline-none"
           >
             <MenuSection className="outline-none">
-              <MenuItem id="copy" textValue={t("common.copy")} className={MENU_ITEM_CLASS}>
+              <MenuItem
+                id="copy"
+                data-command-exempt="clipboard"
+                textValue={t("common.copy")}
+                className={MENU_ITEM_CLASS}
+              >
                 <ClipboardCopy className="w-4 h-4 shrink-0" />
                 <span className="truncate">{t("common.copy")}</span>
               </MenuItem>
               <MenuItem
                 id="paste"
+                data-command-exempt="clipboard"
                 isDisabled={!menu?.canPaste}
                 textValue={t("common.paste")}
                 className={`${MENU_ITEM_CLASS} data-disabled:opacity-50`}
@@ -379,6 +424,7 @@ export function EditorContextMenu({
               {menu?.hasFormatting && (
                 <MenuItem
                   id="paste-plain"
+                  data-command="editor.pasteWithoutFormatting"
                   textValue={t("editor.pasteWithoutFormatting")}
                   className={MENU_ITEM_CLASS}
                 >
@@ -398,6 +444,7 @@ export function EditorContextMenu({
                   {menu.isLoadingSuggestions ? (
                     <MenuItem
                       id="suggestions-loading"
+                      data-command-exempt="spelling suggestion"
                       isDisabled
                       textValue={t("common.loading")}
                       className={MENU_ITEM_CLASS}
@@ -409,6 +456,7 @@ export function EditorContextMenu({
                       <MenuItem
                         key={suggestion}
                         id={`suggestion:${index}`}
+                        data-command-exempt="spelling suggestion"
                         textValue={suggestion}
                         className={MENU_ITEM_CLASS}
                       >
@@ -418,6 +466,7 @@ export function EditorContextMenu({
                   ) : (
                     <MenuItem
                       id="suggestions-none"
+                      data-command-exempt="spelling suggestion"
                       isDisabled
                       textValue={t("editor.noSuggestions")}
                       className={MENU_ITEM_CLASS}
@@ -427,6 +476,7 @@ export function EditorContextMenu({
                   )}
                   <MenuItem
                     id="add-to-dictionary"
+                    data-command="editor.addToDictionary"
                     textValue={t("editor.addToDictionary")}
                     className={MENU_ITEM_CLASS}
                   >
@@ -441,6 +491,7 @@ export function EditorContextMenu({
                 <Separator className="my-1 border-t border-border" />
                 <MenuItem
                   id="look-up"
+                  data-command="editor.lookUp"
                   textValue={t("editor.lookUp", { word: menu.wordUnderCursor })}
                   className={MENU_ITEM_CLASS}
                 >
@@ -455,6 +506,7 @@ export function EditorContextMenu({
             {menu?.markdown && (
               <MenuItem
                 id="format-markdown"
+                data-command="editor.formatAsMarkdown"
                 textValue={t("editor.formatAsMarkdown")}
                 className={MENU_ITEM_CLASS}
               >
@@ -466,6 +518,7 @@ export function EditorContextMenu({
             <Separator className="my-1 border-t border-border" />
             <MenuItem
               id="inspect-html"
+              data-command="editor.inspectInHtml"
               textValue={t("editor.inspectInHtml")}
               className={MENU_ITEM_CLASS}
             >

@@ -43,7 +43,7 @@ async function focusToolbarControl(page: Page, target: Locator) {
   await pressUntilFocused(page, "ArrowRight", target, { max: 120 });
 }
 
-test.describe("find and replace @wf:editor-find-replace @sc:editor.findReplace @sc:editor.findNext @sc:editor.findPrevious @sc:editor.closeFindReplace", () => {
+test.describe("find and replace @wf:editor-find-replace @sc:common.find @sc:editor.findNext @sc:editor.findPrevious @sc:editor.closeFindReplace", () => {
   test("Mod+F finds, Enter and Shift+Enter step, and a replacement persists", async ({ page }) => {
     await openEditor(page);
     await page.keyboard.press("ControlOrMeta+f");

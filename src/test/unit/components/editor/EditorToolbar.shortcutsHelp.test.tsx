@@ -95,7 +95,7 @@ describe("EditorToolbar shortcuts help", () => {
 
     const dialog = await screen.findByRole("dialog");
     const thisScreen = within(dialog).getByRole("region", { name: "shortcuts.onThisScreen" });
-    expect(within(thisScreen).getByText("editor.findReplace")).toBeInTheDocument();
+    expect(within(thisScreen).getByText("shortcuts.find")).toBeInTheDocument();
     expect(within(thisScreen).getByText("editor.dictionary")).toBeInTheDocument();
     expect(within(thisScreen).getByText("shortcuts.insertSymbol")).toBeInTheDocument();
     // Ctrl+K is handled by the toolbar's editor key listener, and declared as bound.
@@ -107,5 +107,18 @@ describe("EditorToolbar shortcuts help", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("opens the Shortcut Editor from the toolbar help", async () => {
+    const user = userEvent.setup();
+    renderToolbar();
+    screen.getByRole("button", { name: "shortcuts.title" }).focus();
+    await user.keyboard("{Enter}");
+    const help = await screen.findByRole("dialog", { name: "shortcuts.title" });
+    const customize = within(help).getByRole("button", { name: "shortcuts.customize" });
+    customize.focus();
+    await user.keyboard("{Enter}");
+    expect(help).not.toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "shortcutEditor.title" })).toBeInTheDocument();
   });
 });

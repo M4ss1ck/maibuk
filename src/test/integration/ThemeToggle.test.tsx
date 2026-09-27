@@ -21,7 +21,8 @@ const translations = {
   },
 } as const;
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({
     t: (key: string, options?: Record<string, string>) => {
       const lang = i18nState.language;

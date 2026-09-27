@@ -70,6 +70,18 @@ test.describe("Notes Gallery browsing @wf:notes-gallery-browse", () => {
     await expect(page.getByRole("heading", { name: SEED_NOTES.keeperLog, level: 1 })).toBeVisible();
   });
 
+  test("ArrowDown from the page enters the first Gallery card @sc:notes.enterList", async ({
+    page,
+  }) => {
+    await page.goto("/notes");
+    await expect(galleryGrid(page).getByRole("row")).toHaveCount(3);
+    await expect(page.locator("body")).toBeFocused();
+
+    await page.keyboard.press("ArrowDown");
+
+    await expect(galleryCard(page, SEED_NOTES.tideTables)).toBeFocused();
+  });
+
   test.describe("empty Library @wf:notes-gallery-browse", () => {
     test.use({ library: "empty" });
 
@@ -170,6 +182,19 @@ test.describe("Notes search and filters @wf:notes-search-filter", () => {
     await expect(galleryGrid(page).getByRole("row")).toHaveCount(1);
     await expect(galleryCard(page, SEED_NOTES.harborNotes)).toBeVisible();
     await expect(galleryCard(page, SEED_NOTES.keeperLog)).toHaveCount(0);
+  });
+
+  test("Mod+Shift+F opens the advanced filters with focus in the tag filter @sc:notes.advancedFilters", async ({
+    page,
+  }) => {
+    await page.goto("/notes");
+    await expect(galleryGrid(page).getByRole("row").first()).toBeVisible();
+
+    await page.keyboard.press("ControlOrMeta+Shift+f");
+
+    const tagFilter = page.getByPlaceholder("Any tag");
+    await expect(tagFilter).toBeVisible();
+    await expect(tagFilter).toBeFocused();
   });
 
   test("a Tag filter narrows the Gallery", async ({ page }) => {

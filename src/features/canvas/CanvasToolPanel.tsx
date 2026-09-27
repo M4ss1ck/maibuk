@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useCanvasStore } from "@/features/canvas/store";
 import { Tooltip, TooltipGroup } from "@/components/ui";
-import type { ShortcutId } from "@/lib/shortcut-registry";
+import type { CommandId } from "@/lib/shortcut-registry";
 
 interface ToolbarButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
@@ -72,7 +72,7 @@ export function CanvasToolPanel({
     mode: "select" | "pen" | "eraser";
     icon: typeof MousePointer2;
     label: string;
-    shortcutId: ShortcutId;
+    shortcutId: CommandId;
   }> = [
     {
       mode: "select",
@@ -137,12 +137,12 @@ export function CanvasToolPanel({
         <ToolbarDivider />
 
         <ToolbarGroup>
-          <Tooltip content={t("canvas.zoomIn")} shortcut="canvas.zoomIn">
+          <Tooltip content={t("canvas.zoomIn")} shortcut="common.zoomIn">
             <ToolbarButton onClick={onZoomIn} aria-label={t("canvas.zoomIn")}>
               <ZoomIn className="size-4" aria-hidden="true" />
             </ToolbarButton>
           </Tooltip>
-          <Tooltip content={t("canvas.zoomOut")} shortcut="canvas.zoomOut">
+          <Tooltip content={t("canvas.zoomOut")} shortcut="common.zoomOut">
             <ToolbarButton onClick={onZoomOut} aria-label={t("canvas.zoomOut")}>
               <ZoomOut className="size-4" aria-hidden="true" />
             </ToolbarButton>

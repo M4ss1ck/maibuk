@@ -288,6 +288,24 @@ test.describe("selecting and moving @wf:canvas-node-select-move", () => {
     const moved = await flowNode(page, "text-storm").boundingBox();
     expect(moved?.x ?? 0).toBeGreaterThan(before?.x ?? 0);
   });
+
+  test("Escape clears the node selection and Alt+ArrowLeft returns to the gallery @sc:canvas.clearSelection @sc:canvas.backToGallery", async ({
+    page,
+  }) => {
+    await openMap(page);
+    const storm = flowNode(page, "text-storm");
+    await selectNode(page, storm);
+    await expect(storm).toHaveClass(/selected/);
+    await expect(page.getByRole("button", { name: "Connect to…" })).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(storm).not.toHaveClass(/selected/);
+    await expect(page.getByRole("button", { name: "Connect to…" })).toHaveCount(0);
+
+    await page.keyboard.press("Alt+ArrowLeft");
+    await expect(page).toHaveURL(/\/canvas$/);
+    await expect(page.getByRole("heading", { name: "Canvas", level: 1 })).toBeVisible();
+  });
 });
 
 test.describe("Connect to @wf:canvas-connect", () => {
@@ -480,7 +498,7 @@ test.describe("Delete and undo @wf:canvas-delete-undo", () => {
   });
 });
 
-test.describe("Zoom, fit, and lock @wf:canvas-zoom-fit-lock @sc:canvas.zoomIn @sc:canvas.zoomOut @sc:canvas.fitView @sc:canvas.lock", () => {
+test.describe("Zoom, fit, and lock @wf:canvas-zoom-fit-lock @sc:common.zoomIn @sc:common.zoomOut @sc:canvas.fitView @sc:canvas.lock", () => {
   test("Mod+=, Mod+-, Shift+1, and L work and the viewport persists", async ({ page }) => {
     await openMap(page);
     const viewport = page.locator(".react-flow__viewport");

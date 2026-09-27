@@ -76,7 +76,7 @@ describe("useEditorZoomControls bound shortcuts", () => {
     const { unmount } = renderHook(() => useEditorZoomControls(null));
 
     expect(Object.keys(useBoundShortcutStore.getState().counts)).toEqual(
-      expect.arrayContaining(["editor.zoomIn", "editor.zoomOut", "editor.zoomReset"])
+      expect.arrayContaining(["common.zoomIn", "common.zoomOut", "editor.zoomReset"])
     );
 
     unmount();

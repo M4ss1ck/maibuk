@@ -19,6 +19,7 @@ import { DictionaryDialog } from "@/components/editor/DictionaryDialog";
 import { DictionaryPromptDialog } from "@/components/editor/DictionaryPromptDialog";
 import { SymbolsDialog } from "@/components/editor/SymbolsDialog";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
+import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
@@ -29,7 +30,6 @@ import { openExternal } from "@/lib/platform";
 import { isModKey } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
-import { matchKeys } from "@/lib/shortcut-registry";
 import { ChevronDown, ChevronUp, Settings2 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -75,6 +75,7 @@ export function EditorToolbar({
   const [dictionaryWord, setDictionaryWord] = useState("");
   const [showSymbolsDialog, setShowSymbolsDialog] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const [showShortcutEditor, setShowShortcutEditor] = useState(false);
   const [showToolbarSettings, setShowToolbarSettings] = useState(false);
   const openShortcutsHelp = useCallback(() => {
     setShowShortcutsHelp(true);
@@ -85,6 +86,8 @@ export function EditorToolbar({
   ];
   const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
   const setDictionaryOpenInBrowser = useSettingsStore((state) => state.setDictionaryOpenInBrowser);
+  const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
+  const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
   const showHtmlPanelRef = useRef(showHtmlPanel);
   showHtmlPanelRef.current = showHtmlPanel;
   const htmlPanelHandleRef = useRef<{
@@ -203,28 +206,88 @@ export function EditorToolbar({
 
   useShortcuts([
     {
-      id: "editor.findReplace",
-      keys: matchKeys("editor.findReplace"),
+      id: "common.find",
       allowInInput: true,
       onTrigger: openFindReplace,
     },
     {
       id: "editor.dictionary",
-      keys: matchKeys("editor.dictionary"),
       allowInInput: true,
       onTrigger: handleOpenDictionary,
     },
     {
       id: "editor.insertSymbol",
-      keys: matchKeys("editor.insertSymbol"),
       allowInInput: true,
       onTrigger: () => setShowSymbolsDialog(true),
     },
     {
       id: "editor.toolbarSettings",
-      keys: matchKeys("editor.toolbarSettings"),
       allowInInput: true,
       onTrigger: () => setShowToolbarSettings(true),
+    },
+    {
+      id: "editor.insertImage",
+      allowInInput: true,
+      onTrigger: () => setShowImageDialog(true),
+    },
+    {
+      id: "editor.footnote",
+      allowInInput: true,
+      onTrigger: () => setShowFootnoteDialog(true),
+    },
+    {
+      id: "editor.viewHtml",
+      allowInInput: true,
+      onTrigger: () => setShowHtmlPanel(true),
+    },
+    {
+      id: "editor.horizontalRule",
+      allowInInput: true,
+      onTrigger: () => editor.chain().focus().setHorizontalRule().run(),
+    },
+    {
+      id: "editor.increaseFirstLineIndent",
+      allowInInput: true,
+      onTrigger: () => editor.chain().focus().increaseFirstLineIndent().run(),
+    },
+    {
+      id: "editor.decreaseFirstLineIndent",
+      allowInInput: true,
+      onTrigger: () => editor.chain().focus().decreaseFirstLineIndent().run(),
+    },
+    {
+      id: "editor.removeFormatting",
+      allowInInput: true,
+      onTrigger: () => editor.chain().focus().unsetAllMarks().clearNodes().run(),
+    },
+    {
+      id: "editor.spellCheck",
+      allowInInput: true,
+      onTrigger: () => setSpellCheckEnabled(!spellCheckEnabled),
+    },
+    {
+      id: "editor.textColor",
+      allowInInput: true,
+      onTrigger: () => {
+        const current = editor.getAttributes("textStyle").color as string | undefined;
+        if (current) editor.chain().focus().unsetColor().run();
+        else editor.chain().focus().setColor("#000000").run();
+      },
+    },
+    {
+      id: "editor.exportMarkdown",
+      enabled: !!onExportMarkdown,
+      onTrigger: () => onExportMarkdown?.(),
+    },
+    {
+      id: "editor.exportPdf",
+      enabled: !!onExportPdf,
+      onTrigger: () => onExportPdf?.(),
+    },
+    {
+      id: "editor.exportImage",
+      enabled: !!onExportImage,
+      onTrigger: () => onExportImage?.(),
     },
   ]);
 
@@ -258,7 +321,11 @@ export function EditorToolbar({
           onExitToolbar={onExitToolbar}
           utilityCluster={
             <>
-              <ToolbarButton onClick={openShortcutsHelp} label={t("shortcuts.title")}>
+              <ToolbarButton
+                onClick={openShortcutsHelp}
+                label={t("shortcuts.title")}
+                shortcut="global.showHelp"
+              >
                 <span className="w-4 h-4 flex items-center justify-center font-bold">?</span>
               </ToolbarButton>
               <Divider />
@@ -363,6 +430,17 @@ export function EditorToolbar({
         <ShortcutsHelpDialog
           isOpen={showShortcutsHelp}
           onClose={() => setShowShortcutsHelp(false)}
+          onCustomize={() => {
+            setShowShortcutsHelp(false);
+            setShowShortcutEditor(true);
+          }}
+        />
+        <ShortcutEditorDialog
+          isOpen={showShortcutEditor}
+          onClose={() => {
+            setShowShortcutEditor(false);
+            setShowShortcutsHelp(true);
+          }}
         />
         <ToolbarSettingsDialog
           isOpen={showToolbarSettings}

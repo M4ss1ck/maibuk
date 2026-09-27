@@ -3,49 +3,56 @@ import { useTranslation } from "react-i18next";
 import { GraduationCap } from "lucide-react";
 import { Button, Modal, KeyboardShortcut } from "@/components/ui";
 import { useBoundShortcuts } from "@/lib/bound-shortcuts";
-import { SHORTCUTS, formatKeys, type ShortcutId } from "@/lib/shortcut-registry";
+import { liveShortcuts, useCommandKeys } from "@/lib/command-keys";
+import { formatShortcut, shortcutKey } from "@/lib/shortcut-keys";
+import { isMac } from "@/lib/platform/detect";
+import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
+import {
+  COMMANDS,
+  COMMAND_IDS,
+  SHORTCUT_SECTIONS,
+  commandSection,
+  type CommandId,
+} from "@/lib/shortcut-registry";
 
 interface ShortcutsHelpDialogProps {
   isOpen: boolean;
   onClose: () => void;
   /** Runs this screen's Tutorial section; the dialog closes first. */
   onStartTutorial?: () => void;
+  /** Opens the shortcut editor. */
+  onCustomize?: () => void;
 }
 
-const AREAS = [
-  { prefix: "global.", labelKey: "shortcuts.areaGlobal" },
-  { prefix: "home.", labelKey: "shortcuts.areaHome" },
-  { prefix: "editor.", labelKey: "shortcuts.areaEditor" },
-  { prefix: "canvas.", labelKey: "shortcuts.areaCanvas" },
-  { prefix: "cover.", labelKey: "shortcuts.areaCover" },
-  { prefix: "tutorial.", labelKey: "shortcuts.areaTutorial" },
-] as const;
+type SectionLabelKey = (typeof SHORTCUT_SECTIONS)[number]["labelKey"];
+type SectionGroup = { id: string; labelKey: SectionLabelKey; ids: CommandId[] };
 
-type AreaGroup = {
-  prefix: string;
-  labelKey: (typeof AREAS)[number]["labelKey"];
-  ids: ShortcutId[];
-};
-
-const ALL_IDS = Object.keys(SHORTCUTS) as ShortcutId[];
-
-function ShortcutRow({ id }: { id: ShortcutId }) {
+function ShortcutRow({ id }: { id: CommandId }) {
   const { t } = useTranslation();
-  const definition = SHORTCUTS[id];
+  const shortcuts = useCommandKeys(id);
+  if (shortcuts.length === 0) return null;
   return (
     <li className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
-      <span className="text-sm text-foreground">{t(definition.labelKey)}</span>
-      <KeyboardShortcut shortcut={formatKeys(definition)} alwaysVisible />
+      <span className="text-sm text-foreground">{t(COMMANDS[id].labelKey)}</span>
+      <span className="inline-flex items-center gap-2">
+        {shortcuts.map((shortcut) => (
+          <KeyboardShortcut
+            key={shortcutKey(shortcut)}
+            shortcut={formatShortcut(shortcut, isMac())}
+            alwaysVisible
+          />
+        ))}
+      </span>
     </li>
   );
 }
 
-function AreaGroups({ groups }: { groups: AreaGroup[] }) {
+function SectionGroups({ groups }: { groups: SectionGroup[] }) {
   const { t } = useTranslation();
   return (
     <div className="space-y-4">
       {groups.map((group) => (
-        <section key={group.prefix} aria-label={t(group.labelKey)}>
+        <section key={group.id} aria-label={t(group.labelKey)}>
           <h4 className="mb-2 text-sm font-medium text-foreground">{t(group.labelKey)}</h4>
           <ul className="space-y-2">
             {group.ids.map((id) => (
@@ -58,43 +65,63 @@ function AreaGroups({ groups }: { groups: AreaGroup[] }) {
   );
 }
 
-export function ShortcutsHelpDialog({ isOpen, onClose, onStartTutorial }: ShortcutsHelpDialogProps) {
+function groupsFor(ids: CommandId[]): SectionGroup[] {
+  return SHORTCUT_SECTIONS.map((section) => ({
+    id: section.id,
+    labelKey: section.labelKey,
+    ids: ids.filter((id) => commandSection(id) === section.id),
+  })).filter((group) => group.ids.length > 0);
+}
+
+export function ShortcutsHelpDialog({
+  isOpen,
+  onClose,
+  onStartTutorial,
+  onCustomize,
+}: ShortcutsHelpDialogProps) {
   const { t } = useTranslation();
   const thisScreenId = useId();
   const otherScreensId = useId();
   const bound = useBoundShortcuts();
   const boundSet = new Set(bound);
+  const settings = useShortcutSettingsStore((state) => state.shortcuts);
+  const hasLive = (id: CommandId) => liveShortcuts(id, settings).length > 0;
 
-  const thisScreen = AREAS.map((area) => ({
-    ...area,
-    ids: bound.filter((id) => id.startsWith(area.prefix)),
-  })).filter((area) => area.ids.length > 0);
+  const thisScreen = groupsFor(COMMAND_IDS.filter((id) => boundSet.has(id) && hasLive(id)));
 
   // Global shortcuts are bound on every screen, so one missing here is not
   // available on this device at all and belongs in neither list.
-  const otherScreens = AREAS.filter((area) => area.prefix !== "global.")
-    .map((area) => ({
-      ...area,
-      ids: ALL_IDS.filter((id) => id.startsWith(area.prefix) && !boundSet.has(id)),
-    }))
-    .filter((area) => area.ids.length > 0);
+  const otherScreens = groupsFor(
+    COMMAND_IDS.filter(
+      (id) => !boundSet.has(id) && commandSection(id) !== "global" && hasLive(id)
+    )
+  );
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t("shortcuts.title")} footer={null}>
       <div className="space-y-6">
-        {onStartTutorial && (
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full"
-            onClick={() => {
-              onClose();
-              onStartTutorial();
-            }}
-          >
-            <GraduationCap className="h-4 w-4" aria-hidden="true" />
-            {t("tutorial.help.startForScreen")}
-          </Button>
+        {(onStartTutorial || onCustomize) && (
+          <div className="flex flex-wrap gap-2">
+            {onStartTutorial && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1"
+                onClick={() => {
+                  onClose();
+                  onStartTutorial();
+                }}
+              >
+                <GraduationCap className="h-4 w-4" aria-hidden="true" />
+                {t("tutorial.help.startForScreen")}
+              </Button>
+            )}
+            {onCustomize && (
+              <Button type="button" variant="secondary" className="flex-1" onClick={onCustomize}>
+                {t("shortcuts.customize")}
+              </Button>
+            )}
+          </div>
         )}
         <section aria-labelledby={thisScreenId}>
           <h3
@@ -106,7 +133,7 @@ export function ShortcutsHelpDialog({ isOpen, onClose, onStartTutorial }: Shortc
           {thisScreen.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("shortcuts.none")}</p>
           ) : (
-            <AreaGroups groups={thisScreen} />
+            <SectionGroups groups={thisScreen} />
           )}
         </section>
 
@@ -118,7 +145,7 @@ export function ShortcutsHelpDialog({ isOpen, onClose, onStartTutorial }: Shortc
             >
               {t("shortcuts.onOtherScreens")}
             </h3>
-            <AreaGroups groups={otherScreens} />
+            <SectionGroups groups={otherScreens} />
           </section>
         )}
       </div>

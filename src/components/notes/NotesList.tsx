@@ -42,6 +42,7 @@ import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 import { useSettingsStore } from "@/features/settings/store";
+import { useShortcuts } from "@/lib/shortcuts";
 import { tagColor } from "@/components/notes/tagColor";
 import {
   buildBookNoteGroups,
@@ -181,6 +182,15 @@ export function NotesList({
   // The list view reorders through React Aria drag-and-drop, which is also its
   // keyboard path. Search hides Notes, so an order written then would be partial.
   const canReorder = viewMode === "list" && !isSearchActive && filtered.length > 0;
+
+  useShortcuts([
+    { id: "notes.newNote", onTrigger: () => onCreateNote(null) },
+    {
+      id: "notes.addNoteToBook",
+      enabled: books.length > 0,
+      onTrigger: () => onCreateNote(books[0]?.id ?? null),
+    },
+  ]);
 
   const resolveFileDropTarget = useCallback(
     (point: DropPoint | null): ListDropTarget | null => {
@@ -656,6 +666,7 @@ export function NotesList({
   return (
     <aside className="w-full border-r border-border flex flex-col bg-background h-full shrink-0">
       <div className="p-4 pt-12 md:pt-4 flex items-center justify-between gap-2 bg-background z-10 shrink-0">
+        {" "}
         <h2 className="min-w-0 truncate font-medium">{t("notes.title")}</h2>
         <ResponsiveToggleGroup
           value={viewMode}

@@ -45,7 +45,7 @@ export function ZoomControl() {
           aria-label={t("editor.zoom")}
           className="flex max-w-[calc(100vw-1rem)] flex-wrap items-center gap-2 outline-none"
         >
-          <Tooltip content={t("editor.zoomOut")} shortcut="editor.zoomOut">
+          <Tooltip content={t("editor.zoomOut")} shortcut="common.zoomOut">
             <button
               type="button"
               onClick={zoomOut}
@@ -65,7 +65,7 @@ export function ZoomControl() {
             aria-label={t("editor.zoom")}
             className="w-32"
           />
-          <Tooltip content={t("editor.zoomIn")} shortcut="editor.zoomIn">
+          <Tooltip content={t("editor.zoomIn")} shortcut="common.zoomIn">
             <button
               type="button"
               onClick={zoomIn}

@@ -73,7 +73,7 @@ async function focusToolbarControl(page: Page, target: Locator) {
   await pressUntilFocused(page, "ArrowLeft", target, { max: 80 });
 }
 
-test.describe("typing and saving @wf:editor-type-save @sc:editor.save", () => {
+test.describe("typing and saving @wf:editor-type-save @sc:common.save", () => {
   test("typing reaches Saved and Mod+S lands the text; a reload keeps it", async ({ page }) => {
     await openEditor(page);
     await page.keyboard.press("End");
@@ -283,7 +283,7 @@ test.describe("align and indent @wf:editor-keymap-align-indent @sc:editor.alignL
   });
 });
 
-test.describe("undo and redo @wf:editor-undo-redo @sc:editor.undo @sc:editor.redo", () => {
+test.describe("undo and redo @wf:editor-undo-redo @sc:common.undo @sc:common.redo", () => {
   test("Mod+Z undoes typing and Mod+Shift+Z restores it", async ({ page }) => {
     await openEditor(page);
     await page.keyboard.press("End");

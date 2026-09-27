@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui";
 import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 import { findImageNodeAtPos } from "@/components/editor/editor-context-menu-utils";
+import { useShortcuts } from "@/lib/shortcuts";
 
 interface ImageContextMenuProps {
   editor: Editor;
@@ -232,6 +233,16 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
     }
   };
 
+  useShortcuts([
+    { id: "image.editAlt", enabled: isOpen, onTrigger: handleEditAlt },
+    { id: "image.copy", enabled: isOpen, onTrigger: () => void handleCopyImage() },
+    { id: "image.save", enabled: isOpen, onTrigger: () => void handleSaveImage() },
+    { id: "image.alignLeft", enabled: isOpen, onTrigger: () => handleSetAlignment("left") },
+    { id: "image.alignCenter", enabled: isOpen, onTrigger: () => handleSetAlignment("center") },
+    { id: "image.alignRight", enabled: isOpen, onTrigger: () => handleSetAlignment("right") },
+    { id: "image.delete", enabled: isOpen, onTrigger: handleDelete },
+  ]);
+
   return (
     <>
       {/* A zero-size anchor at the caret/image: MenuTrigger positions the menu
@@ -267,6 +278,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
           >
           <MenuItem
             id="edit-alt"
+            data-command="image.editAlt"
             textValue={t("editor.imageEditAlt")}
             className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
           >
@@ -275,6 +287,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
           </MenuItem>
           <MenuItem
             id="copy"
+            data-command="image.copy"
             textValue={t("editor.imageCopy")}
             className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
           >
@@ -283,6 +296,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
           </MenuItem>
           <MenuItem
             id="save"
+            data-command="image.save"
             textValue={t("editor.imageSave")}
             className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
           >
@@ -298,6 +312,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
             </Header>
             <MenuItem
               id="align-left"
+              data-command="image.alignLeft"
               textValue={t("editor.alignLeft")}
               className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -306,6 +321,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
             </MenuItem>
             <MenuItem
               id="align-center"
+              data-command="image.alignCenter"
               textValue={t("editor.alignCenter")}
               className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -314,6 +330,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
             </MenuItem>
             <MenuItem
               id="align-right"
+              data-command="image.alignRight"
               textValue={t("editor.alignRight")}
               className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -326,6 +343,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
 
           <MenuItem
             id="delete"
+            data-command="image.delete"
             textValue={t("common.delete")}
             className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-destructive outline-none data-focused:bg-muted"
           >

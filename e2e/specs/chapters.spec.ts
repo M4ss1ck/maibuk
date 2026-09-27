@@ -291,7 +291,7 @@ test.describe("compact view @wf:chapters-compact-view", () => {
   });
 });
 
-test.describe("sidebar toggle @wf:chapters-toggle-sidebar @sc:editor.toggleSidebar", () => {
+test.describe("sidebar toggle @wf:chapters-toggle-sidebar @sc:bookEditor.toggleSidebar", () => {
   test("Mod+\\ hides and shows the Chapter sidebar without losing focus", async ({ page }) => {
     await openBook(page);
     const add = page.getByRole("button", { name: "Add Chapter" });
@@ -318,7 +318,7 @@ test.describe("Chapter Status display @wf:chapters-status-display", () => {
   });
 });
 
-test.describe("Backspace @wf:chapters-back @sc:editor.back", () => {
+test.describe("Backspace @wf:chapters-back @sc:common.back", () => {
   test("Backspace in the Chapter text deletes and does not navigate", async ({ page }) => {
     await openBook(page, { toEditor: true });
     const textbox = page.getByRole("textbox", { name: "Text of Storm" });

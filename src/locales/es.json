@@ -4,6 +4,23 @@
     "title": "Maibuk",
     "description": "Una aplicación de escritura multiplataforma para autores"
   },
+  "commands": {
+    "noteItem": {
+      "togglePinned": "Fijar o desfijar la nota"
+    },
+    "bookEditor": {
+      "toggleCompactView": "Alternar la lista compacta de capítulos",
+      "toggleOutline": "Alternar el esquema de capítulos"
+    },
+    "coverDesigner": {
+      "addTextTitle": "Añadir texto: título",
+      "addTextSubtitle": "Añadir texto: subtítulo",
+      "addTextAuthor": "Añadir texto: autor",
+      "addShapeRect": "Añadir forma: rectángulo",
+      "addShapeEllipse": "Añadir forma: elipse",
+      "addShapeLine": "Añadir forma: línea"
+    }
+  },
   "dropImport": {
     "importFailed": "No se pudieron importar los archivos",
     "importing": "Importando archivos…",
@@ -1110,6 +1127,46 @@
     "insertSymbol": "Insertar símbolo",
     "deleteSelection": "Eliminar objeto seleccionado",
     "cyclePanes": "Navegar entre paneles",
+    "cyclePanesForward": "Panel siguiente",
+    "cyclePanesBackward": "Panel anterior",
+    "find": "Buscar",
+    "moveSelectionNext": "Libro siguiente",
+    "moveSelectionPrevious": "Libro anterior",
+    "leavePanel": "Salir del panel actual",
+    "enterNotesList": "Entrar en la lista de notas",
+    "clearSelection": "Quitar selección",
+    "backToCanvasGallery": "Volver a Lienzos",
+    "sendBackward": "Enviar atrás",
+    "bringForward": "Traer adelante",
+    "nudgeUp": "Mover arriba",
+    "nudgeDown": "Mover abajo",
+    "nudgeLeft": "Mover a la izquierda",
+    "nudgeRight": "Mover a la derecha",
+    "nudgeUpFar": "Mover 10 px arriba",
+    "nudgeDownFar": "Mover 10 px abajo",
+    "nudgeLeftFar": "Mover 10 px a la izquierda",
+    "nudgeRightFar": "Mover 10 px a la derecha",
+    "customize": "Personalizar atajos",
+    "fixed": {
+      "escape": "Escape siempre cierra o sale",
+      "undo": "Tu sistema usa esta tecla para deshacer y rehacer",
+      "navigation": "Las flechas recorren la lista",
+      "findField": "El campo de búsqueda usa esta tecla",
+      "tab": "Tab sangra y mueve el foco",
+      "family": "Una tecla por posición, del 1 al 9",
+      "activate": "Enter abre el libro enfocado"
+    },
+    "sections": {
+      "common": "Comunes",
+      "global": "En todas partes",
+      "bookList": "Libros",
+      "bookEditor": "Editor de libro",
+      "coverDesigner": "Diseñador de portada",
+      "notes": "Notas",
+      "canvas": "Lienzo",
+      "editor": "Editor",
+      "ephemeral": "Efímero"
+    },
     "onThisScreen": "En esta pantalla",
     "onOtherScreens": "En otras pantallas",
     "areaGlobal": "En todas partes",
@@ -1120,6 +1177,90 @@
     "startTutorial": "Empezar el Tutorial",
     "skipTutorial": "Omitir el Tutorial",
     "areaTutorial": "Tutorial"
+  },
+  "shortcutEditor": {
+    "title": "Personalizar atajos",
+    "intro": "Maibuk se usa con el teclado. Dale a cualquier comando tu propio atajo, agrega otro o quítalo. Los cambios se guardan solo en este dispositivo.",
+    "singleKey": "Atajos de una tecla",
+    "singleKeyOff": "Desactivado",
+    "search": "Buscar comandos y teclas",
+    "searchPlaceholder": "Negrita, Ctrl+S, g p…",
+    "listLabel": "Comandos y sus atajos",
+    "empty": "Ningún comando coincide.",
+    "connectKeyboard": "Conecta un teclado para grabar un atajo.",
+    "fixed": "fijo",
+    "noShortcut": "Sin atajo",
+    "sealed": "No admite otros atajos",
+    "add": "Agregar un atajo a {{command}}",
+    "addShort": "Agregar",
+    "addLimit": "{{command}} ya tiene {{max}} atajos",
+    "change": "Cambiar {{keys}} de {{command}}",
+    "remove": "Quitar {{keys}} de {{command}}",
+    "reset": "Restablecer {{command}} a sus atajos predeterminados",
+    "resetShort": "Restablecer",
+    "resetAll": "Restablecer todos los atajos",
+    "resetAllTitle": "¿Restablecer todos los atajos?",
+    "resetAllBody_one": "{{count}} comando personalizado vuelve a sus atajos predeterminados.",
+    "resetAllBody_other": "{{count}} comandos personalizados vuelven a sus atajos predeterminados.",
+    "filter": {
+      "all": "Todos",
+      "customized": "Personalizados",
+      "none": "Sin atajo"
+    },
+    "recorder": {
+      "label": "Pulsa el nuevo atajo para {{command}}. Enter para terminar, Escape para cancelar.",
+      "placeholder": "Pulsa teclas…",
+      "pressFirst": "Pulsa una tecla primero.",
+      "firstStep": "{{keys}}. Pulsa una segunda tecla para una secuencia, o Enter para terminar.",
+      "notAllowed": "{{keys}} no puede ser un atajo.",
+      "reserved": "El navegador se reserva {{keys}}. Elige otra tecla."
+    },
+    "errors": {
+      "needsModifier": "{{keys}} escribiría texto en el editor. Agrega Ctrl, Alt o una tecla de función.",
+      "duplicate": "{{keys}} ya es un atajo de este comando.",
+      "locked": "{{keys}} es {{command}} y no se puede reasignar."
+    },
+    "conflict": {
+      "message": "{{keys}} ya lo usa {{command}}.",
+      "replace": "Reemplazar"
+    },
+    "announce": {
+      "set": "{{command}}: {{keys}}",
+      "moved": "{{keys}} pasó de {{from}} a {{to}}.",
+      "removed": "{{keys}} se quitó de {{command}}.",
+      "reset": "{{command}} se restableció a {{keys}}.",
+      "resetNone": "{{command}} se restableció a sin atajo.",
+      "resetAll": "Se restablecieron todos los atajos.",
+      "cancelled": "Grabación cancelada."
+    },
+    "file": {
+      "save": "Guardar en archivo",
+      "load": "Cargar desde archivo",
+      "saved": "Atajos guardados en un archivo.",
+      "saveFailed": "No se pudo guardar el archivo de atajos.",
+      "readFailed": "No se pudo leer el archivo de atajos.",
+      "previewTitle": "Cargar atajos desde archivo",
+      "previewBody_one": "{{count}} comando toma los atajos de este archivo. Tus atajos personalizados actuales se reemplazan.",
+      "previewBody_other": "{{count}} comandos toman los atajos de este archivo. Tus atajos personalizados actuales se reemplazan.",
+      "replace": "Reemplazar mis atajos",
+      "loaded": "Atajos cargados desde el archivo.",
+      "droppedTitle_one": "Se omitió {{count}} entrada:",
+      "droppedTitle_other": "Se omitieron {{count}} entradas:",
+      "dropped": {
+        "unknown": "{{command}}: esta versión de Maibuk no tiene ese comando",
+        "invalid": "{{command}}: {{keys}} no es un atajo válido",
+        "sealed": "{{command}}: no admite otros atajos",
+        "reserved": "{{command}}: el navegador se reserva {{keys}}",
+        "conflict": "{{command}}: {{keys}} ya está en uso"
+      },
+      "errors": {
+        "parse": "Este archivo no es un archivo de atajos.",
+        "kind": "Este archivo no es un archivo de atajos de Maibuk.",
+        "version": "Este archivo de atajos viene de un Maibuk más nuevo."
+      }
+    },
+    "settingsDescription": "Consulta cada comando, dale tu propio atajo o desactiva los atajos de una tecla.",
+    "open": "Personalizar atajos"
   },
   "versions": {
     "title": "Historial de versiones",
@@ -1459,6 +1600,10 @@
         "general": {
           "title": "General",
           "body": "Guardado automático, siempre visible y el idioma de Maibuk."
+        },
+        "shortcuts": {
+          "title": "Atajos de teclado",
+          "body": "Maibuk se usa con el teclado: cada comando se puede ejecutar desde el teclado. Aquí le das a cualquier comando tu propio atajo, agregas otro o desactivas los atajos de una tecla. Tus atajos personalizados se quedan en este dispositivo."
         },
         "sync": {
           "title": "Sincronización",

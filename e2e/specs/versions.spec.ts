@@ -83,7 +83,7 @@ async function selectChapter(page: Page, name: RegExp) {
   await page.keyboard.press("Enter");
 }
 
-test.describe("opening Version history @wf:versions-open-history @sc:editor.versionHistory", () => {
+test.describe("opening Version history @wf:versions-open-history @sc:bookEditor.versionHistory", () => {
   test("g v opens the panel on the first row and arrows move between rows", async ({ page }) => {
     await openEditor(page);
     await openHistory(page);
@@ -146,7 +146,7 @@ test.describe("opening Version history @wf:versions-open-history @sc:editor.vers
   });
 });
 
-test.describe("saving a Named Version @wf:versions-save-named @sc:editor.saveVersion", () => {
+test.describe("saving a Named Version @wf:versions-save-named @sc:bookEditor.saveVersion", () => {
   test("Mod+Alt+S names a Version and it shows the Named badge in history", async ({ page }) => {
     await openEditor(page);
     await page.keyboard.type(" A new line for the storm.");

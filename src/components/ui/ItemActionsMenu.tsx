@@ -1,7 +1,15 @@
-import { useEffect, useId, useRef, type ComponentType, type RefObject } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  type ComponentType,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useInteractOutside } from "react-aria";
 import {
   Button,
+  Keyboard,
   Menu,
   MenuItem,
   MenuTrigger,
@@ -10,6 +18,9 @@ import {
 } from "react-aria-components";
 import { Check, ChevronRight, MoreHorizontal } from "lucide-react";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
+import { useCommandHint } from "@/lib/command-keys";
+import type { CommandId } from "@/lib/shortcut-registry";
 
 export interface ItemAction {
   id: string;
@@ -21,6 +32,8 @@ export interface ItemAction {
   isCurrent?: boolean;
   onAction?: () => void;
   children?: ItemAction[];
+  /** The Command that runs this action from a Shortcut while the item has focus (`useItemCommands`). */
+  commandId?: CommandId;
 }
 
 interface ItemActionsMenuProps {
@@ -83,6 +96,33 @@ function itemClass(action: ItemAction) {
   return `flex cursor-pointer items-center gap-2 whitespace-nowrap px-3 py-1.5 pointer-coarse:py-2.5 text-sm ${tone} outline-none data-focused:bg-muted data-disabled:cursor-default data-disabled:opacity-50`;
 }
 
+function ActionShortcut({ hint }: { hint: ReturnType<typeof useCommandHint> }) {
+  if (!hint) return null;
+  // React Aria's Keyboard slot describes the menu item with its Shortcut.
+  return (
+    <Keyboard className="ml-4 font-sans">
+      <KeyboardShortcut shortcut={hint.formatted} alwaysVisible />
+    </Keyboard>
+  );
+}
+
+function ActionMenuItem({
+  action,
+  className,
+  children,
+}: {
+  action: ItemAction;
+  className: string;
+  children: (hint: ReturnType<typeof useCommandHint>) => ReactNode;
+}) {
+  const hint = useCommandHint(action.commandId);
+  return (
+    <MenuItem id={action.id} textValue={action.label} className={className}>
+      {children(hint)}
+    </MenuItem>
+  );
+}
+
 function ActionItems({
   actions,
   label,
@@ -140,14 +180,14 @@ function ActionItems({
         }
 
         return (
-          <MenuItem
-            key={action.id}
-            id={action.id}
-            textValue={action.label}
-            className={itemClass(action)}
-          >
-            {content}
-          </MenuItem>
+          <ActionMenuItem key={action.id} action={action} className={itemClass(action)}>
+            {(hint) => (
+              <>
+                {content}
+                <ActionShortcut hint={hint} />
+              </>
+            )}
+          </ActionMenuItem>
         );
       })}
     </Menu>

@@ -7,6 +7,7 @@ import { CanvasCard } from "@/components/canvas/CanvasCard";
 import { Button } from "@/components/ui/Button";
 import { useCanvasStore } from "@/features/canvas/store";
 import { useSettingsStore } from "@/features/settings/store";
+import { useShortcuts } from "@/lib/shortcuts";
 
 export function CanvasGallery() {
   const { t } = useTranslation();
@@ -35,6 +36,8 @@ export function CanvasGallery() {
     const canvas = await createCanvas({ title: "" });
     navigate(`/canvas/${canvas.id}`);
   };
+
+  useShortcuts([{ id: "canvas.newCanvas", onTrigger: () => void handleCreate() }]);
 
   return (
     <div className="@container h-full overflow-auto p-4 sm:p-8">

@@ -92,7 +92,8 @@ vi.mock("@xyflow/react", () => ({
   ViewportPortal: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
@@ -181,8 +182,8 @@ describe("Canvas page", () => {
         "canvas.addTextNode",
         "canvas.addNoteRef",
         "canvas.editTextNode",
-        "canvas.zoomIn",
-        "canvas.zoomOut",
+        "common.zoomIn",
+        "common.zoomOut",
         "canvas.fitView",
         "canvas.lock",
       ])

@@ -5,7 +5,7 @@ import { Tooltip, TooltipGroup } from "@/components/ui/Tooltip";
 
 const invalidShortcutProps = (
   // @ts-expect-error shortcut and keys are mutually exclusive.
-  <Tooltip content="Save" shortcut="editor.save" keys={["Ctrl+S"]}>
+  <Tooltip content="Save" shortcut="common.save" keys={["Ctrl+S"]}>
     <button type="button">Save book</button>
   </Tooltip>
 );
@@ -140,7 +140,7 @@ describe("Tooltip", () => {
 
   it("renders the registered shortcut as separate keyboard chips", () => {
     render(
-      <Tooltip content="Save" shortcut="editor.save">
+      <Tooltip content="Save" shortcut="common.save">
         <button type="button">Save book</button>
       </Tooltip>
     );
@@ -153,7 +153,7 @@ describe("Tooltip", () => {
 
   it("keeps shortcut chips subject to the global visibility preference", () => {
     render(
-      <Tooltip content="Save" shortcut="editor.save">
+      <Tooltip content="Save" shortcut="common.save">
         <button type="button">Save book</button>
       </Tooltip>
     );

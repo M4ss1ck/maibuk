@@ -16,7 +16,6 @@ import { CollapsibleHeading } from "@/components/editor/extensions";
 import { collapsibleHeadingPluginKey } from "@/components/editor/extensions/CollapsibleHeading";
 import { createAsyncQueue } from "@/lib/async-queue";
 import { useShortcuts } from "@/lib/shortcuts";
-import { matchKeys } from "@/lib/shortcut-registry";
 import { TagEditor } from "@/components/notes/TagEditor";
 import { timeAgo } from "@/components/notes/timeAgo";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
@@ -395,8 +394,7 @@ export function NoteEditor({
 
   useShortcuts([
     {
-      id: "editor.save",
-      keys: matchKeys("editor.save"),
+      id: "common.save",
       onTrigger: saveNow,
       allowInInput: true,
     },

@@ -254,7 +254,7 @@ describe("Editor", () => {
 
     const bound = Object.keys(useBoundShortcutStore.getState().counts);
     expect(bound).toEqual(
-      expect.arrayContaining(["editor.bold", "editor.redo", "editor.heading2"])
+      expect.arrayContaining(["editor.bold", "common.redo", "editor.heading2"])
     );
     // Task lists are a Notes extension, not part of this editor.
     expect(bound).not.toContain("editor.taskList");

@@ -23,6 +23,9 @@ import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
+import type { ItemAction } from "@/components/ui";
+import { useItemCommands } from "@/hooks/useItemCommands";
+import { useShortcuts } from "@/lib/shortcuts";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { toast } from "@/components/ui/Toast";
 import { GridList, GridListItem } from "react-aria-components/GridList";
@@ -54,11 +57,13 @@ function ChapterItemGestures({
   onOpenMenu,
   isDisabled,
   className,
+  actions,
   children,
 }: {
   onOpenMenu: () => void;
   isDisabled: boolean;
   className: string;
+  actions: ItemAction[];
   children: (anchorRef: RefObject<HTMLDivElement | null>) => ReactNode;
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -67,6 +72,7 @@ function ChapterItemGestures({
     isDisabled,
     anchorRef,
   });
+  useItemCommands(anchorRef, actions, { enabled: !isDisabled });
   return (
     <div
       ref={setOwnerRef}
@@ -330,6 +336,21 @@ export function ChapterList({
     if (id) focusChapterRow(id);
   };
 
+  useShortcuts([
+    { id: "bookEditor.addChapter", onTrigger: () => setShowNewDialog(true) },
+    {
+      id: "bookEditor.importFiles",
+      enabled: !!onImportFromFiles,
+      onTrigger: () => onImportFromFiles?.(),
+    },
+    { id: "bookEditor.toggleCompactView", onTrigger: toggleChapterListView },
+    {
+      id: "bookEditor.toggleOutline",
+      enabled: Boolean(editor) && Boolean(currentChapterId),
+      onTrigger: () => setShowChapterOutline(!showChapterOutline),
+    },
+  ]);
+
   return (
     <aside
       className="w-full border-r border-border flex flex-col bg-background h-full shrink-0"
@@ -489,6 +510,24 @@ export function ChapterList({
                 </Tooltip>
               ) : null;
 
+            const chapterActions: ItemAction[] = [
+              {
+                id: "edit",
+                label: t("chapters.editChapter"),
+                icon: EditIcon,
+                commandId: "chapterItem.edit",
+                onAction: () => startEditing(chapter),
+              },
+              {
+                id: "delete",
+                label: t("chapters.deleteChapter"),
+                icon: DeleteIcon,
+                isDestructive: true,
+                commandId: "chapterItem.delete",
+                onAction: () => openDeleteConfirm(chapter.id),
+              },
+            ];
+
             return (
               <GridListItem
                 id={chapter.id}
@@ -501,6 +540,7 @@ export function ChapterList({
                 <ChapterItemGestures
                   onOpenMenu={() => setMenuChapterId(chapter.id)}
                   isDisabled={editingId === chapter.id || deleteConfirmId === chapter.id}
+                  actions={chapterActions}
                   className={
                     isActive && showChapterOutline
                       ? "sticky top-0 z-10 rounded bg-inherit backdrop-blur-sm"
@@ -604,21 +644,7 @@ export function ChapterList({
                               <ItemActionsMenu
                                 anchorRef={anchorRef}
                                 label={t("common.moreActionsFor", { title: chapter.title })}
-                                actions={[
-                                  {
-                                    id: "edit",
-                                    label: t("chapters.editChapter"),
-                                    icon: EditIcon,
-                                    onAction: () => startEditing(chapter),
-                                  },
-                                  {
-                                    id: "delete",
-                                    label: t("chapters.deleteChapter"),
-                                    icon: DeleteIcon,
-                                    isDestructive: true,
-                                    onAction: () => openDeleteConfirm(chapter.id),
-                                  },
-                                ]}
+                                actions={chapterActions}
                                 isOpen={menuChapterId === chapter.id}
                                 onOpenChange={(open) => setMenuChapterId(open ? chapter.id : null)}
                                 className="hidden pointer-coarse:inline-flex"

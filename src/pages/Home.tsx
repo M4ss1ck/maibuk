@@ -17,12 +17,12 @@ import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "@/lib/platform";
 import { displayNameFromPath } from "@/lib/platform/uri";
 import { DOWNLOAD_PAGE } from "@/constants";
 import { KeyboardShortcut, toast } from "@/components/ui";
-import { isModKey, isTypingTarget } from "@/lib/keyboard";
+import { isTypingTarget } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { useCommandHint } from "@/lib/command-keys";
 import { scanEpubForImport } from "@/features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "@/features/import";
-import { formatKeys, SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
 import { BOOK_STATUSES, type Book, type BookStatus } from "@/features/books/types";
 
 interface EpubImportState {
@@ -49,6 +49,7 @@ export function Home() {
 
   const statusFilter = useSettingsStore((state) => state.booksStatusFilter);
   const setStatusFilter = useSettingsStore((state) => state.setBooksStatusFilter);
+  const newBookHint = useCommandHint("bookList.newBook");
 
   const { books, isLoading, loadBooks, updateBook } = useBookStore();
   const statusCounts = useMemo(() => countBooksByStatus(books), [books]);
@@ -111,75 +112,91 @@ export function Home() {
   }, [visibleBooks, focusBook]);
 
   // Enter on a focused book card opens it through the card's own link.
-  useBoundShortcutIds(["home.openSelected"], visibleBooks.length > 0);
+  useBoundShortcutIds(["bookList.openSelected"], visibleBooks.length > 0);
+
+  const moveSelectionFromBody = (event: KeyboardEvent) => {
+    const activeElement = document.activeElement;
+    const isEnteringFromActions =
+      event.key === "ArrowDown" &&
+      activeElement instanceof HTMLElement &&
+      actionsRef.current?.contains(activeElement);
+    if (activeElement !== document.body && !isEnteringFromActions) return;
+    const target =
+      visibleBooks.find((book) => book.id === focusedBookIdRef.current) ??
+      (event.key === "ArrowUp" || event.key === "ArrowLeft"
+        ? visibleBooks[visibleBooks.length - 1]
+        : visibleBooks[0]);
+    if (!target) return;
+    event.preventDefault();
+    focusBook(target.id);
+  };
 
   useShortcuts([
     {
-      id: "home.moveSelection",
-      keys: ["arrowdown", "arrowright", "arrowup", "arrowleft"],
-      onTrigger: (event) => {
-        const activeElement = document.activeElement;
-        const isEnteringFromActions =
-          event.key === "ArrowDown" &&
-          activeElement instanceof HTMLElement &&
-          actionsRef.current?.contains(activeElement);
-        if (activeElement !== document.body && !isEnteringFromActions) return;
-        const target =
-          visibleBooks.find((book) => book.id === focusedBookIdRef.current) ??
-          (event.key === "ArrowUp" || event.key === "ArrowLeft"
-            ? visibleBooks[visibleBooks.length - 1]
-            : visibleBooks[0]);
-        if (!target) return;
-        event.preventDefault();
-        focusBook(target.id);
-      },
+      id: "bookList.moveSelectionNext",
       preventDefault: false,
-      enabled: !isNewBookOpen && visibleBooks.length > 0,
-    },
-    {
-      id: "home.newBook",
-      keys: matchKeys("home.newBook"),
       onTrigger: (event) => {
-        if (isTypingTarget(event.target) || isModKey(event) === false) return;
-        setIsNewBookOpen(true);
-      },
-      allowInInput: true,
-    },
-    {
-      id: "home.moveSelection",
-      keys: "j",
-      onTrigger: () => {
+        if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+          moveSelectionFromBody(event);
+          return;
+        }
         const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
         const currentIndex = visibleBooks.findIndex((book) => book.id === activeBookId);
         const targetIndex =
           currentIndex < 0 ? 0 : Math.min(currentIndex + 1, visibleBooks.length - 1);
         const target = visibleBooks[targetIndex];
         if (target) focusBook(target.id);
+        event.preventDefault();
       },
       enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
     {
-      id: "home.moveSelection",
-      keys: "k",
-      onTrigger: () => {
+      id: "bookList.moveSelectionPrevious",
+      preventDefault: false,
+      onTrigger: (event) => {
+        if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+          moveSelectionFromBody(event);
+          return;
+        }
         const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
         const currentIndex = visibleBooks.findIndex((book) => book.id === activeBookId);
         const targetIndex =
           currentIndex < 0 ? visibleBooks.length - 1 : Math.max(currentIndex - 1, 0);
         const target = visibleBooks[targetIndex];
         if (target) focusBook(target.id);
+        event.preventDefault();
       },
       enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
-    ...Array.from({ length: 9 }, (_, i) => ({
-      id: "home.jumpBooks" as const,
-      keys: String(i + 1),
-      onTrigger: () => {
-        const target = visibleBooks[i];
-        if (target) focusBook(target.id);
+    {
+      id: "bookList.jumpBooks",
+      onTrigger: (event) => {
+        const digit = /^Digit([1-9])$/.exec(event.code)?.[1] ?? event.key;
+        const index = Number(digit) - 1;
+        if (Number.isInteger(index) && index >= 0 && index < 9) {
+          const target = visibleBooks[index];
+          if (target) focusBook(target.id);
+        }
       },
       enabled: !isNewBookOpen && visibleBooks.length > 0,
-    })),
+    },
+    {
+      id: "bookList.newBook",
+      onTrigger: (event) => {
+        if (isTypingTarget(event.target)) return;
+        setIsNewBookOpen(true);
+      },
+      allowInInput: true,
+    },
+    {
+      id: "bookList.importEpub",
+      onTrigger: () => void handleImportEpub(),
+    },
+    {
+      id: "bookList.downloadApp",
+      enabled: IS_WEB,
+      onTrigger: () => window.open(DOWNLOAD_PAGE, "_blank"),
+    },
   ]);
 
   const handleBookCreated = (bookId: string) => {
@@ -309,10 +326,12 @@ export function Home() {
             <AddIcon className="w-5 h-5" />
             <span className="hidden @xl:inline">{t("books.newBook")}</span>
             <span className="@xl:hidden">{t("common.new")}</span>
-            <KeyboardShortcut
-              shortcut={formatKeys(SHORTCUTS["home.newBook"])}
-              className="hidden @3xl:inline-flex"
-            />
+            {newBookHint && (
+              <KeyboardShortcut
+                shortcut={newBookHint.formatted}
+                className="hidden @3xl:inline-flex"
+              />
+            )}
           </Button>
         </Toolbar>
       </div>

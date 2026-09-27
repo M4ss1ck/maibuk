@@ -7,6 +7,7 @@ import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
 import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
+import { useItemCommands } from "@/hooks/useItemCommands";
 
 export interface NoteMoveTarget {
   bookId: string | null;
@@ -82,6 +83,7 @@ export function NoteListItem({
       id: "rename",
       label: t("common.rename"),
       icon: Pencil,
+      commandId: "noteItem.rename",
       onAction: () => {
         setDraftTitle(note.title);
         setIsEditing(true);
@@ -93,6 +95,7 @@ export function NoteListItem({
       id: "pin",
       label: note.pinned ? t("notes.unpin") : t("notes.pin"),
       icon: note.pinned ? PinOff : Pin,
+      commandId: "noteItem.togglePinned",
       onAction: () => onTogglePinned(note),
     });
   }
@@ -101,6 +104,7 @@ export function NoteListItem({
       id: "move",
       label: t("notes.moveToBook"),
       icon: BookOpen,
+      // command-exempt: submenu value (which Book a Note is filed in)
       children: moveTargets.map((target) => ({
         id: `move:${target.bookId ?? "unfiled"}`,
         label: target.label,
@@ -116,6 +120,7 @@ export function NoteListItem({
       id: "duplicate",
       label: t("notes.duplicate"),
       icon: Copy,
+      commandId: "noteItem.duplicate",
       onAction: () => onDuplicate(note),
     });
   }
@@ -125,6 +130,7 @@ export function NoteListItem({
       label: t("common.delete"),
       icon: Trash2,
       isDestructive: true,
+      commandId: "noteItem.delete",
       onAction: () => onDelete(note.id),
     });
   }
@@ -135,6 +141,7 @@ export function NoteListItem({
     isDisabled: !hasActions || isEditing,
     anchorRef: menuAnchorRef,
   });
+  useItemCommands(menuAnchorRef, actions, { enabled: !isEditing });
 
   const commitTitle = () => {
     const nextTitle = draftTitle.trim();

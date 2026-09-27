@@ -438,6 +438,7 @@ describe("running the Tutorial again", () => {
     const user = userEvent.setup();
     renderApp("/ephemeral");
     await screen.findByRole("heading", { level: 1 }, CARD_TIMEOUT).catch(() => null);
+    (document.activeElement as HTMLElement).blur();
     await user.keyboard("?");
     const help = await screen.findByRole("dialog", { name: en("shortcuts.title") });
     await tabTo(user, within(help).getByRole("button", { name: en("tutorial.help.startForScreen") }));

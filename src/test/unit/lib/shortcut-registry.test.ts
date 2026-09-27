@@ -1,101 +1,127 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { EDITOR_COMMANDS } from "@/components/editor/editor-commands";
+import en from "@/locales/en.json";
+import es from "@/locales/es.json";
+import {
+  COMMAND_IDS,
+  COMMAND_RENAMES,
+  COMMANDS,
+  ROUTE_CONTEXTS,
+  SHORTCUT_SECTIONS,
+  commandSection,
+  type CommandDef,
+  type ShortcutContext,
+} from "@/lib/shortcut-registry";
+import { normalizeShortcut } from "@/lib/shortcut-keys";
+import { findDefaultConflicts } from "@/lib/shortcut-resolve";
 
-import { formatKeys, matchKeys, SHORTCUTS, type ShortcutDef } from "@/lib/shortcut-registry";
+function lookup(messages: unknown, key: string): unknown {
+  return key.split(".").reduce<unknown>((node, part) => {
+    return node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined;
+  }, messages);
+}
 
-describe("shortcut registry", () => {
-  it("contains only valid shortcut definitions", () => {
-    for (const [id, definition] of Object.entries(SHORTCUTS)) {
-      expect(id).toMatch(/^(global|home|editor|canvas|cover|tutorial)\./);
-      expect(definition.labelKey).not.toBe("");
+const ALL_CONTEXTS: ShortcutContext[] = [
+  "global",
+  "bookList",
+  "bookEditor",
+  "coverDesigner",
+  "notes",
+  "canvas",
+  "ephemeral",
+  "editor",
+  "noteItem",
+  "chapterItem",
+  "canvasNode",
+  "image",
+];
 
-      if ("sequence" in definition) {
-        expect(definition.sequence).toHaveLength(2);
-        expect(definition.sequence.every(Boolean)).toBe(true);
-      } else {
-        expect(definition.keys.length).toBeGreaterThan(0);
-        expect(definition.keys.every(Boolean)).toBe(true);
+describe("command registry", () => {
+  it.each(COMMAND_IDS)("%s has a label in both locales", (id) => {
+    const { labelKey } = COMMANDS[id] as CommandDef;
+    expect(typeof lookup(en, labelKey)).toBe("string");
+    expect(typeof lookup(es, labelKey)).toBe("string");
+  });
+
+  it.each(COMMAND_IDS)("%s names a Context its prefix agrees with", (id) => {
+    const definition: CommandDef = COMMANDS[id];
+    const prefix = id.split(".")[0];
+    expect(definition.contexts.length).toBeGreaterThan(0);
+    if (prefix === "common") expect(definition.contexts.length).toBeGreaterThan(1);
+    else if (prefix === "tutorial") expect(definition.contexts).toEqual(["global"]);
+    else expect(definition.contexts).toEqual([prefix]);
+  });
+
+  it.each(COMMAND_IDS)("%s writes every Shortcut in canonical form", (id) => {
+    const definition: CommandDef = COMMANDS[id];
+    const all = [...definition.defaults, ...(definition.fixed ?? []), ...(definition.web ?? [])];
+    for (const shortcut of all) expect(normalizeShortcut(shortcut)).toEqual(shortcut);
+  });
+
+  it("gives a Sealed Command Fixed Shortcuts only, and every Fixed Shortcut a reason", () => {
+    for (const id of COMMAND_IDS) {
+      const definition: CommandDef = COMMANDS[id];
+      if (definition.sealed) {
+        expect(definition.defaults, id).toEqual([]);
+        expect(definition.fixed?.length, id).toBeGreaterThan(0);
+      }
+      if (definition.fixed) {
+        expect(typeof lookup(en, definition.fixedReasonKey ?? ""), id).toBe("string");
+        expect(typeof lookup(es, definition.fixedReasonKey ?? ""), id).toBe("string");
       }
     }
   });
 
-  it("splits modifier combinations into display groups", () => {
-    expect(formatKeys(SHORTCUTS["editor.save"], false)).toEqual({
-      groups: [["Ctrl", "S"]],
-      isSequence: false,
-    });
+  it("ships no Default Shortcut that conflicts with another on desktop or web", () => {
+    expect(findDefaultConflicts(false)).toEqual([]);
+    expect(findDefaultConflicts(true)).toEqual([]);
   });
 
-  it("retains terminal plus and minus keys", () => {
-    expect(formatKeys(SHORTCUTS["editor.zoomIn"], false).groups).toEqual([["Ctrl", "+"]]);
-    expect(formatKeys(SHORTCUTS["editor.zoomOut"], false).groups).toEqual([["Ctrl", "-"]]);
-  });
-
-  it.each([
-    ["editor.focusMode", "F11"],
-    ["home.jumpBooks", "1-9"],
-    ["global.showHelp", "?"],
-  ] as const)("keeps %s as a whole key", (id, key) => {
-    expect(formatKeys(SHORTCUTS[id], false).groups).toEqual([[key]]);
-  });
-
-  it("preserves alternative keys as separate groups", () => {
-    expect(formatKeys(SHORTCUTS["home.moveSelection"], false)).toEqual({
-      groups: [["↑/↓"], ["j/k"]],
-      isSequence: false,
-    });
-  });
-
-  it("uppercases sequence keys and marks them as a sequence", () => {
-    expect(formatKeys(SHORTCUTS["global.gotoProjects"], false)).toEqual({
-      groups: [["G"], ["P"]],
-      isSequence: true,
-    });
-  });
-
-  it("maps Ctrl and Alt to macOS symbols", () => {
-    const definition: ShortcutDef = {
-      labelKey: "shortcuts.saveVersion",
-      keys: ["Ctrl+Alt+S"],
-    };
-
-    expect(formatKeys(definition, true).groups).toEqual([["⌘", "⌥", "S"]]);
-  });
-
-  it("normalizes match keys and expands Ctrl to Meta", () => {
-    expect(matchKeys("editor.save")).toEqual(["ctrl+s", "meta+s"]);
-    expect(matchKeys("global.syncNow")).toEqual(["ctrl+shift+y", "meta+shift+y"]);
-    expect(matchKeys("home.moveSelection")).toEqual(["↑/↓", "j/k"]);
-  });
-
-  it("normalizes the toolbar settings shortcut and expands Ctrl to Meta", () => {
-    expect(matchKeys("editor.toolbarSettings")).toEqual(["ctrl+shift+,", "meta+shift+,"]);
-  });
-
-  it("rejects sequence shortcuts for direct key matching", () => {
-    expect(() => matchKeys("global.gotoProjects")).toThrow(
-      "Sequence shortcuts cannot be matched as key combinations"
+  it("declares the Contexts of every route in App.tsx", () => {
+    const app = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
+    const paths = [...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((match) =>
+      match[1].startsWith("/") ? match[1] : `/${match[1]}`
     );
+    expect(paths.length).toBeGreaterThan(0);
+    expect(Object.keys(ROUTE_CONTEXTS).sort()).toEqual([...new Set(paths)].sort());
   });
 
-  it.each([
-    ["editor.strikethrough", [["Ctrl", "Shift", "S"]]],
-    ["editor.highlight", [["Ctrl", "Shift", "H"]]],
-    ["editor.subscript", [["Ctrl", ","]]],
-    ["editor.superscript", [["Ctrl", "."]]],
-    ["editor.code", [["Ctrl", "E"]]],
-    ["editor.codeBlock", [["Ctrl", "Alt", "C"]]],
-    ["editor.heading1", [["Ctrl", "Alt", "1"]]],
-    ["editor.heading2", [["Ctrl", "Alt", "2"]]],
-    ["editor.heading3", [["Ctrl", "Alt", "3"]]],
-    ["editor.bulletList", [["Ctrl", "Shift", "8"]]],
-    ["editor.numberedList", [["Ctrl", "Shift", "7"]]],
-    ["editor.taskList", [["Ctrl", "Shift", "9"]]],
-    ["editor.quote", [["Ctrl", "Shift", "B"]]],
-    ["editor.alignLeft", [["Ctrl", "Shift", "L"]]],
-    ["editor.alignCenter", [["Ctrl", "Shift", "E"]]],
-    ["editor.alignRight", [["Ctrl", "Shift", "R"]]],
-    ["editor.alignJustify", [["Ctrl", "Shift", "J"]]],
-  ] as const)("formats the %s formatting shortcut", (id, groups) => {
-    expect(formatKeys(SHORTCUTS[id], false).groups).toEqual(groups);
+  it("shows every Context on some route, and each in exactly one section", () => {
+    const shown = new Set(Object.values(ROUTE_CONTEXTS).flat());
+    for (const context of ALL_CONTEXTS) {
+      if (context !== "global") expect(shown.has(context), context).toBe(true);
+      const sections = SHORTCUT_SECTIONS.filter((section) =>
+        (section.contexts as readonly ShortcutContext[]).includes(context)
+      );
+      expect(sections, context).toHaveLength(1);
+    }
+    for (const section of SHORTCUT_SECTIONS) {
+      expect(typeof lookup(en, section.labelKey), section.id).toBe("string");
+      expect(typeof lookup(es, section.labelKey), section.id).toBe("string");
+    }
+  });
+
+  it("files Shared Commands under Common and the rest under their Context's section", () => {
+    expect(commandSection("common.save")).toBe("common");
+    expect(commandSection("editor.bold")).toBe("editor");
+    expect(commandSection("tutorial.skip")).toBe("global");
+    expect(commandSection("coverDesigner.duplicate")).toBe("coverDesigner");
+  });
+
+  it("renames only to Commands that exist", () => {
+    for (const [from, to] of Object.entries(COMMAND_RENAMES)) {
+      expect(COMMAND_IDS).toContain(to);
+      expect(COMMAND_IDS).not.toContain(from);
+    }
+  });
+
+  it("implements every Command handled by the editor keymap", () => {
+    for (const id of COMMAND_IDS) {
+      if ((COMMANDS[id] as CommandDef).source === "editor-keymap") {
+        expect(EDITOR_COMMANDS[id], id).toBeTypeOf("function");
+      }
+    }
   });
 });

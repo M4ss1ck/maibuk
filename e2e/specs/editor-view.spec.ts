@@ -42,7 +42,7 @@ async function tabIntoToolbar(page: Page) {
   throw new Error("Tab never reached the toolbar");
 }
 
-test.describe("zoom and width @wf:editor-zoom-width @sc:editor.zoomIn @sc:editor.zoomOut @sc:editor.zoomReset", () => {
+test.describe("zoom and width @wf:editor-zoom-width @sc:common.zoomIn @sc:common.zoomOut @sc:editor.zoomReset", () => {
   test("zoom shortcuts change the percentage and it survives a reload", async ({ page }) => {
     await openEditor(page);
     await expect(zoomButton(page)).toHaveText("100%");
@@ -95,8 +95,10 @@ test.describe("zoom and width @wf:editor-zoom-width @sc:editor.zoomIn @sc:editor
   });
 });
 
-test.describe("focus mode @wf:editor-focus-mode @sc:editor.focusMode", () => {
-  test("F11 hides the chrome with focus in the text; Esc brings it back", async ({ page }) => {
+test.describe("focus mode @wf:editor-focus-mode @sc:bookEditor.focusMode", () => {
+  test("F11 hides the chrome with focus in the text; Esc brings it back @sc:bookEditor.leavePanel", async ({
+    page,
+  }) => {
     await openEditor(page);
     await expect(toolbar(page)).toBeVisible();
     await expect(

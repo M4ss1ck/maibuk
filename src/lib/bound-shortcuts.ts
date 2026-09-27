@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { create } from "zustand";
-import { SHORTCUTS, type ShortcutId } from "@/lib/shortcut-registry";
+import { COMMAND_IDS, type CommandId } from "@/lib/shortcut-registry";
 
 // A Bound Shortcut works on the screen the author is on right now. Whatever
 // handles a registry shortcut declares its id while it is mounted and enabled,
@@ -8,12 +8,12 @@ import { SHORTCUTS, type ShortcutId } from "@/lib/shortcut-registry";
 
 interface BoundShortcutState {
   /** How many mounted bindings currently declare each id. */
-  counts: Partial<Record<ShortcutId, number>>;
+  counts: Partial<Record<CommandId, number>>;
   /** Declares ids as bound; the returned function releases them once. */
-  bind: (ids: readonly ShortcutId[]) => () => void;
+  bind: (ids: readonly CommandId[]) => () => void;
 }
 
-const REGISTRY_ORDER = Object.keys(SHORTCUTS) as ShortcutId[];
+const REGISTRY_ORDER = COMMAND_IDS;
 
 export const useBoundShortcutStore = create<BoundShortcutState>((set) => ({
   counts: {},
@@ -46,18 +46,18 @@ export const useBoundShortcutStore = create<BoundShortcutState>((set) => ({
  * Declares registry shortcuts that something other than `useShortcuts` handles
  * (the TipTap keymap, a native control, a panel's own key handler).
  */
-export function useBoundShortcutIds(ids: readonly ShortcutId[], enabled = true): void {
+export function useBoundShortcutIds(ids: readonly CommandId[], enabled = true): void {
   const bind = useBoundShortcutStore((state) => state.bind);
   // A stable key, so a new array with the same ids does not rebind every render.
   const key = enabled ? ids.join("|") : "";
   useEffect(() => {
     if (!key) return;
-    return bind(key.split("|") as ShortcutId[]);
+    return bind(key.split("|") as CommandId[]);
   }, [bind, key]);
 }
 
 /** The shortcuts that work on this screen right now, in registry order. */
-export function useBoundShortcuts(): ShortcutId[] {
+export function useBoundShortcuts(): CommandId[] {
   const counts = useBoundShortcutStore((state) => state.counts);
   return useMemo(() => REGISTRY_ORDER.filter((id) => (counts[id] ?? 0) > 0), [counts]);
 }

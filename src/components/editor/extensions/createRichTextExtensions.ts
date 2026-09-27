@@ -30,6 +30,7 @@ import { Footnote } from "@/components/editor/extensions/Footnote";
 import { HeadingId } from "@/components/editor/extensions/HeadingId";
 import { SymbolAutocomplete } from "@/components/editor/extensions/SymbolAutocomplete";
 import { AutoClose } from "@/components/editor/extensions/AutoClose";
+import { ShortcutOverrides } from "@/components/editor/extensions/ShortcutOverrides";
 import type { Language } from "@/features/settings/types";
 
 export interface RichTextExtensionsOptions {
@@ -54,6 +55,7 @@ export function createRichTextExtensions({
   dropcursor = true,
 }: RichTextExtensionsOptions = {}): Extensions {
   return [
+    ShortcutOverrides,
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
       link: false,

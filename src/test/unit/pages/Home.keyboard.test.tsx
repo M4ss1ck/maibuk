@@ -164,10 +164,11 @@ describe("Home keyboard navigation", () => {
 
     expect(boundIds()).toEqual(
       expect.arrayContaining([
-        "home.newBook",
-        "home.jumpBooks",
-        "home.moveSelection",
-        "home.openSelected",
+        "bookList.newBook",
+        "bookList.jumpBooks",
+        "bookList.moveSelectionNext",
+        "bookList.moveSelectionPrevious",
+        "bookList.openSelected",
       ])
     );
   });

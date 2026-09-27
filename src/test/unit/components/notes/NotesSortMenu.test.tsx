@@ -11,7 +11,8 @@ const translations: Record<string, string> = {
   "notes.sortTitleDesc": "Title Z–A",
 };
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({
     t: (key: string) => translations[key] ?? key,
   }),

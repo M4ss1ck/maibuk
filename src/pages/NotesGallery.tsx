@@ -187,6 +187,7 @@ export function NotesGallery() {
             children: [
               { id: null as string | null, label: t("notes.unfiled"), language: undefined },
               ...books.map((book) => ({ id: book.id, label: book.title, language: book.language })),
+              // command-exempt: submenu value (which Book a Note is filed in)
             ].map((target) => ({
               id: `move:${target.id ?? "unfiled"}`,
               label: target.label,
@@ -207,6 +208,7 @@ export function NotesGallery() {
       id: "duplicate",
       label: t("notes.duplicate"),
       icon: Copy,
+      commandId: "noteItem.duplicate",
       onAction: () => void createNote(duplicateNoteInput(note)),
     },
     {
@@ -214,6 +216,7 @@ export function NotesGallery() {
       label: t("common.delete"),
       icon: Trash2,
       isDestructive: true,
+      commandId: "noteItem.delete",
       onAction: () => requestDelete(note.id),
     },
   ];
@@ -282,7 +285,7 @@ export function NotesGallery() {
   useShortcuts(
     [
       {
-        keys: ["ctrl+f", "meta+f"],
+        id: "common.find",
         allowInInput: true,
         onTrigger: () => {
           if (document.activeElement === searchInputRef.current) {
@@ -294,12 +297,12 @@ export function NotesGallery() {
         },
       },
       {
-        keys: ["ctrl+shift+f", "meta+shift+f"],
+        id: "notes.advancedFilters",
         allowInInput: true,
         onTrigger: openAdvancedFilters,
       },
       {
-        keys: ["arrowdown", "arrowright", "arrowup", "arrowleft"],
+        id: "notes.enterList",
         preventDefault: false,
         onTrigger: (event) => {
           if (document.activeElement !== document.body) return;
@@ -311,6 +314,15 @@ export function NotesGallery() {
           event.preventDefault();
           focusNote(target.id);
         },
+      },
+      {
+        id: "notes.newNote",
+        onTrigger: () => void handleCreateNote(),
+      },
+      {
+        id: "notes.clearFilters",
+        enabled: hasFilters,
+        onTrigger: clearFilters,
       },
     ],
     { enabled: notes.length > 0 }

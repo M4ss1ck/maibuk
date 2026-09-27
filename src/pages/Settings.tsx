@@ -40,6 +40,7 @@ import { BackupSection } from "@/components/settings/BackupSection";
 import { MetricsSection } from "@/components/settings/MetricsSection";
 import { PasteCleanupSection } from "@/components/settings/PasteCleanupSection";
 import { TutorialSection } from "@/components/settings/TutorialSection";
+import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { AsciiBanner } from "@/components/settings/AsciiBanner";
 import { AsciiFieldBackground } from "@/components/settings/AsciiFieldBackground";
 import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
@@ -99,6 +100,7 @@ export function Settings() {
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [showShortcutEditor, setShowShortcutEditor] = useState(false);
   const [customDictionaryOpen, setCustomDictionaryOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -384,6 +386,29 @@ export function Settings() {
               />
             </div>
           </div>
+        </section>
+
+        {/* Keyboard shortcuts */}
+        <section className="mb-6 @lg:mb-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            {t("shortcuts.title")}
+          </h2>
+          <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4">
+            <p className="text-sm text-muted-foreground">
+              {t("shortcutEditor.settingsDescription")}
+            </p>
+            <Button
+              variant="secondary"
+              data-tutorial="settings.shortcuts"
+              onClick={() => setShowShortcutEditor(true)}
+            >
+              {t("shortcutEditor.open")}
+            </Button>
+          </div>
+          <ShortcutEditorDialog
+            isOpen={showShortcutEditor}
+            onClose={() => setShowShortcutEditor(false)}
+          />
         </section>
 
         {/* Sync Settings */}

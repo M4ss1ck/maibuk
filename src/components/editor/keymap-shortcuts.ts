@@ -1,5 +1,5 @@
 import { type Editor, getExtensionField, getSchemaTypeByName } from "@tiptap/core";
-import { SHORTCUTS, type ShortcutDef, type ShortcutId } from "@/lib/shortcut-registry";
+import { COMMAND_IDS, COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
 
 // Registry shortcuts tagged `editor-keymap` are handled by TipTap extensions,
 // and which extensions an editor loads differs (Notes add task lists, Chapters
@@ -21,7 +21,7 @@ function fromKeymapKey(key: string): string {
   return normalize(key.split("-"));
 }
 
-/** "Ctrl+Shift+S", "Ctrl++" into the same form. */
+/** "Mod+Shift+s", "Mod++" into the same form. */
 function fromRegistryKey(combination: string): string {
   const parts = combination.split("+").filter(Boolean);
   if (combination.endsWith("+")) parts.push("+");
@@ -48,12 +48,20 @@ export function editorKeymapCombos(editor: Editor): Set<string> {
   return combos;
 }
 
-/** The `editor-keymap` registry shortcuts this editor's extensions actually handle. */
-export function editorKeymapShortcutIds(editor: Editor): ShortcutId[] {
+/**
+ * The `editor-keymap` Commands this editor's extensions actually handle. It
+ * checks the built-in keys, which only say whether the extension is loaded;
+ * the keys that fire are the Command's live Shortcuts.
+ */
+export function editorKeymapShortcutIds(editor: Editor): CommandId[] {
   const combos = editorKeymapCombos(editor);
-  return (Object.keys(SHORTCUTS) as ShortcutId[]).filter((id) => {
-    const definition: ShortcutDef = SHORTCUTS[id];
-    if (definition.source !== "editor-keymap" || !("keys" in definition)) return false;
-    return definition.keys.every((combination) => combos.has(fromRegistryKey(combination)));
+  return COMMAND_IDS.filter((id) => {
+    const definition: CommandDef = COMMANDS[id];
+    if (definition.source !== "editor-keymap") return false;
+    const builtIn = [...(definition.fixed ?? []), ...definition.defaults];
+    return (
+      builtIn.length > 0 &&
+      builtIn.every((shortcut) => shortcut.length === 1 && combos.has(fromRegistryKey(shortcut[0])))
+    );
   });
 }
