@@ -74,6 +74,36 @@ async function focusRow(user: ReturnType<typeof userEvent.setup>, query: string)
   return grid;
 }
 
+/**
+ * A nested dialog by its title. Role queries compute every accessible name in the
+ * rendered Command list, which alone takes seconds per retry under coverage.
+ */
+async function findDialogTitled(title: string) {
+  const heading = await screen.findByText(title, { selector: "h1, h2, h3" });
+  const dialog = heading.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]');
+  expect(dialog).not.toBeNull();
+  return dialog as HTMLElement;
+}
+
+/**
+ * Narrows the list before a nested dialog: user-event's Tab checks every
+ * focusable control in the document, and the full Command list makes each
+ * press cost seconds under coverage.
+ */
+async function narrowList(user: ReturnType<typeof userEvent.setup>, query: string) {
+  const search = screen.getByRole("searchbox");
+  await act(async () => search.focus());
+  await user.keyboard(query);
+}
+
+/** The live filter toggle; the group also renders an aria-hidden copy it measures. */
+function filterButton(label: string) {
+  const [live] = screen
+    .getAllByLabelText(label)
+    .filter((button) => !button.closest('[aria-hidden="true"]'));
+  return live;
+}
+
 function expectFocusName(pattern: RegExp) {
   expect(document.activeElement?.getAttribute("aria-label") ?? "").toMatch(pattern);
 }
@@ -95,7 +125,7 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open editor" })).toHaveFocus();
+    expect(screen.getByText("Open editor", { selector: "button" })).toHaveFocus();
   });
 
   it("changes a Shortcut with the keyboard only, and returns focus to Change", async () => {
@@ -225,17 +255,18 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
       },
     });
     const { user } = await openEditor();
-    const resetAll = screen.getByRole("button", { name: "shortcutEditor.resetAll" });
+    await narrowList(user, "shortcuts.syncNow");
+    const resetAll = screen.getByText("shortcutEditor.resetAll", { selector: "button" });
     await act(async () => resetAll.focus());
     await user.keyboard("{Enter}");
 
-    const confirm = await screen.findByRole("dialog", { name: "shortcutEditor.resetAllTitle" });
+    const confirm = await findDialogTitled("shortcutEditor.resetAllTitle");
     await user.keyboard("{Escape}");
     expect(confirm).not.toBeInTheDocument();
     expect(Object.keys(custom())).toHaveLength(2);
 
     await user.keyboard("{Enter}");
-    await screen.findByRole("dialog", { name: "shortcutEditor.resetAllTitle" });
+    await findDialogTitled("shortcutEditor.resetAllTitle");
     // Focus starts on the close button; the confirm button is last in the footer.
     await user.keyboard("{Shift>}{Tab}{/Shift}");
     expect(document.activeElement).toHaveTextContent("shortcutEditor.resetAll");
@@ -281,7 +312,7 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
       },
     });
     const { user } = await openEditor();
-    const customized = screen.getByRole("button", { name: "shortcutEditor.filter.customized" });
+    const customized = filterButton("shortcutEditor.filter.customized");
     await act(async () => customized.focus());
     await user.keyboard("{Enter}");
     await focusRow(user, "shortcuts.syncNow");
@@ -293,7 +324,7 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
 
   it("returns focus to search when Add removes a row from No shortcut", async () => {
     const { user } = await openEditor();
-    const noShortcut = screen.getByRole("button", { name: "shortcutEditor.filter.none" });
+    const noShortcut = filterButton("shortcutEditor.filter.none");
     await act(async () => noShortcut.focus());
     await user.keyboard("{Enter}");
     await focusRow(user, "ephemeral.clear");
@@ -310,11 +341,12 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
       shortcuts: { version: 1, custom: { "editor.italic": [] }, singleKeyEnabled: true },
     });
     const { user } = await openEditor();
-    const load = screen.getByRole("button", { name: "shortcutEditor.file.load" });
+    await narrowList(user, "shortcuts.syncNow");
+    const load = screen.getByText("shortcutEditor.file.load", { selector: "button" });
     await act(async () => load.focus());
     await user.keyboard("{Enter}");
 
-    const preview = await screen.findByRole("dialog", { name: "shortcutEditor.file.previewTitle" });
+    const preview = await findDialogTitled("shortcutEditor.file.previewTitle");
     expect(preview).toHaveTextContent("shortcutEditor.file.dropped.conflict");
     await user.keyboard("{Shift>}{Tab}{/Shift}");
     expect(document.activeElement).toHaveTextContent("shortcutEditor.file.replace");
@@ -329,7 +361,7 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
       shortcuts: { version: 1, custom: { "editor.italic": [] }, singleKeyEnabled: true },
     });
     const { user } = await openEditor();
-    const load = screen.getByRole("button", { name: "shortcutEditor.file.load" });
+    const load = screen.getByText("shortcutEditor.file.load", { selector: "button" });
     await act(async () => load.focus());
     await user.keyboard("{Enter}");
 
@@ -344,7 +376,7 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
       shortcuts: { version: 1, custom: { "editor.italic": [] }, singleKeyEnabled: true },
     });
     const { user } = await openEditor();
-    const save = screen.getByRole("button", { name: "shortcutEditor.file.save" });
+    const save = screen.getByText("shortcutEditor.file.save", { selector: "button" });
     await act(async () => save.focus());
     await user.keyboard("{Enter}");
     expect(file.save).toHaveBeenCalledWith({ "editor.italic": [] });

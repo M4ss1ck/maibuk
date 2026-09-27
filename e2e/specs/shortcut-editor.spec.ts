@@ -75,6 +75,41 @@ test.describe("Shortcut Editor @wf:shortcut-editor", () => {
     await expect(open).toBeFocused();
   });
 
+  test("keeps the current section's header pinned to the top of the list while scrolling", async ({
+    page,
+  }) => {
+    await openFromSettings(page);
+    const dialog = editorDialog(page);
+    const grid = dialog.getByRole("grid");
+    await tabTo(page, commandRow(page, "Save"));
+    // End moves focus to the last Command and scrolls deep into the Editor section.
+    await page.keyboard.press("End");
+    await expect(grid.getByRole("row").last()).toBeFocused();
+
+    const header = dialog.getByRole("row", { name: "Editor", exact: true });
+    // toBeInViewport's IntersectionObserver misreports inside the Virtualizer's
+    // `contain: size` wrappers, so the position is measured against the grid.
+    await expect(header).toBeVisible();
+    const gridBox = await grid.boundingBox();
+    const headerBox = await header.boundingBox();
+    // The header's own padding box sits a border's width below the grid's edge.
+    expect(Math.abs((headerBox?.y ?? 0) - (gridBox?.y ?? 0))).toBeLessThan(12);
+    await capture(page, "shortcut-editor-sticky-section", { around: [grid] });
+
+    // Arrowing up past the top edge scrolls the focused row in below the header.
+    for (let i = 0; i < 16; i++) await page.keyboard.press("ArrowUp");
+    const focused = grid.locator("[role=row]:focus");
+    await expect(focused).toBeVisible();
+    // The Virtualizer re-lays out after the scroll, so wait for the row to settle.
+    await expect
+      .poll(async () => {
+        const pinned = await header.boundingBox();
+        const row = await focused.boundingBox();
+        return (row?.y ?? 0) - ((pinned?.y ?? 0) + (pinned?.height ?? 0));
+      })
+      .toBeGreaterThanOrEqual(-1);
+  });
+
   test("opens from the shortcut help's Customize button @sc:global.showHelp", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();

@@ -89,6 +89,33 @@ function focusKey(target: NonNullable<FocusTarget>): string {
     : `${target.id}:${target.control}:${target.index}`;
 }
 
+/**
+ * ListLayout positions every item absolutely, which defeats CSS `sticky`. A sticky
+ * layout info is rendered in normal flow inside its section instead, so each
+ * section header stays on top until the next section pushes it off. The section
+ * must allow overflow, or its `overflow: hidden` wrapper traps the header.
+ */
+class StickyHeaderListLayout<T> extends ListLayout<T> {
+  getVisibleLayoutInfos(rect: Parameters<ListLayout<T>["getVisibleLayoutInfos"]>[0]) {
+    const infos = super.getVisibleLayoutInfos(rect);
+    for (const info of infos) {
+      if (info.type === "section") info.allowOverflow = true;
+      if (info.type !== "header") continue;
+      info.isSticky = true;
+      // Rows come later in the DOM; without this they paint over the header.
+      info.zIndex = 1;
+    }
+    return infos;
+  }
+}
+
+/**
+ * With an overflowing section, React Aria sets a sticky item's `top` to its offset
+ * in the whole list (a TODO in its VirtualizerItem), so the header's wrapper is
+ * pinned back to the top of the scroll view.
+ */
+const STICKY_HEADER_TOP = "[&_div:has(>[data-sticky-section-header])]:top-0!";
+
 const ROW_CONTROL =
   "inline-flex items-center gap-1 rounded-md px-1.5 py-1 pointer-coarse:px-2.5 pointer-coarse:py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary data-disabled:opacity-40";
 
@@ -544,17 +571,27 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
             </p>
           ) : (
             <Virtualizer
-              layout={ListLayout}
+              layout={StickyHeaderListLayout}
               layoutOptions={{ estimatedRowHeight: 56, estimatedHeadingHeight: 36 }}
             >
               <GridList
                 aria-label={t("shortcutEditor.listLabel")}
-                className="min-h-0 flex-1 overflow-auto rounded-lg border border-border"
+                // scroll-pt on the list and scroll-mt on rows keep a row focused at the top edge
+                // below the sticky header: WebKit honours only one of them on some scroll paths.
+                className={`min-h-0 flex-1 overflow-auto scroll-pt-12 rounded-lg border border-border ${STICKY_HEADER_TOP}`}
                 style={{ height: "min(60dvh, 36rem)" }}
               >
                 {sections.map((section) => (
-                  <GridListSection key={section.id} id={section.id}>
-                    <GridListHeader className="sticky top-0 z-10 border-b border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <GridListSection
+                    key={section.id}
+                    id={section.id}
+                    // A sticky header can only travel inside its parent; fill the section's box.
+                    className="h-full"
+                  >
+                    <GridListHeader
+                      data-sticky-section-header
+                      className="border-b border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
                       {t(section.labelKey)}
                     </GridListHeader>
                     {section.ids.map((id) => (
@@ -562,7 +599,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
                         key={id}
                         id={id}
                         textValue={label(id)}
-                        className="border-b border-border px-3 py-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-inset data-focus-visible:ring-primary"
+                        className="scroll-mt-12 border-b border-border px-3 py-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-inset data-focus-visible:ring-primary"
                       >
                         <div className="flex flex-col gap-2 @2xl:grid @2xl:grid-cols-[minmax(10rem,14rem)_1fr_auto] @2xl:items-center">
                           <div className="min-w-0">
