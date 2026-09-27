@@ -26,8 +26,10 @@ lags, look = [], []
 for t in trace:
     if t.get("firstTextAudio") is None:
         continue
-    # the true onset this line began at: the last onset at or before start+0.6 s
-    cands = [o for o in onsets if o <= t["start"] + 0.6]
+    # Only lines that begin at a true onset (within 0.8 s of the engine's start,
+    # which sits up to the VAD look-behind before it). Lines the engine split
+    # mid-speech, with no silence before them, have no onset to measure from.
+    cands = [o for o in onsets if t["start"] - 0.3 <= o <= t["start"] + 0.8]
     if not cands:
         continue
     onset = cands[-1]
@@ -35,7 +37,7 @@ for t in trace:
     look.append(onset - t["start"])
 q = lambda xs, p: round(sorted(xs)[min(len(xs) - 1, int(p * len(xs)))], 2)
 print(json.dumps({
-    "file": wav.split("/")[-1], "onsets": len(onsets), "lines": len(lags),
+    "file": wav.split("/")[-1], "onsets": len(onsets), "linesAtOnset": len(lags), "linesTotal": len(trace),
     "firstPartialFromTrueOnsetSec": {"p50": q(lags, 0.5), "p95": q(lags, 0.95), "min": q(lags, 0)},
     "trueOnsetMinusLineStartSec": {"p50": q(look, 0.5)},
 }))

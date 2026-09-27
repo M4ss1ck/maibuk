@@ -1,0 +1,160 @@
+{
+  "summary": {
+    "crossOriginIsolated": true,
+    "loadMs": 1357,
+    "audioSec": 44.3,
+    "lines": 13,
+    "firstPartialMs": {
+      "p50": 1254.4,
+      "p95": 1571.5,
+      "n": 13
+    },
+    "finalMs": {
+      "p50": 327.6,
+      "p95": 439.1,
+      "n": 13
+    },
+    "engineFinalMs": {
+      "p50": 24,
+      "p95": 76
+    },
+    "workerToPageMs": {
+      "p50": 0.1,
+      "max": 0.8
+    },
+    "workerPassMs": {
+      "p50": 0,
+      "p95": 58.9,
+      "max": 87.5,
+      "n": 443
+    },
+    "workerComputePct": 8.9,
+    "longTasks": {
+      "count": 0,
+      "over50": 0,
+      "max": null
+    },
+    "typing": {
+      "keys": 269,
+      "eventsOver16ms": 26,
+      "durationMax": 16,
+      "inputDelayMax": 0.5
+    },
+    "memoryMB": null,
+    "chromiumRssMB": {
+      "beforeLoad": 463,
+      "peak": 976,
+      "delta": 513
+    },
+    "interval": "0.5"
+  },
+  "lines": [
+    "It was the best of times. it was the worst of times.",
+    "It was the age of wisdom,",
+    "It was the age of foolishness.",
+    "It was the epoch of belief,",
+    "That was the epoch of incredulity.",
+    "It was the season of light,",
+    "It was the season of darkness.",
+    "It was the spring of hope. It was the winter of despair.",
+    "We had everything before us. We had nothing before us.",
+    "We're all going direct to heaven.",
+    "We were all going to act the other way.",
+    "In short,, the period was so far like the present period,",
+    "That some of its noisiest authorities insisted on its being received for good or for evil in the superlative degree of comparison only."
+  ],
+  "trace": [
+    {
+      "start": 0.9919999241828918,
+      "duration": 3.936000108718872,
+      "firstTextAudio": 2.500000000000001,
+      "completedAudio": 4.999999999999998,
+      "text": "It was the best of times. it was the worst of times."
+    },
+    {
+      "start": 4.76800012588501,
+      "duration": 1.8239998817443848,
+      "firstTextAudio": 5.999999999999995,
+      "completedAudio": 6.999999999999991,
+      "text": "It was the age of wisdom,"
+    },
+    {
+      "start": 6.431999683380127,
+      "duration": 2.111999988555908,
+      "firstTextAudio": 7.499999999999989,
+      "completedAudio": 8.999999999999984,
+      "text": "It was the age of foolishness."
+    },
+    {
+      "start": 8.576000213623047,
+      "duration": 2.0159997940063477,
+      "firstTextAudio": 9.99999999999998,
+      "completedAudio": 10.999999999999977,
+      "text": "It was the epoch of belief,"
+    },
+    {
+      "start": 10.559999465942383,
+      "duration": 2.560000419616699,
+      "firstTextAudio": 11.999999999999973,
+      "completedAudio": 13.499999999999968,
+      "text": "That was the epoch of incredulity."
+    },
+    {
+      "start": 13.215999603271484,
+      "duration": 1.88800048828125,
+      "firstTextAudio": 14.499999999999964,
+      "completedAudio": 15.499999999999961,
+      "text": "It was the season of light,"
+    },
+    {
+      "start": 14.911999702453613,
+      "duration": 2.1120004653930664,
+      "firstTextAudio": 15.99999999999996,
+      "completedAudio": 17.49999999999998,
+      "text": "It was the season of darkness."
+    },
+    {
+      "start": 17.312000274658203,
+      "duration": 3.4879989624023438,
+      "firstTextAudio": 18.499999999999993,
+      "completedAudio": 21.00000000000003,
+      "text": "It was the spring of hope. It was the winter of despair."
+    },
+    {
+      "start": 20.992000579833984,
+      "duration": 3.3599987030029297,
+      "firstTextAudio": 22.50000000000005,
+      "completedAudio": 24.500000000000078,
+      "text": "We had everything before us. We had nothing before us."
+    },
+    {
+      "start": 24.416000366210938,
+      "duration": 1.983999252319336,
+      "firstTextAudio": 25.500000000000092,
+      "completedAudio": 26.500000000000107,
+      "text": "We're all going direct to heaven."
+    },
+    {
+      "start": 26.336000442504883,
+      "duration": 2.2719993591308594,
+      "firstTextAudio": 27.50000000000012,
+      "completedAudio": 29.000000000000142,
+      "text": "We were all going to act the other way."
+    },
+    {
+      "start": 28.86400032043457,
+      "duration": 3.775999069213867,
+      "firstTextAudio": 30.000000000000156,
+      "completedAudio": 33.0000000000002,
+      "text": "In short,, the period was so far like the present period,"
+    },
+    {
+      "start": 32.51199722290039,
+      "duration": 9.472003936767578,
+      "firstTextAudio": 34.00000000000021,
+      "completedAudio": 42.00000000000033,
+      "text": "That some of its noisiest authorities insisted on its being received for good or for evil in the superlative degree of comparison only."
+    }
+  ],
+  "errors": []
+}

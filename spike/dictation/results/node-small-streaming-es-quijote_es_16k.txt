@@ -1,0 +1,36 @@
+Thread 6860048:bin-tokenizer.cpp:256:build_merge_index(): No byte fallback block in this vocabulary, so it cannot be byte-pair encoded; falling back to longest-match encoding.
+
+[10.9s +2.6s lat=54ms] esta es una grabación de librivox
+[13.6s +3.4s lat=71ms] todas las grabaciones de librivox son de dominio público
+[17.0s +5.1s lat=52ms] para mayor información o para ser un voluntario por favor visite librivox punto org
+[22.6s +3.6s lat=61ms] grabada por marta arevalo en la ciudad de guatemala guatemala
+[27.2s +3.7s lat=66ms] la primera parte del ingenioso hidalgo don quijote de la mancha
+[30.7s +2.0s lat=53ms] por miguel de cervantes saavedra
+[32.6s +2.9s lat=56ms] dedicación al duque de bejar y prólogo
+[36.7s +1.4s lat=40ms] al duque de béjar
+[38.5s +1.6s lat=61ms] marques de gibralión
+[40.3s +2.5s lat=67ms] conde de benalcázar y bañares
+[42.5s +2.3s lat=61ms] vizconde de la puebla de alcocer
+[44.9s +3.4s lat=72ms] señor de las villas de capilla curiel y burguillos
+[49.7s +8.2s lat=73ms] en fe del buen acogimiento y honra que hace vuestra excelencia a toda suerte de libros como príncipe tan inclinado a favorecer las buenas artes
+[57.8s +5.2s lat=86ms] mayormente las que por su nobleza no se abaten al servicio y granjerías del vulgo
+[63.1s +2.4s lat=34ms] he determinado de sacar a luz
+[65.3s +2.7s lat=67ms] al ingenioso hidalgo don quijote de la mancha
+[67.8s +3.2s lat=59ms] al abrigo del clarísimo nombre de vuestra excelencia
+[70.9s +1.1s lat=43ms] a quién
+[71.8s +3.0s lat=56ms] con el acatamiento que debo a tanta grandeza
+[74.6s +3.4s lat=42ms] suplico le reciba agradablemente en su protección
+[78.1s +7.3s lat=89ms] para que a su sombra aunque desnudo de aquel precioso ornamento de elegancia y erudición de que suelen andar vestidas las sobras
+[85.0s +3.5s lat=66ms] que se componen en las casas de los hombres que saben
+[88.6s +3.2s lat=66ms] ose parecer seguramente en el juicio de algunos que
+[91.7s +2.9s lat=104ms] con tiniéndose en los límites de su ignorancia
+[94.5s +4.4s lat=74ms] sueran condenar con más rigor y menos justicia los trabajos ajenos
+[98.8s +5.0s lat=58ms] que poniendo los ojos la prudencia de vuestra excelencia en mi buen deseo
+[103.9s +3.6s lat=67ms] fío que no desdeñarían la cortedad de tan humilde servicio
+[108.5s +2.0s lat=51ms] miguel de cervantes saavedra
+[111.7s +1.0s lat=36ms] prólogo
+[113.1s +1.6s lat=36ms] despreocupado lector
+[115.0s +3.2s lat=47ms] sin juramento me podrás creer que quisiera que este libro
+[117.9s +1.8s lat=29ms] como hijo del entendimiento.
+[119.5s +0.5s lat=35ms] por lo tanto,
+{"model":"small-streaming-es","audioSec":120,"loadMs":394,"wallMs":13456,"computeLoadPct":11.2,"passMs":{"p50":"0.0","p95":"72.0","max":"124.2"},"lineLatencyMs":[54,71,52,61,66,53,56,40,61,67,61,72,73,86,34,67,59,43,56,42,89,66,66,104,74,58,67,51,36,36,47,29,35],"firstText":{"audioSec":11.9,"text":"esta"},"rssMB":{"afterLoad":943,"peak":1131}}

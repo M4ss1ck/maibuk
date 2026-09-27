@@ -1,0 +1,87 @@
+{
+  "summary": {
+    "crossOriginIsolated": true,
+    "loadMs": 3164,
+    "audioSec": 120,
+    "lines": 33,
+    "firstPartialMs": {
+      "p50": 1358.4,
+      "p95": 1573.6,
+      "n": 32
+    },
+    "finalMs": {
+      "p50": 251.9,
+      "p95": 492.2,
+      "n": 33
+    },
+    "engineFinalMs": {
+      "p50": 75,
+      "p95": 143
+    },
+    "workerToPageMs": {
+      "p50": 0.1,
+      "max": 0.5
+    },
+    "workerPassMs": {
+      "p50": 0,
+      "p95": 91.8,
+      "max": 188.7,
+      "n": 1200
+    },
+    "workerComputePct": 13.7,
+    "longTasks": {
+      "count": 0,
+      "over50": 0,
+      "max": null
+    },
+    "typing": {
+      "keys": 269,
+      "eventsOver16ms": 15,
+      "durationMax": 16,
+      "inputDelayMax": 0.2
+    },
+    "memoryMB": null,
+    "chromiumRssMB": {
+      "beforeLoad": 538,
+      "peak": 1338,
+      "delta": 800
+    },
+    "interval": "0.5"
+  },
+  "lines": [
+    "esta es una grabación de librivox",
+    "todas las grabaciones de librivox son de dominio público",
+    "para mayor información o para ser un voluntario por favor visite librivox punto org",
+    "grabada por marta arevalo en la ciudad de guatemala guatemala",
+    "la primera parte del ingenioso hidalgo don quijote de la mancha",
+    "por miguel de cervantes saavedra",
+    "dedicación al duque de bejar y prólogo",
+    "al duque de béjar",
+    "marqués de gibralión",
+    "conde de benalcázar y bañares",
+    "vizconde de la puebla de alcocer",
+    "señor de las villas de capilla curiel y burguillos",
+    "en fe del buen acogimiento y honra que hace vuestra excelencia a toda suerte de libros como príncipe tan inclinado a favorecer las buenas artes",
+    "mayormente las que por su nobleza no se abaten al servicio y granjerías del vulgo",
+    "he determinado de sacar a luz",
+    "al ingenioso hidalgo don quijote de la mancha",
+    "al abrigo del clarísimo nombre de vuestra excelencia",
+    "a quién",
+    "con el acatamiento que debo a tanta grandeza",
+    "suplico le reciba agradablemente en su protección",
+    "para que a su sombra aunque desnudo de aquel precioso ornamento de elegancia y erudición de que suelen andar vestidas las obras",
+    "que se componen en las casas de los hombres que saben",
+    "ose parecer seguramente en el juicio de algunos que",
+    "con tiniéndose en los límites de su ignorancia",
+    "suenan condenar con más rigor y menos justicia los trabajos ajenos",
+    "que poniendo los ojos la prudencia de vuestra excelencia en mi buen deseo",
+    "fío que no desdeñarían la cortedad de tan humilde servicio",
+    "miguel de cervantes saavedra",
+    "prólogo",
+    "despreocupado lector",
+    "sin juramento me podrás creer que quisiera que este libro",
+    "como hijo del entendimiento",
+    "por lo tanto,"
+  ],
+  "errors": []
+}

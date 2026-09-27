@@ -1,0 +1,375 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+    "crossOriginIsolated": true,
+    "sharedArrayBuffer": false,
+    "webkitSpeechRecognition": false,
+    "webgpu": false,
+    "mediaDevices": true,
+    "longtaskSupported": false,
+    "eventTimingSupported": true,
+    "getUserMedia": "NotAllowedError: The request is not allowed by the user agent or the platform in the current context, possibly because the user denied permission."
+  },
+  "model": "small-streaming-es",
+  "source": "quijote_es_16k.wav",
+  "singleThread": true,
+  "options": [
+    [
+      "transcription_interval",
+      "0.2"
+    ]
+  ],
+  "native": {
+    "summary": {
+      "source": "/mnt/Data/Trabajo/native/maibuk/src-tauri/../spike/dictation/public/audio/quijote_es_16k.wav",
+      "arch": 4,
+      "loadMs": 203,
+      "audioSec": 120,
+      "lines": 33,
+      "firstPartialMs": {
+        "p50": 609.5,
+        "p95": 755.1
+      },
+      "finalMs": {
+        "p50": 103,
+        "p95": 159
+      },
+      "engineFinalMs": {
+        "p50": 72,
+        "p95": 138
+      },
+      "passMs": {
+        "p50": 67.9,
+        "p95": 121.5,
+        "max": 250.4
+      },
+      "cpuPctOfOneCore": 54.7,
+      "inputDbfs": {
+        "rms": -31.4,
+        "peak": -10.9
+      },
+      "rssMB": {
+        "beforeLoad": 175,
+        "afterLoad": 507,
+        "peak": 555
+      }
+    },
+    "trace": [
+      {
+        "start": 10.911999702453613,
+        "duration": 2.560000419616699,
+        "firstTextAudio": 11.599999999999975,
+        "completedAudio": 13.499999999999968,
+        "text": "esta es una grabación de librivox"
+      },
+      {
+        "start": 13.600000381469727,
+        "duration": 3.3599987030029297,
+        "firstTextAudio": 14.199999999999966,
+        "completedAudio": 16.99999999999997,
+        "text": "todas las grabaciones de librivox son de dominio público"
+      },
+      {
+        "start": 17.02400016784668,
+        "duration": 5.08799934387207,
+        "firstTextAudio": 17.59999999999998,
+        "completedAudio": 22.200000000000045,
+        "text": "para mayor información o para ser un voluntario por favor visite librivox punto org"
+      },
+      {
+        "start": 22.59200096130371,
+        "duration": 3.647998809814453,
+        "firstTextAudio": 23.20000000000006,
+        "completedAudio": 26.300000000000104,
+        "text": "grabada por marta arevalo en la ciudad de guatemala guatemala"
+      },
+      {
+        "start": 27.200000762939453,
+        "duration": 3.6799983978271484,
+        "firstTextAudio": 27.800000000000125,
+        "completedAudio": 30.90000000000017,
+        "text": "la primera parte del ingenioso hidalgo don quijote de la mancha"
+      },
+      {
+        "start": 30.68800163269043,
+        "duration": 1.9519977569580078,
+        "firstTextAudio": 31.200000000000173,
+        "completedAudio": 32.700000000000195,
+        "text": "por miguel de cervantes saavedra"
+      },
+      {
+        "start": 32.60799789428711,
+        "duration": 2.944000244140625,
+        "firstTextAudio": 33.2000000000002,
+        "completedAudio": 35.600000000000236,
+        "text": "dedicación al duque de bejar y prólogo"
+      },
+      {
+        "start": 36.70399856567383,
+        "duration": 1.4080009460449219,
+        "firstTextAudio": 37.30000000000026,
+        "completedAudio": 38.20000000000027,
+        "text": "al duque de béjar"
+      },
+      {
+        "start": 38.49599838256836,
+        "duration": 1.6319999694824219,
+        "firstTextAudio": 39.100000000000286,
+        "completedAudio": 40.2000000000003,
+        "text": "marques de gibralión"
+      },
+      {
+        "start": 40.25600051879883,
+        "duration": 2.4959983825683594,
+        "firstTextAudio": 40.80000000000031,
+        "completedAudio": 42.80000000000034,
+        "text": "conde de benalcázar y bañares"
+      },
+      {
+        "start": 42.52799987792969,
+        "duration": 2.33599853515625,
+        "firstTextAudio": 43.10000000000034,
+        "completedAudio": 45.00000000000037,
+        "text": "vizconde de la puebla de alcocer"
+      },
+      {
+        "start": 44.92799758911133,
+        "duration": 3.4240036010742188,
+        "firstTextAudio": 45.50000000000038,
+        "completedAudio": 48.40000000000042,
+        "text": "señor de las villas de capilla curiel y burguillos"
+      },
+      {
+        "start": 49.69599914550781,
+        "duration": 8.2239990234375,
+        "firstTextAudio": 50.300000000000445,
+        "completedAudio": 58.000000000000554,
+        "text": "en fe del buen acogimiento y honra que hace vuestra excelencia a toda suerte de libros como príncipe tan inclinado a favorecer las buenas artes"
+      },
+      {
+        "start": 57.7599983215332,
+        "duration": 5.152000427246094,
+        "firstTextAudio": 58.40000000000056,
+        "completedAudio": 63.000000000000625,
+        "text": "mayormente las que por su nobleza no se abaten al servicio y granjerías del vulgo"
+      },
+      {
+        "start": 63.104000091552734,
+        "duration": 2.3999977111816406,
+        "firstTextAudio": 63.700000000000635,
+        "completedAudio": 65.70000000000054,
+        "text": "he determinado de sacar a luz"
+      },
+      {
+        "start": 65.27999877929688,
+        "duration": 2.720001220703125,
+        "firstTextAudio": 65.80000000000054,
+        "completedAudio": 68.00000000000041,
+        "text": "al ingenioso hidalgo don quijote de la mancha"
+      },
+      {
+        "start": 67.83999633789062,
+        "duration": 3.1680068969726562,
+        "firstTextAudio": 68.40000000000039,
+        "completedAudio": 71.10000000000024,
+        "text": "al abrigo del clarísimo nombre de vuestra excelencia"
+      },
+      {
+        "start": 70.87999725341797,
+        "duration": 1.0880050659179688,
+        "firstTextAudio": 71.40000000000022,
+        "completedAudio": 72.00000000000018,
+        "text": "a quién"
+      },
+      {
+        "start": 71.7760009765625,
+        "duration": 3.0400009155273438,
+        "firstTextAudio": 72.30000000000017,
+        "completedAudio": 74.90000000000002,
+        "text": "con el acatamiento que debo a tanta grandeza"
+      },
+      {
+        "start": 74.6240005493164,
+        "duration": 3.391998291015625,
+        "firstTextAudio": 75.3,
+        "completedAudio": 78.09999999999984,
+        "text": "suplico le reciba agradablemente en su protección"
+      },
+      {
+        "start": 78.08000183105469,
+        "duration": 7.327995300292969,
+        "firstTextAudio": 78.59999999999981,
+        "completedAudio": 85.49999999999942,
+        "text": "para que a su sombra aunque desnudo de aquel precioso ornamento de elegancia y erudición de que suelen andar vestidas las sobras"
+      },
+      {
+        "start": 85.02400207519531,
+        "duration": 3.4560012817382812,
+        "firstTextAudio": 85.59999999999941,
+        "completedAudio": 88.49999999999925,
+        "text": "que se componen en las casas de los hombres que saben"
+      },
+      {
+        "start": 88.63999938964844,
+        "duration": 3.2320022583007812,
+        "firstTextAudio": 89.2999999999992,
+        "completedAudio": 91.89999999999905,
+        "text": "ose parecer seguramente en el juicio de algunos que"
+      },
+      {
+        "start": 91.68000030517578,
+        "duration": 2.944000244140625,
+        "firstTextAudio": 92.19999999999904,
+        "completedAudio": 94.6999999999989,
+        "text": "con tiniéndose en los límites de su ignorancia"
+      },
+      {
+        "start": 94.49600219726562,
+        "duration": 4.351997375488281,
+        "firstTextAudio": 95.19999999999887,
+        "completedAudio": 98.89999999999866,
+        "text": "sueran condenar con más rigor y menos justicia los trabajos ajenos"
+      },
+      {
+        "start": 98.81600189208984,
+        "duration": 4.991996765136719,
+        "firstTextAudio": 99.39999999999863,
+        "completedAudio": 103.89999999999837,
+        "text": "que poniendo los ojos la prudencia de vuestra excelencia en mi buen deseo"
+      },
+      {
+        "start": 103.90399932861328,
+        "duration": 3.6480026245117188,
+        "firstTextAudio": 104.49999999999834,
+        "completedAudio": 107.59999999999816,
+        "text": "fío que no desdeñarían la cortedad de tan humilde servicio"
+      },
+      {
+        "start": 108.47999572753906,
+        "duration": 1.9520034790039062,
+        "firstTextAudio": 108.99999999999808,
+        "completedAudio": 110.499999999998,
+        "text": "miguel de cervantes saavedra"
+      },
+      {
+        "start": 111.71199798583984,
+        "duration": 0.99200439453125,
+        "firstTextAudio": 112.39999999999789,
+        "completedAudio": 112.79999999999787,
+        "text": "prólogo"
+      },
+      {
+        "start": 113.05599975585938,
+        "duration": 1.6320037841796875,
+        "firstTextAudio": 113.59999999999782,
+        "completedAudio": 114.69999999999776,
+        "text": "despreocupado lector"
+      },
+      {
+        "start": 114.97599792480469,
+        "duration": 3.167999267578125,
+        "firstTextAudio": 115.49999999999771,
+        "completedAudio": 118.19999999999756,
+        "text": "sin juramento me podrás creer que quisiera que este libro"
+      },
+      {
+        "start": 117.85599517822266,
+        "duration": 1.824005126953125,
+        "firstTextAudio": 118.49999999999754,
+        "completedAudio": 119.69999999999747,
+        "text": "como hijo del entendimiento."
+      },
+      {
+        "start": 119.45600128173828,
+        "duration": 0.5439987182617188,
+        "firstTextAudio": 119.99999999999746,
+        "completedAudio": 119.99999999999746,
+        "text": "fuera de la casa"
+      }
+    ]
+  },
+  "bridgeMs": {
+    "p50": -0.052978515625,
+    "max": 1.3603515625,
+    "n": 569
+  },
+  "page": {
+    "crossOriginIsolated": true,
+    "loadMs": 0,
+    "audioSec": 0,
+    "lines": 0,
+    "firstPartialMs": {
+      "p50": null,
+      "p95": null,
+      "n": 0
+    },
+    "finalMs": {
+      "p50": null,
+      "p95": null,
+      "n": 0
+    },
+    "engineFinalMs": {
+      "p50": null,
+      "p95": null
+    },
+    "workerToPageMs": {
+      "p50": null,
+      "max": null
+    },
+    "workerPassMs": {
+      "p50": null,
+      "p95": null,
+      "max": null,
+      "n": 0
+    },
+    "workerComputePct": 0,
+    "longTasks": {
+      "count": 0,
+      "over50": 0,
+      "max": null
+    },
+    "typing": {
+      "keys": 0,
+      "eventsOver16ms": 0,
+      "durationMax": null,
+      "inputDelayMax": null
+    },
+    "memoryMB": null
+  },
+  "info": [],
+  "lines": [
+    "esta es una grabación de librivox",
+    "todas las grabaciones de librivox son de dominio público",
+    "para mayor información o para ser un voluntario por favor visite librivox punto org",
+    "grabada por marta arevalo en la ciudad de guatemala guatemala",
+    "la primera parte del ingenioso hidalgo don quijote de la mancha",
+    "por miguel de cervantes saavedra",
+    "dedicación al duque de bejar y prólogo",
+    "al duque de béjar",
+    "marques de gibralión",
+    "conde de benalcázar y bañares",
+    "vizconde de la puebla de alcocer",
+    "señor de las villas de capilla curiel y burguillos",
+    "en fe del buen acogimiento y honra que hace vuestra excelencia a toda suerte de libros como príncipe tan inclinado a favorecer las buenas artes",
+    "mayormente las que por su nobleza no se abaten al servicio y granjerías del vulgo",
+    "he determinado de sacar a luz",
+    "al ingenioso hidalgo don quijote de la mancha",
+    "al abrigo del clarísimo nombre de vuestra excelencia",
+    "a quién",
+    "con el acatamiento que debo a tanta grandeza",
+    "suplico le reciba agradablemente en su protección",
+    "para que a su sombra aunque desnudo de aquel precioso ornamento de elegancia y erudición de que suelen andar vestidas las sobras",
+    "que se componen en las casas de los hombres que saben",
+    "ose parecer seguramente en el juicio de algunos que",
+    "con tiniéndose en los límites de su ignorancia",
+    "sueran condenar con más rigor y menos justicia los trabajos ajenos",
+    "que poniendo los ojos la prudencia de vuestra excelencia en mi buen deseo",
+    "fío que no desdeñarían la cortedad de tan humilde servicio",
+    "miguel de cervantes saavedra",
+    "prólogo",
+    "despreocupado lector",
+    "sin juramento me podrás creer que quisiera que este libro",
+    "como hijo del entendimiento.",
+    "fuera de la casa"
+  ]
+}

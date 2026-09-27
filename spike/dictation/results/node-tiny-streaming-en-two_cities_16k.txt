@@ -1,0 +1,14 @@
+[1.0s +3.9s lat=54ms] It was the best of times. it was the worst of times.
+[4.8s +1.8s lat=18ms] It was the age of wisdom,
+[6.4s +2.1s lat=18ms] It was the age of foolishness.
+[8.6s +2.0s lat=17ms] It was the epoch of belief,
+[10.6s +2.6s lat=32ms] It was the epoch of incredulity.
+[13.2s +1.9s lat=17ms] It was the season of light,
+[14.9s +2.1s lat=18ms] It was the season of darkness.
+[17.3s +3.5s lat=24ms] It was the spring of hope. It was the winter of despair.
+[21.0s +3.4s lat=40ms] We had everything before us. We had nothing before us.
+[24.4s +2.0s lat=59ms] We're all going direct to heaven.
+[26.3s +2.3s lat=20ms] We were all going to act the other way.
+[28.9s +3.8s lat=20ms] In short,, the period was so far like the present period,
+[32.5s +9.5s lat=49ms] That some of its noisiest authorities insisted on its being received for good or for evil in the superlative degree of comparison only.
+{"model":"tiny-streaming-en","audioSec":44.4,"loadMs":234,"wallMs":3867,"computeLoadPct":8.7,"passMs":{"p50":"0.0","p95":"55.1","max":"110.3"},"lineLatencyMs":[54,18,18,17,32,17,18,24,40,59,20,20,49],"firstText":{"audioSec":2.4,"text":"It was the best of the best of"},"rssMB":{"afterLoad":663,"peak":875}}

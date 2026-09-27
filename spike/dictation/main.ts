@@ -270,10 +270,18 @@ declare global {
       lines: TranscriptLine[];
       trace: () => unknown[];
       log: string[];
+      markWindow: (edge: "start" | "end") => void;
     };
   }
 }
-window.__spike = { state: "idle", errors: [], load, start, stop, summary: summarize, reset, lines, trace: () => [...lineTrace.values()], log };
+function markWindow(edge: "start" | "end") {
+  if (edge === "start") {
+    windowStart = performance.now();
+    windowEnd = 0;
+  } else windowEnd = performance.now();
+}
+window.__spike = { state: "idle", errors: [], load, start, stop, summary: summarize, reset, lines, trace: () => [...lineTrace.values()], log, markWindow };
+if ("__TAURI_INTERNALS__" in window) void import("./native");
 
 $("load").addEventListener("click", async () => {
   await load($<HTMLSelectElement>("model").value);

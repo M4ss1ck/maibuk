@@ -1,0 +1,43 @@
+{
+  "crossOriginIsolated": true,
+  "loadMs": 0,
+  "audioSec": 0,
+  "lines": 0,
+  "firstPartialMs": {
+    "p50": null,
+    "p95": null,
+    "n": 0
+  },
+  "finalMs": {
+    "p50": null,
+    "p95": null,
+    "n": 0
+  },
+  "engineFinalMs": {
+    "p50": null,
+    "p95": null
+  },
+  "workerToPageMs": {
+    "p50": null,
+    "max": null
+  },
+  "workerPassMs": {
+    "p50": null,
+    "p95": null,
+    "max": null,
+    "n": 0
+  },
+  "workerComputePct": 0,
+  "longTasks": {
+    "count": 0,
+    "over50": 0,
+    "max": null
+  },
+  "typing": {
+    "keys": 179,
+    "eventsOver16ms": 10,
+    "durationMax": 16,
+    "inputDelayMax": 0.2
+  },
+  "memoryMB": null
+}

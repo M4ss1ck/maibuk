@@ -1,0 +1,209 @@
+{
+  "summary": {
+    "crossOriginIsolated": true,
+    "loadMs": 1330,
+    "audioSec": 44.3,
+    "lines": 19,
+    "firstPartialMs": {
+      "p50": 1258.8,
+      "p95": 1866.9,
+      "n": 19
+    },
+    "finalMs": {
+      "p50": 151,
+      "p95": 469.9,
+      "n": 19
+    },
+    "engineFinalMs": {
+      "p50": 40,
+      "p95": 115
+    },
+    "workerToPageMs": {
+      "p50": 0.1,
+      "max": 0.2
+    },
+    "workerPassMs": {
+      "p50": 0,
+      "p95": 56.7,
+      "max": 130.2,
+      "n": 443
+    },
+    "workerComputePct": 9,
+    "longTasks": {
+      "count": 0,
+      "over50": 0,
+      "max": null
+    },
+    "typing": {
+      "keys": 268,
+      "eventsOver16ms": 10,
+      "durationMax": 16,
+      "inputDelayMax": 0.2
+    },
+    "memoryMB": null,
+    "chromiumRssMB": {
+      "beforeLoad": 466,
+      "peak": 975,
+      "delta": 509
+    },
+    "interval": "0.5",
+    "query": "opt.vad_window_duration=0.1"
+  },
+  "lines": [
+    "It was the best of times,",
+    "And it was the worst of times.",
+    "It was the age of wisdom,",
+    "It was the age of foolishness.",
+    "It was the epoch of belief,",
+    "That was the epoch of incredulity.",
+    "It was the season of light,",
+    "It was the season of darkness.",
+    "It was the spring of hope,",
+    "It was the wind-throof despair.",
+    "We had everything before us. We had nothing before us.",
+    "We were all going direct to heaven.",
+    "We were all going direct the other way.",
+    "In short,",
+    "The period was so far like the present period.",
+    "But some of its noisiest authorities insisted on it being received,",
+    "For good.",
+    "Good, off evil.",
+    "2022 in the superlative degree of comparison only."
+  ],
+  "trace": [
+    {
+      "start": 0.800000011920929,
+      "duration": 2.1760001182556152,
+      "firstTextAudio": 2.0000000000000004,
+      "completedAudio": 3.0000000000000013,
+      "text": "It was the best of times,"
+    },
+    {
+      "start": 2.5279998779296875,
+      "duration": 2.1760001182556152,
+      "firstTextAudio": 4.000000000000002,
+      "completedAudio": 4.999999999999998,
+      "text": "And it was the worst of times."
+    },
+    {
+      "start": 4.607999801635742,
+      "duration": 1.760000228881836,
+      "firstTextAudio": 5.999999999999995,
+      "completedAudio": 6.499999999999993,
+      "text": "It was the age of wisdom,"
+    },
+    {
+      "start": 6.239999771118164,
+      "duration": 2.1120004653930664,
+      "firstTextAudio": 7.499999999999989,
+      "completedAudio": 8.499999999999986,
+      "text": "It was the age of foolishness."
+    },
+    {
+      "start": 8.383999824523926,
+      "duration": 2.0159997940063477,
+      "firstTextAudio": 9.499999999999982,
+      "completedAudio": 10.499999999999979,
+      "text": "It was the epoch of belief,"
+    },
+    {
+      "start": 10.335999488830566,
+      "duration": 2.592000961303711,
+      "firstTextAudio": 11.499999999999975,
+      "completedAudio": 12.99999999999997,
+      "text": "That was the epoch of incredulity."
+    },
+    {
+      "start": 13.055999755859375,
+      "duration": 1.8559999465942383,
+      "firstTextAudio": 14.499999999999964,
+      "completedAudio": 14.999999999999963,
+      "text": "It was the season of light,"
+    },
+    {
+      "start": 14.720000267028809,
+      "duration": 2.1120004653930664,
+      "firstTextAudio": 15.99999999999996,
+      "completedAudio": 16.99999999999997,
+      "text": "It was the season of darkness."
+    },
+    {
+      "start": 17.1200008392334,
+      "duration": 1.7599983215332031,
+      "firstTextAudio": 18.499999999999993,
+      "completedAudio": 19,
+      "text": "It was the spring of hope,"
+    },
+    {
+      "start": 18.560001373291016,
+      "duration": 2.0479984283447266,
+      "firstTextAudio": 20.000000000000014,
+      "completedAudio": 21.00000000000003,
+      "text": "It was the wind-throof despair."
+    },
+    {
+      "start": 20.80000114440918,
+      "duration": 3.3599987030029297,
+      "firstTextAudio": 22.000000000000043,
+      "completedAudio": 24.500000000000078,
+      "text": "We had everything before us. We had nothing before us."
+    },
+    {
+      "start": 24.224000930786133,
+      "duration": 1.9519996643066406,
+      "firstTextAudio": 25.500000000000092,
+      "completedAudio": 26.500000000000107,
+      "text": "We were all going direct to heaven."
+    },
+    {
+      "start": 26.144001007080078,
+      "duration": 2.2719993591308594,
+      "firstTextAudio": 27.50000000000012,
+      "completedAudio": 28.500000000000135,
+      "text": "We were all going direct the other way."
+    },
+    {
+      "start": 28.672000885009766,
+      "duration": 1.0879993438720703,
+      "firstTextAudio": 30.000000000000156,
+      "completedAudio": 30.000000000000156,
+      "text": "In short,"
+    },
+    {
+      "start": 29.50400161743164,
+      "duration": 2.911998748779297,
+      "firstTextAudio": 31.00000000000017,
+      "completedAudio": 32.50000000000019,
+      "text": "The period was so far like the present period."
+    },
+    {
+      "start": 32.35199737548828,
+      "duration": 4.416004180908203,
+      "firstTextAudio": 33.500000000000206,
+      "completedAudio": 37.000000000000256,
+      "text": "But some of its noisiest authorities insisted on it being received,"
+    },
+    {
+      "start": 36.47999954223633,
+      "duration": 1.1199989318847656,
+      "firstTextAudio": 37.50000000000026,
+      "completedAudio": 38.00000000000027,
+      "text": "For good."
+    },
+    {
+      "start": 37.152000427246094,
+      "duration": 1.503997802734375,
+      "firstTextAudio": 39.000000000000284,
+      "completedAudio": 39.000000000000284,
+      "text": "Good, off evil."
+    },
+    {
+      "start": 38.27199935913086,
+      "duration": 3.520000457763672,
+      "firstTextAudio": 39.50000000000029,
+      "completedAudio": 42.00000000000033,
+      "text": "2022 in the superlative degree of comparison only."
+    }
+  ],
+  "errors": []
+}

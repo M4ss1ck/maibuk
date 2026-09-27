@@ -1,0 +1,67 @@
+{
+  "summary": {
+    "crossOriginIsolated": true,
+    "loadMs": 3553,
+    "audioSec": 44.3,
+    "lines": 13,
+    "firstPartialMs": {
+      "p50": 1307.4,
+      "p95": 1634.4,
+      "n": 13
+    },
+    "finalMs": {
+      "p50": 393.2,
+      "p95": 499.7,
+      "n": 13
+    },
+    "engineFinalMs": {
+      "p50": 86,
+      "p95": 218
+    },
+    "workerToPageMs": {
+      "p50": 0.1,
+      "max": 1
+    },
+    "workerPassMs": {
+      "p50": 0,
+      "p95": 134.3,
+      "max": 223.2,
+      "n": 443
+    },
+    "workerComputePct": 20.9,
+    "longTasks": {
+      "count": 0,
+      "over50": 0,
+      "max": null
+    },
+    "typing": {
+      "keys": 268,
+      "eventsOver16ms": 25,
+      "durationMax": 16,
+      "inputDelayMax": 0.2
+    },
+    "memoryMB": null,
+    "chromiumRssMB": {
+      "beforeLoad": 539,
+      "peak": 1426,
+      "delta": 887
+    },
+    "interval": "0.5"
+  },
+  "lines": [
+    "It was the best of times, it was the worst of times.",
+    "It was the age of wisdom,",
+    "It was the age of foolishness.",
+    "It was the epoch of belief,",
+    "It was the epoch of incredulity.",
+    "It was a season of light,",
+    "It was a season of darkness.",
+    "It was the spring of hope. It was the winter of despair.",
+    "We had everything before us, we had nothing before us.",
+    "We were all going direct to heaven,",
+    "We were all going to act the other way.",
+    "In short,, the period was so far like the present period,",
+    "That some of its noisiest authorities insisted on its being received for good or for evil in the superlative degree of comparison only."
+  ],
+  "errors": []
+}

@@ -1,0 +1,14 @@
+# PROTOTYPE. Linux native dictation spike: cpal mic capture + Moonshine C API.
+[package]
+name = "dictation-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+name = "dictation_spike"
+
+[dependencies]
+cpal = "0.18"

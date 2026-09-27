@@ -1,0 +1,61 @@
+{
+  "summary": {
+    "crossOriginIsolated": true,
+    "loadMs": 1417,
+    "audioSec": 44.3,
+    "lines": 13,
+    "firstPartialMs": {
+      "p50": 1249.6,
+      "p95": 1572.8,
+      "n": 13
+    },
+    "finalMs": {
+      "p50": 329.7,
+      "p95": 438.9,
+      "n": 13
+    },
+    "engineFinalMs": {
+      "p50": 26,
+      "p95": 83
+    },
+    "workerToPageMs": {
+      "p50": 0.1,
+      "max": 0.9
+    },
+    "workerPassMs": {
+      "p50": 0,
+      "p95": 58.8,
+      "max": 89,
+      "n": 443
+    },
+    "workerComputePct": 8.8,
+    "longTasks": {
+      "count": 0,
+      "over50": 0,
+      "max": null
+    },
+    "typing": {
+      "keys": 269,
+      "eventsOver16ms": 25,
+      "durationMax": 16,
+      "inputDelayMax": 0.2
+    },
+    "memoryMB": null
+  },
+  "lines": [
+    "It was the best of times. it was the worst of times.",
+    "It was the age of wisdom,",
+    "It was the age of foolishness.",
+    "It was the epoch of belief,",
+    "That was the epoch of incredulity.",
+    "It was the season of light,",
+    "It was the season of darkness.",
+    "It was the spring of hope. It was the winter of despair.",
+    "We had everything before us. We had nothing before us.",
+    "We're all going direct to heaven.",
+    "We were all going to act the other way.",
+    "In short,, the period was so far like the present period,",
+    "That some of its noisiest authorities insisted on its being received for good or for evil in the superlative degree of comparison only."
+  ],
+  "errors": []
+}

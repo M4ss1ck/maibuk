@@ -1,6 +1,36 @@
 mod android_exit;
 mod backup;
+#[cfg(feature = "dictation-spike")]
+mod dictation_spike_cmd;
 mod tray;
+
+#[cfg(not(feature = "dictation-spike"))]
+fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        tray::set_tray_syncing,
+        android_exit::exit_app,
+        backup::pick_backup_directory,
+        backup::request_backup_directory,
+        backup::restore_backup_directory,
+        backup::forget_backup_directory
+    ]
+}
+
+// PROTOTYPE: the same list plus the dictation spike commands.
+#[cfg(feature = "dictation-spike")]
+fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        tray::set_tray_syncing,
+        android_exit::exit_app,
+        backup::pick_backup_directory,
+        backup::request_backup_directory,
+        backup::restore_backup_directory,
+        backup::forget_backup_directory,
+        dictation_spike_cmd::dictation_spike_start,
+        dictation_spike_cmd::dictation_spike_stop,
+        dictation_spike_cmd::dictation_spike_report
+    ]
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -46,14 +76,7 @@ pub fn run() {
         ));
 
     builder
-        .invoke_handler(tauri::generate_handler![
-            tray::set_tray_syncing,
-            android_exit::exit_app,
-            backup::pick_backup_directory,
-            backup::request_backup_directory,
-            backup::restore_backup_directory,
-            backup::forget_backup_directory
-        ])
+        .invoke_handler(handler())
         .setup(|app| {
             backup::protect_approval(app.handle())?;
 

@@ -1,0 +1,320 @@
+{
+  "summary": {
+    "crossOriginIsolated": true,
+    "loadMs": 1011,
+    "audioSec": 120,
+    "lines": 33,
+    "firstPartialMs": {
+      "p50": 1319,
+      "p95": 1530.4,
+      "n": 32
+    },
+    "finalMs": {
+      "p50": 213.3,
+      "p95": 433.3,
+      "n": 33
+    },
+    "engineFinalMs": {
+      "p50": 20,
+      "p95": 36
+    },
+    "workerToPageMs": {
+      "p50": 0.1,
+      "max": 2.1
+    },
+    "workerPassMs": {
+      "p50": 0,
+      "p95": 29.5,
+      "max": 91.8,
+      "n": 1200
+    },
+    "workerComputePct": 4.6,
+    "longTasks": {
+      "count": 0,
+      "over50": 0,
+      "max": null
+    },
+    "typing": {
+      "keys": 269,
+      "eventsOver16ms": 14,
+      "durationMax": 16,
+      "inputDelayMax": 0.9
+    },
+    "memoryMB": null,
+    "chromiumRssMB": {
+      "beforeLoad": 466,
+      "peak": 999,
+      "delta": 533
+    },
+    "interval": "0.5",
+    "query": "opt.transcription_interval=0.2"
+  },
+  "lines": [
+    "esta es una grabación de librivox",
+    "todas las grabaciones de librivox son de dominio público",
+    "para mayor información o para ser un voluntario por favor visite librivox punto org",
+    "grabada por marta arevalo en la ciudad de guatemala guatemala",
+    "la primera parte del ingenioso hidalgo don quijote de la mancha",
+    "por miguel de cervantes saavedra",
+    "dedicación al duque de bejar y prólogo",
+    "a luque de behar",
+    "marqués de gibralión",
+    "conde de benalcázar y bañares",
+    "vizconda de la puebla de alcoser",
+    "señor de las villas de capilla curiel y burguillos",
+    "en fe del buen acogimiento y honra que hace vuestra excelencia a toda suerte de libros como príncipe tan inclinado a favorecer las buenas artes",
+    "mayormente las que por su nobleza no se abaten al servicio y granjerías del vulgo",
+    "he determinado de sacar a luz",
+    "al ingenioso hidalgo don quijote de la mancha",
+    "al abrigo del clarísimo nombre de vuestra excelencia",
+    "a quién?",
+    "con el acatamiento que debo a tanta grandeza",
+    "suplico le reciba agradablemente en su protección",
+    "para que su sombra aunque desnu de aquel precioso ornamento de elegancia y erudición de que suelen andar vestidas las obras",
+    "que se componen en las casas de los hombres que saben",
+    "o se parecer seguramente en el juicio de algunos que",
+    "continiéndose en los límites de su ignorancia",
+    "suenan condenar con más rigor y menos justicia los trabajos ajenos",
+    "que poniendo los ojos la prudencia de vuestra excelencia en mi buen deseo",
+    "fío que no desdeñarían la cortedad de tan humilde servicio",
+    "miguel de cervantes saavedra",
+    "prólogo",
+    "despreocupado lector",
+    "sin juramento me podrás creer que quisiera que este libro",
+    "como hijo del entendimiento",
+    ""
+  ],
+  "trace": [
+    {
+      "start": 10.911999702453613,
+      "duration": 2.560000419616699,
+      "firstTextAudio": 11.999999999999973,
+      "completedAudio": 13.499999999999968,
+      "text": "esta es una grabación de librivox"
+    },
+    {
+      "start": 13.600000381469727,
+      "duration": 3.392000198364258,
+      "firstTextAudio": 14.999999999999963,
+      "completedAudio": 16.99999999999997,
+      "text": "todas las grabaciones de librivox son de dominio público"
+    },
+    {
+      "start": 17.02400016784668,
+      "duration": 5.08799934387207,
+      "firstTextAudio": 18.499999999999993,
+      "completedAudio": 22.50000000000005,
+      "text": "para mayor información o para ser un voluntario por favor visite librivox punto org"
+    },
+    {
+      "start": 22.59200096130371,
+      "duration": 3.647998809814453,
+      "firstTextAudio": 24.00000000000007,
+      "completedAudio": 26.500000000000107,
+      "text": "grabada por marta arevalo en la ciudad de guatemala guatemala"
+    },
+    {
+      "start": 27.200000762939453,
+      "duration": 3.6799983978271484,
+      "firstTextAudio": 28.500000000000135,
+      "completedAudio": 31.00000000000017,
+      "text": "la primera parte del ingenioso hidalgo don quijote de la mancha"
+    },
+    {
+      "start": 30.68800163269043,
+      "duration": 1.9519977569580078,
+      "firstTextAudio": 32.000000000000185,
+      "completedAudio": 33.0000000000002,
+      "text": "por miguel de cervantes saavedra"
+    },
+    {
+      "start": 32.60799789428711,
+      "duration": 2.944000244140625,
+      "firstTextAudio": 34.00000000000021,
+      "completedAudio": 36.00000000000024,
+      "text": "dedicación al duque de bejar y prólogo"
+    },
+    {
+      "start": 36.70399856567383,
+      "duration": 1.4080009460449219,
+      "firstTextAudio": 38.00000000000027,
+      "completedAudio": 38.50000000000028,
+      "text": "a luque de behar"
+    },
+    {
+      "start": 38.49599838256836,
+      "duration": 1.6319999694824219,
+      "firstTextAudio": 40.0000000000003,
+      "completedAudio": 40.500000000000306,
+      "text": "marqués de gibralión"
+    },
+    {
+      "start": 40.25600051879883,
+      "duration": 2.4959983825683594,
+      "firstTextAudio": 41.50000000000032,
+      "completedAudio": 43.00000000000034,
+      "text": "conde de benalcázar y bañares"
+    },
+    {
+      "start": 42.49599838256836,
+      "duration": 2.368000030517578,
+      "firstTextAudio": 44.000000000000355,
+      "completedAudio": 45.00000000000037,
+      "text": "vizconda de la puebla de alcoser"
+    },
+    {
+      "start": 44.92799758911133,
+      "duration": 3.4240036010742188,
+      "firstTextAudio": 46.000000000000384,
+      "completedAudio": 48.50000000000042,
+      "text": "señor de las villas de capilla curiel y burguillos"
+    },
+    {
+      "start": 49.69599914550781,
+      "duration": 8.2239990234375,
+      "firstTextAudio": 51.000000000000455,
+      "completedAudio": 58.000000000000554,
+      "text": "en fe del buen acogimiento y honra que hace vuestra excelencia a toda suerte de libros como príncipe tan inclinado a favorecer las buenas artes"
+    },
+    {
+      "start": 57.7599983215332,
+      "duration": 5.152000427246094,
+      "firstTextAudio": 59.00000000000057,
+      "completedAudio": 63.000000000000625,
+      "text": "mayormente las que por su nobleza no se abaten al servicio y granjerías del vulgo"
+    },
+    {
+      "start": 63.104000091552734,
+      "duration": 2.4320030212402344,
+      "firstTextAudio": 64.50000000000061,
+      "completedAudio": 66.00000000000053,
+      "text": "he determinado de sacar a luz"
+    },
+    {
+      "start": 65.27999877929688,
+      "duration": 2.720001220703125,
+      "firstTextAudio": 66.5000000000005,
+      "completedAudio": 68.00000000000041,
+      "text": "al ingenioso hidalgo don quijote de la mancha"
+    },
+    {
+      "start": 67.83999633789062,
+      "duration": 3.1680068969726562,
+      "firstTextAudio": 69.00000000000036,
+      "completedAudio": 71.50000000000021,
+      "text": "al abrigo del clarísimo nombre de vuestra excelencia"
+    },
+    {
+      "start": 70.87999725341797,
+      "duration": 1.0880050659179688,
+      "firstTextAudio": 72.00000000000018,
+      "completedAudio": 72.00000000000018,
+      "text": "a quién?"
+    },
+    {
+      "start": 71.7439956665039,
+      "duration": 3.10400390625,
+      "firstTextAudio": 73.00000000000013,
+      "completedAudio": 75.00000000000001,
+      "text": "con el acatamiento que debo a tanta grandeza"
+    },
+    {
+      "start": 74.6240005493164,
+      "duration": 3.391998291015625,
+      "firstTextAudio": 75.99999999999996,
+      "completedAudio": 78.49999999999982,
+      "text": "suplico le reciba agradablemente en su protección"
+    },
+    {
+      "start": 78.08000183105469,
+      "duration": 7.3600006103515625,
+      "firstTextAudio": 79.49999999999976,
+      "completedAudio": 85.49999999999942,
+      "text": "para que su sombra aunque desnu de aquel precioso ornamento de elegancia y erudición de que suelen andar vestidas las obras"
+    },
+    {
+      "start": 84.99199676513672,
+      "duration": 3.488006591796875,
+      "firstTextAudio": 86.49999999999936,
+      "completedAudio": 88.49999999999925,
+      "text": "que se componen en las casas de los hombres que saben"
+    },
+    {
+      "start": 88.63999938964844,
+      "duration": 3.2320022583007812,
+      "firstTextAudio": 90.49999999999913,
+      "completedAudio": 91.99999999999905,
+      "text": "o se parecer seguramente en el juicio de algunos que"
+    },
+    {
+      "start": 91.68000030517578,
+      "duration": 2.944000244140625,
+      "firstTextAudio": 92.99999999999899,
+      "completedAudio": 94.99999999999888,
+      "text": "continiéndose en los límites de su ignorancia"
+    },
+    {
+      "start": 94.49600219726562,
+      "duration": 4.351997375488281,
+      "firstTextAudio": 95.99999999999882,
+      "completedAudio": 98.99999999999865,
+      "text": "suenan condenar con más rigor y menos justicia los trabajos ajenos"
+    },
+    {
+      "start": 98.81600189208984,
+      "duration": 4.991996765136719,
+      "firstTextAudio": 99.9999999999986,
+      "completedAudio": 103.99999999999837,
+      "text": "que poniendo los ojos la prudencia de vuestra excelencia en mi buen deseo"
+    },
+    {
+      "start": 103.90399932861328,
+      "duration": 3.6480026245117188,
+      "firstTextAudio": 104.99999999999831,
+      "completedAudio": 107.99999999999814,
+      "text": "fío que no desdeñarían la cortedad de tan humilde servicio"
+    },
+    {
+      "start": 108.47999572753906,
+      "duration": 1.9520034790039062,
+      "firstTextAudio": 109.49999999999805,
+      "completedAudio": 110.499999999998,
+      "text": "miguel de cervantes saavedra"
+    },
+    {
+      "start": 111.71199798583984,
+      "duration": 1.0240020751953125,
+      "firstTextAudio": 112.99999999999785,
+      "completedAudio": 112.99999999999785,
+      "text": "prólogo"
+    },
+    {
+      "start": 113.05599975585938,
+      "duration": 1.6320037841796875,
+      "firstTextAudio": 114.49999999999777,
+      "completedAudio": 114.99999999999774,
+      "text": "despreocupado lector"
+    },
+    {
+      "start": 114.97599792480469,
+      "duration": 3.167999267578125,
+      "firstTextAudio": 115.99999999999768,
+      "completedAudio": 118.49999999999754,
+      "text": "sin juramento me podrás creer que quisiera que este libro"
+    },
+    {
+      "start": 117.85599517822266,
+      "duration": 1.8560028076171875,
+      "firstTextAudio": 118.99999999999751,
+      "completedAudio": 119.99999999999746,
+      "text": "como hijo del entendimiento"
+    },
+    {
+      "start": 119.45600128173828,
+      "duration": 0.5439987182617188,
+      "completedAudio": 119.99999999999746,
+      "text": ""
+    }
+  ],
+  "errors": []
+}

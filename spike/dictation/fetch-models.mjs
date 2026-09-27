@@ -29,6 +29,38 @@ if (!existsSync(join(vendor, "dist/moonshine.wasm"))) {
   console.log("vendor/moonshine-wasm from release v0.1.5");
 }
 
+// Native Linux library for the Rust spike (native/).
+const linux = join(here, "vendor/moonshine-linux");
+if (process.platform === "linux" && !existsSync(join(linux, "lib/libmoonshine.so"))) {
+  mkdirSync(linux, { recursive: true });
+  const tgz = join(linux, "moonshine-voice-linux-x86_64.tar.gz");
+  const res = await fetch("https://github.com/moonshine-ai/moonshine/releases/download/v0.1.5/moonshine-voice-linux-x86_64.tar.gz");
+  if (!res.ok) throw new Error(`linux lib: HTTP ${res.status}`);
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(tgz));
+  execFileSync("tar", ["xzf", tgz, "-C", linux, "--strip-components=1", "--exclude=._*", "--warning=no-unknown-keyword"]);
+  console.log("vendor/moonshine-linux from release v0.1.5");
+}
+
+// Test audio: English from Moonshine's test-assets; Spanish is the first 120 s
+// of LibriVox Don Quijote vol. 1, file 02, as 16 kHz mono 16-bit.
+const audio = join(here, "public/audio");
+mkdirSync(audio, { recursive: true });
+async function download(url, dest) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(dest));
+}
+if (!existsSync(join(audio, "two_cities_16k.wav"))) {
+  await download("https://raw.githubusercontent.com/moonshine-ai/moonshine/v0.1.5/test-assets/two_cities_16k.wav", join(audio, "two_cities_16k.wav"));
+  console.log("audio/two_cities_16k.wav");
+}
+if (!existsSync(join(audio, "quijote_es_16k.wav"))) {
+  const mp3 = join(audio, "quijote_vol1_02.mp3");
+  await download("https://archive.org/download/don_quijote_vol1_0706_librivox/quijote_vol1_02_cervantes_64kb.mp3", mp3);
+  execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", mp3, "-t", "120", "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", join(audio, "quijote_es_16k.wav")]);
+  console.log("audio/quijote_es_16k.wav");
+}
+
 for (const [name, { files }] of Object.entries(models)) {
   if (only.length && !only.includes(name)) continue;
   const dir = join(here, "public/models", name);
