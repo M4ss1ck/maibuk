@@ -30,19 +30,22 @@ export interface ModelSpec {
   capabilities: { casing: boolean; punctuation: boolean; streaming: boolean };
 }
 
-export type DictationErrorCode =
-  | "mic_denied"
-  | "mic_unavailable"
-  | "model_missing"
-  | "model_corrupt"
-  | "download_failed"
-  | "disk_full"
-  | "model_gone"
-  | "engine_crashed"
-  | "unsupported"
-  | "tutorial_active"
-  | "no_target"
-  | "cancelled";
+const ERROR_CODES = [
+  "mic_denied",
+  "mic_unavailable",
+  "model_missing",
+  "model_corrupt",
+  "download_failed",
+  "disk_full",
+  "model_gone",
+  "engine_crashed",
+  "unsupported",
+  "tutorial_active",
+  "no_target",
+  "cancelled",
+] as const;
+
+export type DictationErrorCode = (typeof ERROR_CODES)[number];
 
 export class DictationError extends Error {
   constructor(
@@ -60,21 +63,6 @@ export function toDictationError(error: unknown, fallback: DictationErrorCode): 
   if (typeof code === "string" && isErrorCode(code)) return new DictationError(code);
   return new DictationError(fallback, error instanceof Error ? error.message : String(error));
 }
-
-const ERROR_CODES: readonly DictationErrorCode[] = [
-  "mic_denied",
-  "mic_unavailable",
-  "model_missing",
-  "model_corrupt",
-  "download_failed",
-  "disk_full",
-  "model_gone",
-  "engine_crashed",
-  "unsupported",
-  "tutorial_active",
-  "no_target",
-  "cancelled",
-];
 
 function isErrorCode(value: string): value is DictationErrorCode {
   return (ERROR_CODES as readonly string[]).includes(value);
