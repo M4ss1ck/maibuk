@@ -3,10 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useBoundShortcutIds, useBoundShortcuts } from "@/lib/bound-shortcuts";
-import { matchKeys } from "@/lib/shortcut-registry";
 import { useShortcuts } from "@/lib/shortcuts";
 
-vi.mock("@/lib/platform", () => ({ isMac: () => false }));
+vi.mock("@/lib/platform/detect", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform/detect")>()),
+  isMac: () => false,
+}));
 
 function SaveBinding({
   enabled = true,
@@ -20,14 +22,11 @@ function SaveBinding({
   useShortcuts(
     [
       {
-        id: "editor.save",
-        keys: matchKeys("editor.save"),
+        id: "common.save",
         onTrigger: onSave,
         allowInInput: true,
         enabled: entryEnabled,
       },
-      // No id: it works, but it is not a registry shortcut and never listed.
-      { keys: "escape", onTrigger: () => {} },
     ],
     { enabled }
   );
@@ -58,7 +57,7 @@ describe("Bound Shortcuts", () => {
       </>
     );
 
-    expect(bound()).toBe("editor.save");
+    expect(bound()).toBe("common.save");
     await user.keyboard("{Control>}s{/Control}");
     expect(onSave).toHaveBeenCalledTimes(1);
 
@@ -89,7 +88,7 @@ describe("Bound Shortcuts", () => {
         <BoundList />
       </>
     );
-    expect(bound()).toBe("editor.save");
+    expect(bound()).toBe("common.save");
   });
 
   it("keeps listing a shortcut while a dialog is open, so the help can show it", () => {
@@ -104,7 +103,7 @@ describe("Bound Shortcuts", () => {
       useModalStore.getState().register("help");
     });
 
-    expect(bound()).toBe("editor.save");
+    expect(bound()).toBe("common.save");
   });
 
   it("keeps a shortcut bound while any of several bindings remains", () => {
@@ -123,7 +122,7 @@ describe("Bound Shortcuts", () => {
       </>
     );
 
-    expect(bound()).toBe("editor.save");
+    expect(bound()).toBe("common.save");
   });
 
   it("lists ids declared for keys handled elsewhere, in registry order", () => {

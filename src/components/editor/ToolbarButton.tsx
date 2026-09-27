@@ -1,12 +1,12 @@
 import { Tooltip } from "@/components/ui";
-import type { ShortcutId } from "@/lib/shortcut-registry";
+import type { CommandId } from "@/lib/shortcut-registry";
 
 interface ToolbarButtonProps {
   onClick: () => void;
   isActive?: boolean;
   disabled?: boolean;
   label: string;
-  shortcut?: ShortcutId;
+  shortcut?: CommandId;
   markdownHint?: string | string[];
   children: React.ReactNode;
 }

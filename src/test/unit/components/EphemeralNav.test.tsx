@@ -17,18 +17,26 @@ vi.mock("@/features/version", () => ({
   useVersionCheck: () => ({ latestVersion: null, isOutdated: false }),
 }));
 
-const settingsState = {
-  mainSidebarWidth: 280,
-  setMainSidebarWidth: () => {},
-  hideKeyboardHints: false,
-  setHideKeyboardHints: vi.fn(),
-  alwaysOnTop: false,
-  setAlwaysOnTop: vi.fn(),
-};
-
-vi.mock("@/features/settings/store", () => ({
-  useSettingsStore: (selector: (s: typeof settingsState) => unknown) => selector(settingsState),
-}));
+vi.mock("@/features/settings/store", async () => {
+  const { DEFAULT_SHORTCUT_SETTINGS } =
+    await vi.importActual<typeof import("@/lib/shortcut-resolve")>("@/lib/shortcut-resolve");
+  const state = {
+    mainSidebarWidth: 280,
+    setMainSidebarWidth: () => {},
+    hideKeyboardHints: false,
+    setHideKeyboardHints: vi.fn(),
+    alwaysOnTop: false,
+    setAlwaysOnTop: vi.fn(),
+    shortcuts: DEFAULT_SHORTCUT_SETTINGS,
+  };
+  return {
+    useSettingsStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
+      getState: () => state,
+      setState: vi.fn(),
+      subscribe: () => () => {},
+    }),
+  };
+});
 
 vi.mock("@/components/ThemeToggle", () => ({ ThemeToggle: () => null }));
 

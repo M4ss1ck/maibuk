@@ -119,7 +119,7 @@ test.describe("g sequences @wf:shell-goto-sequences", () => {
 
   test("g n typed in a text field is text, not navigation", async ({ page }) => {
     await openHome(page);
-    await page.keyboard.press("ControlOrMeta+n");
+    await page.keyboard.press("Alt+n");
     const title = page.getByRole("textbox", { name: "Book Title" });
     await expect(title).toBeFocused();
 
@@ -130,7 +130,7 @@ test.describe("g sequences @wf:shell-goto-sequences", () => {
   });
 });
 
-test.describe("F6 regions @wf:shell-cycle-panes @sc:global.cyclePanes", () => {
+test.describe("F6 regions @wf:shell-cycle-panes @sc:global.cyclePanesForward @sc:global.cyclePanesBackward", () => {
   test.use({ library: "oneBookThreeChapters" });
 
   test("on Home, F6 and Shift+F6 cycle the navigation sidebar and main content", async ({
@@ -283,11 +283,11 @@ test.describe("shortcuts help @wf:shell-help-dialog @sc:global.showHelp", () => 
     const item = (text: string) => dialog.getByRole("listitem").filter({ hasText: text }).first();
 
     if (mod === "Meta") {
-      await expect(item("Create new book")).toContainText("⌘");
-      await expect(item("Create new book")).not.toContainText("Ctrl");
+      await expect(item("Sync now")).toContainText("⌘");
+      await expect(item("Sync now")).not.toContainText("Ctrl");
       await expect(item("Save version")).toContainText("⌥");
     } else {
-      await expect(item("Create new book")).toContainText("Ctrl");
+      await expect(item("Sync now")).toContainText("Ctrl");
       await expect(item("Save version")).toContainText("Alt");
     }
   });

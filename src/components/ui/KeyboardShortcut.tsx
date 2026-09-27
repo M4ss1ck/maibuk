@@ -1,4 +1,4 @@
-import type { FormattedShortcut } from "@/lib/shortcut-registry";
+import type { FormattedShortcut } from "@/lib/shortcut-keys";
 
 interface KeyboardShortcutProps {
   shortcut: FormattedShortcut;

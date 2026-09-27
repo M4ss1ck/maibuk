@@ -9,6 +9,7 @@ import {
   checkCoverage,
   type GuardInput,
   parseAppRoutes,
+  parseKeylessCommandIds,
   parseShortcutIds,
   type ProblemCode,
   sourceViews,
@@ -32,12 +33,14 @@ Upload.
 `;
 
 const REGISTRY = `import { x } from "y";
-export const SHORTCUTS = {
-  "home.newBook": { labelKey: "a", keys: ["Ctrl+N"] },
+export const COMMANDS = {
+  "home.newBook": { labelKey: "a", contexts: ["bookList"], defaults: [["Mod+n"]] },
   "editor.save": {
     labelKey: "b",
-    keys: ["Ctrl+S"],
+    contexts: ["editor"],
+    defaults: [["Mod+s"]],
   },
+  "noteItem.duplicate": { labelKey: "c", contexts: ["noteItem"], defaults: [] },
 } as const;
 `;
 
@@ -109,7 +112,21 @@ function specWith(body: string): Partial<GuardInput> {
 
 describe("parsers", () => {
   it("reads registry ids, including multi-line entries", () => {
-    assert.deepEqual(parseShortcutIds(REGISTRY), ["home.newBook", "editor.save"]);
+    assert.deepEqual(parseShortcutIds(REGISTRY), [
+      "home.newBook",
+      "editor.save",
+      "noteItem.duplicate",
+    ]);
+  });
+
+  it("finds the Commands that ship with no key, and only those", () => {
+    const withFixed = REGISTRY.replace(
+      "} as const;",
+      `  "tutorial.skip": { labelKey: "d", contexts: ["global"], defaults: [], fixed: [["Escape"]] },
+  "bookList.newBook": { labelKey: "e", contexts: ["bookList"], defaults: [], web: [["Alt+n"]] },
+} as const;`
+    );
+    assert.deepEqual(parseKeylessCommandIds(withFixed), ["noteItem.duplicate"]);
   });
 
   it("reads App.tsx routes as absolute patterns, index as /", () => {

@@ -25,11 +25,22 @@ vi.mock("@/features/notes", () => ({
   useNoteStore: { getState: () => ({ createNote: mockCreateNote }) },
 }));
 
-vi.mock("@/features/settings/store", () => ({
-  useSettingsStore: (
-    selector: (s: { alwaysOnTop: boolean; setAlwaysOnTop: (v: boolean) => void }) => unknown
-  ) => selector({ alwaysOnTop: false, setAlwaysOnTop: mockSetAlwaysOnTop }),
-}));
+vi.mock("@/features/settings/store", async () => {
+  const { DEFAULT_SHORTCUT_SETTINGS } =
+    await vi.importActual<typeof import("@/lib/shortcut-resolve")>("@/lib/shortcut-resolve");
+  const state = {
+    alwaysOnTop: false,
+    setAlwaysOnTop: mockSetAlwaysOnTop,
+    shortcuts: DEFAULT_SHORTCUT_SETTINGS,
+  };
+  return {
+    useSettingsStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
+      getState: () => state,
+      setState: vi.fn(),
+      subscribe: () => () => {},
+    }),
+  };
+});
 
 vi.mock("@/lib/platform", () => ({
   get IS_ANDROID() {

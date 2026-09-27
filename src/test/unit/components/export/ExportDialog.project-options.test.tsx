@@ -14,7 +14,8 @@ vi.mock("../../../../features/import/epub-project-repo", () => ({
   listBookStyles: mockListBookStyles,
 }));
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) => {
       const translations: Record<string, string> = {

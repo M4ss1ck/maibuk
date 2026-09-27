@@ -22,7 +22,10 @@ import { cloneElement, useRef, useState, type ReactElement, type ReactNode, type
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { lowlight } from "@/lib/lowlight";
 import { IS_ANDROID } from "@/lib/platform";
-import { SHORTCUTS, formatKeys, type ShortcutId } from "@/lib/shortcut-registry";
+import { isMac } from "@/lib/platform/detect";
+import { useCommandHint } from "@/lib/command-keys";
+import { toAriaKeyShortcuts } from "@/lib/shortcut-keys";
+import type { CommandId } from "@/lib/shortcut-registry";
 
 const OPEN_DELAY = 500;
 
@@ -55,7 +58,7 @@ type TooltipProps = {
   side?: "top" | "bottom" | "left" | "right";
   disabled?: boolean;
   children: ReactElement;
-} & ({ shortcut?: ShortcutId; keys?: never } | { shortcut?: never; keys?: string[] });
+} & ({ shortcut?: CommandId; keys?: never } | { shortcut?: never; keys?: string[] });
 
 interface TooltipGroupProps {
   children: ReactNode;
@@ -105,13 +108,12 @@ export function Tooltip({
     open: { opacity: 1, transform: "translateY(0)" },
   });
   // Android has no physical keyboard, so shortcut chips are noise there.
-  const shortcutDefinition = IS_ANDROID
-    ? null
-    : shortcut
-      ? SHORTCUTS[shortcut]
-      : keys
-        ? { keys, labelKey: "" }
-        : null;
+  const hint = useCommandHint(IS_ANDROID ? undefined : shortcut);
+  const formattedShortcut = hint
+    ? hint.formatted
+    : keys && !IS_ANDROID
+      ? { groups: keys.map((k) => [k]), isSequence: false }
+      : null;
 
   const markdownHints = typeof markdown === "string" ? [markdown] : (markdown ?? []);
 
@@ -124,6 +126,9 @@ export function Tooltip({
         getReferenceProps({
           ...(children.props as Record<string, unknown>),
           ref: mergedRef,
+          ...(hint
+            ? { "aria-keyshortcuts": toAriaKeyShortcuts(hint.shortcut, isMac()) ?? undefined }
+            : {}),
         })
       )}
       {isMounted && (
@@ -140,9 +145,7 @@ export function Tooltip({
             >
               <div data-testid="tooltip-primary-row" className="flex items-center gap-2">
                 <span>{content}</span>
-                {shortcutDefinition && (
-                  <KeyboardShortcut shortcut={formatKeys(shortcutDefinition)} />
-                )}
+                {formattedShortcut && <KeyboardShortcut shortcut={formattedShortcut} />}
               </div>
               {markdownHints.length > 0 && (
                 <div

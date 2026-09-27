@@ -80,14 +80,34 @@ export function parseContextSections(md: string): string[] {
   return [...md.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim());
 }
 
-/** Keys of the `SHORTCUTS` object literal in src/lib/shortcut-registry.ts. */
-export function parseShortcutIds(source: string): string[] {
-  const start = source.indexOf("export const SHORTCUTS = {");
-  if (start === -1) throw new Error("shortcut registry: `export const SHORTCUTS = {` not found");
+/** Each entry of the `COMMANDS` object literal in src/lib/shortcut-registry.ts, id and source text. */
+function parseCommandEntries(source: string): { id: string; body: string }[] {
+  const start = source.indexOf("export const COMMANDS = {");
+  if (start === -1) throw new Error("command registry: `export const COMMANDS = {` not found");
   const end = source.indexOf("\n} as const", start);
-  if (end === -1) throw new Error("shortcut registry: closing `} as const` not found");
+  if (end === -1) throw new Error("command registry: closing `} as const` not found");
   const block = source.slice(start, end);
-  return [...block.matchAll(/^ {2}"([\w.]+)":/gm)].map((m) => m[1]);
+  const keys = [...block.matchAll(/^ {2}"([\w.]+)":/gm)];
+  return keys.map((match, index) => ({
+    id: match[1],
+    body: block.slice(match.index, keys[index + 1]?.index ?? block.length),
+  }));
+}
+
+/** Keys of the `COMMANDS` object literal in src/lib/shortcut-registry.ts. */
+export function parseShortcutIds(source: string): string[] {
+  return parseCommandEntries(source).map((entry) => entry.id);
+}
+
+/**
+ * Commands that ship with no key (`defaults: []`, no `fixed` or `web` keys).
+ * They have nothing to press until the author gives them a Shortcut, so they
+ * need no matrix row; the shortcut-editor row binds one and runs it.
+ */
+export function parseKeylessCommandIds(source: string): string[] {
+  return parseCommandEntries(source)
+    .filter(({ body }) => /\bdefaults:\s*\[\s*\]/.test(body) && !/\b(fixed|web):/.test(body))
+    .map((entry) => entry.id);
 }
 
 /** Absolute route patterns declared in App.tsx (`index` routes are `/`). */
@@ -273,6 +293,7 @@ export function checkCoverage(input: GuardInput): Problem[] {
   const sections = new Set(parseContextSections(input.contextMd));
   const shortcutIds = parseShortcutIds(input.shortcutRegistrySource);
   const shortcutSet = new Set(shortcutIds);
+  const keyless = new Set(parseKeylessCommandIds(input.shortcutRegistrySource));
   const routes = parseAppRoutes(input.appRoutesSource);
   const routeSet = new Set(routes);
 
@@ -445,7 +466,7 @@ export function checkCoverage(input: GuardInput): Problem[] {
   }
   const rowShortcuts = new Set(input.rows.flatMap((r) => r.shortcuts));
   for (const id of shortcutIds) {
-    if (excluded.shortcut.has(id) || rowShortcuts.has(id)) continue;
+    if (keyless.has(id) || excluded.shortcut.has(id) || rowShortcuts.has(id)) continue;
     add("shortcut-uncovered", `shortcut ${id} has no matrix row and no exclusion`);
   }
   const rowRoutes = new Set(input.rows.flatMap((r) => r.routes));

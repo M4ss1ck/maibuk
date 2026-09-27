@@ -9,6 +9,7 @@ import { timeAgo } from "@/components/notes/timeAgo";
 import { ItemActionsMenu } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
+import { useItemCommands } from "@/hooks/useItemCommands";
 
 interface NoteCardProps {
   note: Note;
@@ -33,15 +34,18 @@ export function NoteCard({
   const preview = notePlainText(note.content);
   const hasActions = actions.length > 0;
   const menuAnchorRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const { itemProps, setOwnerRef } = useItemContextMenu({
     onOpen: () => setIsMenuOpen(true),
     isDisabled: !hasActions,
     anchorRef: menuAnchorRef,
   });
+  useItemCommands(cardRef, actions);
 
   return (
     <GridListItem
       id={note.id}
+      ref={cardRef}
       textValue={title}
       data-tutorial={tutorialAnchor}
       onAction={onClick}

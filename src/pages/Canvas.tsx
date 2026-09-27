@@ -424,19 +424,18 @@ function CanvasEditor() {
 
   useShortcuts(
     [
-      { keys: ["ctrl+z", "meta+z"], onTrigger: undo },
-      { keys: ["ctrl+shift+z", "meta+shift+z"], onTrigger: redo },
-      { keys: ["delete", "backspace"], onTrigger: deleteSelection },
-      { keys: "escape", onTrigger: clearSelection },
-      { keys: "alt+arrowleft", onTrigger: () => navigate("/canvas") },
-      { id: "canvas.toolSelect", keys: "v", onTrigger: () => setToolMode("select") },
-      { id: "canvas.toolPen", keys: "p", onTrigger: () => setToolMode("pen") },
-      { id: "canvas.toolEraser", keys: "e", onTrigger: () => setToolMode("eraser") },
-      { id: "canvas.addTextNode", keys: "t", onTrigger: handleAddTextNode },
-      { id: "canvas.addNoteRef", keys: "n", onTrigger: () => setNotePickerOpen(true) },
+      { id: "common.undo", onTrigger: undo },
+      { id: "common.redo", onTrigger: redo },
+      { id: "common.delete", onTrigger: deleteSelection },
+      { id: "canvas.clearSelection", onTrigger: clearSelection },
+      { id: "canvas.backToGallery", onTrigger: () => navigate("/canvas") },
+      { id: "canvas.toolSelect", onTrigger: () => setToolMode("select") },
+      { id: "canvas.toolPen", onTrigger: () => setToolMode("pen") },
+      { id: "canvas.toolEraser", onTrigger: () => setToolMode("eraser") },
+      { id: "canvas.addTextNode", onTrigger: handleAddTextNode },
+      { id: "canvas.addNoteRef", onTrigger: () => setNotePickerOpen(true) },
       {
         id: "canvas.editTextNode",
-        keys: "f2",
         onTrigger: () => {
           const active = document.activeElement;
           const nodeElement =
@@ -450,13 +449,12 @@ function CanvasEditor() {
         },
       },
       {
-        id: "canvas.zoomIn",
-        keys: ["ctrl+=", "meta+=", "ctrl++", "meta++"],
+        id: "common.zoomIn",
         onTrigger: () => reactFlow.zoomIn(),
       },
-      { id: "canvas.zoomOut", keys: ["ctrl+-", "meta+-"], onTrigger: () => reactFlow.zoomOut() },
-      { id: "canvas.fitView", keys: ["shift+1", "shift+!"], onTrigger: () => reactFlow.fitView() },
-      { id: "canvas.lock", keys: "l", onTrigger: toggleInteractivityLocked },
+      { id: "common.zoomOut", onTrigger: () => reactFlow.zoomOut() },
+      { id: "canvas.fitView", onTrigger: () => reactFlow.fitView() },
+      { id: "canvas.lock", onTrigger: toggleInteractivityLocked },
     ],
     { enabled: loadState === "ready" && !editorReadOnly }
   );

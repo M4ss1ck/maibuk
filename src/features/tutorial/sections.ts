@@ -129,6 +129,13 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
       step("settings.appearance", []),
       step("settings.window", []),
       step("settings.general", []),
+      step("settings.shortcuts", [
+        "Command",
+        "Shortcut",
+        "Custom Shortcut",
+        "Shortcut Editor",
+        "Single-key Shortcuts",
+      ]),
       step(
         "settings.sync",
         [
@@ -163,6 +170,13 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
  * when a new term appears in neither place.
  */
 export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
+  "Default Shortcut": "shown only as a row's keys inside the Shortcut Editor, which the Tutorial does not open",
+  "Fixed Shortcut": "shown only as a lock inside the Shortcut Editor, which the Tutorial does not open",
+  "Sealed Command": "shown only inside the Shortcut Editor, which the Tutorial does not open",
+  "Shared Command": "only a section label inside the Shortcut Editor",
+  "Shortcut Context": "internal: it decides which Shortcuts conflict and has no control of its own",
+  "Shortcut Conflict": "appears only while recording a Shortcut inside the Shortcut Editor",
+  "Shortcut File": "its buttons are inside the Shortcut Editor, which the Tutorial does not open",
   "Sync Base": "internal state a sync compares against; nothing on screen shows it",
   Deferred: "only named in the Sync Log after an automatic run; no control to point at",
   Tombstone: "lives inside the Deletion Review dialog; steps never open dialogs",

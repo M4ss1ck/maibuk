@@ -375,10 +375,61 @@ _UI_: es "Mayúsculas y minúsculas"
 The rules that reshape pasted text before it lands in a Chapter or Note, such as "Match my book".
 _UI_: en "Paste cleanup" / es "Limpieza al pegar"
 
+## Shortcuts
+
+Maibuk is keyboard-first: everything the author can do can run from the keyboard.
+
+**Command**:
+Something the author can do from a key, a button, or an Item Menu, such as Bold, Save, or Delete Note. A Command may have no Shortcut.
+_Avoid_: action (for this concept), hotkey
+
+**Shortcut**:
+A key combination, or a sequence of two (`g` then `p`), that runs a Command. A Command can have several.
+_Avoid_: hotkey, keybinding, keymap (in UI copy)
+
+**Default Shortcut**:
+A Shortcut a Command ships with.
+
+**Custom Shortcut**:
+A Shortcut the author set on this device. A Command's Custom Shortcuts replace its editable Default Shortcuts, and never travel to other devices. (ADR 0012)
+_Avoid_: override, user binding
+
+**Fixed Shortcut**:
+A Shortcut that cannot be changed or removed because the platform or the focused control owns its key, such as Mod+Z or Tab. The author can still add other Shortcuts to its Command.
+
+**Sealed Command**:
+A Command that takes no Shortcuts beyond its Fixed ones, such as jumping to a Book with 1-9.
+
+**Shared Command**:
+One Command that works on several screens, each doing its own version of it, such as Save or Undo. Changing its Shortcut changes it everywhere.
+_UI_: en "Common" / es "Comunes"
+
+**Shortcut Context**:
+A part of the UI whose Commands can be live together, such as the Book Editor, the Editor, or a Note in a list. Two Shortcuts may share keys when no screen shows both of their Contexts.
+_Avoid_: scope (in UI copy)
+
+**Shortcut Conflict**:
+Two Shortcuts with the same keys, or one that is the first key of the other's sequence, in Contexts some screen shows together.
+_Avoid_: clash, collision
+
 **Bound Shortcut**:
-A keyboard shortcut that works on the screen the author is on right now.
+A Shortcut that works on the screen the author is on right now.
 _UI_: en "On this screen" / es "En esta pantalla"
 _Avoid_: hotkey, keybinding (for this concept)
+
+**Shortcut Editor**:
+Where the author sees every Command and changes its Shortcuts, opened from Settings or the shortcut help.
+_UI_: en "Customize shortcuts" / es "Personalizar atajos"
+_Avoid_: keymap editor, hotkey settings
+
+**Single-key Shortcuts**:
+The switch that turns off, on this device, every Shortcut pressed without a modifier key, except Fixed Shortcuts.
+_UI_: en "Single-key shortcuts" / es "Atajos de una tecla"
+
+**Shortcut File**:
+A file holding the author's Custom Shortcuts, to carry them to another device.
+_UI_: en "Save to file", "Load from file" / es "Guardar en archivo", "Cargar desde archivo"
+_Avoid_: export, import (reserved for Library content)
 
 ## Import and export
 
@@ -423,6 +474,7 @@ Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widen
 - **Books**, **Notes**, and **Canvases** are **Synced Items**; each has one **Sync Base** per device.
 - Deleting a **Book**, **Note**, or **Canvas** leaves a **Tombstone** here; after a **Deletion Review** it becomes **Deleted Elsewhere** on the other devices, where a second **Deletion Review** confirms it; if the item was also edited there, a **Conflict** lets the author **Keep** it instead.
 - Open editors **Flush** before a **Sync** reads the **Library**.
+- A **Command** has zero or more **Shortcuts**: its **Fixed Shortcuts**, plus its **Custom Shortcuts** or else its **Default Shortcuts**.
 - The **Tutorial** runs in a **Tutorial Library**, never in the author's **Library**; ending it brings back the author's own.
 
 ## Anticipated

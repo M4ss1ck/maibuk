@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShortcuts } from "@/lib/shortcuts";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
+import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { useThemeStore, getCycledTheme } from "@/features/theme";
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { useNoteStore } from "@/features/notes";
 import { getPassphrase } from "@/features/sync/crypto";
 import { IS_DESKTOP } from "@/lib/platform";
-import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
 import { requestTutorial } from "@/features/tutorial/controller";
 import { sectionForPath } from "@/features/tutorial/sections";
 
@@ -49,6 +49,7 @@ export function GlobalShortcuts() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const [showShortcutEditor, setShowShortcutEditor] = useState(false);
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
   const hideKeyboardHints = useSettingsStore((state) => state.hideKeyboardHints);
@@ -59,7 +60,6 @@ export function GlobalShortcuts() {
   useShortcuts([
     {
       id: "global.gotoProjects",
-      sequence: SHORTCUTS["global.gotoProjects"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/") {
           navigate("/");
@@ -68,7 +68,6 @@ export function GlobalShortcuts() {
     },
     {
       id: "global.gotoSettings",
-      sequence: SHORTCUTS["global.gotoSettings"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/settings") {
           navigate("/settings");
@@ -77,7 +76,6 @@ export function GlobalShortcuts() {
     },
     {
       id: "global.gotoMetrics",
-      sequence: SHORTCUTS["global.gotoMetrics"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/metrics") {
           navigate("/metrics");
@@ -86,7 +84,6 @@ export function GlobalShortcuts() {
     },
     {
       id: "global.gotoNotes",
-      sequence: SHORTCUTS["global.gotoNotes"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/notes") {
           navigate("/notes");
@@ -95,7 +92,6 @@ export function GlobalShortcuts() {
     },
     {
       id: "global.gotoCanvas",
-      sequence: SHORTCUTS["global.gotoCanvas"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/canvas") {
           navigate("/canvas");
@@ -104,7 +100,6 @@ export function GlobalShortcuts() {
     },
     {
       id: "global.gotoEphemeral",
-      sequence: SHORTCUTS["global.gotoEphemeral"].sequence,
       onTrigger: () => {
         if (location.pathname !== "/ephemeral") {
           navigate("/ephemeral");
@@ -113,7 +108,6 @@ export function GlobalShortcuts() {
     },
     {
       id: "global.toggleTheme",
-      sequence: SHORTCUTS["global.toggleTheme"].sequence,
       onTrigger: () => {
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         setTheme(getCycledTheme(theme, prefersDark));
@@ -121,14 +115,12 @@ export function GlobalShortcuts() {
     },
     {
       id: "global.toggleShortcutHints",
-      sequence: SHORTCUTS["global.toggleShortcutHints"].sequence,
       onTrigger: () => {
         setHideKeyboardHints(!hideKeyboardHints);
       },
     },
     {
       id: "global.toggleAlwaysOnTop",
-      keys: matchKeys("global.toggleAlwaysOnTop"),
       allowInInput: true,
       enabled: IS_DESKTOP,
       onTrigger: () => {
@@ -137,7 +129,6 @@ export function GlobalShortcuts() {
     },
     {
       id: "global.syncNow",
-      keys: matchKeys("global.syncNow"),
       allowInInput: true,
       onTrigger: () => {
         const store = useSyncStore.getState();
@@ -165,16 +156,17 @@ export function GlobalShortcuts() {
       },
     },
     {
-      id: "global.cyclePanes",
-      keys: matchKeys("global.cyclePanes"),
+      id: "global.cyclePanesForward",
       allowInInput: true,
-      onTrigger: (event) => {
-        cyclePanes(!event.shiftKey);
-      },
+      onTrigger: () => cyclePanes(true),
+    },
+    {
+      id: "global.cyclePanesBackward",
+      allowInInput: true,
+      onTrigger: () => cyclePanes(false),
     },
     {
       id: "global.showHelp",
-      keys: ["shift+/", "shift+?", "?"],
       onTrigger: () => {
         setShowShortcutsHelp(true);
       },
@@ -182,16 +174,29 @@ export function GlobalShortcuts() {
   ]);
 
   return (
-    <ShortcutsHelpDialog
-      isOpen={showShortcutsHelp}
-      onClose={() => setShowShortcutsHelp(false)}
-      onStartTutorial={() =>
-        requestTutorial({
-          section: sectionForPath(location.pathname),
-          origin: "help",
-          returnTo: location.pathname + location.search,
-        })
-      }
-    />
+    <>
+      <ShortcutsHelpDialog
+        isOpen={showShortcutsHelp}
+        onClose={() => setShowShortcutsHelp(false)}
+        onCustomize={() => {
+          setShowShortcutsHelp(false);
+          setShowShortcutEditor(true);
+        }}
+        onStartTutorial={() =>
+          requestTutorial({
+            section: sectionForPath(location.pathname),
+            origin: "help",
+            returnTo: location.pathname + location.search,
+          })
+        }
+      />
+      <ShortcutEditorDialog
+        isOpen={showShortcutEditor}
+        onClose={() => {
+          setShowShortcutEditor(false);
+          setShowShortcutsHelp(true);
+        }}
+      />
+    </>
   );
 }

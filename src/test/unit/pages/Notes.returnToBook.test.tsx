@@ -195,7 +195,7 @@ describe("Notes page return-to-book navigation", () => {
 
     render(<Notes />);
 
-    expect(boundIds()).toContain("editor.back");
+    expect(boundIds()).toContain("common.back");
   });
 
   it("returns to the gallery on Backspace without a return target", () => {

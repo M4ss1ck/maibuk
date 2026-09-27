@@ -162,7 +162,7 @@ test.describe("Tutorial full run @wf:tutorial-full-run", () => {
 
     // One step was walked with Space above; walkTutorial carries the rest.
     const rest = await walkTutorial(page);
-    expect(rest + 1).toBe(47);
+    expect(rest + 1).toBe(48);
 
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeFocused();
@@ -241,7 +241,7 @@ test.describe("Tutorial from Settings @wf:tutorial-settings-start-all", () => {
 
     await expect(page).toHaveURL(/\/settings$/);
     await expect(startAll).toBeFocused();
-    expect(steps).toBe(47);
+    expect(steps).toBe(48);
     expect(await readLibraryBytes(page)).toBe(before);
 
     // Persisted: every section reads Done after a reload.

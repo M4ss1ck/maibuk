@@ -31,7 +31,8 @@ const translations = {
   es: { "sync.syncStatus": "Estado de sincronización" },
 } as const;
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({
     t: (key: string) => {
       const lang = i18nState.language;

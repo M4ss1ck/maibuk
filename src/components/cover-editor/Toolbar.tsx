@@ -37,6 +37,7 @@ import {
 import { TEMPLATES, buildTemplateScene } from "@/features/covers/scene/templates";
 import { Button } from "@/components/ui/Button";
 import { Tooltip, TooltipGroup } from "@/components/ui";
+import { useShortcuts } from "@/lib/shortcuts";
 import {
   ChevronDownIcon,
   DimensionIcon,
@@ -174,6 +175,43 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
     });
   };
 
+  useShortcuts([
+    { id: "coverDesigner.addTextTitle", onTrigger: () => addText("title") },
+    { id: "coverDesigner.addTextSubtitle", onTrigger: () => addText("subtitle") },
+    { id: "coverDesigner.addTextAuthor", onTrigger: () => addText("author") },
+    { id: "coverDesigner.addImage", onTrigger: () => imageInputRef.current?.click() },
+    { id: "coverDesigner.addShapeRect", onTrigger: () => addShape("rect") },
+    { id: "coverDesigner.addShapeEllipse", onTrigger: () => addShape("ellipse") },
+    { id: "coverDesigner.addShapeLine", onTrigger: () => addShape("line") },
+    { id: "coverDesigner.alignLeft", enabled: !!selectedId, onTrigger: () => alignSelected("left") },
+    {
+      id: "coverDesigner.alignHCenter",
+      enabled: !!selectedId,
+      onTrigger: () => alignSelected("hcenter"),
+    },
+    {
+      id: "coverDesigner.alignRight",
+      enabled: !!selectedId,
+      onTrigger: () => alignSelected("right"),
+    },
+    { id: "coverDesigner.alignTop", enabled: !!selectedId, onTrigger: () => alignSelected("top") },
+    {
+      id: "coverDesigner.alignVCenter",
+      enabled: !!selectedId,
+      onTrigger: () => alignSelected("vcenter"),
+    },
+    {
+      id: "coverDesigner.alignBottom",
+      enabled: !!selectedId,
+      onTrigger: () => alignSelected("bottom"),
+    },
+    { id: "coverDesigner.toggleOverlays", onTrigger: () => setOverlays(!overlays) },
+    { id: "coverDesigner.toggleSnapping", onTrigger: () => setSnapping(!snapping) },
+    { id: "coverDesigner.exportPng", onTrigger: () => onExport("png") },
+    { id: "coverDesigner.exportJpeg", onTrigger: () => onExport("jpeg") },
+    { id: "coverDesigner.exportPdf", onTrigger: () => onExport("pdf") },
+  ]);
+
   return (
     <TooltipGroup>
       <div className="min-h-14 border-b border-border bg-background flex flex-wrap items-center px-2 sm:px-4 py-2 gap-1 sm:gap-2">
@@ -199,6 +237,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
                 <MenuItem
                   key={p.id}
                   id={p.id}
+                  data-command-exempt="size preset option"
                   textValue={p.name}
                   className={`${ITEM_CLASS} justify-between`}
                 >
@@ -225,7 +264,13 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
               className="outline-none"
             >
               {TEMPLATES.map((tpl) => (
-                <MenuItem key={tpl.id} id={tpl.id} textValue={tpl.name} className={ITEM_CLASS}>
+                <MenuItem
+                  key={tpl.id}
+                  id={tpl.id}
+                  data-command-exempt="template option"
+                  textValue={tpl.name}
+                  className={ITEM_CLASS}
+                >
                   {tpl.name}
                 </MenuItem>
               ))}
@@ -249,13 +294,28 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
               onAction={(key) => addText(key as "title" | "subtitle" | "author")}
               className="outline-none"
             >
-              <MenuItem id="title" textValue={t("cover.toolbar.title")} className={ITEM_CLASS}>
+              <MenuItem
+                id="title"
+                data-command="coverDesigner.addTextTitle"
+                textValue={t("cover.toolbar.title")}
+                className={ITEM_CLASS}
+              >
                 {t("cover.toolbar.title")}
               </MenuItem>
-              <MenuItem id="subtitle" textValue={t("cover.toolbar.subtitle")} className={ITEM_CLASS}>
+              <MenuItem
+                id="subtitle"
+                data-command="coverDesigner.addTextSubtitle"
+                textValue={t("cover.toolbar.subtitle")}
+                className={ITEM_CLASS}
+              >
                 {t("cover.toolbar.subtitle")}
               </MenuItem>
-              <MenuItem id="author" textValue={t("cover.toolbar.author")} className={ITEM_CLASS}>
+              <MenuItem
+                id="author"
+                data-command="coverDesigner.addTextAuthor"
+                textValue={t("cover.toolbar.author")}
+                className={ITEM_CLASS}
+              >
                 {t("cover.toolbar.author")}
               </MenuItem>
             </Menu>
@@ -298,13 +358,28 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
               onAction={(key) => addShape(key as "rect" | "ellipse" | "line")}
               className="outline-none"
             >
-              <MenuItem id="rect" textValue={t("cover.shape.rect")} className={ITEM_CLASS}>
+              <MenuItem
+                id="rect"
+                data-command="coverDesigner.addShapeRect"
+                textValue={t("cover.shape.rect")}
+                className={ITEM_CLASS}
+              >
                 <Square className="w-4 h-4" aria-hidden="true" /> {t("cover.shape.rect")}
               </MenuItem>
-              <MenuItem id="ellipse" textValue={t("cover.shape.ellipse")} className={ITEM_CLASS}>
+              <MenuItem
+                id="ellipse"
+                data-command="coverDesigner.addShapeEllipse"
+                textValue={t("cover.shape.ellipse")}
+                className={ITEM_CLASS}
+              >
                 <Circle className="w-4 h-4" aria-hidden="true" /> {t("cover.shape.ellipse")}
               </MenuItem>
-              <MenuItem id="line" textValue={t("cover.shape.line")} className={ITEM_CLASS}>
+              <MenuItem
+                id="line"
+                data-command="coverDesigner.addShapeLine"
+                textValue={t("cover.shape.line")}
+                className={ITEM_CLASS}
+              >
                 <Minus className="w-4 h-4" aria-hidden="true" /> {t("cover.shape.line")}
               </MenuItem>
             </Menu>
@@ -314,12 +389,12 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
         {/* History */}
-        <Tooltip content={t("cover.undo")} shortcut="cover.undo">
+        <Tooltip content={t("cover.undo")} shortcut="common.undo">
           <Button variant="ghost" size="sm" onClick={() => undo()} aria-label={t("cover.undo")}>
             <Undo2 className="w-4 h-4" />
           </Button>
         </Tooltip>
-        <Tooltip content={t("cover.redo")} shortcut="cover.redo">
+        <Tooltip content={t("cover.redo")} shortcut="common.redo">
           <Button variant="ghost" size="sm" onClick={() => redo()} aria-label={t("cover.redo")}>
             <Redo2 className="w-4 h-4" />
           </Button>
@@ -328,7 +403,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         <div className="w-px h-6 bg-border mx-1 sm:mx-2" />
 
         {/* Selection actions */}
-        <Tooltip content={t("cover.duplicate")} shortcut="cover.duplicate">
+        <Tooltip content={t("cover.duplicate")} shortcut="coverDesigner.duplicate">
           <Button
             variant="ghost"
             size="sm"
@@ -339,7 +414,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
             <Copy className="w-4 h-4" />
           </Button>
         </Tooltip>
-        <Tooltip content={t("common.delete")} shortcut="cover.delete">
+        <Tooltip content={t("common.delete")} shortcut="common.delete">
           <Button
             variant="ghost"
             size="sm"
@@ -415,13 +490,28 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
               onAction={(key) => onExport(key as ExportChoice)}
               className="outline-none"
             >
-              <MenuItem id="png" textValue={t("cover.pngExport")} className={ITEM_CLASS}>
+              <MenuItem
+                id="png"
+                data-command="coverDesigner.exportPng"
+                textValue={t("cover.pngExport")}
+                className={ITEM_CLASS}
+              >
                 {t("cover.pngExport")}
               </MenuItem>
-              <MenuItem id="jpeg" textValue={t("cover.jpgExport")} className={ITEM_CLASS}>
+              <MenuItem
+                id="jpeg"
+                data-command="coverDesigner.exportJpeg"
+                textValue={t("cover.jpgExport")}
+                className={ITEM_CLASS}
+              >
                 {t("cover.jpgExport")}
               </MenuItem>
-              <MenuItem id="pdf" textValue={t("cover.pdfExport")} className={ITEM_CLASS}>
+              <MenuItem
+                id="pdf"
+                data-command="coverDesigner.exportPdf"
+                textValue={t("cover.pdfExport")}
+                className={ITEM_CLASS}
+              >
                 {t("cover.pdfExport")}
               </MenuItem>
             </Menu>

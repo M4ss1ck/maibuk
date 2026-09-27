@@ -17,7 +17,7 @@ export function SaveStatus({ status, onSave, disabled }: SaveStatusProps) {
     return (
       <span className="flex items-center gap-1 text-sm text-destructive">
         <span role="status">{t("editor.notSaved")}</span>
-        <Tooltip content={t("editor.retrySave")} shortcut="editor.save">
+        <Tooltip content={t("editor.retrySave")} shortcut="common.save">
           <button
             type="button"
             onClick={onSave}
@@ -51,7 +51,7 @@ export function SaveStatus({ status, onSave, disabled }: SaveStatusProps) {
   }
 
   return (
-    <Tooltip content={t("common.save")} shortcut="editor.save">
+    <Tooltip content={t("common.save")} shortcut="common.save">
       <button
         type="button"
         onClick={onSave}

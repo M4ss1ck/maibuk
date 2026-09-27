@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
@@ -13,7 +13,8 @@ import { APP_VERSION, DOWNLOAD_PAGE } from "@/constants";
 import { useSettingsStore } from "@/features/settings/store";
 import { useVersionCheck } from "@/features/version";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
-import { formatKeys, SHORTCUTS } from "@/lib/shortcut-registry";
+import { useCommandHint } from "@/lib/command-keys";
+import type { CommandId } from "@/lib/shortcut-registry";
 
 // Tutorial steps that point at a sidebar item (the desktop sidebar only; the
 // mobile menu is closed while the Tutorial runs, so those steps show centered).
@@ -21,6 +22,12 @@ const NAV_TUTORIAL_ANCHORS: Record<string, string | undefined> = {
   "/metrics": "books.metrics",
   "/settings": "books.settings",
 };
+
+function NavShortcut({ id, className }: { id: CommandId; className?: string }) {
+  const hint = useCommandHint(id);
+  if (!hint) return null;
+  return <KeyboardShortcut shortcut={hint.formatted} className={className} />;
+}
 
 export function Layout() {
   const { t, i18n } = useTranslation();
@@ -62,42 +69,47 @@ export function Layout() {
     });
   }, [isMobileMenuOpen, setIsMobileMenuOpen]);
 
-  const navigationItems = [
+  const navigationItems: Array<{
+    id: string;
+    label: string;
+    icon: ReactNode;
+    shortcut: CommandId;
+  }> = [
     {
       id: "/",
       label: t("common.projects"),
       icon: <ProjectsIcon className="w-5 h-5 shrink-0" />,
-      shortcut: SHORTCUTS["global.gotoProjects"],
+      shortcut: "global.gotoProjects",
     },
     {
       id: "/notes",
       label: t("common.notes"),
       icon: <NotebookPen className="w-5 h-5 shrink-0" />,
-      shortcut: SHORTCUTS["global.gotoNotes"],
+      shortcut: "global.gotoNotes",
     },
     {
       id: "/canvas",
       label: t("common.canvas"),
       icon: <Workflow className="w-5 h-5 shrink-0" />,
-      shortcut: SHORTCUTS["global.gotoCanvas"],
+      shortcut: "global.gotoCanvas",
     },
     {
       id: "/ephemeral",
       label: t("common.ephemeral"),
       icon: <Feather className="w-5 h-5 shrink-0" />,
-      shortcut: SHORTCUTS["global.gotoEphemeral"],
+      shortcut: "global.gotoEphemeral",
     },
     {
       id: "/metrics",
       label: t("common.metrics"),
       icon: <BarChart3 className="w-5 h-5 shrink-0" />,
-      shortcut: SHORTCUTS["global.gotoMetrics"],
+      shortcut: "global.gotoMetrics",
     },
     {
       id: "/settings",
       label: t("common.settings"),
       icon: <SettingsIcon className="w-5 h-5 shrink-0" />,
-      shortcut: SHORTCUTS["global.gotoSettings"],
+      shortcut: "global.gotoSettings",
     },
   ];
 
@@ -183,10 +195,7 @@ export function Layout() {
                 >
                   {item.label}
                 </span>
-                <KeyboardShortcut
-                  shortcut={formatKeys(item.shortcut)}
-                  className="ml-auto hidden lg:inline-flex"
-                />
+                <NavShortcut id={item.shortcut} className="ml-auto hidden lg:inline-flex" />
               </ListBoxItem>
             )}
           </ListBox>

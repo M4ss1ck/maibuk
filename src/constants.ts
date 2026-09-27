@@ -17,3 +17,7 @@ export const VERSION_CHECKPOINT_WORD_THRESHOLD = 300;
 export const VERSION_CHECKPOINT_IDLE_MS = 2 * 60 * 1000;
 export const VERSION_CHECKPOINT_MIN_INTERVAL_MS = 15 * 60 * 1000;
 export const VERSION_AUTO_PRUNE_KEEP = 5;
+
+// Editable Shortcuts the Shortcut Editor lets one Command hold. The stored
+// model has no limit (ADR 0012); this only keeps the row readable.
+export const MAX_SHORTCUTS_PER_COMMAND = 3;

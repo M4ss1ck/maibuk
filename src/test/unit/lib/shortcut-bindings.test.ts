@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { CollapsibleHeading } from "@/components/editor/extensions/CollapsibleHeading";
-import { SHORTCUTS, type ShortcutDef, type ShortcutId } from "@/lib/shortcut-registry";
+import { COMMAND_IDS, COMMANDS, type CommandDef } from "@/lib/shortcut-registry";
 
 vi.mock("@/components/editor/extensions/SpellCheck", async () => {
   const { Extension } = await vi.importActual<typeof import("@tiptap/core")>("@tiptap/core");
@@ -14,7 +14,7 @@ vi.mock("@/components/editor/extensions/SpellCheck", async () => {
 });
 
 const SRC = join(process.cwd(), "src");
-const ALL_IDS = Object.keys(SHORTCUTS) as ShortcutId[];
+const ALL_IDS = COMMAND_IDS;
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -24,14 +24,21 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** Ids that some `useShortcuts` entry (`id: "…"`) or `useBoundShortcutIds([...])` call declares. */
+const ID = String.raw`[a-z][A-Za-z]*\.[A-Za-z0-9]+`;
+
+/**
+ * Ids that some `useShortcuts` entry (`id: "…"`), Item Menu action
+ * (`commandId: "…"`), or `useBoundShortcutIds([...])` call declares.
+ */
 function declaredBindings(): Set<string> {
   const declared = new Set<string>();
   for (const file of sourceFiles(SRC)) {
     const text = readFileSync(file, "utf8");
-    for (const match of text.matchAll(/\bid:\s*"([a-z]+\.[A-Za-z0-9]+)"/g)) declared.add(match[1]);
+    for (const match of text.matchAll(new RegExp(String.raw`\b(?:id|commandId):\s*"(${ID})"`, "g")))
+      declared.add(match[1]);
     for (const call of text.matchAll(/useBoundShortcutIds\(\s*\[([^\]]*)\]/g)) {
-      for (const match of call[1].matchAll(/"([a-z]+\.[A-Za-z0-9]+)"/g)) declared.add(match[1]);
+      for (const match of call[1].matchAll(new RegExp(`"(${ID})"`, "g")))
+        declared.add(match[1]);
     }
   }
   return declared;
@@ -61,7 +68,7 @@ describe("every registry shortcut is really bound", () => {
   it("binds every shortcut the editor keymap does not handle somewhere in the app", () => {
     const declared = declaredBindings();
     const unbound = ALL_IDS.filter((id) => {
-      const definition: ShortcutDef = SHORTCUTS[id];
+      const definition: CommandDef = COMMANDS[id];
       return definition.source !== "editor-keymap" && !declared.has(id);
     });
 
@@ -82,7 +89,7 @@ describe("every registry shortcut is really bound", () => {
     ]);
 
     const dead = ALL_IDS.filter((id) => {
-      const definition: ShortcutDef = SHORTCUTS[id];
+      const definition: CommandDef = COMMANDS[id];
       return definition.source === "editor-keymap" && !handled.has(id);
     });
 
@@ -96,7 +103,7 @@ describe("every registry shortcut is really bound", () => {
     const ids = editorKeymapShortcutIds(chapterEditor);
 
     expect(ids).toContain("editor.bold");
-    expect(ids).toContain("editor.redo");
+    expect(ids).toContain("common.redo");
     expect(ids).not.toContain("editor.taskList");
   });
 });

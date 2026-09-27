@@ -26,7 +26,7 @@ import {
   type SearchMatch,
 } from "@/components/editor/extensions/SearchReplace";
 import { Tooltip, TooltipGroup } from "@/components/ui";
-import type { ShortcutId } from "@/lib/shortcut-registry";
+import type { CommandId } from "@/lib/shortcut-registry";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 
 interface FindReplaceProps {
@@ -48,7 +48,7 @@ function IconButton({
   disabled?: boolean;
   active?: boolean;
   label: string;
-  shortcut?: ShortcutId;
+  shortcut?: CommandId;
   children: ReactNode;
 }) {
   return (

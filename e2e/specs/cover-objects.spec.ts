@@ -215,6 +215,40 @@ test.describe("selecting a layer @wf:cover-select-layer", () => {
       .poll(async () => (await title.boundingBox())?.y ?? 0)
       .toBeLessThan((await author.boundingBox())?.y ?? 0);
   });
+
+  test("] brings the selected layer forward and [ sends it back, changing the list order @sc:coverDesigner.bringForward @sc:coverDesigner.sendBackward", async ({
+    page,
+  }) => {
+    await openCover(page);
+    const title = layer(page, SEED_BOOK.title);
+    const author = layer(page, SEED_BOOK.authorName);
+    await selectLayer(page, SEED_BOOK.title);
+
+    // The Title starts below the Author in the top-first Layers list.
+    const titleAbove = async () =>
+      ((await title.boundingBox())?.y ?? 0) < ((await author.boundingBox())?.y ?? 0);
+    expect(await titleAbove()).toBe(false);
+
+    // ] brings the selected Title above the Author.
+    await page.keyboard.press("]");
+    await expect.poll(titleAbove).toBe(true);
+
+    // [ sends it back below.
+    await page.keyboard.press("[");
+    await expect.poll(titleAbove).toBe(false);
+  });
+
+  test("Escape clears the selection and the object's properties close @sc:coverDesigner.clearSelection", async ({
+    page,
+  }) => {
+    await openCover(page);
+    await selectLayer(page, SEED_BOOK.authorName);
+    await expect(field(page, "X")).toBeVisible();
+
+    await page.keyboard.press("Escape");
+
+    await expect(field(page, "X")).toHaveCount(0);
+  });
 });
 
 test.describe("editing properties @wf:cover-properties", () => {
@@ -368,25 +402,41 @@ test.describe("editing properties @wf:cover-properties", () => {
 });
 
 test.describe("nudging the selected object @wf:cover-nudge-position", () => {
-  test("arrow keys nudge and the X/Y fields set the position, persisting", async ({ page }) => {
+  test("every arrow nudge — 1 px, 10 px with Shift — and the X/Y fields set the position, persisting @sc:coverDesigner.nudgeUp @sc:coverDesigner.nudgeDown @sc:coverDesigner.nudgeLeft @sc:coverDesigner.nudgeRight @sc:coverDesigner.nudgeUpFar @sc:coverDesigner.nudgeDownFar @sc:coverDesigner.nudgeLeftFar @sc:coverDesigner.nudgeRightFar", async ({
+    page,
+  }) => {
     await openCover(page);
     await selectLayer(page, SEED_BOOK.title);
 
     const x = field(page, "X");
+    const y = field(page, "Y");
     const x0 = Number(await x.inputValue());
+    const y0 = Number(await y.inputValue());
+
+    // One pixel per press, in every direction.
     await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("ArrowRight");
-    await expect(x).toHaveValue(String(x0 + 2));
-    await page.keyboard.press("Shift+ArrowRight");
-    await expect(x).toHaveValue(String(x0 + 12));
-    const y0 = Number(await field(page, "Y").inputValue());
+    await expect(x).toHaveValue(String(x0 + 1));
+    await page.keyboard.press("ArrowLeft");
+    await expect(x).toHaveValue(String(x0));
     await page.keyboard.press("ArrowDown");
-    await expect(field(page, "Y")).toHaveValue(String(y0 + 1));
+    await expect(y).toHaveValue(String(y0 + 1));
+    await page.keyboard.press("ArrowUp");
+    await expect(y).toHaveValue(String(y0));
+
+    // Shift leaps ten pixels.
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect(x).toHaveValue(String(x0 + 10));
+    await page.keyboard.press("Shift+ArrowLeft");
+    await expect(x).toHaveValue(String(x0));
+    await page.keyboard.press("Shift+ArrowDown");
+    await expect(y).toHaveValue(String(y0 + 10));
+    await page.keyboard.press("Shift+ArrowUp");
+    await expect(y).toHaveValue(String(y0));
 
     await setField(page, "X", "100");
     await expect(x).toHaveValue("100");
     await setField(page, "Y", "200");
-    await expect(field(page, "Y")).toHaveValue("200");
+    await expect(y).toHaveValue("200");
 
     await saveCover(page);
     await page.reload();
@@ -395,6 +445,7 @@ test.describe("nudging the selected object @wf:cover-nudge-position", () => {
     await expect(field(page, "Y")).toHaveValue("200");
   });
 });
+
 test.describe("aligning the selected layer @wf:cover-align", () => {
   test("each Align button moves the layer to that edge and the last one persists", async ({
     page,
@@ -438,7 +489,7 @@ test.describe("aligning the selected layer @wf:cover-align", () => {
   });
 });
 
-test.describe("Cover shortcuts @wf:cover-shortcuts @sc:cover.save @sc:cover.delete @sc:cover.undo @sc:cover.redo @sc:cover.duplicate", () => {
+test.describe("Cover shortcuts @wf:cover-shortcuts @sc:common.save @sc:common.delete @sc:common.undo @sc:common.redo @sc:coverDesigner.duplicate", () => {
   test("Mod+D duplicates, Delete removes, Mod+Z and Mod+Shift+Z step the layer count", async ({
     page,
   }) => {

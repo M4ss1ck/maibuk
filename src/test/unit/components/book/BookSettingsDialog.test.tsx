@@ -6,7 +6,8 @@ import { BookSettingsDialog } from "@/components/book/BookSettingsDialog";
 import { useModalStore } from "@/components/ui/modal-store";
 import { buildBook } from "@/test/support/fixtures";
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({
     t: (key: string) => key,
   }),

@@ -14,6 +14,8 @@ const { mockUseShortcuts, platformState } = vi.hoisted(() => ({
 }));
 
 let helpOpen = false;
+let editorOpen = false;
+let customizeHelp: (() => void) | undefined;
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -61,8 +63,16 @@ vi.mock("@/features/notes", () => ({
 vi.mock("@/features/sync/crypto", () => ({ getPassphrase: () => null }));
 
 vi.mock("@/components/ShortcutsHelpDialog", () => ({
-  ShortcutsHelpDialog: ({ isOpen }: { isOpen: boolean }) => {
+  ShortcutsHelpDialog: ({ isOpen, onCustomize }: { isOpen: boolean; onCustomize?: () => void }) => {
     helpOpen = isOpen;
+    customizeHelp = onCustomize;
+    return null;
+  },
+}));
+
+vi.mock("@/components/shortcuts/ShortcutEditorDialog", () => ({
+  ShortcutEditorDialog: ({ isOpen }: { isOpen: boolean }) => {
+    editorOpen = isOpen;
     return null;
   },
 }));
@@ -76,7 +86,7 @@ function latestConfigs() {
 
 function triggerHelpShortcut() {
   const configs = latestConfigs();
-  const helpShortcut = configs.find((c) => c.keys && c.keys.includes("?"));
+  const helpShortcut = configs.find((c) => c.id === "global.showHelp");
   if (!helpShortcut) throw new Error("Help shortcut not registered");
   helpShortcut.onTrigger();
 }
@@ -85,6 +95,8 @@ describe("GlobalShortcuts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     helpOpen = false;
+    editorOpen = false;
+    customizeHelp = undefined;
     platformState.isDesktop = true;
     settingsState.setAlwaysOnTop.mockReset();
   });
@@ -99,6 +111,15 @@ describe("GlobalShortcuts", () => {
     expect(helpOpen).toBe(true);
   });
 
+  it("opens the Shortcut Editor from the help dialog", async () => {
+    render(<GlobalShortcuts />);
+    await act(async () => triggerHelpShortcut());
+    expect(helpOpen).toBe(true);
+    await act(async () => customizeHelp?.());
+    expect(helpOpen).toBe(false);
+    expect(editorOpen).toBe(true);
+  });
+
   it("binds every global shortcut under its registry id, so the help lists it", () => {
     render(<GlobalShortcuts />);
 
@@ -107,7 +128,8 @@ describe("GlobalShortcuts", () => {
       .sort();
 
     expect(ids).toEqual([
-      "global.cyclePanes",
+      "global.cyclePanesBackward",
+      "global.cyclePanesForward",
       "global.gotoCanvas",
       "global.gotoEphemeral",
       "global.gotoMetrics",
@@ -128,13 +150,11 @@ describe("GlobalShortcuts", () => {
 
     const calls = mockUseShortcuts.mock.calls;
     const configs = calls[calls.length - 1]?.[0] as Array<{
-      keys?: string[];
+      id?: string;
       enabled?: boolean;
       onTrigger: () => void;
     }>;
-    const aotShortcut = configs.find(
-      (c) => c.keys && c.keys.some((k) => k.toLowerCase().includes("shift+p"))
-    );
+    const aotShortcut = configs.find((c) => c.id === "global.toggleAlwaysOnTop");
     if (!aotShortcut) throw new Error("Always-on-top shortcut not registered");
 
     aotShortcut.onTrigger();
@@ -147,13 +167,11 @@ describe("GlobalShortcuts", () => {
 
     const calls = mockUseShortcuts.mock.calls;
     const configs = calls[calls.length - 1]?.[0] as Array<{
-      keys?: string[];
+      id?: string;
       enabled?: boolean;
       onTrigger: () => void;
     }>;
-    const aotShortcut = configs.find(
-      (c) => c.keys && c.keys.some((k) => k.toLowerCase().includes("shift+p"))
-    );
+    const aotShortcut = configs.find((c) => c.id === "global.toggleAlwaysOnTop");
 
     // On Android the shortcut should either not be registered or be disabled
     if (aotShortcut) {

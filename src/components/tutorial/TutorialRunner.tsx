@@ -38,7 +38,6 @@ import type { TutorialExitReason, TutorialOrigin } from "@/features/tutorial/typ
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { TUTORIAL_RELAUNCH_HINT_DURATION_MS } from "@/constants";
 import { useShortcuts } from "@/lib/shortcuts";
-import { SHORTCUTS } from "@/lib/shortcut-registry";
 
 // Runs the Tutorial across screens (ADR 0009). React Joyride only draws the
 // spotlight and places the card; the card is our React Aria dialog, and this
@@ -340,7 +339,6 @@ export function TutorialRunner() {
   useShortcuts([
     {
       id: "global.startTutorial",
-      sequence: SHORTCUTS["global.startTutorial"].sequence,
       enabled: status === "idle",
       onTrigger: () => {
         requestTutorial({ origin: "shortcut", returnTo: location.pathname + location.search });
@@ -348,7 +346,6 @@ export function TutorialRunner() {
     },
     {
       id: "tutorial.skip",
-      keys: "escape",
       allowInInput: true,
       enabled: phase === "running",
       onTrigger: onSkip,

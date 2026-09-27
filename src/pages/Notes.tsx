@@ -98,8 +98,7 @@ export function Notes() {
 
   useShortcuts([
     {
-      id: "editor.back",
-      keys: "backspace",
+      id: "common.back",
       onTrigger: () => {
         navigate(returnTarget?.to ?? "/notes");
       },

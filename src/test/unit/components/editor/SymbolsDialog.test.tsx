@@ -12,7 +12,8 @@ const { catalogState, i18nState } = vi.hoisted(() => ({
   i18nState: { language: "en" as "en" | "es" },
 }));
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({
     t: (key: string) => (key === "symbols.allCategories" ? "all categories" : key),
     i18n: { language: i18nState.language },

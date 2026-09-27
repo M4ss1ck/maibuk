@@ -219,24 +219,18 @@ vi.mock("../../../components/versions/HistoryMenuButton", () => ({
 
 import { BookEditor } from "@/pages/BookEditor";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
-import { SHORTCUTS } from "@/lib/shortcut-registry";
+import { COMMAND_IDS, COMMANDS, type CommandDef } from "@/lib/shortcut-registry";
 
 const { useShortcuts: useRealShortcuts } =
   await vi.importActual<typeof import("@/lib/shortcuts")>("@/lib/shortcuts");
 
 type ShortcutConfig = Parameters<typeof useRealShortcuts>[0][number];
-type SequenceDefinition = Extract<
-  (typeof SHORTCUTS)[keyof typeof SHORTCUTS],
-  { readonly sequence: readonly string[] }
->;
-
 function BareSequenceHarness({ onTrigger }: { onTrigger: () => void }) {
-  const sequences = Object.values(SHORTCUTS)
-    .filter(
-      (definition): definition is SequenceDefinition =>
-        "sequence" in definition && definition.sequence[0] === "g"
+  const sequences = COMMAND_IDS.filter((id) =>
+    (COMMANDS[id] as CommandDef).defaults.some(
+      (shortcut) => shortcut.length === 2 && shortcut[0] === "g"
     )
-    .map<ShortcutConfig>((definition) => ({ sequence: definition.sequence, onTrigger }));
+  ).map<ShortcutConfig>((id) => ({ id, onTrigger }));
   useRealShortcuts(sequences);
   return (
     // biome-ignore lint/a11y/useSemanticElements: A contenteditable rich-text editor is correctly exposed as a textbox.
@@ -501,12 +495,12 @@ describe("BookEditor shortcuts", () => {
 
     expect(Object.keys(useBoundShortcutStore.getState().counts)).toEqual(
       expect.arrayContaining([
-        "editor.save",
-        "editor.saveVersion",
-        "editor.versionHistory",
-        "editor.focusMode",
-        "editor.toggleSidebar",
-        "editor.back",
+        "common.save",
+        "bookEditor.saveVersion",
+        "bookEditor.versionHistory",
+        "bookEditor.focusMode",
+        "bookEditor.toggleSidebar",
+        "common.back",
       ])
     );
   });

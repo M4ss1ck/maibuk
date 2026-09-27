@@ -172,7 +172,7 @@ export function EditorToolbarGroups({
               onClick={() => editor.chain().focus().undo().run()}
               disabled={!editorState.canUndo}
               label={t("editor.undo")}
-              shortcut="editor.undo"
+              shortcut="common.undo"
             >
               <Undo2 className={icon} />
             </ToolbarButton>
@@ -180,7 +180,7 @@ export function EditorToolbarGroups({
               onClick={() => editor.chain().focus().redo().run()}
               disabled={!editorState.canRedo}
               label={t("editor.redo")}
-              shortcut="editor.redo"
+              shortcut="common.redo"
             >
               <Redo2 className={icon} />
             </ToolbarButton>
@@ -275,7 +275,7 @@ export function EditorToolbarGroups({
             }
             isActive={callbacks.isFindReplaceOpen}
             label={t("editor.findReplace")}
-            shortcut="editor.findReplace"
+            shortcut="common.find"
           >
             <Search className={icon} />
           </ToolbarButton>
@@ -339,6 +339,7 @@ export function EditorToolbarGroups({
             }
             isActive={!!editorState.color}
             label={t("editor.textColor")}
+            shortcut="editor.textColor"
             icon={<Baseline className={icon} />}
           />
         );
@@ -448,12 +449,14 @@ export function EditorToolbarGroups({
             <ToolbarButton
               onClick={() => editor.chain().focus().increaseFirstLineIndent().run()}
               label={t("editor.increaseFirstLineIndent")}
+              shortcut="editor.increaseFirstLineIndent"
             >
               <WrapText className={icon} />
             </ToolbarButton>
             <ToolbarButton
               onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()}
               label={t("editor.decreaseFirstLineIndent")}
+              shortcut="editor.decreaseFirstLineIndent"
             >
               <WrapText className={`${icon} scale-x-[-1]`} />
             </ToolbarButton>
@@ -501,6 +504,7 @@ export function EditorToolbarGroups({
           <ToolbarButton
             onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
             label={t("editor.removeFormatting")}
+            shortcut="editor.removeFormatting"
           >
             <RemoveFormatting className={icon} />
           </ToolbarButton>
@@ -511,7 +515,11 @@ export function EditorToolbarGroups({
         return <TableMenu editor={editor} wrapItems={wrapItems} />;
       case "image":
         return (
-          <ToolbarButton onClick={callbacks.openImageDialog} label={t("editor.insertImage")}>
+          <ToolbarButton
+            onClick={callbacks.openImageDialog}
+            label={t("editor.insertImage")}
+            shortcut="editor.insertImage"
+          >
             <Image className={icon} />
           </ToolbarButton>
         );
@@ -519,7 +527,11 @@ export function EditorToolbarGroups({
         return <SceneBreakMenu editor={editor} bookId={callbacks.bookId} />;
       case "footnote":
         return (
-          <ToolbarButton onClick={callbacks.openFootnote} label={t("editor.footnote")}>
+          <ToolbarButton
+            onClick={callbacks.openFootnote}
+            label={t("editor.footnote")}
+            shortcut="editor.footnote"
+          >
             <MessageSquareText className={icon} />
           </ToolbarButton>
         );
@@ -528,6 +540,7 @@ export function EditorToolbarGroups({
           <ToolbarButton
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
             label={t("editor.horizontalRule")}
+            shortcut="editor.horizontalRule"
             markdownHint={markdownHints("horizontalRule")}
           >
             <Minus className={icon} />
@@ -540,6 +553,7 @@ export function EditorToolbarGroups({
               onClick={() => setSpellCheckEnabled(!spellCheckEnabled)}
               isActive={spellCheckEnabled}
               label={t("editor.spellCheck")}
+              shortcut="editor.spellCheck"
             >
               <SpellCheck className={icon} />
             </ToolbarButton>
@@ -572,7 +586,11 @@ export function EditorToolbarGroups({
         );
       case "html-view":
         return (
-          <ToolbarButton onClick={callbacks.openHtmlPanel} label={t("editor.viewHtml")}>
+          <ToolbarButton
+            onClick={callbacks.openHtmlPanel}
+            label={t("editor.viewHtml")}
+            shortcut="editor.viewHtml"
+          >
             <Code2 className={icon} />
           </ToolbarButton>
         );
@@ -583,6 +601,7 @@ export function EditorToolbarGroups({
               onClick={() => callbacks.onExportMarkdown?.()}
               disabled={!callbacks.onExportMarkdown}
               label={t("editor.exportMarkdown")}
+              shortcut="editor.exportMarkdown"
             >
               <FileDown className={icon} />
             </ToolbarButton>
@@ -590,6 +609,7 @@ export function EditorToolbarGroups({
               onClick={() => callbacks.onExportPdf?.()}
               disabled={!callbacks.onExportPdf}
               label={t("editor.exportPdf")}
+              shortcut="editor.exportPdf"
             >
               <FileText className={icon} />
             </ToolbarButton>
@@ -597,6 +617,7 @@ export function EditorToolbarGroups({
               onClick={() => callbacks.onExportImage?.()}
               disabled={!callbacks.onExportImage}
               label={t("editor.exportImage")}
+              shortcut="editor.exportImage"
             >
               <ImageDown className={icon} />
             </ToolbarButton>

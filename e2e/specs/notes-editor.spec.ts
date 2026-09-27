@@ -97,7 +97,7 @@ test.describe("collapsible headings @wf:editor-collapsible-heading @sc:editor.to
   });
 });
 
-test.describe("F6 pane cycle in the Note editor @wf:shell-cycle-panes @sc:global.cyclePanes", () => {
+test.describe("F6 pane cycle in the Note editor @wf:shell-cycle-panes @sc:global.cyclePanesForward @sc:global.cyclePanesBackward", () => {
   test("in the Note editor, F6 cycles the title bar, the notes list, and the note editor and wraps", async ({
     page,
   }) => {

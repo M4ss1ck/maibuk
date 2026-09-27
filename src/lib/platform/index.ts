@@ -8,8 +8,9 @@ import type {
   BackupAdapter,
 } from "@/lib/platform/types";
 
-// Build-time constant - Vite replaces this during build
-export const IS_WEB = import.meta.env.VITE_BUILD_TARGET === "web";
+import { IS_WEB } from "@/lib/platform/target";
+
+export { IS_WEB };
 export const IS_TAURI = !IS_WEB;
 const TAURI_PLATFORM = import.meta.env.TAURI_ENV_PLATFORM;
 export const IS_ANDROID = IS_TAURI && TAURI_PLATFORM === "android";

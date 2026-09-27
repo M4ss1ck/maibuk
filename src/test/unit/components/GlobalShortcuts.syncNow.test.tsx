@@ -2,8 +2,7 @@ import { render } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 interface ShortcutConfig {
-  keys?: string[];
-  sequence?: string[];
+  id: string;
   onTrigger: () => void;
 }
 
@@ -38,15 +37,24 @@ vi.mock("../../../features/theme", () => ({
   useThemeStore: (selector: (s: typeof themeState) => unknown) => selector(themeState),
 }));
 
-const settingsState = {
-  hideKeyboardHints: false,
-  setHideKeyboardHints: vi.fn(),
-  alwaysOnTop: false,
-  setAlwaysOnTop: vi.fn(),
-};
-vi.mock("../../../features/settings/store", () => ({
-  useSettingsStore: (selector: (s: typeof settingsState) => unknown) => selector(settingsState),
-}));
+vi.mock("../../../features/settings/store", async () => {
+  const { DEFAULT_SHORTCUT_SETTINGS } =
+    await vi.importActual<typeof import("@/lib/shortcut-resolve")>("@/lib/shortcut-resolve");
+  const state = {
+    hideKeyboardHints: false,
+    setHideKeyboardHints: vi.fn(),
+    alwaysOnTop: false,
+    setAlwaysOnTop: vi.fn(),
+    shortcuts: DEFAULT_SHORTCUT_SETTINGS,
+  };
+  return {
+    useSettingsStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
+      getState: () => state,
+      setState: vi.fn(),
+      subscribe: () => () => {},
+    }),
+  };
+});
 
 const syncState = {
   authStatus: "logged-in" as const,
@@ -77,7 +85,7 @@ const { GlobalShortcuts } = await import("@/components/GlobalShortcuts");
 function triggerSyncNow() {
   const calls = mockUseShortcuts.mock.calls;
   const configs = calls[calls.length - 1]?.[0] as ShortcutConfig[];
-  const syncShortcut = configs.find((c) => c.keys?.includes("ctrl+shift+y"));
+  const syncShortcut = configs.find((c) => c.id === "global.syncNow");
   if (!syncShortcut) throw new Error("Sync Now shortcut not registered");
   syncShortcut.onTrigger();
 }

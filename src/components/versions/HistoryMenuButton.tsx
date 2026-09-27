@@ -109,7 +109,7 @@ export function HistoryMenuButton({
       ref={rootRef}
       className="relative inline-flex items-center rounded-lg border border-border bg-card"
     >
-      <Tooltip content={t("versions.title")} shortcut="editor.versionHistory">
+      <Tooltip content={t("versions.title")} shortcut="bookEditor.versionHistory">
         <button
           type="button"
           onClick={onOpenPanel}

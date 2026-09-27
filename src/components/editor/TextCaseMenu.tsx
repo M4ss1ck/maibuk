@@ -5,6 +5,7 @@ import { CaseSensitive, CaseUpper, CaseLower, ChevronDown } from "lucide-react";
 import { Tooltip } from "@/components/ui";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { transformSelectedText, type TextTransform } from "@/components/editor/text-transforms";
+import { useShortcuts } from "@/lib/shortcuts";
 
 interface TextCaseMenuProps {
   editor: Editor;
@@ -17,13 +18,33 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
     transformSelectedText(editor, transform);
   };
 
+  useShortcuts([
+    { id: "editor.uppercase", onTrigger: () => runTransform("uppercase") },
+    { id: "editor.lowercase", onTrigger: () => runTransform("lowercase") },
+    { id: "editor.alternatingCase", onTrigger: () => runTransform("alternatingCase") },
+    { id: "editor.sentenceCase", onTrigger: () => runTransform("sentenceCase") },
+    { id: "editor.titleCase", onTrigger: () => runTransform("titleCase") },
+    { id: "editor.horizontalMirror", onTrigger: () => runTransform("horizontalMirror") },
+    { id: "editor.upsideDown", onTrigger: () => runTransform("upsideDown") },
+    { id: "editor.reverseText", onTrigger: () => runTransform("reverseText") },
+    { id: "editor.leetspeak", onTrigger: () => runTransform("leetspeak") },
+  ]);
+
   return (
     <>
-      <ToolbarButton onClick={() => runTransform("uppercase")} label={t("editor.uppercase")}>
+      <ToolbarButton
+        onClick={() => runTransform("uppercase")}
+        label={t("editor.uppercase")}
+        shortcut="editor.uppercase"
+      >
         <CaseUpper className="w-4 h-4" />
       </ToolbarButton>
 
-      <ToolbarButton onClick={() => runTransform("lowercase")} label={t("editor.lowercase")}>
+      <ToolbarButton
+        onClick={() => runTransform("lowercase")}
+        label={t("editor.lowercase")}
+        shortcut="editor.lowercase"
+      >
         <CaseLower className="w-4 h-4" />
       </ToolbarButton>
 
@@ -48,6 +69,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
           >
             <MenuItem
               id="alternatingCase"
+              data-command="editor.alternatingCase"
               textValue={t("editor.alternatingCase")}
               className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -55,6 +77,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
             </MenuItem>
             <MenuItem
               id="sentenceCase"
+              data-command="editor.sentenceCase"
               textValue={t("editor.sentenceCase")}
               className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -62,6 +85,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
             </MenuItem>
             <MenuItem
               id="titleCase"
+              data-command="editor.titleCase"
               textValue={t("editor.titleCase")}
               className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -70,6 +94,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
             <Separator className="my-1 border-t border-muted" />
             <MenuItem
               id="horizontalMirror"
+              data-command="editor.horizontalMirror"
               textValue={t("editor.horizontalMirror")}
               className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -77,6 +102,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
             </MenuItem>
             <MenuItem
               id="upsideDown"
+              data-command="editor.upsideDown"
               textValue={t("editor.upsideDown")}
               className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -84,6 +110,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
             </MenuItem>
             <MenuItem
               id="reverseText"
+              data-command="editor.reverseText"
               textValue={t("editor.reverseText")}
               className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >
@@ -91,6 +118,7 @@ export function TextCaseMenu({ editor }: TextCaseMenuProps) {
             </MenuItem>
             <MenuItem
               id="leetspeak"
+              data-command="editor.leetspeak"
               textValue={t("editor.leetspeak")}
               className="cursor-pointer whitespace-nowrap px-3 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted"
             >

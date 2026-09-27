@@ -6,7 +6,7 @@ import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { useSettingsStore } from "@/features/settings/store";
 
 interface ShortcutBinding {
-  keys: string[];
+  id: string;
   onTrigger: () => void;
 }
 
@@ -27,6 +27,10 @@ vi.mock("@/lib/shortcuts", () => ({
   useShortcuts: (bindings: ShortcutBinding[]) => {
     shortcutBindings.splice(0, shortcutBindings.length, ...bindings);
   },
+}));
+
+vi.mock("@/components/shortcuts/ShortcutEditorDialog", () => ({
+  ShortcutEditorDialog: () => null,
 }));
 
 vi.mock("@/components/editor/toolbar/ResponsiveEditorToolbar", () => ({
@@ -166,7 +170,7 @@ describe("EditorToolbar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "close settings" }));
     expect(screen.queryByText("toolbar settings open")).not.toBeInTheDocument();
-    const binding = shortcutBindings.find((item) => item.keys.includes("ctrl+shift+,"));
+    const binding = shortcutBindings.find((item) => item.id === "editor.toolbarSettings");
     expect(binding).toBeDefined();
     act(() => binding?.onTrigger());
     expect(screen.getByText("toolbar settings open")).toBeInTheDocument();

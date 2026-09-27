@@ -66,7 +66,6 @@ import {
 import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { HistoryMenuButton } from "@/components/versions/HistoryMenuButton";
 import { useShortcuts } from "@/lib/shortcuts";
-import { SHORTCUTS, matchKeys } from "@/lib/shortcut-registry";
 import { IS_DESKTOP, isMac } from "@/lib/platform";
 import { useAutoCheckpoint } from "@/features/versions/useAutoCheckpoint";
 import { useVersionStore } from "@/features/versions/store";
@@ -866,27 +865,24 @@ export function BookEditor() {
 
   useShortcuts([
     {
-      keys: "escape",
+      id: "bookEditor.leavePanel",
       onTrigger: () => handleEditorEscape(),
       allowInInput: false,
     },
     {
-      id: "editor.focusMode",
-      keys: ["f11", "ctrl+shift+f", "meta+shift+f"],
+      id: "bookEditor.focusMode",
       onTrigger: () => toggleFocusMode(),
       allowInInput: true,
     },
     {
-      id: "editor.save",
-      keys: matchKeys("editor.save"),
+      id: "common.save",
       onTrigger: () => {
         handleSaveNow();
       },
       allowInInput: true,
     },
     {
-      id: "editor.toggleSidebar",
-      keys: matchKeys("editor.toggleSidebar"),
+      id: "bookEditor.toggleSidebar",
       onTrigger: () => {
         setShowSidebar((prev) => {
           if (!prev) setSidebarWidth(256);
@@ -895,26 +891,42 @@ export function BookEditor() {
       },
     },
     {
-      id: "editor.back",
-      keys: "backspace",
+      id: "common.back",
       onTrigger: () => {
         navigate("/");
       },
     },
     {
-      id: "editor.saveVersion",
-      keys: matchKeys("editor.saveVersion"),
+      id: "bookEditor.saveVersion",
       onTrigger: () => {
         void handleSaveVersion();
       },
       allowInInput: true,
     },
     {
-      id: "editor.versionHistory",
-      sequence: SHORTCUTS["editor.versionHistory"].sequence,
+      id: "bookEditor.versionHistory",
       onTrigger: () => {
         setShowVersionPanel(true);
       },
+    },
+    {
+      id: "bookEditor.bookNotes",
+      onTrigger: () => {
+        setBookSidePanelTab("notes");
+        setShowNotesChapter(true);
+      },
+    },
+    {
+      id: "bookEditor.exportBook",
+      onTrigger: () => setShowExportDialog(true),
+    },
+    {
+      id: "bookEditor.designCover",
+      onTrigger: () => navigate(`/book/${bookId}/cover`),
+    },
+    {
+      id: "bookEditor.bookSettings",
+      onTrigger: () => setShowSettingsDialog(true),
     },
   ]);
 
@@ -977,7 +989,7 @@ export function BookEditor() {
             {/* Desktop sidebar toggle */}
             <Tooltip
               content={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
-              shortcut="editor.toggleSidebar"
+              shortcut="bookEditor.toggleSidebar"
             >
               <button
                 type="button"
@@ -1128,7 +1140,7 @@ export function BookEditor() {
               )}
 
               {/* Focus mode toggle */}
-              <Tooltip content={t("nav.focusMode")} shortcut="editor.focusMode">
+              <Tooltip content={t("nav.focusMode")} shortcut="bookEditor.focusMode">
                 <button
                   type="button"
                   onClick={toggleFocusMode}

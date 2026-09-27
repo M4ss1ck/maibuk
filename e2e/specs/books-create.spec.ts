@@ -1,17 +1,18 @@
 import { expect, test } from "../support/test";
 import { expectTabContained, pressUntilFocused, tabTo } from "../support/keyboard";
 
-// First harness journey: an empty Library, Mod+N, a Book, a Chapter, text,
-// Mod+S, reload. The edges each get their own test (matrix row books-create).
+// First harness journey: an empty Library, Alt+N (the web default; browsers
+// keep Ctrl+N), a Book, a Chapter, text, Mod+S, reload. The edges each get
+// their own test (matrix row books-create).
 
-test.describe("books-create @wf:books-create @sc:home.newBook @sc:editor.save", () => {
+test.describe("books-create @wf:books-create @sc:bookList.newBook @sc:common.save", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
   });
 
-  test("Mod+N opens New Book with focus in Book Title and Tab kept inside", async ({ page }) => {
-    await page.keyboard.press("ControlOrMeta+n");
+  test("Alt+N opens New Book with focus in Book Title and Tab kept inside", async ({ page }) => {
+    await page.keyboard.press("Alt+n");
 
     const dialog = page.getByRole("dialog", { name: "New Book" });
     await expect(dialog).toBeVisible();
@@ -19,13 +20,13 @@ test.describe("books-create @wf:books-create @sc:home.newBook @sc:editor.save", 
     await expectTabContained(page, dialog);
   });
 
-  test("⌘N opens New Book and the button shows ⌘ @mac-platform", async ({ page, mod }) => {
+  test("⌥N opens New Book and the button shows ⌥ @mac-platform", async ({ page, mod }) => {
     const toolbar = page.getByRole("toolbar", { name: "Book actions" });
     await expect(toolbar.getByRole("button", { name: /New Book/ })).toHaveAccessibleName(
-      mod === "Meta" ? "New Book ⌘ N" : "New Book Ctrl N"
+      mod === "Meta" ? "New Book ⌥ N" : "New Book Alt N"
     );
 
-    await page.keyboard.press(`${mod}+n`);
+    await page.keyboard.press("Alt+n");
     await expect(
       page.getByRole("dialog", { name: "New Book" }).getByRole("textbox", { name: "Book Title" })
     ).toBeFocused();
@@ -51,7 +52,7 @@ test.describe("books-create @wf:books-create @sc:home.newBook @sc:editor.save", 
   });
 
   test("an empty title keeps the dialog open with focus on Book Title", async ({ page }) => {
-    await page.keyboard.press("ControlOrMeta+n");
+    await page.keyboard.press("Alt+n");
     const dialog = page.getByRole("dialog", { name: "New Book" });
     const title = dialog.getByRole("textbox", { name: "Book Title" });
 
@@ -65,7 +66,7 @@ test.describe("books-create @wf:books-create @sc:home.newBook @sc:editor.save", 
   });
 
   test("an empty Author Name keeps the dialog open with focus on it", async ({ page }) => {
-    await page.keyboard.press("ControlOrMeta+n");
+    await page.keyboard.press("Alt+n");
     const dialog = page.getByRole("dialog", { name: "New Book" });
     const author = dialog.getByRole("textbox", { name: "Author Name" });
 
@@ -78,7 +79,7 @@ test.describe("books-create @wf:books-create @sc:home.newBook @sc:editor.save", 
   });
 
   test("create a Book, write a Chapter, Mod+S, reload: the text persists", async ({ page }) => {
-    await page.keyboard.press("ControlOrMeta+n");
+    await page.keyboard.press("Alt+n");
     await page.keyboard.type("The Tide Clock");
     await page.keyboard.press("Tab");
     await page.keyboard.type("Ada Marsh");

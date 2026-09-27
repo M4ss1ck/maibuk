@@ -4,6 +4,23 @@
     "title": "Maibuk",
     "description": "A cross-platform writing app for authors"
   },
+  "commands": {
+    "noteItem": {
+      "togglePinned": "Pin or unpin note"
+    },
+    "bookEditor": {
+      "toggleCompactView": "Toggle compact chapter list",
+      "toggleOutline": "Toggle chapter outline"
+    },
+    "coverDesigner": {
+      "addTextTitle": "Add text: title",
+      "addTextSubtitle": "Add text: subtitle",
+      "addTextAuthor": "Add text: author",
+      "addShapeRect": "Add shape: rectangle",
+      "addShapeEllipse": "Add shape: ellipse",
+      "addShapeLine": "Add shape: line"
+    }
+  },
   "dropImport": {
     "importFailed": "Could not import dropped files",
     "importing": "Importing files…",
@@ -1110,6 +1127,46 @@
     "insertSymbol": "Insert symbol",
     "deleteSelection": "Delete selected object",
     "cyclePanes": "Cycle through panes",
+    "cyclePanesForward": "Next pane",
+    "cyclePanesBackward": "Previous pane",
+    "find": "Find",
+    "moveSelectionNext": "Next book",
+    "moveSelectionPrevious": "Previous book",
+    "leavePanel": "Leave the current panel",
+    "enterNotesList": "Move into the notes list",
+    "clearSelection": "Clear selection",
+    "backToCanvasGallery": "Back to Canvases",
+    "sendBackward": "Send backward",
+    "bringForward": "Bring forward",
+    "nudgeUp": "Nudge up",
+    "nudgeDown": "Nudge down",
+    "nudgeLeft": "Nudge left",
+    "nudgeRight": "Nudge right",
+    "nudgeUpFar": "Nudge up 10 px",
+    "nudgeDownFar": "Nudge down 10 px",
+    "nudgeLeftFar": "Nudge left 10 px",
+    "nudgeRightFar": "Nudge right 10 px",
+    "customize": "Customize shortcuts",
+    "fixed": {
+      "escape": "Escape always closes or leaves",
+      "undo": "Your system uses this key for undo and redo",
+      "navigation": "Arrow keys move through the list",
+      "findField": "The find field uses this key",
+      "tab": "Tab indents and moves focus",
+      "family": "One key per position, 1 to 9",
+      "activate": "Enter opens the focused book"
+    },
+    "sections": {
+      "common": "Common",
+      "global": "Everywhere",
+      "bookList": "Books",
+      "bookEditor": "Book Editor",
+      "coverDesigner": "Cover Designer",
+      "notes": "Notes",
+      "canvas": "Canvas",
+      "editor": "Editor",
+      "ephemeral": "Ephemeral"
+    },
     "onThisScreen": "On this screen",
     "onOtherScreens": "On other screens",
     "areaGlobal": "Everywhere",
@@ -1120,6 +1177,90 @@
     "startTutorial": "Start the Tutorial",
     "skipTutorial": "Skip the Tutorial",
     "areaTutorial": "Tutorial"
+  },
+  "shortcutEditor": {
+    "title": "Customize shortcuts",
+    "intro": "Maibuk is keyboard-first. Give any command your own shortcut, add a second one, or remove it. Changes stay on this device.",
+    "singleKey": "Single-key shortcuts",
+    "singleKeyOff": "Off",
+    "search": "Search commands and keys",
+    "searchPlaceholder": "Bold, Ctrl+S, g p…",
+    "listLabel": "Commands and their shortcuts",
+    "empty": "No command matches.",
+    "connectKeyboard": "Connect a keyboard to record a shortcut.",
+    "fixed": "fixed",
+    "noShortcut": "No shortcut",
+    "sealed": "Takes no other shortcuts",
+    "add": "Add a shortcut to {{command}}",
+    "addShort": "Add",
+    "addLimit": "{{command}} already has {{max}} shortcuts",
+    "change": "Change {{keys}} for {{command}}",
+    "remove": "Remove {{keys}} from {{command}}",
+    "reset": "Reset {{command}} to its default shortcuts",
+    "resetShort": "Reset",
+    "resetAll": "Reset all shortcuts",
+    "resetAllTitle": "Reset all shortcuts?",
+    "resetAllBody_one": "{{count}} customized command goes back to its default shortcuts.",
+    "resetAllBody_other": "{{count}} customized commands go back to their default shortcuts.",
+    "filter": {
+      "all": "All",
+      "customized": "Customized",
+      "none": "No shortcut"
+    },
+    "recorder": {
+      "label": "Press the new shortcut for {{command}}. Enter to finish, Escape to cancel.",
+      "placeholder": "Press keys…",
+      "pressFirst": "Press a key first.",
+      "firstStep": "{{keys}}. Press a second key for a sequence, or Enter to finish.",
+      "notAllowed": "{{keys}} cannot be a shortcut.",
+      "reserved": "The browser keeps {{keys}}. Choose another key."
+    },
+    "errors": {
+      "needsModifier": "{{keys}} would type text in the editor. Add Ctrl, Alt, or a function key.",
+      "duplicate": "{{keys}} is already a shortcut of this command.",
+      "locked": "{{keys}} is {{command}} and cannot be reassigned."
+    },
+    "conflict": {
+      "message": "{{keys}} is already used by {{command}}.",
+      "replace": "Replace"
+    },
+    "announce": {
+      "set": "{{command}}: {{keys}}",
+      "moved": "{{keys}} moved from {{from}} to {{to}}.",
+      "removed": "{{keys}} removed from {{command}}.",
+      "reset": "{{command}} reset to {{keys}}.",
+      "resetNone": "{{command}} reset to no shortcut.",
+      "resetAll": "All shortcuts reset.",
+      "cancelled": "Recording cancelled."
+    },
+    "file": {
+      "save": "Save to file",
+      "load": "Load from file",
+      "saved": "Shortcuts saved to a file.",
+      "saveFailed": "Could not save the shortcut file.",
+      "readFailed": "Could not read the shortcut file.",
+      "previewTitle": "Load shortcuts from file",
+      "previewBody_one": "{{count}} command gets the shortcuts from this file. Your current custom shortcuts are replaced.",
+      "previewBody_other": "{{count}} commands get the shortcuts from this file. Your current custom shortcuts are replaced.",
+      "replace": "Replace my shortcuts",
+      "loaded": "Shortcuts loaded from the file.",
+      "droppedTitle_one": "{{count}} entry was skipped:",
+      "droppedTitle_other": "{{count}} entries were skipped:",
+      "dropped": {
+        "unknown": "{{command}}: this version of Maibuk has no such command",
+        "invalid": "{{command}}: {{keys}} is not a valid shortcut",
+        "sealed": "{{command}}: takes no other shortcuts",
+        "reserved": "{{command}}: the browser keeps {{keys}}",
+        "conflict": "{{command}}: {{keys}} is already used"
+      },
+      "errors": {
+        "parse": "This file is not a shortcut file.",
+        "kind": "This file is not a Maibuk shortcut file.",
+        "version": "This shortcut file comes from a newer Maibuk."
+      }
+    },
+    "settingsDescription": "See every command, give it your own shortcut, or turn off single-key shortcuts.",
+    "open": "Customize shortcuts"
   },
   "versions": {
     "title": "Version history",
@@ -1459,6 +1600,10 @@
         "general": {
           "title": "General",
           "body": "Autosave, always on top and the language Maibuk speaks."
+        },
+        "shortcuts": {
+          "title": "Keyboard shortcuts",
+          "body": "Maibuk is keyboard-first: every command can run from the keyboard. Here you give any command your own shortcut, add a second one, or turn off single-key shortcuts. Your custom shortcuts stay on this device."
         },
         "sync": {
           "title": "Sync",

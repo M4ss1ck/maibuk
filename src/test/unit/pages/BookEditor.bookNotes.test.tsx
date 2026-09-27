@@ -85,21 +85,31 @@ vi.mock("../../../features/notes", () => {
   return { useNoteStore };
 });
 
-vi.mock("../../../features/settings/store", () => ({
-  useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      sidebarWidth: 256,
-      setSidebarWidth: vi.fn(),
-      showInlineFootnotes: true,
-      showNotesChapter: mockSettings.showNotesChapter,
-      setShowNotesChapter: mockSetShowNotesChapter,
-      bookSidePanelTab: "notes",
-      setBookSidePanelTab: mockSetBookSidePanelTab,
-      hideKeyboardHints: false,
-      alwaysOnTop: false,
-      setAlwaysOnTop: vi.fn(),
-    }),
-}));
+vi.mock("../../../features/settings/store", async () => {
+  const { DEFAULT_SHORTCUT_SETTINGS } =
+    await vi.importActual<typeof import("@/lib/shortcut-resolve")>("@/lib/shortcut-resolve");
+  const state: Record<string, unknown> = {
+    sidebarWidth: 256,
+    setSidebarWidth: vi.fn(),
+    showInlineFootnotes: true,
+    get showNotesChapter() {
+      return mockSettings.showNotesChapter;
+    },
+    setShowNotesChapter: mockSetShowNotesChapter,
+    bookSidePanelTab: "notes",
+    setBookSidePanelTab: mockSetBookSidePanelTab,
+    hideKeyboardHints: false,
+    alwaysOnTop: false,
+    setAlwaysOnTop: vi.fn(),
+    shortcuts: DEFAULT_SHORTCUT_SETTINGS,
+  };
+  return {
+    useSettingsStore: Object.assign(
+      (selector: (s: Record<string, unknown>) => unknown) => selector(state),
+      { getState: () => state, setState: vi.fn(), subscribe: () => () => {} }
+    ),
+  };
+});
 
 vi.mock("../../../features/versions/useAutoCheckpoint", () => ({
   useAutoCheckpoint: vi.fn(),

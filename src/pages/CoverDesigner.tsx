@@ -13,7 +13,6 @@ import { dataUrlToBytes, exportScene, exportScenePdf } from "@/features/covers/e
 import { Button, Modal } from "@/components/ui";
 import { BackIcon } from "@/components/icons";
 import { useShortcuts } from "@/lib/shortcuts";
-import { matchKeys } from "@/lib/shortcut-registry";
 
 const DEFAULT_PRESET = "6x9";
 
@@ -124,58 +123,80 @@ export function CoverDesigner() {
 
   useShortcuts([
     {
-      id: "cover.delete",
-      keys: ["delete", "backspace"],
+      id: "common.delete",
       onTrigger: () => {
         const { selectedId, removeLayer } = useCoverStore.getState();
         if (selectedId) removeLayer(selectedId);
       },
     },
     {
-      id: "cover.save",
-      keys: matchKeys("cover.save"),
+      id: "common.save",
       onTrigger: () => handleSave(),
       allowInInput: true,
     },
     {
-      id: "cover.undo",
-      keys: ["ctrl+z", "meta+z"],
+      id: "common.undo",
       onTrigger: () => useCoverStore.getState().undo(),
     },
     {
-      id: "cover.redo",
-      keys: ["ctrl+shift+z", "meta+shift+z", "ctrl+y"],
+      id: "common.redo",
       onTrigger: () => useCoverStore.getState().redo(),
     },
     {
-      id: "cover.duplicate",
-      keys: matchKeys("cover.duplicate"),
+      id: "coverDesigner.duplicate",
       onTrigger: () => useCoverStore.getState().duplicateSelected(),
       preventDefault: true,
     },
-    { keys: ["arrowup"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, -1) },
-    { keys: ["arrowdown"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, 1) },
-    { keys: ["arrowleft"], onTrigger: () => useCoverStore.getState().nudgeSelected(-1, 0) },
-    { keys: ["arrowright"], onTrigger: () => useCoverStore.getState().nudgeSelected(1, 0) },
-    { keys: ["shift+arrowup"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, -10) },
-    { keys: ["shift+arrowdown"], onTrigger: () => useCoverStore.getState().nudgeSelected(0, 10) },
-    { keys: ["shift+arrowleft"], onTrigger: () => useCoverStore.getState().nudgeSelected(-10, 0) },
-    { keys: ["shift+arrowright"], onTrigger: () => useCoverStore.getState().nudgeSelected(10, 0) },
     {
-      keys: ["["],
+      id: "coverDesigner.nudgeUp",
+      onTrigger: () => useCoverStore.getState().nudgeSelected(0, -1),
+    },
+    {
+      id: "coverDesigner.nudgeDown",
+      onTrigger: () => useCoverStore.getState().nudgeSelected(0, 1),
+    },
+    {
+      id: "coverDesigner.nudgeLeft",
+      onTrigger: () => useCoverStore.getState().nudgeSelected(-1, 0),
+    },
+    {
+      id: "coverDesigner.nudgeRight",
+      onTrigger: () => useCoverStore.getState().nudgeSelected(1, 0),
+    },
+    {
+      id: "coverDesigner.nudgeUpFar",
+      onTrigger: () => useCoverStore.getState().nudgeSelected(0, -10),
+    },
+    {
+      id: "coverDesigner.nudgeDownFar",
+      onTrigger: () => useCoverStore.getState().nudgeSelected(0, 10),
+    },
+    {
+      id: "coverDesigner.nudgeLeftFar",
+      onTrigger: () => useCoverStore.getState().nudgeSelected(-10, 0),
+    },
+    {
+      id: "coverDesigner.nudgeRightFar",
+      onTrigger: () => useCoverStore.getState().nudgeSelected(10, 0),
+    },
+    {
+      id: "coverDesigner.sendBackward",
       onTrigger: () => {
         const { selectedId, sendBackward } = useCoverStore.getState();
         if (selectedId) sendBackward(selectedId);
       },
     },
     {
-      keys: ["]"],
+      id: "coverDesigner.bringForward",
       onTrigger: () => {
         const { selectedId, bringForward } = useCoverStore.getState();
         if (selectedId) bringForward(selectedId);
       },
     },
-    { keys: ["escape"], onTrigger: () => useCoverStore.getState().select(null) },
+    {
+      id: "coverDesigner.clearSelection",
+      onTrigger: () => useCoverStore.getState().select(null),
+    },
   ]);
 
   if (!currentBook) {
