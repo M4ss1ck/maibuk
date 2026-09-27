@@ -8,6 +8,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { test, expect } from "../support/test";
 
 // The editor slice (issue #205): typing and saving, the editor keymap,
@@ -16,6 +17,7 @@ test.use({ library: "oneBookThreeChapters" });
 
 const editorText = (page: Page) => page.getByRole("textbox", { name: /^Text of / });
 const toolbar = (page: Page) => page.getByRole("toolbar", { name: "Toolbar" });
+const centreY = (box: { y: number; height: number }) => box.y + box.height / 2;
 const mark = (page: Page, name: string) => toolbar(page).getByRole("button", { name, exact: true });
 
 async function openEditor(page: Page) {
@@ -545,6 +547,32 @@ test.describe("toolbar selects @wf:editor-toolbar-selects", () => {
     await page.reload();
     await expect(editorText(page)).toBeFocused();
     await expect(editorText(page).locator('span[style*="color"]').first()).toBeVisible();
+  });
+
+  test("each color options trigger is a narrow, whole half of its split button", async ({
+    page,
+  }) => {
+    await seedSettings(page, { toolbarExpanded: true });
+    await openEditor(page);
+    await capture(page, "editor-color-split-buttons", {
+      around: [
+        mark(page, "Text Color"),
+        toolbar(page).getByRole("button", { name: "Highlight options" }),
+      ],
+    });
+    const bar = await toolbar(page).boundingBox();
+    for (const name of ["Text Color", "Highlight"]) {
+      const apply = await mark(page, name).boundingBox();
+      const options = await toolbar(page)
+        .getByRole("button", { name: `${name} options` })
+        .boundingBox();
+      expect(options!.height).toBeCloseTo(apply!.height, 0);
+      expect(options!.width).toBeLessThan(apply!.width * 0.75);
+      expect(Math.abs(options!.x - (apply!.x + apply!.width))).toBeLessThanOrEqual(1);
+      expect(Math.abs(centreY(options!) - centreY(apply!))).toBeLessThanOrEqual(1);
+      expect(options!.x).toBeGreaterThanOrEqual(bar!.x);
+      expect(options!.x + options!.width).toBeLessThanOrEqual(bar!.x + bar!.width);
+    }
   });
 
   test("highlight color applies to the selection and persists", async ({ page }) => {

@@ -17,6 +17,7 @@ import {
   parseColor,
 } from "react-aria-components";
 import { useTranslation } from "react-i18next";
+import { ChevronDownIcon } from "@/components/icons";
 import { contrastRatio, normalizeHexColor } from "@/lib/color";
 
 export const DEFAULT_COLOR_PRESETS = [
@@ -36,6 +37,15 @@ export const DEFAULT_COLOR_PRESETS = [
 
 const NO_SWATCH = "#0000";
 
+// A split trigger is the options half of a toolbar split button: the other half
+// already shows the color, so this one only needs to read as "more".
+const TRIGGER_CLASSES = {
+  swatch:
+    "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background p-1",
+  split:
+    "inline-flex h-8 w-4 shrink-0 items-center justify-center rounded-r border-l border-border/50 transition-colors hover:bg-muted pointer-coarse:w-6",
+} as const;
+
 interface ColorPickerControlProps {
   label: string;
   value: string;
@@ -47,7 +57,8 @@ interface ColorPickerControlProps {
   contrastAgainst?: string | null;
   contrastKind?: "text" | "large-text" | "non-text";
   showUnknownContrast?: boolean;
-  className?: string;
+  /** `split` is the narrow options half of a split button whose other half shows the color. */
+  variant?: keyof typeof TRIGGER_CLASSES;
   onClear?: () => void;
   clearLabel?: string;
   closeOnPreset?: boolean;
@@ -63,7 +74,7 @@ export function ColorPickerControl({
   contrastAgainst,
   contrastKind = "text",
   showUnknownContrast = false,
-  className = "",
+  variant = "swatch",
   onClear,
   clearLabel,
   closeOnPreset = false,
@@ -131,12 +142,16 @@ export function ColorPickerControl({
     <DialogTrigger isOpen={open} onOpenChange={changeOpen}>
       <Button
         aria-label={label}
-        className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background p-1 outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
+        className={`${TRIGGER_CLASSES[variant]} outline-none focus-visible:ring-2 focus-visible:ring-primary ${open && variant === "split" ? "bg-muted" : ""}`}
       >
-        <span
-          className="size-full rounded border border-border"
-          style={{ backgroundColor: open ? draft : value || draft }}
-        />
+        {variant === "split" ? (
+          <ChevronDownIcon className="size-2" />
+        ) : (
+          <span
+            className="size-full rounded border border-border"
+            style={{ backgroundColor: open ? draft : value || draft }}
+          />
+        )}
       </Button>
       <Popover
         placement="bottom start"
