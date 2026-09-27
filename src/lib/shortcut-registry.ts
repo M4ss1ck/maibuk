@@ -130,6 +130,21 @@ export const COMMANDS = {
     defaults: [["g", "u"]],
   },
 
+  "dictation.toggle": {
+    labelKey: "dictation.toggle",
+    contexts: ["global"],
+    defaults: [["Mod+Shift+Space"]],
+  },
+  "dictation.stop": {
+    labelKey: "dictation.stop",
+    contexts: ["editor"],
+    source: "editor-keymap",
+    defaults: [],
+    fixed: [["Escape"]],
+    fixedReasonKey: FIXED_ESCAPE,
+    sealed: true,
+  },
+
   "tutorial.skip": {
     labelKey: "shortcuts.skipTutorial",
     contexts: ["global"],

@@ -34,6 +34,14 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "Vitest platform tests, manual QA",
   },
   {
+    kind: "shortcut",
+    items: ["dictation.toggle", "dictation.stop"],
+    reason:
+      "Dictation's keyboard workflow reaches a controller that needs a microphone and a loaded model, so it is covered by Vitest until its E2E lane ships",
+    owner:
+      "Vitest dictation suites (session, dictation-messages, GlobalShortcuts.dictation); E2E row in the Voice Dictation plan's E2E task",
+  },
+  {
     kind: "term",
     items: ["Backup Directory"],
     reason:

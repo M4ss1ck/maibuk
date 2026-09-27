@@ -14,3 +14,4 @@ export {
 export { createLineStats, type LineStats } from "@/features/dictation/stats";
 export { pickModel, useDictationStore, type DictationStoreState } from "@/features/dictation/store";
 export { getDictation, resetDictationForTests, type DictationRuntime } from "@/features/dictation/runtime";
+export { attachSession, dictationHub, resetDictationHubForTests } from "@/features/dictation/hub";

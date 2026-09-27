@@ -31,6 +31,7 @@ import { HeadingId } from "@/components/editor/extensions/HeadingId";
 import { SymbolAutocomplete } from "@/components/editor/extensions/SymbolAutocomplete";
 import { AutoClose } from "@/components/editor/extensions/AutoClose";
 import { ShortcutOverrides } from "@/components/editor/extensions/ShortcutOverrides";
+import { Dictation } from "@/components/editor/extensions/Dictation";
 import type { Language } from "@/features/settings/types";
 
 export interface RichTextExtensionsOptions {
@@ -105,5 +106,6 @@ export function createRichTextExtensions({
     SymbolAutocomplete,
     Footnote.configure({ startIndex: footnoteStartIndex }),
     ...(spellCheck ? [SpellCheck.configure(spellCheck)] : []),
+    Dictation,
   ];
 }

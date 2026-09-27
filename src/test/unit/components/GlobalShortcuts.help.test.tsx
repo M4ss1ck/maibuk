@@ -128,6 +128,7 @@ describe("GlobalShortcuts", () => {
       .sort();
 
     expect(ids).toEqual([
+      "dictation.toggle",
       "global.cyclePanesBackward",
       "global.cyclePanesForward",
       "global.gotoCanvas",
