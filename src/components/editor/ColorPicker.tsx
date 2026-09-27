@@ -83,7 +83,7 @@ export function ColorPicker({
         clearLabel={t("editor.clear")}
         closeOnPreset
         showUnknownContrast
-        className="size-8 rounded-l-none border-l-0"
+        variant="split"
       />
     </div>
   );

@@ -217,6 +217,44 @@ pnpm exec playwright show-trace e2e/.output/test-results/<test>/trace.zip
 trace, so only the failing `<test>` directory has one. Open the HTML report in a
 browser if the terminal cannot render it; it links every trace.
 
+## Screenshots for a PR
+
+A PR that changes what the app renders shows it (AGENTS.md, section 2, item 9).
+The spec that reaches the state takes the picture:
+
+```ts
+import { capture } from "../support/capture";
+
+await capture(page, "editor-color-split-buttons", { around: [textColor, highlightOptions] });
+```
+
+`capture` does nothing unless `E2E_CAPTURE_DIR` is set, so the suite runs as
+before. When set, it saves `<name>.<project>.light.png` and `.dark.png`,
+switching the theme through the emulated color scheme; `around` crops to those
+elements plus 24px. Call it before the test's layout assertions, so the "before"
+run still captures when the branch fixes what those assertions check.
+
+```bash
+pnpm screenshots -g "narrow, whole half"                 # chromium
+pnpm screenshots --grep @wf:settings-primary-color --project=webkit
+SCREENSHOTS_OUT=/tmp/x SCREENSHOTS_BASE=origin/main pnpm screenshots -g "..."
+```
+
+`scripts/pr-screenshots.sh` checks out the merge-base with the base branch in a
+temporary worktree, lays this branch's `e2e/` over it, and runs the selected
+tests there (failures are reported, not fatal); then it runs them on the branch
+through `pnpm test:e2e`, which must pass. It writes
+`/tmp/<branch>/screenshots/{before,after}/`, a `screenshots.md` table for the PR
+body, and `attach-args.txt`. Look at each image, then:
+
+```bash
+cat body.md /tmp/<branch>/screenshots/screenshots.md > /tmp/pr-body.md
+gh pr create --title "..." --body-file /tmp/pr-body.md $(cat /tmp/<branch>/screenshots/attach-args.txt)
+```
+
+`gh` (2.99 or later) uploads each `--attach` file to GitHub and rewrites the
+body's `![...](path)` references to it, so no image is committed.
+
 ## Troubleshooting
 
 **Port already in use.** The preview server runs with `--strictPort`, so a run

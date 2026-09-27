@@ -10,6 +10,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { expect, test } from "../support/test";
 
 test.use({ library: "oneBookThreeChapters" });
@@ -92,6 +93,24 @@ test.describe("Settings primary colour @wf:settings-primary-color", () => {
     await page.reload();
     await expect(page.locator("html")).toHaveCSS("--color-primary", "#123456");
     await expect(page.locator("html")).toHaveCSS("--color-primary-foreground", "#FFFFFF");
+  });
+
+  test("the hue thumb sits centred on its track", async ({ page }) => {
+    await openSettings(page);
+    const color = settingsMain(page).getByRole("button", { name: "Primary Color" });
+    await tabTo(page, color);
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("dialog", { name: "Primary Color" });
+    await expectFocusWithin(picker);
+    await capture(page, "settings-primary-color-picker", { around: [color, picker] });
+    // The slider's accessible input sits inside the thumb, which sits inside the track;
+    // the track has no role or name of its own.
+    const hue = picker.getByRole("slider", { name: "Hue" });
+    const thumb = hue.locator("xpath=..");
+    const track = thumb.locator("xpath=..");
+    const [thumbBox, trackBox] = [await thumb.boundingBox(), await track.boundingBox()];
+    const centre = (box: { y: number; height: number }) => box.y + box.height / 2;
+    expect(Math.abs(centre(thumbBox!) - centre(trackBox!))).toBeLessThanOrEqual(1);
   });
 
   test("Escape discards an uncommitted hex edit", async ({ page }) => {
