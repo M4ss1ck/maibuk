@@ -21,7 +21,8 @@ for (const m of src.matchAll(/\{((?:"[^"]*"\s*)+),\s*(\d+),\s*"([^"]*)",\s*"([^"
   const url = [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]).join("");
   const mm = url.match(/^https:\/\/download\.moonshine\.ai\/model\/([a-z-]+)\/([^/]+)\/(.+)$/);
   if (!mm || !PICK[mm[1]] || mm[3].includes("with_attention")) continue;
-  const model = (models[mm[1]] ??= { dir: mm[2], files: [] });
+  models[mm[1]] ??= { dir: mm[2], files: [] };
+  const model = models[mm[1]];
   // m[3] is the base64 checksum, m[4] its algorithm ("crc32c").
   model.files.push({
     name: mm[3],

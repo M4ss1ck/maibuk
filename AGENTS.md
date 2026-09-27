@@ -712,7 +712,7 @@ by. `empty` is a fresh device and is the default; Tutorial specs set
 
 ### Linting & Formatting
 
-There is **no ESLint or Prettier configured** in the project. TypeScript strict mode (`tsconfig.json`) serves as the primary code quality gate.
+There is no ESLint or Prettier. Two gates run in CI: TypeScript strict mode (`tsconfig.json`) and `pnpm lint` (Biome, `biome.json`), which fails the build on any error, scripts included. Run `pnpm lint` before pushing.
 
 ### Type Safety
 
