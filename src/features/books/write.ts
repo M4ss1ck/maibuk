@@ -14,6 +14,7 @@ import { recordTombstone } from "@/features/sync/tombstones";
 import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
 import { normalizeChapterContent, toChapter } from "@/features/chapters/write";
 import { reindexSource } from "@/features/links/link-index";
+import { appLanguage } from "@/features/settings/app-language";
 import type {
   Book,
   BookStatus,
@@ -88,10 +89,11 @@ export async function createBookRow(
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
+  const language = input.language ?? appLanguage();
 
   await db.execute(
     `INSERT INTO books (id, title, subtitle, author_name, description, genre, language, word_count, status, created_at, updated_at, content_updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'en', 0, 'draft', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'draft', ?, ?, ?)`,
     [
       id,
       input.title,
@@ -99,6 +101,7 @@ export async function createBookRow(
       input.authorName,
       input.description || null,
       input.genre || null,
+      language,
       now,
       now,
       now,
@@ -119,7 +122,7 @@ export async function createBookRow(
     authorName: input.authorName,
     description: input.description,
     genre: input.genre,
-    language: "en",
+    language,
     coverImagePath: undefined,
     coverData: undefined,
     wordCount: 0,

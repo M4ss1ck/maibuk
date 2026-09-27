@@ -29,6 +29,7 @@ export interface CreateBookInput {
   subtitle?: string;
   description?: string;
   genre?: string;
+  language?: string;
 }
 
 export interface UpdateBookInput {
