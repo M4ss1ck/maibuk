@@ -39,6 +39,8 @@ export interface RichTextExtensionsOptions {
   spellCheck?: { enabled: boolean; language: Language };
   autoClose?: boolean;
   dropcursor?: boolean;
+  /** See `HeadingId`'s `nameOnOpen`. */
+  nameHeadingsOnOpen?: boolean;
 }
 
 /**
@@ -53,6 +55,7 @@ export function createRichTextExtensions({
   spellCheck,
   autoClose = false,
   dropcursor = true,
+  nameHeadingsOnOpen = true,
 }: RichTextExtensionsOptions = {}): Extensions {
   return [
     ShortcutOverrides,
@@ -69,7 +72,7 @@ export function createRichTextExtensions({
     CustomCode,
     SmartItalic,
     ...(autoClose ? [AutoClose] : []),
-    HeadingId,
+    HeadingId.configure({ nameOnOpen: nameHeadingsOnOpen }),
     Underline,
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     CustomHighlight.configure({ multicolor: true }),

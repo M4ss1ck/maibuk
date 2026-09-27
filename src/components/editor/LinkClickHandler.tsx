@@ -32,7 +32,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
   useEffect(() => {
     const activateLink = (href: string, position: { x: number; y: number }) => {
       if (isInternalLink(href)) {
-        void navigateToLinkTarget(href, navigate);
+        void navigateToLinkTarget(href, navigate, (key) => toast.error(t(key)));
         return;
       }
       setLinkInfo({ url: href, position });
@@ -77,7 +77,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
       editorElement.removeEventListener("click", handleClick);
       editorElement.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [editor, navigate]);
+  }, [editor, navigate, t]);
 
   const handleOpenLink = () => {
     if (linkInfo?.url) {

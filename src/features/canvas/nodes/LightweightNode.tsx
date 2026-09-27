@@ -51,6 +51,8 @@ function ActiveNodeEditor({
       footnoteStartIndex: 1,
       spellCheck: { enabled: spellCheckEnabled, language },
       autoClose: editorAutoClose,
+      // Leaving the node writes its HTML back, so opening must not change it.
+      nameHeadingsOnOpen: false,
     }),
     content: node.html,
     editable: true,
