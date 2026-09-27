@@ -13,7 +13,11 @@ import {
 } from "@/features/dictation/session";
 import { createLineStats, type LineStats } from "@/features/dictation/stats";
 import { pickModel, useDictationStore } from "@/features/dictation/store";
-import type { ModelSpec, RecognizerHost } from "@/features/dictation/types";
+import {
+  toDictationError,
+  type ModelSpec,
+  type RecognizerHost,
+} from "@/features/dictation/types";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import {
   createRecognizerHost,
@@ -117,6 +121,14 @@ async function build(): Promise<DictationRuntime> {
           spec.files.reduce((sum, f) => sum + f.bytes, 0),
         );
         await models.install(spec, progress, controller.signal);
+      } catch (error) {
+        // The session notifies for engine errors; the download reports its own
+        // failure the same way, then the caller still sees the rejection.
+        notify({
+          kind: "error",
+          code: toDictationError(error, "download_failed").code,
+        });
+        throw error;
       } finally {
         aborts.delete(spec.id);
         useDictationStore.setState((s) => {

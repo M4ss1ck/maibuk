@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
@@ -83,6 +84,7 @@ vi.mock("../../../features/sync/useSyncFlow", () => ({
 vi.mock("@/components/settings/BackupSection", () => ({ BackupSection: () => null }));
 vi.mock("@/components/settings/MetricsSection", () => ({ MetricsSection: () => null }));
 vi.mock("@/components/settings/PasteCleanupSection", () => ({ PasteCleanupSection: () => null }));
+vi.mock("@/components/settings/DictationSection", () => ({ DictationSection: () => null }));
 vi.mock("@/components/settings/AsciiBanner", () => ({ AsciiBanner: () => null }));
 vi.mock("@/components/settings/AsciiFieldBackground", () => ({ AsciiFieldBackground: () => null }));
 vi.mock("@/components/sync/SyncControls", () => ({ SyncControls: () => null }));
@@ -92,6 +94,15 @@ vi.mock("@/components/sync/ConflictDialog", () => ({ ConflictDialog: () => null 
 
 const { Settings } = await import("@/pages/Settings");
 const { useSettingsStore } = await import("@/features/settings/store");
+
+// Settings reads the route hash (to scroll to a linked section), so it needs a Router.
+function renderSettings(initialEntries: string[] = ["/settings"]) {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <Settings />
+    </MemoryRouter>
+  );
+}
 
 describe("Settings page — container-aware layout", () => {
   beforeEach(() => {
@@ -117,7 +128,7 @@ describe("Settings page — container-aware layout", () => {
   });
 
   it("marks the content wrapper as the container, not the page shell", () => {
-    render(<Settings />);
+    renderSettings();
 
     const wrapper = document.querySelector(".max-w-2xl");
     expect(wrapper).not.toBeNull();
@@ -127,8 +138,17 @@ describe("Settings page — container-aware layout", () => {
     expect(document.querySelector(".overflow-auto")).not.toHaveClass("@container");
   });
 
+  it("scrolls to the Dictation section when linked by hash", () => {
+    const scrollIntoView = vi.fn();
+    // jsdom has no layout; stub so the section's scroll does not throw.
+    Element.prototype.scrollIntoView = scrollIntoView;
+    renderSettings(["/settings#dictation"]);
+    expect(document.getElementById("dictation")).not.toBeNull();
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
   it("keys heading and section density to the content container", () => {
-    render(<Settings />);
+    renderSettings();
 
     const heading = screen.getByRole("heading", { level: 1 });
     expect(heading).toHaveClass("text-xl", "@lg:text-2xl");
@@ -142,7 +162,7 @@ describe("Settings page — container-aware layout", () => {
 
   it("changes the primary color by keyboard without a native color input", async () => {
     const user = userEvent.setup();
-    render(<Settings />);
+    renderSettings();
     const trigger = screen.getByRole("button", { name: "settings.primaryColor" });
     trigger.focus();
     await user.keyboard("{Enter}");
@@ -159,7 +179,7 @@ describe("Settings page — container-aware layout", () => {
     const user = userEvent.setup();
     const { useThemeStore } = await import("@/features/theme/store");
     useThemeStore.setState({ theme: "system" });
-    render(<Settings />);
+    renderSettings();
 
     const group = screen.getByRole("group", { name: "settings.theme" });
     const button = (name: string) => within(group).getByRole("button", { name });
@@ -175,7 +195,7 @@ describe("Settings page — container-aware layout", () => {
   });
 
   it("uses container variants for setting rows", () => {
-    render(<Settings />);
+    renderSettings();
 
     const themeRow = screen.getByRole("button", { name: "settings.light" }).closest(".py-2");
     expect(themeRow).not.toBeNull();
@@ -197,7 +217,7 @@ describe("Settings page — container-aware layout", () => {
   });
 
   it("sizes the sync server input from the container instead of the viewport", () => {
-    render(<Settings />);
+    renderSettings();
 
     const input = screen.getByPlaceholderText("sync.example.com");
     const row = input.closest(".py-3") as HTMLElement;
@@ -225,7 +245,7 @@ describe("Settings page — automatic sync", () => {
 
   it("is on by default and can be switched off from the keyboard", async () => {
     const user = userEvent.setup();
-    render(<Settings />);
+    renderSettings();
 
     const toggle = screen.getByRole("switch", { name: "sync.autoSync" });
     expect(toggle).toBeChecked();
@@ -240,7 +260,7 @@ describe("Settings page — automatic sync", () => {
 
   it("is hidden while logged out", () => {
     syncState.authStatus = "logged-out";
-    render(<Settings />);
+    renderSettings();
 
     expect(screen.queryByRole("switch", { name: "sync.autoSync" })).not.toBeInTheDocument();
   });
