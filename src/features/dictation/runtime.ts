@@ -39,7 +39,11 @@ export interface DictationRuntime {
 let runtime: Promise<DictationRuntime> | null = null;
 
 export function getDictation(): Promise<DictationRuntime> {
-  runtime ??= build();
+  // A failed build (worker or native host failed to load) must not disable Dictation for the whole run.
+  runtime ??= build().catch((error: unknown) => {
+    runtime = null;
+    throw error;
+  });
   return runtime;
 }
 

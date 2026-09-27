@@ -68,6 +68,7 @@ function fakeTarget(id: string, language: "en" | "es" = "es") {
 let host: ReturnType<typeof fakeHost>;
 let notices: SessionNotice[];
 let copied: string[];
+let copyText: (text: string) => Promise<void>;
 let models: Record<string, ModelSpec | null>;
 
 function makeSession() {
@@ -77,7 +78,7 @@ function makeSession() {
     route: createRouter(),
     runCommand: vi.fn(),
     notify: (n) => void notices.push(n),
-    copyText: async (t) => void copied.push(t),
+    copyText: (t) => copyText(t),
     stats: createLineStats(),
   });
 }
@@ -86,6 +87,7 @@ beforeEach(() => {
   host = fakeHost();
   notices = [];
   copied = [];
+  copyText = async (t) => void copied.push(t);
   models = { es: model("es"), en: model("en") };
 });
 
@@ -181,6 +183,20 @@ describe("Dictation Session", () => {
     await vi.waitFor(() => expect(session.getSnapshot().status).toBe("idle"));
     expect(copied).toEqual(["flushed"]);
     expect(notices).toContainEqual({ kind: "orphan_copied" });
+  });
+
+  it("orphaned final that cannot be copied is handed back, never reported as copied", async () => {
+    copyText = () => Promise.reject(new Error("Document is not focused"));
+    const session = makeSession();
+    const unregister = session.register(fakeTarget("a"));
+    session.focus("a");
+    await session.start();
+    unregister();
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({ kind: "orphan_lost", text: "flushed" }),
+    );
+    expect(notices).not.toContainEqual({ kind: "orphan_copied" });
+    expect(session.getSnapshot().status).toBe("idle");
   });
 
   it("toggle during loading stops after load without starting the engine", async () => {

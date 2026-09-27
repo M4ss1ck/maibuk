@@ -27,7 +27,9 @@ export type SessionNotice =
   | { kind: "started"; language: DictationLanguage }
   | { kind: "stopped" }
   | { kind: "error"; code: DictationErrorCode; language?: DictationLanguage }
-  | { kind: "orphan_copied" };
+  | { kind: "orphan_copied" }
+  // The clipboard refused (unfocused window, no permission): the UI shows the phrase instead.
+  | { kind: "orphan_lost"; text: string };
 
 export interface SessionSnapshot {
   status: SessionStatus;
@@ -112,8 +114,11 @@ export function createDictationSession(deps: {
         const target = active();
         if (target) target.commit(result.text);
         else {
-          void deps.copyText(result.text);
-          deps.notify({ kind: "orphan_copied" });
+          const text = result.text;
+          deps.copyText(text).then(
+            () => deps.notify({ kind: "orphan_copied" }),
+            () => deps.notify({ kind: "orphan_lost", text }),
+          );
         }
         return;
       }
