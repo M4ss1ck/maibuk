@@ -42,6 +42,43 @@ describe("note write path", () => {
     expect(note.contentUpdatedAt).toBe(note.createdAt);
   });
 
+  it("gives a Book Note its Book's language", async () => {
+    const { useSettingsStore } = await import("@/features/settings/store");
+    useSettingsStore.setState({ language: "en" });
+    await testDb.execute(
+      `INSERT INTO books (id, title, author_name, language, created_at, updated_at, content_updated_at)
+         VALUES ('b-es', 'Libro', 'Yo', 'es', 1, 1, 1)`
+    );
+    const note = await useNoteStore.getState().createNote({ title: "Nota", bookId: "b-es" });
+    expect(note.language).toBe("es");
+  });
+
+  it("gives a Book Note the app language when its Book is missing", async () => {
+    const { useSettingsStore } = await import("@/features/settings/store");
+    useSettingsStore.setState({ language: "es" });
+    const note = await useNoteStore.getState().createNote({ title: "Nota", bookId: "gone" });
+    expect(note.language).toBe("es");
+  });
+
+  it("gives an Unfiled Note the app language", async () => {
+    const { useSettingsStore } = await import("@/features/settings/store");
+    useSettingsStore.setState({ language: "es" });
+    const note = await useNoteStore.getState().createNote({ title: "Suelta" });
+    expect(note.language).toBe("es");
+    const rows = await testDb.select<{ language: string }[]>(
+      "SELECT language FROM notes WHERE id = ?",
+      [note.id]
+    );
+    expect(rows[0].language).toBe("es");
+  });
+
+  it("keeps an explicit note language", async () => {
+    const { useSettingsStore } = await import("@/features/settings/store");
+    useSettingsStore.setState({ language: "es" });
+    const note = await useNoteStore.getState().createNote({ title: "x", language: "en" });
+    expect(note.language).toBe("en");
+  });
+
   it("marks title and content edits as content", async () => {
     const note = await useNoteStore.getState().createNote({ title: "A" });
     changes.length = 0;
