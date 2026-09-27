@@ -72,6 +72,7 @@ Every new or modified UI feature ships keyboard-operable and screen-reader-corre
 6. **Proven by behavioral tests** — see the Keyboard & Accessibility Test Gate in section 6.
 7. **Reachable by touch** — Android and phone browsers have no hover, and Tailwind 4 only applies `hover:`/`group-hover:` where hover exists. Mouse devices keep their hover-revealed one-click actions; the same element gets `pointer-coarse:hidden`, and touch screens get the actions another way: an item's actions go in a ⋯ `ItemActionsMenu` shown with `hidden pointer-coarse:inline-flex` (or an `ItemActionsPopover` for Canvas nodes), opened also by long-press through `useItemContextMenu`; a single action becomes a visible control on coarse pointers. `src/test/unit/touch-reachability.test.ts` fails on a hover reveal with no `pointer-coarse:` class unless it is listed there with its touch path. Long-press opens the Item Menu, so on touch a drag starts only from a `data-drag-handle` (wrap the list in `useTouchDragFromHandle`); a React Aria drag button goes through `ReorderHandle`, because React Aria makes the button itself ignore pointers. Remember where phones actually browse: on a phone the Notes gallery, not the notes list, is how notes are reached.
 8. **Covered in the E2E suite**: new interactive UI is not done until it has a row in `e2e/coverage-matrix.ts` and a spec tagged `@wf:<row-id>`. See "Definition of done" in the E2E section of section 6.
+9. **Shown in the PR**: a change to anything the app renders (a component's markup or classes, `src/index.css`, a token) ships before and after screenshots, light and dark, attached to the PR. Add a narrow viewport when the layout responds to width. Put a `capture(page, name)` point in the spec that reaches the state, run `pnpm screenshots -g "<test>"`, and attach with `gh pr create --attach`; see "Screenshots for a PR" in `e2e/README.md`. Look at every image before attaching it: #229 shipped a misaligned hue thumb and a cropped toolbar trigger that no assertion covered and one glance would have caught.
 
 Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and `tabIndex` wiring looked correct while the widget was inoperable by keyboard, and attribute-level tests stayed green. Attributes are not accessibility; behavior is.
 
@@ -371,6 +372,8 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `failIndexedDbWrites(page)` / `allowIndexedDbWrites(page)` / `failBlobDownloads(page)` / `tamperBackupChecksums(page)` (E2E fault injection at the storage and browser-API boundary)                                                                                          | `e2e/support/fault.ts`                                                 |
 | `SEED_LIBRARIES` / `SeedName` (named E2E seed Libraries; each builder uses the real write paths)                                                                                                                                                                             | `e2e/support/seed/libraries.ts`                                        |
 | `buildSeed(name)` / `buildAllSeeds()` (build seed Libraries into database bytes through the real write paths)                                                                                                                                                                | `e2e/support/seed/build-seeds.ts`                                      |
+| `capture(page, name, { around })` (light and dark screenshot of the current state into `E2E_CAPTURE_DIR`; a no-op otherwise) | `e2e/support/capture.ts` |
+| `pnpm screenshots <playwright filter>` (before/after `capture` shots against the merge-base, plus a PR body table and `gh --attach` args) | `scripts/pr-screenshots.sh` |
 
 ---
 
@@ -784,6 +787,7 @@ pnpm build:android    # Android APK
 pnpm preview          # Preview production build
 pnpm preview:web      # Preview web build
 pnpm version:bump     # Bump version via script
+pnpm screenshots -g "<test>"  # Before/after PR screenshots (e2e/README.md)
 pnpm tauri            # Direct Tauri CLI access
 ```
 
