@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE: dictation spike</title>
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 16px; background: #fafaf9; color: #1c1917; }
+      fieldset { border: 1px solid #d6d3d1; border-radius: 8px; margin: 0 0 12px; }
+      textarea { width: 100%; box-sizing: border-box; font: 16px/1.6 Georgia, serif; }
+      #live { color: #78716c; font-style: italic; min-height: 1.6em; }
+      #transcript p { margin: 4px 0; }
+      pre { background: #f5f5f4; padding: 8px; border-radius: 8px; white-space: pre-wrap; font-size: 12px; }
+      .warn { color: #b91c1c; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>PROTOTYPE: voice dictation spike (throwaway, never merges)</h1>
+    <p id="env"></p>
+    <fieldset>
+      <legend>Engine</legend>
+      <label>Model
+        <select id="model">
+          <option>tiny-streaming-es</option>
+          <option>small-streaming-es</option>
+          <option>tiny-streaming-en</option>
+          <option>small-streaming-en</option>
+        </select>
+      </label>
+      <button id="load">Load</button>
+      <label>Source
+        <select id="source">
+          <option value="mic">Microphone</option>
+          <option value="audio/quijote_es_16k.wav">File: quijote_es_16k.wav</option>
+          <option value="audio/two_cities_16k.wav">File: two_cities_16k.wav</option>
+        </select>
+      </label>
+      <button id="start" disabled>Start</button>
+      <button id="stop" disabled>Stop</button>
+    </fieldset>
+    <fieldset>
+      <legend>Type here while dictating (typing latency is measured)</legend>
+      <textarea id="typing" rows="4" aria-label="Typing area"></textarea>
+    </fieldset>
+    <fieldset>
+      <legend>Transcript</legend>
+      <div id="transcript"></div>
+      <div id="live" aria-live="off"></div>
+    </fieldset>
+    <pre id="stats"></pre>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
