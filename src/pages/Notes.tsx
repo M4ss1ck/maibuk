@@ -41,6 +41,7 @@ export function Notes() {
     to: string;
     label: string;
   } | null>(null);
+  const [titleBarSlot, setTitleBarSlot] = useState<HTMLElement | null>(null);
 
   const getBookLanguage = useCallback(
     (bookId?: string | null) =>
@@ -210,51 +211,56 @@ export function Notes() {
   );
 
   return (
-    <div className="flex h-full overflow-hidden">
-      <section
-        data-focus-pane="notes-sidebar"
-        tabIndex={-1}
-        aria-label={t("panes.notesSidebar")}
-        className={`h-full relative shrink-0 max-w-full ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
-        style={{ width: `${notesSidebarWidth}px` }}
-      >
-        <NotesList
-          notes={notes}
-          books={books}
-          currentNoteId={currentNote?.id ?? null}
-          onSelectNote={handleSelectNote}
-          onCreateNote={handleCreateNote}
-          onReorderNotes={reorderNotes}
-          onReassignNoteBook={handleReassignNoteBook}
-          onDeleteNote={handleDelete}
-          onDuplicateNote={handleDuplicateNote}
-          onRenameNote={(id, title) => updateNote({ id, title })}
-          onImportFiles={handleImportFiles}
-        />
-        <div
-          onMouseDown={handleResizeStart}
-          className="hidden md:block absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
-        />
-      </section>
-      <main
-        className={`flex-1 min-w-0 ${currentNote ? "flex" : "hidden md:flex"} flex-col`}
-        data-focus-pane="notes-content"
-        tabIndex={-1}
-        aria-label={t("panes.notesContent")}
-      >
-        {currentNote ? (
-          <NoteEditor
-            key={currentNote.id}
-            note={currentNote}
-            onSave={handleSave}
-            onReturnToBook={returnTarget ? () => navigate(returnTarget.to) : undefined}
-            returnLabel={returnTarget?.label}
-            suppressRestore={hasPendingHeadingScroll}
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* the note title bar portals here so it spans the whole app width */}
+      <div ref={setTitleBarSlot} className={currentNote ? "contents" : "hidden"} />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <section
+          data-focus-pane="notes-sidebar"
+          tabIndex={-1}
+          aria-label={t("panes.notesSidebar")}
+          className={`h-full relative shrink-0 max-w-full ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
+          style={{ width: `${notesSidebarWidth}px` }}
+        >
+          <NotesList
+            notes={notes}
+            books={books}
+            currentNoteId={currentNote?.id ?? null}
+            onSelectNote={handleSelectNote}
+            onCreateNote={handleCreateNote}
+            onReorderNotes={reorderNotes}
+            onReassignNoteBook={handleReassignNoteBook}
+            onDeleteNote={handleDelete}
+            onDuplicateNote={handleDuplicateNote}
+            onRenameNote={(id, title) => updateNote({ id, title })}
+            onImportFiles={handleImportFiles}
           />
-        ) : (
-          <EmptyNotes onCreateNote={handleCreateNote} onBack={() => navigate("/notes")} />
-        )}
-      </main>
+          <div
+            onMouseDown={handleResizeStart}
+            className="hidden md:block absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          />
+        </section>
+        <main
+          className={`flex-1 min-w-0 ${currentNote ? "flex" : "hidden md:flex"} flex-col`}
+          data-focus-pane="notes-content"
+          tabIndex={-1}
+          aria-label={t("panes.notesContent")}
+        >
+          {currentNote ? (
+            <NoteEditor
+              key={currentNote.id}
+              note={currentNote}
+              onSave={handleSave}
+              onReturnToBook={returnTarget ? () => navigate(returnTarget.to) : undefined}
+              returnLabel={returnTarget?.label}
+              suppressRestore={hasPendingHeadingScroll}
+              titleBarContainer={titleBarSlot}
+            />
+          ) : (
+            <EmptyNotes onCreateNote={handleCreateNote} onBack={() => navigate("/notes")} />
+          )}
+        </main>
+      </div>
     </div>
   );
 }

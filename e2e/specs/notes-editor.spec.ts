@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_NOTES } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -94,5 +94,32 @@ test.describe("collapsible headings @wf:editor-collapsible-heading @sc:editor.to
     await page.keyboard.press("Home");
     await page.keyboard.press("Control+Alt+h");
     await expect(page.getByRole("button", { name: "Collapse heading" }).first()).toBeVisible();
+  });
+});
+
+test.describe("F6 pane cycle in the Note editor @wf:shell-cycle-panes @sc:global.cyclePanes", () => {
+  test("in the Note editor, F6 cycles the title bar, the notes list, and the note editor and wraps", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.tideTables);
+
+    const titleBar = page.getByRole("banner", { name: "Note title bar" });
+    const notesList = page.getByRole("region", { name: "Notes list" });
+    const editor = page.getByRole("main", { name: "Note editor" });
+
+    // Focus starts in the editor text, so F6 wraps forward to the title bar
+    // and then walks the notes list and the editor in document order.
+    await page.keyboard.press("F6");
+    await expectFocusWithin(titleBar);
+    await page.keyboard.press("F6");
+    await expectFocusWithin(notesList);
+    await page.keyboard.press("F6");
+    await expectFocusWithin(editor);
+    await page.keyboard.press("F6");
+    await expectFocusWithin(titleBar);
+
+    // Shift+F6 steps back one pane.
+    await page.keyboard.press("Shift+F6");
+    await expectFocusWithin(editor);
   });
 });

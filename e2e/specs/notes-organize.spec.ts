@@ -418,8 +418,11 @@ test.describe("Note Last Edited @wf:notes-last-edited", () => {
     await chooseFromItemMenu(page, "Pin");
     await expect(lastEdited(page, "2 hours ago")).toBeVisible();
 
-    // Tagging is metadata too.
-    await tabTo(page, addTag(page), { max: 60 });
+    // Tagging is metadata too. The title bar now sits before the Notes list in
+    // document order and the editor swallows Tab, so F6 reaches the header.
+    await page.keyboard.press("F6");
+    await page.keyboard.press("F6");
+    await tabTo(page, addTag(page), { max: 6 });
     await page.keyboard.press("Enter");
     await page.keyboard.type("sharp");
     await page.keyboard.press("Enter");

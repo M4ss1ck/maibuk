@@ -58,7 +58,12 @@ async function renameBook(page: Page, title: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page.getByRole("textbox", { name: /^Text of / })).toBeFocused();
   await page.keyboard.press("Escape");
-  await tabTo(page, page.getByRole("button", { name: "Book Settings" }), { max: 40 });
+  // The title bar sits above the Chapter list in document order, so Shift+Tab
+  // walks back into the header to Book Settings.
+  await tabTo(page, page.getByRole("button", { name: "Book Settings" }), {
+    max: 40,
+    backwards: true,
+  });
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Book Settings" });
   const field = dialog.getByRole("textbox", { name: "Book Title" });

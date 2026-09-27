@@ -35,7 +35,9 @@ async function enterBook(page: Page) {
 async function openPanel(page: Page) {
   await enterBook(page);
   const trigger = bookNotesTrigger(page);
-  await tabTo(page, trigger, { max: 40 });
+  // The title bar now sits above the Chapter list in document order, so from
+  // the Chapter list Shift+Tab walks back into the header, not Tab forward.
+  await tabTo(page, trigger, { max: 40, backwards: true });
   await expect(trigger).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(panelTab(page, "Notes")).toBeFocused();
@@ -57,7 +59,7 @@ test.describe("Book side panel tabs @wf:sidepanel-open-tabs", () => {
   }) => {
     await enterBook(page);
     const trigger = bookNotesTrigger(page);
-    await tabTo(page, trigger, { max: 40 });
+    await tabTo(page, trigger, { max: 40, backwards: true });
     await page.keyboard.press("Enter");
 
     await expect(panel(page)).toBeVisible();

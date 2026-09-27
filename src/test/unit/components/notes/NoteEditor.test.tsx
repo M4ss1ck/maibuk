@@ -72,14 +72,28 @@ vi.mock("../../../../components/editor", () => ({
   Editor: ({
     onUpdate,
     onWordCountChange,
+    onEscape,
     headerContent,
   }: {
     onUpdate: (content: string) => void;
     onWordCountChange: (count: number) => void;
+    onEscape?: () => void;
     headerContent?: React.ReactNode;
   }) => (
     <div>
       {headerContent}
+      {/* biome-ignore lint/a11y/useSemanticElements: stands in for the contenteditable editor surface. */}
+      <div
+        role="textbox"
+        aria-label="Text"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onEscape?.();
+          }
+        }}
+      />
       <button
         type="button"
         onClick={() => {
@@ -249,5 +263,75 @@ describe("NoteEditor", () => {
     await user.keyboard(" ");
 
     expect(mockNoteSetAlwaysOnTop).toHaveBeenCalledWith(true);
+  });
+
+  describe("title bar container", () => {
+    it("renders the title bar inline when no container is passed", () => {
+      const { container } = render(
+        <NoteEditor
+          note={buildNote({})}
+          onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+        />
+      );
+
+      const header = container.querySelector('header[data-focus-pane="note-title-bar"]');
+      expect(header).not.toBeNull();
+      expect(header).toHaveAccessibleName("panes.noteTitleBar");
+    });
+
+    it("renders no title bar while the slot is null", () => {
+      const { container } = render(
+        <NoteEditor
+          note={buildNote({})}
+          onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+          titleBarContainer={null}
+        />
+      );
+
+      expect(container.querySelector('[data-focus-pane="note-title-bar"]')).toBeNull();
+      expect(screen.queryByRole("banner", { name: "panes.noteTitleBar" })).not.toBeInTheDocument();
+    });
+
+    it("portals the title bar into the given element", () => {
+      const slot = document.createElement("div");
+      const { container } = render(
+        <NoteEditor
+          note={buildNote({})}
+          onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+          titleBarContainer={slot}
+        />
+      );
+
+      const header = slot.querySelector('header[data-focus-pane="note-title-bar"]');
+      expect(header).not.toBeNull();
+      expect(header).toHaveAccessibleName("panes.noteTitleBar");
+      // It left the editor's own tree.
+      expect(container.querySelector('[data-focus-pane="note-title-bar"]')).toBeNull();
+    });
+
+    it("still moves focus to Back on Escape when the title bar is portaled", async () => {
+      const slot = document.createElement("div");
+      document.body.appendChild(slot);
+      const user = userEvent.setup();
+      try {
+        render(
+          <NoteEditor
+            note={buildNote({})}
+            onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue()}
+            titleBarContainer={slot}
+          />
+        );
+
+        const text = screen.getByRole("textbox", { name: "Text" });
+        text.focus();
+        expect(text).toHaveFocus();
+
+        await user.keyboard("{Escape}");
+
+        expect(screen.getByRole("button", { name: "Back" })).toHaveFocus();
+      } finally {
+        slot.remove();
+      }
+    });
   });
 });

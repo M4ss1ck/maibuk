@@ -39,10 +39,10 @@ async function openBookEditor(page: Page) {
 /** Opens the Cover Designer the way an author does: from the Book Editor. */
 async function openCover(page: Page) {
   await openBookEditor(page);
-  // Tab is trapped inside the editor, so Escape first hands focus to the
-  // Chapter list pane, the last stop before the header controls.
+  // Escape hands focus to the Chapter list pane. The title bar sits above it in
+  // document order, so Shift+Tab walks back into the header controls.
   await page.keyboard.press("Escape");
-  await tabTo(page, designCover(page), { max: 40 });
+  await tabTo(page, designCover(page), { max: 40, backwards: true });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/book\/[\w-]+\/cover$/);
   await expect(page.getByRole("heading", { name: "Cover Designer", level: 1 })).toBeVisible();

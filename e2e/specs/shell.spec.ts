@@ -152,27 +152,32 @@ test.describe("F6 regions @wf:shell-cycle-panes @sc:global.cyclePanes", () => {
     await expect(sidebar).toBeFocused();
   });
 
-  test("in the Book Editor, F6 cycles the chapter list and the editor and wraps", async ({
+  test("in the Book Editor, F6 cycles the title bar, the chapter list, and the editor and wraps", async ({
     page,
   }) => {
     await openSeedBook(page);
+    const titleBar = page.getByRole("banner", { name: "Book title bar" });
     const chapters = page.getByRole("complementary", { name: "Chapter list" });
     const editor = page.getByRole("main", { name: "Editor" });
     const where = async () =>
-      (await isFocusWithin(chapters))
-        ? "chapters"
-        : (await isFocusWithin(editor))
-          ? "editor"
-          : "elsewhere";
+      (await isFocusWithin(titleBar))
+        ? "titleBar"
+        : (await isFocusWithin(chapters))
+          ? "chapters"
+          : (await isFocusWithin(editor))
+            ? "editor"
+            : "elsewhere";
 
+    // openSeedBook leaves focus in the last Chapter's text, inside the editor.
+    // Forward cycling follows document order: title bar -> chapters -> editor.
     const visited: string[] = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       const before = await where();
       await page.keyboard.press("F6");
       await expect.poll(where).not.toBe(before);
       visited.push(await where());
     }
-    expect(visited).toEqual(["chapters", "editor", "chapters", "editor"]);
+    expect(visited).toEqual(["titleBar", "chapters", "editor", "titleBar", "chapters", "editor"]);
 
     await page.keyboard.press("Shift+F6");
     await expect.poll(where).toBe("chapters");
@@ -323,7 +328,9 @@ test.describe("help lists this screen's shortcuts @wf:shell-help-bound-per-scree
 
   test("the Cover Designer lists Cover Designer shortcuts", async ({ page }) => {
     await openSeedBook(page);
-    await leaveChapterText(page);
+    // The title bar is its own pane above the row; F6 from the editor reaches it.
+    await page.keyboard.press("F6");
+    await expect(page.getByRole("banner", { name: "Book title bar" })).toBeFocused();
     await tabTo(page, page.getByRole("button", { name: "Design Cover" }), { max: 80 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/cover$/);

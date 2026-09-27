@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -424,6 +424,43 @@ describe("BookEditor shortcuts", () => {
     expect(container.querySelector('[data-focus-pane="editor-main"]')).toHaveAccessibleName(
       "panes.editorMain"
     );
+  });
+
+  it("book-title-bar pane is a header above the row and outside editor-main", () => {
+    const { container } = render(<BookEditor />);
+    const titleBar = container.querySelector<HTMLElement>('[data-focus-pane="book-title-bar"]');
+    expect(titleBar).not.toBeNull();
+    expect(titleBar!.tagName).toBe("HEADER");
+    expect(titleBar).toHaveAccessibleName("panes.bookTitleBar");
+    expect(within(titleBar!).getByRole("button", { name: "nav.backToHome" })).toBeInTheDocument();
+
+    const editorMain = container.querySelector<HTMLElement>('[data-focus-pane="editor-main"]');
+    expect(editorMain).not.toBeNull();
+    expect(editorMain!.contains(titleBar)).toBe(false);
+    expect(titleBar!.contains(editorMain)).toBe(false);
+    expect(titleBar!.querySelector('[data-focus-pane="chapters"]')).toBeNull();
+
+    // Desktop chapter pane is the visible one; the first is the mobile drawer.
+    const desktopChapters = container.querySelectorAll<HTMLElement>(
+      '[data-focus-pane="chapters"]'
+    )[1];
+    expect(desktopChapters).toBeDefined();
+    // The title bar comes before the chapter pane in document order.
+    expect(
+      titleBar!.compareDocumentPosition(desktopChapters!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("hides the book-title-bar pane in focus mode", async () => {
+    const user = userEvent.setup();
+    enableRealShortcuts();
+    const { container } = render(<BookEditor />);
+
+    screen.getByRole("textbox", { name: "Editor content" }).focus();
+    await user.keyboard("{F11}");
+    await waitFor(() => expect(container.querySelector(".focus-mode")).not.toBeNull());
+
+    expect(container.querySelector('[data-focus-pane="book-title-bar"]')).toBeNull();
   });
 
   // Regression: the "saved" badge scheduled a bare setTimeout to fall back to

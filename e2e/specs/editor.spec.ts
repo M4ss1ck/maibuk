@@ -380,7 +380,9 @@ test.describe("toolbar navigation @wf:editor-toolbar-nav", () => {
     await page.keyboard.press("Escape");
     await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
     const more = page.getByRole("button", { name: "More" });
-    await tabTo(page, more);
+    // The title bar sits above the Chapter list in document order, so Shift+Tab
+    // walks back into the header to the More overflow menu.
+    await tabTo(page, more, { backwards: true });
     await page.keyboard.press("Enter");
 
     const item = page.getByRole("button", { name: "Book Notes" });
