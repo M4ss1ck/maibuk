@@ -428,7 +428,9 @@ test.describe("footnotes @wf:editor-footnote", () => {
     await expect(dialog).toBeHidden();
 
     await page.keyboard.press("Escape");
-    await tabTo(page, page.getByRole("button", { name: "More" }), { max: 60 });
+    // The title bar sits above the Chapter list in document order, so Shift+Tab
+    // walks back into the header to the More overflow menu.
+    await tabTo(page, page.getByRole("button", { name: "More" }), { max: 60, backwards: true });
     await page.keyboard.press("Enter");
     await tabTo(page, page.getByRole("button", { name: "Book Notes" }), { max: 10 });
     await page.keyboard.press("Enter");

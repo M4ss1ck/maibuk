@@ -31,7 +31,9 @@ async function enterBook(page: Page): Promise<void> {
 async function openExportDialog(page: Page) {
   await enterBook(page);
   const trigger = page.getByRole("button", { name: "Export Book" });
-  await tabTo(page, trigger, { max: 40 });
+  // The title bar sits above the Chapter list in document order, so Shift+Tab
+  // walks back into the header to Export Book.
+  await tabTo(page, trigger, { max: 40, backwards: true });
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Export Book" });
   await expect(dialog).toBeVisible();

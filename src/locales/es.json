@@ -1172,7 +1172,9 @@
     "editorMain": "Editor",
     "bookSidePanel": "Panel lateral del libro",
     "notesSidebar": "Lista de notas",
-    "notesContent": "Editor de notas"
+    "notesContent": "Editor de notas",
+    "bookTitleBar": "Barra de título del libro",
+    "noteTitleBar": "Barra de título de la nota"
   },
   "backup": {
     "title": "Copias de seguridad",

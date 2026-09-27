@@ -102,7 +102,9 @@ test.describe("opening Version history @wf:versions-open-history @sc:editor.vers
     await openEditor(page);
     await page.keyboard.press("Escape");
     const trigger = page.getByRole("button", { name: "Open version history" });
-    await tabTo(page, trigger, { max: 60 });
+    // The title bar sits above the Chapter list in document order, so Shift+Tab
+    // walks back into the header to the History controls.
+    await tabTo(page, trigger, { max: 60, backwards: true });
     await page.keyboard.press("Enter");
 
     await expect(panel(page)).toBeVisible();

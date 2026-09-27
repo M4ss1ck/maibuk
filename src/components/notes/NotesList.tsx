@@ -656,7 +656,7 @@ export function NotesList({
   return (
     <aside className="w-full border-r border-border flex flex-col bg-background h-full shrink-0">
       <div className="p-4 pt-12 md:pt-4 flex items-center justify-between gap-2 bg-background z-10 shrink-0">
-        <h3 className="min-w-0 truncate font-medium">{t("notes.title")}</h3>
+        <h2 className="min-w-0 truncate font-medium">{t("notes.title")}</h2>
         <ResponsiveToggleGroup
           value={viewMode}
           options={viewToggleOptions}

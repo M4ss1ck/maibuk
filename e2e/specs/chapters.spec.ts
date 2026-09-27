@@ -149,9 +149,9 @@ test.describe("renaming and Chapter Type @wf:chapters-rename-type", () => {
     await tabTo(page, rowAction(page, "The Beacon", "Edit Chapter"));
     await page.keyboard.press("Enter");
     await expect(row(page, "The Beacon").getByRole("textbox")).toHaveValue("The Beacon");
-    await expect(row(page, "The Beacon").getByRole("button", { name: "Chapter Type" })).toContainText(
-      "Prologue"
-    );
+    await expect(
+      row(page, "The Beacon").getByRole("button", { name: "Chapter Type" })
+    ).toContainText("Prologue");
   });
 
   test("Cancel discards the rename and returns focus to the row", async ({ page }) => {
@@ -215,7 +215,9 @@ test.describe("keyboard reorder @wf:chapters-reorder-keyboard", () => {
 });
 
 test.describe("deleting a Chapter @wf:chapters-delete", () => {
-  test("confirming removes the row, focuses its neighbor, and a reload agrees", async ({ page }) => {
+  test("confirming removes the row, focuses its neighbor, and a reload agrees", async ({
+    page,
+  }) => {
     await openBook(page);
     await focusRowAction(page, "The Lamp", "Delete Chapter");
     await page.keyboard.press("Enter");
@@ -344,14 +346,14 @@ test.describe("Backspace @wf:chapters-back @sc:editor.back", () => {
 test.describe("word count @wf:chapters-word-count", () => {
   test("typing raises the word count and a selection shows its stats", async ({ page }) => {
     await openBook(page, { toEditor: true });
-    const main = page.getByRole("main", { name: "Editor" });
-    await expect(main.getByText("9 words", { exact: true })).toBeVisible();
+    const titleBar = page.getByRole("banner", { name: "Book title bar" });
+    await expect(titleBar.getByText("9 words", { exact: true })).toBeVisible();
 
     await page.keyboard.press("End");
     await page.keyboard.type(" One two three four five.");
-    await expect(main.getByText("14 words", { exact: true })).toBeVisible();
+    await expect(titleBar.getByText("14 words", { exact: true })).toBeVisible();
 
     await page.keyboard.press("Shift+ArrowLeft");
-    await expect(main.getByText(/1 words \/ 1 chars/)).toBeVisible();
+    await expect(titleBar.getByText(/1 words \/ 1 chars/)).toBeVisible();
   });
 });

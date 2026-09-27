@@ -339,7 +339,7 @@ export function ChapterList({
     >
       {/* Sticky header */}
       <div className="p-4 pt-12 md:pt-4 border-b border-border flex items-center justify-between bg-background z-10 shrink-0">
-        <h3 className="font-medium">{t("chapters.title")}</h3>
+        <h2 className="font-medium">{t("chapters.title")}</h2>
         <div className="flex items-center gap-1">
           <Tooltip
             content={

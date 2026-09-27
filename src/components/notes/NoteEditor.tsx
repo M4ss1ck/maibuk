@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Pin, Tags } from "lucide-react";
 import { Extension } from "@tiptap/core";
@@ -214,6 +215,12 @@ interface NoteEditorProps {
   onReturnToBook?: () => void;
   returnLabel?: string;
   suppressRestore?: boolean;
+  /**
+   * Where the title bar renders. `undefined` keeps it inline (standalone use);
+   * `null` renders no title bar yet (the slot is not mounted); an element
+   * portals it there so it can span the whole app width.
+   */
+  titleBarContainer?: HTMLElement | null;
 }
 
 const NOTE_EDITOR_TUTORIAL_ANCHORS: EditorTutorialAnchors = { text: "notes.content" };
@@ -224,6 +231,7 @@ export function NoteEditor({
   onReturnToBook,
   returnLabel,
   suppressRestore = false,
+  titleBarContainer,
 }: NoteEditorProps) {
   const { t, i18n } = useTranslation();
   const title = note.title;
@@ -591,99 +599,112 @@ export function NoteEditor({
     (backlink ?? backButtonRef.current)?.focus();
   }, []);
 
-  return (
-    <div className="flex-1 flex flex-col min-h-0 bg-background">
-      {/* Header */}
-      <div className="@container px-4 py-1 border-b border-border flex items-center gap-2 shrink-0">
-        <button
-          ref={backButtonRef}
-          type="button"
-          onClick={onReturnToBook ?? (() => navigate("/notes"))}
-          className="inline-flex min-w-0 items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-label={onReturnToBook && returnLabel ? undefined : t("common.back")}
-        >
-          <ArrowLeft className="w-5 h-5 shrink-0" />
-          {onReturnToBook && returnLabel ? (
-            <span className="max-w-40 min-w-0 truncate">
-              {t("notes.backToBook", { title: returnLabel ?? "" })}
-            </span>
-          ) : null}
-        </button>
+  const titleBar = (
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: a top-level <header> is the banner landmark, which takes aria-label; Biome cannot infer the role.
+    <header
+      data-focus-pane="note-title-bar"
+      tabIndex={-1}
+      aria-label={t("panes.noteTitleBar")}
+      className="@container px-4 py-1 border-b border-border flex items-center gap-2 shrink-0"
+    >
+      <button
+        ref={backButtonRef}
+        type="button"
+        onClick={onReturnToBook ?? (() => navigate("/notes"))}
+        className="inline-flex min-w-0 items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        aria-label={onReturnToBook && returnLabel ? undefined : t("common.back")}
+      >
+        <ArrowLeft className="w-5 h-5 shrink-0" />
+        {onReturnToBook && returnLabel ? (
+          <span className="max-w-40 min-w-0 truncate">
+            {t("notes.backToBook", { title: returnLabel ?? "" })}
+          </span>
+        ) : null}
+      </button>
 
-        <div className="min-w-0 flex-1">
-          <h1
-            data-route-heading
-            className="block truncate text-sm font-medium leading-tight text-foreground"
-          >
-            {title || note.title || t("notes.untitled")}
-          </h1>
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="min-w-0 flex-1" data-tutorial="notes.tags">
-              <NoteTagsRow
-                tags={note.tags}
-                dateLabel={timeAgo(note.contentUpdatedAt, i18n.language, t)}
-                datePosition="left"
-                action={
-                  <div ref={tagEditorRef} className="relative">
-                    <Tooltip content={t("notes.addTag")}>
-                      <button
-                        type="button"
-                        onClick={() => setShowTagEditor((current) => !current)}
-                        className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        aria-label={t("notes.addTag")}
-                        aria-expanded={showTagEditor}
-                      >
-                        <Tags className="h-4 w-4" />
-                      </button>
-                    </Tooltip>
-                    {showTagEditor && (
-                      <div className="fixed inset-x-3 top-16 z-30 md:absolute md:left-0 md:right-auto md:top-full md:mt-2">
-                        <TagEditor
-                          tags={note.tags}
-                          allTags={allTags}
-                          onChange={handleTagsChange}
-                          onClose={() => setShowTagEditor(false)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                }
-              />
-            </div>
+      <div className="min-w-0 flex-1">
+        <h1
+          data-route-heading
+          className="block truncate text-sm font-medium leading-tight text-foreground"
+        >
+          {title || note.title || t("notes.untitled")}
+        </h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="min-w-0 flex-1" data-tutorial="notes.tags">
+            <NoteTagsRow
+              tags={note.tags}
+              dateLabel={timeAgo(note.contentUpdatedAt, i18n.language, t)}
+              datePosition="left"
+              action={
+                <div ref={tagEditorRef} className="relative">
+                  <Tooltip content={t("notes.addTag")}>
+                    <button
+                      type="button"
+                      onClick={() => setShowTagEditor((current) => !current)}
+                      className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label={t("notes.addTag")}
+                      aria-expanded={showTagEditor}
+                    >
+                      <Tags className="h-4 w-4" />
+                    </button>
+                  </Tooltip>
+                  {showTagEditor && (
+                    <div className="fixed inset-x-3 top-16 z-30 md:absolute md:left-0 md:right-auto md:top-full md:mt-2">
+                      <TagEditor
+                        tags={note.tags}
+                        allTags={allTags}
+                        onChange={handleTagsChange}
+                        onClose={() => setShowTagEditor(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+              }
+            />
           </div>
         </div>
-
-        <div className="shrink-0">
-          <SaveStatus status={saveStatus} onSave={saveNow} />
-        </div>
-
-        <span className="hidden @2xl:inline shrink-0 text-xs text-muted-foreground">
-          {wordCount.toLocaleString()} {t("common.words")}
-        </span>
-
-        <div className="shrink-0">
-          <SyncStatusButton defaultScope="notes" />
-        </div>
-
-        <div className="shrink-0">
-          <ThemeToggle variant="dropdown" />
-        </div>
-
-        {IS_DESKTOP && (
-          <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
-            <button
-              type="button"
-              onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-              className={`shrink-0 p-1 rounded transition-colors ${
-                alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
-              }`}
-              aria-label={t("settings.alwaysOnTop")}
-            >
-              <Pin className="w-4 h-4" />
-            </button>
-          </Tooltip>
-        )}
       </div>
+
+      <div className="shrink-0">
+        <SaveStatus status={saveStatus} onSave={saveNow} />
+      </div>
+
+      <span className="hidden @2xl:inline shrink-0 text-xs text-muted-foreground">
+        {wordCount.toLocaleString()} {t("common.words")}
+      </span>
+
+      <div className="shrink-0">
+        <SyncStatusButton defaultScope="notes" />
+      </div>
+
+      <div className="shrink-0">
+        <ThemeToggle variant="dropdown" />
+      </div>
+
+      {IS_DESKTOP && (
+        <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
+          <button
+            type="button"
+            onClick={() => setAlwaysOnTop(!alwaysOnTop)}
+            className={`shrink-0 p-1 rounded transition-colors ${
+              alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
+            }`}
+            aria-label={t("settings.alwaysOnTop")}
+          >
+            <Pin className="w-4 h-4" />
+          </button>
+        </Tooltip>
+      )}
+    </header>
+  );
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 bg-background">
+      {titleBarContainer === undefined
+        ? titleBar
+        : titleBarContainer
+          ? createPortal(titleBar, titleBarContainer)
+          : null}
 
       {/* Body */}
       <Editor

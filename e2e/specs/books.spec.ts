@@ -40,7 +40,9 @@ async function openBook(page: Page, index: number, title: string) {
 
 async function openBookSettings(page: Page) {
   const trigger = page.getByRole("button", { name: "Book Settings" });
-  await tabTo(page, trigger, { max: 80 });
+  // openBook leaves focus in the Chapter list; the title bar sits above it, so
+  // Shift+Tab walks back into the header controls.
+  await tabTo(page, trigger, { max: 80, backwards: true });
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Book Settings" });
   await expect(dialog.getByRole("textbox", { name: "Book Title" })).toBeFocused();
