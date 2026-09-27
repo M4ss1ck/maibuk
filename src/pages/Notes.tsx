@@ -5,6 +5,7 @@ import { useNoteStore } from "@/features/notes";
 import type { Note, ReorderNoteItem, UpdateNoteInput } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
 import { NotesList, NoteEditor, EmptyNotes } from "@/components/notes";
+import { DictationControl } from "@/components/dictation";
 import { duplicateNoteInput } from "@/components/notes/notes-list-model";
 import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage } from "@/features/settings/types";
@@ -260,6 +261,8 @@ export function Notes() {
           )}
         </main>
       </div>
+
+      <DictationControl />
     </div>
   );
 }

@@ -62,6 +62,8 @@ export function GlobalShortcuts() {
   const setHideKeyboardHints = useSettingsStore((state) => state.setHideKeyboardHints);
   const alwaysOnTop = useSettingsStore((state) => state.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((state) => state.setAlwaysOnTop);
+  // Unbound until the runtime reports support, so an unsupported device lists no Dictation shortcut.
+  const dictationSupported = useDictationStore((state) => state.support?.supported === true);
 
   // Session notices become a toast and/or a screen-reader announcement. The
   // runtime may not exist yet (unsupported build), so a failure is silent.
@@ -200,6 +202,7 @@ export function GlobalShortcuts() {
     {
       id: "dictation.toggle",
       allowInInput: true,
+      enabled: dictationSupported,
       onTrigger: () =>
         void getDictation()
           .then((runtime) => runtime.session.toggle())
