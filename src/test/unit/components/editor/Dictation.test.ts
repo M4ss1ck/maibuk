@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import { undo, undoDepth } from "@tiptap/pm/history";
+import type { DecorationSet } from "@tiptap/pm/view";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { dictationPluginKey } from "@/components/editor/extensions/Dictation";
 import {
@@ -118,8 +119,19 @@ describe("Dictation extension", () => {
     const editor = await makeEditor();
     targets[0].showPartial("mun");
     editor.commands.insertContent(" y");
+    // The partial never entered the document, so typing could not displace it...
+    expect(editor.getText()).toBe("Hola y");
+    // ...and it stays visible, now after the typed text at the caret.
+    expect(dictationPluginKey.getState(editor.state)).toBe("mun");
+    const plugin = dictationPluginKey.get(editor.state)!;
+    const decorations = plugin.props.decorations!.call(plugin, editor.state);
+    const [widget] = (decorations as DecorationSet).find();
+    expect(widget.from).toBe(editor.state.selection.to);
+    targets[0].showPartial("mundo");
+    editor.commands.insertContent(" o");
     targets[0].commit("mundo");
-    expect(editor.getText()).toBe("Hola y mundo");
+    expect(editor.getText()).toBe("Hola y o mundo");
+    expect(dictationPluginKey.getState(editor.state)).toBe("");
     editor.destroy();
   });
 
