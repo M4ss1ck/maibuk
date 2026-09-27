@@ -78,3 +78,5 @@ export interface BackupAdapter {
   readBackup(filename: string): Promise<string>;
   deleteBackup(filename: string): Promise<void>;
 }
+
+export type { ModelFiles, RecognizerHost } from "@/features/dictation/types";
