@@ -154,11 +154,11 @@ export function ColorPickerControl({
               onChange={preview}
               onChangeEnd={(color) => commit(color.toString("hex"))}
               aria-label={t("colorPicker.area")}
-              className="relative h-36 w-full overflow-hidden rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="relative h-36 w-full rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary"
               style={{ backgroundColor: `hsl(${hue} 100% 50%)` }}
             >
-              <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white to-transparent" />
-              <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black to-transparent" />
+              <span className="pointer-events-none absolute inset-0 rounded-md bg-gradient-to-r from-white to-transparent" />
+              <span className="pointer-events-none absolute inset-0 rounded-md bg-gradient-to-t from-black to-transparent" />
               <ColorThumb className="size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_black] outline-none focus-visible:ring-2 focus-visible:ring-primary" />
             </ColorArea>
             <ColorSlider
@@ -170,7 +170,7 @@ export function ColorPickerControl({
             >
               <Label className="text-xs font-medium">{t("colorPicker.hue")}</Label>
               <SliderTrack className="relative h-4 rounded-full bg-[linear-gradient(to_right,red,yellow,lime,cyan,blue,magenta,red)]">
-                <ColorThumb className="size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_black] outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                <ColorThumb className="top-1/2 size-5 rounded-full border-2 border-white shadow-[0_0_0_1px_black] outline-none focus-visible:ring-2 focus-visible:ring-primary" />
               </SliderTrack>
             </ColorSlider>
           </AriaColorPicker>
