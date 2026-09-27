@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShortcuts } from "@/lib/shortcuts";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
+import { noticeMessage } from "@/components/dictation/dictation-messages";
+import { toast } from "@/components/ui/Toast";
+import { getDictation } from "@/features/dictation/runtime";
+import { useDictationStore } from "@/features/dictation/store";
 import { useThemeStore, getCycledTheme } from "@/features/theme";
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
@@ -48,6 +53,7 @@ function cyclePanes(forward: boolean) {
 export function GlobalShortcuts() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showShortcutEditor, setShowShortcutEditor] = useState(false);
   const theme = useThemeStore((state) => state.theme);
@@ -56,6 +62,26 @@ export function GlobalShortcuts() {
   const setHideKeyboardHints = useSettingsStore((state) => state.setHideKeyboardHints);
   const alwaysOnTop = useSettingsStore((state) => state.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((state) => state.setAlwaysOnTop);
+
+  // Session notices become a toast and/or a screen-reader announcement. The
+  // runtime may not exist yet (unsupported build), so a failure is silent.
+  useEffect(() => {
+    let cancelled = false;
+    void getDictation()
+      .then((runtime) => {
+        if (cancelled) return;
+        runtime.setNotifier((notice) => {
+          const message = noticeMessage(notice, t);
+          if (message.toast) toast[message.toast.variant](message.toast.text);
+          if (message.announce)
+            useDictationStore.setState({ announcement: message.announce });
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
   useShortcuts([
     {
@@ -170,6 +196,14 @@ export function GlobalShortcuts() {
       onTrigger: () => {
         setShowShortcutsHelp(true);
       },
+    },
+    {
+      id: "dictation.toggle",
+      allowInInput: true,
+      onTrigger: () =>
+        void getDictation()
+          .then((runtime) => runtime.session.toggle())
+          .catch(() => {}),
     },
   ]);
 

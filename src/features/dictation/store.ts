@@ -14,6 +14,8 @@ export interface DictationStoreState {
   installed: string[];
   downloads: Record<string, { done: number; total: number }>;
   preferredTier: Record<DictationLanguage, ModelTier>;
+  /** The latest screen-reader announcement; the control renders it in a live region. */
+  announcement: string;
   setPreferredTier: (language: DictationLanguage, tier: ModelTier) => void;
 }
 
@@ -31,6 +33,7 @@ export const useDictationStore = create<DictationStoreState>()(
       installed: [],
       downloads: {},
       preferredTier: { en: "fast", es: "fast" },
+      announcement: "",
       setPreferredTier: (language, tier) =>
         set((state) => ({
           preferredTier: { ...state.preferredTier, [language]: tier },

@@ -1,5 +1,6 @@
 import type { Editor } from "@tiptap/core";
 import type { CommandId } from "@/lib/shortcut-registry";
+import { dictationHub } from "@/features/dictation/hub";
 
 type EditorCommand = (editor: Editor) => boolean;
 
@@ -55,4 +56,8 @@ export const EDITOR_COMMANDS: Partial<Record<CommandId, EditorCommand>> = {
   "editor.decreaseIndent": indent("decrease"),
   "common.undo": run("undo"),
   "common.redo": run("redo"),
+  "dictation.stop": () => {
+    dictationHub.stop();
+    return true;
+  },
 };
