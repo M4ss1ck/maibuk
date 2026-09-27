@@ -5,6 +5,7 @@ import {
   type ModelStore,
 } from "@/features/dictation/model-store";
 import { createRouter } from "@/features/dictation/router";
+import { attachSession } from "@/features/dictation/hub";
 import {
   createDictationSession,
   type DictationSession,
@@ -83,6 +84,7 @@ async function build(): Promise<DictationRuntime> {
   session.subscribe(() =>
     useDictationStore.setState({ snapshot: session.getSnapshot() }),
   );
+  attachSession(session);
 
   const refreshInstalled = async () => {
     useDictationStore.setState({

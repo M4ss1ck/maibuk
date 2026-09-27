@@ -829,6 +829,12 @@ option {
   text-underline-offset: 3px;
 }
 
+/* The in-progress spoken line stays legible as text (WCAG 4.5:1 in both themes). */
+.dictation-partial {
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
 /* Find & Replace match highlights */
 .search-result {
   background-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
