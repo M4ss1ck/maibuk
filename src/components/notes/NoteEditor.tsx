@@ -477,7 +477,7 @@ export function NoteEditor({
         const href = target.getAttribute("href");
         if (href && isInternalLink(href)) {
           event.preventDefault();
-          void navigateToLinkTarget(href, navigate);
+          void navigateToLinkTarget(href, navigate, (key) => toast.error(i18n.t(key)));
         } else {
           const broken = (event.target as HTMLElement).closest("a.wikilink-broken");
           if (broken instanceof HTMLAnchorElement) {
@@ -511,7 +511,7 @@ export function NoteEditor({
 
       editor.on("transaction", onTransaction);
     },
-    [navigate, note.id]
+    [navigate, note.id, i18n]
   );
 
   const handleSpellCheckLanguageChange = useCallback(

@@ -1,6 +1,7 @@
 import { parseLinkUri } from "@/features/links/link-uri";
 import type { ParsedLink } from "@/features/links/types";
 import { getDatabase } from "@/lib/db";
+import { assignHeadingIds } from "@/features/links/heading-ids";
 
 export type LinkToastKey = "deepLink.resourceGone" | "deepLink.headingGone" | "deepLink.genericError";
 
@@ -12,11 +13,10 @@ export type LinkTarget = {
 
 export type LinkOutcome = LinkTarget | { to: null; toastKey: LinkToastKey };
 
+// A heading stored without an id is found by the id the editor and link picker derive for it.
 function hasHeading(html: string | null | undefined, headingId: string): boolean {
-  if (!html) return false;
   try {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    return !!doc.getElementById(headingId);
+    return assignHeadingIds(html).headings.some((heading) => heading.id === headingId);
   } catch {
     return false;
   }

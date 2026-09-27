@@ -127,7 +127,10 @@ describe("LineHeight block attribute", () => {
 
     editor.chain().setLineHeight("2").run();
 
-    expect(html(editor)).toContain('<h2 style="line-height: 2; --line-height: 2">Title</h2>');
+    // Editing a heading also stores its id (HeadingId).
+    expect(html(editor)).toMatch(
+      /<h2 id="h-[0-9a-f]{8}" style="line-height: 2; --line-height: 2">Title<\/h2>/
+    );
   });
 
   it("sets the attribute on a task item", () => {

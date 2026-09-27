@@ -189,6 +189,23 @@ describe("LightweightNode editor lifecycle", () => {
     expect(typeof pasteHandler?.options.onMarkdownPaste).toBe("function");
   });
 
+  it("does not name headings on open, so leaving an unedited node writes nothing new", async () => {
+    mocks.state.editingNodeId = "node";
+    mocks.useEditor.mockReturnValue({
+      commands: { focus: vi.fn() },
+      getHTML: vi.fn(() => "<p>Idea</p>"),
+    });
+    renderNode();
+
+    await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
+    const extensions = mocks.useEditor.mock.calls[0][0].extensions as Array<{
+      name: string;
+      options: Record<string, unknown>;
+    }>;
+    const headingId = extensions.find((extension) => extension.name === "headingId");
+    expect(headingId?.options.nameOnOpen).toBe(false);
+  });
+
   it("passes the enabled autoclose setting to the active editor", async () => {
     useSettingsStore.setState({ editorAutoClose: true });
     mocks.state.editingNodeId = "node";

@@ -97,6 +97,48 @@ test.describe("collapsible headings @wf:editor-collapsible-heading @sc:editor.to
   });
 });
 
+test.describe("following a Link to a heading @wf:editor-follow-link @sc:editor.followLink", () => {
+  test("Mod+Enter on a Link to a heading in the same Note scrolls to that heading", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    const dawn = noteText(page).getByRole("heading", { name: /Dawn/ });
+    await expect(dawn).toBeVisible();
+
+    // Link to Dawn from the end of the first paragraph. The seeded headings
+    // were stored without ids, as older Notes were.
+    await page.keyboard.press("ControlOrMeta+Home");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("End");
+    await expect(noteText(page)).toBeFocused();
+    await page.keyboard.press("ControlOrMeta+k");
+    const dialog = page.getByRole("dialog", { name: "Insert Link" });
+    await expect(dialog).toBeVisible();
+    await tabTo(page, dialog.getByRole("button", { name: "In this book" }), { backwards: true });
+    await page.keyboard.press("Enter");
+    await tabTo(page, dialog.getByRole("button", { name: `Expand ${SEED_NOTES.keeperLog}` }));
+    await page.keyboard.press("Enter");
+    await tabTo(page, dialog.getByRole("button", { name: /^Dawn/ }));
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(noteText(page)).toBeFocused();
+    await expect(noteText(page).getByRole("link", { name: "Dawn" })).toBeVisible();
+
+    // Push the heading out of view, then put the caret back inside the Link.
+    for (let i = 0; i < 40; i++) await page.keyboard.press("Enter");
+    await page.keyboard.press("ControlOrMeta+Home");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("End");
+    await page.keyboard.press("ArrowLeft");
+    await expect(dawn).not.toBeInViewport();
+
+    await page.keyboard.press("ControlOrMeta+Enter");
+
+    await expect(dawn).toBeInViewport();
+    await expect(page.getByText("The linked heading no longer exists.")).toHaveCount(0);
+  });
+});
+
 test.describe("F6 pane cycle in the Note editor @wf:shell-cycle-panes @sc:global.cyclePanesForward @sc:global.cyclePanesBackward", () => {
   test("in the Note editor, F6 cycles the title bar, the notes list, and the note editor and wraps", async ({
     page,

@@ -742,7 +742,7 @@ export const ROWS: MatrixRow[] = [
     id: "editor-follow-link",
     area: "editor",
     workflow: "Keyboard activation of a Link opens target (Note/Chapter); asserts: URL/editor",
-    edges: ["Missing target"],
+    edges: ["Missing target", "Heading in the same Note"],
     terms: ["Link", "Note", "Chapter"],
     shortcuts: ["editor.followLink"],
     routes: ["/book/:bookId", "/notes/:noteId"],

@@ -4,6 +4,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
 import { LinkClickHandler } from "@/components/editor/LinkClickHandler";
+import { ToastViewport } from "@/components/ui/Toast";
+import { assignHeadingIds } from "@/features/links/heading-ids";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { createTestDatabase } from "../../../support/db-test-context";
 import type { DatabaseAdapter } from "@/lib/platform/types";
@@ -128,6 +130,45 @@ describe("LinkClickHandler", () => {
 
       await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/", undefined));
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    describe("Links to a Note heading", () => {
+      const noteContent = "<h1>Night Watch</h1><p>x</p><h2>Dawn</h2>";
+
+      beforeEach(async () => {
+        const now = Math.floor(Date.now() / 1000);
+        await testDb.execute(
+          `INSERT INTO notes (id, title, content, "order", created_at, updated_at) VALUES ('note-1','Log',?,0,?,?)`,
+          [noteContent, now, now]
+        );
+      });
+
+      it("scrolls to a heading stored without an id by the id the picker offered", async () => {
+        const user = userEvent.setup();
+        const dawn = assignHeadingIds(noteContent).headings[1].id;
+        render(<ToastViewport />);
+        renderWithLink(`maibuk://note-heading/note-1/${dawn}`);
+
+        await user.keyboard("{Control>}{Enter}{/Control}");
+
+        await waitFor(() =>
+          expect(mockNavigate).toHaveBeenCalledWith("/notes/note-1", {
+            state: { scrollToHeadingId: dawn },
+          })
+        );
+        expect(screen.queryByText("deepLink.headingGone")).not.toBeInTheDocument();
+      });
+
+      it("says so when the heading no longer exists", async () => {
+        const user = userEvent.setup();
+        render(<ToastViewport />);
+        renderWithLink("maibuk://note-heading/note-1/h-8ce64f60");
+
+        await user.keyboard("{Control>}{Enter}{/Control}");
+
+        await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/notes/note-1", undefined));
+        expect(await screen.findByText("deepLink.headingGone")).toBeInTheDocument();
+      });
     });
   });
 });
