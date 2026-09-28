@@ -33,6 +33,7 @@ beforeEach(() => {
   toggle.mockClear();
   setLanguage.mockClear();
   useDictationStore.setState({
+    enabled: true,
     support: { supported: true },
     installed: [esFast, enFast],
     announcement: "",
@@ -147,5 +148,58 @@ describe("DictationControl", () => {
     useDictationStore.setState({ announcement: "Dictation on, Spanish" });
     renderControl();
     expect(screen.getByRole("status")).toHaveTextContent("Dictation on, Spanish");
+  });
+
+  it("cycles compact language codes by keyboard and keeps a fixed width", async () => {
+    const user = userEvent.setup();
+    renderControl();
+    await user.tab();
+    await user.tab();
+    const picker = screen.getByRole("button", { name: /dictation language/i });
+    expect(picker).toHaveFocus();
+    expect(picker).toHaveTextContent("auto");
+
+    const widthClass = picker.parentElement?.className ?? "";
+    expect(widthClass).toContain("w-20");
+    // A comfortable touch target on coarse pointers.
+    expect(picker).toHaveClass("w-full", "pointer-coarse:min-h-12");
+
+    await user.keyboard("{Enter}{ArrowDown}{Enter}");
+    await waitFor(() => expect(setLanguage).toHaveBeenLastCalledWith("en"));
+    const english = screen.getByRole("button", { name: /dictation language/i });
+    expect(english).toHaveTextContent("en");
+    expect(english).toHaveAccessibleName(/English/);
+
+    await user.keyboard("{Enter}{ArrowDown}{Enter}");
+    await waitFor(() => expect(setLanguage).toHaveBeenLastCalledWith("es"));
+    expect(screen.getByRole("button", { name: /dictation language/i })).toHaveTextContent("es");
+
+    await user.keyboard("{Enter}{Home}{Enter}");
+    await waitFor(() => expect(setLanguage).toHaveBeenLastCalledWith(null));
+    const auto = screen.getByRole("button", { name: /dictation language/i });
+    expect(auto).toHaveTextContent("auto");
+    expect(auto.parentElement?.className).toBe(widthClass);
+  });
+
+  it("names the picker options in full while they show codes", async () => {
+    const user = userEvent.setup();
+    renderControl();
+    await user.tab();
+    await user.tab();
+    const picker = screen.getByRole("button", { name: /dictation language/i });
+    expect(picker).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByRole("option", { name: "Auto (Spell Check language)" })).toHaveTextContent(
+      "auto",
+    );
+    expect(screen.getByRole("option", { name: "English" })).toHaveTextContent("en");
+    expect(screen.getByRole("option", { name: "Spanish" })).toHaveTextContent("es");
+  });
+
+  it("renders nothing when Dictation is off", () => {
+    useDictationStore.setState({ enabled: false });
+    const { container } = renderControl();
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -70,6 +70,7 @@ let notices: SessionNotice[];
 let copied: string[];
 let copyText: (text: string) => Promise<void>;
 let models: Record<string, ModelSpec | null>;
+let enabled: boolean;
 
 function makeSession() {
   return createDictationSession({
@@ -80,10 +81,12 @@ function makeSession() {
     notify: (n) => void notices.push(n),
     copyText: (t) => copyText(t),
     stats: createLineStats(),
+    isEnabled: () => enabled,
   });
 }
 
 beforeEach(() => {
+  enabled = true;
   host = fakeHost();
   notices = [];
   copied = [];
@@ -92,6 +95,40 @@ beforeEach(() => {
 });
 
 describe("Dictation Session", () => {
+  it("releases a microphone whose start finishes after Dictation is turned off", async () => {
+    let release = () => {};
+    host.start.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    const session = makeSession();
+    session.register(fakeTarget("chapter"));
+    session.focus("chapter");
+    const starting = session.start();
+    await vi.waitFor(() => expect(host.start).toHaveBeenCalled());
+    enabled = false;
+    const stopping = session.stop();
+    release();
+    await Promise.all([starting, stopping]);
+    expect(host.stop).toHaveBeenCalledTimes(1);
+    expect(session.getSnapshot().status).toBe("idle");
+    expect(notices).not.toContainEqual({ kind: "started", language: "es" });
+  });
+
+  it("does not open the microphone if disabled while the model loads", async () => {
+    host.holdLoad = true;
+    const session = makeSession();
+    session.register(fakeTarget("chapter"));
+    session.focus("chapter");
+    const starting = session.start();
+    enabled = false;
+    const stopping = session.stop();
+    host.finishLoad();
+    await Promise.all([starting, stopping]);
+    expect(host.start).not.toHaveBeenCalled();
+    expect(session.getSnapshot().status).toBe("idle");
+  });
   // Editors re-register whenever TipTap recreates them; a notification for
   // every register re-rendered them into a loop that stalled route changes.
   it("notifies only when the snapshot actually changes", () => {
@@ -142,9 +179,7 @@ describe("Dictation Session", () => {
     session.focus("a");
     await session.start();
     expect(session.getSnapshot().status).toBe("idle");
-    expect(notices).toEqual([
-      { kind: "error", code: "model_missing", language: "es" },
-    ]);
+    expect(notices).toEqual([{ kind: "error", code: "model_missing", language: "es" }]);
   });
 
   it("stop flushes the last final into the target before going idle", async () => {
@@ -210,7 +245,7 @@ describe("Dictation Session", () => {
     await session.start();
     unregister();
     await vi.waitFor(() =>
-      expect(notices).toContainEqual({ kind: "orphan_lost", text: "flushed" }),
+      expect(notices).toContainEqual({ kind: "orphan_lost", text: "flushed" })
     );
     expect(notices).not.toContainEqual({ kind: "orphan_copied" });
     expect(session.getSnapshot().status).toBe("idle");
@@ -269,6 +304,21 @@ describe("Dictation Session", () => {
       status: "listening",
       language: "en",
     });
+  });
+
+  it("switching language while loading starts only the newly selected model", async () => {
+    host.holdLoad = true;
+    const session = makeSession();
+    session.register(fakeTarget("a", "es"));
+    session.focus("a");
+    const starting = session.start();
+    const switching = session.setLanguage("en");
+    host.holdLoad = false;
+    host.finishLoad();
+    await Promise.all([starting, switching]);
+    expect(host.loads).toEqual(["m-es", "m-en"]);
+    expect(host.starts).toBe(1);
+    expect(session.getSnapshot()).toMatchObject({ status: "listening", language: "en" });
   });
 
   it("routes a command result to runCommand instead of the editor", async () => {

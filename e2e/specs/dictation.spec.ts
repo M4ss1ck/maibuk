@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { tabTo } from "../support/keyboard";
+import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
 // Dictation (spec docs/plans/2026-09-27-voice-dictation-design.md). Chromium
@@ -14,8 +14,16 @@ const editorText = (page: Page) => page.getByRole("textbox", { name: /^Text of /
 
 // The Dictation control's live region. RouteAnnouncer is also role=status, so
 // pick the announcement out by its text.
-const announcement = (page: Page) =>
-  page.getByRole("status").filter({ hasText: /^Dictation/ });
+const announcement = (page: Page) => page.getByRole("status").filter({ hasText: /^Dictation/ });
+
+// The bar's picker trigger: it now shows the code (auto/en/es) while its
+// accessible name stays "Dictation language".
+const dictationPicker = (page: Page) => page.getByRole("button", { name: /Dictation language/ });
+
+// The floating bar is the mic button's parent; measuring it proves the whole
+// bar keeps its width, not just the picker.
+const dictationBar = (page: Page) =>
+  page.getByRole("button", { name: /Start dictation/ }).locator("xpath=..");
 
 async function downloadEnglishFast(page: Page) {
   await page.goto("/settings#dictation");
@@ -57,6 +65,46 @@ async function reachControl(page: Page, target: Locator) {
   await tabTo(page, target, { backwards: true, max: 120 });
 }
 
+/**
+ * Binds Cycle Dictation language to Alt+L through the real Shortcut Editor
+ * (the Command has no Default Shortcut, so this is the only way it gets a key).
+ */
+async function bindCycleDictationShortcut(page: Page) {
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  const open = page.getByRole("button", { name: "Customize shortcuts" });
+  await tabTo(page, open, { max: 90 });
+  await page.keyboard.press("Enter");
+
+  const dialog = page.getByRole("dialog", { name: "Customize shortcuts" });
+  await expect(dialog).toBeVisible();
+  await tabTo(page, dialog.getByRole("searchbox"));
+  await page.keyboard.type("Cycle Dictation language");
+  const row = dialog.getByRole("row", {
+    name: "Cycle Dictation language",
+    exact: true,
+  });
+  await tabTo(page, row);
+  await pressUntilFocused(
+    page,
+    "ArrowRight",
+    row.getByRole("button", {
+      name: /^Add a shortcut to Cycle Dictation language/,
+    }),
+    { max: 8 }
+  );
+  await page.keyboard.press("Enter");
+
+  const recorder = dialog.getByRole("textbox", { name: /Press the new shortcut/ });
+  await expect(recorder).toBeFocused();
+  await page.keyboard.press("Alt+l");
+  await page.keyboard.press("Enter");
+  await expect(row).toContainText("L");
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+}
+
 test.describe("@wf:dictation-settings @chromium-only", () => {
   test("downloads and removes a model by keyboard", async ({ page }) => {
     const row = await downloadEnglishFast(page);
@@ -96,17 +144,73 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
     const row = page.getByRole("group", { name: "English, Fast" });
     await tabTo(page, row.getByRole("button", { name: "Download" }), { max: 200 });
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByText(/The download failed|no longer available/).first()
-    ).toBeVisible();
+    await expect(page.getByText(/The download failed|no longer available/).first()).toBeVisible();
     await expect(row.getByRole("button", { name: "Download" })).toBeVisible();
+  });
+
+  test("turning Dictation off removes the bar and the toggle does nothing; turning it on restores both", async ({
+    page,
+  }) => {
+    const row = await downloadEnglishFast(page);
+    // Captured before the switch is touched, so the base branch still gets a shot.
+    await capture(page, "settings-dictation-switch", {
+      around: [page.locator("#dictation")],
+    });
+
+    const dictationSwitch = page.getByRole("switch", { name: "Dictation" });
+    await tabTo(page, dictationSwitch, { backwards: true, max: 200 });
+    await page.keyboard.press("Space");
+    await expect(dictationSwitch).not.toBeChecked();
+    // Off keeps the downloaded models; the author can still manage them.
+    await expect(row.getByText("Used for English")).toBeVisible();
+
+    // A switch is an input, where a "g p" sequence would type instead; Tab off
+    // it before navigating.
+    await page.keyboard.press("Tab");
+
+    // Off means gone, not hidden: no bar, and Start or stop Dictation is no
+    // longer bound, so its key does nothing and the help leaves it out.
+    await openChapter(page);
+    await expect(page.getByRole("button", { name: /dictation/i })).toHaveCount(0);
+    await page.keyboard.press("ControlOrMeta+Shift+Space");
+    await expect(announcement(page)).toHaveCount(0);
+
+    await page.keyboard.press("Escape");
+    // Escape hands focus to the Chapter list on the next frame; wait for it
+    // before "?" or it lands in the editor as text.
+    await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
+    await page.keyboard.press("?");
+    const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+    await expect(help).toBeVisible();
+    await expect(
+      help.getByRole("region", { name: "On this screen" }).getByText("Start or stop dictation")
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(help).toBeHidden();
+
+    // Back on, the bar and the key return, and the model is still downloaded.
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+    const backOn = page.getByRole("switch", { name: "Dictation" });
+    await tabTo(page, backOn, { max: 200 });
+    await page.keyboard.press("Space");
+    await expect(backOn).toBeChecked();
+    await expect(
+      page.getByRole("group", { name: "English, Fast" }).getByText("Used for English")
+    ).toBeVisible();
+
+    await page.keyboard.press("Tab");
+    await openChapter(page);
+    await expect(page.getByRole("button", { name: /Start dictation/ })).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+Shift+Space");
+    await expect(announcement(page)).toHaveText(/Dictation on, English/);
+    await page.keyboard.press("Escape");
+    await expect(announcement(page)).toHaveText("Dictation off");
   });
 });
 
-test.describe("@wf:dictation-toggle @sc:dictation.toggle @sc:dictation.stop @chromium-only", () => {
-  test("dictates into a Chapter, Escape stops, undo removes the line", async ({
-    page,
-  }) => {
+test.describe("@wf:dictation-toggle @sc:dictation.toggle @sc:dictation.stop @sc:dictation.cycleLanguage @chromium-only", () => {
+  test("dictates into a Chapter, Escape stops, undo removes the line", async ({ page }) => {
     await downloadEnglishFast(page);
     await openChapter(page);
     await capture(page, "dictation-idle");
@@ -129,9 +233,7 @@ test.describe("@wf:dictation-toggle @sc:dictation.toggle @sc:dictation.stop @chr
     await expect(editorText(page)).not.toContainText("worst of times");
   });
 
-  test("the floating mic button toggles the same session by Enter", async ({
-    page,
-  }) => {
+  test("the floating mic button toggles the same session by Enter", async ({ page }) => {
     await downloadEnglishFast(page);
     await openChapter(page);
 
@@ -144,21 +246,65 @@ test.describe("@wf:dictation-toggle @sc:dictation.toggle @sc:dictation.stop @chr
     await expect(page.getByRole("button", { name: /Start dictation/ })).toBeFocused();
   });
 
-  test("the language picker switches language with arrow keys", async ({
-    page,
-  }) => {
+  test("the language picker switches language with arrow keys", async ({ page }) => {
     await downloadEnglishFast(page);
     await openChapter(page);
 
-    const picker = page.getByRole("button", { name: /Dictation language/ });
-    await expect(picker).toContainText("Auto (Spell Check language)");
+    const picker = dictationPicker(page);
+    await expect(picker).toContainText("auto");
     await reachControl(page, picker);
     await page.keyboard.press("Enter");
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
 
-    await expect(picker).toContainText("English");
-    await expect(picker).not.toContainText("Auto (Spell Check language)");
+    await expect(picker).toContainText("en");
+    await expect(picker).not.toContainText("auto");
+  });
+
+  test("Cycle Dictation language, bound in the Shortcut Editor, cycles the picker and announces", async ({
+    page,
+  }) => {
+    await downloadEnglishFast(page);
+    await bindCycleDictationShortcut(page);
+
+    await openChapter(page);
+    const picker = dictationPicker(page);
+    await expect(picker).toContainText("auto");
+
+    // One model downloaded: Auto -> English -> Auto, announced each step.
+    await page.keyboard.press("Alt+l");
+    await expect(announcement(page)).toHaveText("Dictation language: English");
+    await expect(picker).toContainText("en");
+
+    await page.keyboard.press("Alt+l");
+    await expect(announcement(page)).toHaveText("Dictation language: Auto");
+    await expect(picker).toContainText("auto");
+  });
+
+  test("the bar keeps the same width across picker values", async ({ page }) => {
+    await downloadEnglishFast(page);
+    await openChapter(page);
+
+    const bar = dictationBar(page);
+    await expect(bar).toBeVisible();
+    // Captured before the width assertion so the base branch still gets a shot.
+    await capture(page, "dictation-bar-wide", { around: [bar] });
+
+    const picker = dictationPicker(page);
+    const autoBarWidth = (await bar.boundingBox())?.width ?? 0;
+    const autoPickerWidth = (await picker.boundingBox())?.width ?? 0;
+    expect(autoBarWidth).toBeGreaterThan(0);
+
+    await reachControl(page, picker);
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(picker).toContainText("en");
+
+    const enBarWidth = (await bar.boundingBox())?.width ?? 0;
+    const enPickerWidth = (await picker.boundingBox())?.width ?? 0;
+    expect(enBarWidth).toBeCloseTo(autoBarWidth, 1);
+    expect(enPickerWidth).toBeCloseTo(autoPickerWidth, 1);
   });
 
   test("with no model downloaded, the shortcut hints and the mic leads to Settings", async ({
@@ -168,15 +314,36 @@ test.describe("@wf:dictation-toggle @sc:dictation.toggle @sc:dictation.stop @chr
     await capture(page, "dictation-no-model");
 
     await page.keyboard.press("ControlOrMeta+Shift+Space");
-    await expect(
-      page.getByText(/No English dictation model is downloaded/).first()
-    ).toBeVisible();
+    await expect(page.getByText(/No English dictation model is downloaded/).first()).toBeVisible();
 
     const mic = page.getByRole("button", { name: /Download a dictation model/ });
     await expect(mic).toBeVisible();
     await reachControl(page, mic);
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: "Dictation" })).toBeVisible();
+  });
+});
+
+test.describe("@wf:dictation-toggle @chromium-only at phone width", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("the bar fits a phone width", async ({ page }) => {
+    await downloadEnglishFast(page);
+    await openChapter(page);
+
+    const bar = dictationBar(page);
+    await expect(bar).toBeVisible();
+    await capture(page, "dictation-bar-narrow", { around: [bar] });
+
+    const box = await bar.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThan(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
+    // The compact picker stays a visible touch target inside the bar. On this
+    // layout the Chapter list keeps Tab, so the picker is not reached by keys
+    // here; cycling it is covered at the default viewport.
+    const pickerBox = await dictationPicker(page).boundingBox();
+    expect(pickerBox?.width ?? 0).toBeGreaterThan(0);
+    expect((pickerBox?.x ?? 0) + (pickerBox?.width ?? 0)).toBeLessThanOrEqual(390);
   });
 });
 

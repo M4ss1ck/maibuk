@@ -42,6 +42,7 @@ export interface DictationRuntime {
 }
 
 let runtime: Promise<DictationRuntime> | null = null;
+let unsubscribeEnabled: (() => void) | null = null;
 
 export function getDictation(): Promise<DictationRuntime> {
   // A failed build (worker or native host failed to load) must not disable Dictation for the whole run.
@@ -53,6 +54,8 @@ export function getDictation(): Promise<DictationRuntime> {
 }
 
 export function resetDictationForTests(): void {
+  unsubscribeEnabled?.();
+  unsubscribeEnabled = null;
   runtime = null;
 }
 
@@ -84,11 +87,11 @@ async function build(): Promise<DictationRuntime> {
     notify: (notice) => notify(notice),
     copyText: (text) => navigator.clipboard.writeText(text),
     stats,
+    isEnabled: () => useDictationStore.getState().enabled,
   });
   session.subscribe(() =>
     useDictationStore.setState({ snapshot: session.getSnapshot() }),
   );
-  attachSession(session);
 
   const refreshInstalled = async () => {
     useDictationStore.setState({
@@ -101,6 +104,12 @@ async function build(): Promise<DictationRuntime> {
     : { supported: false, reason: "platform" as const };
   useDictationStore.setState({ support });
   if (support.supported) await refreshInstalled();
+
+  // Turning Dictation off mid-session releases the microphone.
+  unsubscribeEnabled = useDictationStore.subscribe((state, previous) => {
+    if (!state.enabled && previous.enabled) void session.stop();
+  });
+  attachSession(session);
 
   return {
     session,

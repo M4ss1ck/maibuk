@@ -59,6 +59,7 @@ export function createDictationSession(deps: {
   notify: (notice: SessionNotice) => void;
   copyText: (text: string) => Promise<void>;
   stats: LineStats;
+  isEnabled?: () => boolean;
 }): DictationSession {
   const targets = new Map<string, DictationTarget>();
   /** Most recently focused last; the active target is the last one still registered. */
@@ -138,6 +139,7 @@ export function createDictationSession(deps: {
   };
 
   async function start(): Promise<void> {
+    if (deps.isEnabled?.() === false) return;
     if (starting) return starting;
     if (snapshot.status !== "idle") return;
     const target = active();
@@ -156,11 +158,18 @@ export function createDictationSession(deps: {
     starting = (async () => {
       try {
         await deps.host.load(spec);
-        if (stopRequested) {
+        if (stopRequested || deps.isEnabled?.() === false) {
           set({ status: "idle", level: 0 });
           return;
         }
         await deps.host.start(onEvent);
+        // Microphone permission/start can settle after the author turns Dictation off.
+        if (stopRequested || deps.isEnabled?.() === false) {
+          await deps.host.stop();
+          showPartial("");
+          set({ status: "idle", level: 0 });
+          return;
+        }
         set({ status: "listening" });
         deps.notify({ kind: "started", language });
       } catch (error) {
@@ -252,7 +261,7 @@ export function createDictationSession(deps: {
     stop,
     async setLanguage(language) {
       override = language;
-      if (snapshot.status !== "listening") return;
+      if (snapshot.status === "idle") return;
       await stop();
       await start();
     },

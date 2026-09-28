@@ -15,6 +15,21 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 - **Auto-save**
 - **Find and replace**
 
+### Dictation shortcuts and settings
+
+In Settings → Dictation, download a Dictation Model for English or Spanish.
+Start or stop Dictation with **Ctrl+Shift+Space** (**⌘+Shift+Space** on Mac);
+**Escape** stops it while writing. The floating language picker shows `auto`,
+`en`, or `es`; Auto follows the editor's Spell Check language.
+
+**Cycle Dictation language** has no Default Shortcut. Assign one in Settings →
+Customize shortcuts. It cycles Auto → downloaded languages (English, Spanish)
+→ Auto and also changes a running Dictation Session.
+
+Turn **Dictation** off in Settings → Dictation to stop the session, hide the bar,
+and disable its toggle and cycle Commands. This choice stays on this device.
+Downloaded models remain available to manage while Dictation is off.
+
 ## Tech Stack
 
 - **Frontend**: React + TypeScript + Vite

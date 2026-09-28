@@ -78,6 +78,7 @@ export default defineConfig(() => ({
         "src/features/dictation/stats.ts",
         "src/features/dictation/hub.ts",
         "src/features/dictation/runtime.ts",
+        "src/features/dictation/language.ts",
         "src/features/dictation/session.ts",
         "src/features/dictation/store.ts",
         "src/lib/color.ts",

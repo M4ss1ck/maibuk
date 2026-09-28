@@ -7,6 +7,7 @@ import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialo
 import { noticeMessage } from "@/components/dictation/dictation-messages";
 import { toast } from "@/components/ui/Toast";
 import { getDictation } from "@/features/dictation/runtime";
+import { cycleDictationLanguage } from "@/features/dictation/language";
 import { useDictationStore } from "@/features/dictation/store";
 import { useThemeStore, getCycledTheme } from "@/features/theme";
 import { useSettingsStore } from "@/features/settings/store";
@@ -64,6 +65,7 @@ export function GlobalShortcuts() {
   const setAlwaysOnTop = useSettingsStore((state) => state.setAlwaysOnTop);
   // Unbound until the runtime reports support, so an unsupported device lists no Dictation shortcut.
   const dictationSupported = useDictationStore((state) => state.support?.supported === true);
+  const dictationEnabled = useDictationStore((state) => state.enabled);
 
   // Session notices become a toast and/or a screen-reader announcement. The
   // runtime may not exist yet (unsupported build), so a failure is silent.
@@ -202,11 +204,17 @@ export function GlobalShortcuts() {
     {
       id: "dictation.toggle",
       allowInInput: true,
-      enabled: dictationSupported,
+      enabled: dictationSupported && dictationEnabled,
       onTrigger: () =>
         void getDictation()
           .then((runtime) => runtime.session.toggle())
           .catch(() => {}),
+    },
+    {
+      id: "dictation.cycleLanguage",
+      allowInInput: true,
+      enabled: dictationSupported && dictationEnabled,
+      onTrigger: () => void cycleDictationLanguage(t).catch(() => {}),
     },
   ]);
 

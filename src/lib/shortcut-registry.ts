@@ -135,6 +135,11 @@ export const COMMANDS = {
     contexts: ["global"],
     defaults: [["Mod+Shift+Space"]],
   },
+  "dictation.cycleLanguage": {
+    labelKey: "dictation.cycleLanguage",
+    contexts: ["global"],
+    defaults: [],
+  },
   "dictation.stop": {
     labelKey: "dictation.stop",
     contexts: ["editor"],

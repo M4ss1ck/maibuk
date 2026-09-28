@@ -9,6 +9,8 @@ import type {
 } from "@/features/dictation/types";
 
 export interface DictationStoreState {
+  enabled: boolean;
+  setEnabled: (enabled: boolean) => void;
   snapshot: SessionSnapshot;
   support: SupportReport | null;
   installed: string[];
@@ -24,6 +26,8 @@ export interface DictationStoreState {
 export const useDictationStore = create<DictationStoreState>()(
   persist(
     (set) => ({
+      enabled: true,
+      setEnabled: (enabled) => set({ enabled }),
       snapshot: {
         status: "idle",
         language: null,
@@ -45,7 +49,10 @@ export const useDictationStore = create<DictationStoreState>()(
     // Device-local, like the models themselves.
     {
       name: "maibuk-dictation",
-      partialize: (state) => ({ preferredTier: state.preferredTier }),
+      partialize: (state) => ({
+        preferredTier: state.preferredTier,
+        enabled: state.enabled,
+      }),
     },
   ),
 );

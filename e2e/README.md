@@ -242,7 +242,8 @@ SCREENSHOTS_OUT=/tmp/x SCREENSHOTS_BASE=origin/main pnpm screenshots -g "..."
 ```
 
 `scripts/pr-screenshots.sh` checks out the merge-base with the base branch in a
-temporary worktree, lays this branch's `e2e/` over it, and runs the selected
+temporary worktree, shares the local `node_modules/` and downloaded `vendor/`
+assets with it, lays this branch's `e2e/` over it, and runs the selected
 tests there (failures are reported, not fatal); then it runs them on the branch
 through `pnpm test:e2e`, which must pass. It writes
 `/tmp/<branch>/screenshots/{before,after}/`, a `screenshots.md` table for the PR
