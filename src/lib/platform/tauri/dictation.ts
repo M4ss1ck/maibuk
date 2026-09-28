@@ -25,6 +25,9 @@ async function call<T = void>(
 
 export function createTauriRecognizerHost(): RecognizerHost {
   let stopped: (() => void) | null = null;
+  // Whether a start() completed and no stop() consumed it yet. A stop before
+  // start (or after a failed start) has no runner to wait for.
+  let active = false;
   // The runner can end by itself (mic lost, engine error): its `stopped`
   // then arrives before stop() is called, and stop() must not wait for another.
   let ended = false;
@@ -42,11 +45,18 @@ export function createTauriRecognizerHost(): RecognizerHost {
         } else ended = true;
       };
       await call("dictation_start", { onEvent: channel });
+      active = true;
     },
     async stop() {
+      if (!active && !ended) {
+        await call("dictation_stop");
+        active = false;
+        return;
+      }
       if (ended) {
         ended = false;
         await call("dictation_stop");
+        active = false;
         return;
       }
       // Channel messages can arrive after the command resolves; the Rust side
@@ -54,6 +64,7 @@ export function createTauriRecognizerHost(): RecognizerHost {
       const done = new Promise<void>((resolve) => (stopped = resolve));
       await call("dictation_stop");
       await done;
+      active = false;
     },
     setContext: (text) => call("dictation_set_context", { text }),
     inputDevice: () => call<string | null>("dictation_input_device"),
@@ -63,6 +74,9 @@ export function createTauriRecognizerHost(): RecognizerHost {
 
 export const tauriModelFiles: ModelFiles = {
   async install(spec, onProgress, signal) {
+    if (signal.aborted) {
+      throw toDictationError({ code: "cancelled" }, "cancelled");
+    }
     const channel = new Channel<[number, number]>();
     channel.onmessage = ([done, total]) => onProgress(done, total);
     const cancel = () =>

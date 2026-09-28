@@ -119,6 +119,26 @@ describe("TauriRecognizerHost", () => {
     await expect(host.stop()).resolves.toBeUndefined();
     expect(invoke).toHaveBeenCalledWith("dictation_stop", undefined);
   });
+
+  it("stop resolves without a stopped message when start was never called", async () => {
+    handlers.dictation_stop = () => {};
+    const host = createTauriRecognizerHost();
+    await expect(host.stop()).resolves.toBeUndefined();
+    expect(invoke).toHaveBeenCalledWith("dictation_stop", undefined);
+  });
+
+  it("stop resolves when dictation_start rejected", async () => {
+    handlers.dictation_start = () => {
+      throw { code: "mic_denied" };
+    };
+    handlers.dictation_stop = () => {};
+    const host = createTauriRecognizerHost();
+    await expect(host.start(() => {})).rejects.toMatchObject({
+      code: "mic_denied",
+    });
+    await expect(host.stop()).resolves.toBeUndefined();
+    expect(invoke).toHaveBeenCalledWith("dictation_stop", undefined);
+  });
 });
 
 describe("tauriModelFiles", () => {
@@ -141,5 +161,18 @@ describe("tauriModelFiles", () => {
     await expect(install).rejects.toMatchObject({ code: "cancelled" });
     expect(progress).toEqual([5]);
     expect(cancel).toHaveBeenCalledWith({ id: "m" });
+  });
+
+  it("install rejects an already-aborted signal without invoking anything", async () => {
+    handlers.dictation_models_install = () => undefined;
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      tauriModelFiles.install({ id: "m" } as never, () => {}, controller.signal),
+    ).rejects.toMatchObject({ code: "cancelled" });
+    expect(invoke).not.toHaveBeenCalledWith(
+      "dictation_models_install",
+      expect.anything(),
+    );
   });
 });

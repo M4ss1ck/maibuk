@@ -77,7 +77,7 @@ mod imp {
     }
 
     #[tauri::command]
-    pub fn dictation_start(
+    pub async fn dictation_start(
         state: State<'_, DictationState>,
         on_event: Channel<HostMessage>,
     ) -> Result<(), DictationError> {
@@ -88,8 +88,11 @@ mod imp {
             .as_ref()
             .map(|(_, e)| e.clone())
             .ok_or_else(|| DictationError::new(ErrorCode::ModelMissing, "load first"))?;
-        if let Some(old) = state.running.lock().unwrap().take() {
-            old.stop();
+        let old = state.running.lock().unwrap().take();
+        if let Some(old) = old {
+            tauri::async_runtime::spawn_blocking(move || old.stop())
+                .await
+                .map_err(|e| DictationError::new(ErrorCode::EngineCrashed, e.to_string()))?;
         }
         engine.lock().unwrap().start()?;
         let channel = on_event.clone();
@@ -110,7 +113,7 @@ mod imp {
                 .await
                 .map_err(|e| DictationError::new(ErrorCode::EngineCrashed, e.to_string())),
             None => {
-                if let Some(channel) = state.last_channel.lock().unwrap().as_ref() {
+                if let Some(channel) = state.last_channel.lock().unwrap().take() {
                     let _ = channel.send(HostMessage::Stopped);
                 }
                 Ok(())
@@ -133,11 +136,16 @@ mod imp {
     }
 
     #[tauri::command]
-    pub fn dictation_unload(state: State<'_, DictationState>) {
-        if let Some(runner) = state.running.lock().unwrap().take() {
-            runner.stop();
+    pub async fn dictation_unload(state: State<'_, DictationState>) -> Result<(), DictationError> {
+        let runner = state.running.lock().unwrap().take();
+        if let Some(runner) = runner {
+            tauri::async_runtime::spawn_blocking(move || runner.stop())
+                .await
+                .map_err(|e| DictationError::new(ErrorCode::EngineCrashed, e.to_string()))?;
         }
         *state.loaded.lock().unwrap() = None;
+        *state.last_channel.lock().unwrap() = None;
+        Ok(())
     }
 
     #[tauri::command]
@@ -165,10 +173,9 @@ mod imp {
                 }
             })
         })
-        .await
-        .map_err(|e| DictationError::new(ErrorCode::DownloadFailed, e.to_string()))?;
+        .await;
         state.cancels.lock().unwrap().remove(&id);
-        result
+        result.map_err(|e| DictationError::new(ErrorCode::DownloadFailed, e.to_string()))?
     }
 
     #[tauri::command]
@@ -191,12 +198,14 @@ mod imp {
         state: State<'_, DictationState>,
         id: String,
     ) -> Result<(), DictationError> {
-        let mut loaded = state.loaded.lock().unwrap();
-        if loaded
-            .as_ref()
-            .is_some_and(|(loaded_id, _)| *loaded_id == id)
         {
-            *loaded = None;
+            let mut loaded = state.loaded.lock().unwrap();
+            if loaded
+                .as_ref()
+                .is_some_and(|(loaded_id, _)| *loaded_id == id)
+            {
+                *loaded = None;
+            }
         }
         models::remove(&base(&app)?, &id)
     }
