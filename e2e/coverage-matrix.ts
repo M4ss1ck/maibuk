@@ -47,6 +47,17 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "Vitest canvas suites; keyboard tool switching is covered by canvas-tools",
   },
   {
+    kind: "term",
+    items: [
+      "Dictation Command Interpreter",
+      "Spoken Punctuation",
+      "Voice Command",
+      "Dictation Vocabulary",
+    ],
+    reason: "Decided, not built (ADR 0014, ADR 0015); the v1 build adds their rows",
+    owner: "Dictation Command Interpreter v1, from https://github.com/M4ss1ck/maibuk/pull/261",
+  },
+  {
     kind: "behavior",
     items: [
       "always on top",
@@ -2137,7 +2148,7 @@ export const ROWS: MatrixRow[] = [
       "with no model downloaded, Mod+Shift+Space shows the no-model hint and the mic leads to Settings",
       "WebKit shows no dictation control (not cross-origin isolated without credentialless)",
     ],
-    terms: ["Dictation", "Dictation Session"],
+    terms: ["Dictation", "Dictation Session", "Dictation Language"],
     shortcuts: ["dictation.toggle", "dictation.stop", "dictation.cycleLanguage"],
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
