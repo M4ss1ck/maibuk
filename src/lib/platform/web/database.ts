@@ -107,11 +107,16 @@ export class WebDatabaseAdapter implements DatabaseAdapter {
   }
 }
 
+/**
+ * The saved Library, or null only when none was ever saved. A failed read
+ * rejects: treating it as "nothing saved" opened an empty Library, and its
+ * first write replaced the author's saved one.
+ */
 async function loadFromIndexedDB(): Promise<Uint8Array | null> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const request = indexedDB.open("maibuk-db-storage", 1);
 
-    request.onerror = () => resolve(null);
+    request.onerror = () => reject(request.error ?? new Error("Could not open IndexedDB"));
 
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -122,11 +127,22 @@ async function loadFromIndexedDB(): Promise<Uint8Array | null> {
 
     request.onsuccess = () => {
       const db = request.result;
-      const transaction = db.transaction("database", "readonly");
-      const store = transaction.objectStore("database");
-      const getRequest = store.get("main");
-      getRequest.onsuccess = () => resolve(getRequest.result || null);
-      getRequest.onerror = () => resolve(null);
+      try {
+        const transaction = db.transaction("database", "readonly");
+        const store = transaction.objectStore("database");
+        const getRequest = store.get("main");
+        getRequest.onsuccess = () => {
+          db.close();
+          resolve((getRequest.result as Uint8Array | undefined) ?? null);
+        };
+        getRequest.onerror = () => {
+          db.close();
+          reject(getRequest.error ?? new Error("Could not read the saved Library"));
+        };
+      } catch (error) {
+        db.close();
+        reject(error);
+      }
     };
   });
 }
@@ -138,13 +154,11 @@ export async function createWebDatabase(_path: string): Promise<DatabaseAdapter>
   });
 
   // IndexedDB is the primary (and only) persistence target.
+  // A saved Library that cannot be read or parsed must stop the open, never
+  // fall through to a new empty one that would be saved over it.
   const indexedDBData = await loadFromIndexedDB();
   if (indexedDBData) {
-    try {
-      return new WebDatabaseAdapter(new SQL.Database(indexedDBData));
-    } catch (error) {
-      console.warn("Failed to restore from IndexedDB:", error);
-    }
+    return new WebDatabaseAdapter(new SQL.Database(indexedDBData));
   }
 
   // Legacy: a database persisted by an older build still lives in localStorage.
@@ -152,14 +166,10 @@ export async function createWebDatabase(_path: string): Promise<DatabaseAdapter>
   // never hit the storage quota again.
   const legacy = localStorage.getItem(DB_STORAGE_KEY);
   if (legacy) {
-    try {
-      const binary = Uint8Array.from(atob(legacy), (c) => c.charCodeAt(0));
-      const adapter = new WebDatabaseAdapter(new SQL.Database(binary));
-      await adapter.migrateLegacyStorage();
-      return adapter;
-    } catch (error) {
-      console.warn("Failed to migrate localStorage database:", error);
-    }
+    const binary = Uint8Array.from(atob(legacy), (c) => c.charCodeAt(0));
+    const adapter = new WebDatabaseAdapter(new SQL.Database(binary));
+    await adapter.migrateLegacyStorage();
+    return adapter;
   }
 
   // Create new database

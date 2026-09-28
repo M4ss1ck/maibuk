@@ -2,6 +2,8 @@ import { createDatabase, IS_TAURI, type DatabaseAdapter } from "@/lib/platform";
 import { ensureMetricsSchema } from "@/features/metrics/events-repo";
 import { getTutorialDatabase } from "@/features/tutorial/library-switch";
 import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
+import { compactLibrary } from "@/lib/db/compact";
+import { parseSqlStatements } from "@/lib/db/sql-parser";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;
@@ -23,16 +25,36 @@ export async function getAuthorDatabase(): Promise<DatabaseAdapter> {
   }
 
   if (!dbPromise) {
-    dbPromise = (async () => {
-      const dbPath = IS_TAURI ? "sqlite:maibuk.db" : "maibuk.db";
-      const created = await createDatabase(dbPath);
-      await initializeSchema(created);
-      db = created;
-      return created;
-    })();
+    dbPromise = openAuthorDatabase().catch((error: unknown) => {
+      // A failed open must not stick: every later getDatabase() would reject
+      // for the rest of the session and the Library would look empty.
+      dbPromise = null;
+      throw error;
+    });
   }
 
   return dbPromise;
+}
+
+/** Delays between attempts to open the Library; a busy file usually frees up within seconds. */
+export const DATABASE_OPEN_RETRY_DELAYS_MS = [250, 1000, 3000];
+
+async function openAuthorDatabase(): Promise<DatabaseAdapter> {
+  const dbPath = IS_TAURI ? "sqlite:maibuk.db" : "maibuk.db";
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const created = await createDatabase(dbPath);
+      await initializeSchema(created);
+      await compactLibrary(created);
+      db = created;
+      return created;
+    } catch (error) {
+      const delay = DATABASE_OPEN_RETRY_DELAYS_MS[attempt];
+      console.error(`[db] opening the Library failed (attempt ${attempt + 1})`, error);
+      if (delay === undefined) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 }
 
 export async function waitForDatabaseReady(): Promise<void> {
@@ -407,27 +429,36 @@ export async function resetDatabase(): Promise<void> {
 }
 
 /**
- * Regex that matches INSERT (with optional OR REPLACE/OR IGNORE) followed
- * by INTO. Captures everything before "INTO" so we can normalise it.
+ * Matches an INSERT (with or without OR REPLACE/OR IGNORE) and captures its
+ * table and column list, which every Maibuk export writes.
  */
-const INSERT_INTO_RE = /^(INSERT\s+(?:OR\s+\w+\s+)?)INTO/i;
+const INSERT_RE = /^INSERT\s+(?:OR\s+\w+\s+)?INTO\s+("[^"]+"|\w+)\s*\(([^)]*)\)\s*(VALUES[\s\S]*)$/i;
+const LEGACY_INSERT_RE = /^INSERT\s+(?:OR\s+\w+\s+)?INTO/i;
 
 /**
- * Convert all INSERT INTO statements to INSERT OR REPLACE INTO so that
- * re-importing an export doesn't fail with UNIQUE constraint errors.
+ * Turns an INSERT into an upsert that updates an existing row in place, so
+ * re-importing an export neither fails on UNIQUE constraints nor deletes the
+ * row. INSERT OR REPLACE deletes it first, and on desktop, where sqlx enables
+ * foreign_keys, that cascades to a Book's Chapters and Checkpoints.
+ * An INSERT without a column list keeps OR REPLACE; no Maibuk export writes one.
  * Non-INSERT statements are passed through unchanged.
  */
-export function normaliseToUpsert(sql: string): string {
-  return sql.replace(INSERT_INTO_RE, "INSERT OR REPLACE INTO");
+export function normaliseToUpsert(statement: string): string {
+  const match = statement.trim().match(INSERT_RE);
+  if (!match) return statement.replace(LEGACY_INSERT_RE, "INSERT OR REPLACE INTO");
+  const [, table, columnList, values] = match;
+  const columns = columnList
+    .split(",")
+    .map((column) => column.trim())
+    .filter((column) => column.length > 0);
+  const updates = columns.map((column) => `${column} = excluded.${column}`).join(", ");
+  return `INSERT INTO ${table} (${columns.join(", ")}) ${values.trim()} ON CONFLICT DO UPDATE SET ${updates}`;
 }
 
 export async function importDatabase(sqlContent: string): Promise<void> {
   const database = await getDatabase();
-  // Convert INSERT → INSERT OR REPLACE so re-importing doesn't fail on
-  // existing rows (UNIQUE constraint).
-  const upsertSql = sqlContent
-    .split("\n")
-    .map((line) => normaliseToUpsert(line))
+  const upsertSql = parseSqlStatements(sqlContent)
+    .map((statement) => `${normaliseToUpsert(statement)};`)
     .join("\n");
   await database.importData(upsertSql);
 }

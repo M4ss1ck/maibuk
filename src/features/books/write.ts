@@ -343,6 +343,18 @@ export async function applyBookSnapshotData(
     return { ...ch, content: normalized.html, wordCount: normalized.wordCount };
   });
 
+  // Chapters are upserted by id, so a repeated id would silently replace an
+  // earlier chapter. Refuse the snapshot before anything is written.
+  const seenChapterIds = new Set<string>();
+  normalizedChapters.forEach((ch, i) => {
+    if (seenChapterIds.has(ch.id)) {
+      throw new Error(
+        `Sync apply failed on chapter ${i + 1}/${normalizedChapters.length} ("${ch.title}"): duplicate chapter id "${ch.id}"`
+      );
+    }
+    seenChapterIds.add(ch.id);
+  });
+
   interface ExistingBookRow {
     title: string;
     subtitle: string | null;
@@ -399,13 +411,24 @@ export async function applyBookSnapshotData(
     }
   }
 
-  // Upsert book
+  // Upsert book. Never INSERT OR REPLACE: REPLACE deletes the row first, and
+  // on desktop (sqlx enables foreign_keys) that cascades to the Book's
+  // Checkpoints, assets, and EPUB structure.
   await db.execute(
-    `INSERT OR REPLACE INTO books (
+    `INSERT INTO books (
       id, title, subtitle, author_name, description, genre, language,
       cover_image_path, cover_data, word_count, target_word_count, status,
       created_at, updated_at, content_updated_at, last_opened_at, last_chapter_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title, subtitle = excluded.subtitle,
+      author_name = excluded.author_name, description = excluded.description,
+      genre = excluded.genre, language = excluded.language,
+      cover_image_path = excluded.cover_image_path, cover_data = excluded.cover_data,
+      word_count = excluded.word_count, target_word_count = excluded.target_word_count,
+      status = excluded.status, created_at = excluded.created_at,
+      updated_at = excluded.updated_at, content_updated_at = excluded.content_updated_at,
+      last_opened_at = excluded.last_opened_at, last_chapter_id = excluded.last_chapter_id`,
     [
       book.id,
       book.title,
@@ -428,8 +451,13 @@ export async function applyBookSnapshotData(
   );
 
   const applyChapters = async (): Promise<void> => {
-    // Delete existing chapters for this book, then insert fresh
-    await db.execute("DELETE FROM chapters WHERE book_id = ?", [book.id]);
+    // Drop only the chapters the snapshot no longer has, then upsert the
+    // rest in place: deleting a kept chapter cascades to its EPUB metadata
+    // on desktop.
+    await db.execute(
+      "DELETE FROM chapters WHERE book_id = ? AND id NOT IN (SELECT value FROM json_each(?))",
+      [book.id, JSON.stringify(normalizedChapters.map((ch) => ch.id))]
+    );
 
     for (let i = 0; i < normalizedChapters.length; i++) {
       const ch = normalizedChapters[i];
@@ -439,7 +467,14 @@ export async function applyBookSnapshotData(
             id, book_id, title, content, synopsis, "order", parent_id,
             chapter_type, word_count, status, is_included_in_export,
             created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            book_id = excluded.book_id, title = excluded.title,
+            content = excluded.content, synopsis = excluded.synopsis,
+            "order" = excluded."order", parent_id = excluded.parent_id,
+            chapter_type = excluded.chapter_type, word_count = excluded.word_count,
+            status = excluded.status, is_included_in_export = excluded.is_included_in_export,
+            created_at = excluded.created_at, updated_at = excluded.updated_at`,
           [
             ch.id,
             ch.bookId,

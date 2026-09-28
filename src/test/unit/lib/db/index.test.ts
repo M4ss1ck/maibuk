@@ -43,6 +43,45 @@ describe("src/lib/db/index.ts", () => {
       expect(db).toBe(mockDb);
     });
 
+    it("retries a failed open and returns the Library once it opens", async () => {
+      vi.useFakeTimers();
+      try {
+        mockCreateDatabase
+          .mockRejectedValueOnce(new Error("database is locked"))
+          .mockResolvedValueOnce(mockDb);
+        const { getDatabase } = await import("@/lib/db");
+
+        const opened = getDatabase();
+        await vi.advanceTimersByTimeAsync(250);
+
+        await expect(opened).resolves.toBe(mockDb);
+        expect(mockCreateDatabase).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("opens again on the next call after every attempt failed, instead of failing all session", async () => {
+      vi.useFakeTimers();
+      try {
+        mockCreateDatabase.mockRejectedValue(new Error("database is locked"));
+        const { getDatabase, DATABASE_OPEN_RETRY_DELAYS_MS } = await import("@/lib/db");
+
+        const first = getDatabase();
+        const firstResult = expect(first).rejects.toThrow("database is locked");
+        for (const delay of DATABASE_OPEN_RETRY_DELAYS_MS) {
+          await vi.advanceTimersByTimeAsync(delay);
+        }
+        await firstResult;
+        expect(mockCreateDatabase).toHaveBeenCalledTimes(DATABASE_OPEN_RETRY_DELAYS_MS.length + 1);
+
+        mockCreateDatabase.mockResolvedValue(mockDb);
+        await expect(getDatabase()).resolves.toBe(mockDb);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("returns cached database on subsequent calls without recreating", async () => {
       const { getDatabase } = await import("@/lib/db");
       await getDatabase();
@@ -208,14 +247,15 @@ describe("src/lib/db/index.ts", () => {
   });
 
   describe("importDatabase()", () => {
-    it("imports sql content after converting INSERT to INSERT OR REPLACE", async () => {
+    it("imports sql content after converting each INSERT to an in-place upsert", async () => {
       const { importDatabase } = await import("@/lib/db");
-      const sql = `INSERT INTO books (id) VALUES ('1');\nINSERT OR IGNORE INTO chapters (id) VALUES ('2');`;
+      const sql = `INSERT INTO books (id) VALUES ('1');\nINSERT OR IGNORE INTO chapters (id) VALUES ('a;b');`;
 
       await importDatabase(sql);
 
       expect(mockDb.importData).toHaveBeenCalledWith(
-        `INSERT OR REPLACE INTO books (id) VALUES ('1');\nINSERT OR REPLACE INTO chapters (id) VALUES ('2');`
+        `INSERT INTO books (id) VALUES ('1') ON CONFLICT DO UPDATE SET id = excluded.id;\n` +
+          `INSERT INTO chapters (id) VALUES ('a;b') ON CONFLICT DO UPDATE SET id = excluded.id;`
       );
     });
   });

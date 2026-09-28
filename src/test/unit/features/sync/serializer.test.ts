@@ -646,7 +646,7 @@ describe("book snapshot serializer", () => {
     expect(useChapterStore.getState().chapters).toBe(before);
   });
 
-  it("wraps errors with the failing chapter's position and title", async () => {
+  it("refuses a snapshot that repeats a chapter id before writing anything", async () => {
     await insertBook(testDb, "book-1");
 
     const snapshot: BookSnapshot = {
@@ -670,7 +670,7 @@ describe("book snapshot serializer", () => {
       },
       chapters: [
         {
-          // Duplicate primary key forces the second insert to fail.
+          // Chapters upsert by id: a repeat would silently drop "First".
           id: "dup",
           bookId: "book-1",
           title: "First",
@@ -704,8 +704,79 @@ describe("book snapshot serializer", () => {
     };
 
     await expect(applyBookSnapshot(snapshot)).rejects.toThrow(
-      'Sync apply failed on chapter 2/2 ("Second")'
+      'Sync apply failed on chapter 2/2 ("Second"): duplicate chapter id "dup"'
     );
+    const rows = await testDb.select<{ title: string; updated_at: number }[]>(
+      "SELECT title, updated_at FROM books WHERE id = 'book-1'"
+    );
+    expect(rows).toEqual([{ title: "Title", updated_at: 2 }]);
+    expect(await testDb.select("SELECT id FROM chapters")).toEqual([]);
+  });
+
+  it("wraps a failed chapter write with the chapter's position and title", async () => {
+    await insertBook(testDb, "book-1");
+    const snapshot = JSON.parse(await serializeBook("book-1")) as BookSnapshot;
+    snapshot.chapters = [
+      {
+        id: "orphan",
+        // No such Book: the foreign key rejects the write, as on desktop.
+        bookId: "missing-book",
+        title: "Orphan",
+        content: null,
+        synopsis: null,
+        order: 0,
+        parentId: null,
+        chapterType: "chapter",
+        wordCount: 0,
+        status: "draft",
+        isIncludedInExport: true,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+
+    await expect(applyBookSnapshot(snapshot)).rejects.toThrow(
+      'Sync apply failed on chapter 1/1 ("Orphan"): FOREIGN KEY constraint failed'
+    );
+  });
+
+  it("keeps the Book's Checkpoints and EPUB structure when a pull updates it", async () => {
+    // Regression: the Book row was written with INSERT OR REPLACE, which
+    // deletes it first. With foreign keys on (desktop), that cascaded to
+    // every row referencing the Book, and each kept chapter's delete and
+    // re-insert dropped its EPUB metadata.
+    await insertBook(testDb, "book-1");
+    await insertChapter(testDb, "ch-1", "book-1", 0);
+    await insertChapter(testDb, "ch-gone", "book-1", 1);
+    await testDb.execute(
+      `INSERT INTO book_versions (id, book_id, snapshot, checksum, trigger_type, created_at)
+       VALUES ('v1', 'book-1', '{}', 'abc', 'manual', 1)`
+    );
+    await testDb.execute(
+      `INSERT INTO epub_structures (id, book_id, package_path, manifest_json, spine_json,
+         compatibility_json, created_at, updated_at)
+       VALUES ('e1', 'book-1', 'OEBPS/content.opf', '[]', '[]', '{}', 1, 1)`
+    );
+    await testDb.execute(
+      `INSERT INTO chapter_epub_meta (chapter_id, book_id, href, media_type, spine_index)
+       VALUES ('ch-1', 'book-1', 'ch1.xhtml', 'application/xhtml+xml', 0)`
+    );
+    const snapshot = JSON.parse(await serializeBook("book-1")) as BookSnapshot;
+    snapshot.book.title = "Pulled title";
+    snapshot.chapters = snapshot.chapters.filter((ch) => ch.id === "ch-1");
+    snapshot.chapters[0].content = "<p>Pulled body</p>";
+
+    await applyBookSnapshot(snapshot, "remote");
+
+    expect(await testDb.select("SELECT title FROM books")).toEqual([{ title: "Pulled title" }]);
+    expect(await testDb.select("SELECT id, content FROM chapters")).toEqual([
+      { id: "ch-1", content: "<p>Pulled body</p>" },
+    ]);
+    expect(await testDb.select("SELECT id FROM book_versions")).toEqual([{ id: "v1" }]);
+    expect(await testDb.select("SELECT id FROM epub_structures")).toEqual([{ id: "e1" }]);
+    expect(await testDb.select("SELECT chapter_id FROM chapter_epub_meta")).toEqual([
+      { chapter_id: "ch-1" },
+    ]);
   });
 
   it("round-trips contentUpdatedAt through serialize and apply", async () => {

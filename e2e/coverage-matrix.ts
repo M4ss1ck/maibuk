@@ -268,6 +268,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "books-library-load-error",
+    area: "books",
+    workflow:
+      "the saved Library cannot be read at launch: Home shows libraryLoad.title and the error instead of the empty state; Try again reachable by Tab, Enter reloads and shows the Books; asserts: alert text, no empty-state heading, Book card visible after retry",
+    edges: [],
+    terms: ["Library"],
+    shortcuts: [],
+    routes: ["/"],
+    fixture: "bookShelf",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "books-create",
     area: "books",
     workflow:

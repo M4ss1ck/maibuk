@@ -5,6 +5,7 @@ import { Toolbar } from "react-aria-components/Toolbar";
 import { useBookStore } from "@/features/books/store";
 import { useSettingsStore } from "@/features/settings/store";
 import { BookCard } from "@/components/project/BookCard";
+import { LibraryLoadError } from "@/components/LibraryLoadError";
 import { BookStatusFilter } from "@/components/project/BookStatusFilter";
 import { countBooksByStatus, filterBooksByStatus } from "@/components/project/book-list-model";
 import { NewBookDialog } from "@/components/project/NewBookDialog";
@@ -51,7 +52,7 @@ export function Home() {
   const setStatusFilter = useSettingsStore((state) => state.setBooksStatusFilter);
   const newBookHint = useCommandHint("bookList.newBook");
 
-  const { books, isLoading, loadBooks, updateBook } = useBookStore();
+  const { books, isLoading, error, loadBooks, updateBook } = useBookStore();
   const statusCounts = useMemo(() => countBooksByStatus(books), [books]);
   const visibleBooks = useMemo(
     () => filterBooksByStatus(books, statusFilter),
@@ -336,7 +337,9 @@ export function Home() {
         </Toolbar>
       </div>
 
-      {books.length === 0 ? (
+      {books.length === 0 && error ? (
+        <LibraryLoadError error={error} onRetry={() => void loadBooks()} />
+      ) : books.length === 0 ? (
         /* Empty state */
         <div className="empty-state-enter flex flex-col items-center justify-center py-20 sm:py-28 text-center">
           <div className="w-20 h-20 mb-8">

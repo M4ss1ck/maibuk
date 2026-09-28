@@ -77,3 +77,29 @@ export async function tamperBackupChecksums(page: Page): Promise<void> {
       })
   );
 }
+
+/**
+ * Makes reading the saved Library from IndexedDB fail on every page load until
+ * `allowLibraryReads` is called, like a storage error at launch. Installed
+ * before navigation, so the app's first open hits it.
+ */
+export async function failLibraryReads(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const state = window as unknown as { __e2eFailLibraryReads?: boolean };
+    state.__e2eFailLibraryReads = true;
+    const original = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function (this: IDBObjectStore, ...args: Parameters<typeof original>) {
+      if (state.__e2eFailLibraryReads && this.name === "database") {
+        throw new DOMException("The e2e fault blocked this read.", "UnknownError");
+      }
+      return original.apply(this, args);
+    };
+  });
+}
+
+/** Lets the saved Library be read again, so the next open succeeds. */
+export async function allowLibraryReads(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as unknown as { __e2eFailLibraryReads?: boolean }).__e2eFailLibraryReads = false;
+  });
+}
