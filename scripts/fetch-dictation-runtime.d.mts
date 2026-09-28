@@ -38,6 +38,8 @@ export interface FetchTestAssetsOptions {
 
 export const RUNTIMES: DictationRuntime[];
 
+export function runtimesFor(argv: string[]): DictationRuntime[];
+
 export function createCrc32c(): Crc32c;
 
 export function crc32cBase64(bytes: Uint8Array): string;
