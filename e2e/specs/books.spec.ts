@@ -7,6 +7,8 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { capture } from "../support/capture";
+import { allowLibraryReads, failLibraryReads } from "../support/fault";
 import { SEED_BOOK, SEED_CHAPTERS, SHELF_BOOKS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -95,6 +97,30 @@ test.describe("empty Gallery @wf:books-empty-state", () => {
     await expect(dialog.getByRole("textbox", { name: "Book Title" })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(start).toBeFocused();
+  });
+});
+
+test.describe("a Library that cannot be read @wf:books-library-load-error", () => {
+  test.use({ library: "bookShelf" });
+
+  test("shows the error, never the empty state, and Try again loads the Books", async ({ page }) => {
+    await failLibraryReads(page);
+    await page.goto("/");
+
+    const alert = page.getByRole("alert").filter({ hasText: "Maibuk couldn't open your Library" });
+    // The open retries for about four seconds before giving up.
+    await expect(alert).toBeVisible({ timeout: 15_000 });
+    await expect(alert).toContainText("The e2e fault blocked this read.");
+    await expect(page.getByRole("heading", { name: "Your stories begin here" })).toHaveCount(0);
+    await capture(page, "library-load-error");
+
+    await allowLibraryReads(page);
+    const retry = page.getByRole("button", { name: "Try again" });
+    await tabTo(page, retry);
+    await page.keyboard.press("Enter");
+
+    await expect(card(page, SEED_BOOK.title)).toBeVisible();
+    await expect(alert).toHaveCount(0);
   });
 });
 

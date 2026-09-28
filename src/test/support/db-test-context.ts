@@ -18,6 +18,11 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   const sqlDb = new SQL.Database();
   const adapter = new MemoryDatabaseAdapter(sqlDb);
 
+  // Desktop enforces foreign keys (sqlx turns them on for every connection),
+  // so ON DELETE CASCADE runs there. Mirror it: the web and sql.js leave them
+  // off, which hid INSERT OR REPLACE wiping a Book's Checkpoints on desktop.
+  await adapter.execute("PRAGMA foreign_keys = ON");
+
   // Mirror the schema from src/lib/db/index.ts initializeSchema()
   await adapter.execute(`
     CREATE TABLE IF NOT EXISTS books (

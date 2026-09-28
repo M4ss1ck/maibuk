@@ -1769,5 +1769,10 @@
     "invalidHex": "Enter a 3- or 6-digit hex color.",
     "lowContrast": "This color has low contrast with its background.",
     "unknownContrast": "Contrast cannot be checked against this background."
+  },
+  "libraryLoad": {
+    "title": "Maibuk couldn't open your Library",
+    "body": "Your work is still on this device. Nothing was changed or deleted. Try again, or restart Maibuk if it keeps failing.",
+    "retry": "Try again"
   }
 }

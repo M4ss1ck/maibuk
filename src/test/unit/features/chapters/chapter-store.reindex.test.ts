@@ -28,6 +28,10 @@ describe("chapter store reindex on save", () => {
       )`);
     const now = Math.floor(Date.now() / 1000);
     await testDb.execute(
+      `INSERT INTO books (id, title, author_name, created_at, updated_at) VALUES ('b1','Book','A', ?, ?)`,
+      [now, now]
+    );
+    await testDb.execute(
       `INSERT INTO chapters (id, book_id, title, "order", created_at, updated_at) VALUES ('c1','b1','Ch', 0, ?, ?)`,
       [now, now]
     );

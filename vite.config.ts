@@ -117,6 +117,7 @@ export default defineConfig(() => ({
         "src/lib/window/androidLifecycle.ts",
         "src/lib/db/sql-parser.ts",
         "src/lib/db/index.ts",
+        "src/lib/db/compact.ts",
         "src/lib/platform/tauri/backup.ts",
         "src/lib/platform/web/backup.ts",
         "src/lib/platform/web/database.ts",

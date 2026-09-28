@@ -35,6 +35,7 @@ import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { AddIcon, MaibukLogo } from "@/components/icons";
+import { LibraryLoadError } from "@/components/LibraryLoadError";
 import { useShortcuts } from "@/lib/shortcuts";
 import { droppedTextToEditorHtml } from "@/features/markdown";
 import { useTextFileDrop } from "@/hooks/useTextFileDrop";
@@ -45,6 +46,7 @@ export function NotesGallery() {
   const navigate = useNavigate();
   const notes = useNoteStore((s) => s.notes);
   const loadNotes = useNoteStore((s) => s.loadNotes);
+  const notesError = useNoteStore((s) => s.error);
   const createNote = useNoteStore((s) => s.createNote);
   const updateNote = useNoteStore((s) => s.updateNote);
   const deleteNote = useNoteStore((s) => s.deleteNote);
@@ -481,7 +483,9 @@ export function NotesGallery() {
         </div>
       </div>
 
-      {notes.length === 0 ? (
+      {notes.length === 0 && notesError ? (
+        <LibraryLoadError error={notesError} onRetry={() => void loadNotes()} />
+      ) : notes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 sm:py-28 text-center">
           <div className="w-20 h-20 mb-8">
             <MaibukLogo className="w-full h-full text-primary opacity-70" />
