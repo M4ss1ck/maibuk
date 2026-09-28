@@ -37,6 +37,7 @@ import { setContentSilently } from "@/features/metrics/programmatic";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { buildDropHtml } from "@/components/editor/file-drop-html";
 import { textDropExtension } from "@/features/markdown/dropped-file";
+import { dictationHub } from "@/features/dictation/hub";
 import { readDroppedWebFiles } from "@/hooks/useTextFileDrop";
 import { useEditorFileDrop } from "@/components/editor/useEditorFileDrop";
 import { IS_TAURI } from "@/lib/platform";
@@ -383,6 +384,8 @@ export function Editor({
         // popup (Wikilink, symbols) would never see the Escape that dismisses
         // it. Let the plugin have it.
         if (hasActiveSuggestion(view.state)) return false;
+        // Same for the Dictation extension's Escape (dictation.stop).
+        if (dictationHub.isListening()) return false;
         if (showBubbleLinkDialogRef.current || pendingMarkdownPasteRef.current) {
           return false;
         }
