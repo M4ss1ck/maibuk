@@ -75,6 +75,36 @@ describe("WebRecognizerHost", () => {
     });
   });
 
+  it("releases the microphone when audio worklet setup fails", async () => {
+    const stopTrack = vi.fn();
+    const closeContext = vi.fn(async () => {});
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({
+          getTracks: () => [{ stop: stopTrack }],
+        })),
+      },
+    });
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        audioWorklet = {
+          addModule: vi.fn(async () => {
+            throw new Error("worklet failed");
+          }),
+        };
+        close = closeContext;
+      },
+    );
+    const host = createWebRecognizerHost({
+      createWorker: () => worker as unknown as Worker,
+    });
+
+    await expect(host.start(() => {})).rejects.toThrow("worklet failed");
+    expect(stopTrack).toHaveBeenCalledOnce();
+    expect(closeContext).toHaveBeenCalledOnce();
+  });
+
   it("reports a worker crash as engine_crashed", async () => {
     const events: DictationEvent[] = [];
     const host = createWebRecognizerHost({

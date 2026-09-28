@@ -110,26 +110,32 @@ export function createWebRecognizerHost(
         );
       }
       listener = onEvent;
-      context = new AudioContext();
-      await context.audioWorklet.addModule(workletUrl);
-      const node = new AudioWorkletNode(context, "dictation-capture", {
-        channelCountMode: "explicit",
-        channelCount: 1,
-      });
-      const channel = new MessageChannel();
-      node.port.postMessage({ port: channel.port1 }, [channel.port1]);
-      await rpc(
-        "start",
-        { port: channel.port2, sampleRate: context.sampleRate },
-        [channel.port2],
-      );
-      const source = context.createMediaStreamSource(media);
-      const mute = context.createGain();
-      mute.gain.value = 0;
-      source.connect(node).connect(mute).connect(context.destination);
-      media.getAudioTracks()[0]?.addEventListener("ended", () => {
-        listener?.({ type: "error", code: "mic_unavailable" });
-      });
+      try {
+        context = new AudioContext();
+        await context.audioWorklet.addModule(workletUrl);
+        const node = new AudioWorkletNode(context, "dictation-capture", {
+          channelCountMode: "explicit",
+          channelCount: 1,
+        });
+        const channel = new MessageChannel();
+        node.port.postMessage({ port: channel.port1 }, [channel.port1]);
+        await rpc(
+          "start",
+          { port: channel.port2, sampleRate: context.sampleRate },
+          [channel.port2],
+        );
+        const source = context.createMediaStreamSource(media);
+        const mute = context.createGain();
+        mute.gain.value = 0;
+        source.connect(node).connect(mute).connect(context.destination);
+        media.getAudioTracks()[0]?.addEventListener("ended", () => {
+          listener?.({ type: "error", code: "mic_unavailable" });
+        });
+      } catch (error) {
+        await releaseAudio();
+        listener = null;
+        throw error;
+      }
     },
     async stop() {
       await releaseAudio();
