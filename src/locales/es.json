@@ -1785,8 +1785,9 @@
       "resetShort": "Restablecer",
       "refused": {
         "empty": "Escribe una frase.",
-        "duplicate": "{{phrase}} ya es una frase de Puntuación dictada.",
-        "escape": "{{phrase}} empieza con la palabra de escape, {{word}}."
+        "duplicate": "{{phrase}} ya lo usa {{entry}}.",
+        "escape": "{{phrase}} empieza con la palabra de escape, {{word}}.",
+        "shadow": "{{phrase}} es el inicio de {{conflict}}, que usa {{entry}}."
       }
     }
   },

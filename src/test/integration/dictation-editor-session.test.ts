@@ -120,9 +120,7 @@ describe("Dictation line to rich-text document", () => {
       await session.start();
       host.emitFinal("primero nuevo elemento segundo");
       // TipTap keeps a trailing paragraph after a list, like toggleBulletList does.
-      expect(editor.getHTML()).toBe(
-        "<p>Primero</p><ul><li><p>Segundo</p></li></ul><p></p>"
-      );
+      expect(editor.getHTML()).toBe("<p>Primero</p><ul><li><p>Segundo</p></li></ul><p></p>");
       expect(undoDepth(editor.state)).toBe(1);
       expect(stats.summary().spokenPunctuationCount).toBe(1);
       // Inside the new list item, a spoken item splits it again as one more step.
@@ -133,9 +131,7 @@ describe("Dictation line to rich-text document", () => {
       );
       expect(undoDepth(editor.state)).toBe(2);
       undo(editor.state, editor.view.dispatch);
-      expect(editor.getHTML()).toBe(
-        "<p>Primero</p><ul><li><p>Segundo</p></li></ul><p></p>"
-      );
+      expect(editor.getHTML()).toBe("<p>Primero</p><ul><li><p>Segundo</p></li></ul><p></p>");
     } finally {
       editor.destroy();
     }

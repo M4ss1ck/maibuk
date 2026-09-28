@@ -8,17 +8,14 @@ import {
 } from "@/features/dictation/spoken-punctuation";
 
 const ids = (tier: string, lang: string) =>
-  MODEL_CATALOG.find(
-    (m) => m.tier === tier && m.languages.includes(lang as "en"),
-  )!.id;
+  MODEL_CATALOG.find((m) => m.tier === tier && m.languages.includes(lang as "en"))!.id;
 
 describe("pickModel()", () => {
   it("prefers the author's tier when installed", () => {
     const installed = [ids("fast", "es"), ids("accurate", "es")];
-    expect(
-      pickModel("es", MODEL_CATALOG, installed, { en: "fast", es: "accurate" })
-        ?.id,
-    ).toBe(ids("accurate", "es"));
+    expect(pickModel("es", MODEL_CATALOG, installed, { en: "fast", es: "accurate" })?.id).toBe(
+      ids("accurate", "es")
+    );
   });
 
   it("falls back to any installed tier for the language", () => {
@@ -26,7 +23,7 @@ describe("pickModel()", () => {
       pickModel("es", MODEL_CATALOG, [ids("fast", "es")], {
         en: "fast",
         es: "accurate",
-      })?.id,
+      })?.id
     ).toBe(ids("fast", "es"));
   });
 
@@ -35,7 +32,7 @@ describe("pickModel()", () => {
       pickModel("es", MODEL_CATALOG, [ids("fast", "en")], {
         en: "fast",
         es: "fast",
-      }),
+      })
     ).toBeNull();
   });
 });

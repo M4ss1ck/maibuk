@@ -160,11 +160,52 @@ describe("SpokenPunctuationSection", () => {
     await user.keyboard("comma{Enter}");
 
     expect(
-      within(comma).getByText("comma is already a Spoken punctuation phrase.")
+      within(comma).getByText("comma is already used by comma.")
     ).toBeInTheDocument();
     expect(within(comma).getByRole("alert")).toBeInTheDocument();
     expect(settingsFor("en").aliases.comma).toBeUndefined();
     expect(field).toHaveFocus();
+  });
+
+  it("names the owning entry when another entry already answers to the phrase", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    const comma = screen.getByRole("group", { name: "comma" });
+    const commaField = within(comma).getByRole("textbox", { name: "Add a phrase to comma" });
+    commaField.focus();
+    await user.keyboard("comma please{Enter}");
+
+    const period = screen.getByRole("group", { name: "period" });
+    const periodField = within(period).getByRole("textbox", { name: "Add a phrase to period" });
+    periodField.focus();
+    await user.keyboard("comma please{Enter}");
+
+    expect(within(period).getByRole("alert")).toHaveTextContent(
+      "comma please is already used by comma."
+    );
+    expect(settingsFor("en").aliases.period).toBeUndefined();
+  });
+
+  it("refuses an escape alias that would shadow another phrase, naming both", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    const comma = screen.getByRole("group", { name: "comma" });
+    const commaField = within(comma).getByRole("textbox", { name: "Add a phrase to comma" });
+    commaField.focus();
+    await user.keyboard("komma please{Enter}");
+
+    const literal = screen.getByRole("group", { name: "literal" });
+    const literalField = within(literal).getByRole("textbox", {
+      name: "Add a phrase to literal",
+    });
+    literalField.focus();
+    await user.keyboard("komma{Enter}");
+
+    expect(within(literal).getByRole("alert")).toHaveTextContent(
+      "komma is the start of komma please, used by comma."
+    );
+    expect(settingsFor("en").aliases.literal).toBeUndefined();
+    expect(settingsFor("en").aliases.comma).toEqual(["komma please"]);
   });
 
   it("refuses a phrase that starts with the escape word", async () => {
@@ -223,9 +264,7 @@ describe("SpokenPunctuationSection", () => {
     const field = within(coma).getByRole("textbox", { name: "Agregar una frase a coma" });
     field.focus();
     await user.keyboard("punto{Enter}");
-    expect(
-      within(coma).getByText("punto ya es una frase de Puntuación dictada.")
-    ).toBeInTheDocument();
+    expect(within(coma).getByText("punto ya lo usa punto.")).toBeInTheDocument();
   });
 
   it("opens the language Select with the keyboard", async () => {

@@ -10,8 +10,9 @@ import {
   findAliasRefusal,
   isEntryEnabled,
   normalizeSpokenPunctuationSettings,
+  type SpokenPunctuationSettings,
 } from "@/features/dictation/spoken-punctuation";
-import type { ModelSpec } from "@/features/dictation/types";
+import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
 
 const punctuating: ModelSpec["capabilities"] = {
   casing: true,
@@ -119,38 +120,39 @@ describe("findAliasRefusal()", () => {
     ).toEqual({ kind: "empty" });
   });
 
-  it("refuses a phrase another entry already answers to", () => {
+  it("refuses a phrase another entry already answers to, naming its owner", () => {
     expect(findAliasRefusal({ language: "es", entryId: "coma", alias: "punto", settings })).toEqual(
-      { kind: "duplicate" }
+      { kind: "duplicate", entryId: "punto" }
     );
     expect(
       findAliasRefusal({ language: "es", entryId: "coma", alias: "PUNTO, y coma.", settings })
-    ).toEqual({ kind: "duplicate" });
+    ).toEqual({ kind: "duplicate", entryId: "puntoYComa" });
     expect(
       findAliasRefusal({ language: "es", entryId: "coma", alias: "borra eso", settings })
-    ).toEqual({ kind: "duplicate" });
+    ).toEqual({ kind: "duplicate", entryId: "borraEso" });
   });
 
   it("refuses a phrase the entry itself already has, default or alias", () => {
     const withAlias = { ...settings, aliases: { coma: ["comita"] } };
     expect(findAliasRefusal({ language: "es", entryId: "coma", alias: "coma", settings })).toEqual({
       kind: "duplicate",
+      entryId: "coma",
     });
     expect(
       findAliasRefusal({ language: "es", entryId: "coma", alias: "Comita", settings: withAlias })
-    ).toEqual({ kind: "duplicate" });
+    ).toEqual({ kind: "duplicate", entryId: "coma" });
   });
 
   it("refuses a phrase that starts with the escape word", () => {
     expect(
       findAliasRefusal({ language: "es", entryId: "coma", alias: "literal", settings })
-    ).toEqual({ kind: "escape", word: "literal" });
+    ).toEqual({ kind: "escape", entryId: "literal", word: "literal" });
     expect(
       findAliasRefusal({ language: "es", entryId: "coma", alias: "literal coma", settings })
-    ).toEqual({ kind: "escape", word: "literal" });
+    ).toEqual({ kind: "escape", entryId: "literal", word: "literal" });
     expect(
       findAliasRefusal({ language: "en", entryId: "comma", alias: "Literal comma", settings })
-    ).toEqual({ kind: "escape", word: "literal" });
+    ).toEqual({ kind: "escape", entryId: "literal", word: "literal" });
     // "literales" is another word, not the escape word.
     expect(
       findAliasRefusal({ language: "es", entryId: "coma", alias: "literales", settings })
@@ -166,10 +168,59 @@ describe("findAliasRefusal()", () => {
         alias: "Textual coma",
         settings: withAlias,
       })
-    ).toEqual({ kind: "escape", word: "textual" });
+    ).toEqual({ kind: "escape", entryId: "literal", word: "textual" });
     expect(
       findAliasRefusal({ language: "es", entryId: "coma", alias: "textuales", settings: withAlias })
     ).toBeNull();
+  });
+
+  it("refuses an escape alias that would shadow an existing alias, naming both", () => {
+    const withAlias = { ...settings, aliases: { nuevoParrafo: ["nueva sección"] } };
+    expect(
+      findAliasRefusal({ language: "es", entryId: "literal", alias: "Nueva", settings: withAlias })
+    ).toEqual({ kind: "shadow", entryId: "nuevoParrafo", conflict: "nueva sección" });
+    expect(
+      findAliasRefusal({
+        language: "es",
+        entryId: "literal",
+        alias: "nuevo",
+        settings: withAlias,
+      })
+    ).toEqual({ kind: "shadow", entryId: "nuevoParrafo", conflict: "nuevo párrafo" });
+    // Folded equality is a duplicate, not a shadow: no accents needed.
+    expect(
+      findAliasRefusal({
+        language: "es",
+        entryId: "literal",
+        alias: "nueva seccion",
+        settings: withAlias,
+      })
+    ).toEqual({ kind: "duplicate", entryId: "nuevoParrafo" });
+    // The whole phrase is a duplicate, not a shadow.
+    expect(
+      findAliasRefusal({
+        language: "es",
+        entryId: "literal",
+        alias: "nueva sección",
+        settings: withAlias,
+      })
+    ).toEqual({ kind: "duplicate", entryId: "nuevoParrafo" });
+    // A phrase the escape alias does not start stays available.
+    expect(
+      findAliasRefusal({ language: "es", entryId: "literal", alias: "sección", settings: withAlias })
+    ).toBeNull();
+  });
+
+  it("refuses an escape alias that starts a default phrase too", () => {
+    // Defaults are never dropped on load, so this is not needed for storage to
+    // survive; they count anyway so one rule holds for every phrase, and the
+    // author is told before a longer alias would be refused as an escape.
+    expect(findAliasRefusal({ language: "es", entryId: "literal", alias: "nueva", settings })).toEqual(
+      { kind: "shadow", entryId: "nuevaLinea", conflict: "nueva línea" }
+    );
+    expect(findAliasRefusal({ language: "en", entryId: "literal", alias: "new", settings: settings })).toEqual(
+      { kind: "shadow", entryId: "newParagraph", conflict: "new paragraph" }
+    );
   });
 
   it("checks the language's own phrases only", () => {
@@ -211,13 +262,102 @@ describe("normalizeSpokenPunctuationSettings()", () => {
       es: {
         aliases: {
           // A default phrase, a phrase starting with the escape word, an
-          // escape-alias prefix, a duplicate, and one good phrase.
+          // escape-alias prefix, an escape alias shadowing a default, a
+          // duplicate, and one good phrase.
           coma: ["punto", "literal coma", "textual coma", "comita", "comita"],
-          literal: ["textual"],
+          literal: ["textual", "nueva"],
         },
       },
     });
 
     expect(normalized.es.aliases).toEqual({ literal: ["textual"], coma: ["comita"] });
+  });
+
+  it("resolves a stored escape shadow toward the phrase that keeps working", () => {
+    const normalized = normalizeSpokenPunctuationSettings({
+      es: { aliases: { literal: ["nueva"], nuevoParrafo: ["nueva sección"] } },
+    });
+
+    expect(normalized.es.aliases).toEqual({ nuevoParrafo: ["nueva sección"] });
+  });
+
+  it("never drops an alias the settings UI accepted, in any add order", () => {
+    const add = (
+      settings: SpokenPunctuationSettings,
+      language: DictationLanguage,
+      entryId: string,
+      alias: string
+    ) => {
+      if (findAliasRefusal({ language, entryId, alias, settings: settings[language] })) return;
+      const current = settings[language];
+      const existing = current.aliases[entryId] ?? [];
+      if (existing.includes(alias)) return;
+      settings[language] = {
+        ...current,
+        aliases: { ...current.aliases, [entryId]: [...existing, alias] },
+      };
+    };
+
+    // Pairs that collide through the escape word in both directions, a
+    // duplicate, and phrases that stay clear of each other. Each order's
+    // accepted adds are spelled out, so the property cannot pass by refusing
+    // everything.
+    const orders: {
+      adds: [DictationLanguage, string, string][];
+      aliases: Partial<Record<DictationLanguage, Record<string, string[]>>>;
+    }[] = [
+      {
+        adds: [
+          ["es", "nuevoParrafo", "nueva sección"],
+          ["es", "literal", "nueva"],
+          ["es", "coma", "comita"],
+          ["es", "punto", "comita"],
+          ["es", "literal", "textual"],
+          ["es", "coma", "textual coma"],
+        ],
+        aliases: { es: { nuevoParrafo: ["nueva sección"], coma: ["comita"], literal: ["textual"] } },
+      },
+      {
+        adds: [
+          ["es", "literal", "nueva"],
+          ["es", "nuevoParrafo", "nueva sección"],
+          ["es", "punto", "comita"],
+          ["es", "coma", "comita"],
+          ["es", "literal", "textual"],
+          ["es", "coma", "textual coma"],
+        ],
+        aliases: { es: { nuevoParrafo: ["nueva sección"], punto: ["comita"], literal: ["textual"] } },
+      },
+      {
+        adds: [
+          ["en", "newParagraph", "next part"],
+          ["en", "literal", "next"],
+          ["en", "comma", "komma"],
+          ["en", "period", "komma"],
+          ["en", "literal", "quote"],
+          ["en", "comma", "quote please"],
+        ],
+        aliases: { en: { newParagraph: ["next part"], comma: ["komma"], literal: ["quote"] } },
+      },
+      {
+        adds: [
+          ["en", "literal", "next"],
+          ["en", "newParagraph", "next part"],
+          ["en", "period", "komma"],
+          ["en", "comma", "komma"],
+          ["en", "literal", "quote"],
+          ["en", "comma", "quote please"],
+        ],
+        aliases: { en: { literal: ["next", "quote"], period: ["komma"] } },
+      },
+    ];
+
+    for (const { adds, aliases } of orders) {
+      const settings = defaultSpokenPunctuationSettings();
+      for (const [language, entryId, alias] of adds) add(settings, language, entryId, alias);
+      expect(settings.es.aliases).toEqual(aliases.es ?? {});
+      expect(settings.en.aliases).toEqual(aliases.en ?? {});
+      expect(normalizeSpokenPunctuationSettings(settings)).toEqual(settings);
+    }
   });
 });

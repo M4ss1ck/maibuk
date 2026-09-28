@@ -105,29 +105,34 @@ export function isEntryEnabled(
 
 export type AliasRefusal =
   | { kind: "empty" }
-  | { kind: "duplicate" }
-  | { kind: "escape"; word: string };
+  | { kind: "duplicate"; entryId: string }
+  | { kind: "escape"; entryId: string; word: string }
+  | { kind: "shadow"; entryId: string; conflict: string };
 
-function literalPhrases(
-  language: DictationLanguage,
-  settings?: SpokenPunctuationLanguageSettings
+function isLiteralEntry(entry: SpokenPunctuationEntry): boolean {
+  return entry.actions.some((action) => action.kind === "literal");
+}
+
+/** Every phrase an entry answers to, defaults and aliases, as stored. */
+function entryPhrases(
+  entry: SpokenPunctuationEntry,
+  settings: SpokenPunctuationLanguageSettings
 ): string[] {
-  const literals = new Set<string>();
-  for (const entry of entriesFor(language)) {
-    if (!entry.actions.some((action) => action.kind === "literal")) continue;
-    for (const phrase of [...entry.phrases, ...(settings?.aliases[entry.id] ?? [])]) {
-      const normalized = normalizePhrase(phrase);
-      if (normalized !== "") literals.add(normalized);
-    }
-  }
-  return [...literals];
+  return [...entry.phrases, ...(settings.aliases[entry.id] ?? [])];
 }
 
 /**
  * A new alias is refused when it normalizes to nothing, to a phrase the
- * language already knows (default or alias), or when it starts with the escape
+ * language already knows (default or alias), or when it starts with an escape
  * word (a default one or the author's own alias for it), which would make the
  * rest literal text.
+ *
+ * The escape rule is symmetric: an alias added to an escape entry is refused
+ * when a phrase of the language equals it or starts with it, and the refusal
+ * names the phrase and its entry. Otherwise a later load could drop one of the
+ * two, and a phrase the author taught would vanish. Default phrases count too,
+ * because the author could never add a longer alias starting with the escape
+ * word; one rule holds for every phrase.
  */
 export function findAliasRefusal(options: {
   language: DictationLanguage;
@@ -135,21 +140,36 @@ export function findAliasRefusal(options: {
   alias: string;
   settings: SpokenPunctuationLanguageSettings;
 }): AliasRefusal | null {
-  const { language, alias, settings } = options;
+  const { language, entryId, alias, settings } = options;
   const normalized = normalizePhrase(alias);
   if (normalized === "") return { kind: "empty" };
 
-  const escapeWord = literalPhrases(language, settings).find(
-    (word) => normalized === word || normalized.startsWith(`${word} `)
-  );
-  if (escapeWord) return { kind: "escape", word: escapeWord };
+  for (const entry of entriesFor(language)) {
+    if (!isLiteralEntry(entry)) continue;
+    const word = entryPhrases(entry, settings)
+      .map(normalizePhrase)
+      .find(
+        (candidate) =>
+          candidate !== "" && (normalized === candidate || normalized.startsWith(`${candidate} `))
+      );
+    if (word) return { kind: "escape", entryId: entry.id, word };
+  }
 
   for (const entry of entriesFor(language)) {
-    for (const phrase of entry.phrases) {
-      if (normalizePhrase(phrase) === normalized) return { kind: "duplicate" };
+    for (const phrase of entryPhrases(entry, settings)) {
+      if (normalizePhrase(phrase) === normalized) {
+        return { kind: "duplicate", entryId: entry.id };
+      }
     }
-    for (const existing of settings.aliases[entry.id] ?? []) {
-      if (normalizePhrase(existing) === normalized) return { kind: "duplicate" };
+  }
+
+  const target = entriesFor(language).find((entry) => entry.id === entryId);
+  if (target && isLiteralEntry(target)) {
+    for (const entry of entriesFor(language)) {
+      const conflict = entryPhrases(entry, settings).find((phrase) =>
+        normalizePhrase(phrase).startsWith(`${normalized} `)
+      );
+      if (conflict) return { kind: "shadow", entryId: entry.id, conflict };
     }
   }
   return null;
@@ -175,8 +195,6 @@ function normalizeAliases(
 ): Record<string, string[]> {
   if (typeof raw !== "object" || raw === null) return {};
   const entries = entriesFor(language);
-  const isLiteralEntry = (entry: SpokenPunctuationEntry) =>
-    entry.actions.some((action) => action.kind === "literal");
   // The escape word's aliases come first, so an alias starting with one of
   // them is refused no matter how storage happened to order the entries.
   const ordered = [

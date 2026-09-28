@@ -1785,8 +1785,9 @@
       "resetShort": "Reset",
       "refused": {
         "empty": "Enter a phrase.",
-        "duplicate": "{{phrase}} is already a Spoken punctuation phrase.",
-        "escape": "{{phrase}} starts with the escape word, {{word}}."
+        "duplicate": "{{phrase}} is already used by {{entry}}.",
+        "escape": "{{phrase}} starts with the escape word, {{word}}.",
+        "shadow": "{{phrase}} is the start of {{conflict}}, used by {{entry}}."
       }
     }
   },

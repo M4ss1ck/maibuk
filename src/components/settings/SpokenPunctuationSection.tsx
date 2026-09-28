@@ -44,16 +44,32 @@ function actionLabel(action: PhraseAction, t: TFunction): string {
   }
 }
 
-function refusalMessage(t: TFunction, refusal: AliasRefusal, phrase: string): string {
+function refusalMessage(
+  t: TFunction,
+  language: DictationLanguage,
+  refusal: AliasRefusal,
+  phrase: string
+): string {
+  const owner = (entryId: string) =>
+    entriesFor(language).find((entry) => entry.id === entryId)?.phrases[0] ?? entryId;
   switch (refusal.kind) {
     case "empty":
       return t("dictation.spokenPunctuation.refused.empty");
     case "duplicate":
-      return t("dictation.spokenPunctuation.refused.duplicate", { phrase });
+      return t("dictation.spokenPunctuation.refused.duplicate", {
+        phrase,
+        entry: owner(refusal.entryId),
+      });
     case "escape":
       return t("dictation.spokenPunctuation.refused.escape", {
         phrase,
         word: refusal.word,
+      });
+    case "shadow":
+      return t("dictation.spokenPunctuation.refused.shadow", {
+        phrase,
+        conflict: refusal.conflict,
+        entry: owner(refusal.entryId),
       });
   }
 }
@@ -216,7 +232,7 @@ function EntryRow({
             role="alert"
             className="mt-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-foreground"
           >
-            {refusalMessage(t, refusal, phrase.trim())}
+            {refusalMessage(t, language, refusal, phrase.trim())}
           </div>
         )}
       </fieldset>

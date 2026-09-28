@@ -118,21 +118,30 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
     const field = comma.getByRole("textbox", { name: "Add a phrase to comma" });
 
     await tabTo(page, field, { max: 240 });
+    // A phrase the author already gave this entry is refused, naming the entry.
+    await page.keyboard.type("komma");
+    await page.keyboard.press("Enter");
+    await expect(comma.getByText("komma", { exact: true })).toBeVisible();
+    await page.keyboard.type("komma");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("alert")).toHaveText("komma is already used by comma.");
+
+    // A phrase the language already answers to is refused too.
+    await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.type("period");
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("alert")).toHaveText(
-      "period is already a Spoken punctuation phrase."
-    );
+    await expect(page.getByRole("alert")).toHaveText("period is already used by period.");
     // The refused text stays in the field for editing.
     await expect(field).toHaveValue("period");
 
+    // A phrase that starts with the escape word is refused too.
     await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.type("literal comma");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("alert")).toHaveText(
       "literal comma starts with the escape word, literal."
     );
-    // Nothing was stored: the phrase list still holds only the default.
+    // Nothing more was stored: the phrase list holds the default and "komma".
     await expect(comma.getByText("literal comma", { exact: true })).toHaveCount(0);
   });
 

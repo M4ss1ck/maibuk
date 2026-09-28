@@ -1,9 +1,6 @@
 // Wires the Dictation Session to this build's platform ports, once.
 import { MODEL_CATALOG } from "@/features/dictation/catalog";
-import {
-  createModelStore,
-  type ModelStore,
-} from "@/features/dictation/model-store";
+import { createModelStore, type ModelStore } from "@/features/dictation/model-store";
 import { createRouter } from "@/features/dictation/router";
 import { buildPhraseTable, interpret, type PhraseTable } from "@/features/dictation/interpreter";
 import { catalogCapabilities } from "@/features/dictation/spoken-punctuation";
@@ -22,15 +19,8 @@ import {
   type RecognizerHost,
 } from "@/features/dictation/types";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
-import {
-  createRecognizerHost,
-  dictationPlatform,
-  getModelFiles,
-} from "@/lib/platform";
-import {
-  createUnsupportedHost,
-  unsupportedModelFiles,
-} from "@/lib/platform/unsupported-dictation";
+import { createRecognizerHost, dictationPlatform, getModelFiles } from "@/lib/platform";
+import { createUnsupportedHost, unsupportedModelFiles } from "@/lib/platform/unsupported-dictation";
 
 export interface DictationRuntime {
   session: DictationSession;
@@ -64,9 +54,7 @@ export function resetDictationForTests(): void {
 
 async function build(): Promise<DictationRuntime> {
   const platform = dictationPlatform();
-  const host = platform
-    ? await createRecognizerHost()
-    : createUnsupportedHost("platform");
+  const host = platform ? await createRecognizerHost() : createUnsupportedHost("platform");
   const files = platform ? await getModelFiles() : unsupportedModelFiles;
   const models = createModelStore({
     files,
@@ -125,9 +113,7 @@ async function build(): Promise<DictationRuntime> {
     stats,
     isEnabled: () => useDictationStore.getState().enabled,
   });
-  session.subscribe(() =>
-    useDictationStore.setState({ snapshot: session.getSnapshot() }),
-  );
+  session.subscribe(() => useDictationStore.setState({ snapshot: session.getSnapshot() }));
 
   const refreshInstalled = async () => {
     useDictationStore.setState({
@@ -167,7 +153,7 @@ async function build(): Promise<DictationRuntime> {
       try {
         progress(
           0,
-          spec.files.reduce((sum, f) => sum + f.bytes, 0),
+          spec.files.reduce((sum, f) => sum + f.bytes, 0)
         );
         await models.install(spec, progress, controller.signal);
       } catch (error) {
