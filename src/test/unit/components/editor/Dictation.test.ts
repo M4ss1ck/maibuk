@@ -70,7 +70,7 @@ describe("Dictation extension", () => {
     editor.on("update", onUpdate);
     const before = editor.getJSON();
     targets[0].showPartial("mundo");
-    expect(dictationPluginKey.getState(editor.state)).toBe("mundo");
+    expect(dictationPluginKey.getState(editor.state)?.partial).toBe("mundo");
     expect(editor.view.dom.querySelector(".dictation-partial")?.textContent).toBe(" mundo");
     expect(editor.getJSON()).toEqual(before);
     expect(undoDepth(editor.state)).toBe(0);
@@ -83,7 +83,7 @@ describe("Dictation extension", () => {
     targets[0].showPartial("mundo");
     targets[0].apply([{ kind: "text", text: "mundo" }]);
     expect(editor.getText()).toBe("Hola mundo");
-    expect(dictationPluginKey.getState(editor.state)).toBe("");
+    expect(dictationPluginKey.getState(editor.state)?.partial).toBe("");
     undo(editor.state, editor.view.dispatch);
     expect(editor.getText()).toBe("Hola");
     editor.destroy();
@@ -173,7 +173,7 @@ describe("Dictation extension", () => {
     // The partial never entered the document, so typing could not displace it...
     expect(editor.getText()).toBe("Hola y");
     // ...and it stays visible, now after the typed text at the caret.
-    expect(dictationPluginKey.getState(editor.state)).toBe("mun");
+    expect(dictationPluginKey.getState(editor.state)?.partial).toBe("mun");
     const plugin = dictationPluginKey.get(editor.state)!;
     const decorations = plugin.props.decorations!.call(plugin, editor.state);
     const [widget] = (decorations as DecorationSet).find();
@@ -182,7 +182,7 @@ describe("Dictation extension", () => {
     editor.commands.insertContent(" o");
     targets[0].apply([{ kind: "text", text: "mundo" }]);
     expect(editor.getText()).toBe("Hola y o mundo");
-    expect(dictationPluginKey.getState(editor.state)).toBe("");
+    expect(dictationPluginKey.getState(editor.state)?.partial).toBe("");
     editor.destroy();
   });
 

@@ -5,13 +5,72 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { liftTarget } from "@tiptap/pm/transform";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
-import type { DictationTarget } from "@/features/dictation/session";
+import type { DictationTarget, ScratchOutcome } from "@/features/dictation/session";
 import type { DictationEdit } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
 import { normalizeLanguage } from "@/features/settings/types";
 
-/** Plugin state: the in-progress spoken line, "" when none. Never document content. */
-export const dictationPluginKey = new PluginKey<string>("dictation");
+/** One dictated sentence: its range in the document and the exact text there. */
+export interface DictatedRange {
+  from: number;
+  to: number;
+  text: string;
+  /**
+   * Set when a non-dictation transaction changed the text inside the range.
+   * A dirty entry is never merged over and never scratched: when unsure,
+   * refuse. Only a dictation commit creates clean entries.
+   */
+  dirty: boolean;
+  /**
+   * The finished lines the entry was dictated in, oldest first. An entry
+   * without a sentence end scratches back to its lines one at a time.
+   */
+  lines: { from: number; to: number }[];
+}
+
+/** Plugin state: the in-progress line plus the dictated history for scratch that. */
+export interface DictationPluginState {
+  /** The in-progress spoken line, "" when none. Never document content. */
+  partial: string;
+  /** Last dictated sentences, oldest first, capped at MAX_DICTATED_SENTENCES. */
+  history: DictatedRange[];
+}
+
+/** Scratch that reaches back this many dictated sentences. */
+export const MAX_DICTATED_SENTENCES = 10;
+
+/** Plugin state for scratch that. Ranges map through every transaction. */
+export const dictationPluginKey = new PluginKey<DictationPluginState>("dictation");
+
+type DictationMeta =
+  | string
+  | {
+      partial?: string;
+      added?: DictatedRange[];
+      scratch?: true;
+      reset?: true;
+      /** This commit inserted an auto `¿`/`¡` opener (possibly at last.from). */
+      openersInserted?: boolean;
+    }
+  | undefined;
+
+const INITIAL_PLUGIN_STATE: DictationPluginState = { partial: "", history: [] };
+
+function sameHistory(a: readonly DictatedRange[], b: readonly DictatedRange[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (
+      a[i].from !== b[i].from ||
+      a[i].to !== b[i].to ||
+      a[i].text !== b[i].text ||
+      a[i].dirty !== b[i].dirty ||
+      a[i].lines.length !== b[i].lines.length ||
+      a[i].lines.some((l, j) => l.from !== b[i].lines[j].from || l.to !== b[i].lines[j].to)
+    )
+      return false;
+  }
+  return true;
+}
 
 // No space after whitespace or an opening mark (¿ ¡ « “ ( [ { — –).
 const NO_SPACE_AFTER = /[\s([{"'“‘«¿¡—–-]/;
@@ -52,10 +111,256 @@ function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
   return sliceStart + findSentenceStartOffset(text);
 }
 
+function isSentenceEndMark(ch: string): boolean {
+  return ch === "." || ch === "?" || ch === "!";
+}
+
+/** Closing marks a sentence end takes with it: `hola.»` is one sentence. */
+const SENTENCE_CLOSERS = new Set(['»', '”', '’', '"', "'", ")", "]", "}"]);
+
+/**
+ * Whether the block text before `pos` ends a sentence: trailing spaces and
+ * closing marks are skipped, then `.?!`, a hard break, or the block start
+ * counts as a boundary. Only the tail is read, so long Chapters stay cheap.
+ */
+function blockTextEndsSentence(
+  doc: ProseMirrorNode,
+  blockStart: number,
+  pos: number
+): boolean {
+  if (pos <= blockStart) return true;
+  const text = doc.textBetween(Math.max(blockStart, pos - 8), pos, "\n", "\n");
+  let end = text.length;
+  for (;;) {
+    while (end > 0 && (text[end - 1] === " " || text[end - 1] === "\t")) end -= 1;
+    if (end > 0 && SENTENCE_CLOSERS.has(text[end - 1])) {
+      end -= 1;
+      continue;
+    }
+    break;
+  }
+  if (end === 0) return true;
+  const ch = text[end - 1];
+  return ch === "." || ch === "?" || ch === "!" || ch === "\n";
+}
+
+/**
+ * Split one textblock slice into dictated sentences. Shares the interpreter's
+ * boundary rule (`.`, `?`, `!`, hard breaks); paragraph breaks are handled by
+ * splitting per block. A hard break belongs to the sentence after it, so
+ * scratching that sentence removes the break too. Spaces after a mark belong
+ * to the next sentence, so scratching leaves no trailing space.
+ */
+function splitSliceIntoSentences(sliceText: string): { start: number; end: number }[] {
+  const bounds: { start: number; end: number }[] = [];
+  let start = 0;
+  let i = 0;
+  while (i < sliceText.length) {
+    const ch = sliceText[i];
+    if (isSentenceEndMark(ch)) {
+      let j = i + 1;
+      while (j < sliceText.length && isSentenceEndMark(sliceText[j])) j += 1;
+      while (j < sliceText.length && SENTENCE_CLOSERS.has(sliceText[j])) j += 1;
+      bounds.push({ start, end: j });
+      start = j;
+      i = j;
+    } else if (ch === "\n") {
+      if (i > start) bounds.push({ start, end: i });
+      let j = i + 1;
+      while (j < sliceText.length && sliceText[j] === "\n") j += 1;
+      start = i;
+      i = j;
+    } else {
+      i += 1;
+    }
+  }
+  if (start < sliceText.length) bounds.push({ start, end: sliceText.length });
+  return bounds.filter(({ start: s, end: e }) => {
+    const text = sliceText.slice(s, e);
+    return /[^\s]/.test(text) || text.includes("\n");
+  });
+}
+
+/**
+ * Merge a commit's pieces into the still-open dictated sentence. Choice (b):
+ * a piece that continues a sentence mid-sentence always joins the last entry
+ * into one open entry that tracks its lines (one per finished line); a later
+ * commit can still end that sentence, and the entry counts as one toward
+ * `MAX_DICTATED_SENTENCES` however many lines it holds. `scratchDictation`
+ * splits an entry without a sentence end back into its lines, so unfinished
+ * lines keep scratching line by line (AC 4). Merging needs: the piece does
+ * not start at a sentence boundary, the last entry is a clean sentence
+ * fragment in the same block (never a complete sentence, never dirty),
+ * adjacency with only whitespace between. Merging never reaches back over
+ * typed text (which has no entry) or an author edit (which is dirty).
+ */
+function mergeIntoOpenSentence(
+  doc: ProseMirrorNode,
+  history: readonly DictatedRange[],
+  added: readonly DictatedRange[],
+  openersInserted: boolean
+): { consumed: 0 | 1; pieces: DictatedRange[] } {
+  const keep = { consumed: 0 as const, pieces: [...added] };
+  if (added.length === 0 || history.length === 0) return keep;
+  const first = added[0];
+  const last = history[history.length - 1];
+  if (last.dirty || last.from >= last.to) return keep;
+  // Never cross a complete sentence: one scratch removes one sentence.
+  if (/[.!?]/.test(last.text)) return keep;
+  let blockStart: number;
+  try {
+    blockStart = doc.resolve(first.from).start();
+  } catch {
+    return keep;
+  }
+  if (blockTextEndsSentence(doc, blockStart, first.from)) return keep;
+  let lastBlockStart: number;
+  try {
+    lastBlockStart = doc.resolve(last.from).start();
+  } catch {
+    return keep;
+  }
+  if (lastBlockStart !== blockStart) return keep;
+  if (last.to > first.from) return keep;
+  if (!/^[ \t]*$/.test(doc.textBetween(last.to, first.from, "\n", "\n"))) return keep;
+  let from = last.from;
+  if (openersInserted && from > blockStart) {
+    // Assoc +1 maps `from` past an opener this commit inserted exactly there;
+    // pull it back in so one scratch removes the whole sentence. The
+    // skip-if-present rule means a leading opener here is this commit's own.
+    const opener = doc.textBetween(from - 1, from, "\n", "\n");
+    if (opener === "¿" || opener === "¡") from = from - 1;
+  }
+  const lastLines =
+    last.lines.length > 0 ? last.lines : [{ from: last.from, to: last.to }];
+  return {
+    consumed: 1,
+    pieces: [
+      {
+        from,
+        to: first.to,
+        text: doc.textBetween(from, first.to, "\n", "\n"),
+        dirty: false,
+        lines: [...lastLines, { from: first.from, to: first.to }],
+      },
+      ...added.slice(1),
+    ],
+  };
+}
+
+/**
+ * Sentences inserted by one dictation commit, in document order. The span is
+ * the caret's mapped start to its new position; per-block splitting keeps the
+ * offset-to-position mapping exact (one char per position inside a textblock).
+ * A sentence begun by hand contributes only its dictated tail, since the span
+ * starts at the caret. With no sentence ends the slice is one entry, so
+ * scratch falls back to removing the last dictated line.
+ */
+export function extractDictatedSentences(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number
+): DictatedRange[] {
+  const size = doc.content.size;
+  const clampedFrom = Math.max(0, Math.min(from, size));
+  const clampedTo = Math.max(0, Math.min(to, size));
+  if (clampedFrom >= clampedTo) return [];
+  const out: DictatedRange[] = [];
+  doc.nodesBetween(clampedFrom, clampedTo, (node, pos) => {
+    if (!node.isTextblock) return true;
+    const blockFrom = Math.max(clampedFrom, pos + 1);
+    const blockTo = Math.min(clampedTo, pos + node.nodeSize - 1);
+    if (blockFrom >= blockTo) return false;
+    const sliceText = doc.textBetween(blockFrom, blockTo, "\n", "\n");
+    if (sliceText.length !== blockTo - blockFrom) {
+      out.push({ from: blockFrom, to: blockTo, text: sliceText, dirty: false, lines: [{ from: blockFrom, to: blockTo }] });
+      return false;
+    }
+    let splitFallback = false;
+    for (const { start, end } of splitSliceIntoSentences(sliceText)) {
+      const rFrom = blockFrom + start;
+      const rTo = blockFrom + end;
+      const text = sliceText.slice(start, end);
+      if (doc.textBetween(rFrom, rTo, "\n", "\n") !== text) {
+        splitFallback = true;
+        break;
+      }
+      out.push({ from: rFrom, to: rTo, text, dirty: false, lines: [{ from: rFrom, to: rTo }] });
+    }
+    if (splitFallback) {
+      out.push({ from: blockFrom, to: blockTo, text: sliceText, dirty: false, lines: [{ from: blockFrom, to: blockTo }] });
+    }
+    return false;
+  });
+  return out;
+}
+
+/** Remove the last dictated sentence as one undo step. Never touches typed text. */
+export function scratchDictation(editor: Editor): ScratchOutcome {
+  const pluginState = dictationPluginKey.getState(editor.state);
+  const history = pluginState?.history ?? [];
+  if (history.length === 0) return "empty";
+  const last = history[history.length - 1];
+  const doc = editor.state.doc;
+  if (last.from < 0 || last.to > doc.content.size || last.from >= last.to) return "refused";
+  if (last.dirty || doc.textBetween(last.from, last.to, "\n", "\n") !== last.text)
+    return "refused";
+  // An entry without a sentence end is an unfinished sentence: remove only
+  // its last dictated line and keep the rest as the new last entry.
+  if (!/[.!?]/.test(last.text)) {
+    const lines = last.lines.filter(
+      (line) => line.from < line.to && line.from >= last.from && line.to <= last.to
+    );
+    const line = lines[lines.length - 1] ?? { from: last.from, to: last.to };
+    const from = Math.max(line.from, last.from);
+    const to = Math.min(line.to, last.to);
+    if (from >= to) return "refused";
+    const rest = lines.slice(0, -1);
+    const tr = closeHistory(editor.state.tr);
+    tr.delete(from, to);
+    if (rest.length === 0 || from <= last.from) {
+      tr.setMeta(dictationPluginKey, { partial: "", scratch: true });
+    } else {
+      tr.setMeta(dictationPluginKey, {
+        partial: "",
+        scratch: true,
+        added: [
+          {
+            from: last.from,
+            to: from,
+            text: tr.doc.textBetween(last.from, from, "\n", "\n"),
+            dirty: false,
+            lines: rest,
+          },
+        ],
+      });
+    }
+    editor.view.dispatch(tr);
+    return "removed";
+  }
+  const tr = closeHistory(editor.state.tr);
+  tr.delete(last.from, last.to);
+  tr.setMeta(dictationPluginKey, { partial: "", scratch: true });
+  editor.view.dispatch(tr);
+  return "removed";
+}
+
+/** Drop the dictated history so scratch never reaches into another editor. */
+export function resetDictationHistory(editor: Editor): void {
+  if (editor.isDestroyed) return;
+  editor.view.dispatch(
+    editor.state.tr
+      .setMeta(dictationPluginKey, { partial: "", reset: true })
+      .setMeta("addToHistory", false)
+  );
+}
+
 /** Apply a finished line in one transaction and one undo step. */
 export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): void {
   if (edits.length === 0) return;
   const { state } = editor;
+  const startPos = state.selection.from;
+  let openersInserted = false;
   const tr = closeHistory(state.tr);
   for (const edit of edits) {
     if (edit.kind === "paragraph") {
@@ -125,6 +430,7 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
       const existing = tr.doc.textBetween(at, Math.min(at + 1, tr.doc.content.size), "\n", "\n");
       if (existing !== edit.mark) {
         tr.insertText(edit.mark, at);
+        openersInserted = true;
         // A sentence that starts here starts with a capital (Spanish openers).
         // The word was already emitted in lowercase when it continued the
         // previous sentence before the hard break; fix it now that the opener
@@ -148,7 +454,12 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
       tr.insertText(spaced, from, to);
     }
   }
-  tr.setMeta(dictationPluginKey, "");
+  const endPos = tr.selection.from;
+  // Map the caret with assoc -1 so it stays before the inserted text
+  // (the default assoc 1 lands after it, leaving an empty span).
+  const mappedStart = tr.mapping.map(startPos, -1);
+  const added = extractDictatedSentences(tr.doc, mappedStart, endPos);
+  tr.setMeta(dictationPluginKey, { partial: "", added, openersInserted });
   editor.view.dispatch(tr);
 }
 
@@ -166,18 +477,91 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
 
   addProseMirrorPlugins() {
     return [
-      new Plugin<string>({
+      new Plugin<DictationPluginState>({
         key: dictationPluginKey,
         state: {
-          init: () => "",
-          apply: (tr, value) => {
-            const meta = tr.getMeta(dictationPluginKey);
-            return typeof meta === "string" ? meta : value;
+          init: () => ({ ...INITIAL_PLUGIN_STATE, history: [] }),
+          apply: (tr, prev) => {
+            const meta = tr.getMeta(dictationPluginKey) as DictationMeta;
+            const isDictation =
+              !!meta &&
+              typeof meta === "object" &&
+              (Array.isArray(meta.added) || meta.scratch === true);
+            let history = prev.history;
+            if (tr.docChanged) {
+              history = history.map((entry) => {
+                // Insertions at the edges stay outside the entry, so text
+                // typed right before or after it never gets absorbed.
+                const from = tr.mapping.map(entry.from, 1);
+                const to = tr.mapping.map(entry.to, -1);
+                const lines = entry.lines
+                  .map((line) => ({
+                    from: tr.mapping.map(line.from, 1),
+                    to: tr.mapping.map(line.to, -1),
+                  }))
+                  .filter((line) => line.from < line.to && line.from >= from && line.to <= to);
+                const mapped: DictatedRange = {
+                  from,
+                  to,
+                  text: entry.text,
+                  dirty: entry.dirty,
+                  lines: lines.length > 0 || from >= to ? lines : [{ from, to }],
+                };
+                if (
+                  !isDictation &&
+                  !mapped.dirty &&
+                  mapped.from < mapped.to &&
+                  tr.doc.textBetween(mapped.from, mapped.to, "\n", "\n") !== mapped.text
+                ) {
+                  // A non-dictation change rewrote the entry's text: mark it
+                  // dirty so merging never heals it and scratch refuses it.
+                  return { ...mapped, dirty: true };
+                }
+                return mapped;
+              });
+            }
+            let partial = prev.partial;
+            if (typeof meta === "string") {
+              partial = meta;
+            } else if (meta && typeof meta === "object") {
+              if (typeof meta.partial === "string") partial = meta.partial;
+              if (meta.reset === true) {
+                history = [];
+              } else {
+                if (meta.scratch === true && history.length > 0) {
+                  // Pop before pruning: the just-deleted entry is still
+                  // last (collapsed), and pruning first would eat a live one.
+                  history = history.slice(0, -1);
+                }
+                if (tr.docChanged) {
+                  // An undone or deleted entry collapses; drop it so it can
+                  // never block scratching an earlier sentence.
+                  history = history.filter((entry) => entry.from < entry.to);
+                }
+                if (Array.isArray(meta.added) && meta.added.length > 0) {
+                  const { consumed, pieces } = mergeIntoOpenSentence(
+                    tr.doc,
+                    history,
+                    meta.added,
+                    meta.openersInserted === true
+                  );
+                  history = [
+                    ...history.slice(0, history.length - consumed),
+                    ...pieces,
+                  ].slice(-MAX_DICTATED_SENTENCES);
+                }
+              }
+            } else if (tr.docChanged) {
+              history = history.filter((entry) => entry.from < entry.to);
+            }
+            if (partial === prev.partial && sameHistory(history, prev.history)) return prev;
+            return { partial, history };
           },
         },
         props: {
           decorations(state) {
-            const text = dictationPluginKey.getState(state);
+            const pluginState = dictationPluginKey.getState(state);
+            const text = pluginState?.partial ?? "";
             if (!text) return null;
             const pos = state.selection.to;
             const shown = (needsSpaceBefore(state.doc, pos) ? " " : "") + text;
@@ -223,13 +607,22 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
       showPartial: (text) => {
         if (editor.isDestroyed) return;
         editor.view.dispatch(
-          editor.state.tr.setMeta(dictationPluginKey, text).setMeta("addToHistory", false)
+          editor.state.tr
+            .setMeta(dictationPluginKey, { partial: text })
+            .setMeta("addToHistory", false)
         );
       },
       before: () => textBeforeCaret(editor),
       apply: (edits) => {
         if (editor.isDestroyed || !editor.isEditable) return;
         applyDictationEdits(editor, edits);
+      },
+      scratch: () => {
+        if (editor.isDestroyed || !editor.isEditable) return "empty";
+        return scratchDictation(editor);
+      },
+      resetScratch: () => {
+        resetDictationHistory(editor);
       },
     };
     this.storage.unregister = dictationHub.register(target);

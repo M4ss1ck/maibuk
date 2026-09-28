@@ -103,6 +103,7 @@ async function build(): Promise<DictationRuntime> {
         state: interpreterState,
       });
       interpreterState = output.state;
+      if (output.result.kind === "scratch") return { kind: "scratch" };
       return { ...output.result, spokenPunctuationCount: output.spokenPunctuationCount };
     }),
     // Voice Commands (Anticipated) dispatch registry Commands here; v1's router never asks.

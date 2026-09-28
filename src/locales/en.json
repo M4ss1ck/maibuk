@@ -1719,6 +1719,8 @@
     "announceStarted": "Dictation on, {{language}}",
     "announceStopped": "Dictation off",
     "announceLanguage": "Dictation language: {{language}}",
+    "scratchRefused": "Nothing removed. Scratch that only removes text that hasn't been edited.",
+    "scratchEmpty": "Nothing to remove.",
     "languages": { "en": "English", "es": "Spanish" },
     "languageNames": { "en": "English", "es": "Spanish" },
     "errors": {
@@ -1755,7 +1757,7 @@
       "progress": "{{done}} of {{total}} MB",
       "size": "{{size}} MB",
       "recent": "Recent lines: {{lines}}, typical delay {{ms}} ms",
-      "interpreter": "Interpreter: typical delay {{median}} ms, worst delay {{max}} ms, spoken punctuation {{count}}",
+      "interpreter": "Interpreter: typical delay {{median}} ms, worst delay {{max}} ms, spoken punctuation {{count}}, scratch that {{scratch}}",
       "noPunctuation": "Adds no punctuation or capitals.",
       "device": "Microphone: {{device}}"
     }

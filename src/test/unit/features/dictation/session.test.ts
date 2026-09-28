@@ -398,6 +398,104 @@ describe("Dictation Session", () => {
     expect(target.commits).toEqual([]);
   });
 
+  it("runs scratch on the active target and announces a refusal", async () => {
+    const stats = createLineStats();
+    const scratch = vi.fn(() => "refused" as const);
+    const target = { ...fakeTarget("a"), scratch };
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "scratch" })),
+      runCommand: vi.fn(),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "borra eso" });
+    expect(scratch).toHaveBeenCalledTimes(1);
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({ kind: "scratch_refused" });
+    expect(stats.summary().scratchCount).toBe(1);
+  });
+
+  it("counts a removed scratch without notifying", async () => {
+    const stats = createLineStats();
+    const scratch = vi.fn(() => "removed" as const);
+    const target = { ...fakeTarget("a"), scratch };
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "scratch" })),
+      runCommand: vi.fn(),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "borra eso" });
+    expect(stats.summary().scratchCount).toBe(1);
+    expect(notices).not.toContainEqual({ kind: "scratch_refused" });
+  });
+
+  it("announces an empty scratch without touching the editor", async () => {
+    const stats = createLineStats();
+    const scratch = vi.fn(() => "empty" as const);
+    const target = { ...fakeTarget("a"), scratch };
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "scratch" })),
+      runCommand: vi.fn(),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "borra eso" });
+    expect(scratch).toHaveBeenCalledTimes(1);
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({ kind: "scratch_empty" });
+    expect(stats.summary().scratchCount).toBe(1);
+  });
+
+  it("announces an empty scratch when the target cannot scratch", async () => {
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "scratch" })),
+      runCommand: vi.fn(),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats: createLineStats(),
+    });
+    session.register(fakeTarget("a"));
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "borra eso" });
+    expect(notices).toContainEqual({ kind: "scratch_empty" });
+  });
+
+  it("resets the previous target's history when focus moves editors", async () => {
+    const resetA = vi.fn();
+    const resetB = vi.fn();
+    const session = makeSession();
+    session.register({ ...fakeTarget("a"), resetScratch: resetA });
+    session.register({ ...fakeTarget("b"), resetScratch: resetB });
+    session.focus("a");
+    session.focus("b");
+    expect(resetA).toHaveBeenCalledTimes(1);
+    expect(resetB).not.toHaveBeenCalled();
+    session.focus("b");
+    expect(resetA).toHaveBeenCalledTimes(1);
+  });
+
   it("level events update the snapshot and notify subscribers", async () => {
     const session = makeSession();
     const listener = vi.fn();

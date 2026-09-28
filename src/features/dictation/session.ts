@@ -13,6 +13,9 @@ import {
   type RecognizerHost,
 } from "@/features/dictation/types";
 
+/** What a scratch request did on its target. `refused` means the author edited inside the dictated text. */
+export type ScratchOutcome = "removed" | "refused" | "empty";
+
 export interface DictationTarget {
   id: string;
   language(): DictationLanguage;
@@ -22,6 +25,10 @@ export interface DictationTarget {
   before(): string;
   /** Applies one finished line as one undo step. */
   apply(edits: DictationEdit[]): void;
+  /** Removes the last dictated sentence as one undo step. Absent targets ignore scratch. */
+  scratch?(): ScratchOutcome;
+  /** Drops the dictated history so scratch never reaches into another editor. Absent targets keep no history. */
+  resetScratch?(): void;
 }
 
 export type SessionStatus = "idle" | "loading" | "listening" | "stopping";
@@ -32,7 +39,11 @@ export type SessionNotice =
   | { kind: "error"; code: DictationErrorCode; language?: DictationLanguage }
   | { kind: "orphan_copied" }
   // The clipboard refused (unfocused window, no permission): the UI shows the phrase instead.
-  | { kind: "orphan_lost"; text: string };
+  | { kind: "orphan_lost"; text: string }
+  // Scratch that found edited dictated text: nothing removed, the live region says so.
+  | { kind: "scratch_refused" }
+  // Scratch that had nothing to remove: the live region says so.
+  | { kind: "scratch_empty" };
 
 export interface SessionSnapshot {
   status: SessionStatus;
@@ -140,13 +151,19 @@ export function createDictationSession(deps: {
         const result = deps.route(event.text, target?.before() ?? "");
         deps.stats.recordInterpreter(
           performance.now() - startedAt,
-          result.kind === "edits" ? (result.spokenPunctuationCount ?? 0) : 0
+          result.kind === "edits" ? (result.spokenPunctuationCount ?? 0) : 0,
+          result.kind === "scratch" ? 1 : 0
         );
         if (result.kind === "voice_command") {
           deps.runCommand(result.id);
           return;
         }
-        if (result.kind === "scratch") return;
+        if (result.kind === "scratch") {
+          const outcome = target?.scratch?.() ?? "empty";
+          if (outcome === "refused") deps.notify({ kind: "scratch_refused" });
+          else if (outcome === "empty") deps.notify({ kind: "scratch_empty" });
+          return;
+        }
         if (target) target.apply(result.edits);
         else {
           const text = editsToOrphanText(result.edits);
@@ -270,9 +287,13 @@ export function createDictationSession(deps: {
       const index = focusOrder.indexOf(targetId);
       if (index >= 0) focusOrder.splice(index, 1);
       focusOrder.push(targetId);
-      if (previous && previous.id !== targetId && partial) {
-        previous.showPartial("");
-        targets.get(targetId)?.showPartial(partial);
+      if (previous && previous.id !== targetId) {
+        // Scratch history never reaches into another editor.
+        previous.resetScratch?.();
+        if (partial) {
+          previous.showPartial("");
+          targets.get(targetId)?.showPartial(partial);
+        }
       }
     },
     async toggle() {
