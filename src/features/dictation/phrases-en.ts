@@ -1,36 +1,73 @@
-// Default English recognizer phrases. These are Dictation Language data, not UI copy.
-import type { PhraseDefinition } from "@/features/dictation/interpreter";
+// Default English Spoken Punctuation entries. These are Dictation Language
+// data, not UI copy: the words are what the model hears and what the author
+// can switch off or extend in Settings → Dictation.
+import type { SpokenPunctuationEntry } from "@/features/dictation/spoken-punctuation";
 
-export const EN_PHRASES: readonly PhraseDefinition[] = [
-  { phrase: "comma", entry: { actions: [{ kind: "mark", mark: "," }], punctuation: true } },
-  { phrase: "period", entry: { actions: [{ kind: "mark", mark: "." }], punctuation: true } },
+export const EN_ENTRIES: readonly SpokenPunctuationEntry[] = [
+  { id: "comma", phrases: ["comma"], actions: [{ kind: "mark", mark: "," }], punctuation: true },
+  { id: "period", phrases: ["period"], actions: [{ kind: "mark", mark: "." }], punctuation: true },
   {
-    phrase: "question mark",
-    entry: { actions: [{ kind: "mark", mark: "?" }], punctuation: true },
+    id: "questionMark",
+    phrases: ["question mark"],
+    actions: [{ kind: "mark", mark: "?" }],
+    punctuation: true,
   },
   {
-    phrase: "exclamation mark",
-    entry: { actions: [{ kind: "mark", mark: "!" }], punctuation: true },
+    id: "exclamationMark",
+    phrases: ["exclamation mark", "exclamation point"],
+    actions: [{ kind: "mark", mark: "!" }],
+    punctuation: true,
+  },
+  { id: "colon", phrases: ["colon"], actions: [{ kind: "mark", mark: ":" }], punctuation: true },
+  {
+    id: "semicolon",
+    phrases: ["semicolon"],
+    actions: [{ kind: "mark", mark: ";" }],
+    punctuation: true,
   },
   {
-    phrase: "exclamation point",
-    entry: { actions: [{ kind: "mark", mark: "!" }], punctuation: true },
-  },
-  { phrase: "colon", entry: { actions: [{ kind: "mark", mark: ":" }], punctuation: true } },
-  { phrase: "semicolon", entry: { actions: [{ kind: "mark", mark: ";" }], punctuation: true } },
-  { phrase: "new paragraph", entry: { actions: [{ kind: "paragraph" }], punctuation: false } },
-  { phrase: "new line", entry: { actions: [{ kind: "line_break" }], punctuation: false } },
-  { phrase: "new item", entry: { actions: [{ kind: "list_item" }], punctuation: false } },
-  { phrase: "open quote", entry: { actions: [{ kind: "mark", mark: "“" }], punctuation: true } },
-  { phrase: "close quote", entry: { actions: [{ kind: "mark", mark: "”" }], punctuation: true } },
-  {
-    phrase: "open parenthesis",
-    entry: { actions: [{ kind: "mark", mark: "(" }], punctuation: true },
+    id: "openQuote",
+    phrases: ["open quote"],
+    actions: [{ kind: "mark", mark: "“" }],
+    punctuation: true,
   },
   {
-    phrase: "close parenthesis",
-    entry: { actions: [{ kind: "mark", mark: ")" }], punctuation: true },
+    id: "closeQuote",
+    phrases: ["close quote"],
+    actions: [{ kind: "mark", mark: "”" }],
+    punctuation: true,
   },
-  { phrase: "capitalize", entry: { actions: [{ kind: "cap" }], punctuation: false } },
-  { phrase: "literal", entry: { actions: [{ kind: "literal" }], punctuation: false } },
+  {
+    id: "openParenthesis",
+    phrases: ["open parenthesis"],
+    actions: [{ kind: "mark", mark: "(" }],
+    punctuation: true,
+  },
+  {
+    id: "closeParenthesis",
+    phrases: ["close parenthesis"],
+    actions: [{ kind: "mark", mark: ")" }],
+    punctuation: true,
+  },
+  {
+    id: "newParagraph",
+    phrases: ["new paragraph"],
+    actions: [{ kind: "paragraph" }],
+    punctuation: false,
+  },
+  { id: "newLine", phrases: ["new line"], actions: [{ kind: "line_break" }], punctuation: false },
+  { id: "newItem", phrases: ["new item"], actions: [{ kind: "list_item" }], punctuation: false },
+  {
+    id: "capitalize",
+    phrases: ["capitalize"],
+    actions: [{ kind: "cap" }],
+    punctuation: false,
+  },
+  { id: "literal", phrases: ["literal"], actions: [{ kind: "literal" }], punctuation: false },
+  {
+    id: "scratchThat",
+    phrases: ["scratch that"],
+    actions: [{ kind: "scratch" }],
+    punctuation: false,
+  },
 ];

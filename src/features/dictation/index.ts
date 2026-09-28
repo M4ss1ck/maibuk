@@ -23,12 +23,27 @@ export {
   buildPhraseTable,
   interpret,
   isScratchLine,
-  normalizePhrase,
   INITIAL_INTERPRETER_STATE,
-  SCRATCH_PHRASES,
   type InterpreterState,
   type PhraseTable,
+  type PhraseTableOptions,
+  type TokenTrieNode,
 } from "@/features/dictation/interpreter";
+export { normalizePhrase } from "@/features/dictation/normalize";
+export {
+  catalogCapabilities,
+  defaultEntryEnabled,
+  defaultSpokenPunctuationSettings,
+  entriesFor,
+  findAliasRefusal,
+  isEntryEnabled,
+  normalizeSpokenPunctuationSettings,
+  type AliasRefusal,
+  type PhraseAction,
+  type SpokenPunctuationEntry,
+  type SpokenPunctuationLanguageSettings,
+  type SpokenPunctuationSettings,
+} from "@/features/dictation/spoken-punctuation";
 export { pickModel, useDictationStore, type DictationStoreState } from "@/features/dictation/store";
 export {
   getDictation,

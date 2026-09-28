@@ -1,57 +1,112 @@
-// Default Spanish recognizer phrases. These are Dictation Language data, not UI copy.
-import type { PhraseDefinition } from "@/features/dictation/interpreter";
+// Default Spanish Spoken Punctuation entries. These are Dictation Language
+// data, not UI copy: the words are what the model hears and what the author
+// can switch off or extend in Settings → Dictation.
+import type { SpokenPunctuationEntry } from "@/features/dictation/spoken-punctuation";
 
-export const ES_PHRASES: readonly PhraseDefinition[] = [
-  { phrase: "coma", entry: { actions: [{ kind: "mark", mark: "," }], punctuation: true } },
-  { phrase: "punto", entry: { actions: [{ kind: "mark", mark: "." }], punctuation: true } },
-  { phrase: "punto y seguido", entry: { actions: [{ kind: "mark", mark: "." }], punctuation: true } },
+export const ES_ENTRIES: readonly SpokenPunctuationEntry[] = [
+  { id: "coma", phrases: ["coma"], actions: [{ kind: "mark", mark: "," }], punctuation: true },
   {
-    phrase: "punto y aparte",
-    entry: { actions: [{ kind: "mark", mark: "." }, { kind: "paragraph" }], punctuation: true },
-  },
-  { phrase: "dos puntos", entry: { actions: [{ kind: "mark", mark: ":" }], punctuation: true } },
-  { phrase: "punto y coma", entry: { actions: [{ kind: "mark", mark: ";" }], punctuation: true } },
-  {
-    phrase: "puntos suspensivos",
-    entry: { actions: [{ kind: "mark", mark: "…" }], punctuation: true },
+    id: "punto",
+    phrases: ["punto", "punto y seguido"],
+    actions: [{ kind: "mark", mark: "." }],
+    punctuation: true,
   },
   {
-    phrase: "signo de interrogación",
-    entry: { actions: [{ kind: "mark", mark: "?" }], punctuation: true },
+    id: "puntoYAparte",
+    phrases: ["punto y aparte"],
+    actions: [{ kind: "mark", mark: "." }, { kind: "paragraph" }],
+    punctuation: true,
   },
   {
-    phrase: "cierra interrogación",
-    entry: { actions: [{ kind: "mark", mark: "?" }], punctuation: true },
+    id: "dosPuntos",
+    phrases: ["dos puntos"],
+    actions: [{ kind: "mark", mark: ":" }],
+    punctuation: true,
   },
   {
-    phrase: "abre interrogación",
-    entry: { actions: [{ kind: "mark", mark: "¿" }], punctuation: true },
+    id: "puntoYComa",
+    phrases: ["punto y coma"],
+    actions: [{ kind: "mark", mark: ";" }],
+    punctuation: true,
   },
   {
-    phrase: "signo de exclamación",
-    entry: { actions: [{ kind: "mark", mark: "!" }], punctuation: true },
+    id: "puntosSuspensivos",
+    phrases: ["puntos suspensivos"],
+    actions: [{ kind: "mark", mark: "…" }],
+    punctuation: true,
   },
   {
-    phrase: "cierra exclamación",
-    entry: { actions: [{ kind: "mark", mark: "!" }], punctuation: true },
+    id: "signoDeInterrogacion",
+    phrases: ["signo de interrogación", "cierra interrogación"],
+    actions: [{ kind: "mark", mark: "?" }],
+    punctuation: true,
   },
   {
-    phrase: "abre exclamación",
-    entry: { actions: [{ kind: "mark", mark: "¡" }], punctuation: true },
-  },
-  { phrase: "abre comillas", entry: { actions: [{ kind: "mark", mark: "«" }], punctuation: true } },
-  { phrase: "cierra comillas", entry: { actions: [{ kind: "mark", mark: "»" }], punctuation: true } },
-  {
-    phrase: "abre paréntesis",
-    entry: { actions: [{ kind: "mark", mark: "(" }], punctuation: true },
+    id: "abreInterrogacion",
+    phrases: ["abre interrogación"],
+    actions: [{ kind: "mark", mark: "¿" }],
+    punctuation: true,
   },
   {
-    phrase: "cierra paréntesis",
-    entry: { actions: [{ kind: "mark", mark: ")" }], punctuation: true },
+    id: "signoDeExclamacion",
+    phrases: ["signo de exclamación", "cierra exclamación"],
+    actions: [{ kind: "mark", mark: "!" }],
+    punctuation: true,
   },
-  { phrase: "nuevo párrafo", entry: { actions: [{ kind: "paragraph" }], punctuation: false } },
-  { phrase: "nueva línea", entry: { actions: [{ kind: "line_break" }], punctuation: false } },
-  { phrase: "nuevo elemento", entry: { actions: [{ kind: "list_item" }], punctuation: false } },
-  { phrase: "mayúscula", entry: { actions: [{ kind: "cap" }], punctuation: false } },
-  { phrase: "literal", entry: { actions: [{ kind: "literal" }], punctuation: false } },
+  {
+    id: "abreExclamacion",
+    phrases: ["abre exclamación"],
+    actions: [{ kind: "mark", mark: "¡" }],
+    punctuation: true,
+  },
+  {
+    id: "abreComillas",
+    phrases: ["abre comillas"],
+    actions: [{ kind: "mark", mark: "«" }],
+    punctuation: true,
+  },
+  {
+    id: "cierraComillas",
+    phrases: ["cierra comillas"],
+    actions: [{ kind: "mark", mark: "»" }],
+    punctuation: true,
+  },
+  {
+    id: "abreParentesis",
+    phrases: ["abre paréntesis"],
+    actions: [{ kind: "mark", mark: "(" }],
+    punctuation: true,
+  },
+  {
+    id: "cierraParentesis",
+    phrases: ["cierra paréntesis"],
+    actions: [{ kind: "mark", mark: ")" }],
+    punctuation: true,
+  },
+  {
+    id: "nuevoParrafo",
+    phrases: ["nuevo párrafo"],
+    actions: [{ kind: "paragraph" }],
+    punctuation: false,
+  },
+  {
+    id: "nuevaLinea",
+    phrases: ["nueva línea"],
+    actions: [{ kind: "line_break" }],
+    punctuation: false,
+  },
+  {
+    id: "nuevoElemento",
+    phrases: ["nuevo elemento"],
+    actions: [{ kind: "list_item" }],
+    punctuation: false,
+  },
+  { id: "mayuscula", phrases: ["mayúscula"], actions: [{ kind: "cap" }], punctuation: false },
+  { id: "literal", phrases: ["literal"], actions: [{ kind: "literal" }], punctuation: false },
+  {
+    id: "borraEso",
+    phrases: ["borra eso"],
+    actions: [{ kind: "scratch" }],
+    punctuation: false,
+  },
 ];

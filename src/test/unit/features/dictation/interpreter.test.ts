@@ -4,9 +4,10 @@ import {
   buildPhraseTable,
   interpret,
   isScratchLine,
-  normalizePhrase,
   type InterpreterState,
 } from "@/features/dictation/interpreter";
+import { normalizePhrase } from "@/features/dictation/normalize";
+import { defaultSpokenPunctuationLanguageSettings } from "@/features/dictation/spoken-punctuation";
 import type { ModelSpec } from "@/features/dictation/types";
 import en from "@/test/fixtures/dictation/interpreter/en.json";
 import es from "@/test/fixtures/dictation/interpreter/es.json";
@@ -73,19 +74,106 @@ describe("buildPhraseTable()", () => {
     });
     expect(a).toEqual(b);
   });
+
+  it("leaves punctuation entries out where the model punctuates, unless switched on", () => {
+    const punctuating: Capabilities = { casing: true, punctuation: true, streaming: true };
+    const interpretWith = (table: ReturnType<typeof buildPhraseTable>) =>
+      interpret({
+        line: "uno coma dos",
+        before: "",
+        capabilities: punctuating,
+        table,
+        state: INITIAL_INTERPRETER_STATE,
+      });
+    const off = interpretWith(buildPhraseTable("es", { capabilities: punctuating }));
+    expect(off.result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "Uno coma dos" }] });
+
+    const settings = defaultSpokenPunctuationLanguageSettings();
+    settings.entries.coma = true;
+    const on = interpretWith(buildPhraseTable("es", { capabilities: punctuating, settings }));
+    expect(on.result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "Uno, dos" }] });
+  });
+
+  it("drops a switched-off entry and the whole layer with the master switch", () => {
+    const line = "uno coma dos punto nuevo párrafo tres";
+    const capabilities: Capabilities = { casing: false, punctuation: false, streaming: true };
+    const run = (settings: ReturnType<typeof defaultSpokenPunctuationLanguageSettings>) =>
+      interpret({
+        line,
+        before: "",
+        capabilities,
+        table: buildPhraseTable("es", { capabilities, settings }),
+        state: INITIAL_INTERPRETER_STATE,
+      });
+
+    const punctuationOff = defaultSpokenPunctuationLanguageSettings();
+    punctuationOff.entries.coma = false;
+    const entryOff = run(punctuationOff);
+    expect(entryOff.result).toEqual({
+      kind: "edits",
+      edits: [
+        { kind: "text", text: "Uno coma dos." },
+        { kind: "paragraph" },
+        { kind: "text", text: "Tres" },
+      ],
+    });
+
+    const masterOff = defaultSpokenPunctuationLanguageSettings();
+    masterOff.enabled = false;
+    const allOff = run(masterOff);
+    expect(allOff.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Uno coma dos punto nuevo párrafo tres" }],
+    });
+  });
+
+  it("matches an author's alias in place of the default phrasing", () => {
+    const capabilities: Capabilities = { casing: false, punctuation: false, streaming: true };
+    const settings = defaultSpokenPunctuationLanguageSettings();
+    settings.aliases.puntoYAparte = ["punto y la parte"];
+    const result = interpret({
+      line: "uno punto y la parte dos",
+      before: "",
+      capabilities,
+      table: buildPhraseTable("es", { capabilities, settings }),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(result.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Uno." }, { kind: "paragraph" }, { kind: "text", text: "Dos" }],
+    });
+    expect(result.spokenPunctuationCount).toBe(1);
+  });
+
+  it("falls back to the defaults when settings are partial", () => {
+    const capabilities: Capabilities = { casing: false, punctuation: false, streaming: true };
+    const table = buildPhraseTable("es", {
+      capabilities,
+      settings: { enabled: true, entries: {}, aliases: {} },
+    });
+    expect(
+      interpret({
+        line: "uno punto y coma dos",
+        before: "",
+        capabilities,
+        table,
+        state: INITIAL_INTERPRETER_STATE,
+      }).result
+    ).toEqual({ kind: "edits", edits: [{ kind: "text", text: "Uno; dos" }] });
+  });
 });
 
 describe("interpret() fixtures", () => {
   for (const file of fixtures) {
     describe(file.language, () => {
-      const table = buildPhraseTable(file.language);
       for (const fixture of file.cases) {
         it(fixture.name, () => {
+          const capabilities = fixture.capabilities ?? file.capabilities;
           const result = interpret({
             line: fixture.line,
             before: fixture.before,
-            capabilities: fixture.capabilities ?? file.capabilities,
-            table,
+            capabilities,
+            table: buildPhraseTable(file.language, { capabilities }),
             state: fixture.state ?? INITIAL_INTERPRETER_STATE,
           });
           expect(result).toEqual({
@@ -196,22 +284,44 @@ describe("interpret() scratch that", () => {
   const caps: Capabilities = { casing: false, punctuation: false, streaming: true };
 
   it("matches the whole line per language, folding case and model punctuation", () => {
-    expect(isScratchLine("borra eso", "es")).toBe(true);
-    expect(isScratchLine("Borra eso.", "es")).toBe(true);
-    expect(isScratchLine("¡BORRA ESO!", "es")).toBe(true);
-    expect(isScratchLine("scratch that", "en")).toBe(true);
-    expect(isScratchLine("Scratch that.", "en")).toBe(true);
+    expect(isScratchLine("borra eso", esTable)).toBe(true);
+    expect(isScratchLine("Borra eso.", esTable)).toBe(true);
+    expect(isScratchLine("¡BORRA ESO!", esTable)).toBe(true);
+    expect(isScratchLine("scratch that", enTable)).toBe(true);
+    expect(isScratchLine("Scratch that.", enTable)).toBe(true);
   });
 
   it("does not cross languages", () => {
-    expect(isScratchLine("scratch that", "es")).toBe(false);
-    expect(isScratchLine("borra eso", "en")).toBe(false);
+    expect(isScratchLine("scratch that", esTable)).toBe(false);
+    expect(isScratchLine("borra eso", enTable)).toBe(false);
   });
 
   it("never acts inside prose", () => {
-    expect(isScratchLine("dije borra eso alto", "es")).toBe(false);
-    expect(isScratchLine("I said scratch that loudly", "en")).toBe(false);
-    expect(isScratchLine("", "es")).toBe(false);
+    expect(isScratchLine("dije borra eso alto", esTable)).toBe(false);
+    expect(isScratchLine("I said scratch that loudly", enTable)).toBe(false);
+    expect(isScratchLine("", esTable)).toBe(false);
+  });
+
+  it("stops matching when the entry is switched off and takes an alias", () => {
+    const settings = defaultSpokenPunctuationLanguageSettings();
+    const capabilities: Capabilities = { casing: false, punctuation: false, streaming: true };
+    settings.entries.borraEso = false;
+    const offTable = buildPhraseTable("es", { settings, capabilities });
+    expect(isScratchLine("borra eso", offTable)).toBe(false);
+
+    const aliasSettings = defaultSpokenPunctuationLanguageSettings();
+    aliasSettings.aliases.borraEso = ["bórralo"];
+    const aliasTable = buildPhraseTable("es", { settings: aliasSettings, capabilities });
+    expect(isScratchLine("Bórralo.", aliasTable)).toBe(true);
+    expect(
+      interpret({
+        line: "bórralo",
+        before: "hola ",
+        capabilities,
+        table: aliasTable,
+        state: INITIAL_INTERPRETER_STATE,
+      }).result
+    ).toEqual({ kind: "scratch" });
   });
 
   it("returns a scratch result with unchanged state", () => {

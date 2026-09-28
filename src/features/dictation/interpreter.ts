@@ -7,35 +7,35 @@
 // ignores the model's own punctuation; model punctuation adjacent to a matched
 // phrase is dropped so marks never double. Text is then cased and spaced using
 // the bounded text before the caret.
+import { normalizePhrase, tokenize, type Token } from "@/features/dictation/normalize";
 import type { DictationEdit } from "@/features/dictation/router";
+import {
+  entriesFor,
+  isEntryEnabled,
+  type PhraseAction,
+  type SpokenPunctuationEntry,
+  type SpokenPunctuationLanguageSettings,
+} from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
-import { EN_PHRASES } from "@/features/dictation/phrases-en";
-import { ES_PHRASES } from "@/features/dictation/phrases-es";
-
-/** One emitted piece of a phrase: a mark, a layout split, or a next-word modifier. */
-export type PhraseAction =
-  | { kind: "mark"; mark: string }
-  | { kind: "paragraph" }
-  | { kind: "line_break" }
-  | { kind: "list_item" }
-  | { kind: "cap" }
-  | { kind: "literal" };
-
-export interface PhraseEntry {
-  actions: PhraseAction[];
-  /** Spoken Punctuation (marks) is gated by the model; layout phrases are not. */
-  punctuation: boolean;
-}
 
 export interface TokenTrieNode {
   children: Map<string, TokenTrieNode>;
-  match?: PhraseEntry;
+  match?: SpokenPunctuationEntry;
 }
 
 /** A prebuilt token trie for one Dictation Language. Build once, reuse per line. */
 export interface PhraseTable {
   language: DictationLanguage;
   trie: TokenTrieNode;
+  /** Normalized whole-line phrases that remove the last dictated sentence. */
+  scratch: ReadonlySet<string>;
+}
+
+export interface PhraseTableOptions {
+  /** What the author switched off, and the extra phrases they added. */
+  settings?: SpokenPunctuationLanguageSettings;
+  /** What the Dictation Model's text already has; sets the entries' defaults. */
+  capabilities?: ModelSpec["capabilities"];
 }
 
 export interface InterpreterState {
@@ -67,39 +67,17 @@ export interface InterpretResult {
   spokenPunctuationCount: number;
 }
 
-/** Whole-line scratch phrases per Dictation Language (ADR 0014: Spoken Punctuation config, not Commands). */
-export const SCRATCH_PHRASES: Record<DictationLanguage, readonly string[]> = {
-  en: ["scratch that"],
-  es: ["borra eso"],
-};
-
 /** Whole-line match for scratch that: folds case and accents, ignores model punctuation. */
-export function isScratchLine(line: string, language: DictationLanguage): boolean {
+export function isScratchLine(line: string, table: PhraseTable): boolean {
   const norm = normalizePhrase(line);
   if (norm === "") return false;
-  return SCRATCH_PHRASES[language].some((phrase) => normalizePhrase(phrase) === norm);
-}
-
-export interface PhraseDefinition {
-  phrase: string;
-  entry: PhraseEntry;
-}
-
-// Keyed by Dictation Language, never the UI locale (ADR 0014).
-const PHRASES: Record<DictationLanguage, readonly PhraseDefinition[]> = { en: EN_PHRASES, es: ES_PHRASES };
-
-const TOKEN_RE = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]/gu;
-
-interface Token {
-  surface: string;
-  norm: string | null;
-  mark: boolean;
+  return table.scratch.has(norm);
 }
 
 interface Match {
   start: number;
   end: number;
-  entry: PhraseEntry;
+  entry: SpokenPunctuationEntry;
 }
 
 const OPENING_MARKS = new Set(["¿", "¡", "«", "“", "‘", "(", "[", "{"]);
@@ -136,41 +114,20 @@ export function findSentenceStartOffset(text: string): number {
   return stepPastOpeningMarks(text, lastSentenceEndIndex(text) + 1);
 }
 
-function normalizeWord(word: string): string {
-  return word
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function tokenize(text: string): Token[] {
-  const tokens: Token[] = [];
-  for (const match of text.normalize("NFC").matchAll(TOKEN_RE)) {
-    const surface = match[0];
-    if (/[\p{L}\p{N}]/u.test(surface)) {
-      tokens.push({ surface, norm: normalizeWord(surface), mark: false });
-    } else {
-      tokens.push({ surface, norm: null, mark: true });
-    }
-  }
-  return tokens;
-}
-
-/** Case- and accent-folded, punctuation-free phrase key. Shared by matching and storage. */
-export function normalizePhrase(text: string): string {
-  return tokenize(text)
-    .filter((token) => !token.mark)
-    .map((token) => token.norm ?? "")
-    .join(" ");
-}
-
 /** Build the prebuilt token trie for one Dictation Language. */
-export function buildPhraseTable(language: DictationLanguage): PhraseTable {
+export function buildPhraseTable(
+  language: DictationLanguage,
+  options: PhraseTableOptions = {}
+): PhraseTable {
+  const { settings, capabilities } = options;
   const trie: TokenTrieNode = { children: new Map() };
-  for (const { phrase, entry } of PHRASES[language]) {
+  const scratch = new Set<string>();
+
+  const addToTrie = (phrase: string, entry: SpokenPunctuationEntry) => {
     const words = tokenize(phrase)
       .filter((token) => !token.mark)
       .map((token) => token.norm ?? "");
+    if (words.length === 0) return;
     let node = trie;
     for (const word of words) {
       let child = node.children.get(word);
@@ -181,8 +138,22 @@ export function buildPhraseTable(language: DictationLanguage): PhraseTable {
       node = child;
     }
     node.match = entry;
+  };
+
+  for (const entry of entriesFor(language)) {
+    if (!isEntryEnabled(entry, settings, capabilities)) continue;
+    const aliases = settings?.aliases[entry.id] ?? [];
+    const phrases = [...entry.phrases, ...aliases];
+    if (entry.actions.some((action) => action.kind === "scratch")) {
+      for (const phrase of phrases) {
+        const norm = normalizePhrase(phrase);
+        if (norm !== "") scratch.add(norm);
+      }
+      continue;
+    }
+    for (const phrase of phrases) addToTrie(phrase, entry);
   }
-  return { language, trie };
+  return { language, trie, scratch };
 }
 
 function isSentenceStart(before: string): boolean {
@@ -217,7 +188,7 @@ function endsWithOpening(text: string): boolean {
   return OPENING_MARKS.has(text[text.length - 1]);
 }
 
-function findMatches(tokens: Token[], table: PhraseTable, allowPunctuation: boolean): Match[] {
+function findMatches(tokens: Token[], table: PhraseTable): Match[] {
   const matches: Match[] = [];
   let i = 0;
   while (i < tokens.length) {
@@ -237,9 +208,7 @@ function findMatches(tokens: Token[], table: PhraseTable, allowPunctuation: bool
       const child = node.children.get(token.norm ?? "");
       if (!child) break;
       node = child;
-      if (node.match && (allowPunctuation || !node.match.punctuation)) {
-        best = { start: i, end: j, entry: node.match };
-      }
+      if (node.match) best = { start: i, end: j, entry: node.match };
       j += 1;
     }
     if (best) {
@@ -260,11 +229,13 @@ export function interpret(input: InterpretInput): InterpretResult {
   }
 
   // Built-in whole-line words (ADR 0015 order): scratch that never acts inside prose.
-  if (isScratchLine(line, table.language)) {
+  if (isScratchLine(line, table)) {
     return { result: { kind: "scratch" }, state, spokenPunctuationCount: 0 };
   }
 
-  const allowPunctuation = !capabilities.punctuation;
+  // The table already holds the entries that act; capabilities only decide
+  // whether a model `?`/`!` earns the Spanish opener it could not have typed.
+  const modelInsertsMarks = capabilities.punctuation;
   const spanish = table.language === "es";
   const edits: DictationEdit[] = [];
   let spokenPunctuationCount = 0;
@@ -313,8 +284,8 @@ export function interpret(input: InterpretInput): InterpretResult {
   const appendMark = (mark: string) => {
     if (mark === "¿") hasQuestionOpener = true;
     else if (mark === "¡") hasExclamationOpener = true;
-    else if (mark === "?" && spanish && allowPunctuation) ensureOpener("¿");
-    else if (mark === "!" && spanish && allowPunctuation) ensureOpener("¡");
+    else if (mark === "?" && spanish && !modelInsertsMarks) ensureOpener("¿");
+    else if (mark === "!" && spanish && !modelInsertsMarks) ensureOpener("¡");
     if (OPENING_MARKS.has(mark) && current !== "" && !/\s$/u.test(current)) current += " ";
     current += mark;
     if (SENTENCE_END_MARKS.has(mark)) {
@@ -323,7 +294,7 @@ export function interpret(input: InterpretInput): InterpretResult {
     }
   };
 
-  const emitActions = (actions: PhraseAction[]) => {
+  const emitActions = (actions: readonly PhraseAction[]) => {
     for (const action of actions) {
       if (action.kind === "mark") {
         appendMark(action.mark);
@@ -343,13 +314,13 @@ export function interpret(input: InterpretInput): InterpretResult {
         resetSentence();
       } else if (action.kind === "cap") {
         capNext = true;
-      } else {
+      } else if (action.kind === "literal") {
         literalNext = true;
       }
     }
   };
 
-  const allMatches = findMatches(tokens, table, allowPunctuation);
+  const allMatches = findMatches(tokens, table);
   const allByStart = new Map<number, Match>();
   for (const match of allMatches) allByStart.set(match.start, match);
 

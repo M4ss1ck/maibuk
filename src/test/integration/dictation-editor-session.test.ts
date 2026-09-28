@@ -7,6 +7,7 @@ import { attachSession, resetDictationHubForTests } from "@/features/dictation/h
 import { buildPhraseTable, interpret } from "@/features/dictation/interpreter";
 import { createRouter } from "@/features/dictation/router";
 import { createDictationSession } from "@/features/dictation/session";
+import { defaultSpokenPunctuationLanguageSettings } from "@/features/dictation/spoken-punctuation";
 import { createLineStats } from "@/features/dictation/stats";
 import type { DictationEvent, ModelSpec, RecognizerHost } from "@/features/dictation/types";
 
@@ -462,6 +463,55 @@ describe("Dictation line to rich-text document", () => {
       expect(editor.getHTML()).toBe("<p>Hola María di coma por favor</p>");
       expect(undoDepth(editor.state)).toBe(1);
       expect(stats.summary().spokenPunctuationCount).toBe(2);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("honors the author's Spoken Punctuation settings as one undo step", async () => {
+    const host = fakeHost();
+    let state = { capitalizeNext: false, noSpaceNext: false };
+    const settings = defaultSpokenPunctuationLanguageSettings();
+    settings.entries.coma = false;
+    settings.aliases.puntoYAparte = ["punto y la parte"];
+    settings.aliases.borraEso = ["bórralo"];
+    const table = buildPhraseTable("es", { settings, capabilities: model.capabilities });
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: () => model,
+      route: createRouter((line, before) => {
+        const next = interpret({ line, before, capabilities: model.capabilities, table, state });
+        state = next.state;
+        return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
+      }),
+      runCommand: vi.fn(),
+      notify: vi.fn(),
+      copyText: vi.fn(async () => {}),
+      stats,
+    });
+    resetDictationHubForTests();
+    attachSession(session);
+    const editor = new Editor({
+      extensions: createRichTextExtensions({ spellCheck: { enabled: false, language: "es" } }),
+      content: "<p></p>",
+    });
+    try {
+      await new Promise<void>((resolve) => editor.on("create", () => resolve()));
+      document.body.appendChild(editor.view.dom);
+      const focused = new Promise<void>((resolve) => editor.on("focus", () => resolve()));
+      editor.commands.focus();
+      await focused;
+      await session.start();
+      // "coma" is switched off and "punto y la parte" is the author's alias.
+      host.emitFinal("hola coma cómo estás punto y la parte mañana");
+      expect(editor.getHTML()).toBe("<p>Hola coma cómo estás.</p><p>Mañana</p>");
+      expect(undoDepth(editor.state)).toBe(1);
+      expect(stats.summary().spokenPunctuationCount).toBe(1);
+      // The alias works for scratch that too, and never reaches the text.
+      host.emitFinal("bórralo.");
+      expect(editor.getHTML()).toBe("<p>Hola coma cómo estás.</p><p></p>");
+      expect(undoDepth(editor.state)).toBe(2);
     } finally {
       editor.destroy();
     }

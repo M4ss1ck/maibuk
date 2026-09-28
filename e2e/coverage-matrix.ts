@@ -2173,6 +2173,26 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "dictation-spoken-punctuation",
+    area: "settings",
+    workflow:
+      "Settings → Dictation: the Spoken punctuation list shows each entry's phrases and what it inserts for the chosen Dictation Language, with a master switch, a switch per entry, extra phrases, and reset, all by keyboard",
+    edges: [
+      "the list follows the chosen Dictation Language",
+      "an entry switch and the master switch switch matching off, and the master disables the entry switches",
+      "an extra phrase is added and removed by keyboard",
+      "an extra phrase that is already a phrase, or starts with the escape word, is refused with an alert",
+      "reset brings one entry's switch and phrases back to the defaults",
+      "the settings stay per language and survive a reload",
+    ],
+    terms: ["Spoken Punctuation", "Dictation Language", "Dictation"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "dictation-interpreter-stats",
     area: "settings",
     workflow:

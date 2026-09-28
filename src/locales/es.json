@@ -1760,6 +1760,34 @@
       "interpreter": "Intérprete: demora típica {{median}} ms, peor demora {{max}} ms, puntuación dictada {{count}}, borra eso {{scratch}}",
       "noPunctuation": "No añade puntuación ni mayúsculas.",
       "device": "Micrófono: {{device}}"
+    },
+    "spokenPunctuation": {
+      "title": "Puntuación dictada",
+      "description": "Di estas palabras mientras dictas y se convierten en puntuación o saltos en lugar de texto. Los cambios se guardan en este dispositivo.",
+      "master": "Puntuación dictada para {{language}}",
+      "listLabel": "Entradas de Puntuación dictada para {{language}}",
+      "inserts": "Inserta",
+      "insertsLabels": {
+        "paragraph": "Párrafo nuevo",
+        "line_break": "Salto de línea",
+        "list_item": "Elemento de lista",
+        "cap": "Pone mayúscula a la palabra siguiente",
+        "literal": "Escribe la palabra siguiente tal cual",
+        "scratch": "Borra la última frase dictada"
+      },
+      "phrasesFor": "Frases de {{entry}}",
+      "aliasLabel": "Agregar una frase a {{entry}}",
+      "aliasPlaceholder": "otra forma de decirlo",
+      "add": "Agregar",
+      "addAlias": "Agregar una frase a {{entry}}",
+      "removeAlias": "Quitar {{phrase}} de {{entry}}",
+      "reset": "Restablecer {{entry}} a su interruptor y frases predeterminados",
+      "resetShort": "Restablecer",
+      "refused": {
+        "empty": "Escribe una frase.",
+        "duplicate": "{{phrase}} ya es una frase de Puntuación dictada.",
+        "escape": "{{phrase}} empieza con la palabra de escape, {{word}}."
+      }
     }
   },
   "colorPicker": {

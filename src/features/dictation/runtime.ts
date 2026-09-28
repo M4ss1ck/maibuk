@@ -5,7 +5,8 @@ import {
   type ModelStore,
 } from "@/features/dictation/model-store";
 import { createRouter } from "@/features/dictation/router";
-import { buildPhraseTable, interpret } from "@/features/dictation/interpreter";
+import { buildPhraseTable, interpret, type PhraseTable } from "@/features/dictation/interpreter";
+import { catalogCapabilities } from "@/features/dictation/spoken-punctuation";
 import { attachSession } from "@/features/dictation/hub";
 import {
   createDictationSession,
@@ -79,9 +80,19 @@ async function build(): Promise<DictationRuntime> {
   let selectedModel: ModelSpec | null = null;
   let selectedLanguage: DictationLanguage = "es";
   let interpreterState = { capitalizeNext: false, noSpaceNext: false };
-  const phraseTables = {
-    en: buildPhraseTable("en"),
-    es: buildPhraseTable("es"),
+  // The author's switches and aliases feed the table; so do the picked model's
+  // capabilities, which set the entries' defaults.
+  const buildTable = (language: DictationLanguage): PhraseTable =>
+    buildPhraseTable(language, {
+      settings: useDictationStore.getState().spokenPunctuation[language],
+      capabilities:
+        selectedLanguage === language && selectedModel
+          ? selectedModel.capabilities
+          : catalogCapabilities(language),
+    });
+  let phraseTables: Record<DictationLanguage, PhraseTable> = {
+    en: buildTable("en"),
+    es: buildTable("es"),
   };
 
   const session = createDictationSession({
@@ -91,6 +102,7 @@ async function build(): Promise<DictationRuntime> {
       selectedLanguage = language;
       selectedModel = pickModel(language, models.available(), installed, preferredTier);
       interpreterState = { capitalizeNext: false, noSpaceNext: false };
+      phraseTables = { ...phraseTables, [language]: buildTable(language) };
       return selectedModel;
     },
     route: createRouter((line, before) => {
@@ -129,9 +141,13 @@ async function build(): Promise<DictationRuntime> {
   useDictationStore.setState({ support });
   if (support.supported) await refreshInstalled();
 
-  // Turning Dictation off mid-session releases the microphone.
+  // Turning Dictation off mid-session releases the microphone; a Spoken
+  // Punctuation change rebuilds the tables the next line is matched against.
   unsubscribeEnabled = useDictationStore.subscribe((state, previous) => {
     if (!state.enabled && previous.enabled) void session.stop();
+    if (state.spokenPunctuation !== previous.spokenPunctuation) {
+      phraseTables = { en: buildTable("en"), es: buildTable("es") };
+    }
   });
   attachSession(session);
 
