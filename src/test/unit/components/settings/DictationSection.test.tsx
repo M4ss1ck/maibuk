@@ -1,7 +1,8 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODEL_CATALOG } from "@/features/dictation/catalog";
+import i18n from "@/i18n";
 import "@/i18n";
 
 const install = vi.fn(async () => {});
@@ -24,16 +25,23 @@ const { useDictationStore } = await import("@/features/dictation/store");
 const { DictationSection } = await import("@/components/settings/DictationSection");
 
 const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast")!;
+const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "fast")!;
 
 beforeEach(() => {
   install.mockClear();
   remove.mockClear();
+  localStorage.clear();
   useDictationStore.setState({
+    enabled: true,
     support: { supported: true },
     installed: [],
     downloads: {},
     preferredTier: { en: "fast", es: "fast" },
   });
+});
+
+afterEach(async () => {
+  await act(() => i18n.changeLanguage("en"));
 });
 
 describe("DictationSection", () => {
@@ -141,5 +149,100 @@ describe("DictationSection", () => {
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
     expect(within(row).getByText(/no punctuation/i)).toBeInTheDocument();
+  });
+
+  it("offers no Dictation switch where Dictation is unsupported", () => {
+    useDictationStore.setState({ support: { supported: false, reason: "not_isolated" } });
+    render(<DictationSection />);
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
+
+  it("turns Dictation off with Space and keeps the model rows usable", async () => {
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    const toggle = screen.getByRole("switch", { name: "Dictation" });
+    expect(toggle).toBeChecked();
+
+    await user.tab();
+    expect(toggle).toHaveFocus();
+    await user.keyboard(" ");
+
+    expect(toggle).not.toBeChecked();
+
+    const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
+    within(row).getByRole("button", { name: /download/i }).focus();
+    await user.keyboard("{Enter}");
+    expect(install).toHaveBeenCalledWith(esFast);
+  });
+
+  it("keeps an installed model removable while Dictation is off", async () => {
+    useDictationStore.setState({ enabled: false, installed: [esFast.id] });
+    const user = userEvent.setup();
+    render(<DictationSection />);
+
+    expect(screen.getByRole("switch", { name: "Dictation" })).not.toBeChecked();
+
+    const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
+    within(row).getByRole("button", { name: /remove/i }).focus();
+    await user.keyboard("{Enter}");
+    expect(remove).toHaveBeenCalledWith(esFast.id);
+  });
+
+  it("restores an off switch from persisted storage after a reload", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<DictationSection />);
+    const toggle = screen.getByRole("switch", { name: "Dictation" });
+    await user.tab();
+    expect(toggle).toHaveFocus();
+    await user.keyboard(" ");
+    expect(toggle).not.toBeChecked();
+
+    const saved = localStorage.getItem("maibuk-dictation");
+    expect(saved).not.toBeNull();
+    unmount();
+
+    // A fresh launch starts from defaults; persist then restores the record.
+    useDictationStore.setState({ enabled: true, preferredTier: { en: "fast", es: "fast" } });
+    localStorage.setItem("maibuk-dictation", saved!);
+    await act(async () => {
+      await useDictationStore.persist.rehydrate();
+    });
+
+    render(<DictationSection />);
+    expect(screen.getByRole("switch", { name: "Dictation" })).not.toBeChecked();
+  });
+
+  it("defaults a legacy preferredTier-only record to Dictation on", async () => {
+    useDictationStore.setState({ enabled: true, preferredTier: { en: "fast", es: "fast" } });
+    localStorage.setItem(
+      "maibuk-dictation",
+      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 }),
+    );
+    await act(async () => {
+      await useDictationStore.persist.rehydrate();
+    });
+
+    render(<DictationSection />);
+    expect(screen.getByRole("switch", { name: "Dictation" })).toBeChecked();
+  });
+
+  it("uses sentence-case headings but lowercase sentences in Spanish", async () => {
+    await act(() => i18n.changeLanguage("es"));
+    useDictationStore.setState({
+      installed: [esFast.id],
+      preferredTier: { en: "fast", es: "accurate" },
+    });
+    render(<DictationSection />);
+
+    expect(screen.getByRole("heading", { name: "Español" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Inglés" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Usar para español" })).toBeInTheDocument();
+  });
+
+  it("keeps English headings for English", () => {
+    useDictationStore.setState({ installed: [enFast.id] });
+    render(<DictationSection />);
+    expect(screen.getByRole("heading", { name: "English" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Spanish" })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
+import { Switch } from "@/components/ui/Switch";
 import { MODEL_CATALOG, modelsFor } from "@/features/dictation/catalog";
 import { getDictation } from "@/features/dictation/runtime";
 import { useDictationStore } from "@/features/dictation/store";
@@ -14,6 +15,8 @@ const sizeMb = (spec: ModelSpec) =>
 export function DictationSection() {
   const { t } = useTranslation();
   const support = useDictationStore((s) => s.support);
+  const enabled = useDictationStore((s) => s.enabled);
+  const setEnabled = useDictationStore((s) => s.setEnabled);
   const installed = useDictationStore((s) => s.installed);
   const downloads = useDictationStore((s) => s.downloads);
   const preferred = useDictationStore((s) => s.preferredTier);
@@ -43,11 +46,15 @@ export function DictationSection() {
   const platform = dictationPlatform();
   if (platform && support === null && !settled) return null;
   if (!support?.supported || !platform) {
-    return <p className="text-sm text-muted-foreground">{t(
-      support?.reason === "library_missing"
-        ? "dictation.section.libraryMissing"
-        : "dictation.section.unsupported",
-    )}</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t(
+          support?.reason === "library_missing"
+            ? "dictation.section.libraryMissing"
+            : "dictation.section.unsupported"
+        )}
+      </p>
+    );
   }
 
   const byLanguage = new Map<DictationLanguage, ModelSpec[]>();
@@ -58,12 +65,16 @@ export function DictationSection() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-medium">{t("dictation.section.title")}</span>
+        <Switch checked={enabled} onChange={setEnabled} label={t("dictation.section.title")} />
+      </div>
       <p className="text-sm text-muted-foreground">{t("dictation.section.description")}</p>
       {[...byLanguage].map(([language, specs]) => (
         <div key={language} className="space-y-2">
-          <h3 className="font-medium">{t(`dictation.languages.${language}`)}</h3>
+          <h3 className="font-medium">{t(`dictation.languageNames.${language}`)}</h3>
           {specs.map((spec) => {
-            const name = `${t(`dictation.languages.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
+            const name = `${t(`dictation.languageNames.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
             const download = downloads[spec.id];
             const isInstalled = installed.includes(spec.id);
             const inUse = isInstalled && preferred[language] === spec.tier;
@@ -140,7 +151,7 @@ export function DictationSection() {
                           ? r.cancelInstall(spec.id)
                           : isInstalled
                             ? r.remove(spec.id)
-                            : r.install(spec),
+                            : r.install(spec)
                       )
                       .catch(() => {})
                   }
@@ -150,7 +161,7 @@ export function DictationSection() {
                       ? "dictation.section.cancel"
                       : isInstalled
                         ? "dictation.section.remove"
-                        : "dictation.section.download",
+                        : "dictation.section.download"
                   )}
                 </Button>
               </fieldset>

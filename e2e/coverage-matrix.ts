@@ -2119,11 +2119,13 @@ export const ROWS: MatrixRow[] = [
     edges: [
       "the floating mic button toggles the same session by Enter",
       "the language picker switches language with arrow keys",
+      "Cycle Dictation language, bound in the Shortcut Editor, cycles the picker Auto -> en -> Auto and announces each step",
+      "the bar keeps the same width across picker values",
       "with no model downloaded, Mod+Shift+Space shows the no-model hint and the mic leads to Settings",
       "WebKit shows no dictation control (not cross-origin isolated without credentialless)",
     ],
     terms: ["Dictation", "Dictation Session"],
-    shortcuts: ["dictation.toggle", "dictation.stop"],
+    shortcuts: ["dictation.toggle", "dictation.stop", "dictation.cycleLanguage"],
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["chromium-only"],
@@ -2137,6 +2139,7 @@ export const ROWS: MatrixRow[] = [
     edges: [
       "Cancel during download leaves the model not downloaded",
       "a failed download (fixture 404) shows the error toast and a Download button again",
+      "turning Dictation off removes the bar and Start or stop Dictation does nothing; turning it on restores both and keeps the downloaded models",
     ],
     terms: ["Dictation Model"],
     shortcuts: [],

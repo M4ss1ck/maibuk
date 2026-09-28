@@ -112,6 +112,41 @@ describe("Select", () => {
     });
   });
 
+  describe("accessible option names", () => {
+    const namedOptions = [
+      { value: "auto", label: "auto", accessibleName: "Auto (Spell Check language)" },
+      { value: "en", label: "en", accessibleName: "English" },
+    ];
+
+    it("names each option in full while showing its code", async () => {
+      const user = userEvent.setup();
+      render(
+        <Select value="auto" onChange={() => {}} options={namedOptions} ariaLabel="Language" />,
+      );
+
+      await user.tab();
+      await user.keyboard("{Enter}");
+
+      const english = screen.getByRole("option", { name: "English" });
+      expect(english).toHaveTextContent("en");
+    });
+
+    it("names the selected value in full while showing its code", () => {
+      render(
+        <Select value="en" onChange={() => {}} options={namedOptions} ariaLabel="Language" />,
+      );
+
+      const trigger = screen.getByRole("button");
+      expect(trigger).toHaveTextContent("en");
+      expect(trigger).toHaveAccessibleName(/English/);
+    });
+
+    it("keeps the label as the name when no accessible name is given", () => {
+      render(<Select value="apple" onChange={() => {}} options={options} ariaLabel="Fruit" />);
+      expect(screen.getByRole("button")).toHaveAccessibleName(/apple/i);
+    });
+  });
+
   describe("numeric values", () => {
     it("works with number options", () => {
       const numOptions = [

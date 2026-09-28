@@ -13,15 +13,58 @@ vi.mock("@/lib/platform", () => ({
 }));
 
 const { getDictation, resetDictationForTests } = await import("@/features/dictation/runtime");
+const { useDictationStore } = await import("@/features/dictation/store");
+const { MODEL_CATALOG } = await import("@/features/dictation/catalog");
 
 beforeEach(() => {
   resetDictationForTests();
+  useDictationStore.setState({ enabled: true });
   createRecognizerHost.mockReset();
   getModelFiles.mockReset();
   getModelFiles.mockResolvedValue(unsupportedModelFiles);
 });
 
 describe("getDictation()", () => {
+  it("turning Dictation off releases an active microphone and keeps models", async () => {
+    const host = {
+      ...createUnsupportedHost("platform"),
+      load: vi.fn(async () => {}),
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+    };
+    createRecognizerHost.mockResolvedValue(host);
+    const { session } = await getDictation();
+    useDictationStore.setState({ installed: [MODEL_CATALOG[0].id] });
+    session.register({ id: "chapter", language: () => "en", showPartial() {}, commit() {} });
+    session.focus("chapter");
+    await session.start();
+    expect(session.getSnapshot().status).toBe("listening");
+    useDictationStore.getState().setEnabled(false);
+    await vi.waitFor(() => expect(host.stop).toHaveBeenCalledTimes(1));
+    expect(session.getSnapshot().status).toBe("idle");
+    expect(useDictationStore.getState().installed).toEqual([MODEL_CATALOG[0].id]);
+    useDictationStore.getState().setEnabled(true);
+    await session.start();
+    expect(host.start).toHaveBeenCalledTimes(2);
+    await session.stop();
+  });
+  it("refuses to load a model or open the microphone while Dictation is off", async () => {
+    const host = {
+      ...createUnsupportedHost("platform"),
+      load: vi.fn(async () => {}),
+      start: vi.fn(async () => {}),
+    };
+    createRecognizerHost.mockResolvedValue(host);
+    const { session } = await getDictation();
+    useDictationStore.setState({ installed: [MODEL_CATALOG[0].id], enabled: false });
+    session.register({ id: "chapter", language: () => "en", showPartial() {}, commit() {} });
+    session.focus("chapter");
+    await session.start();
+    await session.toggle();
+    expect(host.load).not.toHaveBeenCalled();
+    expect(host.start).not.toHaveBeenCalled();
+    expect(session.getSnapshot().status).toBe("idle");
+  });
   it("builds the runtime once and shares it", async () => {
     createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
     const [a, b] = await Promise.all([getDictation(), getDictation()]);

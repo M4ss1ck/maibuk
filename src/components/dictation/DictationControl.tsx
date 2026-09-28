@@ -1,9 +1,9 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Mic, MicOff, Loader2, Settings2 } from "lucide-react";
 import { Select } from "@/components/ui/Select";
-import { MODEL_CATALOG } from "@/features/dictation/catalog";
+import { installedDictationLanguages, setDictationLanguage } from "@/features/dictation/language";
 import { getDictation } from "@/features/dictation/runtime";
 import { useDictationStore } from "@/features/dictation/store";
 import type { DictationLanguage } from "@/features/dictation/types";
@@ -22,6 +22,7 @@ export function DictationControl() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const support = useDictationStore((s) => s.support);
+  const enabled = useDictationStore((s) => s.enabled);
   const snapshot = useDictationStore((s) => s.snapshot);
   const installed = useDictationStore((s) => s.installed);
   const announcement = useDictationStore((s) => s.announcement);
@@ -34,14 +35,9 @@ export function DictationControl() {
     void getDictation().catch(() => {});
   }, []);
 
-  const languages = useMemo(() => {
-    const set = new Set<DictationLanguage>();
-    for (const spec of MODEL_CATALOG)
-      if (installed.includes(spec.id)) for (const l of spec.languages) set.add(l);
-    return [...set];
-  }, [installed]);
+  const languages = installedDictationLanguages(installed);
 
-  if (!support?.supported) return null;
+  if (!enabled || !support?.supported) return null;
 
   const listening = snapshot.status === "listening" || snapshot.status === "stopping";
   const loading = snapshot.status === "loading";
@@ -94,20 +90,20 @@ export function DictationControl() {
         <Select<string>
           ariaLabel={t("dictation.language")}
           minWidth="none"
+          className="w-20 pointer-coarse:[&_button]:min-h-12"
           value={languageOverride ?? AUTO}
           options={[
-            { value: AUTO, label: t("dictation.languageAuto") },
+            { value: AUTO, label: AUTO, accessibleName: t("dictation.languageAuto") },
             ...languages.map((l) => ({
               value: l,
-              label: t(`dictation.languages.${l}`),
+              label: l,
+              accessibleName: t(`dictation.languageNames.${l}`),
             })),
           ]}
           onChange={(value) => {
-            const next = value === AUTO ? null : (value as DictationLanguage);
-            useDictationStore.setState({ languageOverride: next });
-            void getDictation()
-              .then((r) => r.session.setLanguage(next))
-              .catch(() => {});
+            void setDictationLanguage(value === AUTO ? null : (value as DictationLanguage)).catch(
+              () => {}
+            );
           }}
         />
       )}

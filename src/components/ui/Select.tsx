@@ -10,6 +10,11 @@ type SelectKey = string | number;
 interface SelectOption<T> {
   value: T;
   label: string;
+  /**
+   * The option's accessible name when it must differ from the visible label,
+   * such as a language code shown as "en" but named "English".
+   */
+  accessibleName?: string;
 }
 
 interface SelectProps<T> {
@@ -49,9 +54,20 @@ export function Select<T extends string | number>({
         className={`relative flex w-full ${minWidthClass} items-center gap-1 px-3 py-1.5 pr-8 text-sm text-left border border-border rounded-lg bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1`}
       >
         <SelectValue>
-          {({ selectedText, isPlaceholder }) => (
-            <span className="min-w-0 flex-1 truncate">{isPlaceholder ? "" : selectedText}</span>
-          )}
+          {({ selectedItem, selectedText, isPlaceholder }) => {
+            const selected = selectedItem as SelectOption<T> | null;
+            if (selected?.accessibleName) {
+              return (
+                <span className="min-w-0 flex-1 truncate">
+                  <span aria-hidden="true">{selected.label}</span>
+                  <span className="sr-only">{selected.accessibleName}</span>
+                </span>
+              );
+            }
+            return (
+              <span className="min-w-0 flex-1 truncate">{isPlaceholder ? "" : selectedText}</span>
+            );
+          }}
         </SelectValue>
         {endAdornment && <span className="shrink-0 text-muted-foreground">{endAdornment}</span>}
         <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
@@ -67,7 +83,8 @@ export function Select<T extends string | number>({
           {(option) => (
             <ListBoxItem
               id={option.value as SelectKey}
-              textValue={option.label}
+              textValue={option.accessibleName ?? option.label}
+              aria-label={option.accessibleName}
               className="relative cursor-pointer select-none py-1.5 px-3 text-sm text-foreground data-focused:bg-muted data-selected:bg-primary/10 data-selected:text-primary"
             >
               {({ isSelected }) => (

@@ -64,6 +64,11 @@ rm -rf "$WORKTREE/e2e"
 cp -R "$ROOT/e2e" "$WORKTREE/e2e"
 rm -rf "$WORKTREE/e2e/.output"
 ln -s "$ROOT/node_modules" "$WORKTREE/node_modules"
+# Dictation's downloaded runtime, models and fake-microphone audio are ignored
+# by git, just like node_modules. Both builds must use the same local assets.
+if [[ -d "$ROOT/vendor" ]]; then
+  ln -s "$ROOT/vendor" "$WORKTREE/vendor"
+fi
 
 (
   cd "$WORKTREE"
