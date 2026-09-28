@@ -1719,6 +1719,7 @@
     "announceStarted": "Dictado activado, {{language}}",
     "announceStopped": "Dictado desactivado",
     "announceLanguage": "Idioma del dictado: {{language}}",
+    "scratchRefused": "No se eliminó nada. Borra eso solo elimina texto que no ha sido editado.",
     "languages": { "en": "inglés", "es": "español" },
     "languageNames": { "en": "Inglés", "es": "Español" },
     "errors": {
@@ -1755,7 +1756,7 @@
       "progress": "{{done}} de {{total}} MB",
       "size": "{{size}} MB",
       "recent": "Líneas recientes: {{lines}}, demora típica {{ms}} ms",
-      "interpreter": "Intérprete: demora típica {{median}} ms, peor demora {{max}} ms, puntuación dictada {{count}}",
+      "interpreter": "Intérprete: demora típica {{median}} ms, peor demora {{max}} ms, puntuación dictada {{count}}, borra eso {{scratch}}",
       "noPunctuation": "No añade puntuación ni mayúsculas.",
       "device": "Micrófono: {{device}}"
     }

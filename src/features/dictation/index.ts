@@ -10,8 +10,10 @@ export {
 } from "@/features/dictation/router";
 export {
   createDictationSession,
+  editsToOrphanText,
   type DictationSession,
   type DictationTarget,
+  type ScratchOutcome,
   type SessionNotice,
   type SessionSnapshot,
   type SessionStatus,
@@ -20,8 +22,10 @@ export { createLineStats, type LineStats, type LineStatsSummary } from "@/featur
 export {
   buildPhraseTable,
   interpret,
+  isScratchLine,
   normalizePhrase,
   INITIAL_INTERPRETER_STATE,
+  SCRATCH_PHRASES,
   type InterpreterState,
   type PhraseTable,
 } from "@/features/dictation/interpreter";

@@ -5,13 +5,47 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { liftTarget } from "@tiptap/pm/transform";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
-import type { DictationTarget } from "@/features/dictation/session";
+import type { DictationTarget, ScratchOutcome } from "@/features/dictation/session";
 import type { DictationEdit } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
 import { normalizeLanguage } from "@/features/settings/types";
 
-/** Plugin state: the in-progress spoken line, "" when none. Never document content. */
-export const dictationPluginKey = new PluginKey<string>("dictation");
+/** One dictated sentence: its range in the document and the exact text there. */
+export interface DictatedRange {
+  from: number;
+  to: number;
+  text: string;
+}
+
+/** Plugin state: the in-progress line plus the dictated history for scratch that. */
+export interface DictationPluginState {
+  /** The in-progress spoken line, "" when none. Never document content. */
+  partial: string;
+  /** Last dictated sentences, oldest first, capped at MAX_DICTATED_SENTENCES. */
+  history: DictatedRange[];
+}
+
+/** Scratch that reaches back this many dictated sentences. */
+export const MAX_DICTATED_SENTENCES = 10;
+
+/** Plugin state for scratch that. Ranges map through every transaction. */
+export const dictationPluginKey = new PluginKey<DictationPluginState>("dictation");
+
+type DictationMeta =
+  | string
+  | { partial?: string; added?: DictatedRange[]; scratch?: true; reset?: true }
+  | undefined;
+
+const INITIAL_PLUGIN_STATE: DictationPluginState = { partial: "", history: [] };
+
+function sameHistory(a: readonly DictatedRange[], b: readonly DictatedRange[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i].from !== b[i].from || a[i].to !== b[i].to || a[i].text !== b[i].text)
+      return false;
+  }
+  return true;
+}
 
 // No space after whitespace or an opening mark (¿ ¡ « “ ( [ { — –).
 const NO_SPACE_AFTER = /[\s([{"'“‘«¿¡—–-]/;
@@ -52,10 +86,124 @@ function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
   return sliceStart + findSentenceStartOffset(text);
 }
 
+function isSentenceEndMark(ch: string): boolean {
+  return ch === "." || ch === "?" || ch === "!";
+}
+
+/**
+ * Split one textblock slice into dictated sentences. Shares the interpreter's
+ * boundary rule (`.`, `?`, `!`, hard breaks); paragraph breaks are handled by
+ * splitting per block. A hard break belongs to the sentence after it, so
+ * scratching that sentence removes the break too. Spaces after a mark belong
+ * to the next sentence, so scratching leaves no trailing space.
+ */
+function splitSliceIntoSentences(sliceText: string): { start: number; end: number }[] {
+  const bounds: { start: number; end: number }[] = [];
+  let start = 0;
+  let i = 0;
+  while (i < sliceText.length) {
+    const ch = sliceText[i];
+    if (isSentenceEndMark(ch)) {
+      let j = i + 1;
+      while (j < sliceText.length && isSentenceEndMark(sliceText[j])) j += 1;
+      bounds.push({ start, end: j });
+      start = j;
+      i = j;
+    } else if (ch === "\n") {
+      if (i > start) bounds.push({ start, end: i });
+      let j = i + 1;
+      while (j < sliceText.length && sliceText[j] === "\n") j += 1;
+      start = i;
+      i = j;
+    } else {
+      i += 1;
+    }
+  }
+  if (start < sliceText.length) bounds.push({ start, end: sliceText.length });
+  return bounds.filter(({ start: s, end: e }) => {
+    const text = sliceText.slice(s, e);
+    return /[^\s]/.test(text) || text.includes("\n");
+  });
+}
+
+/**
+ * Sentences inserted by one dictation commit, in document order. The span is
+ * the caret's mapped start to its new position; per-block splitting keeps the
+ * offset-to-position mapping exact (one char per position inside a textblock).
+ * A sentence begun by hand contributes only its dictated tail, since the span
+ * starts at the caret. With no sentence ends the slice is one entry, so
+ * scratch falls back to removing the last dictated line.
+ */
+export function extractDictatedSentences(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number
+): DictatedRange[] {
+  const size = doc.content.size;
+  const clampedFrom = Math.max(0, Math.min(from, size));
+  const clampedTo = Math.max(0, Math.min(to, size));
+  if (clampedFrom >= clampedTo) return [];
+  const out: DictatedRange[] = [];
+  doc.nodesBetween(clampedFrom, clampedTo, (node, pos) => {
+    if (!node.isTextblock) return true;
+    const blockFrom = Math.max(clampedFrom, pos + 1);
+    const blockTo = Math.min(clampedTo, pos + node.nodeSize - 1);
+    if (blockFrom >= blockTo) return false;
+    const sliceText = doc.textBetween(blockFrom, blockTo, "\n", "\n");
+    if (sliceText.length !== blockTo - blockFrom) {
+      out.push({ from: blockFrom, to: blockTo, text: sliceText });
+      return false;
+    }
+    let splitFallback = false;
+    for (const { start, end } of splitSliceIntoSentences(sliceText)) {
+      const rFrom = blockFrom + start;
+      const rTo = blockFrom + end;
+      const text = sliceText.slice(start, end);
+      if (doc.textBetween(rFrom, rTo, "\n", "\n") !== text) {
+        splitFallback = true;
+        break;
+      }
+      out.push({ from: rFrom, to: rTo, text });
+    }
+    if (splitFallback) {
+      out.push({ from: blockFrom, to: blockTo, text: sliceText });
+    }
+    return false;
+  });
+  return out;
+}
+
+/** Remove the last dictated sentence as one undo step. Never touches typed text. */
+export function scratchDictation(editor: Editor): ScratchOutcome {
+  const pluginState = dictationPluginKey.getState(editor.state);
+  const history = pluginState?.history ?? [];
+  if (history.length === 0) return "empty";
+  const last = history[history.length - 1];
+  const doc = editor.state.doc;
+  if (last.from < 0 || last.to > doc.content.size || last.from >= last.to) return "refused";
+  if (doc.textBetween(last.from, last.to, "\n", "\n") !== last.text) return "refused";
+  const tr = closeHistory(editor.state.tr);
+  tr.delete(last.from, last.to);
+  tr.setMeta(dictationPluginKey, { partial: "", scratch: true });
+  editor.view.dispatch(tr);
+  return "removed";
+}
+
+/** Drop the dictated history so scratch never reaches into another editor. */
+export function resetDictationHistory(editor: Editor): void {
+  if (editor.isDestroyed) return;
+  editor.view.dispatch(
+    editor.state.tr
+      .setMeta(dictationPluginKey, { partial: "", reset: true })
+      .setMeta("addToHistory", false)
+  );
+}
+
 /** Apply a finished line in one transaction and one undo step. */
 export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): void {
   if (edits.length === 0) return;
   const { state } = editor;
+  const startPos = state.selection.from;
   const tr = closeHistory(state.tr);
   for (const edit of edits) {
     if (edit.kind === "paragraph") {
@@ -148,7 +296,12 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
       tr.insertText(spaced, from, to);
     }
   }
-  tr.setMeta(dictationPluginKey, "");
+  const endPos = tr.selection.from;
+  // Map the caret with assoc -1 so it stays before the inserted text
+  // (the default assoc 1 lands after it, leaving an empty span).
+  const mappedStart = tr.mapping.map(startPos, -1);
+  const added = extractDictatedSentences(tr.doc, mappedStart, endPos);
+  tr.setMeta(dictationPluginKey, { partial: "", added });
   editor.view.dispatch(tr);
 }
 
@@ -166,18 +319,44 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
 
   addProseMirrorPlugins() {
     return [
-      new Plugin<string>({
+      new Plugin<DictationPluginState>({
         key: dictationPluginKey,
         state: {
-          init: () => "",
-          apply: (tr, value) => {
-            const meta = tr.getMeta(dictationPluginKey);
-            return typeof meta === "string" ? meta : value;
+          init: () => ({ ...INITIAL_PLUGIN_STATE, history: [] }),
+          apply: (tr, prev) => {
+            let history = prev.history;
+            if (tr.docChanged) {
+              history = history.map((entry) => ({
+                from: tr.mapping.map(entry.from),
+                to: tr.mapping.map(entry.to),
+                text: entry.text,
+              }));
+            }
+            const meta = tr.getMeta(dictationPluginKey) as DictationMeta;
+            let partial = prev.partial;
+            if (typeof meta === "string") {
+              partial = meta;
+            } else if (meta && typeof meta === "object") {
+              if (typeof meta.partial === "string") partial = meta.partial;
+              if (meta.reset === true) {
+                history = [];
+              } else {
+                if (meta.scratch === true && history.length > 0) {
+                  history = history.slice(0, -1);
+                }
+                if (Array.isArray(meta.added) && meta.added.length > 0) {
+                  history = [...history, ...meta.added].slice(-MAX_DICTATED_SENTENCES);
+                }
+              }
+            }
+            if (partial === prev.partial && sameHistory(history, prev.history)) return prev;
+            return { partial, history };
           },
         },
         props: {
           decorations(state) {
-            const text = dictationPluginKey.getState(state);
+            const pluginState = dictationPluginKey.getState(state);
+            const text = pluginState?.partial ?? "";
             if (!text) return null;
             const pos = state.selection.to;
             const shown = (needsSpaceBefore(state.doc, pos) ? " " : "") + text;
@@ -223,13 +402,22 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
       showPartial: (text) => {
         if (editor.isDestroyed) return;
         editor.view.dispatch(
-          editor.state.tr.setMeta(dictationPluginKey, text).setMeta("addToHistory", false)
+          editor.state.tr
+            .setMeta(dictationPluginKey, { partial: text })
+            .setMeta("addToHistory", false)
         );
       },
       before: () => textBeforeCaret(editor),
       apply: (edits) => {
         if (editor.isDestroyed || !editor.isEditable) return;
         applyDictationEdits(editor, edits);
+      },
+      scratch: () => {
+        if (editor.isDestroyed || !editor.isEditable) return "empty";
+        return scratchDictation(editor);
+      },
+      resetScratch: () => {
+        resetDictationHistory(editor);
       },
     };
     this.storage.unregister = dictationHub.register(target);

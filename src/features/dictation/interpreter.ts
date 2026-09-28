@@ -62,9 +62,22 @@ export interface InterpretInput {
 }
 
 export interface InterpretResult {
-  result: { kind: "edits"; edits: DictationEdit[] };
+  result: { kind: "edits"; edits: DictationEdit[] } | { kind: "scratch" };
   state: InterpreterState;
   spokenPunctuationCount: number;
+}
+
+/** Whole-line scratch phrases per Dictation Language (ADR 0014: Spoken Punctuation config, not Commands). */
+export const SCRATCH_PHRASES: Record<DictationLanguage, readonly string[]> = {
+  en: ["scratch that"],
+  es: ["borra eso"],
+};
+
+/** Whole-line match for scratch that: folds case and accents, ignores model punctuation. */
+export function isScratchLine(line: string, language: DictationLanguage): boolean {
+  const norm = normalizePhrase(line);
+  if (norm === "") return false;
+  return SCRATCH_PHRASES[language].some((phrase) => normalizePhrase(phrase) === norm);
 }
 
 export interface PhraseDefinition {
@@ -244,6 +257,11 @@ export function interpret(input: InterpretInput): InterpretResult {
   const tokens = tokenize(line);
   if (tokens.length === 0) {
     return { result: { kind: "edits", edits: [] }, state, spokenPunctuationCount: 0 };
+  }
+
+  // Built-in whole-line words (ADR 0015 order): scratch that never acts inside prose.
+  if (isScratchLine(line, table.language)) {
+    return { result: { kind: "scratch" }, state, spokenPunctuationCount: 0 };
   }
 
   const allowPunctuation = !capabilities.punctuation;

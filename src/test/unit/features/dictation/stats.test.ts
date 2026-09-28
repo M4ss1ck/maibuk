@@ -9,6 +9,7 @@ const summary = (
   medianInterpreterMs: null as number | null,
   maxInterpreterMs: null as number | null,
   spokenPunctuationCount: 0,
+  scratchCount: 0,
   ...overrides,
 });
 
@@ -90,6 +91,24 @@ describe("createLineStats()", () => {
         medianInterpreterMs: 10,
         maxInterpreterMs: 10,
       })
+    );
+  });
+
+  it("sums scratch uses across every interpreted line", () => {
+    const stats = createLineStats();
+    stats.recordInterpreter(8, 0, 1);
+    stats.recordInterpreter(9, 2, 0);
+    stats.recordInterpreter(7, 1, 1);
+    const result = stats.summary();
+    expect(result.scratchCount).toBe(2);
+    expect(result.spokenPunctuationCount).toBe(3);
+  });
+
+  it("defaults scratch uses to zero for older callers", () => {
+    const stats = createLineStats();
+    stats.recordInterpreter(8, 2);
+    expect(stats.summary()).toEqual(
+      summary({ medianInterpreterMs: 8, maxInterpreterMs: 8, spokenPunctuationCount: 2 })
     );
   });
 });

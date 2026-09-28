@@ -15,6 +15,7 @@ const defaultSummary: LineStatsSummary = {
   medianInterpreterMs: 8,
   maxInterpreterMs: 15,
   spokenPunctuationCount: 4,
+  scratchCount: 2,
 };
 const summaryMock = vi.fn<() => LineStatsSummary>(() => defaultSummary);
 vi.mock("@/features/dictation/runtime", () => ({
@@ -266,7 +267,7 @@ describe("DictationSection", () => {
     render(<DictationSection />);
     expect(
       await screen.findByText(
-        "Interpreter: typical delay 1.015 ms, worst delay 2.015 ms, spoken punctuation 4"
+        "Interpreter: typical delay 1.015 ms, worst delay 2.015 ms, spoken punctuation 4, scratch that 2"
       )
     ).toBeInTheDocument();
   });
@@ -278,6 +279,7 @@ describe("DictationSection", () => {
       medianInterpreterMs: null,
       maxInterpreterMs: null,
       spokenPunctuationCount: 0,
+      scratchCount: 0,
     });
     render(<DictationSection />);
     expect(await screen.findByText(/Recent lines: 1/)).toBeInTheDocument();
@@ -289,7 +291,7 @@ describe("DictationSection", () => {
     render(<DictationSection />);
     expect(
       await screen.findByText(
-        "Intérprete: demora típica 8 ms, peor demora 15 ms, puntuación dictada 4"
+        "Intérprete: demora típica 8 ms, peor demora 15 ms, puntuación dictada 4, borra eso 2"
       )
     ).toBeInTheDocument();
   });

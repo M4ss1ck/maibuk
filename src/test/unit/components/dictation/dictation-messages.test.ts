@@ -36,6 +36,17 @@ describe("noticeMessage()", () => {
       noticeMessage({ kind: "error", code: "cancelled" }, t).toast?.variant,
     ).toBe("info");
   });
+  it("announces a refused scratch without a toast", () => {
+    const message = noticeMessage({ kind: "scratch_refused" }, t);
+    expect(message.toast).toBeUndefined();
+    expect(message.announce).toBe("Nothing removed. Scratch that only removes text that hasn't been edited.");
+  });
+  it("announces a refused scratch in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "scratch_refused" }, es).announce).toBe(
+      "No se eliminó nada. Borra eso solo elimina texto que no ha sido editado."
+    );
+  });
   it("announces an orphan copied to the clipboard", () => {
     const message = noticeMessage({ kind: "orphan_copied" }, t);
     expect(message.toast?.variant).toBe("info");

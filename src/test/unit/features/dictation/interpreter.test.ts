@@ -3,6 +3,7 @@ import {
   INITIAL_INTERPRETER_STATE,
   buildPhraseTable,
   interpret,
+  isScratchLine,
   normalizePhrase,
   type InterpreterState,
 } from "@/features/dictation/interpreter";
@@ -133,7 +134,7 @@ describe("interpret() contract", () => {
       table: esTable,
       state: INITIAL_INTERPRETER_STATE,
     });
-    expect(result.edits).toEqual([{ kind: "text", text: "hola mundo" }]);
+    expect(result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "hola mundo" }] });
   });
 
   it("keeps the model's period before a spoken paragraph break", () => {
@@ -144,11 +145,14 @@ describe("interpret() contract", () => {
       table: esTable,
       state: INITIAL_INTERPRETER_STATE,
     });
-    expect(result.edits).toEqual([
-      { kind: "text", text: "Termina." },
-      { kind: "paragraph" },
-      { kind: "text", text: "Sigue" },
-    ]);
+    expect(result).toEqual({
+      kind: "edits",
+      edits: [
+        { kind: "text", text: "Termina." },
+        { kind: "paragraph" },
+        { kind: "text", text: "Sigue" },
+      ],
+    });
   });
 
   it("capitalizes after adjacent model sentence marks", () => {
@@ -159,7 +163,10 @@ describe("interpret() contract", () => {
       table: esTable,
       state: INITIAL_INTERPRETER_STATE,
     });
-    expect(result.edits).toEqual([{ kind: "text", text: "Hola?! Cómo sigues" }]);
+    expect(result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Hola?! Cómo sigues" }],
+    });
   });
 
   it("matches decomposed accents as one phrase", () => {
@@ -172,10 +179,63 @@ describe("interpret() contract", () => {
       table: esTable,
       state: INITIAL_INTERPRETER_STATE,
     });
-    expect(result.edits).toEqual([
-      { kind: "text", text: "Hola" },
-      { kind: "paragraph" },
-      { kind: "text", text: "Mundo" },
-    ]);
+    expect(result).toEqual({
+      kind: "edits",
+      edits: [
+        { kind: "text", text: "Hola" },
+        { kind: "paragraph" },
+        { kind: "text", text: "Mundo" },
+      ],
+    });
+  });
+});
+
+describe("interpret() scratch that", () => {
+  const esTable = buildPhraseTable("es");
+  const enTable = buildPhraseTable("en");
+  const caps: Capabilities = { casing: false, punctuation: false, streaming: true };
+
+  it("matches the whole line per language, folding case and model punctuation", () => {
+    expect(isScratchLine("borra eso", "es")).toBe(true);
+    expect(isScratchLine("Borra eso.", "es")).toBe(true);
+    expect(isScratchLine("¡BORRA ESO!", "es")).toBe(true);
+    expect(isScratchLine("scratch that", "en")).toBe(true);
+    expect(isScratchLine("Scratch that.", "en")).toBe(true);
+  });
+
+  it("does not cross languages", () => {
+    expect(isScratchLine("scratch that", "es")).toBe(false);
+    expect(isScratchLine("borra eso", "en")).toBe(false);
+  });
+
+  it("never acts inside prose", () => {
+    expect(isScratchLine("dije borra eso alto", "es")).toBe(false);
+    expect(isScratchLine("I said scratch that loudly", "en")).toBe(false);
+    expect(isScratchLine("", "es")).toBe(false);
+  });
+
+  it("returns a scratch result with unchanged state", () => {
+    const state = { capitalizeNext: true, noSpaceNext: false };
+    const out = interpret({
+      line: "Borra eso.",
+      before: "hola ",
+      capabilities: caps,
+      table: esTable,
+      state,
+    });
+    expect(out.result).toEqual({ kind: "scratch" });
+    expect(out.state).toBe(state);
+    expect(out.spokenPunctuationCount).toBe(0);
+  });
+
+  it("returns scratch in English", () => {
+    const out = interpret({
+      line: "scratch that",
+      before: "",
+      capabilities: { casing: true, punctuation: true, streaming: true },
+      table: enTable,
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(out.result).toEqual({ kind: "scratch" });
   });
 });
