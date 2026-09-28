@@ -55,7 +55,7 @@ export const EXCLUSIONS: Exclusion[] = [
       "Dictation Vocabulary",
     ],
     reason: "Decided, not built (ADR 0014, ADR 0015); the v1 build adds their rows",
-    owner: "Dictation Command Interpreter v1, from https://github.com/M4ss1ck/maibuk/pull/261",
+    owner: "Dictation Command Interpreter v1: https://github.com/M4ss1ck/maibuk/issues/275",
   },
   {
     kind: "behavior",
