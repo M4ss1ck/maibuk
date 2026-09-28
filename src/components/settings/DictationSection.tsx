@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { MODEL_CATALOG, modelsFor } from "@/features/dictation/catalog";
@@ -24,6 +24,7 @@ export function DictationSection() {
   } | null>(null);
 
   const [device, setDevice] = useState<string | null>(null);
+  const actionRefs = useRef(new Map<string, HTMLButtonElement>());
   // Support is null until the runtime reports; a build failure leaves it null for good.
   const [settled, setSettled] = useState(false);
 
@@ -86,73 +87,72 @@ export function DictationSection() {
                     </div>
                   )}
                 </div>
-                {download ? (
-                  <>
-                    <progress
-                      className="h-2 w-40 appearance-none overflow-hidden rounded-lg bg-border [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-border [&::-webkit-progress-value]:bg-primary"
-                      max={100}
-                      value={Math.round((download.done / download.total) * 100)}
-                      aria-valuenow={Math.round((download.done / download.total) * 100)}
-                      aria-label={t("dictation.section.progress", {
-                        done: Math.round(download.done / MB),
-                        total: Math.round(download.total / MB),
-                      })}
-                    />
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        void getDictation()
-                          .then((r) => r.cancelInstall(spec.id))
-                          .catch(() => {})
-                      }
-                    >
-                      {t("dictation.section.cancel")}
-                    </Button>
-                  </>
-                ) : isInstalled ? (
-                  <>
-                    {inUse ? (
-                      <span className="text-sm">
-                        {t("dictation.section.inUse", {
-                          language: t(`dictation.languages.${language}`),
-                        })}
-                      </span>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setPreferred(language, spec.tier)}
-                      >
-                        {t("dictation.section.useThis", {
-                          language: t(`dictation.languages.${language}`),
-                        })}
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        void getDictation()
-                          .then((r) => r.remove(spec.id))
-                          .catch(() => {})
-                      }
-                    >
-                      {t("dictation.section.remove")}
-                    </Button>
-                  </>
-                ) : (
+                {download && (
+                  <progress
+                    key="progress"
+                    className="h-2 w-40 appearance-none overflow-hidden rounded-lg bg-border [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-border [&::-webkit-progress-value]:bg-primary"
+                    max={100}
+                    value={Math.round((download.done / download.total) * 100)}
+                    aria-valuenow={Math.round((download.done / download.total) * 100)}
+                    aria-label={t("dictation.section.progress", {
+                      done: Math.round(download.done / MB),
+                      total: Math.round(download.total / MB),
+                    })}
+                  />
+                )}
+                {!download && isInstalled && inUse && (
+                  <span key="in-use" className="text-sm">
+                    {t("dictation.section.inUse", {
+                      language: t(`dictation.languages.${language}`),
+                    })}
+                  </span>
+                )}
+                {!download && isInstalled && !inUse && (
                   <Button
+                    key="use"
+                    variant="secondary"
                     size="sm"
-                    onClick={() =>
-                      void getDictation()
-                        .then((r) => r.install(spec))
-                        .catch(() => {})
-                    }
+                    onClick={() => {
+                      setPreferred(language, spec.tier);
+                      // The button becomes text; keep focus in the row.
+                      actionRefs.current.get(spec.id)?.focus();
+                    }}
                   >
-                    {t("dictation.section.download")}
+                    {t("dictation.section.useThis", {
+                      language: t(`dictation.languages.${language}`),
+                    })}
                   </Button>
                 )}
+                {/* One action button whose label follows the row's state
+                    (Download, Cancel, Remove), so focus stays on it. */}
+                <Button
+                  key="action"
+                  ref={(el) => {
+                    if (el) actionRefs.current.set(spec.id, el);
+                    else actionRefs.current.delete(spec.id);
+                  }}
+                  variant={download ? "secondary" : isInstalled ? "ghost" : "primary"}
+                  size="sm"
+                  onClick={() =>
+                    void getDictation()
+                      .then((r) =>
+                        download
+                          ? r.cancelInstall(spec.id)
+                          : isInstalled
+                            ? r.remove(spec.id)
+                            : r.install(spec),
+                      )
+                      .catch(() => {})
+                  }
+                >
+                  {t(
+                    download
+                      ? "dictation.section.cancel"
+                      : isInstalled
+                        ? "dictation.section.remove"
+                        : "dictation.section.download",
+                  )}
+                </Button>
               </fieldset>
             );
           })}

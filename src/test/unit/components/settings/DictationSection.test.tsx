@@ -87,6 +87,39 @@ describe("DictationSection", () => {
     expect(cancelInstall).toHaveBeenCalledWith(esFast.id);
   });
 
+  // The row's action button swapped elements on every state change, dropping
+  // keyboard focus to <body> (found by the dictation E2E spec).
+  it("keeps focus on the row's action through download, install, and remove", async () => {
+    const { act } = await import("@testing-library/react");
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
+    within(row).getByRole("button", { name: /download/i }).focus();
+    await user.keyboard("{Enter}");
+    act(() =>
+      useDictationStore.setState({ downloads: { [esFast.id]: { done: 1, total: 2 } } }),
+    );
+    expect(within(row).getByRole("button", { name: /cancel/i })).toHaveFocus();
+    act(() => useDictationStore.setState({ downloads: {}, installed: [esFast.id] }));
+    expect(within(row).getByRole("button", { name: /remove/i })).toHaveFocus();
+    act(() => useDictationStore.setState({ installed: [] }));
+    expect(within(row).getByRole("button", { name: /download/i })).toHaveFocus();
+  });
+
+  it("moves focus to Remove when a model becomes the one in use", async () => {
+    useDictationStore.setState({
+      installed: [esFast.id],
+      preferredTier: { en: "fast", es: "accurate" },
+    });
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
+    within(row).getByRole("button", { name: /use for/i }).focus();
+    await user.keyboard("{Enter}");
+    expect(within(row).getByText(/used for spanish/i)).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /remove/i })).toHaveFocus();
+  });
+
   it("removes an installed model by keyboard", async () => {
     useDictationStore.setState({ installed: [esFast.id] });
     const user = userEvent.setup();
