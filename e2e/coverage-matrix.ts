@@ -2111,4 +2111,38 @@ export const ROWS: MatrixRow[] = [
     tags: [],
     status: "accepted",
   },
+  {
+    id: "dictation-toggle",
+    area: "editor",
+    workflow:
+      "Open a Chapter, Mod+Shift+Space starts Dictation (live region: Dictation on, English), speech lands at the caret as text, Escape stops (Dictation off), Mod+Z removes the last spoken line",
+    edges: [
+      "the floating mic button toggles the same session by Enter",
+      "the language picker switches language with arrow keys",
+      "with no model downloaded, Mod+Shift+Space shows the no-model hint and the mic leads to Settings",
+      "WebKit shows no dictation control (not cross-origin isolated without credentialless)",
+    ],
+    terms: ["Dictation", "Dictation Session"],
+    shortcuts: ["dictation.toggle", "dictation.stop"],
+    routes: ["/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
+    id: "dictation-settings",
+    area: "settings",
+    workflow:
+      "Settings → Dictation: Tab to English Fast, Enter downloads with progress, the row shows Downloaded; Remove by keyboard returns it to Download",
+    edges: [
+      "Cancel during download leaves the model not downloaded",
+      "a failed download (fixture 404) shows the error toast and a Download button again",
+    ],
+    terms: ["Dictation Model"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
 ];

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useTheme } from "@/features/theme";
 import {
   useSettings,
@@ -39,6 +40,7 @@ import { SyncControls } from "@/components/sync/SyncControls";
 import { BackupSection } from "@/components/settings/BackupSection";
 import { MetricsSection } from "@/components/settings/MetricsSection";
 import { PasteCleanupSection } from "@/components/settings/PasteCleanupSection";
+import { DictationSection } from "@/components/settings/DictationSection";
 import { TutorialSection } from "@/components/settings/TutorialSection";
 import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { AsciiBanner } from "@/components/settings/AsciiBanner";
@@ -49,6 +51,7 @@ import { applyAccentColor } from "@/features/settings/accent-color";
 export function Settings() {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
+  const location = useLocation();
   const { latestVersion, isOutdated } = useVersionCheck(APP_VERSION);
   const {
     appFontSize,
@@ -107,6 +110,21 @@ export function Settings() {
   const [isResetting, setIsResetting] = useState(false);
 
   const updateAvailable = isOutdated && latestVersion;
+
+  // A control elsewhere links to Settings → Dictation by hash; scroll to it.
+  // Two frames wait for the section to be in the DOM; location.key re-scrolls
+  // on a repeated navigation to the same hash.
+  useEffect(() => {
+    if (location.hash !== "#dictation") return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById("dictation")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
+  }, [location.hash, location.key]);
 
   const handleExportDatabase = async () => {
     setIsExporting(true);
@@ -628,6 +646,17 @@ export function Settings() {
               <PasteCleanupSection />
             </div>
           </div>
+        </section>
+
+        {/* Dictation */}
+        <section
+          id="dictation"
+          className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
+        >
+          <h2 className="text-lg text-primary font-medium mb-4">
+            {t("dictation.section.title")}
+          </h2>
+          <DictationSection />
         </section>
 
         {/* Export Settings */}

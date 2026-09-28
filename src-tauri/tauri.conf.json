@@ -29,13 +29,25 @@
     "longDescription": "Maibuk is a cross-platform writing application designed for authors. Create books, manage chapters, design covers, and export to EPUB and PDF.",
     "linux": {
       "appimage": {
-        "bundleMediaFramework": false
+        "bundleMediaFramework": false,
+        "files": {
+          "usr/lib/maibuk/libmoonshine.so": "../vendor/moonshine/linux-x86_64/lib/libmoonshine.so",
+          "usr/lib/maibuk/libonnxruntime.so.1": "../vendor/moonshine/linux-x86_64/lib/libonnxruntime.so.1"
+        }
       },
       "deb": {
-        "depends": []
+        "depends": [],
+        "files": {
+          "/usr/lib/maibuk/libmoonshine.so": "../vendor/moonshine/linux-x86_64/lib/libmoonshine.so",
+          "/usr/lib/maibuk/libonnxruntime.so.1": "../vendor/moonshine/linux-x86_64/lib/libonnxruntime.so.1"
+        }
       },
       "rpm": {
-        "depends": []
+        "depends": [],
+        "files": {
+          "/usr/lib/maibuk/libmoonshine.so": "../vendor/moonshine/linux-x86_64/lib/libmoonshine.so",
+          "/usr/lib/maibuk/libonnxruntime.so.1": "../vendor/moonshine/linux-x86_64/lib/libonnxruntime.so.1"
+        }
       }
     },
     "windows": {

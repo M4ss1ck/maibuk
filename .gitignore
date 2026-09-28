@@ -38,3 +38,6 @@ docs/superpowers/
 
 # Playwright E2E output (traces, screenshots, report, seeds, web build)
 e2e/.output/
+
+# Fetched Moonshine runtimes (never committed; run `pnpm fetch:dictation`)
+vendor/

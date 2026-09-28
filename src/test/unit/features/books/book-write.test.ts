@@ -51,6 +51,24 @@ describe("book write path", () => {
     resetChangeFeedForTests();
   });
 
+  it("creates a book in the app language", async () => {
+    const { useSettingsStore } = await import("@/features/settings/store");
+    useSettingsStore.setState({ language: "es" });
+    const book = await useBookStore.getState().createBook({ title: "Nueva", authorName: "Yo" });
+    expect(book.language).toBe("es");
+    expect((await readBookRow(book.id)).language).toBe("es");
+  });
+
+  it("keeps an explicit book language", async () => {
+    const { useSettingsStore } = await import("@/features/settings/store");
+    useSettingsStore.setState({ language: "es" });
+    const book = await useBookStore
+      .getState()
+      .createBook({ title: "New", authorName: "Me", language: "en" });
+    expect(book.language).toBe("en");
+    expect((await readBookRow(book.id)).language).toBe("en");
+  });
+
   it("creates a book as a local content change with Last Edited set", async () => {
     const book = await useBookStore.getState().createBook({ title: "New", authorName: "Me" });
 

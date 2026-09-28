@@ -1,5 +1,6 @@
 mod android_exit;
 mod backup;
+mod dictation;
 mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -46,13 +47,25 @@ pub fn run() {
         ));
 
     builder
+        .manage(dictation::commands::DictationState::default())
         .invoke_handler(tauri::generate_handler![
             tray::set_tray_syncing,
             android_exit::exit_app,
             backup::pick_backup_directory,
             backup::request_backup_directory,
             backup::restore_backup_directory,
-            backup::forget_backup_directory
+            backup::forget_backup_directory,
+            dictation::commands::dictation_is_supported,
+            dictation::commands::dictation_load,
+            dictation::commands::dictation_start,
+            dictation::commands::dictation_stop,
+            dictation::commands::dictation_set_context,
+            dictation::commands::dictation_unload,
+            dictation::commands::dictation_input_device,
+            dictation::commands::dictation_models_install,
+            dictation::commands::dictation_models_cancel,
+            dictation::commands::dictation_models_is_complete,
+            dictation::commands::dictation_models_remove
         ])
         .setup(|app| {
             backup::protect_approval(app.handle())?;

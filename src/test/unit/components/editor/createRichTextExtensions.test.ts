@@ -23,6 +23,7 @@ describe("createRichTextExtensions", () => {
         "symbolAutocomplete",
         "footnote",
         "spellCheck",
+        "dictation",
       ])
     );
     expect(new Set(names).size).toBe(names.length);

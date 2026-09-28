@@ -36,7 +36,26 @@ export default defineConfig<{ macPlatform: boolean }>({
     ...shared,
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"], ...shared } },
+    {
+      name: "chromium",
+      // The fake microphone is a Chromium flag; the WebKit-only edge runs in
+      // its own project (tagged @webkit-only) and never here.
+      grepInvert: /@webkit-only/,
+      use: {
+        ...devices["Desktop Chrome"],
+        ...shared,
+        launchOptions: {
+          args: [
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
+            `--use-file-for-fake-audio-capture=${resolve(
+              import.meta.dirname,
+              "../vendor/moonshine/audio/two_cities_short.wav"
+            )}`,
+          ],
+        },
+      },
+    },
     {
       name: "webkit",
       // WebKit cannot grant clipboard permissions; clipboard rows are chromium-only.

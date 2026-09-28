@@ -386,21 +386,44 @@ Passes run:
 
 ### Could not verify
 
-- **Moonshine accuracy and latency on Maibuk's targets.** All numbers are vendor-measured, English-only for latency, native not WASM, and "end of speech to final", not first partial. Settle: the spike in section 7.
+- **Moonshine accuracy and latency on Maibuk's targets.** All numbers are vendor-measured, English-only for latency, native not WASM, and "end of speech to final", not first partial. Settle: the spike in section 7. **Settled by the [spike](#spike-results-2026-09-27), latency only:** web (Chromium) and Linux native are measured; Android, Windows, and WER on Andy's recordings are still open.
 - **Parameter counts.** Docs say 123M/34M (Small/Tiny Streaming); the Spanish HF cards say 112.9M/27.0M. Settle: count tensors in the HF safetensors, or ask on Moonshine's Discord.
-- **Spanish punctuation, `¿`/`¡`, and fillers in Moonshine output.** WER is computed after normalization. Settle: transcribe a Spanish recording and inspect.
-- **Moonshine memory use** (RAM for Tiny/Small, native and WASM). Not documented. Settle: measure in the spike.
-- **Moonshine WASM under Vite.** Whether Vite rewrites `new URL('./stt-worker.js', import.meta.url)` inside the dependency and whether pthread workers resolve under Tauri's custom protocol. Settle: a build of the web target with the package.
+- **Spanish punctuation, `¿`/`¡`, and fillers in Moonshine output.** WER is computed after normalization. Settle: transcribe a Spanish recording and inspect. **Settled by the [spike](#spike-results-2026-09-27):** Spanish output has no capitals and no punctuation at all; fillers are still unmeasured.
+- **Moonshine memory use** (RAM for Tiny/Small, native and WASM). Not documented. Settle: measure in the spike. **Settled by the [spike](#spike-results-2026-09-27):** native 155 MB (Tiny es) to 477 MB (Small en) peak RSS; web +512 to +890 MB across browser processes.
+- **Moonshine WASM under Vite.** Whether Vite rewrites `new URL('./stt-worker.js', import.meta.url)` inside the dependency and whether pthread workers resolve under Tauri's custom protocol. Settle: a build of the web target with the package. **Settled by the [spike](#spike-results-2026-09-27):** the package's worker does not survive Maibuk's Vite config; a Maibuk-owned worker does.
 - **Single-thread Moonshine WASM speed.** Not published. Settle: build with `-DMOONSHINE_WASM_SINGLE_THREAD=ON` and benchmark.
 - **Android WebView `SharedArrayBuffer`.** Based on MDN BCD (`version_added: false`), not a device test. Settle: `typeof SharedArrayBuffer` and `crossOriginIsolated` inside Maibuk's Android build with COOP/COEP set through `app.security.headers`.
 - **Whether `app.security.headers` apply on Android and Linux.** The Tauri page does not state platform limits. Settle: read response headers in each webview's devtools.
-- **Linux webview mic with `enable-media-stream` on.** Tauri #15277 was closed as a local integration problem, so it may work with the right setup. Settle: a minimal Tauri app enabling the setting via `with_webview` and handling `permission-request`.
-- **WebKitGTK `SpeechRecognition`.** The GTK options list no speech recognition option; not tested at runtime. Settle: `'webkitSpeechRecognition' in window` in Maibuk's Linux build.
+- **Linux webview mic with `enable-media-stream` on.** Tauri #15277 was closed as a local integration problem, so it may work with the right setup. Settle: a minimal Tauri app enabling the setting via `with_webview` and handling `permission-request`. **Settled by the [spike](#spike-results-2026-09-27):** denied with `NotAllowedError`; Rust `cpal` capture is the path.
+- **WebKitGTK `SpeechRecognition`.** The GTK options list no speech recognition option; not tested at runtime. Settle: `'webkitSpeechRecognition' in window` in Maibuk's Linux build. **Settled by the [spike](#spike-results-2026-09-27):** absent.
 - **Android WebView `SpeechRecognition`.** BCD lists it (139, and prefixed since 4.4.3) but without `processLocally`. Settle: device test. Irrelevant for "offline" either way.
-- **WebKitGTK WebGPU in distro builds.** CMake default is off; distributions may differ. Settle: `navigator.gpu` in the Linux build.
+- **WebKitGTK WebGPU in distro builds.** CMake default is off; distributions may differ. Settle: `navigator.gpu` in the Linux build. **Settled by the [spike](#spike-results-2026-09-27):** absent.
 - **Android on-device `SpeechRecognizer` Spanish quality and continuity.** Vendor- and device-dependent. Settle: device test.
 - **Whisper Spanish WER per model size.** Not extracted from the Whisper paper's appendix. Settle: read Appendix D.2.4 of https://cdn.openai.com/papers/whisper.pdf.
 - **Kroko Spanish accuracy.** No WER found in the sources read. Settle: Kroko's own benchmark page or a spike run.
 - **sherpa-onnx WASM threading.** Inferred single-threaded from CMake flags without `-pthread`; not run. Settle: build and check `crossOriginIsolated` requirement.
 - **Voxtral Realtime on consumer hardware.** Card claims on-device suitability but documents a ≥16 GB GPU for BF16; no quantized build checked. Settle: look for an official GGUF/ONNX int4 build and measure.
 - **Whether Maibuk's minSdk 24 can link Moonshine's AAR.** Gradle manifest merge normally fails on a higher library `minSdk` unless overridden; not tried. Settle: add the dependency and run `pnpm build:android`.
+
+---
+
+## Spike results (2026-09-27)
+
+The spike is throwaway and lives on the `spike-voice-dictation` branch (never merges): its README, the dictation page and worker, the Rust engine, and a Tauri shell behind a `dictation-spike` Cargo feature. It answered section 7 for the web and Linux desktop paths. Android, Windows, and accuracy on real recordings are still open. The branch's own README, `spike/dictation/README.md`, holds the raw tables.
+
+Moonshine streaming works on both paths, fast enough, with zero main-thread jank. But four things the research above assumed are wrong:
+
+1. **Spanish output has no capitals and no punctuation.** Tiny and Small Spanish both return lowercase text with no commas, periods, `¿` or `¡`. Both English models return cased, punctuated text. Nothing in Moonshine's repo or the model cards says so. Recommendation 7's "rely on the model's own case and punctuation" holds for English only; Spanish needs a punctuation and truecasing pass before v1.
+2. **The npm package is stale.** The catalog of `@moonshine-ai/moonshine-wasm@0.1.5` has no Spanish streaming model and rejects the current `frontend.model.ort` + `frontend.weights.ort` layout. The WASM in the GitHub release `moonshine-voice-wasm.tar.gz` (same tag) is current. `pnpm fetch:dictation` vendors that release, not npm.
+3. **The package's `SttWorkerHost` cannot be bundled by Vite.** Vite copies its `new URL("./stt-worker.js", import.meta.url)` as a raw asset so its `import "./transcriber.js"` 404s, inlines the base URL as a base64 `data:` URL, and rewrites the Emscripten pthread spawn. Maibuk owns its worker instead (`src/lib/platform/web/dictation/worker.ts`), which also lets the AudioWorklet post straight to it so the main thread never touches audio.
+4. **Default settings miss the latency bars.** With defaults the first partial lands about 1 s after speech starts. Two settings fix it: `transcription_interval=0.2` (a core option, default 0.5) plus, on the web, the JS `Stream` `updateInterval=0.2` (a second, separate gate). On native, `MOONSHINE_ORT_SINGLE_THREAD=1` is required or ONNX Runtime spins 5 to 7 cores for Tiny English.
+
+Confirmed from the Tauri shell on this machine (WebKitGTK, `AppleWebKit/605.1.15`):
+
+- `getUserMedia` fails with `NotAllowedError`. Webview mic capture is out on Linux; Rust capture is the path.
+- `SharedArrayBuffer` is `false` even with `crossOriginIsolated === true`. The threaded WASM cannot run in WebKitGTK at all, so desktop must be native.
+- No `SpeechRecognition`, no WebGPU, and no Long Tasks API in WebKitGTK.
+
+Against section 7's bars, measured: first partial 0.34 to 0.64 s p50 (Tiny Spanish is the exception at 0.84 to 0.88 s), final line 33 to 260 ms p50, zero main-thread long tasks while typing, native memory 155 MB (Tiny es) to 477 MB (Small en) peak RSS, web +512 to +890 MB. Spanish WER on Andy's recordings, fillers, Android, and Windows remain unmeasured.
+
+What production code needs out of this: own the worker, vendor the release WASM, bundle the two Linux `.so` files with an `$ORIGIN` rpath, add `libasound2-dev` as a Linux build dependency, guard the null `lines` pointer `moonshine_transcribe_stream` returns when there are no lines, and add a Spanish punctuation and truecasing pass before v1.

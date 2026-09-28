@@ -49,6 +49,7 @@ import {
   MaibukLogo,
 } from "@/components/icons";
 import { BookSettingsDialog } from "@/components/book/BookSettingsDialog";
+import { DictationControl } from "@/components/dictation";
 import { deriveNoteTitle } from "@/components/book/deriveNoteTitle";
 import { useNoteStore } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
@@ -1539,6 +1540,8 @@ export function BookEditor() {
           autoFocus
         />
       </Modal>
+
+      <DictationControl />
     </div>
   );
 }

@@ -10,14 +10,30 @@ const host = process.env.TAURI_DEV_HOST;
 const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
 const isWeb = buildTarget === "web";
 
+// Cross-origin isolation for threaded Dictation (SharedArrayBuffer). Matches
+// public/_headers in production; the E2E suite runs against `vite preview`, so
+// it inherits isolation from the `preview` block too.
+const isolation = {
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Embedder-Policy": "credentialless",
+};
+
 // https://vite.dev/config/
 export default defineConfig(() => ({
   envPrefix: ["VITE_", "TAURI_ENV_"],
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: {
-      "@": resolve(__dirname, "src"),
-    },
+    alias: [
+      { find: "@", replacement: resolve(__dirname, "src") },
+      {
+        find: /^moonshine-wasm$/,
+        replacement: resolve(__dirname, "vendor/moonshine/wasm/dist/index.js"),
+      },
+      {
+        find: /^moonshine-wasm\/(.*)$/,
+        replacement: resolve(__dirname, "vendor/moonshine/wasm/dist/$1"),
+      },
+    ],
   },
   worker: {
     format: "es" as const,
@@ -54,6 +70,16 @@ export default defineConfig(() => ({
         "src/features/notes/store.ts",
         "src/features/settings/store.ts",
         "src/features/settings/accent-color.ts",
+        "src/features/settings/app-language.ts",
+        "src/features/dictation/catalog.ts",
+        "src/features/dictation/crc32c.ts",
+        "src/features/dictation/model-store.ts",
+        "src/features/dictation/router.ts",
+        "src/features/dictation/stats.ts",
+        "src/features/dictation/hub.ts",
+        "src/features/dictation/runtime.ts",
+        "src/features/dictation/session.ts",
+        "src/features/dictation/store.ts",
         "src/lib/color.ts",
         "src/features/settings/toolbar-config.ts",
         "src/features/theme/store.ts",
@@ -214,9 +240,17 @@ export default defineConfig(() => ({
   // the module requests with index.html.
   base: "/",
 
+  preview: {
+    headers: isolation,
+  },
+
   // Only apply Tauri-specific options when building for Tauri
   ...(isWeb
-    ? {}
+    ? {
+        server: {
+          headers: isolation,
+        },
+      }
     : {
         // Vite options tailored for Tauri development
         // 1. prevent Vite from obscuring rust errors
@@ -237,6 +271,7 @@ export default defineConfig(() => ({
             // 3. tell Vite to ignore watching `src-tauri`
             ignored: ["**/src-tauri/**"],
           },
+          headers: isolation,
         },
       }),
 }));

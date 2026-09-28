@@ -12,6 +12,8 @@ import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
 import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
 import { reindexSource } from "@/features/links/link-index";
+import { appLanguage } from "@/features/settings/app-language";
+import type { DatabaseAdapter } from "@/lib/platform/types";
 import type {
   CreateNoteInput,
   Note,
@@ -65,6 +67,18 @@ export function toNote(row: Record<string, unknown>): Note {
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
+/** A Book Note writes in its Book's language; an Unfiled Note in the app's. */
+async function defaultNoteLanguage(db: DatabaseAdapter, bookId: string | null): Promise<string> {
+  if (bookId) {
+    const rows = await db.select<{ language: string | null }[]>(
+      "SELECT language FROM books WHERE id = ?",
+      [bookId]
+    );
+    if (rows[0]?.language) return rows[0].language;
+  }
+  return appLanguage();
+}
+
 async function readNote(id: string): Promise<Note | null> {
   const db = await getDatabase();
   const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [
@@ -86,13 +100,14 @@ export async function createNoteRow(
     'SELECT MAX("order") as max_order FROM notes'
   );
   const order = input.order ?? (orderResult[0]?.max_order ?? -1) + 1;
+  const language = input.language ?? (await defaultNoteLanguage(db, input.bookId ?? null));
 
   const note: Note = {
     id,
     bookId: input.bookId ?? null,
     title: input.title,
     content: input.content ?? "",
-    language: input.language ?? "en",
+    language,
     tags: input.tags ?? [],
     pinned: input.pinned ?? false,
     order,

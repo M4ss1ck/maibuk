@@ -51,7 +51,11 @@ describe("command registry", () => {
     expect(definition.contexts.length).toBeGreaterThan(0);
     if (prefix === "common") expect(definition.contexts.length).toBeGreaterThan(1);
     else if (prefix === "tutorial") expect(definition.contexts).toEqual(["global"]);
-    else expect(definition.contexts).toEqual([prefix]);
+    // Dictation is a feature, not a Context: its Commands are global or editor.
+    else if (prefix === "dictation") {
+      for (const context of definition.contexts)
+        expect(["global", "editor"]).toContain(context);
+    } else expect(definition.contexts).toEqual([prefix]);
   });
 
   it.each(COMMAND_IDS)("%s writes every Shortcut in canonical form", (id) => {

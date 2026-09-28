@@ -140,6 +140,7 @@ vi.mock("@/components/settings/AsciiFieldBackground", () => ({ AsciiFieldBackgro
 vi.mock("@/components/settings/BackupSection", () => ({ BackupSection: () => null }));
 vi.mock("@/components/settings/MetricsSection", () => ({ MetricsSection: () => null }));
 vi.mock("@/components/settings/PasteCleanupSection", () => ({ PasteCleanupSection: () => null }));
+vi.mock("@/components/settings/DictationSection", () => ({ DictationSection: () => null }));
 vi.mock("@/components/sync/SyncControls", () => ({ SyncControls: () => null }));
 vi.mock("@/components/sync/AuthDialog", () => ({ AuthDialog: () => null }));
 vi.mock("@/components/sync/PassphraseDialog", () => ({ PassphraseDialog: () => null }));

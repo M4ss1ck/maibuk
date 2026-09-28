@@ -108,6 +108,7 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
+            libasound2-dev \
             libgtk-3-dev
 
       - name: Rust setup
@@ -132,6 +133,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -152,6 +156,8 @@ jobs:
             src-tauri/target/x86_64-unknown-linux-gnu/release/maibuk
             src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/
             src-tauri/icons/128x128.png
+            vendor/moonshine/linux-x86_64/lib/libmoonshine.so
+            vendor/moonshine/linux-x86_64/lib/libonnxruntime.so.1
           retention-days: 1
 
   # Build for Windows using GNU toolchain
@@ -196,6 +202,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install
+
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
@@ -259,6 +268,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install
+
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
 
       - name: Restore Android signing material
         env:
@@ -331,11 +343,14 @@ jobs:
           # Create the expected directory structure
           mkdir -p src-tauri/target/release/bundle/deb
           mkdir -p src-tauri/icons
+          mkdir -p vendor/moonshine/linux-x86_64/lib
 
           # Move artifacts to expected locations
-          cp ./artifacts/target/x86_64-unknown-linux-gnu/release/maibuk src-tauri/target/release/maibuk
-          cp -r ./artifacts/target/x86_64-unknown-linux-gnu/release/bundle/deb/* src-tauri/target/release/bundle/deb/
-          cp ./artifacts/icons/128x128.png src-tauri/icons/
+          cp ./artifacts/src-tauri/target/x86_64-unknown-linux-gnu/release/maibuk src-tauri/target/release/maibuk
+          cp -r ./artifacts/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/* src-tauri/target/release/bundle/deb/
+          cp ./artifacts/src-tauri/icons/128x128.png src-tauri/icons/
+          cp ./artifacts/vendor/moonshine/linux-x86_64/lib/libmoonshine.so vendor/moonshine/linux-x86_64/lib/
+          cp ./artifacts/vendor/moonshine/linux-x86_64/lib/libonnxruntime.so.1 vendor/moonshine/linux-x86_64/lib/
 
           # Make binary executable
           chmod +x src-tauri/target/release/maibuk
