@@ -16,6 +16,8 @@ export interface DictationStoreState {
   preferredTier: Record<DictationLanguage, ModelTier>;
   /** The latest screen-reader announcement; the control renders it in a live region. */
   announcement: string;
+  /** The control's language choice for the Session; `session.setLanguage` owns the engine. */
+  languageOverride: DictationLanguage | null;
   setPreferredTier: (language: DictationLanguage, tier: ModelTier) => void;
 }
 
@@ -34,6 +36,7 @@ export const useDictationStore = create<DictationStoreState>()(
       downloads: {},
       preferredTier: { en: "fast", es: "fast" },
       announcement: "",
+      languageOverride: null,
       setPreferredTier: (language, tier) =>
         set((state) => ({
           preferredTier: { ...state.preferredTier, [language]: tier },
