@@ -5,6 +5,7 @@ import {
   type ModelStore,
 } from "@/features/dictation/model-store";
 import { createRouter } from "@/features/dictation/router";
+import { buildPhraseTable, interpret } from "@/features/dictation/interpreter";
 import { attachSession } from "@/features/dictation/hub";
 import {
   createDictationSession,
@@ -15,6 +16,7 @@ import { createLineStats, type LineStats } from "@/features/dictation/stats";
 import { pickModel, useDictationStore } from "@/features/dictation/store";
 import {
   toDictationError,
+  type DictationLanguage,
   type ModelSpec,
   type RecognizerHost,
 } from "@/features/dictation/types";
@@ -74,14 +76,35 @@ async function build(): Promise<DictationRuntime> {
   const stats = createLineStats();
   const aborts = new Map<string, AbortController>();
   let notify: (notice: SessionNotice) => void = () => {};
+  let selectedModel: ModelSpec | null = null;
+  let selectedLanguage: DictationLanguage = "es";
+  let interpreterState = { capitalizeNext: false, noSpaceNext: false };
+  const phraseTables = {
+    en: buildPhraseTable("en"),
+    es: buildPhraseTable("es"),
+  };
 
   const session = createDictationSession({
     host,
     modelFor: (language) => {
       const { installed, preferredTier } = useDictationStore.getState();
-      return pickModel(language, models.available(), installed, preferredTier);
+      selectedLanguage = language;
+      selectedModel = pickModel(language, models.available(), installed, preferredTier);
+      interpreterState = { capitalizeNext: false, noSpaceNext: false };
+      return selectedModel;
     },
-    route: createRouter(),
+    route: createRouter((line, before) => {
+      if (!selectedModel) return null;
+      const output = interpret({
+        line,
+        before,
+        capabilities: selectedModel.capabilities,
+        table: phraseTables[selectedLanguage],
+        state: interpreterState,
+      });
+      interpreterState = output.state;
+      return { ...output.result, spokenPunctuationCount: output.spokenPunctuationCount };
+    }),
     // Voice Commands (Anticipated) dispatch registry Commands here; v1's router never asks.
     runCommand: () => {},
     notify: (notice) => notify(notice),

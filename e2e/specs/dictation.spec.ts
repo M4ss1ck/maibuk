@@ -209,7 +209,7 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
   });
 });
 
-test.describe("@wf:dictation-toggle @sc:dictation.toggle @sc:dictation.stop @sc:dictation.cycleLanguage @chromium-only", () => {
+test.describe("@wf:dictation-toggle @wf:dictation-interpreter-stats @sc:dictation.toggle @sc:dictation.stop @sc:dictation.cycleLanguage @chromium-only", () => {
   test("dictates into a Chapter, Escape stops, undo removes the line", async ({ page }) => {
     await downloadEnglishFast(page);
     await openChapter(page);
@@ -231,6 +231,24 @@ test.describe("@wf:dictation-toggle @sc:dictation.toggle @sc:dictation.stop @sc:
 
     await page.keyboard.press("ControlOrMeta+z");
     await expect(editorText(page)).not.toContainText("worst of times");
+
+    await page.keyboard.press("Escape");
+    await tabTo(page, page.getByRole("button", { name: "Back to Home" }), {
+      backwards: true,
+      max: 120,
+    });
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("g");
+    await page.keyboard.press("s");
+    await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+    await page.locator("#dictation").scrollIntoViewIfNeeded();
+    await capture(page, "settings-dictation-interpreter", {
+      around: [page.locator("#dictation")],
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator("#dictation p").last().scrollIntoViewIfNeeded();
+    await capture(page, "settings-dictation-interpreter-narrow");
+    await expect(page.getByText(/Interpreter: typical delay/)).toBeVisible();
   });
 
   test("the floating mic button toggles the same session by Enter", async ({ page }) => {

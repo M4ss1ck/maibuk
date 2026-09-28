@@ -1,16 +1,33 @@
+export interface LineStatsSummary {
+  lines: number;
+  medianLatencyMs: number | null;
+  medianInterpreterMs: number | null;
+  maxInterpreterMs: number | null;
+  spokenPunctuationCount: number;
+}
+
 export interface LineStats {
   record(latencyMs: number | undefined): void;
-  summary(): { lines: number; medianLatencyMs: number | null };
+  recordInterpreter(durationMs: number, spokenPunctuationCount: number): void;
+  summary(): LineStatsSummary;
 }
 
 /**
- * Recent per-line engine latency, shown in Settings → Dictation. Memory only:
- * a Metrics event would sync to the server. With an even count the median is
- * the upper middle value, so it is always a latency that really happened.
+ * Recent per-line engine latency and Dictation Command Interpreter timing,
+ * shown in Settings → Dictation. Memory only: a Metrics event would sync to the
+ * server. With an even count the median is the upper middle value, so it is
+ * always a value that really happened.
  */
 export function createLineStats(capacity = 50): LineStats {
   const recent: number[] = [];
+  const recentInterpreter: number[] = [];
   let lines = 0;
+  let spokenPunctuationCount = 0;
+  const upperMiddle = (samples: number[]): number | null => {
+    if (samples.length === 0) return null;
+    const sorted = [...samples].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
   return {
     record(latencyMs) {
       lines += 1;
@@ -18,10 +35,19 @@ export function createLineStats(capacity = 50): LineStats {
       recent.push(latencyMs);
       if (recent.length > capacity) recent.shift();
     },
+    recordInterpreter(durationMs, spoken) {
+      spokenPunctuationCount += spoken;
+      recentInterpreter.push(durationMs);
+      if (recentInterpreter.length > capacity) recentInterpreter.shift();
+    },
     summary() {
-      if (recent.length === 0) return { lines, medianLatencyMs: null };
-      const sorted = [...recent].sort((a, b) => a - b);
-      return { lines, medianLatencyMs: sorted[Math.floor(sorted.length / 2)] };
+      return {
+        lines,
+        medianLatencyMs: upperMiddle(recent),
+        medianInterpreterMs: upperMiddle(recentInterpreter),
+        maxInterpreterMs: recentInterpreter.length === 0 ? null : Math.max(...recentInterpreter),
+        spokenPunctuationCount,
+      };
     },
   };
 }

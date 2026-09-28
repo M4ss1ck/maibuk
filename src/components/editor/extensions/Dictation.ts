@@ -38,9 +38,25 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
   const { state } = editor;
   const tr = closeHistory(state.tr);
   for (const edit of edits) {
-    const { from, to } = tr.selection;
-    const spaced = (needsSpaceBefore(tr.doc, from) ? " " : "") + edit.text;
-    tr.insertText(spaced, from, to);
+    if (edit.kind === "paragraph") {
+      tr.deleteSelection();
+      tr.split(tr.selection.from, 1, [{ type: state.schema.nodes.paragraph }]);
+    } else if (edit.kind === "line_break") {
+      const hardBreak = state.schema.nodes.hardBreak;
+      if (hardBreak) tr.replaceSelectionWith(hardBreak.create());
+    } else {
+      const startsWithClosingMark = ",.;:?!)]}".includes(edit.text[0] ?? "");
+      if (startsWithClosingMark) {
+        const from = tr.selection.from;
+        const preceding = tr.doc.textBetween(Math.max(0, from - 64), from, "\n", "\n");
+        const spaces = preceding.match(/[ \t]+$/)?.[0].length ?? 0;
+        if (spaces > 0) tr.delete(from - spaces, from);
+      }
+      const { from, to } = tr.selection;
+      const spaced =
+        (needsSpaceBefore(tr.doc, from) && !startsWithClosingMark ? " " : "") + edit.text;
+      tr.insertText(spaced, from, to);
+    }
   }
   tr.setMeta(dictationPluginKey, "");
   editor.view.dispatch(tr);

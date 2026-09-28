@@ -2172,4 +2172,17 @@ export const ROWS: MatrixRow[] = [
     tags: ["chromium-only"],
     status: "accepted",
   },
+  {
+    id: "dictation-interpreter-stats",
+    area: "settings",
+    workflow:
+      "Dictate a finished line into a Chapter, then open Settings → Dictation and read the interpreter delay and spoken punctuation count from this app session",
+    edges: ["the numbers stay on this device and reset when the app reloads"],
+    terms: ["Dictation Command Interpreter", "Spoken Punctuation"],
+    shortcuts: ["dictation.toggle", "dictation.stop"],
+    routes: ["/book/:bookId", "/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
 ];

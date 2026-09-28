@@ -61,7 +61,10 @@ function fakeTarget(id: string, language: "en" | "es" = "es") {
     language: () => language,
     showPartial: (text) => void target.partials.push(text),
     before: () => "",
-    apply: (edits) => void target.commits.push(edits.map((edit) => edit.text).join("")),
+    apply: (edits) =>
+      void target.commits.push(
+        edits.map((edit) => (edit.kind === "text" ? edit.text : "\n")).join("")
+      ),
   };
   return target;
 }

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import { MODEL_CATALOG, modelsFor } from "@/features/dictation/catalog";
 import { getDictation } from "@/features/dictation/runtime";
+import type { LineStatsSummary } from "@/features/dictation/stats";
 import { useDictationStore } from "@/features/dictation/store";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
 import { dictationPlatform } from "@/lib/platform";
@@ -13,7 +14,7 @@ const sizeMb = (spec: ModelSpec) =>
   Math.round(spec.files.reduce((sum, f) => sum + f.bytes, 0) / MB);
 
 export function DictationSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const support = useDictationStore((s) => s.support);
   const enabled = useDictationStore((s) => s.enabled);
   const setEnabled = useDictationStore((s) => s.setEnabled);
@@ -21,15 +22,14 @@ export function DictationSection() {
   const downloads = useDictationStore((s) => s.downloads);
   const preferred = useDictationStore((s) => s.preferredTier);
   const setPreferred = useDictationStore((s) => s.setPreferredTier);
-  const [recent, setRecent] = useState<{
-    lines: number;
-    medianLatencyMs: number | null;
-  } | null>(null);
+  const [recent, setRecent] = useState<LineStatsSummary | null>(null);
 
   const [device, setDevice] = useState<string | null>(null);
   const actionRefs = useRef(new Map<string, HTMLButtonElement>());
   // Support is null until the runtime reports; a build failure leaves it null for good.
   const [settled, setSettled] = useState(false);
+  const formatMs = (value: number) =>
+    new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 3 }).format(value);
 
   useEffect(() => {
     // Unsupported builds reject when the runtime cannot be built: keep the
@@ -177,6 +177,15 @@ export function DictationSection() {
           {t("dictation.section.recent", {
             lines: recent.lines,
             ms: recent.medianLatencyMs,
+          })}
+        </p>
+      )}
+      {recent && recent.medianInterpreterMs !== null && (
+        <p className="text-sm text-muted-foreground">
+          {t("dictation.section.interpreter", {
+            median: formatMs(recent.medianInterpreterMs),
+            max: formatMs(recent.maxInterpreterMs ?? recent.medianInterpreterMs),
+            count: recent.spokenPunctuationCount,
           })}
         </p>
       )}

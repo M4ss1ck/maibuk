@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { BEFORE_CARET_LIMIT } from "@/components/editor/extensions/Dictation";
 import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
+import { buildPhraseTable, interpret } from "@/features/dictation/interpreter";
 import { createRouter } from "@/features/dictation/router";
 import { createDictationSession } from "@/features/dictation/session";
 import { createLineStats } from "@/features/dictation/stats";
@@ -43,6 +44,48 @@ function fakeHost() {
 afterEach(() => resetDictationHubForTests());
 
 describe("Dictation line to rich-text document", () => {
+  it("turns a Spanish spoken line into punctuated paragraphs as one undo step", async () => {
+    const host = fakeHost();
+    let state = { capitalizeNext: false, noSpaceNext: false };
+    const table = buildPhraseTable("es");
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: () => model,
+      route: createRouter((line, before) => {
+        const next = interpret({ line, before, capabilities: model.capabilities, table, state });
+        state = next.state;
+        return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
+      }),
+      runCommand: vi.fn(),
+      notify: vi.fn(),
+      copyText: vi.fn(async () => {}),
+      stats,
+    });
+    resetDictationHubForTests();
+    attachSession(session);
+    const editor = new Editor({
+      extensions: createRichTextExtensions({ spellCheck: { enabled: false, language: "es" } }),
+      content: "<p></p>",
+    });
+    try {
+      await new Promise<void>((resolve) => editor.on("create", () => resolve()));
+      document.body.appendChild(editor.view.dom);
+      const focused = new Promise<void>((resolve) => editor.on("focus", () => resolve()));
+      editor.commands.focus();
+      await focused;
+      await session.start();
+      host.emitFinal("hola coma cómo estás punto y aparte mañana seguimos");
+      expect(editor.getHTML()).toBe("<p>Hola, cómo estás.</p><p>Mañana seguimos</p>");
+      expect(undoDepth(editor.state)).toBe(1);
+      expect(stats.summary().spokenPunctuationCount).toBe(2);
+      undo(editor.state, editor.view.dispatch);
+      expect(editor.getHTML()).toBe("<p></p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
   it("routes two final lines into separate undo steps and exposes bounded context", async () => {
     const host = fakeHost();
     const before: string[] = [];

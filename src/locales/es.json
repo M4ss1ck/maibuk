@@ -1755,6 +1755,7 @@
       "progress": "{{done}} de {{total}} MB",
       "size": "{{size}} MB",
       "recent": "Líneas recientes: {{lines}}, demora típica {{ms}} ms",
+      "interpreter": "Intérprete: demora típica {{median}} ms, peor demora {{max}} ms, puntuación dictada {{count}}",
       "noPunctuation": "No añade puntuación ni mayúsculas.",
       "device": "Micrófono: {{device}}"
     }
