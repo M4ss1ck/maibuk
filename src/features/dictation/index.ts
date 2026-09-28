@@ -16,7 +16,15 @@ export {
   type SessionSnapshot,
   type SessionStatus,
 } from "@/features/dictation/session";
-export { createLineStats, type LineStats } from "@/features/dictation/stats";
+export { createLineStats, type LineStats, type LineStatsSummary } from "@/features/dictation/stats";
+export {
+  buildPhraseTable,
+  interpret,
+  normalizePhrase,
+  INITIAL_INTERPRETER_STATE,
+  type InterpreterState,
+  type PhraseTable,
+} from "@/features/dictation/interpreter";
 export { pickModel, useDictationStore, type DictationStoreState } from "@/features/dictation/store";
 export {
   getDictation,

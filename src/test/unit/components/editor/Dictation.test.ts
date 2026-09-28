@@ -105,6 +105,46 @@ describe("Dictation extension", () => {
     editor.destroy();
   });
 
+  it("applies spoken paragraph and line breaks in one undo step", async () => {
+    const editor = await makeEditor("<p>Hola</p>");
+    targets[0].apply([
+      { kind: "text", text: ", mundo." },
+      { kind: "paragraph" },
+      { kind: "text", text: "Otro verso" },
+      { kind: "line_break" },
+      { kind: "text", text: "final" },
+    ]);
+    expect(editor.getHTML()).toBe("<p>Hola, mundo.</p><p>Otro verso<br>final</p>");
+    expect(undoDepth(editor.state)).toBe(1);
+    undo(editor.state, editor.view.dispatch);
+    expect(editor.getHTML()).toBe("<p>Hola</p>");
+    editor.destroy();
+  });
+
+  it("removes trailing spaces before a spoken closing mark", async () => {
+    const editor = await makeEditor("<p>Hola</p>");
+    editor.commands.insertContent("  ");
+    targets[0].apply([{ kind: "text", text: ", mundo" }]);
+    expect(editor.getHTML()).toBe("<p>Hola, mundo</p>");
+    undo(editor.state, editor.view.dispatch);
+    expect(editor.getHTML()).toBe("<p>Hola  </p>");
+    editor.destroy();
+  });
+
+  it("starts a plain paragraph after a heading", async () => {
+    const editor = await makeEditor("<h1>Hola</h1>");
+    editor.commands.setTextSelection(5);
+    const initialUndoDepth = undoDepth(editor.state);
+    targets[0].apply([{ kind: "paragraph" }, { kind: "text", text: "Mundo" }]);
+    expect(editor.state.doc.child(0).type.name).toBe("heading");
+    expect(editor.state.doc.child(1).type.name).toBe("paragraph");
+    expect(editor.state.doc.child(1).textContent).toBe("Mundo");
+    expect(undoDepth(editor.state)).toBe(initialUndoDepth + 1);
+    undo(editor.state, editor.view.dispatch);
+    expect(editor.state.doc.child(0).textContent).toBe("Hola");
+    editor.destroy();
+  });
+
   it("does not add a space after whitespace, an opening mark, or at a paragraph start", async () => {
     for (const [content, expected] of [
       ["<p>Hola </p>", "Hola mundo"],

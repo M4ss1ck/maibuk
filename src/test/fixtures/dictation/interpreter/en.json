@@ -1,0 +1,84 @@
+{
+  "language": "en",
+  "capabilities": { "casing": true, "punctuation": true, "streaming": true },
+  "cases": [
+    {
+      "name": "real small-en: command words arrive as text and stay text",
+      "line": "Hello, comma, how are you question mark?",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hello, comma, how are you question mark?" }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "real small-en: new paragraph inside a prose line",
+      "line": "The detective paused period new paragraph she looked at the clock.",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "The detective paused period" },
+          { "kind": "paragraph" },
+          { "kind": "text", "text": "She looked at the clock." }
+        ],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "real small-en: 'New paragraph.' on its own line",
+      "line": "New paragraph.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "paragraph" }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "real small-en: prose 'period of time' stays text",
+      "line": "He waited for a period of time before speaking.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "He waited for a period of time before speaking." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "real small-en: misheard 'new line' stays text",
+      "line": "You line.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "You line." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "real small-en: 'literal comma' arrives as text and stays text",
+      "line": "I said the word literal, come out, loud.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "I said the word literal, come out, loud." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "layout: new line",
+      "line": "first line new line second",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "First line" },
+          { "kind": "line_break" },
+          { "kind": "text", "text": "second" }
+        ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    }
+  ]
+}

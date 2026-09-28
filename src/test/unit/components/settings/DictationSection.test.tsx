@@ -2,18 +2,27 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODEL_CATALOG } from "@/features/dictation/catalog";
+import type { LineStatsSummary } from "@/features/dictation/stats";
 import i18n from "@/i18n";
 import "@/i18n";
 
 const install = vi.fn(async () => {});
 const remove = vi.fn(async () => {});
 const cancelInstall = vi.fn();
+const defaultSummary: LineStatsSummary = {
+  lines: 3,
+  medianLatencyMs: 120,
+  medianInterpreterMs: 8,
+  maxInterpreterMs: 15,
+  spokenPunctuationCount: 4,
+};
+const summaryMock = vi.fn<() => LineStatsSummary>(() => defaultSummary);
 vi.mock("@/features/dictation/runtime", () => ({
   getDictation: async () => ({
     install,
     remove,
     cancelInstall,
-    stats: { summary: () => ({ lines: 3, medianLatencyMs: 120 }) },
+    stats: { summary: summaryMock },
     host: { inputDevice: async () => "USB Mic" },
   }),
 }));
@@ -30,6 +39,8 @@ const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "
 beforeEach(() => {
   install.mockClear();
   remove.mockClear();
+  summaryMock.mockClear();
+  summaryMock.mockReturnValue(defaultSummary);
   localStorage.clear();
   useDictationStore.setState({
     enabled: true,
@@ -244,5 +255,42 @@ describe("DictationSection", () => {
     render(<DictationSection />);
     expect(screen.getByRole("heading", { name: "English" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Spanish" })).toBeInTheDocument();
+  });
+
+  it("shows the interpreter median and worst delay and spoken punctuation once on mount", async () => {
+    summaryMock.mockReturnValue({
+      ...defaultSummary,
+      medianInterpreterMs: 1.0150000001303852,
+      maxInterpreterMs: 2.0150000001303852,
+    });
+    render(<DictationSection />);
+    expect(
+      await screen.findByText(
+        "Interpreter: typical delay 1.015 ms, worst delay 2.015 ms, spoken punctuation 4"
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing about the interpreter until a line has been interpreted", async () => {
+    summaryMock.mockReturnValue({
+      lines: 1,
+      medianLatencyMs: 120,
+      medianInterpreterMs: null,
+      maxInterpreterMs: null,
+      spokenPunctuationCount: 0,
+    });
+    render(<DictationSection />);
+    expect(await screen.findByText(/Recent lines: 1/)).toBeInTheDocument();
+    expect(screen.queryByText(/Interpreter:/)).toBeNull();
+  });
+
+  it("names the interpreter stats in Spanish", async () => {
+    await act(() => i18n.changeLanguage("es"));
+    render(<DictationSection />);
+    expect(
+      await screen.findByText(
+        "Intérprete: demora típica 8 ms, peor demora 15 ms, puntuación dictada 4"
+      )
+    ).toBeInTheDocument();
   });
 });

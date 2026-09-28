@@ -1,0 +1,227 @@
+{
+  "language": "es",
+  "capabilities": { "casing": false, "punctuation": false, "streaming": true },
+  "cases": [
+    {
+      "name": "authored line: comma, period, then new paragraph",
+      "line": "hola coma cómo estás punto nuevo párrafo el día",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "Hola, cómo estás." },
+          { "kind": "paragraph" },
+          { "kind": "text", "text": "El día" }
+        ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 3
+      }
+    },
+    {
+      "name": "real small-es: hola coma como está (accents drift)",
+      "line": "hola coma como está",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hola, como está" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "real small-es: dos puntos inside prose",
+      "line": "el capítulo tres empieza con dos puntos y una lista",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "El capítulo tres empieza con: y una lista" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "real tiny-es: misheard 'nuevo párrafo' stays text",
+      "line": "fin de la frase punto nuevo para foli día siguiente llorió",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "Fin de la frase. Nuevo para foli día siguiente llorió" }
+        ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "real tiny-es: model marks around 'coma' are dropped",
+      "line": "¡Hola, coma! ¿Cómo estás, signo de interrogación?",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "¡Hola, ¿Cómo estás, signo de interrogación?" }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "real small-es: misheard 'punto y aparte' matches only 'punto'",
+      "line": "punto y la parte.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": ". Y la parte." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "real small-es: misheard 'nuevo párrafo' alone stays text",
+      "line": "Nuevo Palafox.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Nuevo Palafox." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "layout: nueva línea",
+      "line": "el día nueva línea llovió",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "El día" },
+          { "kind": "line_break" },
+          { "kind": "text", "text": "llovió" }
+        ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "longest match: punto y coma is a semicolon",
+      "line": "uno punto y coma dos",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Uno; dos" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "longest match: punto y aparte is period plus paragraph",
+      "line": "uno punto y aparte dos",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "Uno." },
+          { "kind": "paragraph" },
+          { "kind": "text", "text": "Dos" }
+        ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "punto y seguido is a period",
+      "line": "uno punto y seguido dos",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Uno. Dos" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "puntos suspensivos",
+      "line": "bla puntos suspensivos bla",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Bla… bla" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "duplicate mark avoided: trailing period after coma is dropped",
+      "line": "hola coma.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hola," }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "model punctuation between phrase words is dropped",
+      "line": "uno punto, y coma dos",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Uno; dos" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "spoken punctuation off when the model punctuates",
+      "line": "uno coma dos",
+      "capabilities": { "casing": true, "punctuation": true, "streaming": true },
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Uno coma dos" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "layout phrases stay on when the model punctuates",
+      "line": "uno nuevo párrafo dos",
+      "capabilities": { "casing": true, "punctuation": true, "streaming": true },
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "Uno" },
+          { "kind": "paragraph" },
+          { "kind": "text", "text": "Dos" }
+        ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "continuing line starts lowercase",
+      "line": "Dos tres",
+      "before": "uno ",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "dos tres" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "capitalize after a sentence end before the caret",
+      "line": "Dos tres",
+      "before": "uno. ",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Dos tres" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "capitalize at a paragraph boundary before the caret",
+      "line": "Dos",
+      "before": "uno\n",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Dos" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "carried capitalization charge from the previous line",
+      "line": "cómo estás",
+      "before": "",
+      "state": { "capitalizeNext": true, "noSpaceNext": false },
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Cómo estás" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    }
+  ]
+}

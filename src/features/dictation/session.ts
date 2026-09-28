@@ -118,7 +118,12 @@ export function createDictationSession(deps: {
         showPartial("");
         deps.stats.record(event.latencyMs);
         const target = active();
+        const startedAt = performance.now();
         const result = deps.route(event.text, target?.before() ?? "");
+        deps.stats.recordInterpreter(
+          performance.now() - startedAt,
+          result.kind === "edits" ? (result.spokenPunctuationCount ?? 0) : 0
+        );
         if (result.kind === "voice_command") {
           deps.runCommand(result.id);
           return;
@@ -126,7 +131,9 @@ export function createDictationSession(deps: {
         if (result.kind === "scratch") return;
         if (target) target.apply(result.edits);
         else {
-          const text = result.edits.map((edit) => edit.text).join("");
+          const text = result.edits
+            .map((edit) => edit.kind === "text" ? edit.text : "\n")
+            .join("");
           deps.copyText(text).then(
             () => deps.notify({ kind: "orphan_copied" }),
             () => deps.notify({ kind: "orphan_lost", text })
