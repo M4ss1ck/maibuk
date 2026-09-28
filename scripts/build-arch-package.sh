@@ -31,8 +31,8 @@ fi
 # Check if the Tauri build artifacts exist
 BINARY_PATH="$PROJECT_ROOT/src-tauri/target/release/maibuk"
 ICON_PATH="$PROJECT_ROOT/src-tauri/icons/128x128.png"
-DEB_DIR="$PROJECT_ROOT/src-tauri/target/release/bundle/deb/maibuk_${VERSION}_amd64"
-DESKTOP_PATH="$DEB_DIR/usr/share/applications/maibuk.desktop"
+DEB_DIR="$PROJECT_ROOT/src-tauri/target/release/bundle/deb/Maibuk_${VERSION}_amd64"
+DESKTOP_PATH="$DEB_DIR/data/usr/share/applications/Maibuk.desktop"
 
 if [[ ! -f "$BINARY_PATH" ]]; then
     echo -e "${RED}Error: Binary not found at $BINARY_PATH${NC}"
@@ -64,7 +64,7 @@ mkdir -p "$OUTPUT_DIR"
 
 # Create a temporary build context
 TEMP_BUILD_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_BUILD_DIR" EXIT
+trap 'rm -r -- "$TEMP_BUILD_DIR"' EXIT
 
 echo -e "${YELLOW}Preparing build context...${NC}"
 
@@ -72,6 +72,8 @@ echo -e "${YELLOW}Preparing build context...${NC}"
 cp "$BINARY_PATH" "$TEMP_BUILD_DIR/maibuk"
 cp "$ICON_PATH" "$TEMP_BUILD_DIR/maibuk.png"
 cp "$DESKTOP_PATH" "$TEMP_BUILD_DIR/maibuk.desktop"
+cp "$PROJECT_ROOT/vendor/moonshine/linux-x86_64/lib/libmoonshine.so" "$TEMP_BUILD_DIR/libmoonshine.so"
+cp "$PROJECT_ROOT/vendor/moonshine/linux-x86_64/lib/libonnxruntime.so.1" "$TEMP_BUILD_DIR/libonnxruntime.so.1"
 cp "$BUILD_DIR/Dockerfile" "$TEMP_BUILD_DIR/"
 
 # Create PKGBUILD with correct version
@@ -85,17 +87,19 @@ arch=('x86_64')
 url="https://maibuk.massick.dev"
 license=('MIT')
 # Tauri v2 dependencies
-depends=('webkit2gtk-4.1' 'gtk3' 'libappindicator-gtk3')
+depends=('webkit2gtk-4.1' 'gtk3' 'libappindicator-gtk3' 'alsa-lib')
 provides=('maibuk')
 conflicts=('maibuk')
 
 # Sources are provided as pre-built artifacts
 source=("maibuk"
         "maibuk.png"
-        "maibuk.desktop")
+        "maibuk.desktop"
+        "libmoonshine.so"
+        "libonnxruntime.so.1")
 
 # We skip checksums for local builds
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
     # 1. Install the binary
@@ -106,6 +110,10 @@ package() {
 
     # 3. Install the .desktop file
     install -Dm644 "\${srcdir}/maibuk.desktop" "\${pkgdir}/usr/share/applications/maibuk.desktop"
+
+    # 4. Keep the recognition runtime beside its ONNX dependency.
+    install -Dm644 "\${srcdir}/libmoonshine.so" "\${pkgdir}/usr/lib/maibuk/libmoonshine.so"
+    install -Dm644 "\${srcdir}/libonnxruntime.so.1" "\${pkgdir}/usr/lib/maibuk/libonnxruntime.so.1"
 }
 EOF
 
