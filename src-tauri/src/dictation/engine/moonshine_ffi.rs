@@ -77,33 +77,41 @@ pub fn library_candidates(exe: &Path) -> Vec<PathBuf> {
     out
 }
 
-static API: OnceLock<Result<Api, String>> = OnceLock::new();
+static API: OnceLock<Result<Api, DictationError>> = OnceLock::new();
 
 pub fn api() -> Result<&'static Api, DictationError> {
     API.get_or_init(|| {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let mut tried = Vec::new();
-        for candidate in library_candidates(&exe) {
-            if !candidate.exists() {
-                tried.push(candidate.display().to_string());
-                continue;
-            }
-            // Safety: loading a trusted, pinned library shipped with the app.
-            match unsafe { Library::new(&candidate) } {
-                Ok(lib) => match unsafe { load_symbols(lib) } {
-                    Ok(api) => return Ok(api),
-                    Err(error) => tried.push(format!("{}: {error}", candidate.display())),
-                },
-                Err(error) => tried.push(format!("{}: {error}", candidate.display())),
-            }
-        }
-        Err(format!(
-            "library_missing: libmoonshine.so unavailable ({})",
-            tried.join(", ")
-        ))
+        let exe = std::env::current_exe()
+            .map_err(|e| DictationError::new(ErrorCode::Unsupported, e.to_string()))?;
+        load_from_candidates(&library_candidates(&exe))
     })
     .as_ref()
-    .map_err(|detail| DictationError::new(ErrorCode::Unsupported, detail.clone()))
+    .map_err(Clone::clone)
+}
+
+fn load_from_candidates(candidates: &[PathBuf]) -> Result<Api, DictationError> {
+    let mut tried = Vec::new();
+    for candidate in candidates {
+        if !candidate.exists() {
+            tried.push(candidate.display().to_string());
+            continue;
+        }
+        // Safety: loading a trusted, pinned library shipped with the app.
+        match unsafe { Library::new(candidate) } {
+            Ok(lib) => match unsafe { load_symbols(lib) } {
+                Ok(api) => return Ok(api),
+                Err(error) => tried.push(format!("{}: {error}", candidate.display())),
+            },
+            Err(error) => tried.push(format!("{}: {error}", candidate.display())),
+        }
+    }
+    Err(DictationError::new(
+        ErrorCode::Unsupported,
+        format!(
+            "library_missing: libmoonshine.so unavailable ({})",
+            tried.join(", ")
+        ),
+    ))
 }
 
 unsafe fn load_symbols(lib: Library) -> Result<Api, libloading::Error> {
@@ -204,5 +212,15 @@ mod tests {
     fn looks_beside_the_installed_binary_first() {
         let c = library_candidates(Path::new("/usr/bin/maibuk"));
         assert!(c.contains(&PathBuf::from("/usr/bin/../lib/maibuk/libmoonshine.so")));
+    }
+
+    #[test]
+    fn missing_library_reports_unsupported_without_loading_at_startup() {
+        let missing = PathBuf::from("/no/such/libmoonshine.so");
+        let error = load_from_candidates(&[missing])
+            .err()
+            .expect("missing library");
+        assert_eq!(error.code, ErrorCode::Unsupported);
+        assert!(error.detail.unwrap().contains("library_missing"));
     }
 }
