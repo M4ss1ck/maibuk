@@ -16,7 +16,7 @@ Custom Voice Commands are a second binding kind in ADR 0012's device-local layer
 - List every Voice Command phrase by hand per Command: rejected. Real phrasing varies ("poner negrita", "poner en negrita", "activar negritas"); a shared verb vocabulary covers bold, italic, underline, and the rest with one list per language.
 - Allow single-word Voice Commands, guarded by the pause: rejected. Apple advises "two or more words"; a single word ends many spoken sentences.
 - Key phrases by UI locale: rejected, see above.
-- Pass Vocabulary words to the model as context biasing (Moonshine `set_context`): not in v1. It needs a provider-specific change to the `RecognizerHost` protocol (ADR 0013); the Interpreter's own replacement is model-agnostic. Kept only if a measurement shows it adds accuracy without slowing lines.
+- Pass Vocabulary words to the model as context biasing (Moonshine `set_context`): not in v1. `RecognizerHost.setContext` exists on both platforms but nothing calls it, and biasing is a Moonshine behavior other engines may not share; the Interpreter's own replacement is model-agnostic. Kept only if a measurement shows it adds accuracy without slowing lines (#274).
 
 ## Consequences
 
