@@ -1,0 +1,155 @@
+{
+  "spec": {
+    "id": "moonshine-tiny-en-260821",
+    "engine": "moonshine",
+    "languages": [
+      "en"
+    ],
+    "tier": "fast",
+    "platforms": [
+      "web",
+      "tauri-linux"
+    ],
+    "files": [
+      {
+        "name": "adapter.ort",
+        "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/adapter.ort",
+        "bytes": 1319664,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "kwQ+Bw=="
+        }
+      },
+      {
+        "name": "cross_kv.ort",
+        "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/cross_kv.ort",
+        "bytes": 1287544,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "76wzFQ=="
+        }
+      },
+      {
+        "name": "decoder_kv.ort",
+        "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/decoder_kv.ort",
+        "bytes": 32583720,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "KJjeNw=="
+        }
+      },
+      {
+        "name": "encoder.ort",
+        "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/encoder.ort",
+        "bytes": 7675440,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "UjAIpQ=="
+        }
+      },
+      {
+        "name": "frontend.model.ort",
+        "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/frontend.model.ort",
+        "bytes": 23344,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "aM/+wQ=="
+        }
+      },
+      {
+        "name": "frontend.weights.ort",
+        "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/frontend.weights.ort",
+        "bytes": 2093464,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "WYZ7EQ=="
+        }
+      },
+      {
+        "name": "streaming_config.json",
+        "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/streaming_config.json",
+        "bytes": 509,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "HGL0Ug=="
+        }
+      },
+      {
+        "name": "tokenizer.bin",
+        "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/tokenizer.bin",
+        "bytes": 249974,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "B7s10Q=="
+        }
+      }
+    ],
+    "engineOptions": {
+      "arch": "tiny-streaming",
+      "transcription_interval": "0.2"
+    },
+    "capabilities": {
+      "casing": true,
+      "punctuation": true,
+      "streaming": true
+    }
+  },
+  "events": [
+    {
+      "type": "level",
+      "rms": 0.25
+    },
+    {
+      "type": "partial",
+      "text": "hola"
+    },
+    {
+      "type": "final",
+      "text": "hola mundo",
+      "latencyMs": 40
+    },
+    {
+      "type": "final",
+      "text": "sin latencia"
+    },
+    {
+      "type": "error",
+      "code": "mic_unavailable",
+      "detail": "unplugged"
+    },
+    {
+      "type": "error",
+      "code": "engine_crashed"
+    }
+  ],
+  "hostMessages": [
+    {
+      "kind": "event",
+      "event": {
+        "type": "partial",
+        "text": "a"
+      }
+    },
+    {
+      "kind": "stopped"
+    }
+  ],
+  "error": {
+    "code": "model_corrupt",
+    "detail": "a.ort"
+  },
+  "errorCodes": [
+    "mic_denied",
+    "mic_unavailable",
+    "model_missing",
+    "model_corrupt",
+    "download_failed",
+    "disk_full",
+    "model_gone",
+    "engine_crashed",
+    "unsupported",
+    "tutorial_active",
+    "no_target",
+    "cancelled"
+  ]
+}

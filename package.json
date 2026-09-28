@@ -32,7 +32,8 @@
     "android:dev": "tauri android dev",
     "version:bump": "./scripts/bump-version.sh",
     "generate:symbols": "tsx scripts/generate-symbols-data.ts",
-    "fetch:dictation": "node scripts/fetch-dictation-runtime.mjs"
+    "fetch:dictation": "node scripts/fetch-dictation-runtime.mjs",
+    "conformance:dictation": "node scripts/dictation-conformance/web.mjs && cd src-tauri && cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture && python3 ../scripts/dictation-conformance/report.py"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",

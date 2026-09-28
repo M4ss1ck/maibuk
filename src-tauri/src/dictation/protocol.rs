@@ -112,3 +112,50 @@ pub struct SupportReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<&'static str>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    const FIXTURE: &str = include_str!("../../../src/test/fixtures/dictation/protocol.json");
+
+    fn fixture() -> Value {
+        serde_json::from_str(FIXTURE).unwrap()
+    }
+
+    fn roundtrip<T: serde::de::DeserializeOwned + Serialize>(value: &Value) -> Value {
+        let typed: T = serde_json::from_value(value.clone())
+            .unwrap_or_else(|e| panic!("{value} does not deserialize: {e}"));
+        serde_json::to_value(typed).unwrap()
+    }
+
+    // f32 0.25 is exact; a non-dyadic rms in the fixture would need a tolerance.
+    #[test]
+    fn rust_reads_and_writes_the_same_json_as_typescript() {
+        let fixture = fixture();
+        assert_eq!(roundtrip::<ModelSpec>(&fixture["spec"]), fixture["spec"]);
+        for event in fixture["events"].as_array().unwrap() {
+            assert_eq!(&roundtrip::<DictationEvent>(event), event);
+        }
+        assert_eq!(roundtrip::<DictationError>(&fixture["error"]), fixture["error"]);
+    }
+
+    #[test]
+    fn every_typescript_error_code_is_a_rust_error_code() {
+        for code in fixture()["errorCodes"].as_array().unwrap() {
+            assert_eq!(&roundtrip::<ErrorCode>(code), code);
+        }
+    }
+
+    #[test]
+    fn host_messages_serialize_like_the_typescript_host_expects() {
+        let msgs = vec![
+            HostMessage::Event {
+                event: DictationEvent::Partial { text: "a".into() },
+            },
+            HostMessage::Stopped,
+        ];
+        assert_eq!(serde_json::to_value(msgs).unwrap(), fixture()["hostMessages"]);
+    }
+}

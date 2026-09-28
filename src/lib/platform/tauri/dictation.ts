@@ -8,7 +8,7 @@ import {
   type SupportReport,
 } from "@/features/dictation/types";
 
-type HostMessage =
+export type HostMessage =
   | { kind: "event"; event: DictationEvent }
   | { kind: "stopped" };
 

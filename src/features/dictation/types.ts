@@ -30,7 +30,7 @@ export interface ModelSpec {
   capabilities: { casing: boolean; punctuation: boolean; streaming: boolean };
 }
 
-const ERROR_CODES = [
+export const ERROR_CODES = [
   "mic_denied",
   "mic_unavailable",
   "model_missing",
