@@ -86,6 +86,145 @@ describe("Dictation line to rich-text document", () => {
     }
   });
 
+  it("starts a bulleted list outside one and splits inside one, each as one undo step", async () => {
+    const host = fakeHost();
+    let state = { capitalizeNext: false, noSpaceNext: false };
+    const table = buildPhraseTable("es");
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: () => model,
+      route: createRouter((line, before) => {
+        const next = interpret({ line, before, capabilities: model.capabilities, table, state });
+        state = next.state;
+        return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
+      }),
+      runCommand: vi.fn(),
+      notify: vi.fn(),
+      copyText: vi.fn(async () => {}),
+      stats,
+    });
+    resetDictationHubForTests();
+    attachSession(session);
+    const editor = new Editor({
+      extensions: createRichTextExtensions({ spellCheck: { enabled: false, language: "es" } }),
+      content: "<p></p>",
+    });
+    try {
+      await new Promise<void>((resolve) => editor.on("create", () => resolve()));
+      document.body.appendChild(editor.view.dom);
+      const focused = new Promise<void>((resolve) => editor.on("focus", () => resolve()));
+      editor.commands.focus();
+      await focused;
+      await session.start();
+      host.emitFinal("primero nuevo elemento segundo");
+      // TipTap keeps a trailing paragraph after a list, like toggleBulletList does.
+      expect(editor.getHTML()).toBe(
+        "<p>Primero</p><ul><li><p>Segundo</p></li></ul><p></p>"
+      );
+      expect(undoDepth(editor.state)).toBe(1);
+      expect(stats.summary().spokenPunctuationCount).toBe(1);
+      // Inside the new list item, a spoken item splits it again as one more step.
+      // The caret stayed in the list item; the trailing paragraph is TipTap's.
+      host.emitFinal("tercero nuevo elemento cuarto");
+      expect(editor.getHTML()).toBe(
+        "<p>Primero</p><ul><li><p>Segundo tercero</p></li><li><p>Cuarto</p></li></ul><p></p>"
+      );
+      expect(undoDepth(editor.state)).toBe(2);
+      undo(editor.state, editor.view.dispatch);
+      expect(editor.getHTML()).toBe(
+        "<p>Primero</p><ul><li><p>Segundo</p></li></ul><p></p>"
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("inserts Spanish openers automatically, explicitly, and across lines as one undo step", async () => {
+    const host = fakeHost();
+    let state = { capitalizeNext: false, noSpaceNext: false };
+    const table = buildPhraseTable("es");
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: () => model,
+      route: createRouter((line, before) => {
+        const next = interpret({ line, before, capabilities: model.capabilities, table, state });
+        state = next.state;
+        return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
+      }),
+      runCommand: vi.fn(),
+      notify: vi.fn(),
+      copyText: vi.fn(async () => {}),
+      stats,
+    });
+    resetDictationHubForTests();
+    attachSession(session);
+    const editor = new Editor({
+      extensions: createRichTextExtensions({ spellCheck: { enabled: false, language: "es" } }),
+      content: "<p></p>",
+    });
+    try {
+      await new Promise<void>((resolve) => editor.on("create", () => resolve()));
+      document.body.appendChild(editor.view.dom);
+      const focused = new Promise<void>((resolve) => editor.on("focus", () => resolve()));
+      editor.commands.focus();
+      await focused;
+      await session.start();
+      host.emitFinal("cómo estás signo de interrogación");
+      expect(editor.getHTML()).toBe("<p>¿Cómo estás?</p>");
+      expect(undoDepth(editor.state)).toBe(1);
+      undo(editor.state, editor.view.dispatch);
+      expect(editor.getHTML()).toBe("<p></p>");
+      state = { capitalizeNext: false, noSpaceNext: false };
+      host.emitFinal("si vienes abre interrogación me avisas cierra interrogación");
+      expect(editor.getHTML()).toBe("<p>Si vienes ¿me avisas?</p>");
+      expect(undoDepth(editor.state)).toBe(1);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("capitalizes with cap and writes punctuation words with literal as one undo step", async () => {
+    const host = fakeHost();
+    let state = { capitalizeNext: false, noSpaceNext: false };
+    const table = buildPhraseTable("es");
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: () => model,
+      route: createRouter((line, before) => {
+        const next = interpret({ line, before, capabilities: model.capabilities, table, state });
+        state = next.state;
+        return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
+      }),
+      runCommand: vi.fn(),
+      notify: vi.fn(),
+      copyText: vi.fn(async () => {}),
+      stats,
+    });
+    resetDictationHubForTests();
+    attachSession(session);
+    const editor = new Editor({
+      extensions: createRichTextExtensions({ spellCheck: { enabled: false, language: "es" } }),
+      content: "<p></p>",
+    });
+    try {
+      await new Promise<void>((resolve) => editor.on("create", () => resolve()));
+      document.body.appendChild(editor.view.dom);
+      const focused = new Promise<void>((resolve) => editor.on("focus", () => resolve()));
+      editor.commands.focus();
+      await focused;
+      await session.start();
+      host.emitFinal("hola mayúscula maría di literal coma por favor");
+      expect(editor.getHTML()).toBe("<p>Hola María di coma por favor</p>");
+      expect(undoDepth(editor.state)).toBe(1);
+      expect(stats.summary().spokenPunctuationCount).toBe(2);
+    } finally {
+      editor.destroy();
+    }
+  });
+
   it("routes two final lines into separate undo steps and exposes bounded context", async () => {
     const host = fakeHost();
     const before: string[] = [];

@@ -57,13 +57,13 @@
       }
     },
     {
-      "name": "real small-en: 'literal comma' arrives as text and stays text",
+      "name": "escape: 'literal' keeps the next word even when punctuation is off",
       "line": "I said the word literal, come out, loud.",
       "before": "",
       "expected": {
-        "edits": [{ "kind": "text", "text": "I said the word literal, come out, loud." }],
+        "edits": [{ "kind": "text", "text": "I said the word come out, loud." }],
         "state": { "capitalizeNext": true, "noSpaceNext": false },
-        "spokenPunctuationCount": 0
+        "spokenPunctuationCount": 1
       }
     },
     {
@@ -76,6 +76,75 @@
           { "kind": "line_break" },
           { "kind": "text", "text": "second" }
         ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "marks: comma, period, colon, semicolon, question",
+      "line": "hello comma world period how are you question mark",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hello, world. How are you?" }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 3
+      }
+    },
+    {
+      "name": "marks: exclamation mark and exclamation point",
+      "line": "wow exclamation mark really exclamation point",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Wow! Really!" }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 2
+      }
+    },
+    {
+      "name": "quotes and parentheses open and close",
+      "line": "she said open quote hello close quote and open parenthesis aside close parenthesis",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "expected": {
+        "edits": [{ "kind": "text", "text": "She said “hello” and (aside)" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 4
+      }
+    },
+    {
+      "name": "list: new item splits even when punctuation is off",
+      "line": "first new item second",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "First" },
+          { "kind": "list_item" },
+          { "kind": "text", "text": "Second" }
+        ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "cap capitalizes the next word",
+      "line": "hello cap maria how are you",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hello Maria how are you" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "literal writes a punctuation word instead of acting",
+      "line": "say literal comma please",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Say comma please" }],
         "state": { "capitalizeNext": false, "noSpaceNext": false },
         "spokenPunctuationCount": 1
       }

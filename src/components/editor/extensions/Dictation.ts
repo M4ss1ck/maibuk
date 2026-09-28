@@ -32,6 +32,34 @@ export function textBeforeCaret(editor: Editor): string {
   );
 }
 
+function isInListItem(doc: ProseMirrorNode, pos: number): boolean {
+  const $pos = doc.resolve(pos);
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    if ($pos.node(depth).type.name === "listItem") return true;
+  }
+  return false;
+}
+
+/** Sentence start in the current textblock, for Spanish auto-openers. */
+function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
+  const $from = doc.resolve(caretPos);
+  const blockStart = $from.start();
+  const sliceEnd = caretPos;
+  const sliceStart = Math.max(blockStart, sliceEnd - 500);
+  const text = doc.textBetween(sliceStart, sliceEnd, "\n", "\n");
+  let lastEnd = -1;
+  for (let idx = text.length - 1; idx >= 0; idx -= 1) {
+    const ch = text[idx];
+    if (ch === "." || ch === "?" || ch === "!") {
+      lastEnd = idx;
+      break;
+    }
+  }
+  let offset = lastEnd + 1;
+  while (offset < text.length && (text[offset] === " " || text[offset] === "\t")) offset += 1;
+  return sliceStart + offset;
+}
+
 /** Apply a finished line in one transaction and one undo step. */
 export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): void {
   if (edits.length === 0) return;
@@ -44,8 +72,40 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
     } else if (edit.kind === "line_break") {
       const hardBreak = state.schema.nodes.hardBreak;
       if (hardBreak) tr.replaceSelectionWith(hardBreak.create());
+    } else if (edit.kind === "list_item") {
+      tr.deleteSelection();
+      const pos = tr.selection.from;
+      if (isInListItem(tr.doc, pos)) {
+        // Split the current list item, like pressing Enter inside it.
+        // Depth 2 splits listItem + paragraph (prosemirror-schema-list).
+        if (tr.doc.resolve(pos).depth >= 2) tr.split(pos, 2);
+        else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+      } else {
+        // Start a bulleted list for what follows: split the paragraph, then
+        // wrap the new paragraph in a bullet list in the same transaction.
+        const bulletList = state.schema.nodes.bulletList;
+        const listItem = state.schema.nodes.listItem;
+        if (!bulletList || !listItem) {
+          tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+        } else {
+          // Start a bulleted list for what follows, like toggleBulletList:
+          // split, then wrap the new paragraph. TipTap leaves its usual
+          // trailing paragraph after the list.
+          tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+          const $after = tr.selection.$from;
+          const itemEnd = $after.end();
+          const range = $after.blockRange(tr.doc.resolve(itemEnd));
+          if (range) tr.wrap(range, [{ type: bulletList }, { type: listItem }]);
+        }
+      }
+    } else if (edit.kind === "opener") {
+      const caret = tr.selection.from;
+      const at = findSentenceStartPos(tr.doc, caret);
+      // Never duplicate an opener the author already has.
+      const existing = tr.doc.textBetween(at, Math.min(at + 1, tr.doc.content.size), "\n", "\n");
+      if (existing !== edit.mark) tr.insertText(edit.mark, at);
     } else {
-      const startsWithClosingMark = ",.;:?!)]}".includes(edit.text[0] ?? "");
+      const startsWithClosingMark = ",.;:?!»”’)]}…".includes(edit.text[0] ?? "");
       if (startsWithClosingMark) {
         const from = tr.selection.from;
         const preceding = tr.doc.textBetween(Math.max(0, from - 64), from, "\n", "\n");

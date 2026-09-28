@@ -132,7 +132,13 @@ export function createDictationSession(deps: {
         if (target) target.apply(result.edits);
         else {
           const text = result.edits
-            .map((edit) => edit.kind === "text" ? edit.text : "\n")
+            .map((edit) =>
+              edit.kind === "text"
+                ? edit.text
+                : edit.kind === "opener"
+                  ? edit.mark
+                  : "\n"
+            )
             .join("");
           deps.copyText(text).then(
             () => deps.notify({ kind: "orphan_copied" }),
