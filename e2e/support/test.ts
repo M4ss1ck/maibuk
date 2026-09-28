@@ -2,7 +2,8 @@
 // (Playwright default), a prepared device (seed Library + Tutorial progress),
 // and the sql.js wasm served from node_modules instead of the CDN.
 
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { test as base, expect } from "@playwright/test";
 import { REPO_ROOT } from "./seed/seeds";
 import { prepareDevice, type LibrarySeed, type TutorialProgressSeed } from "./storage";
@@ -26,6 +27,19 @@ interface Fixtures {
 }
 
 const SQL_WASM = resolve(REPO_ROOT, "node_modules/sql.js/dist/sql-wasm.wasm");
+
+const VENDOR_MODELS = resolve(REPO_ROOT, "vendor/moonshine/models");
+// The catalog is the same data the app ships; read it as data so the harness
+// needs no app import. Each entry's file `url` maps to the file
+// `pnpm fetch:dictation --test-assets` put on disk.
+const CATALOG = JSON.parse(
+  readFileSync(resolve(REPO_ROOT, "src/features/dictation/catalog.json"), "utf8")
+) as { id: string; files: { name: string; url: string }[] }[];
+const MODEL_FILES = new Map(
+  CATALOG.flatMap((spec) =>
+    spec.files.map((f) => [f.url, join(VENDOR_MODELS, spec.id, f.name)] as const)
+  )
+);
 
 export const test = base.extend<Options & Fixtures>({
   library: ["empty", { option: true }],
@@ -51,6 +65,16 @@ export const test = base.extend<Options & Fixtures>({
     await context.route("https://api.github.com/repos/M4ss1ck/maibuk/tags*", (route) =>
       route.fulfill({ json: [] })
     );
+    // Dictation Models come from vendor/ (pnpm fetch:dictation --test-assets),
+    // never the network. Unknown files 404, which the settings spec relies on.
+    // Registered after the catch-all abort, like the sql.js route: a later
+    // route takes precedence.
+    await context.route(/^https:\/\/download\.moonshine\.ai\//, (route) => {
+      const file = MODEL_FILES.get(route.request().url());
+      return file && existsSync(file)
+        ? route.fulfill({ path: file })
+        : route.fulfill({ status: 404 });
+    });
     if (macPlatform) {
       // isMac() prefers userAgentData.platform; TipTap reads navigator.platform.
       await page.addInitScript(() => {

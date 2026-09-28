@@ -15,6 +15,7 @@ spec. Playwright itself stays a local command and never runs in CI.
 ```bash
 pnpm install
 pnpm exec playwright install chromium webkit
+pnpm fetch:dictation --test-assets   # the Dictation specs' models and test audio
 ```
 
 `@playwright/test` is pinned to an exact version; the browsers must match it.

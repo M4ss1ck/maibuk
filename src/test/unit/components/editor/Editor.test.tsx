@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import userEvent from "@testing-library/user-event";
 import { createRef, useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Extension, type Editor as TiptapEditor } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
@@ -10,6 +10,7 @@ import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { useBookStore } from "@/features/books/store";
 import { useNoteStore } from "@/features/notes/store";
+import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
 
 const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),
@@ -461,6 +462,59 @@ describe("Editor", () => {
     const lastProps = capturedToolbarProps[capturedToolbarProps.length - 1];
     expect(lastProps.spellCheckLanguage).toBe("es");
     expect(lastProps.onSpellCheckLanguageChange).toBe(onSpellCheckLanguageChange);
+  });
+
+  // BookEditor passes onEscape (leave the text for the Chapter list); editor
+  // props run before plugin keymaps, so it swallowed dictation.stop's Escape.
+  describe("Escape while dictating", () => {
+    function attach(status: "idle" | "listening") {
+      const stop = vi.fn(async () => {});
+      attachSession({
+        register: () => () => {},
+        focus: () => {},
+        stop,
+        getSnapshot: () => ({ status }) as never,
+      });
+      return stop;
+    }
+
+    async function renderWithEscape() {
+      const onEscape = vi.fn();
+      let editor: TiptapEditor | null = null;
+      render(
+        <Editor
+          content={"<p>Chapter</p>\n"}
+          onUpdate={vi.fn()}
+          onEscape={onEscape}
+          onEditorReady={(instance) => {
+            editor = instance;
+          }}
+        />
+      );
+      await waitFor(() => expect(editor).not.toBeNull());
+      return { onEscape, dom: (editor as unknown as TiptapEditor).view.dom };
+    }
+
+    beforeEach(() => resetDictationHubForTests());
+    afterEach(() => resetDictationHubForTests());
+
+    it("stops the Dictation Session instead of leaving the text", async () => {
+      const stop = attach("listening");
+      // A click would reach ProseMirror's mousedown, which needs elementFromPoint.
+      const { onEscape, dom } = await renderWithEscape();
+      fireEvent.keyDown(dom, { key: "Escape" });
+      expect(stop).toHaveBeenCalledTimes(1);
+      expect(onEscape).not.toHaveBeenCalled();
+    });
+
+    it("leaves the text as before when no session is listening", async () => {
+      const stop = attach("idle");
+      // A click would reach ProseMirror's mousedown, which needs elementFromPoint.
+      const { onEscape, dom } = await renderWithEscape();
+      fireEvent.keyDown(dom, { key: "Escape" });
+      expect(onEscape).toHaveBeenCalledTimes(1);
+      expect(stop).not.toHaveBeenCalled();
+    });
   });
 
   it("focuses the editor when the blank editor surround is clicked", async () => {

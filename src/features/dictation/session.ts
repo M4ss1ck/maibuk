@@ -78,6 +78,14 @@ export function createDictationSession(deps: {
   let stopping: Promise<void> | null = null;
 
   const set = (patch: Partial<SessionSnapshot>) => {
+    let changed = false;
+    for (const key of Object.keys(patch) as (keyof SessionSnapshot)[]) {
+      if (!Object.is(snapshot[key], patch[key])) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return;
     snapshot = { ...snapshot, ...patch };
     for (const listener of listeners) listener();
   };
