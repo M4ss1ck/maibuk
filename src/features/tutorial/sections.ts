@@ -190,6 +190,11 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   Dictation: "needs a downloaded Dictation Model and a microphone",
   "Dictation Session": "needs a downloaded Dictation Model and a microphone",
   "Dictation Model": "needs a downloaded Dictation Model and a microphone",
+  "Dictation Language": "needs a downloaded Dictation Model and a microphone",
+  "Dictation Command Interpreter": "decided, not built (ADR 0015); the Dictation section will teach it (#266)",
+  "Spoken Punctuation": "decided, not built (ADR 0014); the Dictation section will teach it (#266)",
+  "Voice Command": "decided, not built (ADR 0014); the Dictation section will teach it (#266)",
+  "Dictation Vocabulary": "decided, not built (ADR 0014); the Dictation section will teach it (#266)",
 };
 
 /** The step the Settings → Tutorial row is anchored to; the whole Tutorial ends there. */

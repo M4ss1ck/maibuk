@@ -31,7 +31,45 @@ Pinned refs used below:
 7. **Change the `DictationTarget` contract, not `RecognizerHost`.** `commit(text)` becomes `apply(edits)` in one ProseMirror transaction with `closeHistory`, so one spoken line stays one undo step. The `RecognizerHost` protocol (ADR 0013) is untouched in v1; word timestamps (section 2.5) would change it and need their own ADR.
 8. **Two ADRs.** One for "phrases are a second binding kind in the Custom Shortcuts layer, keyed by Dictation language" (extends ADR 0012), one for "the interpreter is deterministic text rules over finished lines; no grammar-constrained decoding and no intent model" (the trade-off in section 3). `CONTEXT.md` moves Voice Command and Dictation Command Interpreter out of Anticipated and gains a term for the phrase itself.
 
-**Top risks:** recognition of short command phrases is poor in the probe (synthetic voice, so unproven for a human; section 2.4); English prose words that are also punctuation words ("period", "colon") need the whole-line rule or the escape; and the Spanish Small model's accuracy on "párrafo" in the probe was bad enough that authors will want alias phrases, which the binding model supports.
+**Top risks:** recognition of short command phrases is poor in the probe, but the probe used a synthetic voice and Andy's own dictation in both languages has been accurate, so the misses most likely reflect the TTS assets (section 2.4); English prose words that are also punctuation words ("period", "colon") need the whole-line rule or the escape; authors will want alias phrases for consistent mishearings.
+
+---
+
+## Decisions (2026-09-28)
+
+Settled with Andy after this research. Where they differ from the recommendations above, the decisions win; sections 5.3 to 5.5 describe the rejected "punctuation as Commands" design and are kept as the record of why. Glossary: `CONTEXT.md` (Dictation Language, Dictation Command Interpreter, Spoken Punctuation, Voice Command, Dictation Vocabulary). ADRs: 0014 and 0015.
+
+**Two layers, not one.** Voice Commands are a second way to run registry Commands, next to Shortcuts. Spoken Punctuation (punctuation, paragraph, line, list item, `cap`/`mayúscula <word>`, the escape word "literal", "scratch that"/"borra eso") is Dictation configuration, not Commands: listed in Settings → Dictation, each entry switchable off and open to custom aliases per Dictation Language. No Shortcuts for Spoken Punctuation.
+
+**v1 scope.**
+
+1. The Interpreter: deterministic, pure TypeScript, model-agnostic, finished lines only (ADR 0015).
+2. Spoken Punctuation, matched anywhere in a line, longest match first. On by default where the model does not punctuate (capability flag, not language name); layout phrases always on.
+3. Spanish `¿`/`¡`: explicit "abre interrogación/exclamación"; closing a question or exclamation with no opener inserts the opener at the start of that sentence.
+4. Voice Commands, editor tier only (`EDITOR_COMMANDS`): phrases are verb × target from a per-language vocabulary with on/off polarity and ignored filler words; whole line, two words minimum; Command semantics (selection, else what is dictated next); custom phrases typed in the Shortcut Editor's Voice list, stored in the ADR 0012 layer v2 and the Shortcut File; conflicts with Spoken Punctuation refused; each run announced in a live region.
+5. Dictation Vocabulary: heard form → written form per Dictation Language, device-local, applied first, output is literal text. Moonshine context biasing is not in v1.
+6. "Scratch that" removes dictated text back to the previous sentence end, up to 10 sentences, never the author's typing; with no sentence ends it removes the last dictated line; a sentence begun by hand loses only its dictated tail.
+7. Trace: interpreter time per line, Voice Command hits, Spoken Punctuation hits, and scratch-that uses join the memory-only line stats in Settings → Dictation.
+8. Performance: under 1 ms p99 per line with 1,000 aliases and Vocabulary entries; phrase table rebuild under 10 ms; periodic `vitest bench` on desktop and Android; the gate lane asserts the algorithm, not timings.
+9. Ship gate: human-recorded command WAVs in the conformance lane, at least 80% hit rate on default phrases with the Accurate model, zero triggers on a prose set.
+
+**Draft Voice Command vocabulary** (unverified against vendor phrasing, see the verification log):
+
+| Class | en | es | Targets |
+| --- | --- | --- | --- |
+| Format on | make, set, turn on, use, apply | poner, activar, usar, aplicar | bold, italic, underline, strike, code |
+| Format off | remove, turn off, stop | quitar, desactivar | same |
+| Block to | make, turn into, change to | convertir en, cambiar a, poner | heading one to three, quote, paragraph |
+| List | start, begin / end, stop | empezar, iniciar / terminar, salir de | bullet list, numbered list |
+| Align | align | alinear (a la), centrar | left, center, right, justify |
+| Action | undo that, redo that | deshacer eso, rehacer eso | undo, redo |
+| Dictation | stop dictation | parar dictado, detener dictado | `dictation.stop` |
+
+Filler words: en "the, to, in"; es "la, el, las, los, en, a, al". Targets accept number and gender variants, and numbers as words or digits.
+
+**Next, not deferred:** a Tutorial "Dictation" section that teaches without dictating: steps anchored on Settings → Dictation and the Shortcut Editor's Voice list, plus an `image` step for the editor control, covering every Dictation term.
+
+**Deferred, each with its own issue:** app-tier Voice Commands; "<target> that" on the last dictated span; custom verbs and targets; recording a Voice Command by dictating it (v2, typing stays); an all-caps lock; "numeral"; word timestamps and a pause rule inside a line; Moonshine context biasing for Vocabulary words, kept only if measured faster than the Interpreter's replacement.
 
 ---
 
@@ -369,7 +407,7 @@ export function normalizePhrase(text: string): string;   // shared by matching, 
 3. **Model punctuation and spoken punctuation colliding (medium).** Section 2.4 point 1. Fixture tests cover the observed shapes; new model releases can change them, so fixtures should be regenerated when the catalog changes models.
 4. **Voice Commands that navigate (medium).** Running a Command that unmounts the editor stops dictation (`session.ts:226-233`). Either exclude navigation Commands from `voice`, or decide that stopping is correct.
 5. **Scope creep toward Voice Control (low now, high later).** Selection by voice ("select last paragraph"), correction ("correct that"), and numbers are each a feature. The binding model supports them later; v1 should not.
-6. **Coordination.** Branch `dictation-follow-ups-259` currently changes `session.ts`, `runtime.ts`, and the dictation store in the main checkout. The interpreter touches the same files; start it after that work merges.
+6. **Coordination.** Resolved: `dictation-follow-ups-259` merged as #264.
 
 ---
 
@@ -437,4 +475,5 @@ Could not verify:
 - **Whether Apple and Microsoft offer `¿`/`¡` anywhere.** I checked the command tables only; a hidden phrase may exist. Settle: search each Spanish help page for "apertura" and test Apple Dictation in Spanish.
 - **Moonshine `IntentRecognizer` in WASM.** Inferred from no "intent" match under `language-bindings/wasm`. Settle: search the release WASM bundle's exports.
 - **Word timestamps with Maibuk's catalog models.** The `*_with_attention.ort` decoders are not in the installed model folders; whether upstream publishes them for the Spanish streaming models was not checked. Settle: list the model files in Moonshine's model catalog source (`moonshine-model-file-metadata.generated.cpp`).
+- **The draft Voice Command vocabulary and the prior-art names for the Dictation Vocabulary** (Decisions section): both come from memory of Dragon ("Vocabulary", written form / spoken form), Apple Voice Control ("Vocabulary"; "Bold that"), Windows voice access ("Bold that"), Google Docs, Talon (`words_to_replace`), and Gboard ("Personal dictionary"), because every fetch in the decision session was blocked. Settle: extract the formatting rows from the Apple and Microsoft en/es command pages and the Google Docs page as in pass 2, and correct the table.
 - **Whether `closeHistory` plus a TipTap chain inside one transaction keeps one undo step for layout edits.** Reasoned from `commitLine` and prosemirror-history, not run. Settle: the editor integration test in section 5.7.

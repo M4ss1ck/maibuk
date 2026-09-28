@@ -387,6 +387,9 @@ The span from starting Dictation to stopping it. One per app at a time; it follo
 A downloaded speech model for one language and tier (Fast or Accurate), kept on this device.
 _Avoid_: voice pack
 
+**Dictation Language**:
+The language a Dictation Session listens for: the language of the editor it types into (Auto), unless the author picked one for the Session.
+
 ## Shortcuts
 
 Maibuk is keyboard-first: everything the author can do can run from the keyboard.
@@ -475,6 +478,23 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
 
+**Dictation Command Interpreter**:
+The step between a finished spoken line and the editor that turns it into text, Spoken Punctuation, or a Voice Command, by fixed rules that do not depend on the Dictation Model. (ADR 0015)
+
+**Spoken Punctuation**:
+Words said while dictating that become punctuation, a paragraph or line break, or a list item instead of text, such as "comma" or "punto y aparte"; also the dictation words "scratch that", "literal", and "cap". Each can be switched off and given extra phrases per Dictation Language, on this device. (ADR 0014)
+_UI_: en "Spoken punctuation" / es "Puntuación dictada"
+_Avoid_: voice command (for these)
+
+**Voice Command**:
+A spoken phrase, said on its own, that runs a Command instead of inserting text, such as "poner negrita". A second way to run a Command, next to its Shortcuts; custom ones stay on this device. (ADR 0014)
+_Avoid_: voice shortcut
+
+**Dictation Vocabulary**:
+Words and names the author teaches Dictation: what the Dictation Model hears and what to write instead, per Dictation Language, on this device. (ADR 0014)
+_UI_: en "Dictation vocabulary" / es "Vocabulario de dictado"
+_Avoid_: dictionary (that is Spell Check's), autocorrect
+
 ## Relationships
 
 - A **Library** holds many **Books**, **Notes**, and **Canvases**.
@@ -489,6 +509,7 @@ Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widen
 - A **Command** has zero or more **Shortcuts**: its **Fixed Shortcuts**, plus its **Custom Shortcuts** or else its **Default Shortcuts**.
 - The **Tutorial** runs in a **Tutorial Library**, never in the author's **Library**; ending it brings back the author's own.
 - A **Dictation Session** uses one **Dictation Model** and inserts into whichever editor has the caret.
+- A **Command** may also have **Voice Commands**; **Spoken Punctuation** and the **Dictation Vocabulary** are not Commands, and all three are kept per **Dictation Language**.
 
 ## Anticipated
 
@@ -534,9 +555,3 @@ _Avoid_: annotation, footnote
 **Pen Name**:
 The name a Book is published under when it differs from the author's own name.
 _Avoid_: pseudonym
-
-**Voice Command**:
-A spoken phrase that runs a Command instead of inserting text.
-
-**Dictation Command Interpreter**:
-The step between a finished spoken line and the editor that turns phrases into punctuation, corrections, or Voice Commands.
