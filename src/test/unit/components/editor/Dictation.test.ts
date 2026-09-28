@@ -4,10 +4,7 @@ import { undo, undoDepth } from "@tiptap/pm/history";
 import type { DecorationSet } from "@tiptap/pm/view";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { dictationPluginKey } from "@/components/editor/extensions/Dictation";
-import {
-  attachSession,
-  resetDictationHubForTests,
-} from "@/features/dictation/hub";
+import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
 import type { DictationTarget } from "@/features/dictation/session";
 
 let targets: DictationTarget[];
@@ -74,9 +71,7 @@ describe("Dictation extension", () => {
     const before = editor.getJSON();
     targets[0].showPartial("mundo");
     expect(dictationPluginKey.getState(editor.state)).toBe("mundo");
-    expect(
-      editor.view.dom.querySelector(".dictation-partial")?.textContent,
-    ).toBe(" mundo");
+    expect(editor.view.dom.querySelector(".dictation-partial")?.textContent).toBe(" mundo");
     expect(editor.getJSON()).toEqual(before);
     expect(undoDepth(editor.state)).toBe(0);
     expect(onUpdate).not.toHaveBeenCalled();
@@ -86,11 +81,27 @@ describe("Dictation extension", () => {
   it("commits a line at the caret with a separating space, as one undo step", async () => {
     const editor = await makeEditor();
     targets[0].showPartial("mundo");
-    targets[0].commit("mundo");
+    targets[0].apply([{ kind: "text", text: "mundo" }]);
     expect(editor.getText()).toBe("Hola mundo");
     expect(dictationPluginKey.getState(editor.state)).toBe("");
     undo(editor.state, editor.view.dispatch);
     expect(editor.getText()).toBe("Hola");
+    editor.destroy();
+  });
+
+  it("applies a list of text edits in one transaction and undo step", async () => {
+    const editor = await makeEditor();
+    const onUpdate = vi.fn();
+    editor.on("update", onUpdate);
+    targets[0].apply([
+      { kind: "text", text: "uno" },
+      { kind: "text", text: "dos" },
+    ]);
+    expect(editor.getHTML()).toBe("<p>Hola uno dos</p>");
+    expect(undoDepth(editor.state)).toBe(1);
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    undo(editor.state, editor.view.dispatch);
+    expect(editor.getHTML()).toBe("<p>Hola</p>");
     editor.destroy();
   });
 
@@ -101,7 +112,7 @@ describe("Dictation extension", () => {
       ["<p></p>", "mundo"],
     ] as const) {
       const editor = await makeEditor(content);
-      targets.at(-1)!.commit("mundo");
+      targets.at(-1)!.apply([{ kind: "text", text: "mundo" }]);
       expect(editor.getText()).toBe(expected);
       editor.destroy();
     }
@@ -110,7 +121,7 @@ describe("Dictation extension", () => {
   it("replaces a range selection", async () => {
     const editor = await makeEditor("<p>Hola gente</p>");
     editor.commands.setTextSelection({ from: 6, to: 11 }); // "gente"
-    targets[0].commit("mundo");
+    targets[0].apply([{ kind: "text", text: "mundo" }]);
     expect(editor.getText()).toBe("Hola mundo");
     editor.destroy();
   });
@@ -129,7 +140,7 @@ describe("Dictation extension", () => {
     expect(widget.from).toBe(editor.state.selection.to);
     targets[0].showPartial("mundo");
     editor.commands.insertContent(" o");
-    targets[0].commit("mundo");
+    targets[0].apply([{ kind: "text", text: "mundo" }]);
     expect(editor.getText()).toBe("Hola y o mundo");
     expect(dictationPluginKey.getState(editor.state)).toBe("");
     editor.destroy();
@@ -137,9 +148,7 @@ describe("Dictation extension", () => {
 
   it("reports focus to the session", async () => {
     const editor = await makeEditor();
-    const reported = new Promise<void>((resolve) =>
-      editor.on("focus", () => resolve()),
-    );
+    const reported = new Promise<void>((resolve) => editor.on("focus", () => resolve()));
     editor.commands.focus();
     await reported;
     expect(focus).toHaveBeenCalledWith(targets[0].id);
@@ -150,7 +159,7 @@ describe("Dictation extension", () => {
     const editor = await makeEditor();
     const press = () =>
       editor.view.someProp("handleKeyDown", (f) =>
-        f(editor.view, new KeyboardEvent("keydown", { key: "Escape" })),
+        f(editor.view, new KeyboardEvent("keydown", { key: "Escape" }))
       );
     expect(press()).toBeFalsy();
     status = "listening";
@@ -162,7 +171,7 @@ describe("Dictation extension", () => {
   it("a read-only editor ignores commits", async () => {
     const editor = await makeEditor();
     editor.setEditable(false);
-    targets[0].commit("mundo");
+    targets[0].apply([{ kind: "text", text: "mundo" }]);
     expect(editor.getText()).toBe("Hola");
     editor.destroy();
   });

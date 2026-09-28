@@ -2,7 +2,12 @@ export * from "@/features/dictation/types";
 export { MODEL_CATALOG, modelsFor, validateCatalog } from "@/features/dictation/catalog";
 export { createCrc32c, crc32cBase64, type Crc32c } from "@/features/dictation/crc32c";
 export { createModelStore, type ModelStore } from "@/features/dictation/model-store";
-export { createRouter, type Interpreter, type RouteResult } from "@/features/dictation/router";
+export {
+  createRouter,
+  type DictationEdit,
+  type Interpreter,
+  type RouteResult,
+} from "@/features/dictation/router";
 export {
   createDictationSession,
   type DictationSession,
@@ -13,5 +18,9 @@ export {
 } from "@/features/dictation/session";
 export { createLineStats, type LineStats } from "@/features/dictation/stats";
 export { pickModel, useDictationStore, type DictationStoreState } from "@/features/dictation/store";
-export { getDictation, resetDictationForTests, type DictationRuntime } from "@/features/dictation/runtime";
+export {
+  getDictation,
+  resetDictationForTests,
+  type DictationRuntime,
+} from "@/features/dictation/runtime";
 export { attachSession, dictationHub, resetDictationHubForTests } from "@/features/dictation/hub";

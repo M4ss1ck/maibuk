@@ -35,7 +35,13 @@ describe("getDictation()", () => {
     createRecognizerHost.mockResolvedValue(host);
     const { session } = await getDictation();
     useDictationStore.setState({ installed: [MODEL_CATALOG[0].id] });
-    session.register({ id: "chapter", language: () => "en", showPartial() {}, commit() {} });
+    session.register({
+      id: "chapter",
+      language: () => "en",
+      showPartial() {},
+      before: () => "",
+      apply() {},
+    });
     session.focus("chapter");
     await session.start();
     expect(session.getSnapshot().status).toBe("listening");
@@ -57,7 +63,13 @@ describe("getDictation()", () => {
     createRecognizerHost.mockResolvedValue(host);
     const { session } = await getDictation();
     useDictationStore.setState({ installed: [MODEL_CATALOG[0].id], enabled: false });
-    session.register({ id: "chapter", language: () => "en", showPartial() {}, commit() {} });
+    session.register({
+      id: "chapter",
+      language: () => "en",
+      showPartial() {},
+      before: () => "",
+      apply() {},
+    });
     session.focus("chapter");
     await session.start();
     await session.toggle();

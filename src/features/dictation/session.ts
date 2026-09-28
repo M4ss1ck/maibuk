@@ -2,7 +2,7 @@
 // It knows targets (editors), a language, and a RecognizerHost; it never
 // knows which engine or platform is underneath.
 import type { LineStats } from "@/features/dictation/stats";
-import type { RouteResult } from "@/features/dictation/router";
+import type { DictationEdit, RouteResult } from "@/features/dictation/router";
 import {
   toDictationError,
   type DictationErrorCode,
@@ -17,8 +17,10 @@ export interface DictationTarget {
   language(): DictationLanguage;
   /** Shows the in-progress line; "" clears it. Never changes the document. */
   showPartial(text: string): void;
-  /** Inserts a finished line at the caret as one undo step. */
-  commit(text: string): void;
+  /** At most 256 characters before the caret; never the whole document. */
+  before(): string;
+  /** Applies one finished line as one undo step. */
+  apply(edits: DictationEdit[]): void;
 }
 
 export type SessionStatus = "idle" | "loading" | "listening" | "stopping";
@@ -54,7 +56,7 @@ export interface DictationSession {
 export function createDictationSession(deps: {
   host: RecognizerHost;
   modelFor: (language: DictationLanguage) => ModelSpec | null;
-  route: (text: string) => RouteResult;
+  route: (text: string, before: string) => RouteResult;
   runCommand: (id: string) => void;
   notify: (notice: SessionNotice) => void;
   copyText: (text: string) => Promise<void>;
@@ -115,18 +117,19 @@ export function createDictationSession(deps: {
       case "final": {
         showPartial("");
         deps.stats.record(event.latencyMs);
-        const result = deps.route(event.text);
-        if (result.kind === "command") {
+        const target = active();
+        const result = deps.route(event.text, target?.before() ?? "");
+        if (result.kind === "voice_command") {
           deps.runCommand(result.id);
           return;
         }
-        const target = active();
-        if (target) target.commit(result.text);
+        if (result.kind === "scratch") return;
+        if (target) target.apply(result.edits);
         else {
-          const text = result.text;
+          const text = result.edits.map((edit) => edit.text).join("");
           deps.copyText(text).then(
             () => deps.notify({ kind: "orphan_copied" }),
-            () => deps.notify({ kind: "orphan_lost", text }),
+            () => deps.notify({ kind: "orphan_lost", text })
           );
         }
         return;
@@ -235,11 +238,7 @@ export function createDictationSession(deps: {
         if (!wasActive) return;
         const next = active();
         if (next) next.showPartial(partial);
-        else if (
-          snapshot.status === "listening" ||
-          snapshot.status === "loading"
-        )
-          void stop();
+        else if (snapshot.status === "listening" || snapshot.status === "loading") void stop();
       };
     },
     focus(targetId) {

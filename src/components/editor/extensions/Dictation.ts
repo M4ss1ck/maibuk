@@ -5,6 +5,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
 import type { DictationTarget } from "@/features/dictation/session";
+import type { DictationEdit } from "@/features/dictation/router";
 import { normalizeLanguage } from "@/features/settings/types";
 
 /** Plugin state: the in-progress spoken line, "" when none. Never document content. */
@@ -18,19 +19,30 @@ export function needsSpaceBefore(doc: ProseMirrorNode, pos: number): boolean {
   return before !== "" && !NO_SPACE_AFTER.test(before);
 }
 
-/**
- * One finished line at the caret (replacing a range), as its own undo step.
- * Case and punctuation are left alone: that is the Dictation Command
- * Interpreter's job (Anticipated), not the editor's.
- */
-export function commitLine(editor: Editor, text: string): void {
-  const { state } = editor;
-  const { from, to } = state.selection;
-  const spaced = (needsSpaceBefore(state.doc, from) ? " " : "") + text;
-  const tr = closeHistory(state.tr.insertText(spaced, from, to)).setMeta(
-    dictationPluginKey,
-    "",
+/** Keep context reads constant-size even in a very long Chapter. */
+export const BEFORE_CARET_LIMIT = 256;
+
+export function textBeforeCaret(editor: Editor): string {
+  const { doc, selection } = editor.state;
+  return doc.textBetween(
+    Math.max(0, selection.from - BEFORE_CARET_LIMIT),
+    selection.from,
+    "\n",
+    "\n"
   );
+}
+
+/** Apply a finished line in one transaction and one undo step. */
+export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): void {
+  if (edits.length === 0) return;
+  const { state } = editor;
+  const tr = closeHistory(state.tr);
+  for (const edit of edits) {
+    const { from, to } = tr.selection;
+    const spaced = (needsSpaceBefore(tr.doc, from) ? " " : "") + edit.text;
+    tr.insertText(spaced, from, to);
+  }
+  tr.setMeta(dictationPluginKey, "");
   editor.view.dispatch(tr);
 }
 
@@ -39,10 +51,7 @@ interface DictationStorage {
   unregister: (() => void) | null;
 }
 
-export const Dictation = Extension.create<
-  Record<string, never>,
-  DictationStorage
->({
+export const Dictation = Extension.create<Record<string, never>, DictationStorage>({
   name: "dictation",
 
   addStorage() {
@@ -76,7 +85,7 @@ export const Dictation = Extension.create<
                 span.textContent = shown;
                 return span;
               },
-              { side: 1, key: `dictation:${shown}` },
+              { side: 1, key: `dictation:${shown}` }
             );
             return DecorationSet.create(state.doc, [widget]);
           },
@@ -103,20 +112,18 @@ export const Dictation = Extension.create<
       id: this.storage.targetId,
       language: () =>
         normalizeLanguage(
-          (editor.storage as { spellCheck?: { language?: string } }).spellCheck
-            ?.language,
+          (editor.storage as { spellCheck?: { language?: string } }).spellCheck?.language
         ),
       showPartial: (text) => {
         if (editor.isDestroyed) return;
         editor.view.dispatch(
-          editor.state.tr
-            .setMeta(dictationPluginKey, text)
-            .setMeta("addToHistory", false),
+          editor.state.tr.setMeta(dictationPluginKey, text).setMeta("addToHistory", false)
         );
       },
-      commit: (text) => {
+      before: () => textBeforeCaret(editor),
+      apply: (edits) => {
         if (editor.isDestroyed || !editor.isEditable) return;
-        commitLine(editor, text);
+        applyDictationEdits(editor, edits);
       },
     };
     this.storage.unregister = dictationHub.register(target);
