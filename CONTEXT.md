@@ -375,6 +375,18 @@ _UI_: es "Mayúsculas y minúsculas"
 The rules that reshape pasted text before it lands in a Chapter or Note, such as "Match my book".
 _UI_: en "Paste cleanup" / es "Limpieza al pegar"
 
+**Dictation**:
+Turning the author's speech into text in the editor that has the caret, offline, with a downloaded Dictation Model.
+_UI_: en "Dictation" / es "Dictado"
+_Avoid_: voice typing, speech-to-text (in UI copy)
+
+**Dictation Session**:
+The span from starting Dictation to stopping it. One per app at a time; it follows the caret across the editors on the page.
+
+**Dictation Model**:
+A downloaded speech model for one language and tier (Fast or Accurate), kept on this device.
+_Avoid_: voice pack
+
 ## Shortcuts
 
 Maibuk is keyboard-first: everything the author can do can run from the keyboard.
@@ -476,6 +488,7 @@ Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widen
 - Open editors **Flush** before a **Sync** reads the **Library**.
 - A **Command** has zero or more **Shortcuts**: its **Fixed Shortcuts**, plus its **Custom Shortcuts** or else its **Default Shortcuts**.
 - The **Tutorial** runs in a **Tutorial Library**, never in the author's **Library**; ending it brings back the author's own.
+- A **Dictation Session** uses one **Dictation Model** and inserts into whichever editor has the caret.
 
 ## Anticipated
 
@@ -521,3 +534,9 @@ _Avoid_: annotation, footnote
 **Pen Name**:
 The name a Book is published under when it differs from the author's own name.
 _Avoid_: pseudonym
+
+**Voice Command**:
+A spoken phrase that runs a Command instead of inserting text.
+
+**Dictation Command Interpreter**:
+The step between a finished spoken line and the editor that turns phrases into punctuation, corrections, or Voice Commands.
