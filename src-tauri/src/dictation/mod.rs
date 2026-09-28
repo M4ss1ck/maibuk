@@ -7,6 +7,12 @@ pub mod protocol;
 pub mod resample;
 
 #[cfg(target_os = "linux")]
+mod capture;
+#[cfg(target_os = "linux")]
 pub mod engine;
+#[cfg(target_os = "linux")]
+mod models;
+#[cfg(target_os = "linux")]
+mod runner;
 
 mod commands;
