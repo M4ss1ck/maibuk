@@ -53,9 +53,9 @@
       "line": "¡Hola, coma! ¿Cómo estás, signo de interrogación?",
       "before": "",
       "expected": {
-        "edits": [{ "kind": "text", "text": "¡Hola, ¿Cómo estás, signo de interrogación?" }],
+        "edits": [{ "kind": "text", "text": "¡Hola, ¿Cómo estás?" }],
         "state": { "capitalizeNext": true, "noSpaceNext": false },
-        "spokenPunctuationCount": 1
+        "spokenPunctuationCount": 2
       }
     },
     {
@@ -86,10 +86,23 @@
         "edits": [
           { "kind": "text", "text": "El día" },
           { "kind": "line_break" },
-          { "kind": "text", "text": "llovió" }
+          { "kind": "text", "text": "Llovió" }
         ],
         "state": { "capitalizeNext": false, "noSpaceNext": false },
         "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "hard break starts a sentence for casing",
+      "line": "nueva línea qué tal punto",
+      "before": "Hola",
+      "expected": {
+        "edits": [
+          { "kind": "line_break" },
+          { "kind": "text", "text": "Qué tal." }
+        ],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 2
       }
     },
     {
@@ -221,6 +234,152 @@
         "edits": [{ "kind": "text", "text": "Cómo estás" }],
         "state": { "capitalizeNext": false, "noSpaceNext": false },
         "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "quotes and parentheses open and close",
+      "line": "dijo abre comillas hola cierra comillas y abre paréntesis aparte cierra paréntesis",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Dijo «hola» y (aparte)" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 4
+      }
+    },
+    {
+      "name": "list: nuevo elemento splits",
+      "line": "primero nuevo elemento segundo",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "Primero" },
+          { "kind": "list_item" },
+          { "kind": "text", "text": "Segundo" }
+        ],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "explicit openers stay where said mid-sentence",
+      "line": "si vienes abre interrogación me avisas cierra interrogación",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Si vienes ¿me avisas?" }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 2
+      }
+    },
+    {
+      "name": "auto opener inserts at the sentence start",
+      "line": "cómo estás signo de interrogación",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "Cómo estás" },
+          { "kind": "opener", "mark": "¿" },
+          { "kind": "text", "text": "?" }
+        ],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "explicit opener suppresses the auto opener",
+      "line": "abre interrogación cómo estás signo de interrogación",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "¿Cómo estás?" }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 2
+      }
+    },
+    {
+      "name": "auto opener for exclamations",
+      "line": "qué sorpresa signo de exclamación",
+      "before": "",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "Qué sorpresa" },
+          { "kind": "opener", "mark": "¡" },
+          { "kind": "text", "text": "!" }
+        ],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "cap: mayúscula capitalizes the next word",
+      "line": "hola mayúscula maría cómo estás",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hola María cómo estás" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "literal writes a punctuation word instead of acting",
+      "line": "di literal coma por favor",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Di coma por favor" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "auto opener finds the sentence start before the caret",
+      "line": "me avisas signo de interrogación",
+      "before": "Si vienes",
+      "expected": {
+        "edits": [
+          { "kind": "text", "text": "me avisas" },
+          { "kind": "opener", "mark": "¿" },
+          { "kind": "text", "text": "?" }
+        ],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "literal without a following phrase stays as prose",
+      "line": "una traducción literal del texto",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Una traducción literal del texto" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "literal protects a phrase at the end of the line",
+      "line": "di literal coma",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Di coma" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "literal turns a layout phrase into text",
+      "line": "literal nuevo párrafo",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Nuevo párrafo" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "mayúscula capitalizes a protected phrase at the end of the line",
+      "line": "hola mayúscula coma",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hola Coma" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
       }
     }
   ]

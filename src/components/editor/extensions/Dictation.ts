@@ -2,10 +2,12 @@ import { Extension, type Editor } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { liftTarget } from "@tiptap/pm/transform";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
 import type { DictationTarget } from "@/features/dictation/session";
 import type { DictationEdit } from "@/features/dictation/router";
+import { findSentenceStartOffset } from "@/features/dictation/interpreter";
 import { normalizeLanguage } from "@/features/settings/types";
 
 /** Plugin state: the in-progress spoken line, "" when none. Never document content. */
@@ -32,6 +34,24 @@ export function textBeforeCaret(editor: Editor): string {
   );
 }
 
+function isInListItem(doc: ProseMirrorNode, pos: number): boolean {
+  const $pos = doc.resolve(pos);
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    if ($pos.node(depth).type.name === "listItem") return true;
+  }
+  return false;
+}
+
+/** Sentence start in the current textblock, for Spanish auto-openers. Shares the interpreter's boundary rule. */
+function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
+  const $from = doc.resolve(caretPos);
+  const blockStart = $from.start();
+  const sliceEnd = caretPos;
+  const sliceStart = Math.max(blockStart, sliceEnd - 500);
+  const text = doc.textBetween(sliceStart, sliceEnd, "\n", "\n");
+  return sliceStart + findSentenceStartOffset(text);
+}
+
 /** Apply a finished line in one transaction and one undo step. */
 export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): void {
   if (edits.length === 0) return;
@@ -44,8 +64,78 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
     } else if (edit.kind === "line_break") {
       const hardBreak = state.schema.nodes.hardBreak;
       if (hardBreak) tr.replaceSelectionWith(hardBreak.create());
+    } else if (edit.kind === "list_item") {
+      tr.deleteSelection();
+      const pos = tr.selection.from;
+      if (isInListItem(tr.doc, pos)) {
+        const $at = tr.doc.resolve(pos);
+        if ($at.parent.content.size === 0) {
+          // Empty list item: match Enter. In a nested list lift the list
+          // item itself out of its list (like liftListItem), so it moves up
+          // one level as an empty item; at the top level lift the empty
+          // paragraph out (like liftEmptyBlock).
+          const itemType = state.schema.nodes.listItem;
+          const $from = tr.selection.$from;
+          const itemRange = $from.blockRange(
+            $from,
+            (node) => node.childCount > 0 && node.firstChild?.type === itemType
+          );
+          const outerTarget = itemRange && liftTarget(itemRange);
+          if (
+            itemRange &&
+            outerTarget != null &&
+            $from.node(itemRange.depth - 1).type === itemType
+          ) {
+            tr.lift(itemRange, outerTarget);
+          } else {
+            const range = $at.blockRange();
+            const target = range && liftTarget(range);
+            if (range && target != null) tr.lift(range, target);
+            else if ($at.depth >= 2) tr.split(pos, 2);
+            else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+          }
+        } else {
+          // Split the current list item, like pressing Enter inside it.
+          // Depth 2 splits listItem + paragraph (prosemirror-schema-list).
+          if (tr.doc.resolve(pos).depth >= 2) tr.split(pos, 2);
+          else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+        }
+      } else {
+        const bulletList = state.schema.nodes.bulletList;
+        const listItem = state.schema.nodes.listItem;
+        const $at = tr.doc.resolve(pos);
+        if ($at.parent.type.name === "paragraph" && $at.parent.content.size === 0) {
+          // Empty paragraph becomes the list item, like toggleBulletList.
+          const range = $at.blockRange(tr.doc.resolve($at.end()));
+          if (range) tr.wrap(range, [{ type: bulletList }, { type: listItem }]);
+        } else {
+          // Split, then wrap the new paragraph. TipTap leaves its usual
+          // trailing paragraph after the list.
+          tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+          const $after = tr.selection.$from;
+          const itemEnd = $after.end();
+          const range = $after.blockRange(tr.doc.resolve(itemEnd));
+          if (range) tr.wrap(range, [{ type: bulletList }, { type: listItem }]);
+        }
+      }
+    } else if (edit.kind === "opener") {
+      const caret = tr.selection.from;
+      const at = findSentenceStartPos(tr.doc, caret);
+      // Never duplicate an opener the author already has.
+      const existing = tr.doc.textBetween(at, Math.min(at + 1, tr.doc.content.size), "\n", "\n");
+      if (existing !== edit.mark) {
+        tr.insertText(edit.mark, at);
+        // A sentence that starts here starts with a capital (Spanish openers).
+        // The word was already emitted in lowercase when it continued the
+        // previous sentence before the hard break; fix it now that the opener
+        // shows it starts a sentence. Mid-sentence explicit openers are text,
+        // never this edit, so "¿me" stays lowercase.
+        const after = tr.doc.textBetween(at + 1, Math.min(at + 2, tr.doc.content.size), "\n", "\n");
+        const upper = after.toUpperCase();
+        if (after !== "" && after !== upper) tr.insertText(upper, at + 1, at + 2);
+      }
     } else {
-      const startsWithClosingMark = ",.;:?!)]}".includes(edit.text[0] ?? "");
+      const startsWithClosingMark = ",.;:?!»”’)]}…".includes(edit.text[0] ?? "");
       if (startsWithClosingMark) {
         const from = tr.selection.from;
         const preceding = tr.doc.textBetween(Math.max(0, from - 64), from, "\n", "\n");

@@ -12,8 +12,14 @@ import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
 import { EN_PHRASES } from "@/features/dictation/phrases-en";
 import { ES_PHRASES } from "@/features/dictation/phrases-es";
 
-/** One emitted piece of a phrase: a mark, a paragraph split, or a line break. */
-export type PhraseAction = { kind: "mark"; mark: string } | { kind: "paragraph" } | { kind: "line_break" };
+/** One emitted piece of a phrase: a mark, a layout split, or a next-word modifier. */
+export type PhraseAction =
+  | { kind: "mark"; mark: string }
+  | { kind: "paragraph" }
+  | { kind: "line_break" }
+  | { kind: "list_item" }
+  | { kind: "cap" }
+  | { kind: "literal" };
 
 export interface PhraseEntry {
   actions: PhraseAction[];
@@ -86,6 +92,37 @@ interface Match {
 const OPENING_MARKS = new Set(["¿", "¡", "«", "“", "‘", "(", "[", "{"]);
 const SENTENCE_END_MARKS = new Set([".", "?", "!"]);
 
+/**
+ * One shared sentence-boundary rule for the interpreter, the editor target,
+ * and the orphan copy path: a sentence ends after `.`, `?`, `!`, or a hard
+ * break (`\n` in the bounded text before the caret).
+ */
+function lastSentenceEndIndex(text: string): number {
+  for (let idx = text.length - 1; idx >= 0; idx -= 1) {
+    const ch = text[idx];
+    if (ch === "\n" || SENTENCE_END_MARKS.has(ch)) return idx;
+  }
+  return -1;
+}
+
+/** Opening quotes and parentheses an opener is inserted after, never before. */
+const SENTENCE_START_SKIP_MARKS = new Set(["«", "“", "‘", "(", "[", "{"]);
+
+function stepPastOpeningMarks(text: string, offset: number): number {
+  let i = offset;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === " " || ch === "\t" || SENTENCE_START_SKIP_MARKS.has(ch)) i += 1;
+    else break;
+  }
+  return i;
+}
+
+/** Start of the current sentence: after the last end mark, past whitespace and opening quotes/parens. */
+export function findSentenceStartOffset(text: string): number {
+  return stepPastOpeningMarks(text, lastSentenceEndIndex(text) + 1);
+}
+
 function normalizeWord(word: string): string {
   return word
     .normalize("NFD")
@@ -141,6 +178,12 @@ function isSentenceStart(before: string): boolean {
   const trimmed = before.replace(/[ \t]+$/u, "");
   if (trimmed === "") return true;
   return SENTENCE_END_MARKS.has(trimmed[trimmed.length - 1]);
+}
+
+/** Whether the current sentence already has its Spanish opener. Derived from `before`, never stored. */
+function openerInSentence(before: string, mark: "¿" | "¡"): boolean {
+  const lastEnd = lastSentenceEndIndex(before);
+  return before.indexOf(mark, lastEnd + 1) !== -1;
 }
 
 function uppercaseFirst(word: string): string {
@@ -204,11 +247,16 @@ export function interpret(input: InterpretInput): InterpretResult {
   }
 
   const allowPunctuation = !capabilities.punctuation;
+  const spanish = table.language === "es";
   const edits: DictationEdit[] = [];
   let spokenPunctuationCount = 0;
   let current = "";
   let capitalize = state.capitalizeNext || isSentenceStart(before);
   let firstWord = true;
+  let hasQuestionOpener = openerInSentence(before, "¿");
+  let hasExclamationOpener = openerInSentence(before, "¡");
+  let capNext = false;
+  let literalNext = false;
 
   const flush = () => {
     if (current !== "") {
@@ -217,9 +265,23 @@ export function interpret(input: InterpretInput): InterpretResult {
     }
   };
 
-  const appendWord = (surface: string) => {
+  const resetSentence = () => {
+    hasQuestionOpener = false;
+    hasExclamationOpener = false;
+  };
+
+  const ensureOpener = (mark: "¿" | "¡") => {
+    const has = mark === "¿" ? hasQuestionOpener : hasExclamationOpener;
+    if (!spanish || has) return;
+    flush();
+    edits.push({ kind: "opener", mark });
+    if (mark === "¿") hasQuestionOpener = true;
+    else hasExclamationOpener = true;
+  };
+
+  const appendWord = (surface: string, forceCap = false) => {
     let word = surface;
-    if (capitalize) {
+    if (forceCap || capitalize) {
       word = uppercaseFirst(word);
       capitalize = false;
     } else if (firstWord) {
@@ -231,9 +293,16 @@ export function interpret(input: InterpretInput): InterpretResult {
   };
 
   const appendMark = (mark: string) => {
+    if (mark === "¿") hasQuestionOpener = true;
+    else if (mark === "¡") hasExclamationOpener = true;
+    else if (mark === "?" && spanish && allowPunctuation) ensureOpener("¿");
+    else if (mark === "!" && spanish && allowPunctuation) ensureOpener("¡");
     if (OPENING_MARKS.has(mark) && current !== "" && !/\s$/u.test(current)) current += " ";
     current += mark;
-    if (SENTENCE_END_MARKS.has(mark)) capitalize = true;
+    if (SENTENCE_END_MARKS.has(mark)) {
+      capitalize = true;
+      resetSentence();
+    }
   };
 
   const emitActions = (actions: PhraseAction[]) => {
@@ -244,22 +313,73 @@ export function interpret(input: InterpretInput): InterpretResult {
         flush();
         edits.push({ kind: "paragraph" });
         capitalize = true;
-      } else {
+        resetSentence();
+      } else if (action.kind === "line_break") {
         flush();
         edits.push({ kind: "line_break" });
+        capitalize = true;
+      } else if (action.kind === "list_item") {
+        flush();
+        edits.push({ kind: "list_item" });
+        capitalize = true;
+        resetSentence();
+      } else if (action.kind === "cap") {
+        capNext = true;
+      } else {
+        literalNext = true;
       }
     }
   };
 
-  const matches = findMatches(tokens, table, allowPunctuation);
+  const allMatches = findMatches(tokens, table, allowPunctuation);
+  const allByStart = new Map<number, Match>();
+  for (const match of allMatches) allByStart.set(match.start, match);
+
+  // The token right after a modifier, skipping only model punctuation. Phrase
+  // tokens count: "di literal coma" targets "coma" even though it starts a
+  // match, and "hola mayúscula coma" targets "coma" the same way.
+  const immediateNextWord = (from: number): number | null => {
+    let j = from;
+    while (j < tokens.length) {
+      if (tokens[j].mark) {
+        j += 1;
+        continue;
+      }
+      return j;
+    }
+    return null;
+  };
+
+  // "literal" only escapes when the words right after it would otherwise act
+  // (they start a matched phrase). Otherwise it is ordinary prose and stays
+  // as text, so it never deletes a word. "capitalize"/"mayúscula" acts on the
+  // next word anywhere. A modifier with no word after it stays as prose.
+  const matches: Match[] = [];
+  for (const match of allMatches) {
+    const isCap = match.entry.actions.some((action) => action.kind === "cap");
+    const isLiteral = match.entry.actions.some((action) => action.kind === "literal");
+    if (!isCap && !isLiteral) {
+      matches.push(match);
+      continue;
+    }
+    const target = immediateNextWord(match.end + 1);
+    if (target === null) continue;
+    if (isCap) {
+      matches.push(match);
+      continue;
+    }
+    if (allByStart.has(target)) matches.push(match);
+  }
+
   const byStart = new Map<number, Match>();
   const skip = new Set<number>();
   const drop = new Set<number>();
   for (const match of matches) {
     byStart.set(match.start, match);
     for (let k = match.start; k <= match.end; k += 1) skip.add(k);
-    // A layout phrase adds no mark, so punctuation before it belongs to the
-    // preceding prose. A spoken mark replaces adjacent model punctuation.
+    // A layout phrase or a next-word modifier adds no mark, so punctuation
+    // before it belongs to the preceding prose. A spoken mark replaces
+    // adjacent model punctuation.
     if (match.entry.actions.some((action) => action.kind === "mark")) {
       let beforeMark = match.start - 1;
       while (
@@ -272,6 +392,8 @@ export function interpret(input: InterpretInput): InterpretResult {
       }
     }
     // A trailing mark on the phrase itself ("New paragraph.") is model noise.
+    // A modifier's trailing model punctuation ("capitalize.", "literal, coma")
+    // is dropped too; the modifier's word follows after skipping marks.
     let afterMark = match.end + 1;
     while (
       afterMark < tokens.length &&
@@ -285,6 +407,27 @@ export function interpret(input: InterpretInput): InterpretResult {
 
   let i = 0;
   while (i < tokens.length) {
+    if ((capNext || literalNext) && !tokens[i].mark) {
+      // A modifier protects its word even when that word would otherwise start
+      // a Spoken Punctuation phrase ("literal coma" writes "coma"). Free any
+      // longer phrase starting here so its tail stays as prose.
+      const overriding = byStart.get(i);
+      if (overriding) {
+        for (let k = overriding.start + 1; k <= overriding.end; k += 1) skip.delete(k);
+        byStart.delete(i);
+      }
+      const forceCap = capNext;
+      capNext = false;
+      literalNext = false;
+      appendWord(tokens[i].surface, forceCap);
+      i += 1;
+      continue;
+    }
+    if ((capNext || literalNext) && (tokens[i].mark || skip.has(i) || drop.has(i))) {
+      // Model punctuation between a modifier and its word is noise.
+      i += 1;
+      continue;
+    }
     const match = byStart.get(i);
     if (match) {
       emitActions(match.entry.actions);
