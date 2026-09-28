@@ -90,7 +90,8 @@ export function DictationControl() {
         <Select<string>
           ariaLabel={t("dictation.language")}
           minWidth="none"
-          className="w-20 pointer-coarse:[&_button]:min-h-12"
+          className="w-20"
+          triggerClassName="pointer-coarse:min-h-12"
           value={languageOverride ?? AUTO}
           options={[
             { value: AUTO, label: AUTO, accessibleName: t("dictation.languageAuto") },

@@ -24,6 +24,8 @@ interface SelectProps<T> {
   endAdornment?: ReactNode;
   minWidth?: "default" | "none";
   className?: string;
+  /** Classes for the trigger button, such as a fixed width or a larger touch target. */
+  triggerClassName?: string;
   id?: string;
   ariaLabel?: string;
 }
@@ -35,6 +37,7 @@ export function Select<T extends string | number>({
   endAdornment,
   minWidth = "default",
   className = "",
+  triggerClassName = "",
   id,
   ariaLabel,
 }: SelectProps<T>) {
@@ -51,7 +54,7 @@ export function Select<T extends string | number>({
       aria-label={ariaLabel}
     >
       <Button
-        className={`relative flex w-full ${minWidthClass} items-center gap-1 px-3 py-1.5 pr-8 text-sm text-left border border-border rounded-lg bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1`}
+        className={`relative flex w-full ${minWidthClass} items-center gap-1 px-3 py-1.5 pr-8 text-sm text-left border border-border rounded-lg bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${triggerClassName}`}
       >
         <SelectValue>
           {({ selectedItem, selectedText, isPlaceholder }) => {

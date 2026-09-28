@@ -162,8 +162,7 @@ describe("DictationControl", () => {
     const widthClass = picker.parentElement?.className ?? "";
     expect(widthClass).toContain("w-20");
     // A comfortable touch target on coarse pointers.
-    expect(widthClass).toContain("pointer-coarse:[&_button]:min-h-12");
-    expect(picker).toHaveClass("w-full");
+    expect(picker).toHaveClass("w-full", "pointer-coarse:min-h-12");
 
     await user.keyboard("{Enter}{ArrowDown}{Enter}");
     await waitFor(() => expect(setLanguage).toHaveBeenLastCalledWith("en"));
