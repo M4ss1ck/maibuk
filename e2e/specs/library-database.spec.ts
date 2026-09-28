@@ -32,7 +32,8 @@ async function openBooksGallery(page: Page): Promise<void> {
 /** Expands the Advanced section and returns it; its buttons are now visible. */
 async function openAdvanced(page: Page): Promise<Locator> {
   const toggle = page.getByRole("button", { name: "Advanced" }).last();
-  await tabTo(page, toggle, { max: 60 });
+  // The way there passes the Dictation section's Spoken punctuation list.
+  await tabTo(page, toggle, { max: 200 });
   await page.keyboard.press("Enter");
   const section = page
     .locator("section")

@@ -136,7 +136,10 @@ test.describe("Settings primary colour @wf:settings-primary-color", () => {
 test.describe("Settings language @wf:settings-language", () => {
   test("Español swaps the UI copy and back, and the choice persists", async ({ page }) => {
     await openSettings(page);
-    await chooseFromSelect(page, page.getByRole("button", { name: "Language" }), "Español");
+    // Scope to General: the Dictation section's Spoken punctuation list has a
+    // "Dictation language" Select of its own.
+    const general = page.locator('[data-tutorial="settings.general"]');
+    await chooseFromSelect(page, general.getByRole("button", { name: "Language" }), "Español");
 
     await expect(page.getByRole("heading", { name: "Configuración", level: 1 })).toBeVisible();
     const nav = page.getByRole("listbox", { name: "Navegación principal" });
@@ -147,7 +150,7 @@ test.describe("Settings language @wf:settings-language", () => {
 
     await chooseFromSelect(
       page,
-      page.getByRole("button", { name: "Idioma" }),
+      general.getByRole("button", { name: "Idioma" }),
       "English",
       "ArrowUp"
     );

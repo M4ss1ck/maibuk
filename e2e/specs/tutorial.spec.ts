@@ -35,7 +35,8 @@ async function openSettingsTutorial(page: Page) {
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
   const startAll = page.getByRole("button", { name: "Start from the beginning" });
-  await tabTo(page, startAll, { max: 60 });
+  // The way there passes the Dictation section's Spoken punctuation list.
+  await tabTo(page, startAll, { max: 200 });
   return startAll;
 }
 
