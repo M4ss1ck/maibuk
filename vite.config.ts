@@ -10,6 +10,14 @@ const host = process.env.TAURI_DEV_HOST;
 const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
 const isWeb = buildTarget === "web";
 
+// Cross-origin isolation for threaded Dictation (SharedArrayBuffer). Matches
+// public/_headers in production; the E2E suite runs against `vite preview`, so
+// it inherits isolation from the `preview` block too.
+const isolation = {
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Embedder-Policy": "credentialless",
+};
+
 // https://vite.dev/config/
 export default defineConfig(() => ({
   envPrefix: ["VITE_", "TAURI_ENV_"],
@@ -228,9 +236,17 @@ export default defineConfig(() => ({
   // the module requests with index.html.
   base: "/",
 
+  preview: {
+    headers: isolation,
+  },
+
   // Only apply Tauri-specific options when building for Tauri
   ...(isWeb
-    ? {}
+    ? {
+        server: {
+          headers: isolation,
+        },
+      }
     : {
         // Vite options tailored for Tauri development
         // 1. prevent Vite from obscuring rust errors
@@ -251,6 +267,7 @@ export default defineConfig(() => ({
             // 3. tell Vite to ignore watching `src-tauri`
             ignored: ["**/src-tauri/**"],
           },
+          headers: isolation,
         },
       }),
 }));

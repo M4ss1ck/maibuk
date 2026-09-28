@@ -1,3 +1,10 @@
+# Cross-origin isolation for threaded Dictation (SharedArrayBuffer).
+# credentialless, not require-corp: images hot-linked from other sites keep
+# loading. Safari has no credentialless, so Dictation reports unsupported there.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+
 # Allow cross-origin framing of the embed route from the portfolio domain.
 /embed
   Content-Security-Policy: frame-ancestors 'self' https://www.massick.dev
