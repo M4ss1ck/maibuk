@@ -31,7 +31,8 @@
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "version:bump": "./scripts/bump-version.sh",
-    "generate:symbols": "tsx scripts/generate-symbols-data.ts"
+    "generate:symbols": "tsx scripts/generate-symbols-data.ts",
+    "fetch:dictation": "node scripts/fetch-dictation-runtime.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",

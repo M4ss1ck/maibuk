@@ -132,6 +132,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -197,6 +200,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -259,6 +265,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install
+
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
 
       - name: Restore Android signing material
         env:

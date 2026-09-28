@@ -9,7 +9,8 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "moonshine-wasm": ["./vendor/moonshine/wasm/dist/index.d.ts"]
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
