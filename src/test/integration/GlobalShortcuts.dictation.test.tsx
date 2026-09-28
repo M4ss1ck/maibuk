@@ -38,7 +38,7 @@ describe("dictation.toggle", () => {
 
   it("is not bound, and does nothing, where Dictation is unsupported", async () => {
     useDictationStore.setState({
-      support: { supported: false, reason: "not_isolated" },
+      support: { supported: false, reason: "library_missing" },
     });
     const user = userEvent.setup();
     const { getByRole } = render(

@@ -50,7 +50,7 @@ beforeEach(() => {
 describe("DictationControl", () => {
   it("is not rendered where dictation is unsupported", () => {
     useDictationStore.setState({
-      support: { supported: false, reason: "not_isolated" },
+      support: { supported: false, reason: "library_missing" },
     });
     const { container } = renderControl();
     expect(container).toBeEmptyDOMElement();

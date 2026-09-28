@@ -1737,6 +1737,7 @@
       "title": "Dictation",
       "description": "Speak and Maibuk types, offline. Models download once and stay on this device.",
       "unsupported": "Dictation works in Maibuk for Linux and in Chrome, Edge, and Firefox.",
+      "libraryMissing": "Dictation's native library is missing. Reinstall Maibuk for Linux to restore Dictation.",
       "fast": "Fast",
       "accurate": "Accurate",
       "fastHint": "Smaller and lighter on the processor.",
