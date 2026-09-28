@@ -57,13 +57,13 @@
       }
     },
     {
-      "name": "escape: 'literal' keeps the next word even when punctuation is off",
+      "name": "escape: 'literal' without a following phrase stays as prose",
       "line": "I said the word literal, come out, loud.",
       "before": "",
       "expected": {
-        "edits": [{ "kind": "text", "text": "I said the word come out, loud." }],
+        "edits": [{ "kind": "text", "text": "I said the word literal, come out, loud." }],
         "state": { "capitalizeNext": true, "noSpaceNext": false },
-        "spokenPunctuationCount": 1
+        "spokenPunctuationCount": 0
       }
     },
     {
@@ -128,14 +128,45 @@
       }
     },
     {
-      "name": "cap capitalizes the next word",
-      "line": "hello cap maria how are you",
+      "name": "capitalize capitalizes the next word",
+      "line": "hello capitalize maria how are you",
       "before": "",
       "capabilities": { "casing": true, "punctuation": false, "streaming": true },
       "expected": {
         "edits": [{ "kind": "text", "text": "Hello Maria how are you" }],
         "state": { "capitalizeNext": false, "noSpaceNext": false },
         "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "capitalize at the start of the line",
+      "line": "capitalize maria said hi",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Maria said hi" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "prose 'cap' is not a modifier after the rename",
+      "line": "He wore a cap and gloves.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "He wore a cap and gloves." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "literal without a following phrase stays as prose",
+      "line": "It was a literal translation.",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "It was a literal translation." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
       }
     },
     {

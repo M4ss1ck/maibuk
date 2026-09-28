@@ -2,10 +2,14 @@ import { Extension, type Editor } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { liftTarget } from "@tiptap/pm/transform";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
 import type { DictationTarget } from "@/features/dictation/session";
 import type { DictationEdit } from "@/features/dictation/router";
+import {
+  findSentenceStartOffset,
+} from "@/features/dictation/interpreter";
 import { normalizeLanguage } from "@/features/settings/types";
 
 /** Plugin state: the in-progress spoken line, "" when none. Never document content. */
@@ -40,24 +44,14 @@ function isInListItem(doc: ProseMirrorNode, pos: number): boolean {
   return false;
 }
 
-/** Sentence start in the current textblock, for Spanish auto-openers. */
-function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
+/** Sentence start in the current textblock, for Spanish auto-openers. Shares the interpreter's boundary rule. */
+export function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
   const $from = doc.resolve(caretPos);
   const blockStart = $from.start();
   const sliceEnd = caretPos;
   const sliceStart = Math.max(blockStart, sliceEnd - 500);
   const text = doc.textBetween(sliceStart, sliceEnd, "\n", "\n");
-  let lastEnd = -1;
-  for (let idx = text.length - 1; idx >= 0; idx -= 1) {
-    const ch = text[idx];
-    if (ch === "." || ch === "?" || ch === "!") {
-      lastEnd = idx;
-      break;
-    }
-  }
-  let offset = lastEnd + 1;
-  while (offset < text.length && (text[offset] === " " || text[offset] === "\t")) offset += 1;
-  return sliceStart + offset;
+  return sliceStart + findSentenceStartOffset(text);
 }
 
 /** Apply a finished line in one transaction and one undo step. */
@@ -76,20 +70,30 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
       tr.deleteSelection();
       const pos = tr.selection.from;
       if (isInListItem(tr.doc, pos)) {
-        // Split the current list item, like pressing Enter inside it.
-        // Depth 2 splits listItem + paragraph (prosemirror-schema-list).
-        if (tr.doc.resolve(pos).depth >= 2) tr.split(pos, 2);
-        else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+        const $at = tr.doc.resolve(pos);
+        if ($at.parent.content.size === 0) {
+          // Empty list item: lift out of the list, like pressing Enter.
+          const range = $at.blockRange();
+          const target = range && liftTarget(range);
+          if (range && target != null) tr.lift(range, target);
+          else if ($at.depth >= 2) tr.split(pos, 2);
+          else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+        } else {
+          // Split the current list item, like pressing Enter inside it.
+          // Depth 2 splits listItem + paragraph (prosemirror-schema-list).
+          if (tr.doc.resolve(pos).depth >= 2) tr.split(pos, 2);
+          else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+        }
       } else {
-        // Start a bulleted list for what follows: split the paragraph, then
-        // wrap the new paragraph in a bullet list in the same transaction.
         const bulletList = state.schema.nodes.bulletList;
         const listItem = state.schema.nodes.listItem;
-        if (!bulletList || !listItem) {
-          tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+        const $at = tr.doc.resolve(pos);
+        if ($at.parent.type.name === "paragraph" && $at.parent.content.size === 0) {
+          // Empty paragraph becomes the list item, like toggleBulletList.
+          const range = $at.blockRange(tr.doc.resolve($at.end()));
+          if (range) tr.wrap(range, [{ type: bulletList }, { type: listItem }]);
         } else {
-          // Start a bulleted list for what follows, like toggleBulletList:
-          // split, then wrap the new paragraph. TipTap leaves its usual
+          // Split, then wrap the new paragraph. TipTap leaves its usual
           // trailing paragraph after the list.
           tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
           const $after = tr.selection.$from;
@@ -103,7 +107,17 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
       const at = findSentenceStartPos(tr.doc, caret);
       // Never duplicate an opener the author already has.
       const existing = tr.doc.textBetween(at, Math.min(at + 1, tr.doc.content.size), "\n", "\n");
-      if (existing !== edit.mark) tr.insertText(edit.mark, at);
+      if (existing !== edit.mark) {
+        tr.insertText(edit.mark, at);
+        // A sentence that starts here starts with a capital (Spanish openers).
+        // The word was already emitted in lowercase when it continued the
+        // previous sentence before the hard break; fix it now that the opener
+        // shows it starts a sentence. Mid-sentence explicit openers are text,
+        // never this edit, so "¿me" stays lowercase.
+        const after = tr.doc.textBetween(at + 1, Math.min(at + 2, tr.doc.content.size), "\n", "\n");
+        const upper = after.toUpperCase();
+        if (after !== "" && after !== upper) tr.insertText(upper, at + 1, at + 2);
+      }
     } else {
       const startsWithClosingMark = ",.;:?!»”’)]}…".includes(edit.text[0] ?? "");
       if (startsWithClosingMark) {

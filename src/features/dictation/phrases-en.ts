@@ -31,6 +31,6 @@ export const EN_PHRASES: readonly PhraseDefinition[] = [
     phrase: "close parenthesis",
     entry: { actions: [{ kind: "mark", mark: ")" }], punctuation: true },
   },
-  { phrase: "cap", entry: { actions: [{ kind: "cap" }], punctuation: false } },
+  { phrase: "capitalize", entry: { actions: [{ kind: "cap" }], punctuation: false } },
   { phrase: "literal", entry: { actions: [{ kind: "literal" }], punctuation: false } },
 ];

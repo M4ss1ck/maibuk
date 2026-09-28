@@ -92,6 +92,37 @@ interface Match {
 const OPENING_MARKS = new Set(["¿", "¡", "«", "“", "‘", "(", "[", "{"]);
 const SENTENCE_END_MARKS = new Set([".", "?", "!"]);
 
+/**
+ * One shared sentence-boundary rule for the interpreter, the editor target,
+ * and the orphan copy path: a sentence ends after `.`, `?`, `!`, or a hard
+ * break (`\n` in the bounded text before the caret).
+ */
+export function lastSentenceEndIndex(text: string): number {
+  for (let idx = text.length - 1; idx >= 0; idx -= 1) {
+    const ch = text[idx];
+    if (ch === "\n" || SENTENCE_END_MARKS.has(ch)) return idx;
+  }
+  return -1;
+}
+
+/** Opening quotes and parentheses an opener is inserted after, never before. */
+export const SENTENCE_START_SKIP_MARKS = new Set(["«", "“", "‘", "(", "[", "{"]);
+
+export function stepPastOpeningMarks(text: string, offset: number): number {
+  let i = offset;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === " " || ch === "\t" || SENTENCE_START_SKIP_MARKS.has(ch)) i += 1;
+    else break;
+  }
+  return i;
+}
+
+/** Start of the current sentence: after the last end mark, past whitespace and opening quotes/parens. */
+export function findSentenceStartOffset(text: string): number {
+  return stepPastOpeningMarks(text, lastSentenceEndIndex(text) + 1);
+}
+
 function normalizeWord(word: string): string {
   return word
     .normalize("NFD")
@@ -151,14 +182,7 @@ function isSentenceStart(before: string): boolean {
 
 /** Whether the current sentence already has its Spanish opener. Derived from `before`, never stored. */
 function openerInSentence(before: string, mark: "¿" | "¡"): boolean {
-  let lastEnd = -1;
-  for (let idx = before.length - 1; idx >= 0; idx -= 1) {
-    const ch = before[idx];
-    if (ch === "\n" || SENTENCE_END_MARKS.has(ch)) {
-      lastEnd = idx;
-      break;
-    }
-  }
+  const lastEnd = lastSentenceEndIndex(before);
   return before.indexOf(mark, lastEnd + 1) !== -1;
 }
 
@@ -306,7 +330,46 @@ export function interpret(input: InterpretInput): InterpretResult {
     }
   };
 
-  const matches = findMatches(tokens, table, allowPunctuation);
+  const allMatches = findMatches(tokens, table, allowPunctuation);
+  const allByStart = new Map<number, Match>();
+  for (const match of allMatches) allByStart.set(match.start, match);
+
+  // The token right after a modifier, skipping only model punctuation. Phrase
+  // tokens count: "di literal coma" targets "coma" even though it starts a
+  // match, and "hola mayúscula coma" targets "coma" the same way.
+  const immediateNextWord = (from: number): number | null => {
+    let j = from;
+    while (j < tokens.length) {
+      if (tokens[j].mark) {
+        j += 1;
+        continue;
+      }
+      return j;
+    }
+    return null;
+  };
+
+  // "literal" only escapes when the words right after it would otherwise act
+  // (they start a matched phrase). Otherwise it is ordinary prose and stays
+  // as text, so it never deletes a word. "capitalize"/"mayúscula" acts on the
+  // next word anywhere. A modifier with no word after it stays as prose.
+  const matches: Match[] = [];
+  for (const match of allMatches) {
+    const isCap = match.entry.actions.some((action) => action.kind === "cap");
+    const isLiteral = match.entry.actions.some((action) => action.kind === "literal");
+    if (!isCap && !isLiteral) {
+      matches.push(match);
+      continue;
+    }
+    const target = immediateNextWord(match.end + 1);
+    if (target === null) continue;
+    if (isCap) {
+      matches.push(match);
+      continue;
+    }
+    if (allByStart.has(target)) matches.push(match);
+  }
+
   const byStart = new Map<number, Match>();
   const skip = new Set<number>();
   const drop = new Set<number>();
@@ -328,26 +391,26 @@ export function interpret(input: InterpretInput): InterpretResult {
       }
     }
     // A trailing mark on the phrase itself ("New paragraph.") is model noise.
-    // Modifiers also drop it ("cap."), so the mark never leaks into prose.
+    // A modifier's trailing model punctuation ("capitalize.", "literal, coma")
+    // is dropped too; the modifier's word follows after skipping marks.
     let afterMark = match.end + 1;
     while (
       afterMark < tokens.length &&
       tokens[afterMark].mark &&
       !OPENING_MARKS.has(tokens[afterMark].surface)
     ) {
-      // A modifier's trailing punctuation is dropped, but a mark between the
-      // modifier and its word ("literal, coma") is dropped at emit time.
-      // Dropping here is equivalent: the word that follows is still found by
-      // skipping marks.
       drop.add(afterMark);
       afterMark += 1;
     }
   }
 
+  // The next word after a modifier, skipping only model punctuation. Phrase
+  // tokens are not skipped, so a protected phrase at the end of the line is
+  // still found instead of reporting the modifier as dangling.
   const nextWordIndex = (from: number): number | null => {
     let j = from;
     while (j < tokens.length) {
-      if (skip.has(j) || drop.has(j)) {
+      if (drop.has(j)) {
         j += 1;
         continue;
       }
@@ -376,28 +439,11 @@ export function interpret(input: InterpretInput): InterpretResult {
       capNext = false;
       literalNext = false;
       appendWord(tokens[i].surface, forceCap);
-      spokenPunctuationCount += 0; // counted when the modifier matched
       i += 1;
       continue;
     }
     if ((capNext || literalNext) && (tokens[i].mark || skip.has(i) || drop.has(i))) {
       // Model punctuation between a modifier and its word is noise.
-      // If no word follows at all, the modifier stays as text below.
-      const peek = nextWordIndex(i);
-      if (peek === null) {
-        // No word: emit the pending modifier word itself so nothing is lost.
-        // Find which modifier is pending by scanning back to its match.
-        capNext = false;
-        literalNext = false;
-        // Fall through to normal handling, which will emit the modifier's
-        // surface only if it was not part of a match. Since it was, we need
-        // to recover it: search matches for a modifier ending at or before i.
-        // Simpler: emit nothing here and let the loop end; the modifier word
-        // is already consumed. To avoid silent loss, count on the caller
-        // never dictating a dangling modifier. Break to avoid an infinite loop.
-        i += 1;
-        continue;
-      }
       i += 1;
       continue;
     }
@@ -413,7 +459,6 @@ export function interpret(input: InterpretInput): InterpretResult {
           for (let k = match.start; k <= match.end; k += 1) {
             if (!tokens[k].mark) appendWord(tokens[k].surface);
           }
-          spokenPunctuationCount += 0;
         } else {
           emitActions(match.entry.actions);
           spokenPunctuationCount += 1;

@@ -241,6 +241,41 @@ describe("Dictation Session", () => {
     expect(notices).toContainEqual({ kind: "orphan_copied" });
   });
 
+  it("orphaned opener goes at its sentence start, not next to the closing mark", async () => {
+    const { editsToOrphanText } = await import("@/features/dictation/session");
+    expect(
+      editsToOrphanText([
+        { kind: "text", text: "Qué hora es" },
+        { kind: "opener", mark: "¿" },
+        { kind: "text", text: "?" },
+      ])
+    ).toBe("¿Qué hora es?");
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({
+        kind: "edits",
+        edits: [
+          { kind: "text", text: "Qué hora es" },
+          { kind: "opener", mark: "¿" },
+          { kind: "text", text: "?" },
+        ],
+        spokenPunctuationCount: 1,
+      })),
+      runCommand: vi.fn(),
+      notify: (n) => void notices.push(n),
+      copyText: (t) => copyText(t),
+      stats: createLineStats(),
+    });
+    const unregister = session.register(fakeTarget("a"));
+    session.focus("a");
+    await session.start();
+    unregister();
+    await vi.waitFor(() => expect(session.getSnapshot().status).toBe("idle"));
+    expect(copied).toEqual(["¿Qué hora es?"]);
+    expect(notices).toContainEqual({ kind: "orphan_copied" });
+  });
+
   it("orphaned final that cannot be copied is handed back, never reported as copied", async () => {
     copyText = () => Promise.reject(new Error("Document is not focused"));
     const session = makeSession();

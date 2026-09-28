@@ -3,6 +3,7 @@
 // knows which engine or platform is underneath.
 import type { LineStats } from "@/features/dictation/stats";
 import type { DictationEdit, RouteResult } from "@/features/dictation/router";
+import { findSentenceStartOffset } from "@/features/dictation/interpreter";
 import {
   toDictationError,
   type DictationErrorCode,
@@ -51,6 +52,23 @@ export interface DictationSession {
   stop(): Promise<void>;
   setLanguage(language: DictationLanguage | null): Promise<void>;
   languageOverride(): DictationLanguage | null;
+}
+
+/**
+ * Plain-text rendering for the orphan path (no editor target). Layout edits
+ * become line breaks; an opener is inserted at the start of its sentence in
+ * the text built so far, using the interpreter's boundary rule.
+ */
+export function editsToOrphanText(edits: DictationEdit[]): string {
+  let out = "";
+  for (const edit of edits) {
+    if (edit.kind === "text") out += edit.text;
+    else if (edit.kind === "opener") {
+      const at = findSentenceStartOffset(out);
+      out = out.slice(0, at) + edit.mark + out.slice(at);
+    } else out += "\n";
+  }
+  return out;
 }
 
 export function createDictationSession(deps: {
@@ -131,15 +149,7 @@ export function createDictationSession(deps: {
         if (result.kind === "scratch") return;
         if (target) target.apply(result.edits);
         else {
-          const text = result.edits
-            .map((edit) =>
-              edit.kind === "text"
-                ? edit.text
-                : edit.kind === "opener"
-                  ? edit.mark
-                  : "\n"
-            )
-            .join("");
+          const text = editsToOrphanText(result.edits);
           deps.copyText(text).then(
             () => deps.notify({ kind: "orphan_copied" }),
             () => deps.notify({ kind: "orphan_lost", text })

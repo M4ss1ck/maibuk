@@ -328,6 +328,46 @@
         "state": { "capitalizeNext": true, "noSpaceNext": false },
         "spokenPunctuationCount": 1
       }
+    },
+    {
+      "name": "literal without a following phrase stays as prose",
+      "line": "una traducción literal del texto",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Una traducción literal del texto" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "literal protects a phrase at the end of the line",
+      "line": "di literal coma",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Di coma" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "literal turns a layout phrase into text",
+      "line": "literal nuevo párrafo",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Nuevo párrafo" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "mayúscula capitalizes a protected phrase at the end of the line",
+      "line": "hola mayúscula coma",
+      "before": "",
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hola Coma" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
     }
   ]
 }
