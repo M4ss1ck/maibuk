@@ -6,6 +6,7 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Editor, type EditorTutorialAnchors } from "@/components/editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { DictationControl } from "@/components/dictation";
 import { Tooltip } from "@/components/ui";
 import { useEphemeralStore } from "@/features/ephemeral";
 import { useNoteStore } from "@/features/notes";
@@ -135,6 +136,8 @@ export function Ephemeral() {
         extraExtensions={ephemeralExtensions}
         tutorialAnchors={EPHEMERAL_TUTORIAL_ANCHORS}
       />
+
+      <DictationControl />
     </div>
   );
 }
