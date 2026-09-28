@@ -92,6 +92,23 @@ beforeEach(() => {
 });
 
 describe("Dictation Session", () => {
+  // Editors re-register whenever TipTap recreates them; a notification for
+  // every register re-rendered them into a loop that stalled route changes.
+  it("notifies only when the snapshot actually changes", () => {
+    const session = makeSession();
+    const listener = vi.fn();
+    session.subscribe(listener);
+    const unregisterA = session.register(fakeTarget("a", "es"));
+    const calls = listener.mock.calls.length;
+    const before = session.getSnapshot();
+    const unregisterB = session.register(fakeTarget("b", "es"));
+    unregisterB();
+    session.register(fakeTarget("b", "es"));
+    expect(listener).toHaveBeenCalledTimes(calls);
+    expect(session.getSnapshot()).toBe(before);
+    unregisterA();
+  });
+
   it("does nothing without a target and says why", async () => {
     const session = makeSession();
     await session.toggle();
