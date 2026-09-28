@@ -85,7 +85,7 @@ export function DictationSection() {
                 {download ? (
                   <>
                     <progress
-                      className="w-40"
+                      className="h-2 w-40 appearance-none overflow-hidden rounded-lg bg-border [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-border [&::-webkit-progress-value]:bg-primary"
                       max={100}
                       value={Math.round((download.done / download.total) * 100)}
                       aria-valuenow={Math.round((download.done / download.total) * 100)}
