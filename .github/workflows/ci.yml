@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
+
       - name: Lint
         run: pnpm lint
 

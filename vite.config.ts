@@ -15,9 +15,17 @@ export default defineConfig(() => ({
   envPrefix: ["VITE_", "TAURI_ENV_"],
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: {
-      "@": resolve(__dirname, "src"),
-    },
+    alias: [
+      { find: "@", replacement: resolve(__dirname, "src") },
+      {
+        find: /^moonshine-wasm$/,
+        replacement: resolve(__dirname, "vendor/moonshine/wasm/dist/index.js"),
+      },
+      {
+        find: /^moonshine-wasm\/(.*)$/,
+        replacement: resolve(__dirname, "vendor/moonshine/wasm/dist/$1"),
+      },
+    ],
   },
   worker: {
     format: "es" as const,
