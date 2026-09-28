@@ -11,6 +11,16 @@ export interface LibrarySize {
   freePages: number;
 }
 
+export interface CompactThresholds {
+  minFreeBytes: number;
+  minFreeRatio: number;
+}
+
+const DEFAULT_COMPACT_THRESHOLDS: CompactThresholds = {
+  minFreeBytes: COMPACT_MIN_FREE_BYTES,
+  minFreeRatio: COMPACT_MIN_FREE_RATIO,
+};
+
 export interface CompactResult {
   before: LibrarySize;
   after: LibrarySize;
@@ -29,10 +39,14 @@ export async function readLibrarySize(db: DatabaseAdapter): Promise<LibrarySize>
   };
 }
 
-export function shouldCompact({ pageSize, pageCount, freePages }: LibrarySize): boolean {
+export function shouldCompact(
+  { pageSize, pageCount, freePages }: LibrarySize,
+  thresholds: Readonly<CompactThresholds> = DEFAULT_COMPACT_THRESHOLDS
+): boolean {
   if (pageCount === 0) return false;
   return (
-    freePages * pageSize >= COMPACT_MIN_FREE_BYTES && freePages / pageCount >= COMPACT_MIN_FREE_RATIO
+    freePages * pageSize >= thresholds.minFreeBytes &&
+    freePages / pageCount >= thresholds.minFreeRatio
   );
 }
 
@@ -42,10 +56,13 @@ export function shouldCompact({ pageSize, pageCount, freePages }: LibrarySize): 
  * VACUUM is atomic, so a failure leaves the file as it was; it never stops
  * the Library from opening.
  */
-export async function compactLibrary(db: DatabaseAdapter): Promise<CompactResult | null> {
+export async function compactLibrary(
+  db: DatabaseAdapter,
+  thresholds: Readonly<CompactThresholds> = DEFAULT_COMPACT_THRESHOLDS
+): Promise<CompactResult | null> {
   try {
     const before = await readLibrarySize(db);
-    if (!shouldCompact(before)) return null;
+    if (!shouldCompact(before, thresholds)) return null;
     await db.execute("VACUUM");
     // In WAL mode the file shrinks only once the rewrite is checkpointed.
     await db.select("PRAGMA wal_checkpoint(TRUNCATE)");
