@@ -1,9 +1,17 @@
-// Every finished line passes through here on its way to the editor. v1 inserts
-// it; the Dictation Command Interpreter (Anticipated) plugs in as `interpreter`
-// to turn phrases into punctuation, corrections, or Voice Commands.
-export type RouteResult = { kind: "insert"; text: string } | { kind: "command"; id: string };
-export type Interpreter = (text: string) => RouteResult | null;
+// Every finished line passes through this seam before reaching an editor.
+// The Interpreter will later produce layout edits, Voice Commands, and scratch requests.
+export type DictationEdit = { kind: "text"; text: string };
 
-export function createRouter(interpreter?: Interpreter): (text: string) => RouteResult {
-  return (text) => interpreter?.(text) ?? { kind: "insert", text };
+export type RouteResult =
+  | { kind: "edits"; edits: DictationEdit[] }
+  | { kind: "voice_command"; id: string }
+  | { kind: "scratch" };
+
+export type Interpreter = (text: string, before: string) => RouteResult | null;
+
+export function createRouter(
+  interpreter?: Interpreter
+): (text: string, before: string) => RouteResult {
+  return (text, before) =>
+    interpreter?.(text, before) ?? { kind: "edits", edits: [{ kind: "text", text }] };
 }

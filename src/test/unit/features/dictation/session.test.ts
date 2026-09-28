@@ -60,7 +60,8 @@ function fakeTarget(id: string, language: "en" | "es" = "es") {
     commits: [],
     language: () => language,
     showPartial: (text) => void target.partials.push(text),
-    commit: (text) => void target.commits.push(text),
+    before: () => "",
+    apply: (edits) => void target.commits.push(edits.map((edit) => edit.text).join("")),
   };
   return target;
 }
@@ -327,7 +328,7 @@ describe("Dictation Session", () => {
     const session = createDictationSession({
       host,
       modelFor: (l) => models[l] ?? null,
-      route: createRouter(() => ({ kind: "command", id: "common.save" })),
+      route: createRouter(() => ({ kind: "voice_command", id: "common.save" })),
       runCommand,
       notify: () => {},
       copyText: async () => {},
@@ -338,6 +339,24 @@ describe("Dictation Session", () => {
     await session.start();
     host.emit({ type: "final", text: "guardar" });
     expect(runCommand).toHaveBeenCalledWith("common.save");
+    expect(target.commits).toEqual([]);
+  });
+
+  it("does not apply a scratch request", async () => {
+    const target = fakeTarget("a");
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "scratch" })),
+      runCommand: vi.fn(),
+      notify: () => {},
+      copyText: async () => {},
+      stats: createLineStats(),
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "borra eso" });
     expect(target.commits).toEqual([]);
   });
 
