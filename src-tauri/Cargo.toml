@@ -24,6 +24,7 @@ tauri-plugin-os = "2.3.2"
 tauri-plugin-process = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
+base64 = "0.22"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
@@ -37,3 +38,8 @@ tauri-plugin-window-state = "2"
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
 ndk-context = "0.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = "0.18"
+libloading = "0.8"
+ureq = "2"

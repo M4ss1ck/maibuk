@@ -1,5 +1,8 @@
 mod android_exit;
 mod backup;
+// Task 16 wires this staged native backend into Tauri commands.
+#[allow(dead_code)]
+mod dictation;
 mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
