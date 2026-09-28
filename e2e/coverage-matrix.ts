@@ -34,14 +34,6 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "Vitest platform tests, manual QA",
   },
   {
-    kind: "shortcut",
-    items: ["dictation.toggle", "dictation.stop"],
-    reason:
-      "Dictation's keyboard workflow reaches a controller that needs a microphone and a loaded model, so it is covered by Vitest until its E2E lane ships",
-    owner:
-      "Vitest dictation suites (session, dictation-messages, GlobalShortcuts.dictation); E2E row in the Voice Dictation plan's E2E task",
-  },
-  {
     kind: "term",
     items: ["Backup Directory"],
     reason:
@@ -2117,6 +2109,40 @@ export const ROWS: MatrixRow[] = [
     routes: ["/embed"],
     fixture: "empty",
     tags: [],
+    status: "accepted",
+  },
+  {
+    id: "dictation-toggle",
+    area: "editor",
+    workflow:
+      "Open a Chapter, Mod+Shift+Space starts Dictation (live region: Dictation on, English), speech lands at the caret as text, Escape stops (Dictation off), Mod+Z removes the last spoken line",
+    edges: [
+      "the floating mic button toggles the same session by Enter",
+      "the language picker switches language with arrow keys",
+      "with no model downloaded, Mod+Shift+Space shows the no-model hint and the mic leads to Settings",
+      "WebKit shows no dictation control (not cross-origin isolated without credentialless)",
+    ],
+    terms: ["Dictation", "Dictation Session"],
+    shortcuts: ["dictation.toggle", "dictation.stop"],
+    routes: ["/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
+    id: "dictation-settings",
+    area: "settings",
+    workflow:
+      "Settings → Dictation: Tab to English Fast, Enter downloads with progress, the row shows Downloaded; Remove by keyboard returns it to Download",
+    edges: [
+      "Cancel during download leaves the model not downloaded",
+      "a failed download (fixture 404) shows the error toast and a Download button again",
+    ],
+    terms: ["Dictation Model"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
     status: "accepted",
   },
 ];
