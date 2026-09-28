@@ -6,6 +6,7 @@ import {
   RUNTIMES,
   crc32cBase64,
   fetchTestAssets,
+  runtimesFor,
 } from "../../../../scripts/fetch-dictation-runtime.mjs";
 import { crc32cBase64 as appCrc32cBase64 } from "@/features/dictation/crc32c";
 
@@ -25,6 +26,15 @@ describe("fetch-dictation-runtime pins", () => {
         stripComponents: 1,
       },
     ]);
+  });
+
+  it("fetches only the WASM runtime for the web build", () => {
+    expect(runtimesFor(["node", "script", "--web"]).map((r) => r.name)).toEqual(["wasm"]);
+  });
+
+  it("fetches every runtime without --web", () => {
+    expect(runtimesFor(["node", "script"])).toEqual(RUNTIMES);
+    expect(runtimesFor(["node", "script", "--test-assets"])).toEqual(RUNTIMES);
   });
 });
 

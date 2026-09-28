@@ -2,6 +2,10 @@
 // pinned by SHA-256. Never committed (vendor/ is git-ignored).
 //   pnpm fetch:dictation
 //   pnpm fetch:dictation --test-assets
+//   pnpm fetch:dictation --web
+// `--web` fetches only the WASM runtime, which is all the web build needs;
+// `pnpm build:web` runs it first so hosts that only run that script (Cloudflare
+// Pages) can build.
 // `--test-assets` additionally downloads every model file listed in
 // src/features/dictation/catalog.json (verified by size and CRC32C) into
 // vendor/moonshine/models/<id>/, plus the Dictation test audio into
@@ -247,8 +251,12 @@ export async function fetchTestAssets(root, { fetchImpl = fetch, run = execFileS
   await fetchTestAudio(root, fetchImpl, run);
 }
 
+export function runtimesFor(argv) {
+  return argv.includes("--web") ? RUNTIMES.filter((runtime) => runtime.name === "wasm") : RUNTIMES;
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-  for (const runtime of RUNTIMES) await fetchRuntime(root, runtime);
+  for (const runtime of runtimesFor(process.argv)) await fetchRuntime(root, runtime);
   if (process.argv.includes("--test-assets")) await fetchTestAssets(root);
 }
