@@ -53,6 +53,10 @@ vi.mock("@/lib/platform", () => ({
   isMac: () => false,
 }));
 
+vi.mock("@/components/dictation", () => ({
+  DictationControl: () => <div data-testid="dictation-control" />,
+}));
+
 // Stub the heavy TipTap editor with a textarea that mirrors its callbacks.
 vi.mock("@/components/editor", () => ({
   Editor: ({
@@ -94,6 +98,11 @@ describe("Ephemeral page", () => {
     render(<Ephemeral />);
     expect(screen.getByRole("button", { name: "ephemeral.clear" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "ephemeral.createNote" })).toBeDisabled();
+  });
+
+  it("renders the dictation control like notes and chapters do", () => {
+    render(<Ephemeral />);
+    expect(screen.getByTestId("dictation-control")).toBeInTheDocument();
   });
 
   it("updates the word count as the user types", async () => {
