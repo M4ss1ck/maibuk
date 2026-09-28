@@ -479,4 +479,142 @@ describe("Dictation scratch that (audit probes)", () => {
       editor.destroy();
     }
   });
+
+  it("K: a sentence dictated over four lines takes one scratch", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno punto");
+      host.emitFinal("el hombre");
+      host.emitFinal("llegó");
+      host.emitFinal("a casa punto");
+      expect(editor.getHTML()).toBe("<p>Uno. El hombre llegó a casa.</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno.</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("K2: unfinished lines still scratch line by line", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno punto");
+      host.emitFinal("el hombre");
+      host.emitFinal("llegó");
+      host.emitFinal("a casa");
+      expect(editor.getHTML()).toBe("<p>Uno. El hombre llegó a casa</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno. El hombre llegó</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno. El hombre</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno.</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("K3: a twelve-line sentence counts as one history entry", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      for (const line of [
+        "el",
+        "hombre",
+        "llegó",
+        "a",
+        "la",
+        "casa",
+        "grande",
+        "y",
+        "blanca",
+        "ayer",
+        "muy",
+        "temprano punto",
+      ])
+        host.emitFinal(line);
+      expect(editor.getHTML()).toBe(
+        "<p>El hombre llegó a la casa grande y blanca ayer muy temprano.</p>"
+      );
+      expect(dictationPluginKey.getState(editor.state)?.history.length).toBe(1);
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p></p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("L: a dictated closing quote stays with its sentence", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("dijo abre comillas hola punto cierra comillas");
+      host.emitFinal("adiós punto");
+      expect(editor.getHTML()).toBe("<p>Dijo «hola.» Adiós.</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Dijo «hola.»</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("M: a dictated closing parenthesis stays with its sentence", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno abre paréntesis dos punto cierra paréntesis");
+      host.emitFinal("tres punto");
+      expect(editor.getHTML()).toBe("<p>Uno (dos.) Tres.</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno (dos.)</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("L2: closing marks after ? and ! stay with their sentence", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("hola signo de interrogación cierra comillas");
+      expect(editor.getHTML()).toBe("<p>¿Hola?»</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p></p>");
+      host.emitFinal("hola signo de exclamación cierra comillas");
+      expect(editor.getHTML()).toBe("<p>¡Hola!»</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p></p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("L3: a mid-sentence parenthesis scratches with its sentence", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno abre paréntesis dos cierra paréntesis tres punto");
+      expect(editor.getHTML()).toBe("<p>Uno (dos) tres.</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p></p>");
+    } finally {
+      editor.destroy();
+    }
+  });
 });
