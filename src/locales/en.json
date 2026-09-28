@@ -1760,6 +1760,35 @@
       "interpreter": "Interpreter: typical delay {{median}} ms, worst delay {{max}} ms, spoken punctuation {{count}}, scratch that {{scratch}}",
       "noPunctuation": "Adds no punctuation or capitals.",
       "device": "Microphone: {{device}}"
+    },
+    "spokenPunctuation": {
+      "title": "Spoken punctuation",
+      "description": "Say these words while dictating and they become punctuation or breaks instead of text. Changes stay on this device.",
+      "master": "Spoken punctuation for {{language}}",
+      "listLabel": "Spoken punctuation entries for {{language}}",
+      "inserts": "Inserts",
+      "insertsLabels": {
+        "paragraph": "New paragraph",
+        "line_break": "Line break",
+        "list_item": "New list item",
+        "cap": "Capitalizes the next word",
+        "literal": "Writes the next word literally",
+        "scratch": "Removes the last dictated sentence"
+      },
+      "phrasesFor": "Phrases for {{entry}}",
+      "aliasLabel": "Add a phrase to {{entry}}",
+      "aliasPlaceholder": "another way to say it",
+      "add": "Add",
+      "addAlias": "Add a phrase to {{entry}}",
+      "removeAlias": "Remove {{phrase}} from {{entry}}",
+      "reset": "Reset {{entry}} to its default switch and phrases",
+      "resetShort": "Reset",
+      "refused": {
+        "empty": "Enter a phrase.",
+        "duplicate": "{{phrase}} is already used by {{entry}}.",
+        "escape": "{{phrase}} starts with the escape word, {{word}}.",
+        "shadow": "{{phrase}} is the start of {{conflict}}, used by {{entry}}."
+      }
     }
   },
   "colorPicker": {

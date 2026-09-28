@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
+import { SpokenPunctuationSection } from "@/components/settings/SpokenPunctuationSection";
 import { MODEL_CATALOG, modelsFor } from "@/features/dictation/catalog";
 import { getDictation } from "@/features/dictation/runtime";
+import { catalogCapabilities } from "@/features/dictation/spoken-punctuation";
 import type { LineStatsSummary } from "@/features/dictation/stats";
-import { useDictationStore } from "@/features/dictation/store";
+import { pickModel, useDictationStore } from "@/features/dictation/store";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
 import { dictationPlatform } from "@/lib/platform";
 
@@ -169,6 +171,16 @@ export function DictationSection() {
           })}
         </div>
       ))}
+      <SpokenPunctuationSection
+        languages={[...byLanguage.keys()]}
+        capabilitiesFor={(language) => {
+          const specs = byLanguage.get(language) ?? [];
+          return (
+            (pickModel(language, specs, installed, preferred) ?? specs[0])?.capabilities ??
+            catalogCapabilities(language)
+          );
+        }}
+      />
       {device && (
         <p className="text-sm text-muted-foreground">{t("dictation.section.device", { device })}</p>
       )}
