@@ -74,7 +74,7 @@
         "edits": [
           { "kind": "text", "text": "First line" },
           { "kind": "line_break" },
-          { "kind": "text", "text": "second" }
+          { "kind": "text", "text": "Second" }
         ],
         "state": { "capitalizeNext": false, "noSpaceNext": false },
         "spokenPunctuationCount": 1

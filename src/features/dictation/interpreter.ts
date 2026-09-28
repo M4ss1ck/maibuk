@@ -97,7 +97,7 @@ const SENTENCE_END_MARKS = new Set([".", "?", "!"]);
  * and the orphan copy path: a sentence ends after `.`, `?`, `!`, or a hard
  * break (`\n` in the bounded text before the caret).
  */
-export function lastSentenceEndIndex(text: string): number {
+function lastSentenceEndIndex(text: string): number {
   for (let idx = text.length - 1; idx >= 0; idx -= 1) {
     const ch = text[idx];
     if (ch === "\n" || SENTENCE_END_MARKS.has(ch)) return idx;
@@ -106,9 +106,9 @@ export function lastSentenceEndIndex(text: string): number {
 }
 
 /** Opening quotes and parentheses an opener is inserted after, never before. */
-export const SENTENCE_START_SKIP_MARKS = new Set(["«", "“", "‘", "(", "[", "{"]);
+const SENTENCE_START_SKIP_MARKS = new Set(["«", "“", "‘", "(", "[", "{"]);
 
-export function stepPastOpeningMarks(text: string, offset: number): number {
+function stepPastOpeningMarks(text: string, offset: number): number {
   let i = offset;
   while (i < text.length) {
     const ch = text[i];
@@ -317,6 +317,7 @@ export function interpret(input: InterpretInput): InterpretResult {
       } else if (action.kind === "line_break") {
         flush();
         edits.push({ kind: "line_break" });
+        capitalize = true;
       } else if (action.kind === "list_item") {
         flush();
         edits.push({ kind: "list_item" });
@@ -404,26 +405,6 @@ export function interpret(input: InterpretInput): InterpretResult {
     }
   }
 
-  // The next word after a modifier, skipping only model punctuation. Phrase
-  // tokens are not skipped, so a protected phrase at the end of the line is
-  // still found instead of reporting the modifier as dangling.
-  const nextWordIndex = (from: number): number | null => {
-    let j = from;
-    while (j < tokens.length) {
-      if (drop.has(j)) {
-        j += 1;
-        continue;
-      }
-      const token = tokens[j];
-      if (token.mark) {
-        j += 1;
-        continue;
-      }
-      return j;
-    }
-    return null;
-  };
-
   let i = 0;
   while (i < tokens.length) {
     if ((capNext || literalNext) && !tokens[i].mark) {
@@ -449,23 +430,6 @@ export function interpret(input: InterpretInput): InterpretResult {
     }
     const match = byStart.get(i);
     if (match) {
-      const isModifier = match.entry.actions.some(
-        (action) => action.kind === "cap" || action.kind === "literal"
-      );
-      if (isModifier) {
-        const wordIdx = nextWordIndex(match.end + 1);
-        if (wordIdx === null) {
-          // Dangling modifier with no word after it: keep it as prose.
-          for (let k = match.start; k <= match.end; k += 1) {
-            if (!tokens[k].mark) appendWord(tokens[k].surface);
-          }
-        } else {
-          emitActions(match.entry.actions);
-          spokenPunctuationCount += 1;
-        }
-        i = match.end + 1;
-        continue;
-      }
       emitActions(match.entry.actions);
       spokenPunctuationCount += 1;
       i = match.end + 1;

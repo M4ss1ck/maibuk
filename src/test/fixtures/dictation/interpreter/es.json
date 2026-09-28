@@ -86,10 +86,23 @@
         "edits": [
           { "kind": "text", "text": "El día" },
           { "kind": "line_break" },
-          { "kind": "text", "text": "llovió" }
+          { "kind": "text", "text": "Llovió" }
         ],
         "state": { "capitalizeNext": false, "noSpaceNext": false },
         "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "hard break starts a sentence for casing",
+      "line": "nueva línea qué tal punto",
+      "before": "Hola",
+      "expected": {
+        "edits": [
+          { "kind": "line_break" },
+          { "kind": "text", "text": "Qué tal." }
+        ],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 2
       }
     },
     {

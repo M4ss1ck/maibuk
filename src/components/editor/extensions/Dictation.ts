@@ -7,9 +7,7 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
 import type { DictationTarget } from "@/features/dictation/session";
 import type { DictationEdit } from "@/features/dictation/router";
-import {
-  findSentenceStartOffset,
-} from "@/features/dictation/interpreter";
+import { findSentenceStartOffset } from "@/features/dictation/interpreter";
 import { normalizeLanguage } from "@/features/settings/types";
 
 /** Plugin state: the in-progress spoken line, "" when none. Never document content. */
@@ -45,7 +43,7 @@ function isInListItem(doc: ProseMirrorNode, pos: number): boolean {
 }
 
 /** Sentence start in the current textblock, for Spanish auto-openers. Shares the interpreter's boundary rule. */
-export function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
+function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
   const $from = doc.resolve(caretPos);
   const blockStart = $from.start();
   const sliceEnd = caretPos;
@@ -72,12 +70,30 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
       if (isInListItem(tr.doc, pos)) {
         const $at = tr.doc.resolve(pos);
         if ($at.parent.content.size === 0) {
-          // Empty list item: lift out of the list, like pressing Enter.
-          const range = $at.blockRange();
-          const target = range && liftTarget(range);
-          if (range && target != null) tr.lift(range, target);
-          else if ($at.depth >= 2) tr.split(pos, 2);
-          else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+          // Empty list item: match Enter. In a nested list lift the list
+          // item itself out of its list (like liftListItem), so it moves up
+          // one level as an empty item; at the top level lift the empty
+          // paragraph out (like liftEmptyBlock).
+          const itemType = state.schema.nodes.listItem;
+          const $from = tr.selection.$from;
+          const itemRange = $from.blockRange(
+            $from,
+            (node) => node.childCount > 0 && node.firstChild?.type === itemType
+          );
+          const outerTarget = itemRange && liftTarget(itemRange);
+          if (
+            itemRange &&
+            outerTarget != null &&
+            $from.node(itemRange.depth - 1).type === itemType
+          ) {
+            tr.lift(itemRange, outerTarget);
+          } else {
+            const range = $at.blockRange();
+            const target = range && liftTarget(range);
+            if (range && target != null) tr.lift(range, target);
+            else if ($at.depth >= 2) tr.split(pos, 2);
+            else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
+          }
         } else {
           // Split the current list item, like pressing Enter inside it.
           // Depth 2 splits listItem + paragraph (prosemirror-schema-list).

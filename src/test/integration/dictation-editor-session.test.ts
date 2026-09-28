@@ -367,6 +367,66 @@ describe("Dictation line to rich-text document", () => {
     }
   });
 
+  it("moves an empty nested item up one list level like Enter", async () => {
+    const host = fakeHost();
+    let state = { capitalizeNext: false, noSpaceNext: false };
+    const table = buildPhraseTable("es");
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: () => model,
+      route: createRouter((line, before) => {
+        const next = interpret({ line, before, capabilities: model.capabilities, table, state });
+        state = next.state;
+        return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
+      }),
+      runCommand: vi.fn(),
+      notify: vi.fn(),
+      copyText: vi.fn(async () => {}),
+      stats,
+    });
+    resetDictationHubForTests();
+    attachSession(session);
+    const editor = new Editor({
+      extensions: createRichTextExtensions({ spellCheck: { enabled: false, language: "es" } }),
+      content: "<ul><li><p>a</p><ul><li><p>b</p></li><li><p></p></li></ul></li></ul><p></p>",
+    });
+    try {
+      await new Promise<void>((resolve) => editor.on("create", () => resolve()));
+      document.body.appendChild(editor.view.dom);
+      // Caret into the nested empty item: the deepest empty paragraph in a list item.
+      let emptyPos: number | null = null;
+      let emptyDepth = -1;
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === "paragraph" && node.textContent === "") {
+          const $p = editor.state.doc.resolve(pos + 1);
+          for (let d = $p.depth; d > 0; d -= 1) {
+            if ($p.node(d).type.name === "listItem" && $p.depth > emptyDepth) {
+              emptyPos = pos + 1;
+              emptyDepth = $p.depth;
+              break;
+            }
+          }
+        }
+        return true;
+      });
+      expect(emptyPos).not.toBeNull();
+      if (emptyPos === null) throw new Error("empty nested list item not found");
+      editor.commands.setTextSelection(emptyPos);
+      const focused = new Promise<void>((resolve) => editor.on("focus", () => resolve()));
+      editor.commands.focus();
+      await focused;
+      await session.start();
+      host.emitFinal("nuevo elemento");
+      expect(editor.getHTML()).toBe(
+        "<ul><li><p>a</p><ul><li><p>b</p></li></ul></li><li><p></p></li></ul><p></p>"
+      );
+      expect(undoDepth(editor.state)).toBe(1);
+    } finally {
+      editor.destroy();
+    }
+  });
+
   it("capitalizes with mayúscula and writes punctuation words with literal as one undo step", async () => {
     const host = fakeHost();
     let state = { capitalizeNext: false, noSpaceNext: false };
