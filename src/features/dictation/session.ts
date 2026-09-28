@@ -41,7 +41,9 @@ export type SessionNotice =
   // The clipboard refused (unfocused window, no permission): the UI shows the phrase instead.
   | { kind: "orphan_lost"; text: string }
   // Scratch that found edited dictated text: nothing removed, the live region says so.
-  | { kind: "scratch_refused" };
+  | { kind: "scratch_refused" }
+  // Scratch that had nothing to remove: the live region says so.
+  | { kind: "scratch_empty" };
 
 export interface SessionSnapshot {
   status: SessionStatus;
@@ -159,6 +161,7 @@ export function createDictationSession(deps: {
         if (result.kind === "scratch") {
           const outcome = target?.scratch?.() ?? "empty";
           if (outcome === "refused") deps.notify({ kind: "scratch_refused" });
+          else if (outcome === "empty") deps.notify({ kind: "scratch_empty" });
           return;
         }
         if (target) target.apply(result.edits);

@@ -1720,6 +1720,7 @@
     "announceStopped": "Dictado desactivado",
     "announceLanguage": "Idioma del dictado: {{language}}",
     "scratchRefused": "No se eliminó nada. Borra eso solo elimina texto que no ha sido editado.",
+    "scratchEmpty": "No hay nada que borrar.",
     "languages": { "en": "inglés", "es": "español" },
     "languageNames": { "en": "Inglés", "es": "Español" },
     "errors": {

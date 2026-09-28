@@ -327,3 +327,156 @@ describe("Dictation scratch that (Seam 1)", () => {
     }
   });
 });
+
+describe("Dictation scratch that (audit probes)", () => {
+  it("B: text typed at the end after dictation is not absorbed into the range", async () => {
+    const notices: SessionNotice[] = [];
+    const { host, session } = setupSession({ notices });
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno punto dos punto");
+      expect(editor.getHTML()).toBe("<p>Uno. Dos.</p>");
+      editor.commands.insertContentAt(editor.state.doc.content.size - 1, " hola");
+      expect(editor.getHTML()).toBe("<p>Uno. Dos. hola</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno. hola</p>");
+      expect(notices).not.toContainEqual({ kind: "scratch_refused" });
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("E: scratch, undo, scratch removes the earlier sentence", async () => {
+    const notices: SessionNotice[] = [];
+    const { host, session } = setupSession({ notices });
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno punto dos punto");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno.</p>");
+      undo(editor.state, editor.view.dispatch);
+      expect(editor.getHTML()).toBe("<p>Uno. Dos.</p>");
+      host.emitFinal("borra eso");
+      expect(notices).not.toContainEqual({ kind: "scratch_refused" });
+      expect(editor.getHTML()).not.toContain("Uno");
+      // The removed "Uno." carried no leading space, so its deletion leaves
+      // the second sentence's leading space behind.
+      expect(editor.getHTML()).toBe("<p> Dos.</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("A: a sentence dictated over several lines takes one scratch", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno punto");
+      host.emitFinal("el hombre llegó");
+      host.emitFinal("a la casa punto");
+      expect(editor.getHTML()).toBe("<p>Uno. El hombre llegó a la casa.</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno.</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("A2: merging never reaches back over a typed prefix", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      editor.commands.insertContent("Hola ");
+      await session.start();
+      host.emitFinal("el hombre");
+      host.emitFinal("llegó punto");
+      expect(editor.getHTML()).toBe("<p>Hola el hombre llegó.</p>");
+      host.emitFinal("borra eso");
+      // The dictated tail (with its leading space) is removed; the typed
+      // "Hola " keeps its own trailing space, which the editor preserves.
+      expect(editor.getHTML()).toBe("<p>Hola </p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("A3: lines with no sentence end at all stay line-by-line", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno");
+      host.emitFinal("dos");
+      expect(editor.getHTML()).toBe("<p>Uno dos</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("F: a Spanish question dictated across two lines scratches as one", async () => {
+    const notices: SessionNotice[] = [];
+    const { host, session } = setupSession({ notices });
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno punto");
+      host.emitFinal("cómo estás");
+      host.emitFinal("cierra interrogación");
+      expect(editor.getHTML()).toBe("<p>Uno. ¿Cómo estás?</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Uno.</p>");
+      expect(notices).not.toContainEqual({ kind: "scratch_refused" });
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("F2: a Spanish exclamation dictated across two lines scratches as one", async () => {
+    const notices: SessionNotice[] = [];
+    const { host, session } = setupSession({ notices });
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("qué bien");
+      host.emitFinal("cierra exclamación");
+      expect(editor.getHTML()).toBe("<p>¡Qué bien!</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p></p>");
+      expect(notices).not.toContainEqual({ kind: "scratch_refused" });
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("C: an entry emptied by undo is pruned and never blocks scratch", async () => {
+    const notices: SessionNotice[] = [];
+    const { host, session } = setupSession({ notices });
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("uno punto");
+      host.emitFinal("dos punto");
+      expect(editor.getHTML()).toBe("<p>Uno. Dos.</p>");
+      undo(editor.state, editor.view.dispatch);
+      expect(editor.getHTML()).toBe("<p>Uno.</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p></p>");
+      expect(notices).not.toContainEqual({ kind: "scratch_refused" });
+    } finally {
+      editor.destroy();
+    }
+  });
+});

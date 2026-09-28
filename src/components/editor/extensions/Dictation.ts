@@ -33,7 +33,16 @@ export const dictationPluginKey = new PluginKey<DictationPluginState>("dictation
 
 type DictationMeta =
   | string
-  | { partial?: string; added?: DictatedRange[]; scratch?: true; reset?: true }
+  | {
+      partial?: string;
+      added?: DictatedRange[];
+      scratch?: true;
+      reset?: true;
+      /** The last history entry matched the pre-commit document. Gates merging. */
+      lastVerified?: boolean;
+      /** This commit inserted an auto `¿`/`¡` opener (possibly at last.from). */
+      openersInserted?: boolean;
+    }
   | undefined;
 
 const INITIAL_PLUGIN_STATE: DictationPluginState = { partial: "", history: [] };
@@ -127,6 +136,67 @@ function splitSliceIntoSentences(sliceText: string): { start: number; end: numbe
 }
 
 /**
+ * Merge a commit's first piece into the previous dictated sentence when the
+ * commit continues it. #279 removes back to the previous sentence end, so a
+ * sentence dictated over several finished lines is one history entry.
+ *
+ * Merge needs all of: the piece does not start at a sentence boundary (the
+ * text before it in the block ends in neither `.?!` nor a hard break, and it
+ * is not at the block start), the last entry is in the same block with only
+ * whitespace between it and the piece, and the resulting sentence holds a
+ * sentence end somewhere (otherwise the AC 4 line-by-line fallback applies).
+ * The merged text is re-read from the post-transaction document, so a commit
+ * that rewrote earlier text (the auto `¿`/`¡` opener plus recasing) heals
+ * instead of breaking the entry. Merging never reaches back over typed text:
+ * it only extends to the start of the last *dictated* entry.
+ */
+function maybeMergeFirstPiece(
+  doc: ProseMirrorNode,
+  history: readonly DictatedRange[],
+  added: readonly DictatedRange[],
+  openersInserted: boolean
+): DictatedRange[] {
+  if (added.length === 0 || history.length === 0) return [...added];
+  const first = added[0];
+  if (first.text.includes("\n")) return [...added];
+  let blockStart: number;
+  try {
+    blockStart = doc.resolve(first.from).start();
+  } catch {
+    return [...added];
+  }
+  if (first.from <= blockStart) return [...added];
+  const before = doc.textBetween(first.from - 1, first.from, "\n", "\n");
+  if (before === "." || before === "?" || before === "!" || before === "\n") return [...added];
+  const last = history[history.length - 1];
+  if (last.from >= last.to) return [...added];
+  let lastBlockStart: number;
+  try {
+    lastBlockStart = doc.resolve(last.from).start();
+  } catch {
+    return [...added];
+  }
+  if (lastBlockStart !== blockStart) return [...added];
+  if (last.to > first.from) return [...added];
+  if (!/^[ \t]*$/.test(doc.textBetween(last.to, first.from, "\n", "\n"))) return [...added];
+  const combinedHasEnd =
+    /[.!?]/.test(last.text) || /[.!?]/.test(added.map((a) => a.text).join(""));
+  if (!combinedHasEnd) return [...added];
+  let from = last.from;
+  if (openersInserted && from > blockStart) {
+    // Assoc +1 maps `from` past an opener this commit inserted exactly there;
+    // pull it back in so one scratch removes the whole sentence. The
+    // skip-if-present rule means a leading opener here is this commit's own.
+    const opener = doc.textBetween(from - 1, from, "\n", "\n");
+    if (opener === "¿" || opener === "¡") from = from - 1;
+  }
+  return [
+    { from, to: first.to, text: doc.textBetween(from, first.to, "\n", "\n") },
+    ...added.slice(1),
+  ];
+}
+
+/**
  * Sentences inserted by one dictation commit, in document order. The span is
  * the caret's mapped start to its new position; per-block splitting keeps the
  * offset-to-position mapping exact (one char per position inside a textblock).
@@ -204,6 +274,21 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
   if (edits.length === 0) return;
   const { state } = editor;
   const startPos = state.selection.from;
+  // Merging needs the last entry verified against the pre-commit document:
+  // only a still-intact entry may fuse with the new pieces.
+  const oldHistory = dictationPluginKey.getState(state)?.history ?? [];
+  const lastOld = oldHistory[oldHistory.length - 1];
+  let lastVerified = false;
+  if (
+    lastOld &&
+    lastOld.from >= 0 &&
+    lastOld.to <= state.doc.content.size &&
+    lastOld.from < lastOld.to
+  ) {
+    lastVerified =
+      state.doc.textBetween(lastOld.from, lastOld.to, "\n", "\n") === lastOld.text;
+  }
+  let openersInserted = false;
   const tr = closeHistory(state.tr);
   for (const edit of edits) {
     if (edit.kind === "paragraph") {
@@ -273,6 +358,7 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
       const existing = tr.doc.textBetween(at, Math.min(at + 1, tr.doc.content.size), "\n", "\n");
       if (existing !== edit.mark) {
         tr.insertText(edit.mark, at);
+        openersInserted = true;
         // A sentence that starts here starts with a capital (Spanish openers).
         // The word was already emitted in lowercase when it continued the
         // previous sentence before the hard break; fix it now that the opener
@@ -301,7 +387,7 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
   // (the default assoc 1 lands after it, leaving an empty span).
   const mappedStart = tr.mapping.map(startPos, -1);
   const added = extractDictatedSentences(tr.doc, mappedStart, endPos);
-  tr.setMeta(dictationPluginKey, { partial: "", added });
+  tr.setMeta(dictationPluginKey, { partial: "", added, lastVerified, openersInserted });
   editor.view.dispatch(tr);
 }
 
@@ -327,8 +413,10 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
             let history = prev.history;
             if (tr.docChanged) {
               history = history.map((entry) => ({
-                from: tr.mapping.map(entry.from),
-                to: tr.mapping.map(entry.to),
+                // Insertions at the edges stay outside the entry, so text
+                // typed right before or after it never gets absorbed.
+                from: tr.mapping.map(entry.from, 1),
+                to: tr.mapping.map(entry.to, -1),
                 text: entry.text,
               }));
             }
@@ -342,12 +430,30 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
                 history = [];
               } else {
                 if (meta.scratch === true && history.length > 0) {
+                  // Pop before pruning: the just-deleted entry is still
+                  // last (collapsed), and pruning first would eat a live one.
                   history = history.slice(0, -1);
                 }
+                if (tr.docChanged) {
+                  // An undone or deleted entry collapses; drop it so it can
+                  // never block scratching an earlier sentence.
+                  history = history.filter((entry) => entry.from < entry.to);
+                }
                 if (Array.isArray(meta.added) && meta.added.length > 0) {
-                  history = [...history, ...meta.added].slice(-MAX_DICTATED_SENTENCES);
+                  const pieces =
+                    meta.lastVerified === true
+                      ? maybeMergeFirstPiece(
+                          tr.doc,
+                          history,
+                          meta.added,
+                          meta.openersInserted === true
+                        )
+                      : meta.added;
+                  history = [...history, ...pieces].slice(-MAX_DICTATED_SENTENCES);
                 }
               }
+            } else if (tr.docChanged) {
+              history = history.filter((entry) => entry.from < entry.to);
             }
             if (partial === prev.partial && sameHistory(history, prev.history)) return prev;
             return { partial, history };

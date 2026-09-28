@@ -47,6 +47,17 @@ describe("noticeMessage()", () => {
       "No se eliminó nada. Borra eso solo elimina texto que no ha sido editado."
     );
   });
+  it("announces an empty scratch without a toast", () => {
+    const message = noticeMessage({ kind: "scratch_empty" }, t);
+    expect(message.toast).toBeUndefined();
+    expect(message.announce).toBe("Nothing to remove.");
+  });
+  it("announces an empty scratch in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "scratch_empty" }, es).announce).toBe(
+      "No hay nada que borrar."
+    );
+  });
   it("announces an orphan copied to the clipboard", () => {
     const message = noticeMessage({ kind: "orphan_copied" }, t);
     expect(message.toast?.variant).toBe("info");

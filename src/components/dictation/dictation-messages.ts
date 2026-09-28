@@ -21,6 +21,8 @@ export function noticeMessage(
       return { announce: t("dictation.announceStopped") };
     case "scratch_refused":
       return { announce: t("dictation.scratchRefused") };
+    case "scratch_empty":
+      return { announce: t("dictation.scratchEmpty") };
     case "orphan_copied": {
       const text = t("dictation.orphanCopied");
       return { toast: { variant: "info", text }, announce: text };
