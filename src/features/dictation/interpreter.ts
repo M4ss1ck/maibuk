@@ -294,6 +294,8 @@ export function interpret(input: InterpretInput): InterpretResult {
     }
   };
 
+  // Scratch entries live in `table.scratch`, never in the trie, so this loop
+  // never sees a `scratch` action.
   const emitActions = (actions: readonly PhraseAction[]) => {
     for (const action of actions) {
       if (action.kind === "mark") {

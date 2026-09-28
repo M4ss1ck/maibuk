@@ -146,6 +146,8 @@ describe("SpokenPunctuationSection", () => {
 
     expect(within(comma).queryByText("comma please")).toBeNull();
     expect(settingsFor("en").aliases.comma).toBeUndefined();
+    // The button unmounted; focus moved into the field, not to <body>.
+    expect(field).toHaveFocus();
   });
 
   it("refuses a phrase that already is a Spoken punctuation phrase", async () => {
@@ -204,6 +206,8 @@ describe("SpokenPunctuationSection", () => {
     expect(toggle).not.toBeChecked();
     expect(settingsFor("en").entries.comma).toBeUndefined();
     expect(settingsFor("en").aliases.comma).toBeUndefined();
+    // The Reset button unmounted; focus moved into the field, not to <body>.
+    expect(field).toHaveFocus();
   });
 
   it("shows the glossary copy in Spanish and starts on the Spanish entries", async () => {

@@ -157,6 +157,21 @@ describe("findAliasRefusal()", () => {
     ).toBeNull();
   });
 
+  it("treats the author's own alias of the escape word as the escape word", () => {
+    const withAlias = { ...settings, aliases: { literal: ["textual"] } };
+    expect(
+      findAliasRefusal({
+        language: "es",
+        entryId: "coma",
+        alias: "Textual coma",
+        settings: withAlias,
+      })
+    ).toEqual({ kind: "escape", word: "textual" });
+    expect(
+      findAliasRefusal({ language: "es", entryId: "coma", alias: "textuales", settings: withAlias })
+    ).toBeNull();
+  });
+
   it("checks the language's own phrases only", () => {
     const en = defaultSpokenPunctuationSettings().en;
     expect(
@@ -189,5 +204,20 @@ describe("normalizeSpokenPunctuationSettings()", () => {
     expect(normalized.es.entries).toEqual({ coma: false });
     expect(normalized.es.aliases).toEqual({ coma: ["comita"] });
     expect(normalized.en).toEqual(defaultSpokenPunctuationSettings().en);
+  });
+
+  it("drops stored aliases the settings UI would refuse", () => {
+    const normalized = normalizeSpokenPunctuationSettings({
+      es: {
+        aliases: {
+          // A default phrase, a phrase starting with the escape word, an
+          // escape-alias prefix, a duplicate, and one good phrase.
+          coma: ["punto", "literal coma", "textual coma", "comita", "comita"],
+          literal: ["textual"],
+        },
+      },
+    });
+
+    expect(normalized.es.aliases).toEqual({ literal: ["textual"], coma: ["comita"] });
   });
 });

@@ -45,7 +45,7 @@ export type SpokenPunctuationSettings = Record<
 
 export const DICTATION_LANGUAGES: readonly DictationLanguage[] = ["en", "es"];
 
-const PUNCTUATION_CAPABILITIES: ModelSpec["capabilities"] = {
+const NO_PUNCTUATION_CAPABILITIES: ModelSpec["capabilities"] = {
   casing: false,
   punctuation: false,
   streaming: true,
@@ -79,7 +79,7 @@ export function defaultEntryEnabled(
   entry: SpokenPunctuationEntry,
   capabilities?: ModelSpec["capabilities"]
 ): boolean {
-  return !entry.punctuation || !(capabilities ?? PUNCTUATION_CAPABILITIES).punctuation;
+  return !entry.punctuation || !(capabilities ?? NO_PUNCTUATION_CAPABILITIES).punctuation;
 }
 
 /**
@@ -89,7 +89,7 @@ export function defaultEntryEnabled(
 export function catalogCapabilities(language: DictationLanguage): ModelSpec["capabilities"] {
   return (
     MODEL_CATALOG.find((spec) => spec.languages.includes(language))?.capabilities ??
-    PUNCTUATION_CAPABILITIES
+    NO_PUNCTUATION_CAPABILITIES
   );
 }
 
@@ -108,17 +108,26 @@ export type AliasRefusal =
   | { kind: "duplicate" }
   | { kind: "escape"; word: string };
 
-function literalPhrases(language: DictationLanguage): string[] {
-  return entriesFor(language)
-    .filter((entry) => entry.actions.some((action) => action.kind === "literal"))
-    .flatMap((entry) => entry.phrases.map((phrase) => normalizePhrase(phrase)))
-    .filter((phrase) => phrase !== "");
+function literalPhrases(
+  language: DictationLanguage,
+  settings?: SpokenPunctuationLanguageSettings
+): string[] {
+  const literals = new Set<string>();
+  for (const entry of entriesFor(language)) {
+    if (!entry.actions.some((action) => action.kind === "literal")) continue;
+    for (const phrase of [...entry.phrases, ...(settings?.aliases[entry.id] ?? [])]) {
+      const normalized = normalizePhrase(phrase);
+      if (normalized !== "") literals.add(normalized);
+    }
+  }
+  return [...literals];
 }
 
 /**
  * A new alias is refused when it normalizes to nothing, to a phrase the
  * language already knows (default or alias), or when it starts with the escape
- * word, which would make the rest literal text.
+ * word (a default one or the author's own alias for it), which would make the
+ * rest literal text.
  */
 export function findAliasRefusal(options: {
   language: DictationLanguage;
@@ -130,11 +139,10 @@ export function findAliasRefusal(options: {
   const normalized = normalizePhrase(alias);
   if (normalized === "") return { kind: "empty" };
 
-  const literals = literalPhrases(language);
-  const startsWithEscape = literals.some(
+  const escapeWord = literalPhrases(language, settings).find(
     (word) => normalized === word || normalized.startsWith(`${word} `)
   );
-  if (startsWithEscape) return { kind: "escape", word: literals[0] };
+  if (escapeWord) return { kind: "escape", word: escapeWord };
 
   for (const entry of entriesFor(language)) {
     for (const phrase of entry.phrases) {
@@ -160,17 +168,42 @@ function normalizeEntrySwitches(
   return switches;
 }
 
-function normalizeAliases(language: DictationLanguage, raw: unknown): Record<string, string[]> {
+function normalizeAliases(
+  language: DictationLanguage,
+  raw: unknown,
+  settings: SpokenPunctuationLanguageSettings
+): Record<string, string[]> {
   if (typeof raw !== "object" || raw === null) return {};
+  const entries = entriesFor(language);
+  const isLiteralEntry = (entry: SpokenPunctuationEntry) =>
+    entry.actions.some((action) => action.kind === "literal");
+  // The escape word's aliases come first, so an alias starting with one of
+  // them is refused no matter how storage happened to order the entries.
+  const ordered = [
+    ...entries.filter(isLiteralEntry),
+    ...entries.filter((entry) => !isLiteralEntry(entry)),
+  ];
   const aliases: Record<string, string[]> = {};
-  for (const entry of entriesFor(language)) {
+  for (const entry of ordered) {
     const value = (raw as Record<string, unknown>)[entry.id];
     if (!Array.isArray(value)) continue;
-    const phrases = value
-      .filter((phrase): phrase is string => typeof phrase === "string")
-      .map((phrase) => phrase.trim())
-      .filter((phrase) => phrase !== "");
-    if (phrases.length > 0) aliases[entry.id] = phrases;
+    for (const phrase of value) {
+      if (typeof phrase !== "string") continue;
+      const trimmed = phrase.trim();
+      if (trimmed === "") continue;
+      const kept = aliases[entry.id] ?? [];
+      if (kept.includes(trimmed)) continue;
+      // Stored data is refused the same way the settings UI refuses a new
+      // alias, so a stale or hand-edited record can never shadow a phrase.
+      const refusal = findAliasRefusal({
+        language,
+        entryId: entry.id,
+        alias: trimmed,
+        settings: { ...settings, aliases },
+      });
+      if (refusal) continue;
+      aliases[entry.id] = [...kept, trimmed];
+    }
   }
   return aliases;
 }
@@ -191,7 +224,11 @@ export function normalizeSpokenPunctuationSettings(raw: unknown): SpokenPunctuat
     if (typeof languageValue.enabled === "boolean")
       settings[language].enabled = languageValue.enabled;
     settings[language].entries = normalizeEntrySwitches(language, languageValue.entries);
-    settings[language].aliases = normalizeAliases(language, languageValue.aliases);
+    settings[language].aliases = normalizeAliases(
+      language,
+      languageValue.aliases,
+      settings[language]
+    );
   }
   return settings;
 }

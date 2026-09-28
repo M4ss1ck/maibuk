@@ -106,6 +106,8 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
     await tabTo(page, remove, { backwards: true, max: 20 });
     await page.keyboard.press("Enter");
     await expect(comma.getByText("komma", { exact: true })).toHaveCount(0);
+    // The remove button unmounted; focus moved into the field, not to <body>.
+    await expect(field).toBeFocused();
   });
 
   test("refuses a phrase that is already a phrase, or starts with the escape word", async ({
@@ -156,6 +158,8 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
     await page.keyboard.press("Enter");
     await expect(comma.getByText("komma", { exact: true })).toHaveCount(0);
     await expect(commaSwitch).not.toBeChecked();
+    // The Reset button unmounted; focus moved into the field, not to <body>.
+    await expect(field).toBeFocused();
   });
 
   test("keeps the settings per language and across a reload", async ({ page }) => {

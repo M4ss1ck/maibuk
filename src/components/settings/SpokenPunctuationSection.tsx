@@ -83,6 +83,9 @@ function EntryRow({
   const enabled = isEntryEnabled(entry, settings, capabilities);
   const aliases = settings.aliases[entry.id] ?? [];
   const customized = aliases.length > 0 || settings.entries[entry.id] !== undefined;
+  // Removing an alias or resetting the entry unmounts the focused button, so
+  // focus moves to the field instead of falling to <body>.
+  const focusField = () => inputRef.current?.focus();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -139,7 +142,10 @@ function EntryRow({
                     phrase: alias,
                     entry: entryName,
                   })}
-                  onClick={() => removeAlias(language, entry.id, alias)}
+                  onClick={() => {
+                    removeAlias(language, entry.id, alias);
+                    focusField();
+                  }}
                   className="inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:h-8 pointer-coarse:w-8"
                 >
                   <X className="h-3 w-3" aria-hidden="true" />
@@ -194,6 +200,7 @@ function EntryRow({
               onClick={() => {
                 resetEntry(language, entry.id);
                 setRefusal(null);
+                focusField();
               }}
               aria-label={t("dictation.spokenPunctuation.reset", { entry: entryName })}
             >
