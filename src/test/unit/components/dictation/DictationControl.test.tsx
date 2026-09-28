@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,12 +15,8 @@ vi.mock("@/features/dictation/runtime", () => ({
 const { useDictationStore } = await import("@/features/dictation/store");
 const { DictationControl } = await import("@/components/dictation/DictationControl");
 
-const esFast = MODEL_CATALOG.find(
-  (m) => m.languages[0] === "es" && m.tier === "fast",
-)!.id;
-const enFast = MODEL_CATALOG.find(
-  (m) => m.languages[0] === "en" && m.tier === "fast",
-)!.id;
+const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast")!.id;
+const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "fast")!.id;
 
 function renderControl() {
   return render(
@@ -29,7 +25,7 @@ function renderControl() {
         <Route path="/book/:bookId" element={<DictationControl />} />
         <Route path="/settings" element={<p>settings page</p>} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 
@@ -64,10 +60,17 @@ describe("DictationControl", () => {
     const user = userEvent.setup();
     renderControl();
     await user.tab();
-    expect(
-      screen.getByRole("button", { name: /start dictation/i }),
-    ).toHaveFocus();
+    expect(screen.getByRole("button", { name: /start dictation/i })).toHaveFocus();
     await user.keyboard("{Enter}");
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("toggles dictation with Space on the focused mic button", async () => {
+    const user = userEvent.setup();
+    renderControl();
+    await user.tab();
+    expect(screen.getByRole("button", { name: /start dictation/i })).toHaveFocus();
+    await user.keyboard(" ");
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
@@ -82,19 +85,41 @@ describe("DictationControl", () => {
       },
     });
     renderControl();
-    expect(
-      screen.getByRole("button", { name: /stop dictation/i }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /stop dictation/i })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
   });
 
-  it("changes language with the arrow keys", async () => {
+  it("changes language with the arrow keys and restores focus to the picker", async () => {
     const user = userEvent.setup();
     renderControl();
     await user.tab();
     await user.tab();
+    const picker = screen.getByRole("button", { name: /dictation language/i });
+    expect(picker).toHaveFocus();
     await user.keyboard("{Enter}");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
     await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
     expect(setLanguage).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(picker).toHaveFocus());
+  });
+
+  it("closes the language picker with Escape and restores focus to its trigger", async () => {
+    const user = userEvent.setup();
+    renderControl();
+    await user.tab();
+    await user.tab();
+    const picker = screen.getByRole("button", { name: /dictation language/i });
+    expect(picker).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(setLanguage).not.toHaveBeenCalled();
+    await waitFor(() => expect(picker).toHaveFocus());
   });
 
   it("with no model installed, the mic leads to Settings → Dictation", async () => {
@@ -102,9 +127,7 @@ describe("DictationControl", () => {
     const user = userEvent.setup();
     renderControl();
     await user.tab();
-    expect(
-      screen.getByRole("button", { name: /download a dictation model/i }),
-    ).toHaveFocus();
+    expect(screen.getByRole("button", { name: /download a dictation model/i })).toHaveFocus();
     await user.keyboard("{Enter}");
     expect(await screen.findByText("settings page")).toBeInTheDocument();
     expect(toggle).not.toHaveBeenCalled();
@@ -123,8 +146,6 @@ describe("DictationControl", () => {
   it("announces through a polite live region", () => {
     useDictationStore.setState({ announcement: "Dictation on, Spanish" });
     renderControl();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Dictation on, Spanish",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("Dictation on, Spanish");
   });
 });

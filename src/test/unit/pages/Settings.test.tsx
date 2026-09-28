@@ -138,13 +138,35 @@ describe("Settings page — container-aware layout", () => {
     expect(document.querySelector(".overflow-auto")).not.toHaveClass("@container");
   });
 
-  it("scrolls to the Dictation section when linked by hash", () => {
+  it("scrolls to the Dictation section when linked by hash", async () => {
+    const original = Element.prototype.scrollIntoView;
     const scrollIntoView = vi.fn();
     // jsdom has no layout; stub so the section's scroll does not throw.
     Element.prototype.scrollIntoView = scrollIntoView;
-    renderSettings(["/settings#dictation"]);
-    expect(document.getElementById("dictation")).not.toBeNull();
-    expect(scrollIntoView).toHaveBeenCalled();
+    try {
+      renderSettings(["/settings#dictation"]);
+      expect(document.getElementById("dictation")).not.toBeNull();
+      // The page waits two animation frames before scrolling the section into view.
+      await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it("does not scroll when Settings opens without a hash", async () => {
+    const original = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      renderSettings();
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it("keys heading and section density to the content container", () => {

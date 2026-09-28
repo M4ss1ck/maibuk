@@ -21,13 +21,9 @@ vi.mock("@/lib/platform", async (orig) => ({
   dictationPlatform: () => "web",
 }));
 const { useDictationStore } = await import("@/features/dictation/store");
-const { DictationSection } = await import(
-  "@/components/settings/DictationSection"
-);
+const { DictationSection } = await import("@/components/settings/DictationSection");
 
-const esFast = MODEL_CATALOG.find(
-  (m) => m.languages[0] === "es" && m.tier === "fast",
-)!;
+const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast")!;
 
 beforeEach(() => {
   install.mockClear();
@@ -74,10 +70,7 @@ describe("DictationSection", () => {
     const user = userEvent.setup();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    expect(within(row).getByRole("progressbar")).toHaveAttribute(
-      "aria-valuenow",
-      "31",
-    );
+    expect(within(row).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "31");
     within(row)
       .getByRole("button", { name: /cancel/i })
       .focus();

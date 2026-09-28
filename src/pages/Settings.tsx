@@ -112,10 +112,19 @@ export function Settings() {
   const updateAvailable = isOutdated && latestVersion;
 
   // A control elsewhere links to Settings → Dictation by hash; scroll to it.
+  // Two frames wait for the section to be in the DOM; location.key re-scrolls
+  // on a repeated navigation to the same hash.
   useEffect(() => {
-    if (location.hash === "#dictation")
-      document.getElementById("dictation")?.scrollIntoView();
-  }, [location.hash]);
+    if (location.hash !== "#dictation") return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById("dictation")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
+  }, [location.hash, location.key]);
 
   const handleExportDatabase = async () => {
     setIsExporting(true);

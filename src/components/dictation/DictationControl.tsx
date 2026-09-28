@@ -37,15 +37,13 @@ export function DictationControl() {
   const languages = useMemo(() => {
     const set = new Set<DictationLanguage>();
     for (const spec of MODEL_CATALOG)
-      if (installed.includes(spec.id))
-        for (const l of spec.languages) set.add(l);
+      if (installed.includes(spec.id)) for (const l of spec.languages) set.add(l);
     return [...set];
   }, [installed]);
 
   if (!support?.supported) return null;
 
-  const listening =
-    snapshot.status === "listening" || snapshot.status === "stopping";
+  const listening = snapshot.status === "listening" || snapshot.status === "stopping";
   const loading = snapshot.status === "loading";
   const noModel = languages.length === 0;
   const openSettings = () => navigate("/settings#dictation");
@@ -73,10 +71,8 @@ export function DictationControl() {
                 .then((r) => r.session.toggle())
                 .catch(() => {})
         }
-        className={`relative inline-flex h-10 w-10 items-center justify-center rounded-lg pointer-coarse:h-12 pointer-coarse:w-12 focus-visible:outline-2 focus-visible:outline-primary ${
-          listening
-            ? "bg-primary text-primary-foreground"
-            : "text-foreground hover:bg-muted/20"
+        className={`relative inline-flex h-10 w-10 items-center justify-center rounded-lg pointer-coarse:h-12 pointer-coarse:w-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+          listening ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted/20"
         }`}
         style={
           listening
@@ -120,7 +116,7 @@ export function DictationControl() {
         aria-label={t("dictation.settings")}
         title={t("dictation.settings")}
         onClick={openSettings}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground hover:bg-muted/20 pointer-coarse:h-12 pointer-coarse:w-12 focus-visible:outline-2 focus-visible:outline-primary"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground hover:bg-muted/20 pointer-coarse:h-12 pointer-coarse:w-12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         <Settings2 className="h-5 w-5" aria-hidden />
       </button>

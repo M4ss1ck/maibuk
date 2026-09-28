@@ -42,11 +42,7 @@ export function DictationSection() {
   const platform = dictationPlatform();
   if (platform && support === null && !settled) return null;
   if (!support?.supported || !platform) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        {t("dictation.section.unsupported")}
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">{t("dictation.section.unsupported")}</p>;
   }
 
   const byLanguage = new Map<DictationLanguage, ModelSpec[]>();
@@ -57,14 +53,10 @@ export function DictationSection() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        {t("dictation.section.description")}
-      </p>
+      <p className="text-sm text-muted-foreground">{t("dictation.section.description")}</p>
       {[...byLanguage].map(([language, specs]) => (
         <div key={language} className="space-y-2">
-          <h3 className="font-medium">
-            {t(`dictation.languages.${language}`)}
-          </h3>
+          <h3 className="font-medium">{t(`dictation.languages.${language}`)}</h3>
           {specs.map((spec) => {
             const name = `${t(`dictation.languages.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
             const download = downloads[spec.id];
@@ -96,9 +88,7 @@ export function DictationSection() {
                       className="w-40"
                       max={100}
                       value={Math.round((download.done / download.total) * 100)}
-                      aria-valuenow={Math.round(
-                        (download.done / download.total) * 100,
-                      )}
+                      aria-valuenow={Math.round((download.done / download.total) * 100)}
                       aria-label={t("dictation.section.progress", {
                         done: Math.round(download.done / MB),
                         total: Math.round(download.total / MB),
@@ -165,9 +155,7 @@ export function DictationSection() {
         </div>
       ))}
       {device && (
-        <p className="text-sm text-muted-foreground">
-          {t("dictation.section.device", { device })}
-        </p>
+        <p className="text-sm text-muted-foreground">{t("dictation.section.device", { device })}</p>
       )}
       {recent && recent.medianLatencyMs !== null && (
         <p className="text-sm text-muted-foreground">
