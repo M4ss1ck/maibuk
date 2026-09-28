@@ -1,5 +1,5 @@
 import { renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { useReadingPositionStore } from "@/features/reading-position/store";
 import { useReadingPosition } from "@/features/reading-position/useReadingPosition";
 
@@ -218,6 +218,93 @@ describe("useReadingPosition", () => {
     expect(useReadingPositionStore.getState().getPosition("chapter:a")).toMatchObject({
       caret: 5,
       top: 42,
+    });
+  });
+
+  describe("while late layout settles", () => {
+    let resize: (() => void) | undefined;
+    let disconnect: Mock<() => void>;
+
+    beforeEach(() => {
+      resize = undefined;
+      disconnect = vi.fn();
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          constructor(callback: () => void) {
+            resize = callback;
+          }
+          observe() {}
+          disconnect() {
+            disconnect();
+            resize = undefined;
+          }
+        }
+      );
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function restoreWithGrowth() {
+      useReadingPositionStore.getState().savePosition("chapter:a", { caret: 30, top: 20 });
+      const editor = makeEditor(100);
+      const scrollEl = makeScrollEl();
+      const hook = renderHook(() =>
+        useReadingPosition({ editor: editor as never, scrollEl, storageKey: "chapter:a" })
+      );
+      expect(scrollEl.scrollTop).toBe(400);
+      // An image above the restored block finishes loading: the block moves down 400px.
+      editor.view.coordsAtPos.mockReturnValue({ top: 500, left: 0, bottom: 510, right: 0 });
+      return { editor, scrollEl, hook };
+    }
+
+    it("keeps the restored block at the top when the document above it grows", () => {
+      const { scrollEl } = restoreWithGrowth();
+
+      resize?.();
+
+      expect(scrollEl.scrollTop).toBe(800);
+    });
+
+    it("lets the author's own scroll win once they act", () => {
+      const { scrollEl } = restoreWithGrowth();
+
+      document.dispatchEvent(new Event("wheel"));
+      resize?.();
+
+      expect(scrollEl.scrollTop).toBe(400);
+      expect(disconnect).toHaveBeenCalled();
+    });
+
+    it("stops holding once the settle window ends", () => {
+      restoreWithGrowth();
+
+      vi.advanceTimersByTime(10_000);
+
+      expect(disconnect).toHaveBeenCalled();
+    });
+
+    it("stops holding when the editor unmounts", () => {
+      const { hook } = restoreWithGrowth();
+
+      hook.unmount();
+
+      expect(disconnect).toHaveBeenCalled();
+    });
+
+    it("holds nothing when there is no saved scroll to keep", () => {
+      const editor = makeEditor(100);
+      renderHook(() =>
+        useReadingPosition({
+          editor: editor as never,
+          scrollEl: makeScrollEl(),
+          storageKey: "chapter:none",
+        })
+      );
+
+      expect(resize).toBeUndefined();
     });
   });
 });
