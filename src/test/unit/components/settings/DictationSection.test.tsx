@@ -46,6 +46,15 @@ describe("DictationSection", () => {
     expect(screen.queryByRole("button", { name: /download/i })).toBeNull();
   });
 
+  it("explains how to restore the missing Linux library", () => {
+    useDictationStore.setState({
+      support: { supported: false, reason: "library_missing" },
+    });
+    render(<DictationSection />);
+    expect(screen.getByText(/native library is missing.*Reinstall Maibuk for Linux/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /download/i })).toBeNull();
+  });
+
   it("claims nothing while the runtime is still reporting support", () => {
     useDictationStore.setState({ support: null });
     const { container } = render(<DictationSection />);

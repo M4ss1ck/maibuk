@@ -1737,6 +1737,7 @@
       "title": "Dictado",
       "description": "Habla y Maibuk escribe, sin conexión. Los modelos se descargan una vez y se quedan en este dispositivo.",
       "unsupported": "El dictado funciona en Maibuk para Linux y en Chrome, Edge y Firefox.",
+      "libraryMissing": "Falta la biblioteca nativa del dictado. Vuelve a instalar Maibuk para Linux para restaurar el dictado.",
       "fast": "Rápido",
       "accurate": "Preciso",
       "fastHint": "Más pequeño y ligero para el procesador.",

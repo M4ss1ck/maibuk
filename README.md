@@ -48,7 +48,8 @@ environment variable must contain its parent directory.
 ```
 
 Install the required development packages (these provide the `glib`, `gobject`,
-`gio`, and `gtk` dev files with the missing `pkg-config` `.pc` files):
+`gio`, `gtk`, and ALSA (Dictation's microphone capture) dev files with the missing
+`pkg-config` `.pc` files):
 
 ```bash
 sudo apt update
@@ -61,7 +62,8 @@ sudo apt install \
   libxdo-dev \
   libssl-dev \
   libayatana-appindicator3-dev \
-  librsvg2-dev
+  librsvg2-dev \
+  libasound2-dev
 ```
 
 Then verify `pkg-config` can find the libraries:

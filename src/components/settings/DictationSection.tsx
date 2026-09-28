@@ -42,7 +42,11 @@ export function DictationSection() {
   const platform = dictationPlatform();
   if (platform && support === null && !settled) return null;
   if (!support?.supported || !platform) {
-    return <p className="text-sm text-muted-foreground">{t("dictation.section.unsupported")}</p>;
+    return <p className="text-sm text-muted-foreground">{t(
+      support?.reason === "library_missing"
+        ? "dictation.section.libraryMissing"
+        : "dictation.section.unsupported",
+    )}</p>;
   }
 
   const byLanguage = new Map<DictationLanguage, ModelSpec[]>();
