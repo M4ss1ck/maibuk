@@ -29,14 +29,24 @@ function cyclePanes(forward: boolean) {
     isVisiblePane
   );
   // Panes nest (the Book Editor's chapter wrapper holds the Chapter list).
-  // Only the innermost ones are stops: the outer one is the same region.
+  // Only the innermost ones are stops: the outer one is the same region. A
+  // pane marked nested (the Footnotes after the text) is a region of its own
+  // inside its outer pane, so both stay stops.
+  const isNested = (pane: HTMLElement) => pane.hasAttribute("data-focus-pane-nested");
   const panes = visible.filter(
-    (pane) => !visible.some((other) => other !== pane && pane.contains(other))
+    (pane) =>
+      isNested(pane) ||
+      !visible.some((other) => other !== pane && !isNested(other) && pane.contains(other))
   );
   if (panes.length === 0) return;
 
   const active = document.activeElement;
-  let currentIndex = panes.findIndex((pane) => pane === active || pane.contains(active));
+  // Document order puts an outer pane before the nested one, so the last pane
+  // holding focus is the innermost.
+  let currentIndex = -1;
+  panes.forEach((pane, index) => {
+    if (pane === active || pane.contains(active)) currentIndex = index;
+  });
   if (currentIndex < 0) {
     // Focus on an outer pane itself counts as being in its first inner one.
     const outer = visible.find((pane) => pane === active);

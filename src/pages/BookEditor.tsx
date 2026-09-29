@@ -1476,6 +1476,7 @@ export function BookEditor() {
           chapters={chapters}
           currentChapterId={currentChapter?.id ?? null}
           onSelectChapter={handleSelectChapter}
+          editor={tocEditor}
           notes={bookNotes}
           onCreateNote={handleCreateBookNote}
           onOpenNote={handleOpenBookNote}

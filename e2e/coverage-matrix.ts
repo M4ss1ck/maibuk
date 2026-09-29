@@ -792,15 +792,19 @@ export const ROWS: MatrixRow[] = [
     id: "editor-footnote",
     area: "editor",
     workflow:
-      "Insert Footnote (toolbar/menu) opens dialog; type text; Enter; Footnotes view lists it; edit and delete from list; asserts: Dialog focus; side panel Footnotes tab; persists: yes",
-    edges: ["Cancel inserts nothing"],
+      "Insert Footnote (toolbar/menu) opens dialog; type text; Enter; Footnotes view lists it; edit and delete from each list's Item Menu; asserts: Dialog focus; side panel Footnotes tab; focus returns to the entry; persists: yes",
+    edges: [
+      "Cancel inserts nothing",
+      "Escape in the Edit dialog changes nothing and returns focus to the entry",
+      "Undo restores a Footnote deleted from the list, with its text",
+      "edit and delete a Footnote from the side panel's Footnotes tab",
+    ],
     terms: ["Footnote"],
     shortcuts: [],
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "not-accepted",
-    issue: "https://github.com/M4ss1ck/maibuk/issues/217",
+    status: "accepted",
   },
   {
     id: "editor-scene-break",

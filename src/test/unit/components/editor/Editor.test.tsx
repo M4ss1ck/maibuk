@@ -154,9 +154,24 @@ vi.mock("../../../../components/editor/ImageContextMenu", () => ({
   ImageContextMenu: () => null,
 }));
 
-vi.mock("../../../../components/editor/FootnoteList", () => ({
-  FootnoteList: () => null,
-}));
+const capturedFootnoteListProps: Record<string, unknown>[] = [];
+
+// Stands in for the Footnotes list after the text: operated in place, with its
+// Item Menu and Edit dialog portaled out of the editor's DOM.
+vi.mock("../../../../components/editor/FootnoteList", async () => {
+  const { createPortal } = await vi.importActual<typeof import("react-dom")>("react-dom");
+  return {
+    FootnoteList: (props: Record<string, unknown>) => {
+      capturedFootnoteListProps.push(props);
+      return (
+        <div data-footnote-list="">
+          <button type="button">Footnote entry</button>
+          {createPortal(<button type="button">Footnote dialog field</button>, document.body)}
+        </div>
+      );
+    },
+  };
+});
 
 vi.mock("../../../../components/editor/MarkdownPasteDialog", async () => ({
   MarkdownPasteDialog: ({ markdown }: { markdown: string | null }) =>
@@ -543,6 +558,42 @@ describe("Editor", () => {
     expect(focusCalls.some((args) => args.length === 0)).toBe(true);
   });
 
+  it("leaves focus in the Footnotes list and its portaled dialogs when keys are pressed there", async () => {
+    let editor: TiptapEditor | null = null;
+    const user = userEvent.setup();
+    render(
+      <Editor
+        content={"<p>Chapter</p>\n"}
+        onUpdate={vi.fn()}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    const focusCalls = trackFocusCalls(editor!);
+
+    const entry = screen.getByRole("button", { name: "Footnote entry" });
+    act(() => entry.focus());
+    await user.keyboard("{ArrowDown}");
+    await user.click(entry);
+    expect(entry).toHaveFocus();
+
+    const field = screen.getByRole("button", { name: "Footnote dialog field" });
+    act(() => field.focus());
+    await user.keyboard("a");
+    expect(field).toHaveFocus();
+
+    expect(focusCalls).toEqual([]);
+  });
+
+  it("makes the Footnotes list read-only when the editor is", async () => {
+    capturedFootnoteListProps.length = 0;
+    render(<Editor content="<p>Hello</p>" onUpdate={vi.fn()} editable={false} />);
+
+    await waitFor(() => expect(capturedFootnoteListProps.at(-1)?.readOnly).toBe(true));
+  });
+
   it("does not refocus the previous selection when a task checkbox is clicked", async () => {
     let editor: TiptapEditor | null = null;
 
@@ -685,7 +736,14 @@ describe("Editor", () => {
 
   it('takes focus on mount with autoFocus="if-unfocused" when focus was lost to <body>', async () => {
     (document.activeElement as HTMLElement | null)?.blur();
-    render(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} autoFocus="if-unfocused" ariaLabel="Text" />);
+    render(
+      <Editor
+        content={"<p>hello</p>"}
+        onUpdate={vi.fn()}
+        autoFocus="if-unfocused"
+        ariaLabel="Text"
+      />
+    );
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Text" })).toHaveFocus());
   });
 
@@ -696,7 +754,12 @@ describe("Editor", () => {
     rerender(
       <>
         <button type="button">Tutorial card</button>
-        <Editor content={"<p>hello</p>"} onUpdate={vi.fn()} autoFocus="if-unfocused" ariaLabel="Text" />
+        <Editor
+          content={"<p>hello</p>"}
+          onUpdate={vi.fn()}
+          autoFocus="if-unfocused"
+          ariaLabel="Text"
+        />
       </>
     );
     await screen.findByRole("textbox", { name: "Text" });
@@ -876,7 +939,8 @@ describe("Editor", () => {
     onStatsChange.mockClear();
 
     act(() => {
-      for (const character of "abcdefghij") editor!.chain().focus("end").insertContent(character).run();
+      for (const character of "abcdefghij")
+        editor!.chain().focus("end").insertContent(character).run();
     });
 
     // Nothing has been serialized yet: the keystrokes only marked the document

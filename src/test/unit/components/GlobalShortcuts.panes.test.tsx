@@ -174,6 +174,58 @@ describe("GlobalShortcuts pane cycling", () => {
     });
   });
 
+  describe("a pane inside another that keeps its own stop (the Footnotes after the text)", () => {
+    function TextFixture() {
+      return (
+        <>
+          <GlobalShortcuts />
+          <aside data-focus-pane="chapters" tabIndex={-1} aria-label="Chapters" />
+          <main data-focus-pane="editor" tabIndex={-1} aria-label="Editor">
+            <div contentEditable data-testid="text" />
+            <section
+              data-focus-pane="footnotes"
+              data-focus-pane-nested=""
+              tabIndex={-1}
+              aria-label="Footnotes"
+            >
+              <button type="button">Entry</button>
+            </section>
+          </main>
+        </>
+      );
+    }
+
+    it("stops on the outer pane and then on the nested one, in DOM order", async () => {
+      const user = userEvent.setup();
+      render(<TextFixture />);
+      pane("chapters").focus();
+
+      await user.keyboard("{F6}");
+      expect(pane("editor")).toHaveFocus();
+      await user.keyboard("{F6}");
+      expect(pane("footnotes")).toHaveFocus();
+      await user.keyboard("{F6}");
+      expect(pane("chapters")).toHaveFocus();
+    });
+
+    it("moves from the text to the nested pane, and back out of it", async () => {
+      const user = userEvent.setup();
+      render(<TextFixture />);
+      screen.getByTestId("text").focus();
+
+      await user.keyboard("{F6}");
+      expect(pane("footnotes")).toHaveFocus();
+
+      screen.getByRole("button", { name: "Entry" }).focus();
+      await user.keyboard("{F6}");
+      expect(pane("chapters")).toHaveFocus();
+      await user.keyboard("{Shift>}{F6}{/Shift}");
+      expect(pane("footnotes")).toHaveFocus();
+      await user.keyboard("{Shift>}{F6}{/Shift}");
+      expect(pane("editor")).toHaveFocus();
+    });
+  });
+
   it("works while a contenteditable typing target has focus", async () => {
     const user = userEvent.setup();
     render(
