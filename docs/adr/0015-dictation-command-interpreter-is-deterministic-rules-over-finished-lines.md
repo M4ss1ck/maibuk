@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted
 ---
 
 # The Dictation Command Interpreter is deterministic rules over finished lines

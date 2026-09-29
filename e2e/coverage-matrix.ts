@@ -47,12 +47,6 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "Vitest canvas suites; keyboard tool switching is covered by canvas-tools",
   },
   {
-    kind: "term",
-    items: ["Dictation Command Interpreter", "Spoken Punctuation", "Voice Command"],
-    reason: "Decided, not built (ADR 0014, ADR 0015); the v1 build adds their rows",
-    owner: "Dictation Command Interpreter v1, from https://github.com/M4ss1ck/maibuk/pull/261",
-  },
-  {
     kind: "behavior",
     items: [
       "always on top",

@@ -390,6 +390,24 @@ _Avoid_: voice pack
 **Dictation Language**:
 The language a Dictation Session listens for: the language of the editor it types into (Auto), unless the author picked one for the Session.
 
+**Dictation Command Interpreter**:
+The step between a finished spoken line and the editor that turns it into text, Spoken Punctuation, or a Voice Command, by fixed rules that do not depend on the Dictation Model. (ADR 0015)
+
+**Spoken Punctuation**:
+Words said while dictating that become punctuation, a paragraph or line break, or a list item instead of text, such as "comma" or "punto y aparte"; also the dictation words "scratch that", "literal", and "capitalize" / "mayúscula". Each can be switched off and given extra phrases per Dictation Language, on this device. (ADR 0014)
+_UI_: en "Spoken punctuation" / es "Puntuación dictada"
+_Avoid_: voice command (for these)
+
+**Voice Command**:
+A spoken phrase, said on its own, that runs a Command instead of inserting text, such as "poner negrita". A second way to run a Command, next to its Shortcuts; the author edits a Command's phrases per Dictation Language in the Shortcut Editor, and custom ones stay on this device. (ADR 0014)
+_UI_: en "Voice commands" / es "Comandos de voz"
+_Avoid_: voice shortcut
+
+**Dictation Vocabulary**:
+Words and names the author teaches Dictation: what the Dictation Model hears and what to write instead, per Dictation Language, on this device. (ADR 0014)
+_UI_: en "Dictation vocabulary" / es "Vocabulario de dictado"
+_Avoid_: dictionary (that is Spell Check's), autocorrect
+
 ## Shortcuts
 
 Maibuk is keyboard-first: everything the author can do can run from the keyboard.
@@ -477,24 +495,6 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 ## Decided, not built
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
-
-**Dictation Command Interpreter**:
-The step between a finished spoken line and the editor that turns it into text, Spoken Punctuation, or a Voice Command, by fixed rules that do not depend on the Dictation Model. (ADR 0015)
-
-**Spoken Punctuation**:
-Words said while dictating that become punctuation, a paragraph or line break, or a list item instead of text, such as "comma" or "punto y aparte"; also the dictation words "scratch that", "literal", and "capitalize" / "mayúscula". Each can be switched off and given extra phrases per Dictation Language, on this device. (ADR 0014)
-_UI_: en "Spoken punctuation" / es "Puntuación dictada"
-_Avoid_: voice command (for these)
-
-**Voice Command**:
-A spoken phrase, said on its own, that runs a Command instead of inserting text, such as "poner negrita". A second way to run a Command, next to its Shortcuts; the author edits a Command's phrases per Dictation Language in the Shortcut Editor, and custom ones stay on this device. (ADR 0014)
-_UI_: en "Voice commands" / es "Comandos de voz"
-_Avoid_: voice shortcut
-
-**Dictation Vocabulary**:
-Words and names the author teaches Dictation: what the Dictation Model hears and what to write instead, per Dictation Language, on this device. (ADR 0014)
-_UI_: en "Dictation vocabulary" / es "Vocabulario de dictado"
-_Avoid_: dictionary (that is Spell Check's), autocorrect
 
 ## Relationships
 
