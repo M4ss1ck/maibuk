@@ -9,7 +9,7 @@ import {
   buildPhraseTable,
   interpret,
 } from "@/features/dictation/interpreter";
-import type { DictationLanguage } from "@/features/dictation/types";
+import { DICTATION_LANGUAGES } from "@/features/dictation/spoken-punctuation";
 import { interpreterBenchCase } from "@/test/support/dictation-bench";
 
 interface Sampled {
@@ -35,8 +35,7 @@ function sample(name: string, fn: () => void, minSamples: number, minTimeMs: num
 }
 
 function run() {
-  const languages: DictationLanguage[] = ["en", "es"];
-  const groups = languages.map((language) => {
+  const groups = DICTATION_LANGUAGES.map((language) => {
     const benchCase = interpreterBenchCase(language);
     const table = buildPhraseTable(language, benchCase.options);
     return {

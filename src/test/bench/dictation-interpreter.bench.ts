@@ -10,12 +10,10 @@ import {
   buildPhraseTable,
   interpret,
 } from "@/features/dictation/interpreter";
-import type { DictationLanguage } from "@/features/dictation/types";
+import { DICTATION_LANGUAGES } from "@/features/dictation/spoken-punctuation";
 import { interpreterBenchCase } from "@/test/support/dictation-bench";
 
-const LANGUAGES: readonly DictationLanguage[] = ["en", "es"];
-
-for (const language of LANGUAGES) {
+for (const language of DICTATION_LANGUAGES) {
   const benchCase = interpreterBenchCase(language);
   const table = buildPhraseTable(language, benchCase.options);
 

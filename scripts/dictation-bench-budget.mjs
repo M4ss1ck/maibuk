@@ -5,6 +5,7 @@
 //
 //   node scripts/dictation-bench-budget.mjs <bench.json>
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 /** p99 budgets in milliseconds, by benchmark name prefix (ADR 0015). */
 export const BUDGETS_MS = {
@@ -51,7 +52,7 @@ export function printBudgetReport(report, heading = "") {
   return ok;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const path = process.argv[2];
   if (!path) {
     console.error("usage: node scripts/dictation-bench-budget.mjs <bench.json>");

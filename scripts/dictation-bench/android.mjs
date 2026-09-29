@@ -36,6 +36,10 @@ if (devices.length !== 1) {
   console.error(`Expected exactly one adb device, found ${devices.length}. Set ANDROID_SERIAL.`);
   if (!process.env.ANDROID_SERIAL) process.exit(2);
 }
+if (spawnSync("adb", ["shell", "pm", "path", "com.android.chrome"]).status !== 0) {
+  console.error("Chrome (com.android.chrome) is not installed on the device.");
+  process.exit(2);
+}
 const model = adb("shell", "getprop", "ro.product.model");
 const abi = adb("shell", "getprop", "ro.product.cpu.abi");
 
