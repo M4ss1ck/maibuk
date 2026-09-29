@@ -342,13 +342,16 @@ describe("SpokenPunctuationSection", () => {
     it("toggles the master switch with Space without expanding the list", async () => {
       const user = userEvent.setup();
       renderCollapsed();
+      // Query once: each getByRole walks the hidden panel's ~50 controls, and a
+      // re-query per Tab pushed this past the 5s timeout on a loaded CI runner.
+      const master = masterSwitch();
 
-      await tabToFocused(user, masterSwitch);
-      expect(masterSwitch()).toBeChecked();
+      await tabToFocused(user, () => master);
+      expect(master).toBeChecked();
 
       await user.keyboard(" ");
 
-      expect(masterSwitch()).not.toBeChecked();
+      expect(master).not.toBeChecked();
       expect(screen.queryByRole("group", { name: "comma" })).toBeNull();
     });
 
@@ -376,10 +379,11 @@ describe("SpokenPunctuationSection", () => {
       const commaSwitch = screen.getByRole("switch", { name: "comma" });
       expect(commaSwitch).toBeEnabled();
 
-      await tabToFocused(user, masterSwitch, { backwards: true });
+      const master = masterSwitch();
+      await tabToFocused(user, () => master, { backwards: true });
       await user.keyboard(" ");
 
-      expect(masterSwitch()).not.toBeChecked();
+      expect(master).not.toBeChecked();
       expect(commaSwitch).toBeDisabled();
     });
   });
