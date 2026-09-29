@@ -8,6 +8,7 @@ import { FootnoteList } from "@/components/editor/FootnoteList";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { DEFAULT_SHORTCUT_SETTINGS } from "@/lib/shortcut-resolve";
+import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -244,6 +245,23 @@ describe("FootnoteList", () => {
     expect(texts()).toEqual(["First", "Second", "Third"]);
   });
 
+  it("renumbers the references in the text after a Delete", async () => {
+    const user = await renderList();
+    const refs = () =>
+      Array.from(editorRef!.view.dom.querySelectorAll("sup button")).map((b) => b.textContent);
+    expect(refs()).toEqual(["1", "2", "3"]);
+
+    await focusRow(user, "First");
+    await openMenu(user);
+    await chooseMenuItem(user, "editor.deleteFootnote");
+
+    await waitFor(() => expect(refs()).toEqual(["1", "2"]));
+    expect(within(grid()).getAllByRole("row").map((r) => r.textContent)).toEqual([
+      expect.stringContaining("1.Second"),
+      expect.stringContaining("2.Third"),
+    ]);
+  });
+
   it("offers the same actions on the hover buttons for pointer devices", async () => {
     const user = await renderList();
     await focusRow(user, "Third");
@@ -256,5 +274,40 @@ describe("FootnoteList", () => {
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(texts()).toEqual(["First", "Second"]));
+  });
+
+  describe("on a touch screen", () => {
+    beforeEach(() => installPointerEvent());
+
+    it("edits from the ⋯ button a tap opens", async () => {
+      const user = await renderList();
+      touchTap(screen.getByRole("button", { name: "common.moreActionsFor editor.footnoteNumber 2" }));
+      touchTap(await screen.findByRole("menuitem", { name: "editor.editFootnote" }));
+
+      const dialog = await screen.findByRole("dialog", { name: "editor.editFootnote" });
+      const field = within(dialog).getByRole("textbox");
+      expect(field).toHaveValue("Second");
+      await user.clear(field);
+      await user.type(field, "Tapped");
+      touchTap(within(dialog).getByRole("button", { name: "common.save" }));
+
+      await waitFor(() => expect(texts()).toEqual(["First", "Tapped", "Third"]));
+    });
+
+    it("deletes from the menu a long-press opens, and renumbers the rest", async () => {
+      await renderList();
+      vi.useFakeTimers();
+      try {
+        touchLongPress(row("First").querySelector(".footnote-content")!);
+        const remove = screen.getByRole("menuitem", { name: "editor.deleteFootnote" });
+        touchTap(remove);
+      } finally {
+        vi.useRealTimers();
+      }
+
+      await waitFor(() => expect(texts()).toEqual(["Second", "Third"]));
+      expect(row("Second")).toHaveTextContent("1.Second");
+      expect(row("Third")).toHaveTextContent("2.Third");
+    });
   });
 });
