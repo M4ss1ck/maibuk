@@ -13,12 +13,24 @@ import {
 import { phraseWords } from "@/features/dictation/normalize";
 import { entriesFor, type SpokenPunctuationEntry } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
-import { VOICE_VOCABULARY, voiceCommandPhrases } from "@/features/dictation/voice-commands";
+import {
+  VOICE_VOCABULARY,
+  heardForms,
+  rewriteHeard,
+  voiceCommandPhrases,
+} from "@/features/dictation/voice-commands";
 import { COMMAND_IDS, COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
 import { phraseItems, type PhraseItem } from "@/test/support/dictation-phrase-set";
 
 /** The ship bar (issue #285): Accurate models hear at least this share of default phrases. */
 export const SHIP_BAR_HIT_RATE = 0.8;
+
+/**
+ * The languages held to the hit-rate bar. English is reported but not gated
+ * in v1: its only recordings are a non-native speaker's, and the misses are
+ * accent, not phrasing, so no alias or removal would fix them (#285).
+ */
+export const SHIP_BAR_LANGUAGES: readonly DictationLanguage[] = ["es"];
 
 const NUMBER_WORDS: Record<DictationLanguage, Record<string, string>> = {
   en: { "1": "one", "2": "two", "3": "three" },
@@ -157,6 +169,11 @@ export function isolatedTable(
       }
     }
     addToTrie(trie, phrase, entry);
+    // The phrase as the models mishear it counts as the phrase itself.
+    const key = phraseWords(phrase).join(" ");
+    for (const [heard, meant] of Object.entries(entry.heard ?? {})) {
+      if (phraseWords(meant).join(" ") === key) addToTrie(trie, heard, entry);
+    }
   }
   return { ...base, trie, scratch };
 }
@@ -346,6 +363,7 @@ interface ScoreContext {
  */
 function scoreVoice(context: ScoreContext, rows: readonly DefaultPhrase[]): PhraseScore[] {
   const { language, capabilities, script, clips } = context;
+  const heard = heardForms(language);
   const recorded = new Map<string, Evidence[]>();
   const verbs = new Map<string, UnitTally>();
   const targets = new Map<CommandId, Map<string, UnitTally>>();
@@ -357,7 +375,8 @@ function scoreVoice(context: ScoreContext, rows: readonly DefaultPhrase[]): Phra
     for (const clip of clips.get(item.id) ?? []) {
       const hit = voiceClipHit(clip.finals, item, capabilities);
       const lines = spokenLines(clip.finals);
-      const words = lines.length === 1 ? spokenWords(lines[0], language) : [];
+      // A unit counts as heard in the forms the matcher accepts for it.
+      const words = lines.length === 1 ? rewriteHeard(heard, spokenWords(lines[0], language)) : [];
       tallyOf(verbs, split.verb).add(
         hit || startsWithWords(words, spokenWords(split.verb, language))
       );

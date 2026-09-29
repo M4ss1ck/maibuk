@@ -24,6 +24,13 @@ export interface SpokenPunctuationEntry {
   id: string;
   /** The phrases that trigger it by default; aliases add to these. */
   phrases: readonly string[];
+  /**
+   * How Dictation Models write a default phrase when they mishear it the same
+   * way every time, heard → the phrase it stands for ("cierre interrogación" →
+   * "cierra interrogación"). They act like the defaults under the entry's
+   * switch, but the Settings list shows only `phrases` (#285).
+   */
+  heard?: Readonly<Record<string, string>>;
   actions: readonly PhraseAction[];
   /** Marks are defaulted by the model's capabilities; layout phrases are not. */
   punctuation: boolean;
@@ -103,6 +110,11 @@ export function isEntryEnabled(
   return settings?.entries[entry.id] ?? defaultEntryEnabled(entry, capabilities);
 }
 
+/** Every phrase an entry acts on before the author adds any: defaults, then heard forms. */
+export function defaultTriggers(entry: SpokenPunctuationEntry): readonly string[] {
+  return entry.heard ? [...entry.phrases, ...Object.keys(entry.heard)] : entry.phrases;
+}
+
 export type AliasRefusal =
   | { kind: "empty" }
   | { kind: "duplicate"; entryId: string }
@@ -118,7 +130,7 @@ function entryPhrases(
   entry: SpokenPunctuationEntry,
   settings: SpokenPunctuationLanguageSettings
 ): string[] {
-  return [...entry.phrases, ...(settings.aliases[entry.id] ?? [])];
+  return [...defaultTriggers(entry), ...(settings.aliases[entry.id] ?? [])];
 }
 
 /**

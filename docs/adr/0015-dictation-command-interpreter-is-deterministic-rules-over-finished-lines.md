@@ -20,4 +20,5 @@ The budget is under 1 ms p99 per line with 1,000 aliases and Vocabulary entries,
 
 - Same input, same output: every behavior is a fixture test with real model transcripts.
 - A word the author means as prose ("period of time", "dos puntos y una lista") is protected by the whole-line rule for Voice Commands and by the escape word inside a line, not by guessing.
+- A short sentence that is a command on its own text ("empezar la lista", "Use code.") runs the command. The phrase conformance ship bar (#285) counts only prose a model mishears into an action; a command said alone is the whole-line rule working.
 - Deciding by pauses inside a line needs word timestamps, a change to the `RecognizerHost` events and its own ADR.

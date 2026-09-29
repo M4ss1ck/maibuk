@@ -102,6 +102,9 @@ const VOICE: Record<DictationLanguage, readonly string[]> = {
   ],
 };
 
+// Carriers use only common words: a word no model knows (the first script
+// said "Maibuk") makes the model end the line before it, and a "capitalize"
+// with no word after it on its line stays as prose, so that clip could only fail.
 const PUNCTUATION: Record<DictationLanguage, readonly string[]> = {
   en: [
     "the rain stopped comma and she left period",
@@ -110,7 +113,7 @@ const PUNCTUATION: Record<DictationLanguage, readonly string[]> = {
     "she said open quote stay close quote",
     "the house open parenthesis the old one close parenthesis burned",
     "the end new paragraph next day new line eggs new item bread",
-    "capitalize maibuk is ready",
+    "capitalize summer is here",
     "type literal comma",
     "scratch that",
   ],
@@ -123,7 +126,7 @@ const PUNCTUATION: Record<DictationLanguage, readonly string[]> = {
     "la casa abre paréntesis la vieja cierra paréntesis ardió",
     "fin punto y aparte al otro día nuevo párrafo llovió",
     "huevos nueva línea pan nuevo elemento leche",
-    "mayúscula maibuk está listo",
+    "mayúscula verano ya llegó",
     "escribe literal coma",
     "borra eso",
   ],

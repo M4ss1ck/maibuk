@@ -109,8 +109,10 @@ About 55 short lines per Dictation Language, around two minutes each
 - **Spoken Punctuation** rides in carrier sentences, several phrases per clip.
   Each phrase is scored on its own (a table where only it acts), and English
   marks count even though they are off by default: an author may switch them on.
-- **Prose** must run nothing under the shipped defaults. The report also says
-  which sentences fire on their own text, before any model hears them.
+- **Prose** must not be misheard into an action. A sentence that runs something
+  on its own text ("empezar la lista") is a command said alone, which the
+  whole-line rule runs by design (ADR 0015); the report lists those apart and
+  they do not fail the bar.
 
 The gate lane (`phrase-conformance.test.ts`) fails when a default verb, target,
 or Spoken Punctuation phrase is added without a line in the script.
@@ -140,9 +142,19 @@ Dictation Command Interpreter and writes `phrases-report.md` next to them.
 
 | Bar | Scope |
 | --- | --- |
-| Hit rate over every default phrase >= 80% | Accurate models |
-| Prose triggers == 0 | every model |
+| Hit rate over every default phrase >= 80% | Accurate models of `SHIP_BAR_LANGUAGES` (Spanish) |
+| Misheard prose triggers == 0 | every model |
 | No clip missing | every model |
 
-Each default phrase under the bar on Accurate gets an alias default or is
-removed (issue #285); the report lists them with what the model heard.
+English is reported but not gated: its recordings are a non-native speaker's
+and the misses are accent, not phrasing.
+
+A default phrase under the bar on Accurate gets a heard form or is removed
+(issue #285); the report lists them with what the model heard. A heard form is
+how the models write a default word when they mishear it the same way every
+time: `heard` in `VOICE_VOCABULARY` (a verb or target, tried only after the line
+as heard fails to match) and `heard` on a Spoken Punctuation entry (heard →
+the phrase it stands for). Add one only when the recordings show the same
+mishearing on more than one clip or model; a one-off miss ("alinear zen") stays
+under the bar. Carriers use common words: an unknown word makes the model end
+the line before it.

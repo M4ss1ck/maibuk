@@ -12,6 +12,7 @@
 import { normalizePhrase, tokenWords, tokenize, type Token } from "@/features/dictation/normalize";
 import type { DictationEdit } from "@/features/dictation/router";
 import {
+  defaultTriggers,
   entriesFor,
   isEntryEnabled,
   type PhraseAction,
@@ -233,7 +234,7 @@ export function buildPhraseTable(
   for (const entry of entriesFor(language)) {
     if (!isEntryEnabled(entry, settings, capabilities)) continue;
     const aliases = settings?.aliases[entry.id] ?? [];
-    const phrases = [...entry.phrases, ...aliases];
+    const phrases = [...defaultTriggers(entry), ...aliases];
     if (entry.actions.some((action) => action.kind === "scratch")) {
       for (const phrase of phrases) {
         const norm = normalizePhrase(phrase);
