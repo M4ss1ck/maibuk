@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted
 ---
 
 # Voice Commands bind Commands; Spoken Punctuation and the Dictation Vocabulary are Dictation settings
