@@ -1789,6 +1789,27 @@
         "escape": "{{phrase}} empieza con la palabra de escape, {{word}}.",
         "shadow": "{{phrase}} es el inicio de {{conflict}}, que usa {{entry}}."
       }
+    },
+    "vocabulary": {
+      "title": "Vocabulario de dictado",
+      "description": "Palabras y nombres que Dictado oye mal: lo que oye el modelo y lo que hay que escribir en su lugar. Palabras completas, sin distinguir mayúsculas ni acentos. La forma escrita se inserta exactamente como la escribes. Los cambios quedan en este dispositivo.",
+      "language": "Idioma del vocabulario",
+      "listLabel": "Vocabulario de dictado para {{language}}",
+      "entry": "{{heard}} se escribe {{written}}",
+      "empty": "Todavía no hay entradas. Agrega la primera palabra que Dictado oye mal.",
+      "heardLabel": "Lo que oye Dictado",
+      "heardPlaceholder": "a reliano",
+      "writtenLabel": "Escribir en su lugar",
+      "writtenPlaceholder": "Aureliano",
+      "add": "Agregar",
+      "edit": "Editar {{phrase}}",
+      "remove": "Quitar {{phrase}}",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "refused": {
+        "empty": "Escribe lo que oye Dictado y lo que hay que escribir en su lugar.",
+        "duplicate": "{{phrase}} ya está en el vocabulario de dictado."
+      }
     }
   },
   "colorPicker": {

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { normalizePhrase } from "@/features/dictation/normalize";
 import type { SessionSnapshot } from "@/features/dictation/session";
 import {
   defaultSpokenPunctuationSettings,
@@ -13,6 +14,12 @@ import type {
   ModelTier,
   SupportReport,
 } from "@/features/dictation/types";
+import {
+  defaultVocabularySettings,
+  normalizeVocabularySettings,
+  type VocabularyEntry,
+  type VocabularySettings,
+} from "@/features/dictation/vocabulary";
 
 export interface DictationStoreState {
   enabled: boolean;
@@ -44,6 +51,18 @@ export interface DictationStoreState {
   ) => void;
   /** One entry goes back to its default switch and its default phrases. */
   resetSpokenPunctuationEntry: (language: DictationLanguage, entryId: string) => void;
+  /** The Dictation Vocabulary per Dictation Language, this device only (ADR 0014). */
+  vocabulary: VocabularySettings;
+  /** The caller refuses a duplicate heard form first; this only stores the entry. */
+  addVocabularyEntry: (language: DictationLanguage, heard: string, written: string) => void;
+  /** Edits one entry in place; ignored when the index is gone or a form is empty. */
+  updateVocabularyEntry: (
+    language: DictationLanguage,
+    index: number,
+    heard: string,
+    written: string
+  ) => void;
+  removeVocabularyEntry: (language: DictationLanguage, index: number) => void;
 }
 
 function withLanguage(
@@ -52,6 +71,21 @@ function withLanguage(
   next: SpokenPunctuationLanguageSettings
 ): SpokenPunctuationSettings {
   return { ...settings, [language]: next };
+}
+
+function withVocabulary(
+  vocabulary: VocabularySettings,
+  language: DictationLanguage,
+  entries: VocabularyEntry[]
+): VocabularySettings {
+  return { ...vocabulary, [language]: entries };
+}
+
+/** Whether `heard` already answers to an entry other than `index` (folded, whole words). */
+function isHeardTaken(entries: readonly VocabularyEntry[], heard: string, index = -1): boolean {
+  const normalized = normalizePhrase(heard);
+  if (normalized === "") return true;
+  return entries.some((entry, at) => at !== index && normalizePhrase(entry.heard) === normalized);
 }
 
 export const useDictationStore = create<DictationStoreState>()(
@@ -142,6 +176,47 @@ export const useDictationStore = create<DictationStoreState>()(
             }),
           };
         }),
+      vocabulary: defaultVocabularySettings(),
+      addVocabularyEntry: (language, heard, written) =>
+        set((state) => {
+          const trimmedHeard = heard.trim();
+          const trimmedWritten = written.trim();
+          if (trimmedWritten === "") return state;
+          const entries = state.vocabulary[language];
+          // A repeated heard form would make the written form depend on
+          // storage order; the caller refuses it first, this keeps it out.
+          if (isHeardTaken(entries, trimmedHeard)) return state;
+          return {
+            vocabulary: withVocabulary(state.vocabulary, language, [
+              ...entries,
+              { heard: trimmedHeard, written: trimmedWritten },
+            ]),
+          };
+        }),
+      updateVocabularyEntry: (language, index, heard, written) =>
+        set((state) => {
+          const entries = state.vocabulary[language];
+          const current = entries[index];
+          const trimmedHeard = heard.trim();
+          const trimmedWritten = written.trim();
+          if (!current || trimmedWritten === "") return state;
+          if (isHeardTaken(entries, trimmedHeard, index)) return state;
+          const next = [...entries];
+          next[index] = { heard: trimmedHeard, written: trimmedWritten };
+          return { vocabulary: withVocabulary(state.vocabulary, language, next) };
+        }),
+      removeVocabularyEntry: (language, index) =>
+        set((state) => {
+          const entries = state.vocabulary[language];
+          if (!entries[index]) return state;
+          return {
+            vocabulary: withVocabulary(
+              state.vocabulary,
+              language,
+              entries.filter((_entry, at) => at !== index)
+            ),
+          };
+        }),
     }),
     // Device-local, like the models themselves.
     {
@@ -150,14 +225,19 @@ export const useDictationStore = create<DictationStoreState>()(
         preferredTier: state.preferredTier,
         enabled: state.enabled,
         spokenPunctuation: state.spokenPunctuation,
+        vocabulary: state.vocabulary,
       }),
-      // Older records have no spokenPunctuation yet; a hand-edited one may be
-      // partial or name entries this version no longer has.
+      // Older records have no spokenPunctuation or vocabulary yet; a
+      // hand-edited one may be partial or name entries this version no longer
+      // has.
       merge: (persisted, current) => ({
         ...current,
         ...(persisted as Partial<DictationStoreState> | undefined),
         spokenPunctuation: normalizeSpokenPunctuationSettings(
           (persisted as { spokenPunctuation?: unknown } | undefined)?.spokenPunctuation
+        ),
+        vocabulary: normalizeVocabularySettings(
+          (persisted as { vocabulary?: unknown } | undefined)?.vocabulary
         ),
       }),
     }

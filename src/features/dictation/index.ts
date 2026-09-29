@@ -20,6 +20,7 @@ export {
 } from "@/features/dictation/session";
 export { createLineStats, type LineStats, type LineStatsSummary } from "@/features/dictation/stats";
 export {
+  applyVocabulary,
   buildPhraseTable,
   interpret,
   isScratchLine,
@@ -30,6 +31,14 @@ export {
   type TokenTrieNode,
 } from "@/features/dictation/interpreter";
 export { normalizePhrase } from "@/features/dictation/normalize";
+export {
+  defaultVocabularySettings,
+  findVocabularyRefusal,
+  normalizeVocabularySettings,
+  type VocabularyEntry,
+  type VocabularyRefusal,
+  type VocabularySettings,
+} from "@/features/dictation/vocabulary";
 export {
   catalogCapabilities,
   defaultEntryEnabled,

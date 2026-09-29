@@ -68,11 +68,12 @@ async function build(): Promise<DictationRuntime> {
   let selectedModel: ModelSpec | null = null;
   let selectedLanguage: DictationLanguage = "es";
   let interpreterState = { capitalizeNext: false, noSpaceNext: false };
-  // The author's switches and aliases feed the table; so do the picked model's
-  // capabilities, which set the entries' defaults.
+  // The author's switches, aliases, and Vocabulary feed the table; so do the
+  // picked model's capabilities, which set the entries' defaults.
   const buildTable = (language: DictationLanguage): PhraseTable =>
     buildPhraseTable(language, {
       settings: useDictationStore.getState().spokenPunctuation[language],
+      vocabulary: useDictationStore.getState().vocabulary[language],
       capabilities:
         selectedLanguage === language && selectedModel
           ? selectedModel.capabilities
@@ -128,10 +129,14 @@ async function build(): Promise<DictationRuntime> {
   if (support.supported) await refreshInstalled();
 
   // Turning Dictation off mid-session releases the microphone; a Spoken
-  // Punctuation change rebuilds the tables the next line is matched against.
+  // Punctuation or Vocabulary change rebuilds the tables the next line is
+  // matched against.
   unsubscribeEnabled = useDictationStore.subscribe((state, previous) => {
     if (!state.enabled && previous.enabled) void session.stop();
-    if (state.spokenPunctuation !== previous.spokenPunctuation) {
+    if (
+      state.spokenPunctuation !== previous.spokenPunctuation ||
+      state.vocabulary !== previous.vocabulary
+    ) {
       phraseTables = { en: buildTable("en"), es: buildTable("es") };
     }
   });

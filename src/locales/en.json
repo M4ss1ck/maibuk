@@ -1789,6 +1789,27 @@
         "escape": "{{phrase}} starts with the escape word, {{word}}.",
         "shadow": "{{phrase}} is the start of {{conflict}}, used by {{entry}}."
       }
+    },
+    "vocabulary": {
+      "title": "Dictation vocabulary",
+      "description": "Words and names Dictation gets wrong: what the model hears and what to write instead. Whole words, ignoring case and accents. The written form is inserted exactly as typed. Changes stay on this device.",
+      "language": "Vocabulary language",
+      "listLabel": "Dictation vocabulary for {{language}}",
+      "entry": "{{heard}} writes {{written}}",
+      "empty": "No entries yet. Add the first word Dictation gets wrong.",
+      "heardLabel": "What Dictation hears",
+      "heardPlaceholder": "a reliano",
+      "writtenLabel": "Write instead",
+      "writtenPlaceholder": "Aureliano",
+      "add": "Add",
+      "edit": "Edit {{phrase}}",
+      "remove": "Remove {{phrase}}",
+      "save": "Save",
+      "cancel": "Cancel",
+      "refused": {
+        "empty": "Enter what Dictation hears and what to write instead.",
+        "duplicate": "{{phrase}} is already in the Dictation vocabulary."
+      }
     }
   },
   "colorPicker": {

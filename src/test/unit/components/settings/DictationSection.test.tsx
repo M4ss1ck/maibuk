@@ -71,7 +71,9 @@ describe("DictationSection", () => {
       support: { supported: false, reason: "library_missing" },
     });
     render(<DictationSection />);
-    expect(screen.getByText(/native library is missing.*Reinstall Maibuk for Linux/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/native library is missing.*Reinstall Maibuk for Linux/i)
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download/i })).toBeNull();
   });
 
@@ -114,11 +116,11 @@ describe("DictationSection", () => {
     const user = userEvent.setup();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    within(row).getByRole("button", { name: /download/i }).focus();
+    within(row)
+      .getByRole("button", { name: /download/i })
+      .focus();
     await user.keyboard("{Enter}");
-    act(() =>
-      useDictationStore.setState({ downloads: { [esFast.id]: { done: 1, total: 2 } } }),
-    );
+    act(() => useDictationStore.setState({ downloads: { [esFast.id]: { done: 1, total: 2 } } }));
     expect(within(row).getByRole("button", { name: /cancel/i })).toHaveFocus();
     act(() => useDictationStore.setState({ downloads: {}, installed: [esFast.id] }));
     expect(within(row).getByRole("button", { name: /remove/i })).toHaveFocus();
@@ -134,7 +136,9 @@ describe("DictationSection", () => {
     const user = userEvent.setup();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    within(row).getByRole("button", { name: /use for/i }).focus();
+    within(row)
+      .getByRole("button", { name: /use for/i })
+      .focus();
     await user.keyboard("{Enter}");
     expect(within(row).getByText(/used for spanish/i)).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /remove/i })).toHaveFocus();
@@ -163,6 +167,14 @@ describe("DictationSection", () => {
     expect(within(row).getByText(/no punctuation/i)).toBeInTheDocument();
   });
 
+  it("shows the Dictation vocabulary editor for the offered languages", () => {
+    render(<DictationSection />);
+    expect(screen.getByRole("heading", { name: "Dictation vocabulary" })).toBeInTheDocument();
+    const heard = screen.getByRole("textbox", { name: "What Dictation hears" });
+    expect(heard).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Vocabulary language/ })).toBeInTheDocument();
+  });
+
   it("offers no Dictation switch where Dictation is unsupported", () => {
     useDictationStore.setState({ support: { supported: false, reason: "not_isolated" } });
     render(<DictationSection />);
@@ -182,7 +194,9 @@ describe("DictationSection", () => {
     expect(toggle).not.toBeChecked();
 
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    within(row).getByRole("button", { name: /download/i }).focus();
+    within(row)
+      .getByRole("button", { name: /download/i })
+      .focus();
     await user.keyboard("{Enter}");
     expect(install).toHaveBeenCalledWith(esFast);
   });
@@ -195,7 +209,9 @@ describe("DictationSection", () => {
     expect(screen.getByRole("switch", { name: "Dictation" })).not.toBeChecked();
 
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    within(row).getByRole("button", { name: /remove/i }).focus();
+    within(row)
+      .getByRole("button", { name: /remove/i })
+      .focus();
     await user.keyboard("{Enter}");
     expect(remove).toHaveBeenCalledWith(esFast.id);
   });
@@ -228,7 +244,7 @@ describe("DictationSection", () => {
     useDictationStore.setState({ enabled: true, preferredTier: { en: "fast", es: "fast" } });
     localStorage.setItem(
       "maibuk-dictation",
-      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 }),
+      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 })
     );
     await act(async () => {
       await useDictationStore.persist.rehydrate();
