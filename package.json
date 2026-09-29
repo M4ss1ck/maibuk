@@ -33,7 +33,9 @@
     "version:bump": "./scripts/bump-version.sh",
     "generate:symbols": "tsx scripts/generate-symbols-data.ts",
     "fetch:dictation": "node scripts/fetch-dictation-runtime.mjs",
-    "conformance:dictation": "node scripts/dictation-conformance/web.mjs && cd src-tauri && cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture && python3 ../scripts/dictation-conformance/report.py"
+    "conformance:dictation": "node scripts/dictation-conformance/web.mjs && cd src-tauri && cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture && python3 ../scripts/dictation-conformance/report.py",
+    "bench:dictation": "vitest bench --run src/test/bench --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
+    "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",

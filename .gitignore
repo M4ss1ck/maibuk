@@ -41,3 +41,6 @@ e2e/.output/
 
 # Fetched Moonshine runtimes (never committed; run `pnpm fetch:dictation`)
 vendor/
+
+# Dictation Interpreter bench output (pnpm bench:dictation)
+.bench/
