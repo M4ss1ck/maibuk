@@ -109,7 +109,7 @@ function ActiveNodeEditor({
             }
           }}
         />
-        <FootnoteList editor={editor} startIndex={1} />
+        <FootnoteList editor={editor} startIndex={1} readOnly />
       </div>
       <NodeFormatBubble
         editor={editor}

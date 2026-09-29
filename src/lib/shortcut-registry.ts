@@ -30,7 +30,8 @@ export type ShortcutContext =
   | "noteItem"
   | "chapterItem"
   | "canvasNode"
-  | "image";
+  | "image"
+  | "footnoteItem";
 
 /** Handled by the TipTap keymap inside the editor instead of a `useShortcuts` binding. */
 export type ShortcutSource = "editor-keymap";
@@ -651,6 +652,17 @@ export const COMMANDS = {
     defaults: [],
   },
 
+  "footnoteItem.edit": {
+    labelKey: "editor.editFootnote",
+    contexts: ["footnoteItem"],
+    defaults: [],
+  },
+  "footnoteItem.delete": {
+    labelKey: "editor.deleteFootnote",
+    contexts: ["footnoteItem"],
+    defaults: [],
+  },
+
   "canvasNode.connect": { labelKey: "canvas.connectTo", contexts: ["canvasNode"], defaults: [] },
   "canvasNode.delete": { labelKey: "common.delete", contexts: ["canvasNode"], defaults: [] },
 
@@ -894,14 +906,14 @@ export function isCommandId(value: string): value is CommandId {
 export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>> = {
   "/": ["bookList"],
   "/notes": ["notes", "noteItem"],
-  "/notes/:noteId": ["notes", "noteItem", "editor", "image"],
+  "/notes/:noteId": ["notes", "noteItem", "editor", "image", "footnoteItem"],
   "/canvas": ["canvas"],
   "/canvas/:canvasId": ["canvas", "canvasNode", "editor"],
-  "/ephemeral": ["ephemeral", "editor", "image"],
+  "/ephemeral": ["ephemeral", "editor", "image", "footnoteItem"],
   "/metrics": [],
   "/settings": [],
   "/embed": [],
-  "/book/:bookId": ["bookEditor", "chapterItem", "noteItem", "editor", "image"],
+  "/book/:bookId": ["bookEditor", "chapterItem", "noteItem", "editor", "image", "footnoteItem"],
   "/book/:bookId/cover": ["coverDesigner"],
 };
 
@@ -923,7 +935,11 @@ export const SHORTCUT_SECTIONS = [
   { id: "notes", labelKey: "shortcuts.sections.notes", contexts: ["notes", "noteItem"] },
   { id: "canvas", labelKey: "shortcuts.sections.canvas", contexts: ["canvas", "canvasNode"] },
   { id: "ephemeral", labelKey: "shortcuts.sections.ephemeral", contexts: ["ephemeral"] },
-  { id: "editor", labelKey: "shortcuts.sections.editor", contexts: ["editor", "image"] },
+  {
+    id: "editor",
+    labelKey: "shortcuts.sections.editor",
+    contexts: ["editor", "image", "footnoteItem"],
+  },
 ] as const satisfies readonly {
   id: string;
   labelKey: string;

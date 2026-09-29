@@ -3,6 +3,7 @@ import { FocusScope, Overlay, useModalOverlay, useMove } from "react-aria";
 import { Dialog, Tab, TabList, TabPanel, TabPanels, Tabs } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
+import type { Editor } from "@tiptap/react";
 import type { Chapter } from "@/features/chapters/types";
 import type { Note } from "@/features/notes";
 import { FootnotesView } from "@/components/editor/FootnotesView";
@@ -29,6 +30,8 @@ interface BookSidePanelProps {
   chapters: Chapter[];
   currentChapterId: string | null;
   onSelectChapter: (chapter: Chapter) => void;
+  /** The open Chapter's editor, through which its Footnotes are edited. */
+  editor?: Editor | null;
   // notes
   notes: Note[];
   onCreateNote: (html: string) => void;
@@ -46,6 +49,7 @@ export function BookSidePanel({
   chapters,
   currentChapterId,
   onSelectChapter,
+  editor = null,
   notes,
   onCreateNote,
   onOpenNote,
@@ -179,6 +183,8 @@ export function BookSidePanel({
             chapters={chapters}
             currentChapterId={currentChapterId}
             onSelectChapter={onSelectChapter}
+            editor={editor}
+            onEmptied={() => activeTabRef.current?.focus()}
           />
         </TabPanel>
         <TabPanel id="notes" className="flex min-h-0 flex-1 flex-col">

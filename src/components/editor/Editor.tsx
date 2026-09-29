@@ -528,6 +528,10 @@ export function Editor({
       if (editor && target instanceof Node && editor.view.dom.contains(target)) {
         return;
       }
+      // Portaled dialogs and menus bubble through React, and the Footnotes
+      // list after the text is operated in place: neither hands focus back.
+      if (!(target instanceof Node) || !event.currentTarget.contains(target)) return;
+      if (target instanceof Element && target.closest("[data-footnote-list]")) return;
 
       editor?.chain().focus().run();
     },
@@ -579,7 +583,9 @@ export function Editor({
           }`}
         >
           <EditorContent editor={editor} />
-          {showInlineFootnotes && <FootnoteList editor={editor} startIndex={footnoteStartIndex} />}
+          {showInlineFootnotes && (
+            <FootnoteList editor={editor} startIndex={footnoteStartIndex} readOnly={!editable} />
+          )}
         </div>
       </div>
 

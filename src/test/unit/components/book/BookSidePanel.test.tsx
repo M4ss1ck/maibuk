@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { BookSidePanel } from "@/components/book/BookSidePanel";
@@ -21,8 +21,14 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
+const { footnotesViewProps } = vi.hoisted(() => ({
+  footnotesViewProps: { current: null as null | { onEmptied?: () => void; editor?: unknown } },
+}));
 vi.mock("../../../../components/editor/FootnotesView", () => ({
-  FootnotesView: () => <div data-testid="footnotes-view" />,
+  FootnotesView: (props: { onEmptied?: () => void; editor?: unknown }) => {
+    footnotesViewProps.current = props;
+    return <div data-testid="footnotes-view" />;
+  },
 }));
 vi.mock("../../../../components/book/BookNotesView", () => ({
   BookNotesView: () => <div data-testid="book-notes-view" />,
@@ -49,15 +55,28 @@ describe("BookSidePanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("hands the open Chapter's editor to the Footnotes view", () => {
+    const editor = { isDestroyed: false };
+    render(<BookSidePanel {...baseProps} isOpen activeTab="footnotes" editor={editor as never} />);
+
+    expect(footnotesViewProps.current?.editor).toBe(editor);
+  });
+
+  it("focuses the Footnotes tab when a Delete removed the Book's last Footnote", () => {
+    render(<BookSidePanel {...baseProps} isOpen activeTab="footnotes" />);
+    screen.getByRole("button", { name: "Close" }).focus();
+
+    act(() => footnotesViewProps.current?.onEmptied?.());
+
+    expect(screen.getByRole("tab", { name: "Footnotes" })).toHaveFocus();
+  });
+
   it("shows the footnotes view and marks the footnotes tab selected", () => {
     render(<BookSidePanel {...baseProps} isOpen activeTab="footnotes" />);
 
     expect(screen.getByTestId("footnotes-view")).toBeInTheDocument();
     expect(screen.queryByTestId("book-notes-view")).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Footnotes" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    );
+    expect(screen.getByRole("tab", { name: "Footnotes" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("shows the notes view when the notes tab is active", () => {
@@ -130,7 +149,13 @@ describe("BookSidePanel", () => {
   it("resizes by keyboard arrows through a focusable separator", () => {
     const onResizeKey = vi.fn();
     render(
-      <BookSidePanel {...baseProps} isOpen activeTab="footnotes" width={280} onResizeKey={onResizeKey} />
+      <BookSidePanel
+        {...baseProps}
+        isOpen
+        activeTab="footnotes"
+        width={280}
+        onResizeKey={onResizeKey}
+      />
     );
 
     const handle = screen.getByRole("separator", { name: "Resize panel" });

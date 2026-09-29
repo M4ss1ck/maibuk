@@ -7,6 +7,7 @@ import {
   tabTo,
 } from "../support/keyboard";
 import { DOT_PNG, IMAGE_FIXTURE_DIR } from "../support/fixtures/images";
+import { capture } from "../support/capture";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -394,6 +395,73 @@ test.describe("image menu @wf:editor-image-menu", () => {
   });
 });
 
+/** Inserts a Footnote at the caret from its shortcut and dialog. */
+async function insertFootnote(page: Page, text: string) {
+  await page.keyboard.press("Control+Alt+n");
+  const dialog = page.getByRole("dialog", { name: "Add Footnote" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.type(text);
+  await tabTo(page, dialog.getByRole("button", { name: "Insert Footnote" }));
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
+}
+
+/** The Footnotes list after the Chapter text (the side panel has its own). */
+const footnoteList = (page: Page) =>
+  page.getByRole("main").getByRole("grid", { name: "Footnotes" });
+
+/** Tab stays in the text (it indents), so F6 moves on to the Footnotes after it. */
+async function focusFootnoteList(page: Page) {
+  await expect(editorText(page)).toBeFocused();
+  await page.keyboard.press("F6");
+  await expect(page.getByRole("region", { name: "Footnotes" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(footnoteList(page).getByRole("row").first()).toBeFocused();
+}
+
+/** Opens the focused entry's Item Menu with Shift+F10 and runs one action. */
+async function chooseFootnoteAction(page: Page, footnote: string, action: string) {
+  await page.keyboard.press("Shift+F10");
+  const menu = page.getByRole("menu", { name: `More actions for ${footnote}` });
+  await expect(menu).toBeVisible();
+  await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: action }));
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeHidden();
+  return page.getByRole("dialog", { name: "Edit Footnote" });
+}
+
+/** The title bar's More menu (a narrow toolbar has its own More). */
+const titleBarMore = (page: Page) =>
+  page.getByRole("banner", { name: "Book title bar" }).getByRole("button", { name: "More" });
+
+/** Opens the Book side panel from the More menu and switches to Footnotes. */
+async function openFootnotesTab(page: Page) {
+  await page.keyboard.press("Escape");
+  // The title bar sits above the Chapter list in document order, so Shift+Tab
+  // walks back into the header to the More overflow menu.
+  await tabTo(page, titleBarMore(page), { max: 60, backwards: true });
+  return openFootnotesTabFromMore(page);
+}
+
+/** From the focused More menu button, opens the Book side panel on Footnotes. */
+async function openFootnotesTabFromMore(page: Page) {
+  await expect(titleBarMore(page)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await tabTo(page, page.getByRole("button", { name: "Book Notes" }), { max: 10 });
+  await page.keyboard.press("Enter");
+
+  const panel = page.getByRole("complementary", { name: "Book side panel" });
+  await expect(panel).toBeVisible();
+  // Focus lands inside the panel: on its active tab (Notes) on a wide screen,
+  // on its first control when it opens as a phone dialog. Its tabs are a React
+  // Aria tab list, so an arrow key moves between them and switches the panel.
+  await expectFocusWithin(panel);
+  await tabTo(page, panel.getByRole("tab", { name: "Notes", exact: true }), { max: 5 });
+  await page.keyboard.press("ArrowLeft");
+  await expect(panel.getByRole("tab", { name: "Footnotes", exact: true })).toBeFocused();
+  return panel;
+}
+
 test.describe("footnotes @wf:editor-footnote", () => {
   test("the dialog inserts a Footnote that the Footnotes panel lists, and it persists", async ({
     page,
@@ -419,30 +487,9 @@ test.describe("footnotes @wf:editor-footnote", () => {
 
   test("the Footnotes panel lists the inserted Footnote", async ({ page }) => {
     await openEditor(page);
-    await page.keyboard.press("Control+Alt+n");
-    const dialog = page.getByRole("dialog", { name: "Add Footnote" });
-    await expect(dialog).toBeVisible();
-    await page.keyboard.type("The lamp was trimmed at midnight.");
-    await tabTo(page, dialog.getByRole("button", { name: "Insert Footnote" }));
-    await page.keyboard.press("Enter");
-    await expect(dialog).toBeHidden();
+    await insertFootnote(page, "The lamp was trimmed at midnight.");
 
-    await page.keyboard.press("Escape");
-    // The title bar sits above the Chapter list in document order, so Shift+Tab
-    // walks back into the header to the More overflow menu.
-    await tabTo(page, page.getByRole("button", { name: "More" }), { max: 60, backwards: true });
-    await page.keyboard.press("Enter");
-    await tabTo(page, page.getByRole("button", { name: "Book Notes" }), { max: 10 });
-    await page.keyboard.press("Enter");
-
-    const panel = page.getByRole("complementary", { name: "Book side panel" });
-    await expect(panel).toBeVisible();
-    // The panel opens with its active tab (Notes) focused. Its tabs are a
-    // React Aria tab list, so an arrow key moves between them and switches the
-    // visible panel automatically.
-    await expect(panel.getByRole("tab", { name: "Notes", exact: true })).toBeFocused();
-    await page.keyboard.press("ArrowLeft");
-    await expect(panel.getByRole("tab", { name: "Footnotes", exact: true })).toBeFocused();
+    const panel = await openFootnotesTab(page);
     await expect(panel).toContainText("The lamp was trimmed at midnight.");
   });
 
@@ -457,20 +504,195 @@ test.describe("footnotes @wf:editor-footnote", () => {
     await expect(editorText(page).locator("sup.footnote-ref")).toHaveCount(0);
   });
 
-  test.fail(
-    "edit and delete a Footnote from the list",
-    {
-      annotation: {
-        type: "issue",
-        // Editing and deleting from the list is not built; the interaction is undecided.
-        description: "https://github.com/M4ss1ck/maibuk/issues/217",
-      },
-    },
-    async ({ page }) => {
-      await openEditor(page);
-      await expect(page.getByRole("button", { name: "Edit footnote" })).toBeVisible();
+  test("edit and delete a Footnote from the Item Menu of the list after the text; it persists", async ({
+    page,
+  }) => {
+    // Tall enough that the list after the text is on screen for the capture.
+    await page.setViewportSize({ width: 1280, height: 1100 });
+    await openEditor(page);
+    // End before each insert: WebKit can leave the caret before a new Footnote.
+    await page.keyboard.press("End");
+    await insertFootnote(page, "The lamp was trimmed at midnight.");
+    await page.keyboard.press("End");
+    await insertFootnote(page, "The log ends here.");
+    await capture(page, "footnote-list-after-text", {
+      around: [page.locator(".footnote-section")],
+    });
+
+    const list = footnoteList(page);
+    const first = list.getByRole("row", { name: /^1\. The lamp/ });
+    const second = list.getByRole("row", { name: /^2\. The log/ });
+    await focusFootnoteList(page);
+    await expect(first).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(second).toBeFocused();
+    await capture(page, "footnote-list-entry-focused", {
+      around: [page.getByRole("region", { name: "Footnotes" })],
+    });
+
+    const dialog = await chooseFootnoteAction(page, "Footnote 2", "Edit Footnote");
+    const content = dialog.getByRole("textbox", { name: "Footnote Content" });
+    await expect(content).toBeFocused();
+    await expect(content).toHaveValue("The log ends here.");
+    await expectTabContained(page, dialog);
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("The log ends at dawn.");
+    await tabTo(page, dialog.getByRole("button", { name: "Save" }));
+    await page.keyboard.press("Enter");
+
+    await expect(dialog).toBeHidden();
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveText(["1", "2"]);
+    const edited = list.getByRole("row", { name: /^2\. The log ends at dawn\.$/ });
+    await expect(edited).toBeFocused();
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveCount(2);
+
+    await page.keyboard.press("ArrowUp");
+    await expect(first).toBeFocused();
+    await chooseFootnoteAction(page, "Footnote 1", "Delete Footnote");
+
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveCount(1);
+    const renumbered = list.getByRole("row", { name: /^1\. The log ends at dawn\.$/ });
+    await expect(renumbered).toBeFocused();
+    // The reference in the text is renumbered too.
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveText(["1"]);
+
+    await saveNow(page);
+    await page.reload();
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveCount(1);
+    await expect(footnoteList(page).getByRole("row")).toHaveText([/^1\.The log ends at dawn\./]);
+  });
+
+  test("Escape in the Edit dialog changes nothing and returns focus to the entry", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await insertFootnote(page, "The lamp was trimmed at midnight.");
+    await focusFootnoteList(page);
+    const entry = footnoteList(page).getByRole("row", { name: /^1\. The lamp/ });
+    await expect(entry).toBeFocused();
+
+    const dialog = await chooseFootnoteAction(page, "Footnote 1", "Edit Footnote");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("Discarded draft");
+    await page.keyboard.press("Escape");
+
+    await expect(dialog).toBeHidden();
+    await expect(entry).toBeFocused();
+    await expect(entry).toHaveAccessibleName("1. The lamp was trimmed at midnight.");
+  });
+
+  test("Undo restores a Footnote deleted from the list, with its text", async ({ page }) => {
+    await openEditor(page);
+    await insertFootnote(page, "The lamp was trimmed at midnight.");
+    await focusFootnoteList(page);
+    await chooseFootnoteAction(page, "Footnote 1", "Delete Footnote");
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveCount(0);
+    // Deleting the last entry hands focus back to the text.
+    await expect(editorText(page)).toBeFocused();
+
+    await page.keyboard.press("ControlOrMeta+z");
+
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveCount(1);
+    await expect(
+      footnoteList(page).getByRole("row", { name: "1. The lamp was trimmed at midnight." })
+    ).toBeVisible();
+  });
+
+  test("edit and delete a Footnote from the side panel's Footnotes tab", async ({ page }) => {
+    await openEditor(page);
+    await insertFootnote(page, "The lamp was trimmed at midnight.");
+    const panel = await openFootnotesTab(page);
+    await capture(page, "footnotes-side-panel", { around: [panel] });
+
+    const grid = panel.getByRole("grid", { name: "Footnotes" });
+    const entry = grid.getByRole("row", { name: /^1\. The lamp/ });
+    await tabTo(page, entry, { max: 5 });
+
+    const dialog = await chooseFootnoteAction(page, "Footnote 1", "Edit Footnote");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("The lamp burned until dawn.");
+    await tabTo(page, dialog.getByRole("button", { name: "Save" }));
+    await page.keyboard.press("Enter");
+
+    await expect(dialog).toBeHidden();
+    const edited = grid.getByRole("row", { name: "1. The lamp burned until dawn." });
+    await expect(edited).toBeFocused();
+    // The list after the text shows the change too: both read the same Footnote.
+    await expect(
+      footnoteList(page).getByRole("row", { name: "1. The lamp burned until dawn." })
+    ).toBeVisible();
+
+    await chooseFootnoteAction(page, "Footnote 1", "Delete Footnote");
+    await expect(panel).toContainText("No footnotes in this book yet.");
+    await expect(panel.getByRole("tab", { name: "Footnotes", exact: true })).toBeFocused();
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveCount(0);
+  });
+});
+
+test.describe("footnotes on a phone @wf:editor-footnote", () => {
+  // A coarse pointer shows each entry's ⋯ button; the side panel opens as a dialog.
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test("each entry shows its ⋯ Item Menu, and the side panel edits and deletes", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await page.keyboard.press("End");
+    await insertFootnote(page, "The lamp was trimmed at midnight.");
+    await page.keyboard.press("End");
+    await insertFootnote(page, "The log ends here.");
+
+    const inline = footnoteList(page);
+    const more = inline.getByRole("button", { name: "More actions for Footnote 2" });
+    await expect(more).toBeVisible();
+    await expect(inline.getByRole("button", { name: "Edit Footnote" }).first()).toBeHidden();
+    await focusFootnoteList(page);
+    await page.keyboard.press("ArrowDown");
+    await expect(inline.getByRole("row", { name: /^2\. The log/ })).toBeFocused();
+    // The last entry's ⋯ clears the floating Dictation controls, where the
+    // browser offers Dictation (WebKit here does not).
+    const controls = page.getByRole("button", { name: "Dictation settings" });
+    if ((await controls.count()) > 0) {
+      const moreBox = await more.boundingBox();
+      const controlsBox = await controls.boundingBox();
+      expect(moreBox && controlsBox && moreBox.y + moreBox.height <= controlsBox.y - 8).toBe(true);
     }
-  );
+    await capture(page, "footnote-list-phone", {
+      around: [page.getByRole("region", { name: "Footnotes" })],
+    });
+
+    // On a phone Escape opens the Chapters dialog; F6 moves on to the title bar.
+    await page.keyboard.press("F6");
+    await expect(page.getByRole("banner", { name: "Book title bar" })).toBeFocused();
+    await tabTo(page, titleBarMore(page), { max: 10 });
+    const panel = await openFootnotesTabFromMore(page);
+    await expect(panel).toBeVisible();
+    const grid = panel.getByRole("grid", { name: "Footnotes" });
+    await expect(grid.getByRole("button", { name: "More actions for Footnote 1" })).toBeVisible();
+    const entry = grid.getByRole("row", { name: /^1\. The lamp/ });
+    await tabTo(page, entry, { max: 5 });
+    await page.keyboard.press("Shift+F10");
+    const menu = page.getByRole("menu", { name: "More actions for Footnote 1" });
+    await expect(menu).toBeVisible();
+    await capture(page, "footnotes-side-panel-phone-menu");
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    // Escape hands focus back to the entry (or its ⋯ button), never to the page.
+    await expectFocusWithin(entry);
+
+    const dialog = await chooseFootnoteAction(page, "Footnote 1", "Edit Footnote");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("The lamp burned until dawn.");
+    await tabTo(page, dialog.getByRole("button", { name: "Save" }));
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    const edited = grid.getByRole("row", { name: "1. The lamp burned until dawn." });
+    await expect(edited).toBeFocused();
+
+    await chooseFootnoteAction(page, "Footnote 1", "Delete Footnote");
+    await expect(grid.getByRole("row", { name: "1. The log ends here." })).toBeFocused();
+    await expect(editorText(page).locator("sup.footnote-ref")).toHaveText(["1"]);
+  });
 });
 
 test.describe("scene breaks @wf:editor-scene-break", () => {
