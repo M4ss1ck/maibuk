@@ -8,6 +8,7 @@
 import { normalizePhrase, phraseWords } from "@/features/dictation/normalize";
 import {
   defaultSpokenPunctuationLanguageSettings,
+  defaultTriggers,
   entriesFor,
   findAliasRefusal,
   type AliasRefusal,
@@ -78,7 +79,9 @@ function voiceConflict(
   // The escape word turns the rest of a line into text, and Spoken
   // Punctuation phrases are never Commands, switched off or not.
   for (const entry of entriesFor(language)) {
-    const phrases = [...entry.phrases, ...(settings.aliases[entry.id] ?? [])].map(normalizePhrase);
+    const phrases = [...defaultTriggers(entry), ...(settings.aliases[entry.id] ?? [])].map(
+      normalizePhrase
+    );
     const literal = entry.actions.some((action) => action.kind === "literal");
     if (literal) {
       const word = phrases.find(

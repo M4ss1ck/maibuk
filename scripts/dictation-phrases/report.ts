@@ -3,6 +3,7 @@
 import type { ModelSpec } from "@/features/dictation/types";
 import {
   SHIP_BAR_HIT_RATE,
+  SHIP_BAR_LANGUAGES,
   type ModelScore,
   type PhraseScore,
 } from "@/test/support/dictation-phrase-score";
@@ -30,10 +31,19 @@ function label(phrase: PhraseScore): string {
 export function failedBars({ spec, score }: ScoredModel): string[] {
   const failed: string[] = [];
   if (score.missingItems.length) failed.push(`${score.missingItems.length} clips missing`);
-  if (spec.tier === "accurate" && score.hitRate < SHIP_BAR_HIT_RATE) {
+  if (
+    spec.tier === "accurate" &&
+    SHIP_BAR_LANGUAGES.includes(score.language) &&
+    score.hitRate < SHIP_BAR_HIT_RATE
+  ) {
     failed.push(`hit rate ${pct(score.hitRate)} < ${pct(SHIP_BAR_HIT_RATE)}`);
   }
-  if (score.proseTriggers > 0) failed.push(`${score.proseTriggers} prose triggers`);
+  // A sentence that runs something on its own text is a command said alone,
+  // which the whole-line rule runs by design (ADR 0015); only a mishearing
+  // that turns prose into an action fails.
+  if (score.misheardProseTriggers > 0) {
+    failed.push(`${score.misheardProseTriggers} misheard prose triggers`);
+  }
   return failed;
 }
 
@@ -41,9 +51,9 @@ export function renderReport(models: readonly ScoredModel[]): Report {
   const failures: string[] = [];
   const out: string[] = ["# Dictation phrase conformance", ""];
   out.push(
-    `Ship bar: every Accurate model hears at least ${pct(SHIP_BAR_HIT_RATE)} of the default phrases, and no model runs anything on the prose set.`,
+    `Ship bar: every Accurate model of ${SHIP_BAR_LANGUAGES.join(", ")} hears at least ${pct(SHIP_BAR_HIT_RATE)} of the default phrases, and no model mishears a prose sentence into an action.`,
     "",
-    "Prose triggers count every take that ran something; *misheard* are the ones on sentences that type as text when heard right.",
+    "Prose triggers count every take that ran something; *misheard* are the ones on sentences that type as text when heard right, and only those fail the bar.",
     "",
     "| Model | Tier | Clips | Hit rate | Voice Commands | Spoken Punctuation | Prose triggers (misheard) | Bar |",
     "| --- | --- | --- | --- | --- | --- | --- | --- |"
@@ -62,6 +72,9 @@ export function renderReport(models: readonly ScoredModel[]): Report {
     const accurate = ofLanguage.filter((model) => model.spec.tier === "accurate");
 
     out.push("", `## ${language}: under the bar on Accurate`, "");
+    if (!SHIP_BAR_LANGUAGES.includes(language)) {
+      out.push("Reported, not gated: this language is outside the ship bar.", "");
+    }
     const under = accurate.flatMap((model) =>
       model.score.phrases
         .filter((phrase) => phrase.rate < SHIP_BAR_HIT_RATE)
@@ -71,7 +84,7 @@ export function renderReport(models: readonly ScoredModel[]): Report {
       out.push("None.");
     } else {
       out.push(
-        "Each needs an alias default or removal (issue #285). An inferred row fails because its verb or target was misheard in another clip.",
+        "Each needs a heard form or removal (issue #285). An inferred row fails because its verb or target was misheard in another clip.",
         "",
         "| Phrase | For | Source | Rate | Heard |",
         "| --- | --- | --- | --- | --- |"

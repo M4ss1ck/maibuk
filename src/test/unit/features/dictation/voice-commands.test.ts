@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { EDITOR_COMMANDS, VOICE_RUNNERS } from "@/components/editor/editor-commands";
 import { MODEL_CATALOG } from "@/features/dictation/catalog";
-import { normalizePhrase } from "@/features/dictation/normalize";
-import { entriesFor } from "@/features/dictation/spoken-punctuation";
+import { normalizePhrase, phraseWords } from "@/features/dictation/normalize";
+import { defaultTriggers, entriesFor } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
   VOICE_VOCABULARY,
   buildVoiceCommandTable,
+  heardForms,
   matchVoiceCommand,
+  rewriteHeard,
   voiceCommandPhrases,
   voiceEligibleCommands,
   type VoiceCommandTable,
@@ -223,5 +225,76 @@ describe("matchVoiceCommand()", () => {
     expect(match("es", "nuevo párrafo")).toBeNull();
     expect(match("en", "new paragraph")).toBeNull();
     expect(match("en", "scratch that")).toBeNull();
+  });
+});
+
+describe("Voice Command heard forms", () => {
+  const esTable = buildVoiceCommandTable("es");
+  const matchEs = (line: string) => matchVoiceCommand(esTable, phraseWords(line));
+
+  it("runs the Command a misheard default still means", () => {
+    expect(matchEs("quitad negrita")).toEqual({ id: "editor.bold", polarity: "off" });
+    expect(matchEs("poner una grita")).toEqual({ id: "editor.bold", polarity: "on" });
+    expect(matchEs("poner su brallado")).toEqual({ id: "editor.underline", polarity: "on" });
+    expect(matchEs("central izquierda")).toEqual({ id: "editor.alignLeft", polarity: null });
+    expect(matchEs("detened dictado")).toEqual({ id: "dictation.stop", polarity: null });
+  });
+
+  it("keeps prose prose", () => {
+    expect(matchEs("estación central")).toBeNull();
+    expect(matchEs("una grita fuerte")).toBeNull();
+  });
+
+  it("lets the raw line win over a rewrite", () => {
+    // Rewritten, "quitad negrita" is bold's "quitar negrita"; as said, it is
+    // the author's own italic phrase, and that runs first.
+    const table = buildVoiceCommandTable("es", { "editor.italic": { es: ["quitad negrita"] } });
+    expect(matchVoiceCommand(table, phraseWords("quitad negrita"))?.id).toBe("editor.italic");
+  });
+
+  it("rewriteHeard prefers the longest form and leaves other words alone", () => {
+    const forms = heardForms("es");
+    const lengths = forms.map((form) => form.from.length);
+    expect(lengths).toEqual([...lengths].sort((a, b) => b - a));
+    expect(rewriteHeard(forms, phraseWords("hola su brallado mundo"))).toEqual([
+      "hola",
+      "subrayado",
+      "mundo",
+    ]);
+    // The two-word form is taken before a shorter form that starts it.
+    const overlapping = [
+      { from: ["su", "brallado"], to: ["subrayado"] },
+      { from: ["su"], to: ["suyo"] },
+    ];
+    expect(rewriteHeard(overlapping, ["su", "brallado"])).toEqual(["subrayado"]);
+  });
+
+  it("keeps every heard key clear of a default, a target, a filler, and Spoken Punctuation", () => {
+    for (const language of LANGUAGES) {
+      const vocabulary = VOICE_VOCABULARY[language];
+      const verbs = new Set(
+        VERB_CLASSES.flatMap((cls) => vocabulary.verbs[cls].phrases.map(normalizePhrase))
+      );
+      const fillers = new Set(vocabulary.fillers.map(normalizePhrase));
+      const targets = new Set(
+        voiceEligibleCommands().flatMap((id) =>
+          ((COMMANDS[id] as CommandDef).voice?.targets[language] ?? []).map(normalizePhrase)
+        )
+      );
+      const punctuation = new Set(
+        entriesFor(language).flatMap((entry) => defaultTriggers(entry).map(normalizePhrase))
+      );
+      for (const [heard, meant] of Object.entries(vocabulary.heard)) {
+        const key = normalizePhrase(heard);
+        expect(verbs.has(key), `${language}: ${heard}`).toBe(false);
+        expect(fillers.has(key), `${language}: ${heard}`).toBe(false);
+        expect(targets.has(key), `${language}: ${heard}`).toBe(false);
+        expect(punctuation.has(key), `${language}: ${heard}`).toBe(false);
+        const value = normalizePhrase(meant);
+        expect(verbs.has(value) || targets.has(value), `${language}: ${heard} -> ${meant}`).toBe(
+          true
+        );
+      }
+    }
   });
 });

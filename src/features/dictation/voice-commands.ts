@@ -43,6 +43,14 @@ export interface VoiceVocabulary {
   verbs: Readonly<Record<VoiceVerbClass, VoiceVerbClassSpec>>;
   /** Single words the match skips between the verb and the target ("poner en negrita"). */
   fillers: readonly string[];
+  /**
+   * What Dictation Models write for a default verb or target when they mishear
+   * it the same way every time, heard → default ("quitad" → "quitar"). A line
+   * is tried as heard first, then with these rewritten, so prose is still
+   * protected by the whole-line rule (#285). Not phrases: the Shortcut Editor
+   * never lists them.
+   */
+  heard: Readonly<Record<string, string>>;
 }
 
 /**
@@ -88,6 +96,7 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
     // "the" and "a" are not fillers: they turned short sentences ("Use the
     // code.", "Center the text.", "Stop the list.") into Commands.
     fillers: ["to", "in"],
+    heard: {},
   },
   es: {
     verbs: {
@@ -120,6 +129,19 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
       dictation: { phrases: ["parar", "detener"], polarity: null },
     },
     fillers: ["la", "el", "las", "los", "en", "a", "al"],
+    // From the phrase conformance recordings (#285): the models turn
+    // infinitives into vosotros imperatives and split or bend some targets.
+    heard: {
+      quitad: "quitar",
+      desactivad: "desactivar",
+      detened: "detener",
+      inicial: "iniciar",
+      central: "centrar",
+      "una grita": "negrita",
+      cursivo: "cursiva",
+      "su brallado": "subrayado",
+      "su rayada": "subrayada",
+    },
   },
 };
 
@@ -164,6 +186,44 @@ export interface VoiceCommandTable {
   exact: ReadonlyMap<string, readonly VoiceCommandRun[]>;
   /** The author's phrases that are a default verb and target of their own Command. */
   pinned: readonly VoicePinnedEntry[];
+  /** The language's heard forms, longest first. */
+  heard: readonly HeardForm[];
+}
+
+/** One heard form as normalized words: what the model writes, and the default it means. */
+export interface HeardForm {
+  from: readonly string[];
+  to: readonly string[];
+}
+
+/** A language's heard forms as normalized words, longest first so "su rayada" beats a shorter one. */
+export function heardForms(language: DictationLanguage): HeardForm[] {
+  return Object.entries(VOICE_VOCABULARY[language].heard)
+    .map(([from, to]) => ({ from: phraseWords(from), to: phraseWords(to) }))
+    .filter((form) => form.from.length > 0 && form.to.length > 0)
+    .sort((a, b) => b.from.length - a.from.length);
+}
+
+/** The words with every heard form replaced by its default, left to right. */
+export function rewriteHeard(forms: readonly HeardForm[], words: readonly string[]): string[] {
+  if (forms.length === 0) return [...words];
+  const out: string[] = [];
+  let at = 0;
+  while (at < words.length) {
+    const form = forms.find(
+      (candidate) =>
+        at + candidate.from.length <= words.length &&
+        candidate.from.every((word, offset) => words[at + offset] === word)
+    );
+    if (form) {
+      out.push(...form.to);
+      at += form.from.length;
+    } else {
+      out.push(words[at]);
+      at += 1;
+    }
+  }
+  return out;
 }
 
 /**
@@ -408,6 +468,7 @@ export function buildVoiceCommandTable(
     ),
     exact,
     pinned,
+    heard: heardForms(language),
   };
 }
 
@@ -430,6 +491,17 @@ function fillersThenTarget(
  * takes the first; the conflict check needs them all.
  */
 export function* voiceCommandMatches(
+  table: VoiceCommandTable,
+  words: readonly string[]
+): Generator<VoiceCommandRun> {
+  if (words.length < MIN_VOICE_PHRASE_WORDS) return;
+  yield* matchesOfWords(table, words);
+  // The line as the author meant it, when the model misheard a default word.
+  const rewritten = rewriteHeard(table.heard, words);
+  if (rewritten.join(" ") !== words.join(" ")) yield* matchesOfWords(table, rewritten);
+}
+
+function* matchesOfWords(
   table: VoiceCommandTable,
   words: readonly string[]
 ): Generator<VoiceCommandRun> {

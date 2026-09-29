@@ -38,6 +38,7 @@ export const ES_ENTRIES: readonly SpokenPunctuationEntry[] = [
   {
     id: "signoDeInterrogacion",
     phrases: ["signo de interrogación", "cierra interrogación"],
+    heard: { "cierre interrogación": "cierra interrogación" },
     actions: [{ kind: "mark", mark: "?" }],
     punctuation: true,
   },
@@ -50,6 +51,7 @@ export const ES_ENTRIES: readonly SpokenPunctuationEntry[] = [
   {
     id: "signoDeExclamacion",
     phrases: ["signo de exclamación", "cierra exclamación"],
+    heard: { "cierre exclamación": "cierra exclamación" },
     actions: [{ kind: "mark", mark: "!" }],
     punctuation: true,
   },

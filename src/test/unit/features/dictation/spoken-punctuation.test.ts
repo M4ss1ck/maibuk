@@ -6,6 +6,7 @@ import {
   catalogCapabilities,
   defaultEntryEnabled,
   defaultSpokenPunctuationSettings,
+  defaultTriggers,
   entriesFor,
   findAliasRefusal,
   isEntryEnabled,
@@ -59,6 +60,45 @@ describe("Spoken Punctuation entries", () => {
       expect(DICTATION_LANGUAGES, `missing Spoken Punctuation for ${language}`).toContain(language);
       expect(entriesFor(language).length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("heard forms", () => {
+  it("makes every heard value one of the entry's own phrases", () => {
+    for (const language of DICTATION_LANGUAGES) {
+      for (const entry of entriesFor(language)) {
+        const phrases = new Set(entry.phrases.map(normalizePhrase));
+        for (const [heard, meant] of Object.entries(entry.heard ?? {})) {
+          expect(phrases.has(normalizePhrase(meant)), `${entry.id}: ${heard}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("keeps every heard key clear of any entry's phrases", () => {
+    for (const language of DICTATION_LANGUAGES) {
+      const phrases = new Set(
+        entriesFor(language).flatMap((entry) => entry.phrases.map(normalizePhrase))
+      );
+      for (const entry of entriesFor(language)) {
+        for (const heard of Object.keys(entry.heard ?? {})) {
+          expect(phrases.has(normalizePhrase(heard)), `${entry.id}: ${heard}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("refuses a heard key added as an alias, as a duplicate of its own entry", () => {
+    const settings = defaultSpokenPunctuationSettings().es;
+    expect(
+      findAliasRefusal({ language: "es", entryId: "coma", alias: "cierre interrogación", settings })
+    ).toEqual({ kind: "duplicate", entryId: "signoDeInterrogacion" });
+  });
+
+  it("lists only the default phrases in Settings while defaultTriggers adds the heard form", () => {
+    const entry = entriesFor("es").find((candidate) => candidate.id === "signoDeInterrogacion")!;
+    expect(defaultTriggers(entry)).toContain("cierre interrogación");
+    expect(entry.phrases).not.toContain("cierre interrogación");
   });
 });
 

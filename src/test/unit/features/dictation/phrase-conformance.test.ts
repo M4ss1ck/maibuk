@@ -250,4 +250,33 @@ describe("scoreModel()", () => {
   it("an English period stays text under the shipped defaults", () => {
     expect(proseTriggers(["I waited for a period of time"], "en", PUNCTUATES)).toBe(false);
   });
+
+  it("hears a vosotros imperative as the default verb it means", () => {
+    const clips = perfectClips("es").map((clip) =>
+      clip.itemId === "v-quitar-negrita" ? { ...clip, finals: ["quitad negrita"] } : clip
+    );
+    const score = scoreModel({ language: "es", capabilities: NO_PUNCTUATION, clips });
+    const rate = (phrase: string) => score.phrases.find((row) => row.row.phrase === phrase)?.rate;
+    expect(rate("quitar negrita")).toBe(1);
+    // "quitar" was heard, and "cursiva" was heard in its own clip.
+    expect(rate("quitar cursiva")).toBe(1);
+  });
+
+  it("counts a misheard close-question phrase once, as its own phrase", () => {
+    const item = phraseItems("es").find((entry) => entry.say.startsWith("abre interrogación"))?.id;
+    const clips = perfectClips("es").map((clip) =>
+      clip.itemId === item
+        ? {
+            ...clip,
+            finals: [
+              "abre interrogación vienes cierre interrogación claro signo de interrogación",
+            ],
+          }
+        : clip
+    );
+    const score = scoreModel({ language: "es", capabilities: NO_PUNCTUATION, clips });
+    const rate = (phrase: string) => score.phrases.find((row) => row.row.phrase === phrase)?.rate;
+    expect(rate("cierra interrogación")).toBe(1);
+    expect(rate("signo de interrogación")).toBe(1);
+  });
 });

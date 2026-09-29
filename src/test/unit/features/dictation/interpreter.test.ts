@@ -164,6 +164,45 @@ describe("buildPhraseTable()", () => {
   });
 });
 
+describe("interpret() heard Spoken Punctuation", () => {
+  const noPunctuation: Capabilities = { casing: false, punctuation: false, streaming: true };
+
+  it("inserts the mark a misheard close-question phrase means", () => {
+    const { result, spokenPunctuationCount } = interpret({
+      line: "Cierre interrogación",
+      before: "",
+      capabilities: noPunctuation,
+      table: buildPhraseTable("es", { capabilities: noPunctuation }),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(result).toEqual({
+      kind: "edits",
+      edits: [
+        { kind: "opener", mark: "¿" },
+        { kind: "text", text: "?" },
+      ],
+    });
+    expect(spokenPunctuationCount).toBe(1);
+  });
+
+  it("stops acting when the entry is switched off", () => {
+    const settings = defaultSpokenPunctuationLanguageSettings();
+    settings.entries.signoDeInterrogacion = false;
+    const { result, spokenPunctuationCount } = interpret({
+      line: "Cierre interrogación",
+      before: "",
+      capabilities: noPunctuation,
+      table: buildPhraseTable("es", { capabilities: noPunctuation, settings }),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Cierre interrogación" }],
+    });
+    expect(spokenPunctuationCount).toBe(0);
+  });
+});
+
 describe("interpret() fixtures", () => {
   for (const file of fixtures) {
     describe(file.language, () => {

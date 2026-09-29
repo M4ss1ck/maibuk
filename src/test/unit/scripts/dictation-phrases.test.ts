@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { DictationLanguage } from "@/features/dictation/types";
 import { scoreModel, type Clip } from "@/test/support/dictation-phrase-score";
 import { phraseItems } from "@/test/support/dictation-phrase-set";
 import {
@@ -86,17 +87,21 @@ describe("ClipCutter", () => {
   });
 });
 
-function model(tier: "fast" | "accurate", clips: Clip[]): ScoredModel {
+function model(
+  tier: "fast" | "accurate",
+  clips: Clip[],
+  language: DictationLanguage = "en"
+): ScoredModel {
   return {
-    spec: { id: `moonshine-${tier}-en`, tier, languages: ["en"] },
+    spec: { id: `moonshine-${tier}-${language}`, tier, languages: [language] },
     clipCount: clips.length,
-    score: scoreModel({ language: "en", capabilities: PUNCTUATES, clips }),
+    score: scoreModel({ language, capabilities: PUNCTUATES, clips }),
   };
 }
 
 /** Every clip heard as read, except the prose that fires on its own text. */
-function cleanClips(): Clip[] {
-  return phraseItems("en").map((item) => ({
+function cleanClips(language: DictationLanguage = "en"): Clip[] {
+  return phraseItems(language).map((item) => ({
     itemId: item.id,
     finals: [item.kind === "prose" ? "the weather was fine" : item.say],
   }));
@@ -109,16 +114,29 @@ describe("renderReport()", () => {
     expect(report.markdown).toContain(
       "| moonshine-accurate-en | accurate | 55 | 100% | 100% | 100% | 0 (0) | pass |"
     );
-    expect(report.markdown).toContain("## en: under the bar on Accurate\n\nNone.");
+    expect(report.markdown).toContain(
+      "## en: under the bar on Accurate\n\nReported, not gated: this language is outside the ship bar.\n\nNone."
+    );
   });
 
   it("fails an Accurate model under the bar and lists the phrases", () => {
+    const clips = cleanClips("es").map((clip) =>
+      clip.itemId.startsWith("v-") ? { ...clip, finals: ["mumble"] } : clip
+    );
+    const report = renderReport([model("accurate", clips, "es")]);
+    expect(report.failures.some((f) => /hit rate \d+% < 80%/.test(f))).toBe(true);
+    expect(report.markdown).toContain("| poner negrita | editor.bold | recorded | 0% | mumble |");
+  });
+
+  it("reports an English Accurate model under the bar without gating it", () => {
     const clips = cleanClips().map((clip) =>
       clip.itemId.startsWith("v-") ? { ...clip, finals: ["mumble"] } : clip
     );
     const report = renderReport([model("accurate", clips)]);
-    expect(report.failures.some((f) => /hit rate \d+% < 80%/.test(f))).toBe(true);
-    expect(report.markdown).toContain("| make bold | editor.bold | recorded | 0% | mumble |");
+    expect(report.failures).toEqual([]);
+    expect(report.markdown).toContain(
+      "Reported, not gated: this language is outside the ship bar."
+    );
   });
 
   it("does not hold a Fast model to the hit-rate bar", () => {
@@ -128,13 +146,29 @@ describe("renderReport()", () => {
     expect(renderReport([model("fast", clips)]).failures).toEqual([]);
   });
 
-  it("fails every model with a prose trigger, and one with missing clips", () => {
+  it("does not fail a prose sentence that fires on its own text", () => {
+    const clips = cleanClips().map((clip) =>
+      clip.itemId === "x-use-code" ? { ...clip, finals: ["Use code."] } : clip
+    );
+    expect(renderReport([model("fast", clips)]).failures).toEqual([]);
+  });
+
+  it("fails a prose sentence misheard into an action", () => {
+    const clips = cleanClips().map((clip) =>
+      clip.itemId === "x-make-it-bold" ? { ...clip, finals: ["Make bold."] } : clip
+    );
+    expect(renderReport([model("fast", clips)]).failures).toEqual([
+      "moonshine-fast-en: 1 misheard prose triggers",
+    ]);
+  });
+
+  it("fails every model with a misheard prose trigger, and one with missing clips", () => {
     const clips = cleanClips().map((clip) =>
       clip.itemId === "x-make-it-bold" ? { ...clip, finals: ["Make bold."] } : clip
     );
     const report = renderReport([model("fast", clips), model("accurate", cleanClips().slice(1))]);
     expect(report.failures).toEqual([
-      "moonshine-fast-en: 1 prose triggers",
+      "moonshine-fast-en: 1 misheard prose triggers",
       "moonshine-accurate-en: 1 clips missing",
     ]);
     expect(report.markdown).toContain("## Failed bars");
