@@ -1,13 +1,17 @@
 import { saveBinaryFile } from "@/features/export/save-binary-file";
 import { IS_WEB, getDialog, getFileSystem, getWebDialog } from "@/lib/platform";
+import type { CustomVoiceCommands } from "@/features/dictation/voice-commands";
 import { serializeShortcutFile, type CustomShortcuts } from "@/lib/shortcut-resolve";
 
 export const SHORTCUT_FILE_NAME = "maibuk-shortcuts.json";
 const JSON_FILTER = { name: "JSON", extensions: ["json"] };
 
 /** Saves a Shortcut File; false when the author cancelled the desktop dialog. */
-export function saveShortcutFile(custom: CustomShortcuts): Promise<boolean> {
-  const bytes = new TextEncoder().encode(serializeShortcutFile(custom));
+export function saveShortcutFile(
+  custom: CustomShortcuts,
+  voice: CustomVoiceCommands = {}
+): Promise<boolean> {
+  const bytes = new TextEncoder().encode(serializeShortcutFile(custom, voice));
   return saveBinaryFile(SHORTCUT_FILE_NAME, bytes, "application/json", JSON_FILTER);
 }
 

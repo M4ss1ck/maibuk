@@ -442,7 +442,7 @@ The switch that turns off, on this device, every Shortcut pressed without a modi
 _UI_: en "Single-key shortcuts" / es "Atajos de una tecla"
 
 **Shortcut File**:
-A file holding the author's Custom Shortcuts, to carry them to another device.
+A file holding the author's Custom Shortcuts and custom Voice Commands, to carry them to another device.
 _UI_: en "Save to file", "Load from file" / es "Guardar en archivo", "Cargar desde archivo"
 _Avoid_: export, import (reserved for Library content)
 
@@ -487,7 +487,8 @@ _UI_: en "Spoken punctuation" / es "Puntuación dictada"
 _Avoid_: voice command (for these)
 
 **Voice Command**:
-A spoken phrase, said on its own, that runs a Command instead of inserting text, such as "poner negrita". A second way to run a Command, next to its Shortcuts; custom ones stay on this device. (ADR 0014)
+A spoken phrase, said on its own, that runs a Command instead of inserting text, such as "poner negrita". A second way to run a Command, next to its Shortcuts; the author edits a Command's phrases per Dictation Language in the Shortcut Editor, and custom ones stay on this device. (ADR 0014)
+_UI_: en "Voice commands" / es "Comandos de voz"
 _Avoid_: voice shortcut
 
 **Dictation Vocabulary**:

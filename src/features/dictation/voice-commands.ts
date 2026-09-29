@@ -7,7 +7,14 @@
 // matched, and which default phrases a Command expands to.
 import { normalizeWord, phraseWords } from "@/features/dictation/normalize";
 import type { DictationLanguage } from "@/features/dictation/types";
-import { COMMAND_IDS, COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
+import {
+  COMMAND_IDS,
+  COMMAND_RENAMES,
+  COMMANDS,
+  isCommandId,
+  type CommandDef,
+  type CommandId,
+} from "@/lib/shortcut-registry";
 
 /** What an on-verb does to a mark, and what an off-verb undoes: never a toggle. */
 export type VoicePolarity = "on" | "off";
@@ -139,6 +146,13 @@ interface VoiceTargetEntry {
   id: CommandId;
 }
 
+/** A listed phrase that is a default verb and target of its own Command: fillers still match. */
+interface VoicePinnedEntry {
+  verb: readonly string[];
+  target: readonly string[];
+  run: VoiceCommandRun;
+}
+
 /** A prebuilt Voice Command matcher for one Dictation Language. Build once, reuse per line. */
 export interface VoiceCommandTable {
   language: DictationLanguage;
@@ -146,7 +160,25 @@ export interface VoiceCommandTable {
   fillers: ReadonlySet<string>;
   targets: ReadonlyMap<VoiceVerbClass, readonly VoiceTargetEntry[]>;
   polarity: ReadonlyMap<VoiceVerbClass, VoicePolarity | null>;
+  /** The author's phrases that match only as the whole line, by normalized words. */
+  exact: ReadonlyMap<string, readonly VoiceCommandRun[]>;
+  /** The author's phrases that are a default verb and target of their own Command. */
+  pinned: readonly VoicePinnedEntry[];
 }
+
+/**
+ * Custom Voice Commands (ADR 0014): per Command and Dictation Language, the
+ * phrases that replace that language's defaults. An empty list means the
+ * Command takes no Voice Command in that language.
+ */
+export type CustomVoiceCommands = Partial<
+  Record<CommandId, Partial<Record<DictationLanguage, readonly string[]>>>
+>;
+
+/** A Voice Command of one word would fire on ordinary one-word sentences. */
+export const MIN_VOICE_PHRASE_WORDS = 2;
+
+export const VOICE_LANGUAGES = Object.keys(VOICE_VOCABULARY) as DictationLanguage[];
 
 /** One resolved Voice Command: the registry Command to run and the verb's polarity. */
 export interface VoiceCommandRun {
@@ -165,7 +197,149 @@ export function voiceEligibleCommands(): CommandId[] {
   return COMMAND_IDS.filter((id) => (COMMANDS[id] as CommandDef).voice !== undefined);
 }
 
-export function buildVoiceCommandTable(language: DictationLanguage): VoiceCommandTable {
+export function isVoiceEligible(id: CommandId): boolean {
+  return (COMMANDS[id] as CommandDef).voice !== undefined;
+}
+
+/**
+ * Splits a phrase into one of its Command's default verbs, any fillers, and one
+ * of its targets. A phrase that splits keeps the filler matching and the
+ * verb's polarity of the default it came from.
+ */
+function splitDefaultPhrase(
+  id: CommandId,
+  language: DictationLanguage,
+  words: readonly string[]
+): { verb: string[]; target: string[]; cls: VoiceVerbClass } | null {
+  const voice = (COMMANDS[id] as CommandDef).voice;
+  if (!voice) return null;
+  const vocabulary = VOICE_VOCABULARY[language];
+  const fillers = new Set(vocabulary.fillers.map(normalizeWord));
+  for (const cls of voice.verbs) {
+    for (const verbPhrase of vocabulary.verbs[cls].phrases) {
+      const verb = phraseWords(verbPhrase);
+      if (verb.length === 0 || !verb.every((word, at) => words[at] === word)) continue;
+      for (const targetPhrase of voice.targets[language] ?? []) {
+        const target = phraseWords(targetPhrase);
+        const start = words.length - target.length;
+        if (target.length === 0 || start < verb.length) continue;
+        if (!target.every((word, offset) => words[start + offset] === word)) continue;
+        if (words.slice(verb.length, start).every((word) => fillers.has(word))) {
+          return { verb, target, cls };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * What a listed phrase does to a mark or a list. A default verb keeps its own
+ * polarity; any other phrase turns off only when it starts with one of the
+ * language's off-verbs ("quitar ..."), so an author's phrase never toggles.
+ */
+export function voicePhrasePolarity(
+  id: CommandId,
+  language: DictationLanguage,
+  phrase: string
+): VoicePolarity | null {
+  const voice = (COMMANDS[id] as CommandDef).voice;
+  if (!voice) return null;
+  const vocabulary = VOICE_VOCABULARY[language];
+  const polar = voice.verbs.filter((cls) => vocabulary.verbs[cls].polarity !== null);
+  if (polar.length === 0) return null;
+  const words = phraseWords(phrase);
+  const split = splitDefaultPhrase(id, language, words);
+  if (split) return vocabulary.verbs[split.cls].polarity;
+  const startsWithOff = polar.some(
+    (cls) =>
+      vocabulary.verbs[cls].polarity === "off" &&
+      vocabulary.verbs[cls].phrases.some((verbPhrase) => {
+        const verb = phraseWords(verbPhrase);
+        return verb.length < words.length && verb.every((word, at) => words[at] === word);
+      })
+  );
+  return startsWithOff ? "off" : "on";
+}
+
+/** A Command's default phrases in one language, `verb target`, as the author sees them. */
+export function defaultVoicePhrases(id: CommandId, language: DictationLanguage): string[] {
+  const seen = new Set<string>();
+  const phrases: string[] = [];
+  for (const { id: owner, phrase } of voiceCommandPhrases(language)) {
+    if (owner !== id) continue;
+    const key = phraseWords(phrase).join(" ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    phrases.push(phrase);
+  }
+  return phrases;
+}
+
+/** The phrases a Command answers to in one language: the author's list, else the defaults. */
+export function voicePhrases(
+  id: CommandId,
+  language: DictationLanguage,
+  custom: CustomVoiceCommands
+): string[] {
+  const own = custom[id]?.[language];
+  return own !== undefined ? [...own] : defaultVoicePhrases(id, language);
+}
+
+/**
+ * Cleans a list of phrases the way storage keeps it: trimmed, at least two
+ * words once normalized, and each normalized phrase once.
+ */
+export function normalizeVoicePhraseList(raw: readonly unknown[]): string[] {
+  const seen = new Set<string>();
+  const phrases: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim().replace(/\s+/gu, " ");
+    const words = phraseWords(trimmed);
+    if (words.length < MIN_VOICE_PHRASE_WORDS) continue;
+    const key = words.join(" ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    phrases.push(trimmed);
+  }
+  return phrases;
+}
+
+function resolveCommandId(rawId: string): CommandId | null {
+  const renamed = COMMAND_RENAMES[rawId] ?? rawId;
+  return isCommandId(renamed) ? renamed : null;
+}
+
+/**
+ * Whatever storage or a Shortcut File holds is made safe before any line is
+ * matched: unknown Commands, Commands that take no Voice Commands, unknown
+ * languages, and phrases under two words are dropped. An explicit empty list
+ * stays: the author removed every phrase.
+ */
+export function normalizeCustomVoiceCommands(raw: unknown): CustomVoiceCommands {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  const custom: CustomVoiceCommands = {};
+  for (const [rawId, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = resolveCommandId(rawId);
+    if (id === null || !isVoiceEligible(id)) continue;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
+    const languages: Partial<Record<DictationLanguage, string[]>> = {};
+    for (const language of VOICE_LANGUAGES) {
+      const list = (value as Record<string, unknown>)[language];
+      if (!Array.isArray(list)) continue;
+      const phrases = normalizeVoicePhraseList(list);
+      if (list.length === 0 || phrases.length > 0) languages[language] = phrases;
+    }
+    if (Object.keys(languages).length > 0) custom[id] = languages;
+  }
+  return custom;
+}
+
+export function buildVoiceCommandTable(
+  language: DictationLanguage,
+  custom: CustomVoiceCommands = {}
+): VoiceCommandTable {
   const vocabulary = VOICE_VOCABULARY[language];
   const verbsByPhrase = new Map<string, VoiceVerbClass[]>();
   for (const [cls, spec] of Object.entries(vocabulary.verbs) as [
@@ -183,9 +357,30 @@ export function buildVoiceCommandTable(language: DictationLanguage): VoiceComman
   }
 
   const targets = new Map<VoiceVerbClass, VoiceTargetEntry[]>();
+  const exact = new Map<string, VoiceCommandRun[]>();
+  const pinned: VoicePinnedEntry[] = [];
   for (const id of COMMAND_IDS) {
     const voice = (COMMANDS[id] as CommandDef).voice;
     if (!voice) continue;
+    // The author's list replaces this language's defaults for the Command.
+    const own = custom[id]?.[language];
+    if (own !== undefined) {
+      for (const phrase of own) {
+        const words = phraseWords(phrase);
+        if (words.length < MIN_VOICE_PHRASE_WORDS) continue;
+        const split = splitDefaultPhrase(id, language, words);
+        if (split) {
+          const polarity = vocabulary.verbs[split.cls].polarity;
+          pinned.push({ verb: split.verb, target: split.target, run: { id, polarity } });
+          continue;
+        }
+        const key = words.join(" ");
+        const runs = exact.get(key) ?? [];
+        runs.push({ id, polarity: voicePhrasePolarity(id, language, phrase) });
+        exact.set(key, runs);
+      }
+      continue;
+    }
     for (const phrase of voice.targets[language] ?? []) {
       const words = phraseWords(phrase);
       if (words.length === 0) continue;
@@ -211,19 +406,42 @@ export function buildVoiceCommandTable(language: DictationLanguage): VoiceComman
         ([cls, spec]) => [cls, spec.polarity]
       )
     ),
+    exact,
+    pinned,
   };
 }
 
+function fillersThenTarget(
+  table: VoiceCommandTable,
+  words: readonly string[],
+  from: number,
+  target: readonly string[]
+): boolean {
+  // Every word between the verb and the target must be a filler, and the
+  // target must cover the rest of the line.
+  const start = words.length - target.length;
+  if (start < from) return false;
+  for (let at = from; at < start; at += 1) if (!table.fillers.has(words[at])) return false;
+  return target.every((word, offset) => words[start + offset] === word);
+}
+
 /**
- * The whole-line rule: one verb, any run of fillers, one target, nothing else.
- * Two words minimum, so an ordinary one-word sentence never fires; `words` are
- * the line's normalized word tokens with the model's punctuation already gone.
+ * Every Command a whole line runs, the author's phrases first. The runtime
+ * takes the first; the conflict check needs them all.
  */
-export function matchVoiceCommand(
+export function* voiceCommandMatches(
   table: VoiceCommandTable,
   words: readonly string[]
-): VoiceCommandRun | null {
-  if (words.length < 2) return null;
+): Generator<VoiceCommandRun> {
+  if (words.length < MIN_VOICE_PHRASE_WORDS) return;
+
+  yield* table.exact.get(words.join(" ")) ?? [];
+
+  for (const entry of table.pinned) {
+    if (entry.verb.length > words.length) continue;
+    if (!entry.verb.every((word, at) => words[at] === word)) continue;
+    if (fillersThenTarget(table, words, entry.verb.length, entry.target)) yield entry.run;
+  }
 
   let verb: VoiceVerbEntry | null = null;
   for (const candidate of table.verbs) {
@@ -231,23 +449,28 @@ export function matchVoiceCommand(
     if (!candidate.words.every((word, at) => words[at] === word)) continue;
     if (!verb || candidate.words.length > verb.words.length) verb = candidate;
   }
-  if (!verb) return null;
+  if (!verb) return;
 
   for (const cls of verb.classes) {
-    const targets = table.targets.get(cls);
-    if (!targets) continue;
-    for (const target of targets) {
-      // Every word between the verb and the target must be a filler, and the
-      // target must cover the rest of the line.
-      for (let at = verb.words.length; at <= words.length; at += 1) {
-        if (at > verb.words.length && !table.fillers.has(words[at - 1])) break;
-        if (words.length - at !== target.words.length) continue;
-        if (target.words.every((word, offset) => words[at + offset] === word)) {
-          return { id: target.id, polarity: table.polarity.get(cls) ?? null };
-        }
+    for (const target of table.targets.get(cls) ?? []) {
+      if (fillersThenTarget(table, words, verb.words.length, target.words)) {
+        yield { id: target.id, polarity: table.polarity.get(cls) ?? null };
       }
     }
   }
+}
+
+/**
+ * The whole-line rule: one verb, any run of fillers, one target, nothing else,
+ * or one of the author's phrases. Two words minimum, so an ordinary one-word
+ * sentence never fires; `words` are the line's normalized word tokens with the
+ * model's punctuation already gone.
+ */
+export function matchVoiceCommand(
+  table: VoiceCommandTable,
+  words: readonly string[]
+): VoiceCommandRun | null {
+  for (const run of voiceCommandMatches(table, words)) return run;
   return null;
 }
 

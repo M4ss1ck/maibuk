@@ -238,6 +238,17 @@ export const useDictationStore = create<DictationStoreState>()(
   )
 );
 
+/**
+ * The Dictation Language a phrase editor opens on: the one the author picked
+ * for Dictation, else the one matching the app language.
+ */
+export function dictationLanguageFor(
+  override: DictationLanguage | null,
+  uiLanguage: string | undefined
+): DictationLanguage {
+  return override ?? (uiLanguage?.startsWith("es") ? "es" : "en");
+}
+
 export function pickModel(
   language: DictationLanguage,
   available: readonly ModelSpec[],

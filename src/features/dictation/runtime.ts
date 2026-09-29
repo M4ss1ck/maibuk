@@ -18,6 +18,7 @@ import {
   type ModelSpec,
   type RecognizerHost,
 } from "@/features/dictation/types";
+import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { isTutorialStatusActive, useTutorialStore } from "@/features/tutorial/store";
 import { createRecognizerHost, dictationPlatform, getModelFiles } from "@/lib/platform";
@@ -37,6 +38,7 @@ export interface DictationRuntime {
 
 let runtime: Promise<DictationRuntime> | null = null;
 let unsubscribeEnabled: (() => void) | null = null;
+let unsubscribeVoice: (() => void) | null = null;
 
 export function getDictation(): Promise<DictationRuntime> {
   // A failed build (worker or native host failed to load) must not disable Dictation for the whole run.
@@ -50,6 +52,8 @@ export function getDictation(): Promise<DictationRuntime> {
 export function resetDictationForTests(): void {
   unsubscribeEnabled?.();
   unsubscribeEnabled = null;
+  unsubscribeVoice?.();
+  unsubscribeVoice = null;
   runtime = null;
 }
 
@@ -75,6 +79,7 @@ async function build(): Promise<DictationRuntime> {
     buildPhraseTable(language, {
       settings: useDictationStore.getState().spokenPunctuation[language],
       vocabulary: useDictationStore.getState().vocabulary[language],
+      voice: useShortcutSettingsStore.getState().shortcuts.voice,
       capabilities:
         selectedLanguage === language && selectedModel
           ? selectedModel.capabilities
@@ -139,6 +144,12 @@ async function build(): Promise<DictationRuntime> {
       state.spokenPunctuation !== previous.spokenPunctuation ||
       state.vocabulary !== previous.vocabulary
     ) {
+      phraseTables = { en: buildTable("en"), es: buildTable("es") };
+    }
+  });
+  // Custom Voice Commands live with the Custom Shortcuts (ADR 0012, ADR 0014).
+  unsubscribeVoice = useShortcutSettingsStore.subscribe((state, previous) => {
+    if (state.shortcuts.voice !== previous.shortcuts.voice) {
       phraseTables = { en: buildTable("en"), es: buildTable("es") };
     }
   });

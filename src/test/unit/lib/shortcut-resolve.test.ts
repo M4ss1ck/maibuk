@@ -149,13 +149,18 @@ describe("normalizeShortcuts", () => {
     expect(normalizeShortcuts(null)).toEqual(DEFAULT_SHORTCUT_SETTINGS);
     expect(normalizeShortcuts("garbage")).toEqual(DEFAULT_SHORTCUT_SETTINGS);
     expect(normalizeShortcuts([])).toEqual(DEFAULT_SHORTCUT_SETTINGS);
-    expect(normalizeShortcuts({ version: 2, custom: { "editor.bold": [["Mod+b"]] } })).toEqual(
+    expect(normalizeShortcuts({ version: 3, custom: { "editor.bold": [["Mod+b"]] } })).toEqual(
       DEFAULT_SHORTCUT_SETTINGS
     );
   });
 
   it("keeps a valid empty shape", () => {
-    expect(normalizeShortcuts({})).toEqual({ version: 1, custom: {}, singleKeyEnabled: true });
+    expect(normalizeShortcuts({})).toEqual({
+      version: 2,
+      custom: {},
+      voice: {},
+      singleKeyEnabled: true,
+    });
   });
 
   it("normalizes singleKeyEnabled", () => {
@@ -213,6 +218,7 @@ describe("serializeShortcutFile / parseShortcutFile", () => {
     const custom: CustomShortcuts = { "editor.bold": [["Mod+b"]], "editor.italic": [] };
     expect(parseShortcutFile(serializeShortcutFile(custom), false)).toEqual({
       ok: true,
+      voice: {},
       custom,
       dropped: [],
     });
@@ -236,7 +242,7 @@ describe("serializeShortcutFile / parseShortcutFile", () => {
     ).toEqual({ ok: false, error: "kind" });
     expect(
       parseShortcutFile(
-        JSON.stringify({ app: "maibuk", kind: "shortcuts", version: 2, custom: {} }),
+        JSON.stringify({ app: "maibuk", kind: "shortcuts", version: 3, custom: {} }),
         false
       )
     ).toEqual({ ok: false, error: "version" });
@@ -258,6 +264,7 @@ describe("serializeShortcutFile / parseShortcutFile", () => {
     } as unknown as CustomShortcuts);
     expect(parseShortcutFile(file, false)).toEqual({
       ok: true,
+      voice: {},
       custom: {},
       dropped: [
         { id: "nope.nope", reason: "unknown" },
@@ -271,11 +278,13 @@ describe("serializeShortcutFile / parseShortcutFile", () => {
     const file = serializeShortcutFile({ "bookList.newBook": [["Mod+t"]] });
     expect(parseShortcutFile(file, true)).toEqual({
       ok: true,
+      voice: {},
       custom: {},
       dropped: [{ id: "bookList.newBook", shortcut: ["Mod+t"], reason: "reserved" }],
     });
     expect(parseShortcutFile(file, false)).toEqual({
       ok: true,
+      voice: {},
       custom: { "bookList.newBook": [["Mod+t"]] },
       dropped: [],
     });
@@ -288,6 +297,7 @@ describe("serializeShortcutFile / parseShortcutFile", () => {
     });
     expect(parseShortcutFile(file, false)).toEqual({
       ok: true,
+      voice: {},
       custom: { "global.gotoProjects": [["Mod+q"]] },
       dropped: [{ id: "global.gotoNotes", shortcut: ["Mod+q"], reason: "conflict" }],
     });
@@ -300,8 +310,122 @@ describe("serializeShortcutFile / parseShortcutFile", () => {
     });
     expect(parseShortcutFile(file, false)).toEqual({
       ok: true,
+      voice: {},
       custom: { "editor.bold": [["Mod+b"]], "editor.italic": [] },
       dropped: [{ id: "editor.bold", shortcut: ["Foo"], reason: "invalid" }],
     });
+  });
+});
+
+describe("shortcut settings version 2: custom Voice Commands", () => {
+  it("migrates the version 1 shape and keeps every Custom Shortcut", () => {
+    const v1 = {
+      version: 1,
+      custom: { "editor.bold": [["Mod+Shift+k"]], "global.syncNow": [] },
+      singleKeyEnabled: false,
+    };
+    expect(normalizeShortcuts(v1)).toEqual({
+      version: 2,
+      custom: { "editor.bold": [["Mod+Shift+k"]], "global.syncNow": [] },
+      voice: {},
+      singleKeyEnabled: false,
+    });
+    // A record from before versioning had the version 1 shape.
+    expect(normalizeShortcuts({ custom: { "editor.bold": [["Mod+Shift+k"]] } }).custom).toEqual({
+      "editor.bold": [["Mod+Shift+k"]],
+    });
+  });
+
+  it("ignores a stray voice field in a version 1 record", () => {
+    expect(
+      normalizeShortcuts({ version: 1, custom: {}, voice: { "editor.bold": { es: ["a b"] } } })
+        .voice
+    ).toEqual({});
+  });
+
+  it("normalizes the stored Voice Commands", () => {
+    expect(
+      normalizeShortcuts({
+        version: 2,
+        custom: {},
+        voice: {
+          "editor.bold": { es: ["pon esto fuerte", "negrita"] },
+          "common.save": { en: ["save it now"] },
+          "bogus.command": { en: ["a b"] },
+        },
+        singleKeyEnabled: true,
+      }).voice
+    ).toEqual({ "editor.bold": { es: ["pon esto fuerte"] } });
+  });
+
+  it("round-trips Voice Commands through the Shortcut File", () => {
+    const custom: CustomShortcuts = { "editor.bold": [["Mod+b"]] };
+    const voice = { "editor.bold": { es: ["pon esto fuerte"], en: [] } };
+    const text = serializeShortcutFile(custom, voice);
+    expect(JSON.parse(text)).toMatchObject({ app: "maibuk", kind: "shortcuts", version: 2 });
+    expect(parseShortcutFile(text, false)).toEqual({ ok: true, custom, voice, dropped: [] });
+  });
+
+  it("loads a version 1 file with no Voice Commands", () => {
+    const text = JSON.stringify({
+      app: "maibuk",
+      kind: "shortcuts",
+      version: 1,
+      custom: { "editor.bold": [["Mod+b"]] },
+    });
+    expect(parseShortcutFile(text, false)).toEqual({
+      ok: true,
+      custom: { "editor.bold": [["Mod+b"]] },
+      voice: {},
+      dropped: [],
+    });
+  });
+
+  it("reports every Voice Command it drops", () => {
+    const text = JSON.stringify({
+      app: "maibuk",
+      kind: "shortcuts",
+      version: 2,
+      custom: {},
+      voice: {
+        "bogus.command": { es: ["a b"] },
+        "common.save": { es: ["guardar ya"] },
+        "editor.italic": "letra inclinada",
+        "editor.bold": { es: ["negrita", 3, "pon esto fuerte", "Pon esto fuerte"], en: "x" },
+      },
+    });
+    const result = parseShortcutFile(text, false);
+    expect(result).toEqual({
+      ok: true,
+      custom: {},
+      voice: { "editor.bold": { es: ["pon esto fuerte"] } },
+      dropped: [
+        { id: "bogus.command", reason: "unknown" },
+        { id: "common.save", reason: "notVoice" },
+        { id: "editor.italic", reason: "invalid" },
+        { id: "editor.bold", language: "en", reason: "invalid" },
+        { id: "editor.bold", language: "es", phrase: "negrita", reason: "tooShort" },
+        { id: "editor.bold", language: "es", reason: "invalid" },
+      ],
+    });
+  });
+
+  it("drops a phrase the caller's check refuses, seeing what the file kept so far", () => {
+    const text = serializeShortcutFile(
+      {},
+      { "editor.bold": { es: ["uno dos", "tres cuatro"] }, "editor.italic": { es: ["uno dos"] } }
+    );
+    const seen: unknown[] = [];
+    const result = parseShortcutFile(text, false, ({ id, phrase, accepted }) => {
+      seen.push(structuredClone(accepted));
+      return id === "editor.italic" && accepted["editor.bold"]?.es?.includes(phrase) === true;
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      voice: { "editor.bold": { es: ["uno dos", "tres cuatro"] } },
+      dropped: [{ id: "editor.italic", language: "es", phrase: "uno dos", reason: "conflict" }],
+    });
+    // The Command's own list starts empty, so its defaults never count against it.
+    expect(seen[0]).toEqual({ "editor.bold": { es: [] } });
   });
 });

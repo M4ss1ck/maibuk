@@ -5,7 +5,7 @@ import { Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { useDictationStore } from "@/features/dictation/store";
+import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
 import type { DictationLanguage } from "@/features/dictation/types";
 import { findVocabularyRefusal, type VocabularyRefusal } from "@/features/dictation/vocabulary";
 
@@ -36,10 +36,9 @@ export function DictationVocabularySection({ languages }: DictationVocabularySec
   const updateEntry = useDictationStore((state) => state.updateVocabularyEntry);
   const removeEntry = useDictationStore((state) => state.removeVocabularyEntry);
 
-  const [chosen, setChosen] = useState<DictationLanguage>(() => {
-    const uiLanguage: DictationLanguage = i18n.language.startsWith("es") ? "es" : "en";
-    return override ?? uiLanguage;
-  });
+  const [chosen, setChosen] = useState<DictationLanguage>(() =>
+    dictationLanguageFor(override, i18n.language)
+  );
   const [heard, setHeard] = useState("");
   const [written, setWritten] = useState("");
   const [addRefusal, setAddRefusal] = useState<VocabularyRefusal | null>(null);
