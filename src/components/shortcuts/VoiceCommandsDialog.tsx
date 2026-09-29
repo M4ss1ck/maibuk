@@ -2,7 +2,8 @@ import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "rea
 import { useTranslation } from "react-i18next";
 import { Button as AriaButton, GridList, GridListItem } from "react-aria-components";
 import { PencilLine, RotateCcw, X } from "lucide-react";
-import { Button, Input, Modal, Select } from "@/components/ui";
+import { Button, Input, Modal } from "@/components/ui";
+import { DictationLanguageTabs } from "@/components/dictation/DictationLanguageTabs";
 import { phraseConflictMessage } from "@/components/dictation/phrase-conflict-message";
 import { normalizePhrase } from "@/features/dictation/normalize";
 import { findPhraseConflict, type PhraseConflict } from "@/features/dictation/phrase-conflicts";
@@ -189,107 +190,106 @@ function VoiceCommandsDialogContent({
         <p className="text-sm text-muted-foreground">
           {t("shortcutEditor.voice.intro", { command })}
         </p>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm font-medium">{t("dictation.language")}</span>
-          <Select<DictationLanguage>
-            ariaLabel={t("dictation.language")}
-            value={language}
-            options={VOICE_LANGUAGES.map((value) => ({
-              value,
-              label: t(`dictation.languageNames.${value}`),
-            }))}
-            onChange={(next) => {
-              setLanguage(next);
-              setEditing(null);
-              setDraft("");
-              setRefusal(null);
-            }}
-          />
-        </div>
-
-        <GridList
-          aria-label={t("shortcutEditor.voice.listLabel", { command, language: languageName })}
-          onAction={(key) => startEdit(String(key))}
-          renderEmptyState={() => (
-            <p className="px-3 py-2 text-sm text-muted-foreground">
-              {t("shortcutEditor.voice.none")}
-            </p>
-          )}
-          className="max-h-64 overflow-auto rounded-lg border border-border"
+        <DictationLanguageTabs
+          languages={VOICE_LANGUAGES}
+          selected={language}
+          onChange={(next) => {
+            setLanguage(next);
+            setEditing(null);
+            setDraft("");
+            setRefusal(null);
+          }}
+          ariaLabel={t("dictation.language")}
         >
-          {phrases.map((phrase) => {
-            const polarity = polarityLabel(phrase);
-            return (
-              <GridListItem
-                key={phrase}
-                id={phrase}
-                textValue={phrase}
-                className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-sm outline-none last:border-b-0 data-focus-visible:ring-2 data-focus-visible:ring-inset data-focus-visible:ring-primary"
-              >
-                <span className="min-w-0 flex-1 truncate text-foreground">{phrase}</span>
-                {polarity && (
-                  <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {polarity}
-                  </span>
+          {(_language) => (
+            <>
+              <GridList
+                aria-label={t("shortcutEditor.voice.listLabel", { command, language: languageName })}
+                onAction={(key) => startEdit(String(key))}
+                renderEmptyState={() => (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    {t("shortcutEditor.voice.none")}
+                  </p>
                 )}
-                <AriaButton
-                  className={ROW_CONTROL}
-                  aria-label={t("shortcutEditor.voice.edit", { phrase })}
-                  onPress={() => startEdit(phrase)}
-                >
-                  <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-                </AriaButton>
-                <AriaButton
-                  className={ROW_CONTROL}
-                  aria-label={t("shortcutEditor.voice.remove", { phrase, command })}
-                  onPress={() => remove(phrase)}
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </AriaButton>
-              </GridListItem>
-            );
-          })}
-        </GridList>
+                className="max-h-64 overflow-auto rounded-lg border border-border"
+              >
+                {phrases.map((phrase) => {
+                  const polarity = polarityLabel(phrase);
+                  return (
+                    <GridListItem
+                      key={phrase}
+                      id={phrase}
+                      textValue={phrase}
+                      className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-sm outline-none last:border-b-0 data-focus-visible:ring-2 data-focus-visible:ring-inset data-focus-visible:ring-primary"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-foreground">{phrase}</span>
+                      {polarity && (
+                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          {polarity}
+                        </span>
+                      )}
+                      <AriaButton
+                        className={ROW_CONTROL}
+                        aria-label={t("shortcutEditor.voice.edit", { phrase })}
+                        onPress={() => startEdit(phrase)}
+                      >
+                        <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
+                      </AriaButton>
+                      <AriaButton
+                        className={ROW_CONTROL}
+                        aria-label={t("shortcutEditor.voice.remove", { phrase, command })}
+                        onPress={() => remove(phrase)}
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </AriaButton>
+                    </GridListItem>
+                  );
+                })}
+              </GridList>
 
-        <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
-          <div className="min-w-48 flex-1">
-            <Input
-              ref={inputRef}
-              value={draft}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                setRefusal(null);
-              }}
-              onKeyDown={onFieldKeyDown}
-              aria-label={
-                editing === null
-                  ? t("shortcutEditor.voice.addLabel", { command, language: languageName })
-                  : t("shortcutEditor.voice.editLabel", { phrase: editing })
-              }
-              placeholder={t("shortcutEditor.voice.placeholder")}
-              aria-invalid={refusal ? true : undefined}
-              aria-describedby={refusal ? refusalId : undefined}
-            />
-          </div>
-          <Button type="submit" variant="secondary" size="sm" disabled={draft.trim() === ""}>
-            {editing === null ? t("common.add") : t("common.save")}
-          </Button>
-          {editing !== null && (
-            <Button type="button" variant="ghost" size="sm" onClick={cancelEdit}>
-              {t("common.cancel")}
-            </Button>
+              <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
+                <div className="min-w-48 flex-1">
+                  <Input
+                    ref={inputRef}
+                    value={draft}
+                    onChange={(event) => {
+                      setDraft(event.target.value);
+                      setRefusal(null);
+                    }}
+                    onKeyDown={onFieldKeyDown}
+                    aria-label={
+                      editing === null
+                        ? t("shortcutEditor.voice.addLabel", { command, language: languageName })
+                        : t("shortcutEditor.voice.editLabel", { phrase: editing })
+                    }
+                    placeholder={t("shortcutEditor.voice.placeholder")}
+                    aria-invalid={refusal ? true : undefined}
+                    aria-describedby={refusal ? refusalId : undefined}
+                  />
+                </div>
+                <Button type="submit" variant="secondary" size="sm" disabled={draft.trim() === ""}>
+                  {editing === null ? t("common.add") : t("common.save")}
+                </Button>
+                {editing !== null && (
+                  <Button type="button" variant="ghost" size="sm" onClick={cancelEdit}>
+                    {t("common.cancel")}
+                  </Button>
+                )}
+              </form>
+
+              {refusal && (
+                <div
+                  id={refusalId}
+                  role="alert"
+                  className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-foreground"
+                >
+                  {phraseConflictMessage(translate, language, refusal.conflict, refusal.phrase, id)}
+                </div>
+              )}
+            </>
           )}
-        </form>
+        </DictationLanguageTabs>
 
-        {refusal && (
-          <div
-            id={refusalId}
-            role="alert"
-            className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-foreground"
-          >
-            {phraseConflictMessage(translate, language, refusal.conflict, refusal.phrase, id)}
-          </div>
-        )}
         <div role="status" aria-live="polite" className="sr-only">
           {announcement}
         </div>

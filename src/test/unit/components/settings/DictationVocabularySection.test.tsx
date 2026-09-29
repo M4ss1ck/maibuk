@@ -10,8 +10,8 @@ const { DictationVocabularySection } = await import(
 );
 const { useDictationStore } = await import("@/features/dictation/store");
 
-function renderSection() {
-  return render(<DictationVocabularySection languages={["en", "es"]} />);
+function renderSection(language: "en" | "es" = "en") {
+  return render(<DictationVocabularySection language={language} />);
 }
 
 function vocabularyFor(language: "en" | "es") {
@@ -49,14 +49,6 @@ async function addEntry(
   await user.keyboard(heard);
   await user.tab();
   await user.keyboard(`${written}{Enter}`);
-}
-
-async function chooseSpanish(user: ReturnType<typeof userEvent.setup>) {
-  // React Aria names the trigger with its value plus the Select's label.
-  const select = screen.getByRole("button", { name: /Vocabulary language/ });
-  select.focus();
-  await user.keyboard("{Enter}");
-  await user.keyboard("{ArrowDown}{Enter}");
 }
 
 beforeEach(() => {
@@ -193,30 +185,30 @@ describe("DictationVocabularySection", () => {
 
   it("keeps entries per Dictation Language", async () => {
     const user = userEvent.setup();
-    renderSection();
+    const { unmount } = renderSection("en");
     await addEntry(user, "a reliano", "Aureliano");
+    expect(vocabularyFor("en")).toEqual([{ heard: "a reliano", written: "Aureliano" }]);
+    unmount();
 
-    await chooseSpanish(user);
+    // The Spanish editor is a separate render: no shared selector, no leakage.
+    renderSection("es");
     expect(vocabularyFor("es")).toEqual([]);
     expect(
       screen.getByText("No entries yet. Add the first word Dictation gets wrong.")
     ).toBeInTheDocument();
+    expect(screen.queryByText("Aureliano")).toBeNull();
 
     await addEntry(user, "nuevo párrafo", "Nuevo Palafox");
     expect(vocabularyFor("es")).toEqual([{ heard: "nuevo párrafo", written: "Nuevo Palafox" }]);
-
-    const select = screen.getByRole("button", { name: /Vocabulary language/ });
-    select.focus();
-    await user.keyboard("{Enter}{ArrowUp}{Enter}");
-    const list = screen.getByRole("list", { name: "Dictation vocabulary for English" });
-    expect(within(list).getByText("Aureliano")).toBeInTheDocument();
-    expect(within(list).queryByText("Nuevo Palafox")).toBeNull();
+    const list = screen.getByRole("list", { name: "Dictation vocabulary for Spanish" });
+    expect(within(list).getByText("Nuevo Palafox")).toBeInTheDocument();
+    expect(within(list).queryByText("Aureliano")).toBeNull();
   });
 
   it("shows the glossary copy in Spanish", async () => {
     await act(() => i18n.changeLanguage("es"));
     const user = userEvent.setup();
-    renderSection();
+    renderSection("es");
 
     expect(screen.getByRole("heading", { name: "Vocabulario de dictado" })).toBeInTheDocument();
     await addEntry(user, "a reliano", "Aureliano", ES);
@@ -227,18 +219,5 @@ describe("DictationVocabularySection", () => {
     );
     expect(screen.getByRole("button", { name: "Editar a reliano" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Quitar a reliano" })).toBeInTheDocument();
-  });
-
-  it("opens the language Select with the keyboard", async () => {
-    const user = userEvent.setup();
-    renderSection();
-    const select = screen.getByRole("button", { name: /Vocabulary language/ });
-    select.focus();
-    await user.keyboard("{Enter}");
-
-    const listbox = screen.getByRole("listbox");
-    expect(within(listbox).getByRole("option", { name: "Spanish" })).toBeInTheDocument();
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("listbox")).toBeNull();
   });
 });

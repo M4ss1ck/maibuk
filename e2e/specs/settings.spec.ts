@@ -137,7 +137,7 @@ test.describe("Settings language @wf:settings-language", () => {
   test("Español swaps the UI copy and back, and the choice persists", async ({ page }) => {
     await openSettings(page);
     // Scope to General: the Dictation section's Spoken punctuation list has a
-    // "Dictation language" Select of its own.
+    // "Dictation language" tab list of its own.
     const general = page.locator('[data-tutorial="settings.general"]');
     await chooseFromSelect(page, general.getByRole("button", { name: "Language" }), "Español");
 

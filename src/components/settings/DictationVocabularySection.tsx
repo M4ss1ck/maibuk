@@ -4,14 +4,13 @@ import type { TFunction } from "i18next";
 import { Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
-import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
+import { useDictationStore } from "@/features/dictation/store";
 import type { DictationLanguage } from "@/features/dictation/types";
 import { findVocabularyRefusal, type VocabularyRefusal } from "@/features/dictation/vocabulary";
 
 interface DictationVocabularySectionProps {
-  /** The Dictation Languages this build offers, in display order. */
-  languages: readonly DictationLanguage[];
+  /** The Dictation Language of the Dictation settings tab this sits in. */
+  language: DictationLanguage;
 }
 
 function refusalMessage(t: TFunction, refusal: VocabularyRefusal, phrase: string): string {
@@ -25,20 +24,16 @@ function refusalMessage(t: TFunction, refusal: VocabularyRefusal, phrase: string
 
 /**
  * Settings → Dictation's Dictation Vocabulary editor: what the Dictation
- * Model hears and what to write instead, per Dictation Language, on this
+ * Model hears and what to write instead, for one Dictation Language, on this
  * device (ADR 0014). The written form is inserted exactly as typed.
  */
-export function DictationVocabularySection({ languages }: DictationVocabularySectionProps) {
-  const { t, i18n } = useTranslation();
-  const override = useDictationStore((state) => state.languageOverride);
+export function DictationVocabularySection({ language }: DictationVocabularySectionProps) {
+  const { t } = useTranslation();
   const vocabulary = useDictationStore((state) => state.vocabulary);
   const addEntry = useDictationStore((state) => state.addVocabularyEntry);
   const updateEntry = useDictationStore((state) => state.updateVocabularyEntry);
   const removeEntry = useDictationStore((state) => state.removeVocabularyEntry);
 
-  const [chosen, setChosen] = useState<DictationLanguage>(() =>
-    dictationLanguageFor(override, i18n.language)
-  );
   const [heard, setHeard] = useState("");
   const [written, setWritten] = useState("");
   const [addRefusal, setAddRefusal] = useState<VocabularyRefusal | null>(null);
@@ -66,8 +61,6 @@ export function DictationVocabularySection({ languages }: DictationVocabularySec
     }
   }, [editingIndex]);
 
-  if (languages.length === 0) return null;
-  const language = languages.includes(chosen) ? chosen : languages[0];
   const entries = vocabulary[language];
   const languageName = t(`dictation.languageNames.${language}`);
   const listLabel = t("dictation.vocabulary.listLabel", { language: languageName });
@@ -139,31 +132,12 @@ export function DictationVocabularySection({ languages }: DictationVocabularySec
     removeEntry(language, index);
   };
 
-  const chooseLanguage = (next: DictationLanguage) => {
-    setChosen(next);
-    setEditingIndex(null);
-    setAddRefusal(null);
-    setHeard("");
-    setWritten("");
-  };
-
   const addRefusalText = addRefusal ? refusalMessage(t, addRefusal, heard.trim()) : "";
   const editRefusalText = editRefusal ? refusalMessage(t, editRefusal, editHeard.trim()) : "";
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-medium">{t("dictation.vocabulary.title")}</h3>
-        <Select<DictationLanguage>
-          ariaLabel={t("dictation.vocabulary.language")}
-          value={language}
-          options={languages.map((value) => ({
-            value,
-            label: t(`dictation.languageNames.${value}`),
-          }))}
-          onChange={chooseLanguage}
-        />
-      </div>
+      <h3 className="font-medium">{t("dictation.vocabulary.title")}</h3>
       <p className="text-sm text-muted-foreground">{t("dictation.vocabulary.description")}</p>
 
       <form onSubmit={submitAdd} className="flex flex-wrap items-end gap-2">

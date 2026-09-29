@@ -9,15 +9,36 @@ import { expect, test } from "../support/test";
 // reason as the rest of the Dictation settings (WebKit has no Dictation).
 test.use({ library: "oneBookThreeChapters" });
 
-const languageTrigger = (page: Page) => page.getByRole("button", { name: /Dictation language/ });
+const languageTab = (page: Page, name: "English" | "Spanish") => page.getByRole("tab", { name });
 
-/** Opens the focused Spoken punctuation language Select and picks a language. */
-async function chooseLanguage(page: Page, name: "English" | "Spanish") {
+const languageTrigger = (page: Page, name: "English" | "Spanish") =>
+  page.getByRole("button", { name: `Spoken punctuation entries for ${name}` });
+
+/** Focuses the Dictation Language tab list from outside the section. */
+async function openTabs(page: Page) {
+  await tabTo(page, languageTab(page, "English"), { max: 260 });
+}
+
+/** Expands a language's Spoken punctuation list; focus ends on its trigger. */
+async function expandList(page: Page, name: "English" | "Spanish") {
+  await tabTo(page, languageTrigger(page, name), { max: 260 });
   await page.keyboard.press("Enter");
-  // Home lands on the first option, so the walk works from any selection.
-  await page.keyboard.press("Home");
-  await pressUntilFocused(page, "ArrowDown", page.getByRole("option", { name }));
-  await page.keyboard.press("Enter");
+}
+
+/**
+ * Walks the Dictation Language tab list with the arrow keys. Selection follows
+ * focus, so the wanted tab is focused and selected on arrival. Focus is inside
+ * the section, so the tab list is reached by tabbing back.
+ */
+async function chooseLanguage(
+  page: Page,
+  current: "English" | "Spanish",
+  wanted: "English" | "Spanish"
+) {
+  await tabTo(page, languageTab(page, current), { backwards: true, max: 60 });
+  const target = languageTab(page, wanted);
+  await pressUntilFocused(page, wanted === "Spanish" ? "ArrowRight" : "ArrowLeft", target);
+  await expect(target).toHaveAttribute("aria-selected", "true");
 }
 
 test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
@@ -25,7 +46,7 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
     page,
   }) => {
     await page.goto("/settings#dictation");
-    await tabTo(page, languageTrigger(page), { max: 220 });
+    await expandList(page, "English");
 
     const comma = page.getByRole("group", { name: "comma", exact: true });
     await expect(comma.getByText("comma", { exact: true }).first()).toBeVisible();
@@ -47,7 +68,8 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
       around: [page.locator("#dictation")],
     });
 
-    await chooseLanguage(page, "Spanish");
+    await chooseLanguage(page, "English", "Spanish");
+    await expandList(page, "Spanish");
     await expect(page.getByRole("group", { name: "coma", exact: true })).toBeVisible();
     await expect(
       page.getByRole("group", { name: "punto", exact: true }).getByText("punto y seguido")
@@ -66,13 +88,31 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
     });
   });
 
+  test("the list starts collapsed and expands and collapses by keyboard", async ({ page }) => {
+    await page.goto("/settings#dictation");
+
+    const comma = page.getByRole("group", { name: "comma", exact: true });
+    await expect(comma).toHaveCount(0);
+    await page.locator("#dictation").scrollIntoViewIfNeeded();
+    await capture(page, "settings-dictation-collapsed", { around: [page.locator("#dictation")] });
+
+    const trigger = languageTrigger(page, "English");
+    await tabTo(page, trigger, { max: 260 });
+    await page.keyboard.press("Enter");
+    await expect(comma).toBeVisible();
+
+    await page.keyboard.press("Enter");
+    await expect(comma).toHaveCount(0);
+  });
+
   test("switches one entry and the whole layer off by keyboard", async ({ page }) => {
     await page.goto("/settings#dictation");
+    await expandList(page, "English");
     const comma = page.getByRole("group", { name: "comma", exact: true });
     const commaSwitch = comma.getByRole("switch", { name: "comma", exact: true });
 
     // English models punctuate, so marks start off.
-    await tabTo(page, commaSwitch, { max: 230 });
+    await tabTo(page, commaSwitch, { max: 240 });
     await expect(commaSwitch).not.toBeChecked();
     await page.keyboard.press("Space");
     await expect(commaSwitch).toBeChecked();
@@ -92,6 +132,7 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
 
   test("adds and removes an extra phrase by keyboard", async ({ page }) => {
     await page.goto("/settings#dictation");
+    await expandList(page, "English");
     const comma = page.getByRole("group", { name: "comma", exact: true });
     const field = comma.getByRole("textbox", { name: "Add a phrase to comma" });
 
@@ -114,6 +155,7 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
     page,
   }) => {
     await page.goto("/settings#dictation");
+    await expandList(page, "English");
     const comma = page.getByRole("group", { name: "comma", exact: true });
     const field = comma.getByRole("textbox", { name: "Add a phrase to comma" });
 
@@ -147,12 +189,13 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
 
   test("resets one entry's switch and phrases to the defaults", async ({ page }) => {
     await page.goto("/settings#dictation");
+    await expandList(page, "English");
     const comma = page.getByRole("group", { name: "comma", exact: true });
     const commaSwitch = comma.getByRole("switch", { name: "comma", exact: true });
     const field = comma.getByRole("textbox", { name: "Add a phrase to comma" });
 
     // English marks start off; switch the entry on and teach it a phrase.
-    await tabTo(page, commaSwitch, { max: 230 });
+    await tabTo(page, commaSwitch, { max: 240 });
     await page.keyboard.press("Space");
     await expect(commaSwitch).toBeChecked();
     await tabTo(page, field, { max: 20 });
@@ -173,8 +216,9 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
 
   test("keeps the settings per language and across a reload", async ({ page }) => {
     await page.goto("/settings#dictation");
-    await tabTo(page, languageTrigger(page), { max: 220 });
-    await chooseLanguage(page, "Spanish");
+    await expandList(page, "English");
+    await chooseLanguage(page, "English", "Spanish");
+    await expandList(page, "Spanish");
 
     // Spanish models add no punctuation, so marks start on.
     const coma = page.getByRole("group", { name: "coma", exact: true });
@@ -184,19 +228,23 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
     await page.keyboard.press("Space");
     await expect(comaSwitch).not.toBeChecked();
 
-    // English keeps its own list and its own defaults.
-    await tabTo(page, languageTrigger(page), { backwards: true, max: 20 });
-    await chooseLanguage(page, "English");
+    // English keeps its own list and its own defaults. Switching tabs
+    // re-collapses the list (the panel remounts), so it must be expanded again.
+    await chooseLanguage(page, "Spanish", "English");
+    await expect(page.getByRole("group", { name: "comma", exact: true })).toHaveCount(0);
+    await expandList(page, "English");
     await expect(
       page
         .getByRole("group", { name: "comma", exact: true })
         .getByRole("switch", { name: "comma", exact: true })
     ).not.toBeChecked();
 
-    // Device-local: the switch survives a reload.
+    // Device-local: the switch survives a reload, and the list starts collapsed again.
     await page.reload();
-    await tabTo(page, languageTrigger(page), { max: 220 });
-    await chooseLanguage(page, "Spanish");
+    await openTabs(page);
+    await chooseLanguage(page, "English", "Spanish");
+    await expect(page.getByRole("group", { name: "coma", exact: true })).toHaveCount(0);
+    await expandList(page, "Spanish");
     await expect(
       page
         .getByRole("group", { name: "coma", exact: true })

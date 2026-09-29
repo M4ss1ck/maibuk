@@ -38,6 +38,22 @@ const { DictationSection } = await import("@/components/settings/DictationSectio
 const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast")!;
 const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "fast")!;
 
+type User = ReturnType<typeof userEvent.setup>;
+
+/** Tabs until `target` is the active element. */
+async function tabToFocused(user: User, target: () => HTMLElement | null) {
+  for (let i = 0; i < 30; i++) {
+    if (target() === document.activeElement) return;
+    await user.tab();
+  }
+  expect(target()).toHaveFocus();
+}
+
+/** Opens the Dictation settings on the Spanish tab, as the override does. */
+function onSpanish() {
+  useDictationStore.setState({ languageOverride: "es" });
+}
+
 beforeEach(() => {
   install.mockClear();
   remove.mockClear();
@@ -50,6 +66,7 @@ beforeEach(() => {
     installed: [],
     downloads: {},
     preferredTier: { en: "fast", es: "fast" },
+    languageOverride: null,
   });
 });
 
@@ -84,6 +101,7 @@ describe("DictationSection", () => {
 
   it("downloads a model by keyboard", async () => {
     const user = userEvent.setup();
+    onSpanish();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
     within(row)
@@ -98,6 +116,7 @@ describe("DictationSection", () => {
       downloads: { [esFast.id]: { done: 10_000_000, total: 32_316_573 } },
     });
     const user = userEvent.setup();
+    onSpanish();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
     expect(within(row).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "31");
@@ -113,6 +132,7 @@ describe("DictationSection", () => {
   it("keeps focus on the row's action through download, install, and remove", async () => {
     const { act } = await import("@testing-library/react");
     const user = userEvent.setup();
+    onSpanish();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
     within(row).getByRole("button", { name: /download/i }).focus();
@@ -133,6 +153,7 @@ describe("DictationSection", () => {
       preferredTier: { en: "fast", es: "accurate" },
     });
     const user = userEvent.setup();
+    onSpanish();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
     within(row).getByRole("button", { name: /use for/i }).focus();
@@ -144,6 +165,7 @@ describe("DictationSection", () => {
   it("removes an installed model by keyboard", async () => {
     useDictationStore.setState({ installed: [esFast.id] });
     const user = userEvent.setup();
+    onSpanish();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
     within(row)
@@ -159,16 +181,17 @@ describe("DictationSection", () => {
   });
 
   it("says Spanish models add no punctuation", () => {
+    onSpanish();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
     expect(within(row).getByText(/no punctuation/i)).toBeInTheDocument();
   });
 
-  it("shows the Dictation vocabulary editor for the offered languages", () => {
+  it("shows the Dictation vocabulary editor and language tabs", () => {
     render(<DictationSection />);
+    expect(screen.getByRole("tablist", { name: "Dictation language" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Dictation vocabulary" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "What Dictation hears" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Vocabulary language/ })).toBeInTheDocument();
   });
 
   it("offers no Dictation switch where Dictation is unsupported", () => {
@@ -179,6 +202,7 @@ describe("DictationSection", () => {
 
   it("turns Dictation off with Space and keeps the model rows usable", async () => {
     const user = userEvent.setup();
+    onSpanish();
     render(<DictationSection />);
     const toggle = screen.getByRole("switch", { name: "Dictation" });
     expect(toggle).toBeChecked();
@@ -198,6 +222,7 @@ describe("DictationSection", () => {
   it("keeps an installed model removable while Dictation is off", async () => {
     useDictationStore.setState({ enabled: false, installed: [esFast.id] });
     const user = userEvent.setup();
+    onSpanish();
     render(<DictationSection />);
 
     expect(screen.getByRole("switch", { name: "Dictation" })).not.toBeChecked();
@@ -246,24 +271,70 @@ describe("DictationSection", () => {
     expect(screen.getByRole("switch", { name: "Dictation" })).toBeChecked();
   });
 
-  it("uses sentence-case headings but lowercase sentences in Spanish", async () => {
+  it("opens on the author's Dictation Language tab", () => {
+    render(<DictationSection />);
+
+    const tablist = screen.getByRole("tablist", { name: "Dictation language" });
+    expect(within(tablist).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "English",
+      "Spanish",
+    ]);
+    expect(screen.getByRole("tab", { name: "English" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Spanish" })).toHaveAttribute("aria-selected", "false");
+
+    // Only the selected language's panel is mounted.
+    expect(screen.getByRole("heading", { name: "Models" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: /English.*Fast/i })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /Spanish.*Fast/i })).toBeNull();
+  });
+
+  it("moves to the Spanish tab with ArrowRight and scopes the panel to Spanish", async () => {
+    useDictationStore.setState({
+      vocabulary: { en: [], es: [{ heard: "nuevo párrafo", written: "Nuevo Palafox" }] },
+    });
+    const user = userEvent.setup();
+    render(<DictationSection />);
+
+    const english = screen.getByRole("tab", { name: "English" });
+    await tabToFocused(user, () => english);
+    await user.keyboard("{ArrowRight}");
+
+    const spanish = screen.getByRole("tab", { name: "Spanish" });
+    expect(spanish).toHaveFocus();
+    expect(spanish).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("group", { name: /Spanish.*Fast/i })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /English.*Fast/i })).toBeNull();
+    expect(
+      screen.getByRole("switch", { name: "Spoken punctuation for Spanish" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Dictation vocabulary for Spanish" })
+    ).toBeInTheDocument();
+  });
+
+  it("names the tab list in the app language: Inglés and Español in Spanish UI", async () => {
     await act(() => i18n.changeLanguage("es"));
+    onSpanish();
     useDictationStore.setState({
       installed: [esFast.id],
       preferredTier: { en: "fast", es: "accurate" },
     });
     render(<DictationSection />);
 
-    expect(screen.getByRole("heading", { name: "Español" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Inglés" })).toBeInTheDocument();
+    const tablist = screen.getByRole("tablist", { name: "Idioma del dictado" });
+    expect(within(tablist).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Inglés",
+      "Español",
+    ]);
+    expect(screen.getByRole("tab", { name: "Español" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Usar para español" })).toBeInTheDocument();
   });
 
-  it("keeps English headings for English", () => {
+  it("names the tab list in English for English", () => {
     useDictationStore.setState({ installed: [enFast.id] });
     render(<DictationSection />);
-    expect(screen.getByRole("heading", { name: "English" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Spanish" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "English" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Spanish" })).toBeInTheDocument();
   });
 
   it("shows the interpreter median and worst delay and spoken punctuation once on mount", async () => {

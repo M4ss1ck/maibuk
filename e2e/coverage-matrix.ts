@@ -2153,6 +2153,7 @@ export const ROWS: MatrixRow[] = [
       "Cancel during download leaves the model not downloaded",
       "a failed download (fixture 404) shows the error toast and a Download button again",
       "turning Dictation off removes the bar and Start or stop Dictation does nothing; turning it on restores both and keeps the downloaded models",
+      "one Dictation Language tab list scopes the models, Spoken punctuation, and Dictation vocabulary",
     ],
     terms: ["Dictation Model"],
     shortcuts: [],
@@ -2186,7 +2187,8 @@ export const ROWS: MatrixRow[] = [
     workflow:
       "Settings → Dictation: the Spoken punctuation list shows each entry's phrases and what it inserts for the chosen Dictation Language, with a master switch, a switch per entry, extra phrases, and reset, all by keyboard",
     edges: [
-      "the list follows the chosen Dictation Language",
+      "the list follows the Dictation Language tab chosen by arrow keys",
+      "each language's list starts collapsed and expands and collapses by keyboard",
       "an entry switch and the master switch switch matching off, and the master disables the entry switches",
       "an extra phrase is added and removed by keyboard",
       "an extra phrase that is already a phrase, or starts with the escape word, is refused with an alert",
@@ -2209,7 +2211,7 @@ export const ROWS: MatrixRow[] = [
       "an entry is added by keyboard and shown as heard → written",
       "an entry that repeats a heard form, folded, is refused with an alert",
       "an entry is edited in place and removed by keyboard",
-      "the entries stay per language and survive a reload",
+      "the entries stay per Dictation Language tab chosen by arrow keys and survive a reload",
     ],
     terms: ["Dictation Vocabulary", "Dictation Language", "Dictation"],
     shortcuts: [],

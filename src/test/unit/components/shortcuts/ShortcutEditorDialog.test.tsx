@@ -527,21 +527,39 @@ describe("Shortcut Editor: Voice commands", { timeout: 20_000 }, () => {
     expect(field).toHaveFocus();
   });
 
-  it("switches to the other Dictation Language and edits its own list", async () => {
-    const { user, dialog, field } = await openBoldVoice();
-    const picker = within(dialog).getByRole("button", { name: /dictation\.language/ });
-    await act(async () => picker.focus());
-    await user.keyboard("{Enter}");
-    const spanish = await screen.findByRole("option", { name: "dictation.languageNames.es" });
-    await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("option"));
-    while (document.activeElement !== spanish) await user.keyboard("{ArrowDown}");
-    await user.keyboard("{Enter}");
+  it("switches to the other Dictation Language with the tabs and edits its own list", async () => {
+    const { user, dialog } = await openBoldVoice();
+    const english = within(dialog).getByRole("tab", { name: "dictation.languageNames.en" });
+    while (document.activeElement !== english) await user.tab();
+    expect(english).toHaveAttribute("aria-selected", "true");
+
+    await user.keyboard("{ArrowRight}");
+    const spanish = within(dialog).getByRole("tab", { name: "dictation.languageNames.es" });
+    expect(spanish).toHaveFocus();
+    expect(spanish).toHaveAttribute("aria-selected", "true");
     expect(within(dialog).getByRole("grid")).toHaveTextContent("poner negrita");
 
-    await act(async () => field.focus());
+    const spanishField = within(dialog).getByRole("textbox", {
+      name: /shortcutEditor\.voice\.addLabel/,
+    });
+    await act(async () => spanishField.focus());
     await user.keyboard("pon esto fuerte{Enter}");
     expect(voice()["editor.bold"]?.es?.[0]).toBe("pon esto fuerte");
     expect(voice()["editor.bold"]?.en).toBeUndefined();
+  });
+
+  it("returns to English with ArrowLeft and shows its list again", async () => {
+    const { user, dialog } = await openBoldVoice();
+    const english = within(dialog).getByRole("tab", { name: "dictation.languageNames.en" });
+    while (document.activeElement !== english) await user.tab();
+    await user.keyboard("{ArrowRight}");
+    expect(within(dialog).getByRole("tab", { name: "dictation.languageNames.es" })).toHaveFocus();
+    expect(within(dialog).getByRole("grid")).toHaveTextContent("poner negrita");
+
+    await user.keyboard("{ArrowLeft}");
+    expect(english).toHaveFocus();
+    expect(english).toHaveAttribute("aria-selected", "true");
+    expect(within(dialog).getByRole("grid")).toHaveTextContent("make bold");
   });
 
   it("counts a Command with custom Voice commands as customized", async () => {

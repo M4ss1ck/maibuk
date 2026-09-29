@@ -188,13 +188,16 @@ test.describe("Shortcut Editor Voice commands @wf:shortcut-editor-voice-commands
     await openBoldVoice(page);
     await typePhrase(page, "heavy words");
 
-    await tabTo(page, voiceDialog(page).getByRole("button", { name: /Dictation language/ }), {
-      backwards: true,
-    });
-    await page.keyboard.press("Enter");
-    const spanish = page.getByRole("option", { name: "Spanish" });
-    await pressUntilFocused(page, "ArrowDown", spanish, { max: 3 });
-    await page.keyboard.press("Enter");
+    await tabTo(page, voiceDialog(page).getByRole("tab", { name: "English" }));
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      voiceDialog(page).getByRole("tab", { name: "Spanish" })
+    );
+    await expect(voiceDialog(page).getByRole("tab", { name: "Spanish" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
 
     const spanishList = voiceDialog(page).getByRole("grid", {
       name: "Voice commands for Bold in Spanish",
