@@ -561,7 +561,8 @@ mod tests {
                     }
                     DictationEvent::Error { code, detail } => {
                         let code = serde_json::to_value(code).unwrap();
-                        let mut event = serde_json::json!({ "t": t, "type": "error", "code": code });
+                        let mut event =
+                            serde_json::json!({ "t": t, "type": "error", "code": code });
                         if let Some(detail) = detail {
                             event["detail"] = serde_json::json!(detail);
                         }
@@ -600,8 +601,11 @@ mod tests {
             std::fs::create_dir_all(parent)
                 .unwrap_or_else(|e| panic!("create {}: {e}", parent.display()));
         }
-        std::fs::write(path, format!("{}\n", serde_json::to_string_pretty(doc).unwrap()))
-            .unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
+        std::fs::write(
+            path,
+            format!("{}\n", serde_json::to_string_pretty(doc).unwrap()),
+        )
+        .unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
     }
 
     fn partial(text: &str) -> HostMessage {
@@ -641,7 +645,10 @@ mod tests {
         assert_eq!(trace[1]["firstTextAudio"], 0.4);
         assert_eq!(trace[1]["completedAudio"], 0.5);
         assert_eq!(
-            doc["summary"]["contractViolations"].as_array().unwrap().len(),
+            doc["summary"]["contractViolations"]
+                .as_array()
+                .unwrap()
+                .len(),
             0
         );
         assert_eq!(doc["events"].as_array().unwrap().len(), 6);
@@ -680,7 +687,9 @@ mod tests {
         ];
         let doc = trace_document("m", "en", "wav", &repeated, t0, 1.0, None);
         assert!(
-            violations(&doc).iter().any(|v| v.contains("repeated final")),
+            violations(&doc)
+                .iter()
+                .any(|v| v.contains("repeated final")),
             "a repeated final is a violation: {:?}",
             violations(&doc)
         );
@@ -710,7 +719,8 @@ mod tests {
 
     #[test]
     fn wav_source_parses_a_16_bit_mono_wav() {
-        let path = std::env::temp_dir().join(format!("maibuk-conformance-{}.wav", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("maibuk-conformance-{}.wav", std::process::id()));
         let rate = 8000u32;
         let samples: [i16; 4] = [0, 16384, -16384, 32767];
         write_wav(&path, rate, &samples);
@@ -727,14 +737,14 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    /// Real models, real WAVs, production Runner. Ignored: run with
-    /// `cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture`.
-    #[test]
-    #[ignore]
-    fn conformance() {
+    /// The vendored runtime root and the catalog models to run, narrowed by
+    /// `CONFORMANCE_MODELS=a,b`. The adapter only looks in the vendored
+    /// runtime in debug builds; a release harness points libloading at it.
+    fn conformance_models() -> (
+        std::path::PathBuf,
+        Vec<crate::dictation::protocol::ModelSpec>,
+    ) {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vendor/moonshine");
-        // The adapter only looks in the vendored runtime in debug builds; a
-        // release harness points libloading at it directly.
         if std::env::var_os("MAIBUK_MOONSHINE_LIB").is_none() {
             let lib = root.join("linux-x86_64/lib/libmoonshine.so");
             if lib.exists() {
@@ -750,11 +760,20 @@ mod tests {
                 .filter(|s| !s.is_empty())
                 .collect()
         });
+        let models = catalog
+            .into_iter()
+            .filter(|spec| filter.as_ref().is_none_or(|f| f.contains(&spec.id)))
+            .collect();
+        (root, models)
+    }
 
-        for spec in catalog {
-            if filter.as_ref().is_some_and(|f| !f.contains(&spec.id)) {
-                continue;
-            }
+    /// Real models, real WAVs, production Runner. Ignored: run with
+    /// `cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn conformance() {
+        let (root, models) = conformance_models();
+        for spec in models {
             let language = spec
                 .languages
                 .first()
@@ -837,10 +856,15 @@ mod tests {
                 load_ms,
                 Some(cpu_pct),
             );
-            let path = root.join("conformance").join(format!("native-{}.json", spec.id));
+            let path = root
+                .join("conformance")
+                .join(format!("native-{}.json", spec.id));
             write_trace(&path, &doc);
             let finals = doc["trace"].as_array().unwrap().len();
-            let violations = doc["summary"]["contractViolations"].as_array().unwrap().len();
+            let violations = doc["summary"]["contractViolations"]
+                .as_array()
+                .unwrap()
+                .len();
             println!(
                 "{:<28} finals={:<3} cpu={cpu_pct:>6.1}% loadMs={load_ms:>8.1} violations={violations}",
                 spec.id, finals
@@ -924,7 +948,11 @@ mod tests {
                 Ok(())
             }
             fn poll(&mut self) -> Result<Vec<DictationEvent>, DictationError> {
-                Ok(if self.polls.is_empty() { vec![] } else { self.polls.remove(0) })
+                Ok(if self.polls.is_empty() {
+                    vec![]
+                } else {
+                    self.polls.remove(0)
+                })
             }
             fn finish(&mut self) -> Result<Vec<DictationEvent>, DictationError> {
                 Ok(vec![DictationEvent::Final {
@@ -954,28 +982,13 @@ mod tests {
     #[test]
     #[ignore]
     fn phrase_transcripts() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vendor/moonshine");
-        if std::env::var_os("MAIBUK_MOONSHINE_LIB").is_none() {
-            let lib = root.join("linux-x86_64/lib/libmoonshine.so");
-            if lib.exists() {
-                std::env::set_var("MAIBUK_MOONSHINE_LIB", &lib);
-            }
-        }
-        let catalog: Vec<crate::dictation::protocol::ModelSpec> =
-            serde_json::from_str(include_str!("../../../src/features/dictation/catalog.json"))
-                .expect("catalog.json");
-        let filter: Option<Vec<String>> = std::env::var("CONFORMANCE_MODELS").ok().map(|v| {
-            v.split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect()
-        });
-
-        for spec in catalog {
-            if filter.as_ref().is_some_and(|f| !f.contains(&spec.id)) {
-                continue;
-            }
-            let language = spec.languages.first().cloned().unwrap_or_else(|| "en".into());
+        let (root, models) = conformance_models();
+        for spec in models {
+            let language = spec
+                .languages
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "en".into());
             let clips_dir = root.join("phrases").join(&language);
             let mut files: Vec<_> = match std::fs::read_dir(&clips_dir) {
                 Ok(entries) => entries
@@ -1024,13 +1037,11 @@ mod tests {
                 "backend": if realtime { "native-realtime" } else { "native" },
                 "clips": clips,
             });
-            let path = root
-                .join("conformance")
-                .join(format!(
-                    "phrases-{}{}.json",
-                    spec.id,
-                    if realtime { ".realtime" } else { "" }
-                ));
+            let path = root.join("conformance").join(format!(
+                "phrases-{}{}.json",
+                spec.id,
+                if realtime { ".realtime" } else { "" }
+            ));
             write_trace(&path, &doc);
             println!(
                 "{:<28} clips={:<4} seconds={:.1}",

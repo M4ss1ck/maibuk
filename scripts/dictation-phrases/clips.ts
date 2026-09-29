@@ -52,3 +52,46 @@ export function parseClipFileName(name: string): { id: string; take: number } | 
   const take = match[2] ? Number(match[2]) : 1;
   return take >= 1 ? { id: match[1], take } : null;
 }
+
+export interface Cut {
+  index: number;
+  start: number;
+  end: number;
+}
+
+/**
+ * Where each line's clip starts and ends in one continuous capture, driven by
+ * the reader's keys. Offsets are captured bytes, not wall time, so a clip
+ * never drifts from the audio it names.
+ */
+export class ClipCutter {
+  index = 0;
+  private start = 0;
+
+  constructor(readonly count: number) {}
+
+  get done(): boolean {
+    return this.index >= this.count;
+  }
+
+  /** Enter: the current line ends here and the next one starts. */
+  next(received: number): Cut {
+    const cut = { index: this.index, start: this.start, end: received };
+    this.start = received;
+    this.index += 1;
+    return cut;
+  }
+
+  /** r: the current line starts over from here. */
+  redo(received: number) {
+    this.start = received;
+  }
+
+  /** b: the previous line is read again from here; its index, or null on the first line. */
+  back(received: number): number | null {
+    if (this.index === 0) return null;
+    this.index -= 1;
+    this.start = received;
+    return this.index;
+  }
+}

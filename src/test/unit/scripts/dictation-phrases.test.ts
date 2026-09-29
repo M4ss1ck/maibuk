@@ -4,6 +4,7 @@ import { phraseItems } from "@/test/support/dictation-phrase-set";
 import {
   CLIP_PAD_SECONDS,
   CLIP_RATE,
+  ClipCutter,
   clipFileName,
   cutClip,
   parseClipFileName,
@@ -61,6 +62,30 @@ describe("clip files", () => {
   });
 });
 
+describe("ClipCutter", () => {
+  it("cuts each line where Enter was pressed", () => {
+    const cutter = new ClipCutter(2);
+    expect(cutter.next(100)).toEqual({ index: 0, start: 0, end: 100 });
+    expect(cutter.done).toBe(false);
+    expect(cutter.next(250)).toEqual({ index: 1, start: 100, end: 250 });
+    expect(cutter.done).toBe(true);
+  });
+
+  it("redo drops what was said since the last cut", () => {
+    const cutter = new ClipCutter(1);
+    cutter.redo(80);
+    expect(cutter.next(200)).toEqual({ index: 0, start: 80, end: 200 });
+  });
+
+  it("back reopens the previous line from now, and does nothing on the first", () => {
+    const cutter = new ClipCutter(3);
+    expect(cutter.back(10)).toBeNull();
+    cutter.next(100);
+    expect(cutter.back(140)).toBe(0);
+    expect(cutter.next(300)).toEqual({ index: 0, start: 140, end: 300 });
+  });
+});
+
 function model(tier: "fast" | "accurate", clips: Clip[]): ScoredModel {
   return {
     spec: { id: `moonshine-${tier}-en`, tier, languages: ["en"] },
@@ -81,7 +106,9 @@ describe("renderReport()", () => {
   it("passes when Accurate hears everything and no prose runs anything", () => {
     const report = renderReport([model("fast", cleanClips()), model("accurate", cleanClips())]);
     expect(report.failures).toEqual([]);
-    expect(report.markdown).toContain("| moonshine-accurate-en | accurate |");
+    expect(report.markdown).toContain(
+      "| moonshine-accurate-en | accurate | 55 | 100% | 100% | 100% | 0 (0) | pass |"
+    );
     expect(report.markdown).toContain("## en: under the bar on Accurate\n\nNone.");
   });
 

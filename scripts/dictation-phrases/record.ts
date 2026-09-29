@@ -13,10 +13,16 @@ import { emitKeypressEvents } from "node:readline";
 import { fileURLToPath } from "node:url";
 import type { DictationLanguage } from "@/features/dictation/types";
 import { phraseItems, type PhraseItem } from "@/test/support/dictation-phrase-set";
-import { CLIP_RATE, SILENT_PEAK, clipFileName, cutClip, peak, wavBytes } from "./clips";
+import { CLIP_RATE, ClipCutter, SILENT_PEAK, clipFileName, cutClip, peak, wavBytes } from "./clips";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const phrasesDir = resolve(here, "../../vendor/moonshine/phrases");
+
+/** A key press as node:readline reports it. */
+interface Key {
+  name?: string;
+  ctrl?: boolean;
+}
 
 const HINT: Record<PhraseItem["kind"], string> = {
   voice: "command: say it on its own, like a command",
@@ -73,7 +79,7 @@ async function main() {
   emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);
   await new Promise<void>((done) => {
-    const onKey = (_: string, key: { name?: string; ctrl?: boolean }) => {
+    const onKey = (_: string, key: Key) => {
       if (key.ctrl && key.name === "c") process.exit(130);
       if (key.name === "return") {
         process.stdin.off("keypress", onKey);
@@ -100,14 +106,13 @@ async function main() {
     process.exit(1);
   });
 
-  let index = 0;
-  let segmentStart = 0;
+  const cutter = new ClipCutter(todo.length);
   const saved: string[] = [];
   const show = () => {
-    const item = todo[index];
+    const item = todo[cutter.index];
     const meter = "#".repeat(Math.min(20, Math.round(level * 40))).padEnd(20, ".");
     render(
-      `[${index + 1}/${todo.length}] mic ${meter}  (${HINT[item.kind]})\n\x1b[2K   \x1b[1m${item.say}\x1b[0m\x1b[1A`
+      `[${cutter.index + 1}/${todo.length}] mic ${meter}  (${HINT[item.kind]})\n\x1b[2K   \x1b[1m${item.say}\x1b[0m\x1b[1A`
     );
   };
   const meterTimer = setInterval(show, 100);
@@ -123,29 +128,26 @@ async function main() {
     process.exit(0);
   };
 
-  process.stdin.on("keypress", (_: string, key: { name?: string; ctrl?: boolean }) => {
+  process.stdin.on("keypress", (_: string, key: Key) => {
     if ((key.ctrl && key.name === "c") || key.name === "q") {
       finish("Stopped. Rerun the same command to record the rest.");
       return;
     }
     if (key.name === "r") {
-      segmentStart = received;
+      cutter.redo(received);
       return;
     }
     if (key.name === "b") {
-      if (index === 0) return;
-      index -= 1;
-      const previous = todo[index];
-      rmSync(join(dir, clipFileName(previous.id, take)), { force: true });
+      const previous = cutter.back(received);
+      if (previous === null) return;
+      rmSync(join(dir, clipFileName(todo[previous].id, take)), { force: true });
       saved.pop();
-      segmentStart = received;
       return;
     }
     if (key.name !== "return") return;
-    const raw = Buffer.concat(chunks);
-    const item = todo[index];
-    const clip = cutClip(raw, segmentStart, received);
-    segmentStart = received;
+    const cut = cutter.next(received);
+    const item = todo[cut.index];
+    const clip = cutClip(Buffer.concat(chunks), cut.start, cut.end);
     const file = join(dir, clipFileName(item.id, take));
     writeFileSync(file, wavBytes(clip));
     saved.push(file);
@@ -154,8 +156,7 @@ async function main() {
         `\n\n  "${item.say}" sounds silent: check the microphone, then press b to redo it.\n\n`
       );
     }
-    index += 1;
-    if (index === todo.length) finish(`Done: every ${language} line of take ${take} is recorded.`);
+    if (cutter.done) finish(`Done: every ${language} line of take ${take} is recorded.`);
   });
 }
 

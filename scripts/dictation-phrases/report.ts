@@ -26,25 +26,34 @@ function label(phrase: PhraseScore): string {
   return phrase.row.kind === "voice" ? phrase.row.split.id : phrase.row.entry.id;
 }
 
+/** The ship bars one model fails (issue #285); empty when it passes. */
+export function failedBars({ spec, score }: ScoredModel): string[] {
+  const failed: string[] = [];
+  if (score.missingItems.length) failed.push(`${score.missingItems.length} clips missing`);
+  if (spec.tier === "accurate" && score.hitRate < SHIP_BAR_HIT_RATE) {
+    failed.push(`hit rate ${pct(score.hitRate)} < ${pct(SHIP_BAR_HIT_RATE)}`);
+  }
+  if (score.proseTriggers > 0) failed.push(`${score.proseTriggers} prose triggers`);
+  return failed;
+}
+
 export function renderReport(models: readonly ScoredModel[]): Report {
   const failures: string[] = [];
   const out: string[] = ["# Dictation phrase conformance", ""];
   out.push(
     `Ship bar: every Accurate model hears at least ${pct(SHIP_BAR_HIT_RATE)} of the default phrases, and no model runs anything on the prose set.`,
     "",
-    "| Model | Tier | Clips | Hit rate | Prose triggers | Bar |",
-    "| --- | --- | --- | --- | --- | --- |"
+    "Prose triggers count every take that ran something; *misheard* are the ones on sentences that type as text when heard right.",
+    "",
+    "| Model | Tier | Clips | Hit rate | Voice Commands | Spoken Punctuation | Prose triggers (misheard) | Bar |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |"
   );
-  for (const { spec, clipCount, score } of models) {
-    const own: string[] = [];
-    if (score.missingItems.length) own.push(`${score.missingItems.length} clips missing`);
-    if (spec.tier === "accurate" && score.hitRate < SHIP_BAR_HIT_RATE) {
-      own.push(`hit rate ${pct(score.hitRate)} < ${pct(SHIP_BAR_HIT_RATE)}`);
-    }
-    if (score.proseTriggers > 0) own.push(`${score.proseTriggers} prose triggers`);
+  for (const model of models) {
+    const { spec, clipCount, score } = model;
+    const own = failedBars(model);
     for (const failure of own) failures.push(`${spec.id}: ${failure}`);
     out.push(
-      `| ${spec.id} | ${spec.tier} | ${clipCount} | ${pct(score.hitRate)} | ${score.proseTriggers} | ${own.length ? "FAIL" : "pass"} |`
+      `| ${spec.id} | ${spec.tier} | ${clipCount} | ${pct(score.hitRate)} | ${pct(score.voiceRate)} | ${pct(score.punctuationRate)} | ${score.proseTriggers} (${score.misheardProseTriggers}) | ${own.length ? "FAIL" : "pass"} |`
     );
   }
 

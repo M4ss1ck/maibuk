@@ -161,8 +161,30 @@ export function isolatedTable(
   return { ...base, trie, scratch };
 }
 
-function run(line: string, table: PhraseTable, capabilities: ModelSpec["capabilities"]) {
-  return interpret({ line, before: "", capabilities, table, state: INITIAL_INTERPRETER_STATE });
+/**
+ * A clip's finished lines through the interpreter in order, the way a session
+ * inserts them: each line sees the text before it and the carried state.
+ */
+function runLines(
+  lines: readonly string[],
+  table: PhraseTable,
+  capabilities: ModelSpec["capabilities"]
+): InterpretResult[] {
+  const results: InterpretResult[] = [];
+  let before = "";
+  let state = INITIAL_INTERPRETER_STATE;
+  for (const line of lines) {
+    const result = interpret({ line, before: before.slice(-256), capabilities, table, state });
+    results.push(result);
+    state = result.state;
+    if (result.result.kind !== "edits") continue;
+    for (const edit of result.result.edits) {
+      if (edit.kind === "text")
+        before += before && !/\s$/u.test(before) ? ` ${edit.text}` : edit.text;
+      else if (edit.kind !== "opener") before += "\n";
+    }
+  }
+  return results;
 }
 
 function acted(result: InterpretResult): boolean {
@@ -179,8 +201,7 @@ export function phraseCount(
 ): number {
   const table = isolatedTable(language, entry, phrase);
   let count = 0;
-  for (const line of lines) {
-    const result = run(line, table, capabilities);
+  for (const result of runLines(lines, table, capabilities)) {
     if (result.result.kind === "scratch") count += 1;
     else count += result.spokenPunctuationCount;
   }
@@ -193,8 +214,12 @@ export function proseTriggers(
   language: DictationLanguage,
   capabilities: ModelSpec["capabilities"]
 ): boolean {
-  const table = defaultTable(language, capabilities);
-  return lines.some((line) => acted(run(line, table, capabilities)));
+  return runLines(lines, defaultTable(language, capabilities), capabilities).some(acted);
+}
+
+/** The finished lines that carry words; a model's empty line is not a line the author sees. */
+function spokenLines(finals: readonly string[]): string[] {
+  return finals.filter((line) => phraseWords(line).length > 0);
 }
 
 /** A command clip is heard when it is one finished line that runs the Command its text runs. */
@@ -204,12 +229,14 @@ export function voiceClipHit(
   capabilities: ModelSpec["capabilities"]
 ): boolean {
   const table = defaultTable(item.language, capabilities);
-  const expected = run(item.say, table, capabilities).result;
-  const lines = finals.filter((line) => phraseWords(line).length > 0);
-  if (lines.length !== 1 || expected.kind !== "voice_command") return false;
-  const got = run(lines[0], table, capabilities).result;
+  const [expected] = runLines([item.say], table, capabilities);
+  const lines = spokenLines(finals);
+  if (lines.length !== 1 || expected.result.kind !== "voice_command") return false;
+  const [got] = runLines(lines, table, capabilities);
   return (
-    got.kind === "voice_command" && got.id === expected.id && got.polarity === expected.polarity
+    got.result.kind === "voice_command" &&
+    got.result.id === expected.result.id &&
+    got.result.polarity === expected.result.polarity
   );
 }
 
@@ -218,13 +245,19 @@ export interface Clip {
   finals: string[];
 }
 
+export interface Evidence {
+  itemId: string;
+  heard: string;
+  hit: boolean;
+}
+
 export interface PhraseScore {
   row: DefaultPhrase;
   /** "recorded": a clip says this phrase; "inferred": its verb and target were heard elsewhere. */
   source: "recorded" | "inferred";
   rate: number;
   /** The clips that decided it, with what the model heard. */
-  evidence: { itemId: string; heard: string; hit: boolean }[];
+  evidence: Evidence[];
 }
 
 export interface ProseScore {
@@ -240,35 +273,158 @@ export interface ModelScore {
   language: DictationLanguage;
   phrases: PhraseScore[];
   prose: ProseScore[];
-  /** Mean phrase rate over every default phrase. */
+  /** Mean phrase rate over every default phrase: the ship bar. */
   hitRate: number;
+  /** The same mean over Voice Command phrases and over Spoken Punctuation phrases. */
+  voiceRate: number;
+  punctuationRate: number;
   proseTriggers: number;
+  /** Prose triggers on sentences that type as text when heard right: the model's share. */
+  misheardProseTriggers: number;
   /** Items with no clip at all; the score is not trusted while any remain. */
   missingItems: string[];
 }
 
-interface UnitTally {
-  heard: number;
-  takes: number;
+class UnitTally {
+  heard = 0;
+  takes = 0;
+
+  add(heard: boolean) {
+    this.takes += 1;
+    if (heard) this.heard += 1;
+  }
+
+  get rate(): number {
+    return this.takes > 0 ? this.heard / this.takes : 0;
+  }
 }
 
-function ratio(tally: UnitTally | undefined): number {
-  return tally && tally.takes > 0 ? tally.heard / tally.takes : 0;
+function tallyOf<Key>(map: Map<Key, UnitTally>, key: Key): UnitTally {
+  let tally = map.get(key);
+  if (!tally) {
+    tally = new UnitTally();
+    map.set(key, tally);
+  }
+  return tally;
 }
 
-function tally(map: Map<string, UnitTally>, key: string, heard: boolean) {
-  const entry = map.get(key) ?? { heard: 0, takes: 0 };
-  entry.takes += 1;
-  if (heard) entry.heard += 1;
-  map.set(key, entry);
+function startsWithWords(words: readonly string[], prefix: readonly string[]): boolean {
+  return prefix.length <= words.length && prefix.every((word, k) => words[k] === word);
 }
 
-function occurrences(haystack: readonly string[], needle: readonly string[]): number {
+function endsWithWords(words: readonly string[], suffix: readonly string[]): boolean {
+  const offset = words.length - suffix.length;
+  return offset >= 0 && suffix.every((word, k) => words[offset + k] === word);
+}
+
+function occurrences(words: readonly string[], needle: readonly string[]): number {
   let count = 0;
-  for (let i = 0; i + needle.length <= haystack.length; i += 1) {
-    if (needle.every((word, k) => haystack[i + k] === word)) count += 1;
+  for (let i = 0; i + needle.length <= words.length; i += 1) {
+    if (startsWithWords(words.slice(i), needle)) count += 1;
   }
   return count;
+}
+
+function mean(rates: readonly number[]): number {
+  return rates.length ? rates.reduce((sum, rate) => sum + rate, 0) / rates.length : 0;
+}
+
+type ClipsByItem = ReadonlyMap<string, readonly Clip[]>;
+
+interface ScoreContext {
+  language: DictationLanguage;
+  capabilities: ModelSpec["capabilities"];
+  script: readonly PhraseItem[];
+  clips: ClipsByItem;
+}
+
+/**
+ * Voice Command rows. A recorded row is its own clips; any other row is its
+ * verb's hit rate (a verb is the same word for every Command) times its
+ * target's (a target only counts for its own Command). A unit is heard only
+ * in a clip that came back as one line, the same test a recorded row passes.
+ */
+function scoreVoice(context: ScoreContext, rows: readonly DefaultPhrase[]): PhraseScore[] {
+  const { language, capabilities, script, clips } = context;
+  const recorded = new Map<string, Evidence[]>();
+  const verbs = new Map<string, UnitTally>();
+  const targets = new Map<CommandId, Map<string, UnitTally>>();
+  for (const item of script.filter((entry) => entry.kind === "voice")) {
+    const split = splitVoicePhrase(item.say, language);
+    if (!split) throw new Error(`script line "${item.say}" is not a default phrase`);
+    const ownTargets = targets.get(split.id) ?? new Map<string, UnitTally>();
+    targets.set(split.id, ownTargets);
+    for (const clip of clips.get(item.id) ?? []) {
+      const hit = voiceClipHit(clip.finals, item, capabilities);
+      const lines = spokenLines(clip.finals);
+      const words = lines.length === 1 ? spokenWords(lines[0], language) : [];
+      tallyOf(verbs, split.verb).add(
+        hit || startsWithWords(words, spokenWords(split.verb, language))
+      );
+      tallyOf(ownTargets, split.target).add(hit || endsWithWords(words, split.target.split(" ")));
+      const key = `${split.id} ${split.verb} ${split.target}`;
+      recorded.set(key, [
+        ...(recorded.get(key) ?? []),
+        { itemId: item.id, heard: clip.finals.join(" / "), hit },
+      ]);
+    }
+  }
+
+  return rows.flatMap((row): PhraseScore[] => {
+    if (row.kind !== "voice") return [];
+    const evidence = recorded.get(`${row.split.id} ${row.phrase}`);
+    if (evidence) {
+      return [
+        { row, source: "recorded", rate: mean(evidence.map((e) => (e.hit ? 1 : 0))), evidence },
+      ];
+    }
+    const verb = verbs.get(row.split.verb)?.rate ?? 0;
+    const target = targets.get(row.split.id)?.get(row.split.target)?.rate ?? 0;
+    return [{ row, source: "inferred", rate: verb * target, evidence: [] }];
+  });
+}
+
+/**
+ * Spoken Punctuation rows: every carrier that says the phrase, each take hit
+ * only when the phrase acts exactly as often as in the script. More is an
+ * unwanted mark in the author's text, fewer is a miss.
+ */
+function scorePunctuation(context: ScoreContext, rows: readonly DefaultPhrase[]): PhraseScore[] {
+  const { language, capabilities, script, clips } = context;
+  const carriers = script.filter((item) => item.kind === "punctuation");
+  return rows.flatMap((row): PhraseScore[] => {
+    if (row.kind !== "punctuation") return [];
+    const needle = phraseWords(row.phrase);
+    const evidence: Evidence[] = [];
+    for (const item of carriers) {
+      if (occurrences(phraseWords(item.say), needle) === 0) continue;
+      const expected = phraseCount([item.say], language, row.entry, row.phrase, capabilities);
+      if (expected === 0) continue;
+      for (const clip of clips.get(item.id) ?? []) {
+        const got = phraseCount(clip.finals, language, row.entry, row.phrase, capabilities);
+        evidence.push({ itemId: item.id, heard: clip.finals.join(" / "), hit: got === expected });
+      }
+    }
+    return [
+      { row, source: "recorded", rate: mean(evidence.map((e) => (e.hit ? 1 : 0))), evidence },
+    ];
+  });
+}
+
+function scoreProse(context: ScoreContext): ProseScore[] {
+  const { language, capabilities, script, clips } = context;
+  return script
+    .filter((item) => item.kind === "prose")
+    .map((item) => {
+      const own = clips.get(item.id) ?? [];
+      return {
+        item,
+        takes: own.length,
+        triggered: own.filter((clip) => proseTriggers(clip.finals, language, capabilities)).length,
+        firesOnText: proseTriggers([item.say], language, capabilities),
+        heard: own.map((clip) => clip.finals.join(" / ")),
+      };
+    });
 }
 
 /**
@@ -282,100 +438,30 @@ export function scoreModel(input: {
 }): ModelScore {
   const { language, capabilities } = input;
   const script = phraseItems(language);
-  const byItem = new Map<string, Clip[]>();
-  for (const clip of input.clips) {
-    const list = byItem.get(clip.itemId) ?? [];
-    list.push(clip);
-    byItem.set(clip.itemId, list);
-  }
-  const missingItems = script.filter((item) => !byItem.has(item.id)).map((item) => item.id);
+  const clips = new Map<string, Clip[]>();
+  for (const clip of input.clips) clips.set(clip.itemId, [...(clips.get(clip.itemId) ?? []), clip]);
+  const context: ScoreContext = { language, capabilities, script, clips };
 
-  // Voice clips: the whole command, and each unit it carries.
-  const phraseTakes = new Map<string, { itemId: string; heard: string; hit: boolean }[]>();
-  const verbs = new Map<string, UnitTally>();
-  const targets = new Map<string, UnitTally>();
-  for (const item of script.filter((entry) => entry.kind === "voice")) {
-    const split = splitVoicePhrase(item.say, language);
-    if (!split) throw new Error(`script line "${item.say}" is not a default phrase`);
-    const key = `${split.id}|${split.verb} ${split.target}`;
-    for (const clip of byItem.get(item.id) ?? []) {
-      const heard = clip.finals.join(" / ");
-      const hit = voiceClipHit(clip.finals, item, capabilities);
-      const words = spokenWords(clip.finals.join(" "), language);
-      const verbWords = spokenWords(split.verb, language);
-      const targetWords = split.target.split(" ");
-      const verbHeard = hit || verbWords.every((word, k) => words[k] === word);
-      const targetHeard =
-        hit ||
-        targetWords.every((word, k) => words[words.length - targetWords.length + k] === word);
-      tally(verbs, `${split.id}|${split.verb}`, verbHeard);
-      tally(targets, `${split.id}|${split.target}`, targetHeard);
-      const list = phraseTakes.get(key) ?? [];
-      list.push({ itemId: item.id, heard, hit });
-      phraseTakes.set(key, list);
-    }
-  }
+  // Default-phrase order, so every model's rows line up in the report.
+  const rows = defaultPhrases(language);
+  const scored = [...scoreVoice(context, rows), ...scorePunctuation(context, rows)];
+  const byRow = new Map(scored.map((score) => [score.row, score]));
+  const phrases = rows.map((row) => byRow.get(row) as PhraseScore);
+  const prose = scoreProse(context);
+  const rateOf = (kind: DefaultPhrase["kind"]) =>
+    mean(phrases.filter((score) => score.row.kind === kind).map((score) => score.rate));
 
-  const carriers = script.filter((item) => item.kind === "punctuation");
-  const phrases: PhraseScore[] = [];
-  for (const row of defaultPhrases(language)) {
-    if (row.kind === "voice") {
-      const recorded = phraseTakes.get(`${row.split.id}|${row.phrase}`);
-      if (recorded) {
-        phrases.push({
-          row,
-          source: "recorded",
-          rate: recorded.filter((take) => take.hit).length / recorded.length,
-          evidence: recorded,
-        });
-        continue;
-      }
-      // A verb is heard as the verb of any Command, a target only as its own.
-      const verbTally = [...verbs.entries()]
-        .filter(([key]) => key.endsWith(`|${row.split.verb}`))
-        .reduce<UnitTally>(
-          (sum, [, value]) => ({ heard: sum.heard + value.heard, takes: sum.takes + value.takes }),
-          { heard: 0, takes: 0 }
-        );
-      const rate = ratio(verbTally) * ratio(targets.get(`${row.split.id}|${row.split.target}`));
-      phrases.push({ row, source: "inferred", rate, evidence: [] });
-      continue;
-    }
-    const needle = phraseWords(row.phrase);
-    const evidence: PhraseScore["evidence"] = [];
-    for (const item of carriers) {
-      const expected = phraseCount([item.say], language, row.entry, row.phrase, capabilities);
-      if (expected === 0 || occurrences(phraseWords(item.say), needle) === 0) continue;
-      for (const clip of byItem.get(item.id) ?? []) {
-        const got = phraseCount(clip.finals, language, row.entry, row.phrase, capabilities);
-        evidence.push({ itemId: item.id, heard: clip.finals.join(" / "), hit: got >= expected });
-      }
-    }
-    const rate = evidence.length ? evidence.filter((take) => take.hit).length / evidence.length : 0;
-    phrases.push({ row, source: "recorded", rate, evidence });
-  }
-
-  const prose: ProseScore[] = [];
-  for (const item of script.filter((entry) => entry.kind === "prose")) {
-    const clips = byItem.get(item.id) ?? [];
-    prose.push({
-      item,
-      takes: clips.length,
-      triggered: clips.filter((clip) => proseTriggers(clip.finals, language, capabilities)).length,
-      firesOnText: proseTriggers([item.say], language, capabilities),
-      heard: clips.map((clip) => clip.finals.join(" / ")),
-    });
-  }
-
-  const hitRate = phrases.length
-    ? phrases.reduce((sum, score) => sum + score.rate, 0) / phrases.length
-    : 0;
   return {
     language,
     phrases,
     prose,
-    hitRate,
+    hitRate: mean(phrases.map((score) => score.rate)),
+    voiceRate: rateOf("voice"),
+    punctuationRate: rateOf("punctuation"),
     proseTriggers: prose.reduce((sum, score) => sum + score.triggered, 0),
-    missingItems,
+    misheardProseTriggers: prose
+      .filter((score) => !score.firesOnText)
+      .reduce((sum, score) => sum + score.triggered, 0),
+    missingItems: script.filter((item) => !clips.has(item.id)).map((item) => item.id),
   };
 }

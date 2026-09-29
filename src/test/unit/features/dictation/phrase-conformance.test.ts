@@ -196,6 +196,55 @@ describe("scoreModel()", () => {
     expect(useCode?.firesOnText).toBe(true);
     // 3 sentences fire on their text, plus the misheard one.
     expect(score.proseTriggers).toBe(4);
+    expect(score.misheardProseTriggers).toBe(1);
+  });
+
+  it("an extra firing of a phrase is a miss: it leaves a stray mark", () => {
+    const item = phraseItems("en").find((entry) => entry.say.startsWith("the rain"))?.id;
+    const clips = perfectClips("en").map((clip) =>
+      clip.itemId === item
+        ? { ...clip, finals: ["The rain stopped, comma, and she left period.", "Period."] }
+        : clip
+    );
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    const rate = (phrase: string) => score.phrases.find((row) => row.row.phrase === phrase)?.rate;
+    expect(rate("comma")).toBe(1);
+    expect(rate("period")).toBe(0);
+  });
+
+  it("a verb or target in a clip split over two lines is not heard", () => {
+    // "quote" is said only in "make quote"; split, it proves nothing.
+    const clips = perfectClips("en").map((clip) =>
+      clip.itemId === "v-make-quote" ? { ...clip, finals: ["Make", "quote."] } : clip
+    );
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    expect(score.phrases.find((row) => row.row.phrase === "apply quote")?.rate).toBe(0);
+  });
+
+  it("carries the interpreter state from one line of a clip to the next", () => {
+    // "punto y aparte" leaves a sentence start behind it; the next line is
+    // interpreted after it, as a session would, and still counts once.
+    const item = phraseItems("es").find((entry) => entry.say.startsWith("fin"))?.id;
+    const clips = perfectClips("es").map((clip) =>
+      clip.itemId === item
+        ? { ...clip, finals: ["fin", "punto y aparte", "al otro día nuevo párrafo", "llovió"] }
+        : clip
+    );
+    const score = scoreModel({ language: "es", capabilities: NO_PUNCTUATION, clips });
+    for (const phrase of ["punto y aparte", "nuevo párrafo"]) {
+      expect(score.phrases.find((row) => row.row.phrase === phrase)?.rate, phrase).toBe(1);
+    }
+  });
+
+  it("splits the hit rate into Voice Commands and Spoken Punctuation", () => {
+    const clips = perfectClips("en").map((clip) =>
+      clip.itemId.startsWith("p-") ? { ...clip, finals: ["mumble"] } : clip
+    );
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    expect(score.voiceRate).toBe(1);
+    expect(score.punctuationRate).toBe(0);
+    expect(score.hitRate).toBeGreaterThan(0);
+    expect(score.hitRate).toBeLessThan(1);
   });
 
   it("an English period stays text under the shipped defaults", () => {
