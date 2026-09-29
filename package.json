@@ -34,6 +34,8 @@
     "generate:symbols": "tsx scripts/generate-symbols-data.ts",
     "fetch:dictation": "node scripts/fetch-dictation-runtime.mjs",
     "conformance:dictation": "node scripts/dictation-conformance/web.mjs && cd src-tauri && cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture && python3 ../scripts/dictation-conformance/report.py",
+    "record:dictation-phrases": "tsx scripts/dictation-phrases/record.ts",
+    "conformance:dictation:phrases": "cd src-tauri && cargo test --release dictation::runner::tests::phrase_transcripts -- --ignored --nocapture && cd .. && tsx scripts/dictation-phrases/score.ts",
     "bench:dictation": "vitest bench --run src/test/bench --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
     "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json"
   },

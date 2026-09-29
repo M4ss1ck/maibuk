@@ -847,4 +847,197 @@ mod tests {
             );
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Phrase conformance (issue #285): what each model hears in the recorded
+    // phrase clips. Clips are fed to the engine straight, in 100 ms chunks
+    // with a poll after each, then finished: the same engine and line mapping
+    // as a live session, without waiting out the audio in real time.
+    // ---------------------------------------------------------------------
+
+    /// The finished lines an engine produces for one clip, in order.
+    fn transcribe_clip(engine: &mut dyn SpeechEngine, pcm: &[f32]) -> Vec<String> {
+        engine.start().expect("start engine");
+        let mut finals = Vec::new();
+        let mut keep = |events: Vec<DictationEvent>| {
+            for event in events {
+                match event {
+                    DictationEvent::Final { text, .. } => finals.push(text),
+                    DictationEvent::Error { code, detail } => {
+                        panic!("engine error {code:?}: {detail:?}")
+                    }
+                    _ => {}
+                }
+            }
+        };
+        for chunk in pcm.chunks(1_600) {
+            engine.accept(chunk).expect("accept audio");
+            keep(engine.poll().expect("poll"));
+        }
+        keep(engine.finish().expect("finish"));
+        finals
+    }
+
+    /// The same clip through the production Runner at real-time pace, like a
+    /// live microphone. Slower; `PHRASE_REALTIME=1` cross-checks the fast feed.
+    fn transcribe_clip_realtime(engine: &SharedEngine, path: &Path) -> Vec<String> {
+        engine.lock().unwrap().start().expect("start engine");
+        let messages: Arc<Mutex<Vec<HostMessage>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = messages.clone();
+        let runner = Runner::spawn(engine.clone(), WavSource::new(path), move |m| {
+            sink.lock().unwrap().push(m)
+        })
+        .expect("spawn runner");
+        std::thread::sleep(Duration::from_secs_f64(WavSource::seconds(path) + 1.0));
+        runner.stop();
+        let captured = messages.lock().unwrap();
+        captured
+            .iter()
+            .filter_map(|m| match m {
+                HostMessage::Event {
+                    event: DictationEvent::Final { text, .. },
+                } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn transcribe_clip_keeps_finals_in_order_and_drops_partials() {
+        struct Scripted {
+            polls: Vec<Vec<DictationEvent>>,
+            started: usize,
+        }
+        impl SpeechEngine for Scripted {
+            fn load(
+                &mut self,
+                _: &std::path::Path,
+                _: &crate::dictation::protocol::ModelSpec,
+            ) -> Result<(), DictationError> {
+                Ok(())
+            }
+            fn start(&mut self) -> Result<(), DictationError> {
+                self.started += 1;
+                Ok(())
+            }
+            fn accept(&mut self, _: &[f32]) -> Result<(), DictationError> {
+                Ok(())
+            }
+            fn poll(&mut self) -> Result<Vec<DictationEvent>, DictationError> {
+                Ok(if self.polls.is_empty() { vec![] } else { self.polls.remove(0) })
+            }
+            fn finish(&mut self) -> Result<Vec<DictationEvent>, DictationError> {
+                Ok(vec![DictationEvent::Final {
+                    text: "right".into(),
+                    latency_ms: None,
+                }])
+            }
+        }
+        let mut engine = Scripted {
+            polls: vec![
+                vec![DictationEvent::Partial { text: "al".into() }],
+                vec![DictationEvent::Final {
+                    text: "Align.".into(),
+                    latency_ms: Some(80),
+                }],
+            ],
+            started: 0,
+        };
+        // 0.25 s of audio is three chunks, so three polls.
+        let finals = transcribe_clip(&mut engine, &[0.0; 4_000]);
+        assert_eq!(finals, vec!["Align.".to_string(), "right".to_string()]);
+        assert_eq!(engine.started, 1);
+    }
+
+    /// Real models on the recorded phrase clips. Ignored: run with
+    /// `cargo test --release dictation::runner::tests::phrase_transcripts -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn phrase_transcripts() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vendor/moonshine");
+        if std::env::var_os("MAIBUK_MOONSHINE_LIB").is_none() {
+            let lib = root.join("linux-x86_64/lib/libmoonshine.so");
+            if lib.exists() {
+                std::env::set_var("MAIBUK_MOONSHINE_LIB", &lib);
+            }
+        }
+        let catalog: Vec<crate::dictation::protocol::ModelSpec> =
+            serde_json::from_str(include_str!("../../../src/features/dictation/catalog.json"))
+                .expect("catalog.json");
+        let filter: Option<Vec<String>> = std::env::var("CONFORMANCE_MODELS").ok().map(|v| {
+            v.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        });
+
+        for spec in catalog {
+            if filter.as_ref().is_some_and(|f| !f.contains(&spec.id)) {
+                continue;
+            }
+            let language = spec.languages.first().cloned().unwrap_or_else(|| "en".into());
+            let clips_dir = root.join("phrases").join(&language);
+            let mut files: Vec<_> = match std::fs::read_dir(&clips_dir) {
+                Ok(entries) => entries
+                    .filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| p.extension().is_some_and(|x| x == "wav"))
+                    .collect(),
+                Err(_) => {
+                    println!("{:<28} no clips in {}", spec.id, clips_dir.display());
+                    continue;
+                }
+            };
+            files.sort();
+            let dir = root.join("models").join(&spec.id);
+            assert!(
+                dir.exists(),
+                "missing {}: run `pnpm fetch:dictation --test-assets`",
+                dir.display()
+            );
+            let mut engine = crate::dictation::engine::create_engine(&spec).expect("create engine");
+            engine.load(&dir, &spec).expect("load model");
+            let realtime = std::env::var_os("PHRASE_REALTIME").is_some();
+            let shared: SharedEngine = Arc::new(Mutex::new(engine));
+
+            let started = Instant::now();
+            let mut clips = Vec::new();
+            for file in &files {
+                let (rate, pcm) = parse_wav(file);
+                let pcm = if rate == 16_000 {
+                    pcm
+                } else {
+                    crate::dictation::resample::Resampler::new(rate).push(&pcm)
+                };
+                let finals = if realtime {
+                    transcribe_clip_realtime(&shared, file)
+                } else {
+                    transcribe_clip(shared.lock().unwrap().as_mut(), &pcm)
+                };
+                clips.push(serde_json::json!({
+                    "file": file.file_name().unwrap().to_string_lossy(),
+                    "finals": finals,
+                }));
+            }
+            let doc = serde_json::json!({
+                "model": spec.id,
+                "language": language,
+                "backend": if realtime { "native-realtime" } else { "native" },
+                "clips": clips,
+            });
+            let path = root
+                .join("conformance")
+                .join(format!(
+                    "phrases-{}{}.json",
+                    spec.id,
+                    if realtime { ".realtime" } else { "" }
+                ));
+            write_trace(&path, &doc);
+            println!(
+                "{:<28} clips={:<4} seconds={:.1}",
+                spec.id,
+                files.len(),
+                started.elapsed().as_secs_f64()
+            );
+        }
+    }
 }

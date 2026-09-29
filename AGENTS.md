@@ -365,6 +365,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `pnpm fetch:dictation` (vendors the pinned Moonshine WASM release and native libs; `--web` fetches only the WASM runtime, which `pnpm build:web` runs first) | `scripts/fetch-dictation-runtime.mjs` |
 | `pnpm conformance:dictation` (periodic lane: plays the vendored WAVs through the web host in Chromium and the Rust runner, then reports latency and CPU per model) | `scripts/dictation-conformance/web.mjs` / `src-tauri/src/dictation/runner.rs` |
 | `pnpm bench:dictation` / `pnpm bench:dictation:android` (periodic lane: the Dictation Command Interpreter against the ADR 0015 budget, p99 under 1 ms per line and 10 ms per phrase table rebuild, with 1,000 aliases and Vocabulary entries; Node via `vitest bench`, Android in Chrome over `adb`; both fail when a budget is missed. The gate lane checks only that the worst-case inputs still reach every path, never timings) | `src/test/bench/` / `src/test/support/dictation-bench.ts` / `scripts/dictation-bench-budget.mjs` / `scripts/dictation-bench/android.mjs` |
+| `pnpm record:dictation-phrases <en\|es>` / `pnpm conformance:dictation:phrases` (periodic lane, issue #285: record the phrase script, then per-phrase hit rate on every model and the prose set; script in `src/test/support/dictation-phrase-set.ts`, scoring in `dictation-phrase-score.ts`) | `scripts/dictation-phrases/` / `scripts/dictation-conformance/README.md` |
 | `normalizeHexColor()` / `contrastRatio()` / `readableForeground()` (hex parsing that returns null on invalid input; WCAG contrast) | `src/lib/color.ts` |
 | `applyAccentColor(color)` (sets `--color-primary`, hover, and their readable foregrounds without writing settings; used for commit and preview) | `src/features/settings/accent-color.ts` |
 | `ItemActionsMenu` / `ItemActionsPopover` (always-visible ⋯ button, or a popover anchored to the item, with a React Aria menu of its actions; submenus via `children`) | `src/components/ui/ItemActionsMenu.tsx`                                |
@@ -833,6 +834,8 @@ pnpm fetch:dictation  # Vendor the pinned Moonshine WASM release and native libs
 pnpm conformance:dictation  # Dictation latency/CPU lane, web + Rust (needs pnpm fetch:dictation --test-assets)
 pnpm bench:dictation         # Dictation Interpreter budget (ADR 0015), Node; results in .bench/
 pnpm bench:dictation:android # Same bench in Chrome on the one adb device (phone or emulator)
+pnpm record:dictation-phrases en  # Record the Dictation phrase script (then es)
+pnpm conformance:dictation:phrases  # Per-phrase hit rate + prose triggers, native models
 pnpm screenshots -g "<test>"  # Before/after PR screenshots (e2e/README.md)
 pnpm tauri            # Direct Tauri CLI access
 ```
