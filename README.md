@@ -5,6 +5,8 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Release](https://img.shields.io/github/v/release/M4ss1ck/maibuk)
 
+![Maibuk launch film: typing in the Book Editor, then Notes, Canvas, Cover Designer, Version history, Dictation, accent colors and themes, ending on the Maibuk logo](https://github.com/user-attachments/assets/09098692-9a1f-40d5-b6da-278b21f8f430)
+
 ## Features
 
 - **Rich text editor** powered by TipTap, with formatting, tables, links, and images
