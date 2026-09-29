@@ -79,6 +79,23 @@ describe("noticeMessage()", () => {
     expect(noticeMessage({ kind: "voice_command", id: "dictation.stop", polarity: null }, es).announce)
       .toBe("Comando de voz: Detener dictado");
   });
+  it("announces nothing to undo or redo", () => {
+    expect(noticeMessage({ kind: "voice_command_empty", id: "common.undo" }, t)).toEqual({
+      announce: "Nothing to undo.",
+    });
+    expect(noticeMessage({ kind: "voice_command_empty", id: "common.redo" }, t).announce).toBe(
+      "Nothing to redo."
+    );
+  });
+  it("announces nothing to undo or redo in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "voice_command_empty", id: "common.undo" }, es).announce).toBe(
+      "No hay nada que deshacer."
+    );
+    expect(noticeMessage({ kind: "voice_command_empty", id: "common.redo" }, es).announce).toBe(
+      "No hay nada que rehacer."
+    );
+  });
   it("announces an orphan copied to the clipboard", () => {
     const message = noticeMessage({ kind: "orphan_copied" }, t);
     expect(message.toast?.variant).toBe("info");

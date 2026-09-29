@@ -154,7 +154,7 @@ describe("Voice Commands in a real editor session", () => {
     // On-verbs set: saying it again keeps bold on instead of toggling it off.
     emit("poner negrita");
     emit("mundo");
-    expect(editor.getHTML()).toBe("<p><strong>Hola mundo</strong></p>");
+    expect(editor.getHTML()).toBe("<p><strong>Hola</strong> <strong>mundo</strong></p>");
     expect(stats.summary().voiceCommandCount).toBe(2);
     expect(stats.summary().spokenPunctuationCount).toBe(0);
   });
@@ -166,6 +166,21 @@ describe("Voice Commands in a real editor session", () => {
     emit("quitar negrita");
     emit("adios");
     expect(editor.getHTML()).toBe("<p><strong>Hola</strong> adios</p>");
+  });
+
+  it("keeps the mark the Command set across a spoken paragraph break", async () => {
+    const { editor, emit } = await setup();
+    emit("poner negrita");
+    emit("nuevo párrafo hola");
+    expect(editor.getHTML()).toContain("<p><strong>Hola</strong></p>");
+  });
+
+  it("keeps the separating space out of the mark", async () => {
+    const { editor, emit } = await setup();
+    emit("uno");
+    emit("poner negrita");
+    emit("dos");
+    expect(editor.getHTML()).toBe("<p>Uno <strong>dos</strong></p>");
   });
 
   it("changes nothing when an off-verb runs on plain text, and still announces", async () => {
@@ -198,11 +213,66 @@ describe("Voice Commands in a real editor session", () => {
     expect(editor.getHTML()).toContain("<p>hola mundo</p>");
   });
 
+  it("converts a block once, never toggling it back", async () => {
+    const { editor, emit } = await setup({ content: "<p>hola</p>" });
+    editor.commands.setTextSelection(2);
+    emit("convertir en título uno");
+    expect(editor.getHTML()).toMatch(/^<h1[^>]*>hola<\/h1>/);
+    emit("convertir en título uno");
+    expect(editor.getHTML()).toMatch(/^<h1[^>]*>hola<\/h1>/);
+    expect((editor.getHTML().match(/<h1/g) ?? []).length).toBe(1);
+    emit("convertir en cita");
+    expect((editor.getHTML().match(/<blockquote>/g) ?? []).length).toBe(1);
+    emit("convertir en cita");
+    expect((editor.getHTML().match(/<blockquote>/g) ?? []).length).toBe(1);
+  });
+
   it("starts a list on the current block", async () => {
     const { editor, emit } = await setup({ content: "<p>hola</p>" });
     editor.commands.setTextSelection(2);
     emit("empezar lista");
     expect(editor.getHTML()).toContain("<ul><li><p>hola</p></li></ul>");
+  });
+
+  it("starts a list only when it is not already one, and ends it only when it is", async () => {
+    const { editor, emit } = await setup({ content: "<p>hola</p>" });
+    editor.commands.setTextSelection(2);
+    emit("terminar lista");
+    expect(editor.getHTML()).toBe("<p>hola</p>");
+    emit("empezar lista");
+    expect(editor.getHTML()).toContain("<ul><li><p>hola</p></li></ul>");
+    emit("empezar lista");
+    expect((editor.getHTML().match(/<ul>/g) ?? []).length).toBe(1);
+    emit("terminar lista");
+    expect(editor.getHTML()).not.toContain("<ul>");
+    emit("terminar lista");
+    expect(editor.getHTML()).not.toContain("<ul>");
+  });
+
+  it("starts and ends a numbered list the same way", async () => {
+    const { editor, emit } = await setup({ content: "<p>hola</p>" });
+    editor.commands.setTextSelection(2);
+    emit("terminar lista numerada");
+    expect(editor.getHTML()).toBe("<p>hola</p>");
+    emit("empezar lista numerada");
+    expect(editor.getHTML()).toContain("<ol>");
+    emit("empezar lista numerada");
+    expect((editor.getHTML().match(/<ol>/g) ?? []).length).toBe(1);
+    emit("salir de la lista numerada");
+    expect(editor.getHTML()).not.toContain("<ol>");
+  });
+
+  it("starts and ends a list in English the same way", async () => {
+    const { editor, emit } = await setup({ language: "en", content: "<p>hello</p>" });
+    editor.commands.setTextSelection(2);
+    emit("end list");
+    expect(editor.getHTML()).toBe("<p>hello</p>");
+    emit("start bullet list");
+    expect(editor.getHTML()).toContain("<ul><li><p>hello</p></li></ul>");
+    emit("start list");
+    expect((editor.getHTML().match(/<ul>/g) ?? []).length).toBe(1);
+    emit("end list");
+    expect(editor.getHTML()).not.toContain("<ul>");
   });
 
   it("undoes the last dictated line by voice", async () => {
@@ -211,6 +281,32 @@ describe("Voice Commands in a real editor session", () => {
     expect(editor.getHTML()).toBe("<p>Hola</p>");
     emit("deshacer eso");
     expect(editor.getHTML()).toBe("<p></p>");
+  });
+
+  it("makes a Voice Command its own undo step, not part of the previous line's", async () => {
+    const { editor, emit } = await setup();
+    emit("hola");
+    expect(editor.getHTML()).toBe("<p>Hola</p>");
+    emit("convertir en título uno");
+    expect(editor.getHTML()).toMatch(/<h1/);
+    undo(editor.state, editor.view.dispatch);
+    expect(editor.getHTML()).toContain("<p>Hola</p>");
+    expect(editor.getHTML()).not.toContain("<h1");
+    undo(editor.state, editor.view.dispatch);
+    expect(editor.getHTML()).not.toContain("Hola");
+  });
+
+  it("announces nothing-to-undo without counting it as a run", async () => {
+    const { editor, emit, notices, stats } = await setup();
+    const depth = undoDepth(editor.state);
+    emit("deshacer eso");
+    expect(notices).toContainEqual({ kind: "voice_command_empty", id: "common.undo" });
+    expect(stats.summary().voiceCommandCount).toBe(0);
+    expect(undoDepth(editor.state)).toBe(depth);
+    emit("hola");
+    emit("deshacer eso");
+    expect(editor.getHTML()).toBe("<p></p>");
+    expect(stats.summary().voiceCommandCount).toBe(1);
   });
 
   it("stops the Dictation Session by voice", async () => {
@@ -231,6 +327,15 @@ describe("Voice Commands in a real editor session", () => {
     const { editor, emit, notices } = await setup();
     emit("puso la negrita en el título");
     expect(editor.getHTML()).toBe("<p>Puso la negrita en el título</p>");
+    expect(notices.filter((notice) => notice.kind === "voice_command")).toEqual([]);
+  });
+
+  it("types short English sentences that only command words could fire on", async () => {
+    const { editor, emit, notices } = await setup({ language: "en" });
+    for (const line of ["Use the code.", "Center the text.", "Stop the list."]) {
+      emit(line);
+    }
+    expect(editor.getHTML()).toBe("<p>Use the code. Center the text. Stop the list.</p>");
     expect(notices.filter((notice) => notice.kind === "voice_command")).toEqual([]);
   });
 

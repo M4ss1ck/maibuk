@@ -12,12 +12,13 @@ import { COMMAND_IDS, COMMANDS, type CommandDef, type CommandId } from "@/lib/sh
 /** What an on-verb does to a mark, and what an off-verb undoes: never a toggle. */
 export type VoicePolarity = "on" | "off";
 
-/** A class of verbs that act the same way; only marks carry a polarity. */
+/** A class of verbs that act the same way; only marks and lists carry a polarity. */
 export type VoiceVerbClass =
   | "formatOn"
   | "formatOff"
   | "block"
-  | "list"
+  | "listOn"
+  | "listOff"
   | "align"
   | "undo"
   | "redo"
@@ -61,9 +62,13 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
         phrases: ["make", "turn into", "change to", "apply"],
         polarity: null,
       },
-      list: {
-        phrases: ["start", "begin", "create", "end", "stop"],
-        polarity: null,
+      listOn: {
+        phrases: ["start", "begin", "create"],
+        polarity: "on",
+      },
+      listOff: {
+        phrases: ["end", "stop"],
+        polarity: "off",
       },
       align: {
         phrases: ["align", "center"],
@@ -73,7 +78,9 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
       redo: { phrases: ["redo"], polarity: null },
       dictation: { phrases: ["stop"], polarity: null },
     },
-    fillers: ["the", "to", "in", "a"],
+    // "the" and "a" are not fillers: they turned short sentences ("Use the
+    // code.", "Center the text.", "Stop the list.") into Commands.
+    fillers: ["to", "in"],
   },
   es: {
     verbs: {
@@ -89,9 +96,13 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
         phrases: ["convertir en", "cambiar a", "poner"],
         polarity: null,
       },
-      list: {
-        phrases: ["empezar", "iniciar", "crear", "terminar", "salir de"],
-        polarity: null,
+      listOn: {
+        phrases: ["empezar", "iniciar", "crear"],
+        polarity: "on",
+      },
+      listOff: {
+        phrases: ["terminar", "salir de"],
+        polarity: "off",
       },
       align: {
         phrases: ["alinear", "centrar"],
@@ -109,8 +120,9 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
 export interface VoiceCommandSpec {
   /**
    * The verb classes that can introduce this Command. A mark takes both
-   * `formatOn` and `formatOff`; every other Command takes its one class, and
-   * the class's polarity picks the runner.
+   * `formatOn` and `formatOff`, a list both `listOn` and `listOff`; every
+   * other Command takes its one class, and the class's polarity picks the
+   * runner.
    */
   verbs: readonly VoiceVerbClass[];
   /** Target nouns per Dictation Language; the phrase is `verb [fillers] target`. */
@@ -141,6 +153,12 @@ export interface VoiceCommandRun {
   id: CommandId;
   polarity: VoicePolarity | null;
 }
+
+/**
+ * What running one Voice Command did. "empty" is an action with nothing to do
+ * ("undo" on an empty history): the live region says so and it is not counted.
+ */
+export type VoiceOutcome = "ran" | "empty" | "ignored";
 
 /** Commands that declare Voice Commands, in registry order. */
 export function voiceEligibleCommands(): CommandId[] {

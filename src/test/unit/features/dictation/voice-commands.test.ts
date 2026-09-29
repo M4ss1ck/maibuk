@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EDITOR_COMMANDS, VOICE_MARK_RUNNERS } from "@/components/editor/editor-commands";
+import { EDITOR_COMMANDS, VOICE_RUNNERS } from "@/components/editor/editor-commands";
 import { MODEL_CATALOG } from "@/features/dictation/catalog";
 import { normalizePhrase } from "@/features/dictation/normalize";
 import { entriesFor } from "@/features/dictation/spoken-punctuation";
@@ -24,7 +24,8 @@ const VERB_CLASSES: VoiceVerbClass[] = [
   "formatOn",
   "formatOff",
   "block",
-  "list",
+  "listOn",
+  "listOff",
   "align",
   "undo",
   "redo",
@@ -122,14 +123,17 @@ describe("Voice Command defaults", () => {
   it("gives every voice-eligible Command an event-free runner", () => {
     for (const id of voiceEligibleCommands()) {
       const voice = (COMMANDS[id] as CommandDef).voice;
-      expect(EDITOR_COMMANDS[id], id).toBeTypeOf("function");
+      const runners = VOICE_RUNNERS[id];
       const polarities = new Set(
-        (voice?.verbs ?? []).map((cls) => VOICE_VOCABULARY.en.verbs[cls].polarity)
+        LANGUAGES.flatMap((language) =>
+          (voice?.verbs ?? []).map((cls) => VOICE_VOCABULARY[language].verbs[cls].polarity)
+        )
       );
       if (polarities.has("on") || polarities.has("off")) {
-        const runners = VOICE_MARK_RUNNERS[id];
         expect(runners?.on, `${id} on`).toBeTypeOf("function");
         expect(runners?.off, `${id} off`).toBeTypeOf("function");
+      } else {
+        expect(runners?.on ?? EDITOR_COMMANDS[id], `${id} on`).toBeTypeOf("function");
       }
     }
   });
@@ -152,12 +156,16 @@ describe("matchVoiceCommand()", () => {
       id: "editor.heading1",
       polarity: null,
     });
-    expect(match("es", "empezar lista")).toEqual({ id: "editor.bulletList", polarity: null });
+    expect(match("es", "empezar lista")).toEqual({ id: "editor.bulletList", polarity: "on" });
     expect(match("es", "empezar lista numerada")).toEqual({
       id: "editor.numberedList",
-      polarity: null,
+      polarity: "on",
     });
-    expect(match("es", "salir de la lista")).toEqual({ id: "editor.bulletList", polarity: null });
+    expect(match("es", "salir de la lista")).toEqual({ id: "editor.bulletList", polarity: "off" });
+    expect(match("es", "terminar lista numerada")).toEqual({
+      id: "editor.numberedList",
+      polarity: "off",
+    });
     expect(match("es", "alinear a la izquierda")).toEqual({
       id: "editor.alignLeft",
       polarity: null,
@@ -168,7 +176,7 @@ describe("matchVoiceCommand()", () => {
     expect(match("es", "parar dictado")).toEqual({ id: "dictation.stop", polarity: null });
   });
 
-  it("keeps the verb's polarity for marks", () => {
+  it("keeps the verb's polarity for marks and lists", () => {
     expect(match("es", "quitar negrita")).toEqual({ id: "editor.bold", polarity: "off" });
     expect(match("es", "desactivar las cursivas")).toEqual({
       id: "editor.italic",
@@ -178,6 +186,13 @@ describe("matchVoiceCommand()", () => {
     expect(match("en", "turn off underline")).toEqual({ id: "editor.underline", polarity: "off" });
     expect(match("en", "make bold")).toEqual({ id: "editor.bold", polarity: "on" });
     expect(match("en", "apply heading two")).toEqual({ id: "editor.heading2", polarity: null });
+    expect(match("en", "start bullet list")).toEqual({ id: "editor.bulletList", polarity: "on" });
+    expect(match("en", "end list")).toEqual({ id: "editor.bulletList", polarity: "off" });
+    expect(match("en", "start numbered list")).toEqual({
+      id: "editor.numberedList",
+      polarity: "on",
+    });
+    expect(match("en", "stop list")).toEqual({ id: "editor.bulletList", polarity: "off" });
   });
 
   it("refuses a one-word line", () => {
@@ -191,6 +206,11 @@ describe("matchVoiceCommand()", () => {
     expect(match("es", "el título uno")).toBeNull();
     expect(match("en", "he waited for a period of time")).toBeNull();
     expect(match("en", "make the sentence bold")).toBeNull();
+    // The articles "the"/"a" are not English fillers: these are prose, not
+    // Commands (the short shapes without them stay in the #285 prose set).
+    expect(match("en", "Use the code.")).toBeNull();
+    expect(match("en", "Center the text.")).toBeNull();
+    expect(match("en", "Stop the list.")).toBeNull();
   });
 
   it("does not cross languages", () => {

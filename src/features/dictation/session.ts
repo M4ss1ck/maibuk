@@ -4,7 +4,7 @@
 import type { LineStats } from "@/features/dictation/stats";
 import type { DictationEdit, RouteResult } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
-import type { VoiceCommandRun } from "@/features/dictation/voice-commands";
+import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 import {
   toDictationError,
   type DictationErrorCode,
@@ -13,6 +13,7 @@ import {
   type ModelSpec,
   type RecognizerHost,
 } from "@/features/dictation/types";
+import type { CommandId } from "@/lib/shortcut-registry";
 
 /** What a scratch request did on its target. `refused` means the author edited inside the dictated text. */
 export type ScratchOutcome = "removed" | "refused" | "empty";
@@ -27,10 +28,11 @@ export interface DictationTarget {
   /** Applies one finished line as one undo step. */
   apply(edits: DictationEdit[]): void;
   /**
-   * Runs one Voice Command on this target's editor; true when it ran. The
-   * polarity picks a mark's set or unset runner. Absent targets run none.
+   * Runs one Voice Command on this target's editor. The polarity picks a
+   * mark's set or unset runner; "empty" is an action with nothing to do.
+   * Absent targets run none.
    */
-  voice?(run: VoiceCommandRun): boolean;
+  voice?(run: VoiceCommandRun): VoiceOutcome;
   /** Removes the last dictated sentence as one undo step. Absent targets ignore scratch. */
   scratch?(): ScratchOutcome;
   /** Drops the dictated history so scratch never reaches into another editor. Absent targets keep no history. */
@@ -52,7 +54,10 @@ export type SessionNotice =
   | { kind: "scratch_empty" }
   // A Voice Command ran: the live region says which one, so a spoken action
   // with no visible cause is never silent.
-  | ({ kind: "voice_command" } & VoiceCommandRun);
+  | ({ kind: "voice_command" } & VoiceCommandRun)
+  // A Voice Command had nothing to do ("undo that" on an empty history): the
+  // live region says so, and the stats do not count it as a run.
+  | { kind: "voice_command_empty"; id: CommandId };
 
 export interface SessionSnapshot {
   status: SessionStatus;
@@ -162,20 +167,23 @@ export function createDictationSession(deps: {
         const interpreterMs = performance.now() - startedAt;
         // The Tutorial gate is the Shortcuts one: while a run is under way no
         // Voice Command acts, and its words are never inserted either. Only a
-        // Command that really ran counts.
-        const voiceRan =
-          result.kind === "voice_command" &&
-          deps.voiceCommandsAllowed?.() !== false &&
-          target?.voice?.({ id: result.id, polarity: result.polarity }) === true;
+        // Command that really ran counts; an empty action is announced instead.
+        let voiceOutcome: VoiceOutcome = "ignored";
+        if (result.kind === "voice_command" && deps.voiceCommandsAllowed?.() !== false) {
+          voiceOutcome =
+            target?.voice?.({ id: result.id, polarity: result.polarity }) ?? "ignored";
+        }
         deps.stats.recordInterpreter(
           interpreterMs,
           result.kind === "edits" ? (result.spokenPunctuationCount ?? 0) : 0,
           result.kind === "scratch" ? 1 : 0,
-          voiceRan ? 1 : 0
+          voiceOutcome === "ran" ? 1 : 0
         );
         if (result.kind === "voice_command") {
-          if (voiceRan) {
+          if (voiceOutcome === "ran") {
             deps.notify({ kind: "voice_command", id: result.id, polarity: result.polarity });
+          } else if (voiceOutcome === "empty") {
+            deps.notify({ kind: "voice_command_empty", id: result.id });
           }
           return;
         }

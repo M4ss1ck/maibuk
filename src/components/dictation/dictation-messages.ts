@@ -34,6 +34,12 @@ export function noticeMessage(
             : "dictation.voiceCommand";
       return { announce: t(key, { command }) };
     }
+    case "voice_command_empty":
+      return {
+        announce: t(
+          notice.id === "common.redo" ? "dictation.nothingToRedo" : "dictation.nothingToUndo"
+        ),
+      };
     case "orphan_copied": {
       const text = t("dictation.orphanCopied");
       return { toast: { variant: "info", text }, announce: text };

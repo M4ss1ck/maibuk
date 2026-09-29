@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import type { CommandId } from "@/lib/shortcut-registry";
 import { dictationHub } from "@/features/dictation/hub";
-import type { VoiceCommandRun } from "@/features/dictation/voice-commands";
+import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 
 type EditorCommand = (editor: Editor) => boolean;
 
@@ -65,23 +65,76 @@ export const EDITOR_COMMANDS: Partial<Record<CommandId, EditorCommand>> = {
   },
 };
 
-type MarkRunners = { on: EditorCommand; off: EditorCommand };
+type VoiceRunners = { on: EditorCommand; off?: EditorCommand };
+
+/** Starts a list only when it is not already one; ends it only when it is. */
+function listRunner(kind: "bulletList" | "orderedList", mode: "start" | "end"): EditorCommand {
+  return (editor) => {
+    const active = editor.isActive(kind);
+    if (mode === "start" ? active : !active) return true;
+    return kind === "bulletList"
+      ? editor.commands.toggleBulletList()
+      : editor.commands.toggleOrderedList();
+  };
+}
+
+/** Converts the current block and is a no-op when it already is one. */
+function setBlock(command: EditorCommand, active: (editor: Editor) => boolean): EditorCommand {
+  return (editor) => (active(editor) ? true : command(editor));
+}
 
 /**
- * What an on-verb and an off-verb do to a mark, so a Voice Command sets or
- * unsets and never toggles. Commands not listed here run their own runner.
+ * What a Voice Command runs, per Command. A verb with a polarity picks `on` or
+ * `off`; a mark sets or unsets and never toggles, a list starts only when it is
+ * not one and ends only when it is, and a block converts once, never back.
+ * Commands not listed here run their own event-free runner.
  */
-export const VOICE_MARK_RUNNERS: Partial<Record<CommandId, MarkRunners>> = {
+export const VOICE_RUNNERS: Partial<Record<CommandId, VoiceRunners>> = {
   "editor.bold": { on: run("setBold"), off: run("unsetBold") },
   "editor.italic": { on: run("setItalic"), off: run("unsetItalic") },
   "editor.underline": { on: run("setUnderline"), off: run("unsetUnderline") },
   "editor.strikethrough": { on: run("setStrike"), off: run("unsetStrike") },
   "editor.code": { on: run("setCode"), off: run("unsetCode") },
+  "editor.bulletList": {
+    on: listRunner("bulletList", "start"),
+    off: listRunner("bulletList", "end"),
+  },
+  "editor.numberedList": {
+    on: listRunner("orderedList", "start"),
+    off: listRunner("orderedList", "end"),
+  },
+  "editor.heading1": {
+    on: setBlock(run("setHeading", { level: 1 }), (editor) =>
+      editor.isActive("heading", { level: 1 })
+    ),
+  },
+  "editor.heading2": {
+    on: setBlock(run("setHeading", { level: 2 }), (editor) =>
+      editor.isActive("heading", { level: 2 })
+    ),
+  },
+  "editor.heading3": {
+    on: setBlock(run("setHeading", { level: 3 }), (editor) =>
+      editor.isActive("heading", { level: 3 })
+    ),
+  },
+  "editor.quote": {
+    on: setBlock(run("setBlockquote"), (editor) => editor.isActive("blockquote")),
+  },
 };
 
-/** Runs one Voice Command's runner on this editor; the class polarity picks set or unset. */
-export function runVoiceCommand(editor: Editor, run: VoiceCommandRun): boolean {
-  const mark = VOICE_MARK_RUNNERS[run.id];
-  if (mark) return (run.polarity === "off" ? mark.off : mark.on)(editor);
-  return EDITOR_COMMANDS[run.id]?.(editor) ?? false;
+/** Runs one Voice Command's runner on this editor. */
+export function runVoiceCommand(editor: Editor, run: VoiceCommandRun): VoiceOutcome {
+  const runners = VOICE_RUNNERS[run.id];
+  if (runners) {
+    const command = run.polarity === "off" ? (runners.off ?? runners.on) : runners.on;
+    return command(editor) ? "ran" : "ignored";
+  }
+  const command = EDITOR_COMMANDS[run.id];
+  if (!command) return "ignored";
+  const ran = command(editor);
+  // Undo and redo have nothing to do on an empty history: say so instead of
+  // staying silent. The caller does not count an empty action as a run.
+  if (!ran && (run.id === "common.undo" || run.id === "common.redo")) return "empty";
+  return ran ? "ran" : "ignored";
 }

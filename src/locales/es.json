@@ -1724,6 +1724,8 @@
     "voiceCommand": "Comando de voz: {{command}}",
     "voiceCommandOn": "Se activó {{command}}",
     "voiceCommandOff": "Se desactivó {{command}}",
+    "nothingToUndo": "No hay nada que deshacer.",
+    "nothingToRedo": "No hay nada que rehacer.",
     "languages": { "en": "inglés", "es": "español" },
     "languageNames": { "en": "Inglés", "es": "Español" },
     "errors": {

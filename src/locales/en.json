@@ -1724,6 +1724,8 @@
     "voiceCommand": "Voice command: {{command}}",
     "voiceCommandOn": "{{command}} on",
     "voiceCommandOff": "{{command}} off",
+    "nothingToUndo": "Nothing to undo.",
+    "nothingToRedo": "Nothing to redo.",
     "languages": { "en": "English", "es": "Spanish" },
     "languageNames": { "en": "English", "es": "Spanish" },
     "errors": {

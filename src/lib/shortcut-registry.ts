@@ -491,7 +491,7 @@ export const COMMANDS = {
     source: "editor-keymap",
     defaults: [["Mod+Shift+8"]],
     voice: {
-      verbs: ["list"],
+      verbs: ["listOn", "listOff"],
       targets: {
         en: ["bullet list", "bulleted list", "bullets", "list"],
         es: ["lista", "lista con viñetas", "viñetas"],
@@ -504,7 +504,7 @@ export const COMMANDS = {
     source: "editor-keymap",
     defaults: [["Mod+Shift+7"]],
     voice: {
-      verbs: ["list"],
+      verbs: ["listOn", "listOff"],
       targets: {
         en: ["numbered list", "number list", "ordered list"],
         es: ["lista numerada", "lista ordenada"],

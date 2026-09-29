@@ -359,7 +359,7 @@ describe("Dictation Session", () => {
   });
 
   it("runs a Voice Command on the active target instead of inserting its words", async () => {
-    const voice = vi.fn(() => true);
+    const voice = vi.fn(() => "ran" as const);
     const target = { ...fakeTarget("a"), voice };
     const stats = createLineStats();
     const session = createDictationSession({
@@ -390,7 +390,7 @@ describe("Dictation Session", () => {
   });
 
   it("stays silent and counts nothing when the runner did not run", async () => {
-    const voice = vi.fn(() => false);
+    const voice = vi.fn(() => "ignored" as const);
     const target = { ...fakeTarget("a"), voice };
     const stats = createLineStats();
     const session = createDictationSession({
@@ -410,8 +410,28 @@ describe("Dictation Session", () => {
     expect(stats.summary().voiceCommandCount).toBe(0);
   });
 
+  it("announces an empty action without counting it as a run", async () => {
+    const voice = vi.fn(() => "empty" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "common.undo", polarity: null })),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "deshacer eso" });
+    expect(notices).toContainEqual({ kind: "voice_command_empty", id: "common.undo" });
+    expect(stats.summary().voiceCommandCount).toBe(0);
+  });
+
   it("blocks Voice Commands while the Tutorial runs, without inserting them", async () => {
-    const voice = vi.fn(() => true);
+    const voice = vi.fn(() => "ran" as const);
     const target = { ...fakeTarget("a"), voice };
     const stats = createLineStats();
     const session = createDictationSession({

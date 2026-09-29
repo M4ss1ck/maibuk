@@ -60,12 +60,15 @@ Settled with Andy after this research. Where they differ from the recommendation
 | Format on | make, set, turn on, use, apply | poner, activar, usar, aplicar | bold, italic, underline, strike, code |
 | Format off | remove, turn off | quitar, desactivar | same |
 | Block to | make, turn into, change to, apply | convertir en, cambiar a, poner | heading one to three, quote |
-| List | start, begin, create, end, stop | empezar, iniciar, crear, terminar, salir de | bullet list, numbered list |
+| List on | start, begin, create | empezar, iniciar, crear | bullet list, numbered list |
+| List off | end, stop | terminar, salir de | bullet list, numbered list |
 | Align | align, center | alinear, centrar | left, center, right, justify |
 | Action | undo, redo | deshacer, rehacer | that / eso |
 | Dictation | stop | parar, detener | dictation / dictado |
 
-Filler words: en "the, to, in, a"; es "la, el, las, los, en, a, al". Targets accept number and gender variants, and numbers as words or digits ("heading 1" / "título uno"). "stop" left Format off because both vendors use it to stop listening ("stop dictation" keeps it, on a different target), and "remove" is Google Docs' unset verb ("Remove bold"); "create … list" and "apply heading …" come from Google Docs, "poner en negrita" and "deshacer eso" from voice access in Spanish. Paragraph is not a v1 target: no Command with an event-free runner changes a block to a paragraph today.
+Filler words: en "to, in"; es "la, el, las, los, en, a, al". Targets accept number and gender variants, and numbers as words or digits ("heading 1" / "título uno"). "stop" left Format off because both vendors use it to stop listening; it is the list-off verb and, with the "dictation" target, still stops the Session — the target disambiguates. "remove" is Google Docs' unset verb ("Remove bold"); "create … list" and "apply heading …" come from Google Docs, "poner en negrita" and "deshacer eso" from voice access in Spanish.
+
+Lists start only when the caret is not already in that list type, and end only when it is; block verbs convert once and are a no-op when the caret is already in that block. The English articles "the" and "a" are **not** fillers: keeping them turned ordinary sentences ("Use the code.", "Center the text.", "Stop the list.") into Commands. The short shapes without them ("Use code.") stay listed for the #285 conformance prose set. Paragraph is not a v1 target: no Command with an event-free runner changes a block to a paragraph today (recorded on #275, story 40).
 
 **Next, not deferred:** a Tutorial "Dictation" section that teaches without dictating: steps anchored on Settings → Dictation and the Shortcut Editor's Voice list, plus an `image` step for the editor control, covering every Dictation term.
 

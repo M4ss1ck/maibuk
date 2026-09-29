@@ -99,7 +99,7 @@ describe("getDictation()", () => {
     const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast");
     if (!esFast) throw new Error("no Spanish model in the catalog");
     useDictationStore.setState({ installed: [esFast.id] });
-    const voice = vi.fn(() => true);
+    const voice = vi.fn(() => "ran" as const);
     session.register({
       id: "chapter",
       language: () => "es",
