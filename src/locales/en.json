@@ -1200,8 +1200,8 @@
     "resetShort": "Reset",
     "resetAll": "Reset all shortcuts",
     "resetAllTitle": "Reset all shortcuts?",
-    "resetAllBody_one": "{{count}} customized command goes back to its default shortcuts.",
-    "resetAllBody_other": "{{count}} customized commands go back to their default shortcuts.",
+    "resetAllBody_one": "{{count}} customized command goes back to its default shortcuts and voice commands.",
+    "resetAllBody_other": "{{count}} customized commands go back to their default shortcuts and voice commands.",
     "filter": {
       "all": "All",
       "customized": "Customized",
@@ -1257,10 +1257,44 @@
         "parse": "This file is not a shortcut file.",
         "kind": "This file is not a Maibuk shortcut file.",
         "version": "This shortcut file comes from a newer Maibuk."
+      },
+      "droppedVoice": {
+        "unknown": "{{command}}: this version of Maibuk has no such command",
+        "notVoice": "{{command}}: takes no voice commands",
+        "invalid": "{{command}} ({{language}}): not a valid voice command",
+        "tooShort": "{{command}} ({{language}}): {{phrase}} is shorter than two words",
+        "conflict": "{{command}} ({{language}}): {{phrase}} already means something else"
       }
     },
     "settingsDescription": "See every command, give it your own shortcut, or turn off single-key shortcuts.",
-    "open": "Customize shortcuts"
+    "open": "Customize shortcuts",
+    "voice": {
+      "title": "Voice commands: {{command}}",
+      "intro": "Say one of these on its own while dictating to run {{command}}. Each phrase needs two words or more. Changes stay on this device.",
+      "open": "Voice commands for {{command}}",
+      "openShort": "Voice",
+      "rowLabel": "Voice ({{language}}):",
+      "more_one": "+{{count}} more",
+      "more_other": "+{{count}} more",
+      "none": "No voice command",
+      "listLabel": "Voice commands for {{command}} in {{language}}",
+      "edit": "Edit {{phrase}}",
+      "remove": "Remove {{phrase}} from {{command}}",
+      "addLabel": "New voice command for {{command}} in {{language}}",
+      "editLabel": "Change {{phrase}}",
+      "placeholder": "make it bold…",
+      "reset": "Reset {{language}} to defaults",
+      "polarity": {
+        "on": "turns on",
+        "off": "turns off"
+      },
+      "announce": {
+        "added": "{{phrase}} runs {{command}}.",
+        "changed": "{{from}} changed to {{phrase}}.",
+        "removed": "{{phrase}} removed from {{command}}.",
+        "reset": "{{command}} voice commands in {{language}} reset to the defaults."
+      }
+    }
   },
   "versions": {
     "title": "Version history",
@@ -1815,6 +1849,11 @@
         "empty": "Enter what Dictation hears and what to write instead.",
         "duplicate": "{{phrase}} is already in the Dictation vocabulary."
       }
+    },
+    "phraseRefused": {
+      "tooShort": "A Voice Command needs two words or more, so a one-word sentence never runs it.",
+      "spokenPunctuation": "{{phrase}} is already Spoken punctuation: {{entry}}.",
+      "voiceCommand": "{{phrase}} already runs {{command}}."
     }
   },
   "colorPicker": {

@@ -122,7 +122,8 @@ describe("useItemCommands", () => {
     const onAction = vi.fn();
     useShortcutSettingsStore.setState({
       shortcuts: {
-        version: 1,
+        version: 2,
+        voice: {},
         custom: { "common.delete": [["Mod+Shift+x"]] },
         singleKeyEnabled: true,
       },

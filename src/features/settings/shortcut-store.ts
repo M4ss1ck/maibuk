@@ -1,5 +1,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { DictationLanguage } from "@/features/dictation/types";
+import {
+  defaultVoicePhrases,
+  isVoiceEligible,
+  normalizeCustomVoiceCommands,
+  normalizeVoicePhraseList,
+  type CustomVoiceCommands,
+} from "@/features/dictation/voice-commands";
+import { normalizePhrase } from "@/features/dictation/normalize";
 import { IS_WEB } from "@/lib/platform/target";
 import { COMMANDS, type CommandDef, type CommandId, type Shortcut } from "@/lib/shortcut-registry";
 import { normalizeShortcut, shortcutKey } from "@/lib/shortcut-keys";
@@ -18,13 +27,38 @@ interface ShortcutSettingsStore {
   /** An empty list is "No shortcut"; the defaults again delete the entry. */
   setCommandShortcuts: (id: CommandId, shortcuts: readonly Shortcut[]) => void;
   resetCommandShortcuts: (id: CommandId) => void;
+  /** An empty list is "No Voice Command"; the defaults again delete the entry. */
+  setCommandVoicePhrases: (
+    id: CommandId,
+    language: DictationLanguage,
+    phrases: readonly string[]
+  ) => void;
+  resetCommandVoicePhrases: (id: CommandId, language: DictationLanguage) => void;
+  /** Resets every Custom Shortcut and custom Voice Command. */
   resetAllShortcuts: () => void;
-  replaceCustomShortcuts: (custom: CustomShortcuts) => void;
+  /** Loading a Shortcut File replaces both kinds of binding. */
+  replaceCustomShortcuts: (custom: CustomShortcuts, voice?: CustomVoiceCommands) => void;
   setSingleKeyShortcutsEnabled: (enabled: boolean) => void;
 }
 
 function withCustom(settings: ShortcutSettings, custom: CustomShortcuts): ShortcutSettings {
   return { ...settings, custom };
+}
+
+function withVoice(settings: ShortcutSettings, voice: CustomVoiceCommands): ShortcutSettings {
+  return { ...settings, voice };
+}
+
+function withoutLanguage(
+  voice: CustomVoiceCommands,
+  id: CommandId,
+  language: DictationLanguage
+): CustomVoiceCommands {
+  const next = { ...voice };
+  const { [language]: _removed, ...rest } = next[id] ?? {};
+  if (Object.keys(rest).length === 0) delete next[id];
+  else next[id] = rest;
+  return next;
 }
 
 /**
@@ -67,13 +101,43 @@ export const useShortcutSettingsStore = create<ShortcutSettingsStore>()(
           delete custom[id];
           return { shortcuts: withCustom(state.shortcuts, custom) };
         }),
-      resetAllShortcuts: () => set((state) => ({ shortcuts: withCustom(state.shortcuts, {}) })),
-      replaceCustomShortcuts: (custom) =>
+      setCommandVoicePhrases: (id, language, phrases) =>
+        set((state) => {
+          if (!isVoiceEligible(id)) return state;
+          const next = normalizeVoicePhraseList(phrases);
+          const defaults = defaultVoicePhrases(id, language);
+          const isDefault =
+            next.length === defaults.length &&
+            next.every(
+              (phrase, index) => normalizePhrase(phrase) === normalizePhrase(defaults[index])
+            );
+          const voice = isDefault
+            ? withoutLanguage(state.shortcuts.voice, id, language)
+            : {
+                ...state.shortcuts.voice,
+                [id]: { ...state.shortcuts.voice[id], [language]: next },
+              };
+          return { shortcuts: withVoice(state.shortcuts, voice) };
+        }),
+      resetCommandVoicePhrases: (id, language) =>
+        set((state) => {
+          if (state.shortcuts.voice[id]?.[language] === undefined) return state;
+          return {
+            shortcuts: withVoice(
+              state.shortcuts,
+              withoutLanguage(state.shortcuts.voice, id, language)
+            ),
+          };
+        }),
+      resetAllShortcuts: () =>
+        set((state) => ({ shortcuts: { ...state.shortcuts, custom: {}, voice: {} } })),
+      replaceCustomShortcuts: (custom, voice = {}) =>
         set((state) => ({
-          shortcuts: withCustom(
-            state.shortcuts,
-            normalizeShortcuts({ version: 1, custom, singleKeyEnabled: true }).custom
-          ),
+          shortcuts: {
+            ...state.shortcuts,
+            custom: normalizeShortcuts({ version: 1, custom }).custom,
+            voice: normalizeCustomVoiceCommands(voice),
+          },
         })),
       setSingleKeyShortcutsEnabled: (enabled) =>
         set((state) => ({ shortcuts: { ...state.shortcuts, singleKeyEnabled: enabled } })),

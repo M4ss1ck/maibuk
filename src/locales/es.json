@@ -1200,8 +1200,8 @@
     "resetShort": "Restablecer",
     "resetAll": "Restablecer todos los atajos",
     "resetAllTitle": "¿Restablecer todos los atajos?",
-    "resetAllBody_one": "{{count}} comando personalizado vuelve a sus atajos predeterminados.",
-    "resetAllBody_other": "{{count}} comandos personalizados vuelven a sus atajos predeterminados.",
+    "resetAllBody_one": "{{count}} comando personalizado vuelve a sus atajos y comandos de voz predeterminados.",
+    "resetAllBody_other": "{{count}} comandos personalizados vuelven a sus atajos y comandos de voz predeterminados.",
     "filter": {
       "all": "Todos",
       "customized": "Personalizados",
@@ -1257,10 +1257,44 @@
         "parse": "Este archivo no es un archivo de atajos.",
         "kind": "Este archivo no es un archivo de atajos de Maibuk.",
         "version": "Este archivo de atajos viene de un Maibuk más nuevo."
+      },
+      "droppedVoice": {
+        "unknown": "{{command}}: esta versión de Maibuk no tiene ese comando",
+        "notVoice": "{{command}}: no acepta comandos de voz",
+        "invalid": "{{command}} ({{language}}): no es un comando de voz válido",
+        "tooShort": "{{command}} ({{language}}): {{phrase}} tiene menos de dos palabras",
+        "conflict": "{{command}} ({{language}}): {{phrase}} ya significa otra cosa"
       }
     },
     "settingsDescription": "Consulta cada comando, dale tu propio atajo o desactiva los atajos de una tecla.",
-    "open": "Personalizar atajos"
+    "open": "Personalizar atajos",
+    "voice": {
+      "title": "Comandos de voz: {{command}}",
+      "intro": "Di una de estas frases sola mientras dictas para ejecutar {{command}}. Cada frase necesita dos palabras o más. Los cambios se quedan en este dispositivo.",
+      "open": "Comandos de voz de {{command}}",
+      "openShort": "Voz",
+      "rowLabel": "Voz ({{language}}):",
+      "more_one": "+{{count}} más",
+      "more_other": "+{{count}} más",
+      "none": "Sin comando de voz",
+      "listLabel": "Comandos de voz de {{command}} en {{language}}",
+      "edit": "Editar {{phrase}}",
+      "remove": "Quitar {{phrase}} de {{command}}",
+      "addLabel": "Nuevo comando de voz para {{command}} en {{language}}",
+      "editLabel": "Cambiar {{phrase}}",
+      "placeholder": "pon esto en negrita…",
+      "reset": "Restablecer {{language}}",
+      "polarity": {
+        "on": "activa",
+        "off": "desactiva"
+      },
+      "announce": {
+        "added": "{{phrase}} ejecuta {{command}}.",
+        "changed": "{{from}} cambió a {{phrase}}.",
+        "removed": "{{phrase}} quitado de {{command}}.",
+        "reset": "Comandos de voz de {{command}} en {{language}} restablecidos."
+      }
+    }
   },
   "versions": {
     "title": "Historial de versiones",
@@ -1815,6 +1849,11 @@
         "empty": "Escribe lo que oye Dictado y lo que hay que escribir en su lugar.",
         "duplicate": "{{phrase}} ya está en el vocabulario de dictado."
       }
+    },
+    "phraseRefused": {
+      "tooShort": "Un comando de voz necesita dos palabras o más, así una frase de una sola palabra nunca lo ejecuta.",
+      "spokenPunctuation": "{{phrase}} ya es puntuación dictada: {{entry}}.",
+      "voiceCommand": "{{phrase}} ya ejecuta {{command}}."
     }
   },
   "colorPicker": {

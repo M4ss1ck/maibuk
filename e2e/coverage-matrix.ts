@@ -2168,6 +2168,25 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "shortcut-editor-voice-commands",
+    area: "shell",
+    workflow:
+      "Shortcut Editor: a voice-eligible Command's row shows its Voice commands for the current Dictation Language; Voice opens a dialog to add, edit, remove, and reset phrases, with a switch to the other Dictation Language, all by keyboard; persists: yes (device-local, travels in the Shortcut File)",
+    edges: [
+      "a one-word phrase is refused with an alert",
+      "a phrase that is another Command's Voice Command or Spoken Punctuation is refused with an alert",
+      "Escape leaves an edit without closing the dialog, then closes it back to the row's Voice button",
+      "the other Dictation Language keeps its own list",
+      "custom Voice commands survive a reload and travel in the Shortcut File",
+    ],
+    terms: ["Voice Command", "Shortcut Editor", "Dictation Language", "Shortcut File"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "dictation-spoken-punctuation",
     area: "settings",
     workflow:

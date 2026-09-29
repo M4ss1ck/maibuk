@@ -11,6 +11,8 @@ import "@/i18n";
 
 const { SpokenPunctuationSection } = await import("@/components/settings/SpokenPunctuationSection");
 const { useDictationStore } = await import("@/features/dictation/store");
+const { useShortcutSettingsStore } = await import("@/features/settings/shortcut-store");
+const { DEFAULT_SHORTCUT_SETTINGS } = await import("@/lib/shortcut-resolve");
 
 const punctuating: ModelSpec["capabilities"] = {
   casing: true,
@@ -46,6 +48,7 @@ beforeEach(() => {
     spokenPunctuation: defaultSpokenPunctuationSettings(),
     languageOverride: null,
   });
+  useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
 });
 
 afterEach(async () => {
@@ -221,6 +224,28 @@ describe("SpokenPunctuationSection", () => {
       within(comma).getByText("literal comma starts with the escape word, literal.")
     ).toBeInTheDocument();
     expect(settingsFor("en").aliases.comma).toBeUndefined();
+  });
+
+  it("refuses a phrase that is a Voice Command, default or the author's own", async () => {
+    const user = userEvent.setup();
+    useShortcutSettingsStore
+      .getState()
+      .setCommandVoicePhrases("editor.italic", "en", ["slanted words"]);
+    renderSection();
+    const comma = screen.getByRole("group", { name: "comma" });
+    const field = within(comma).getByRole("textbox", { name: "Add a phrase to comma" });
+
+    field.focus();
+    await user.keyboard("make bold{Enter}");
+    expect(within(comma).getByRole("alert")).toHaveTextContent("make bold already runs Bold.");
+
+    await user.clear(field);
+    await user.keyboard("slanted words{Enter}");
+    expect(within(comma).getByRole("alert")).toHaveTextContent(
+      "slanted words already runs Italic."
+    );
+    expect(settingsFor("en").aliases.comma).toBeUndefined();
+    expect(field).toHaveFocus();
   });
 
   it("resets one entry's switch and phrases to the defaults", async () => {

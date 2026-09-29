@@ -13,7 +13,7 @@ vi.mock("@/lib/platform/detect", async (importOriginal) => ({
 }));
 
 function setShortcuts(custom: CustomShortcuts, singleKeyEnabled = true) {
-  useShortcutSettingsStore.setState({ shortcuts: { version: 1, custom, singleKeyEnabled } });
+  useShortcutSettingsStore.setState({ shortcuts: { version: 2, voice: {}, custom, singleKeyEnabled } });
 }
 
 function press(init: KeyboardEventInit, target: EventTarget = window) {

@@ -303,7 +303,7 @@ test.describe("Shortcut Editor @wf:shortcut-editor", () => {
     expect(file.suggestedFilename()).toBe("maibuk-shortcuts.json");
     const path = await file.path();
     const saved = JSON.parse(await readFile(path, "utf8"));
-    expect(saved).toMatchObject({ app: "maibuk", kind: "shortcuts", version: 1 });
+    expect(saved).toMatchObject({ app: "maibuk", kind: "shortcuts", version: 2 });
     expect(saved.custom["global.showHelp"]).toEqual([["Alt+k"]]);
 
     await tabTo(page, editorDialog(page).getByRole("button", { name: "Reset all shortcuts" }));

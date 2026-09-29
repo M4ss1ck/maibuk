@@ -6,16 +6,17 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
+import { phraseConflictMessage } from "@/components/dictation/phrase-conflict-message";
+import { findPhraseConflict, type PhraseConflict } from "@/features/dictation/phrase-conflicts";
 import {
   entriesFor,
-  findAliasRefusal,
   isEntryEnabled,
-  type AliasRefusal,
   type PhraseAction,
   type SpokenPunctuationEntry,
   type SpokenPunctuationLanguageSettings,
 } from "@/features/dictation/spoken-punctuation";
-import { useDictationStore } from "@/features/dictation/store";
+import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
+import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
 
 interface SpokenPunctuationSectionProps {
@@ -44,36 +45,6 @@ function actionLabel(action: PhraseAction, t: TFunction): string {
   }
 }
 
-function refusalMessage(
-  t: TFunction,
-  language: DictationLanguage,
-  refusal: AliasRefusal,
-  phrase: string
-): string {
-  const owner = (entryId: string) =>
-    entriesFor(language).find((entry) => entry.id === entryId)?.phrases[0] ?? entryId;
-  switch (refusal.kind) {
-    case "empty":
-      return t("dictation.spokenPunctuation.refused.empty");
-    case "duplicate":
-      return t("dictation.spokenPunctuation.refused.duplicate", {
-        phrase,
-        entry: owner(refusal.entryId),
-      });
-    case "escape":
-      return t("dictation.spokenPunctuation.refused.escape", {
-        phrase,
-        word: refusal.word,
-      });
-    case "shadow":
-      return t("dictation.spokenPunctuation.refused.shadow", {
-        phrase,
-        conflict: refusal.conflict,
-        entry: owner(refusal.entryId),
-      });
-  }
-}
-
 function EntryRow({
   language,
   entry,
@@ -91,7 +62,8 @@ function EntryRow({
   const removeAlias = useDictationStore((state) => state.removeSpokenPunctuationAlias);
   const resetEntry = useDictationStore((state) => state.resetSpokenPunctuationEntry);
   const [phrase, setPhrase] = useState("");
-  const [refusal, setRefusal] = useState<AliasRefusal | null>(null);
+  const [refusal, setRefusal] = useState<PhraseConflict | null>(null);
+  const voice = useShortcutSettingsStore((state) => state.shortcuts.voice);
   const inputRef = useRef<HTMLInputElement>(null);
   const refusalId = useId();
 
@@ -107,11 +79,14 @@ function EntryRow({
     event.preventDefault();
     const trimmed = phrase.trim();
     if (trimmed === "") return;
-    const nextRefusal = findAliasRefusal({
+    // One check for every kind of phrase: an alias that is a Voice Command
+    // would never act, since the whole-line Command runs first.
+    const nextRefusal = findPhraseConflict({
       language,
-      entryId: entry.id,
-      alias: trimmed,
-      settings,
+      phrase: trimmed,
+      candidate: { kind: "alias", entryId: entry.id },
+      voice,
+      spokenPunctuation: settings,
     });
     if (nextRefusal) {
       setRefusal(nextRefusal);
@@ -232,7 +207,7 @@ function EntryRow({
             role="alert"
             className="mt-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-foreground"
           >
-            {refusalMessage(t, language, refusal, phrase.trim())}
+            {phraseConflictMessage(t, language, refusal, phrase.trim())}
           </div>
         )}
       </fieldset>
@@ -253,10 +228,9 @@ export function SpokenPunctuationSection({
   const override = useDictationStore((state) => state.languageOverride);
   const spoken = useDictationStore((state) => state.spokenPunctuation);
   const setLanguageEnabled = useDictationStore((state) => state.setSpokenPunctuationEnabled);
-  const [chosen, setChosen] = useState<DictationLanguage>(() => {
-    const uiLanguage: DictationLanguage = i18n.language.startsWith("es") ? "es" : "en";
-    return override ?? uiLanguage;
-  });
+  const [chosen, setChosen] = useState<DictationLanguage>(() =>
+    dictationLanguageFor(override, i18n.language)
+  );
 
   if (languages.length === 0) return null;
   const language = languages.includes(chosen) ? chosen : languages[0];

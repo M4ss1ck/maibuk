@@ -12,6 +12,7 @@ vi.mock("react-i18next", async (importOriginal) => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) =>
       options ? `${key} ${JSON.stringify(options)}` : key,
+    i18n: { language: "en" },
   }),
 }));
 
@@ -249,7 +250,8 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
   it("resets everything after confirming in an alert dialog", async () => {
     useShortcutSettingsStore.setState({
       shortcuts: {
-        version: 1,
+        version: 2,
+        voice: {},
         custom: { "global.syncNow": [], "editor.bold": [["Mod+Shift+k"]] },
         singleKeyEnabled: true,
       },
@@ -289,7 +291,8 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
   it("filters to customized Commands and finds Commands by their keys", async () => {
     useShortcutSettingsStore.setState({
       shortcuts: {
-        version: 1,
+        version: 2,
+        voice: {},
         custom: { "editor.bold": [["Mod+Shift+k"]] },
         singleKeyEnabled: true,
       },
@@ -306,7 +309,8 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
   it("returns focus to search when Reset removes a row from Customized", async () => {
     useShortcutSettingsStore.setState({
       shortcuts: {
-        version: 1,
+        version: 2,
+        voice: {},
         custom: { "global.syncNow": [["Mod+Alt+y"]] },
         singleKeyEnabled: true,
       },
@@ -338,7 +342,7 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
       serializeShortcutFile({ "global.syncNow": [["Mod+Alt+y"]], "editor.bold": [["Mod+s"]] })
     );
     useShortcutSettingsStore.setState({
-      shortcuts: { version: 1, custom: { "editor.italic": [] }, singleKeyEnabled: true },
+      shortcuts: { version: 2, voice: {}, custom: { "editor.italic": [] }, singleKeyEnabled: true },
     });
     const { user } = await openEditor();
     await narrowList(user, "shortcuts.syncNow");
@@ -358,7 +362,7 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
   it("changes nothing for a file that is not a Shortcut File", async () => {
     file.pick.mockResolvedValue("{ not json");
     useShortcutSettingsStore.setState({
-      shortcuts: { version: 1, custom: { "editor.italic": [] }, singleKeyEnabled: true },
+      shortcuts: { version: 2, voice: {}, custom: { "editor.italic": [] }, singleKeyEnabled: true },
     });
     const { user } = await openEditor();
     const load = screen.getByText("shortcutEditor.file.load", { selector: "button" });
@@ -373,12 +377,204 @@ describe("Shortcut Editor", { timeout: 20_000 }, () => {
 
   it("saves the Custom Shortcuts to a file", async () => {
     useShortcutSettingsStore.setState({
-      shortcuts: { version: 1, custom: { "editor.italic": [] }, singleKeyEnabled: true },
+      shortcuts: { version: 2, voice: {}, custom: { "editor.italic": [] }, singleKeyEnabled: true },
     });
     const { user } = await openEditor();
     const save = screen.getByText("shortcutEditor.file.save", { selector: "button" });
     await act(async () => save.focus());
     await user.keyboard("{Enter}");
-    expect(file.save).toHaveBeenCalledWith({ "editor.italic": [] });
+    expect(file.save).toHaveBeenCalledWith({ "editor.italic": [] }, {});
+  });
+});
+
+const voice = () => useShortcutSettingsStore.getState().shortcuts.voice;
+
+/** Filters to Bold and opens its Voice commands from the row, by keyboard. */
+async function openBoldVoice() {
+  const { user } = await openEditor();
+  await focusRow(user, "editor.bold");
+  for (let press = 0; press < 8; press += 1) {
+    if (
+      /^shortcutEditor\.voice\.open/.test(document.activeElement?.getAttribute("aria-label") ?? "")
+    )
+      break;
+    await user.keyboard("{ArrowRight}");
+  }
+  expectFocusName(/^shortcutEditor\.voice\.open/);
+  const opener = document.activeElement as HTMLElement;
+  await user.keyboard("{Enter}");
+  const dialog = await findDialogTitled('shortcutEditor.voice.title {"command":"editor.bold"}');
+  const field = within(dialog).getByRole("textbox", { name: /shortcutEditor\.voice\.addLabel/ });
+  return { user, dialog, opener, field };
+}
+
+describe("Shortcut Editor: Voice commands", { timeout: 20_000 }, () => {
+  it("shows the Voice list on a voice-eligible row only", async () => {
+    await openEditor();
+    const user = userEvent.setup();
+    await focusRow(user, "editor.bold");
+    const grid = screen.getByRole("grid");
+    expect(grid).toHaveTextContent(
+      'shortcutEditor.voice.rowLabel {"language":"dictation.languageNames.en"}'
+    );
+    expect(grid).toHaveTextContent("make bold");
+    await focusRow(user, "shortcuts.syncNow");
+    expect(screen.getByRole("grid")).not.toHaveTextContent("shortcutEditor.voice.rowLabel");
+  });
+
+  it("opens from the row with focus inside, and Escape returns focus to Voice", async () => {
+    const { user, dialog, opener } = await openBoldVoice();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await user.keyboard("{Escape}");
+    await vi.waitFor(() => expect(opener).toHaveFocus());
+    // The Shortcut Editor is still open underneath.
+    expect(screen.getByRole("searchbox")).toBeInTheDocument();
+  });
+
+  it("adds a phrase for the current Dictation Language, replacing the defaults", async () => {
+    const { user, dialog, field } = await openBoldVoice();
+    await act(async () => field.focus());
+    await user.keyboard("heavy words{Enter}");
+    const defaults = voice()["editor.bold"]?.en ?? [];
+    expect(defaults[0]).toBe("heavy words");
+    expect(defaults).toContain("make bold");
+    expect(voice()["editor.bold"]?.es).toBeUndefined();
+    expect(field).toHaveValue("");
+    expect(field).toHaveFocus();
+    expect(within(dialog).getByRole("status")).toHaveTextContent(
+      /shortcutEditor\.voice\.announce\.added/
+    );
+  });
+
+  it("refuses a one-word phrase with a message and stores nothing", async () => {
+    const { user, dialog, field } = await openBoldVoice();
+    await act(async () => field.focus());
+    await user.keyboard("bold{Enter}");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("dictation.phraseRefused.tooShort");
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(voice()).toEqual({});
+  });
+
+  it("refuses another Command's phrase and a Spoken Punctuation phrase", async () => {
+    const { user, dialog, field } = await openBoldVoice();
+    await act(async () => field.focus());
+    await user.keyboard("make italic{Enter}");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      'dictation.phraseRefused.voiceCommand {"phrase":"make italic","command":"editor.italic"}'
+    );
+    await user.clear(field);
+    await user.keyboard("new paragraph{Enter}");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "dictation.phraseRefused.spokenPunctuation"
+    );
+    await user.clear(field);
+    await user.keyboard("literal bold{Enter}");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "dictation.spokenPunctuation.refused.escape"
+    );
+    expect(voice()).toEqual({});
+  });
+
+  it("edits a phrase from its row, and Escape leaves the edit without closing", async () => {
+    const { user, dialog, field } = await openBoldVoice();
+    const list = within(dialog).getByRole("grid");
+    // Tab from the dialog's first control reaches the list's first row.
+    while (!list.contains(document.activeElement)) await user.tab();
+    const first = document.activeElement;
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).not.toBe(first);
+    expect(document.activeElement).toHaveTextContent("make boldface");
+
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(field).toHaveFocus());
+    expect(field).toHaveValue("make boldface");
+    expect(field).toHaveAccessibleName(/shortcutEditor\.voice\.editLabel/);
+    await user.keyboard("{Escape}");
+    expect(
+      screen.getByText('shortcutEditor.voice.title {"command":"editor.bold"}')
+    ).toBeInTheDocument();
+    expect(field).toHaveValue("");
+
+    // The list keeps its focused row; the row's Edit button edits that phrase.
+    while (!list.contains(document.activeElement)) await user.tab();
+    expect(document.activeElement).toHaveTextContent("make boldface");
+    await user.keyboard("{ArrowRight}");
+    expectFocusName(/^shortcutEditor\.voice\.edit .*make boldface/);
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(field).toHaveFocus());
+    await user.clear(field);
+    await user.keyboard("set heavy{Enter}");
+    const phrases = voice()["editor.bold"]?.en ?? [];
+    expect(phrases[1]).toBe("set heavy");
+    expect(phrases).not.toContain("make boldface");
+  });
+
+  it("removes a phrase by keyboard and resets the language to its defaults", async () => {
+    const { user, dialog, field } = await openBoldVoice();
+    const list = within(dialog).getByRole("grid");
+    while (!list.contains(document.activeElement)) await user.tab();
+    await user.keyboard("{ArrowRight}{ArrowRight}");
+    expectFocusName(/^shortcutEditor\.voice\.remove .*make bold/);
+    await user.keyboard("{Enter}");
+    expect(voice()["editor.bold"]?.en).not.toContain("make bold");
+    expect(field).toHaveFocus();
+
+    const reset = within(dialog).getByText(/shortcutEditor\.voice\.reset/, { selector: "button" });
+    await act(async () => reset.focus());
+    await user.keyboard("{Enter}");
+    expect(voice()).toEqual({});
+    expect(field).toHaveFocus();
+  });
+
+  it("switches to the other Dictation Language and edits its own list", async () => {
+    const { user, dialog, field } = await openBoldVoice();
+    const picker = within(dialog).getByRole("button", { name: /dictation\.language/ });
+    await act(async () => picker.focus());
+    await user.keyboard("{Enter}");
+    const spanish = await screen.findByRole("option", { name: "dictation.languageNames.es" });
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("option"));
+    while (document.activeElement !== spanish) await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Enter}");
+    expect(within(dialog).getByRole("grid")).toHaveTextContent("poner negrita");
+
+    await act(async () => field.focus());
+    await user.keyboard("pon esto fuerte{Enter}");
+    expect(voice()["editor.bold"]?.es?.[0]).toBe("pon esto fuerte");
+    expect(voice()["editor.bold"]?.en).toBeUndefined();
+  });
+
+  it("counts a Command with custom Voice commands as customized", async () => {
+    useShortcutSettingsStore
+      .getState()
+      .setCommandVoicePhrases("editor.bold", "en", ["heavy words"]);
+    const { user } = await openEditor();
+    await act(async () => filterButton("shortcutEditor.filter.customized").focus());
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("grid")).toHaveTextContent("heavy words");
+  });
+
+  it("saves and loads Voice commands with the Shortcut File", async () => {
+    useShortcutSettingsStore
+      .getState()
+      .setCommandVoicePhrases("editor.bold", "en", ["heavy words"]);
+    const { user } = await openEditor();
+    await narrowList(user, "editor.bold");
+    const save = screen.getByText("shortcutEditor.file.save", { selector: "button" });
+    await act(async () => save.focus());
+    await user.keyboard("{Enter}");
+    expect(file.save).toHaveBeenCalledWith({}, { "editor.bold": { en: ["heavy words"] } });
+
+    file.pick.mockResolvedValue(
+      serializeShortcutFile({}, { "editor.italic": { en: ["slanted words", "make bold", "tilt"] } })
+    );
+    const load = screen.getByText("shortcutEditor.file.load", { selector: "button" });
+    await act(async () => load.focus());
+    await user.keyboard("{Enter}");
+    const preview = await findDialogTitled("shortcutEditor.file.previewTitle");
+    expect(preview).toHaveTextContent("shortcutEditor.file.droppedVoice.conflict");
+    expect(preview).toHaveTextContent("shortcutEditor.file.droppedVoice.tooShort");
+    await user.keyboard("{Shift>}{Tab}{/Shift}{Enter}");
+    expect(voice()).toEqual({ "editor.italic": { en: ["slanted words"] } });
   });
 });

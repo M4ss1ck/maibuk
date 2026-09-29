@@ -21,11 +21,14 @@ vi.mock("@/lib/platform", () => ({
 const { getDictation, resetDictationForTests } = await import("@/features/dictation/runtime");
 const { useDictationStore } = await import("@/features/dictation/store");
 const { MODEL_CATALOG } = await import("@/features/dictation/catalog");
+const { useShortcutSettingsStore } = await import("@/features/settings/shortcut-store");
+const { DEFAULT_SHORTCUT_SETTINGS } = await import("@/lib/shortcut-resolve");
 
 beforeEach(() => {
   resetDictationForTests();
   useDictationStore.setState({ enabled: true });
   useTutorialStore.setState({ status: "idle" });
+  useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
   createRecognizerHost.mockReset();
   getModelFiles.mockReset();
   getModelFiles.mockResolvedValue(unsupportedModelFiles);
@@ -116,6 +119,52 @@ describe("getDictation()", () => {
     expect(voice).not.toHaveBeenCalled();
 
     useTutorialStore.setState({ status: "idle" });
+    control.listener?.({ type: "final", text: "poner negrita" });
+    expect(voice).toHaveBeenCalledWith({ id: "editor.bold", polarity: "on" });
+    await session.stop();
+  });
+
+  it("hears the author's custom Voice Commands as soon as they change", async () => {
+    const control: { listener: ((event: DictationEvent) => void) | null } = { listener: null };
+    const host = {
+      ...createUnsupportedHost("platform"),
+      load: vi.fn(async () => {}),
+      start: vi.fn(async (listener: (event: DictationEvent) => void) => {
+        control.listener = listener;
+      }),
+      stop: vi.fn(async () => {}),
+    };
+    createRecognizerHost.mockResolvedValue(host);
+    const { session } = await getDictation();
+    const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast");
+    if (!esFast) throw new Error("no Spanish model in the catalog");
+    useDictationStore.setState({ installed: [esFast.id] });
+    const voice = vi.fn(() => "ran" as const);
+    const apply = vi.fn();
+    session.register({
+      id: "chapter",
+      language: () => "es",
+      showPartial() {},
+      before: () => "",
+      apply,
+      voice,
+    });
+    session.focus("chapter");
+    await session.start();
+
+    useShortcutSettingsStore
+      .getState()
+      .setCommandVoicePhrases("editor.bold", "es", ["pon esto fuerte"]);
+    control.listener?.({ type: "final", text: "Pon esto fuerte." });
+    expect(voice).toHaveBeenCalledWith({ id: "editor.bold", polarity: "on" });
+
+    // The author's list replaced the defaults: the old phrase is text now.
+    voice.mockClear();
+    control.listener?.({ type: "final", text: "poner negrita" });
+    expect(voice).not.toHaveBeenCalled();
+    expect(apply).toHaveBeenCalled();
+
+    useShortcutSettingsStore.getState().resetCommandVoicePhrases("editor.bold", "es");
     control.listener?.({ type: "final", text: "poner negrita" });
     expect(voice).toHaveBeenCalledWith({ id: "editor.bold", polarity: "on" });
     await session.stop();

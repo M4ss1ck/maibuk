@@ -12,12 +12,16 @@ import {
   SearchField,
   Virtualizer,
 } from "react-aria-components";
-import { Keyboard, List, Lock, PencilLine, Plus, RotateCcw, X } from "lucide-react";
+import { Keyboard, List, Lock, Mic, PencilLine, Plus, RotateCcw, X } from "lucide-react";
 import { Button, KeyboardShortcut, Modal, Switch } from "@/components/ui";
 import { ResponsiveToggleGroup } from "@/components/ui/ResponsiveToggleGroup";
 import { toast } from "@/components/ui/Toast";
 import { ShortcutRecorder, describeShortcut } from "@/components/shortcuts/ShortcutRecorder";
+import { VoiceCommandsDialog } from "@/components/shortcuts/VoiceCommandsDialog";
 import { MAX_SHORTCUTS_PER_COMMAND } from "@/constants";
+import { findPhraseConflict } from "@/features/dictation/phrase-conflicts";
+import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
+import { isVoiceEligible, voicePhrases } from "@/features/dictation/voice-commands";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { pickShortcutFileText, saveShortcutFile } from "@/features/settings/shortcut-file";
 import { isMac } from "@/lib/platform/detect";
@@ -54,7 +58,14 @@ interface PendingConflict extends Recording {
 }
 
 /** Where focus goes once a recording, a removal, or a conflict ends. */
-type FocusTarget = { id: CommandId; control: "change" | "add" | "reset"; index?: number } | null;
+type FocusTarget = {
+  id: CommandId;
+  control: "change" | "add" | "reset" | "voice";
+  index?: number;
+} | null;
+
+/** How many of a Command's Voice Commands its row shows before "+N more". */
+const VOICE_PREVIEW_COUNT = 3;
 
 /**
  * Moves focus to a row's control once that row has re-rendered: the control
@@ -129,7 +140,7 @@ interface ShortcutEditorDialogProps {
  * Shortcuts, grouped in the same sections as the shortcut help (ADR 0012).
  */
 export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogProps) {
-  const { t: translate } = useTranslation();
+  const { t: translate, i18n } = useTranslation();
   // Command labels and reasons are registry data, so their keys are plain strings.
   const t = translate as unknown as (key: string, options?: Record<string, unknown>) => string;
   const settings = useShortcutSettingsStore((state) => state.shortcuts);
@@ -149,12 +160,16 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   const [announcement, setAnnouncement] = useState("");
   const [confirmResetAll, setConfirmResetAll] = useState(false);
   const [loaded, setLoaded] = useState<Extract<LoadResult, { ok: true }> | null>(null);
+  const [voiceFor, setVoiceFor] = useState<CommandId | null>(null);
+  const languageOverride = useDictationStore((state) => state.languageOverride);
+  const voiceLanguage = dictationLanguageFor(languageOverride, i18n?.language);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const clearFocusTarget = useCallback(() => setFocusTarget(null), []);
   const label = (id: CommandId) => t((COMMANDS[id] as CommandDef).labelKey);
 
-  const customizedCount = Object.keys(settings.custom).length;
+  const customizedCount = new Set([...Object.keys(settings.custom), ...Object.keys(settings.voice)])
+    .size;
 
   const sections = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -165,17 +180,29 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
         const definition: CommandDef = COMMANDS[id];
         const editable = editableShortcuts(id, settings.custom, IS_WEB);
         const all = [...(definition.fixed ?? []), ...editable];
-        if (filter === "customized" && settings.custom[id] === undefined) return false;
+        if (
+          filter === "customized" &&
+          settings.custom[id] === undefined &&
+          settings.voice[id] === undefined
+        ) {
+          return false;
+        }
         if (filter === "none" && all.length > 0) return false;
         if (!needle) return true;
-        const haystack = [t(definition.labelKey), ...all.map(describeShortcut), ...all.flat()]
+        const spoken = isVoiceEligible(id) ? voicePhrases(id, voiceLanguage, settings.voice) : [];
+        const haystack = [
+          t(definition.labelKey),
+          ...all.map(describeShortcut),
+          ...all.flat(),
+          ...spoken,
+        ]
           .join(" ")
           .toLowerCase();
         return haystack.includes(needle);
       }),
     })).filter((section) => section.ids.length > 0);
     // `t` changes with the language; the list must follow it.
-  }, [query, filter, settings.custom, t]);
+  }, [query, filter, settings.custom, settings.voice, voiceLanguage, t]);
 
   useEffect(() => {
     if (!focusTarget) return;
@@ -295,7 +322,9 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
 
   const saveFile = async () => {
     try {
-      if (await saveShortcutFile(settings.custom)) toast.success(t("shortcutEditor.file.saved"));
+      if (await saveShortcutFile(settings.custom, settings.voice)) {
+        toast.success(t("shortcutEditor.file.saved"));
+      }
     } catch {
       toast.error(t("shortcutEditor.file.saveFailed"));
     }
@@ -310,7 +339,21 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
       return;
     }
     if (text === null) return;
-    const result = parseShortcutFile(text, IS_WEB);
+    // A Voice Command in the file must still mean one thing next to this
+    // device's Spoken Punctuation, which the file does not carry.
+    const { spokenPunctuation } = useDictationStore.getState();
+    const result = parseShortcutFile(
+      text,
+      IS_WEB,
+      ({ id, language, phrase, accepted }) =>
+        findPhraseConflict({
+          language,
+          phrase,
+          candidate: { kind: "voice", id },
+          voice: accepted,
+          spokenPunctuation: spokenPunctuation[language],
+        }) !== null
+    );
     if (!result.ok) {
       toast.error(t(`shortcutEditor.file.errors.${result.error}`));
       return;
@@ -409,10 +452,55 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
     );
   };
 
+  const voiceButton = (id: CommandId) =>
+    isVoiceEligible(id) ? (
+      <AriaButton
+        className={ROW_CONTROL}
+        data-focus-key={focusKey({ id, control: "voice" })}
+        aria-label={t("shortcutEditor.voice.open", { command: label(id) })}
+        onPress={() => {
+          setPending(null);
+          setVoiceFor(id);
+        }}
+      >
+        <Mic className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="@lg:inline hidden">{t("shortcutEditor.voice.openShort")}</span>
+      </AriaButton>
+    ) : null;
+
+  const voiceSummary = (id: CommandId) => {
+    if (!isVoiceEligible(id)) return null;
+    const phrases = voicePhrases(id, voiceLanguage, settings.voice);
+    const shown = phrases.slice(0, VOICE_PREVIEW_COUNT);
+    const more = phrases.length - shown.length;
+    return (
+      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <Mic className="h-3 w-3" aria-hidden="true" />
+        <span>
+          {t("shortcutEditor.voice.rowLabel", {
+            language: t(`dictation.languageNames.${voiceLanguage}`),
+          })}
+        </span>
+        {shown.map((phrase) => (
+          <span key={phrase} className="rounded-md bg-muted/50 px-1.5 py-0.5 text-foreground">
+            {phrase}
+          </span>
+        ))}
+        {more > 0 && <span>{t("shortcutEditor.voice.more", { count: more })}</span>}
+        {phrases.length === 0 && <span>{t("shortcutEditor.voice.none")}</span>}
+      </p>
+    );
+  };
+
   const actions = (id: CommandId) => {
     const definition: CommandDef = COMMANDS[id];
     if (definition.sealed) {
-      return <span className="text-xs text-muted-foreground">{t("shortcutEditor.sealed")}</span>;
+      return (
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-xs text-muted-foreground">{t("shortcutEditor.sealed")}</span>
+          {voiceButton(id)}
+        </div>
+      );
     }
     const editableCount = editableShortcuts(id, settings.custom, IS_WEB).length;
     const atLimit = editableCount >= MAX_SHORTCUTS_PER_COMMAND;
@@ -452,6 +540,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
             <span className="@lg:inline hidden">{t("shortcutEditor.resetShort")}</span>
           </AriaButton>
         )}
+        {voiceButton(id)}
       </div>
     );
   };
@@ -613,6 +702,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
                           {chips(id)}
                           {actions(id)}
                         </div>
+                        {voiceSummary(id)}
                         {conflictNotice(id)}
                         <RowFocus id={id} target={focusTarget} onDone={clearFocusTarget} />
                       </GridListItem>
@@ -664,7 +754,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
             <Button
               onClick={() => {
                 if (!loaded) return;
-                replaceCustomShortcuts(loaded.custom);
+                replaceCustomShortcuts(loaded.custom, loaded.voice);
                 setLoaded(null);
                 announce(t("shortcutEditor.file.loaded"));
               }}
@@ -677,7 +767,9 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
         {loaded && (
           <div className="space-y-2 text-sm text-foreground">
             <p>
-              {t("shortcutEditor.file.previewBody", { count: Object.keys(loaded.custom).length })}
+              {t("shortcutEditor.file.previewBody", {
+                count: new Set([...Object.keys(loaded.custom), ...Object.keys(loaded.voice)]).size,
+              })}
             </p>
             {loaded.dropped.length > 0 && (
               <>
@@ -687,12 +779,21 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
                 <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                   {loaded.dropped.map((item, index) => (
                     <li key={`${item.id}-${index}`}>
-                      {t(`shortcutEditor.file.dropped.${item.reason}`, {
-                        command: (COMMAND_IDS as string[]).includes(item.id)
-                          ? label(item.id as CommandId)
-                          : item.id,
-                        keys: item.shortcut ? item.shortcut.join(" ") : "",
-                      })}
+                      {t(
+                        item.language
+                          ? `shortcutEditor.file.droppedVoice.${item.reason}`
+                          : `shortcutEditor.file.dropped.${item.reason}`,
+                        {
+                          command: (COMMAND_IDS as string[]).includes(item.id)
+                            ? label(item.id as CommandId)
+                            : item.id,
+                          keys: item.shortcut ? item.shortcut.join(" ") : "",
+                          phrase: item.phrase ?? "",
+                          language: item.language
+                            ? t(`dictation.languageNames.${item.language}`)
+                            : "",
+                        }
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -701,6 +802,15 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
           </div>
         )}
       </Modal>
+
+      <VoiceCommandsDialog
+        id={voiceFor}
+        initialLanguage={voiceLanguage}
+        onClose={() => {
+          if (voiceFor) setFocusTarget({ id: voiceFor, control: "voice" });
+          setVoiceFor(null);
+        }}
+      />
     </>
   );
 }

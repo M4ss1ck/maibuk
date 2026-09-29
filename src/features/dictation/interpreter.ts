@@ -22,6 +22,7 @@ import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
 import {
   buildVoiceCommandTable,
   matchVoiceCommand,
+  type CustomVoiceCommands,
   type VoiceCommandRun,
   type VoiceCommandTable,
 } from "@/features/dictation/voice-commands";
@@ -51,6 +52,8 @@ export interface PhraseTableOptions {
   capabilities?: ModelSpec["capabilities"];
   /** The author's Dictation Vocabulary for this Dictation Language. */
   vocabulary?: readonly VocabularyEntry[];
+  /** The author's custom Voice Commands (ADR 0014); each replaces that language's defaults. */
+  voice?: CustomVoiceCommands;
 }
 
 export interface InterpreterState {
@@ -222,7 +225,7 @@ export function buildPhraseTable(
   language: DictationLanguage,
   options: PhraseTableOptions = {}
 ): PhraseTable {
-  const { settings, capabilities, vocabulary } = options;
+  const { settings, capabilities, vocabulary, voice } = options;
   const trie: TokenTrieNode = { children: new Map() };
   const vocabularyTrie: TokenTrieNode<VocabularyEntry> = { children: new Map() };
   const scratch = new Set<string>();
@@ -250,7 +253,7 @@ export function buildPhraseTable(
     trie,
     vocabularyTrie,
     scratch,
-    voice: buildVoiceCommandTable(language),
+    voice: buildVoiceCommandTable(language, voice),
   };
 }
 
