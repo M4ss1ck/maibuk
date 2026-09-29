@@ -338,7 +338,7 @@ test.describe("@wf:dictation-toggle @wf:dictation-interpreter-stats @sc:dictatio
     await expect(mic).toBeVisible();
     await reachControl(page, mic);
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "Dictation" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dictation", exact: true })).toBeVisible();
   });
 });
 

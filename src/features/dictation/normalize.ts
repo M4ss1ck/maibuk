@@ -7,6 +7,11 @@ export interface Token {
   surface: string;
   norm: string | null;
   mark: boolean;
+  /**
+   * A Dictation Vocabulary written form: literal text that no later step may
+   * match, re-case, or otherwise reinterpret (ADR 0015).
+   */
+  protected?: boolean;
 }
 
 export function normalizeWord(word: string): string {

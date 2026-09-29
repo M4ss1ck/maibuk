@@ -2,11 +2,13 @@
 // finished lines. No engine, no editor, no DOM. See
 // docs/research/dictation-command-interpreter.md sections 2.4 and 3.
 //
-// A finished line is matched against a prebuilt token trie of Spoken
-// Punctuation phrases, longest match first. Matching folds case and accents and
-// ignores the model's own punctuation; model punctuation adjacent to a matched
-// phrase is dropped so marks never double. Text is then cased and spaced using
-// the bounded text before the caret.
+// A finished line first passes the Dictation Vocabulary: heard forms are
+// replaced by their written form as protected literal text. What remains is
+// matched against a prebuilt token trie of Spoken Punctuation phrases, longest
+// match first. Matching folds case and accents and ignores the model's own
+// punctuation; model punctuation adjacent to a matched phrase is dropped so
+// marks never double. Text is then cased and spaced using the bounded text
+// before the caret.
 import { normalizePhrase, tokenize, type Token } from "@/features/dictation/normalize";
 import type { DictationEdit } from "@/features/dictation/router";
 import {
@@ -17,16 +19,19 @@ import {
   type SpokenPunctuationLanguageSettings,
 } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
+import type { VocabularyEntry } from "@/features/dictation/vocabulary";
 
-export interface TokenTrieNode {
-  children: Map<string, TokenTrieNode>;
-  match?: SpokenPunctuationEntry;
+export interface TokenTrieNode<Match = SpokenPunctuationEntry> {
+  children: Map<string, TokenTrieNode<Match>>;
+  match?: Match;
 }
 
 /** A prebuilt token trie for one Dictation Language. Build once, reuse per line. */
 export interface PhraseTable {
   language: DictationLanguage;
   trie: TokenTrieNode;
+  /** Heard-form trie for the Dictation Vocabulary; matched before everything else. */
+  vocabularyTrie: TokenTrieNode<VocabularyEntry>;
   /** Normalized whole-line phrases that remove the last dictated sentence. */
   scratch: ReadonlySet<string>;
 }
@@ -36,6 +41,8 @@ export interface PhraseTableOptions {
   settings?: SpokenPunctuationLanguageSettings;
   /** What the Dictation Model's text already has; sets the entries' defaults. */
   capabilities?: ModelSpec["capabilities"];
+  /** The author's Dictation Vocabulary for this Dictation Language. */
+  vocabulary?: readonly VocabularyEntry[];
 }
 
 export interface InterpreterState {
@@ -67,17 +74,45 @@ export interface InterpretResult {
   spokenPunctuationCount: number;
 }
 
-/** Whole-line match for scratch that: folds case and accents, ignores model punctuation. */
-export function isScratchLine(line: string, table: PhraseTable): boolean {
-  const norm = normalizePhrase(line);
-  if (norm === "") return false;
-  return table.scratch.has(norm);
+/**
+ * The whole-line rule over the already-substituted tokens: folds case and
+ * accents, ignores model punctuation, and never counts a protected Vocabulary
+ * written form, so the Vocabulary can write "borra eso" without the line
+ * removing it again.
+ */
+function isScratchTokens(tokens: Token[], table: PhraseTable): boolean {
+  const words: string[] = [];
+  for (const token of tokens) {
+    if (token.mark) continue;
+    if (token.protected) return false;
+    words.push(token.norm ?? "");
+  }
+  const norm = words.join(" ");
+  return norm !== "" && table.scratch.has(norm);
 }
 
 interface Match {
   start: number;
   end: number;
   entry: SpokenPunctuationEntry;
+}
+
+/** Adds one phrase to a token trie as a chain of normalized word tokens. */
+function addPhrase<MatchType>(root: TokenTrieNode<MatchType>, phrase: string, entry: MatchType) {
+  const words = tokenize(phrase)
+    .filter((token) => !token.mark)
+    .map((token) => token.norm ?? "");
+  if (words.length === 0) return;
+  let node = root;
+  for (const word of words) {
+    let child = node.children.get(word);
+    if (!child) {
+      child = { children: new Map() };
+      node.children.set(word, child);
+    }
+    node = child;
+  }
+  node.match = entry;
 }
 
 const OPENING_MARKS = new Set(["¿", "¡", "«", "“", "‘", "(", "[", "{"]);
@@ -114,31 +149,76 @@ export function findSentenceStartOffset(text: string): number {
   return stepPastOpeningMarks(text, lastSentenceEndIndex(text) + 1);
 }
 
+/** Walks a token trie over whole words, folded, longest match first. */
+function findTrieMatches<MatchType>(
+  tokens: Token[],
+  trie: TokenTrieNode<MatchType>
+): { start: number; end: number; entry: MatchType }[] {
+  const matches: { start: number; end: number; entry: MatchType }[] = [];
+  let i = 0;
+  while (i < tokens.length) {
+    if (tokens[i].mark || tokens[i].protected) {
+      i += 1;
+      continue;
+    }
+    let node: TokenTrieNode<MatchType> | undefined = trie;
+    let best: { start: number; end: number; entry: MatchType } | null = null;
+    let j = i;
+    while (j < tokens.length && node) {
+      const token = tokens[j];
+      if (token.mark) {
+        j += 1;
+        continue;
+      }
+      // Protected text is never matched over, and never re-matched itself.
+      if (token.protected) break;
+      const child = node.children.get(token.norm ?? "");
+      if (!child) break;
+      node = child;
+      if (node.match) best = { start: i, end: j, entry: node.match };
+      j += 1;
+    }
+    if (best) {
+      matches.push(best);
+      i = best.end + 1;
+    } else {
+      i += 1;
+    }
+  }
+  return matches;
+}
+
+/**
+ * The Dictation Vocabulary pass, run before everything else (ADR 0015). Each
+ * matched heard form becomes one protected token carrying the written form
+ * exactly as typed, so no later step can re-case it or read it as punctuation,
+ * a Voice Command, or a scratch phrase. Model punctuation inside the matched
+ * span is dropped with the heard words.
+ */
+export function applyVocabulary(tokens: Token[], trie: TokenTrieNode<VocabularyEntry>): Token[] {
+  if (trie.children.size === 0) return tokens;
+  const matches = findTrieMatches(tokens, trie);
+  if (matches.length === 0) return tokens;
+  const out: Token[] = [];
+  let copyUntil = 0;
+  for (const match of matches) {
+    for (let index = copyUntil; index < match.start; index += 1) out.push(tokens[index]);
+    out.push({ surface: match.entry.written, norm: null, mark: false, protected: true });
+    copyUntil = match.end + 1;
+  }
+  for (let index = copyUntil; index < tokens.length; index += 1) out.push(tokens[index]);
+  return out;
+}
+
 /** Build the prebuilt token trie for one Dictation Language. */
 export function buildPhraseTable(
   language: DictationLanguage,
   options: PhraseTableOptions = {}
 ): PhraseTable {
-  const { settings, capabilities } = options;
+  const { settings, capabilities, vocabulary } = options;
   const trie: TokenTrieNode = { children: new Map() };
+  const vocabularyTrie: TokenTrieNode<VocabularyEntry> = { children: new Map() };
   const scratch = new Set<string>();
-
-  const addToTrie = (phrase: string, entry: SpokenPunctuationEntry) => {
-    const words = tokenize(phrase)
-      .filter((token) => !token.mark)
-      .map((token) => token.norm ?? "");
-    if (words.length === 0) return;
-    let node = trie;
-    for (const word of words) {
-      let child = node.children.get(word);
-      if (!child) {
-        child = { children: new Map() };
-        node.children.set(word, child);
-      }
-      node = child;
-    }
-    node.match = entry;
-  };
 
   for (const entry of entriesFor(language)) {
     if (!isEntryEnabled(entry, settings, capabilities)) continue;
@@ -151,9 +231,14 @@ export function buildPhraseTable(
       }
       continue;
     }
-    for (const phrase of phrases) addToTrie(phrase, entry);
+    for (const phrase of phrases) addPhrase(trie, phrase, entry);
   }
-  return { language, trie, scratch };
+
+  for (const entry of vocabulary ?? []) {
+    addPhrase(vocabularyTrie, entry.heard, entry);
+  }
+
+  return { language, trie, vocabularyTrie, scratch };
 }
 
 function isSentenceStart(before: string): boolean {
@@ -188,48 +273,20 @@ function endsWithOpening(text: string): boolean {
   return OPENING_MARKS.has(text[text.length - 1]);
 }
 
-function findMatches(tokens: Token[], table: PhraseTable): Match[] {
-  const matches: Match[] = [];
-  let i = 0;
-  while (i < tokens.length) {
-    if (tokens[i].mark) {
-      i += 1;
-      continue;
-    }
-    let node: TokenTrieNode | undefined = table.trie;
-    let best: Match | null = null;
-    let j = i;
-    while (j < tokens.length && node) {
-      const token = tokens[j];
-      if (token.mark) {
-        j += 1;
-        continue;
-      }
-      const child = node.children.get(token.norm ?? "");
-      if (!child) break;
-      node = child;
-      if (node.match) best = { start: i, end: j, entry: node.match };
-      j += 1;
-    }
-    if (best) {
-      matches.push(best);
-      i = best.end + 1;
-    } else {
-      i += 1;
-    }
-  }
-  return matches;
-}
-
 export function interpret(input: InterpretInput): InterpretResult {
   const { line, before, capabilities, table, state } = input;
-  const tokens = tokenize(line);
-  if (tokens.length === 0) {
+  const rawTokens = tokenize(line);
+  if (rawTokens.length === 0) {
     return { result: { kind: "edits", edits: [] }, state, spokenPunctuationCount: 0 };
   }
 
-  // Built-in whole-line words (ADR 0015 order): scratch that never acts inside prose.
-  if (isScratchLine(line, table)) {
+  // The Dictation Vocabulary runs first (ADR 0015): the rest of the pipeline
+  // sees its written forms as protected literal text.
+  const tokens = applyVocabulary(rawTokens, table.vocabularyTrie);
+
+  // Built-in whole-line words (ADR 0015 order): scratch that never acts inside
+  // prose, and never matches words the Vocabulary replacement wrote.
+  if (isScratchTokens(tokens, table)) {
     return { result: { kind: "scratch" }, state, spokenPunctuationCount: 0 };
   }
 
@@ -281,6 +338,17 @@ export function interpret(input: InterpretInput): InterpretResult {
     current += word;
   };
 
+  // A Vocabulary written form goes in exactly as typed: no sentence casing,
+  // no lowercasing, and a pending cap or literal charge is spent on it.
+  const appendProtected = (surface: string) => {
+    if (current !== "" && !endsWithOpening(current) && !/\s$/u.test(current)) current += " ";
+    current += surface;
+    firstWord = false;
+    capitalize = false;
+    capNext = false;
+    literalNext = false;
+  };
+
   const appendMark = (mark: string) => {
     if (mark === "¿") hasQuestionOpener = true;
     else if (mark === "¡") hasExclamationOpener = true;
@@ -322,7 +390,7 @@ export function interpret(input: InterpretInput): InterpretResult {
     }
   };
 
-  const allMatches = findMatches(tokens, table);
+  const allMatches = findTrieMatches(tokens, table.trie);
   const allByStart = new Map<number, Match>();
   for (const match of allMatches) allByStart.set(match.start, match);
 
@@ -398,6 +466,11 @@ export function interpret(input: InterpretInput): InterpretResult {
 
   let i = 0;
   while (i < tokens.length) {
+    if (tokens[i].protected) {
+      appendProtected(tokens[i].surface);
+      i += 1;
+      continue;
+    }
     if ((capNext || literalNext) && !tokens[i].mark) {
       // A modifier protects its word even when that word would otherwise start
       // a Spoken Punctuation phrase ("literal coma" writes "coma"). Free any

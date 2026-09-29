@@ -179,6 +179,42 @@
         "state": { "capitalizeNext": false, "noSpaceNext": false },
         "spokenPunctuationCount": 1
       }
+    },
+    {
+      "name": "vocabulary: a misheard name is written exactly as typed",
+      "line": "hello a reliano period",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "vocabulary": [{ "heard": "a reliano", "written": "Aureliano" }],
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hello Aureliano." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "vocabulary: the written form is never re-cased",
+      "line": "note maker",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "vocabulary": [{ "heard": "note maker", "written": "new paragraph" }],
+      "expected": {
+        "edits": [{ "kind": "text", "text": "new paragraph" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "vocabulary: the written form never acts as a Spoken Punctuation word",
+      "line": "dot dot",
+      "before": "",
+      "capabilities": { "casing": true, "punctuation": false, "streaming": true },
+      "vocabulary": [{ "heard": "dot dot", "written": "comma" }],
+      "expected": {
+        "edits": [{ "kind": "text", "text": "comma" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
     }
   ]
 }

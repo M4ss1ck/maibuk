@@ -48,12 +48,7 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
-    items: [
-      "Dictation Command Interpreter",
-      "Spoken Punctuation",
-      "Voice Command",
-      "Dictation Vocabulary",
-    ],
+    items: ["Dictation Command Interpreter", "Spoken Punctuation", "Voice Command"],
     reason: "Decided, not built (ADR 0014, ADR 0015); the v1 build adds their rows",
     owner: "Dictation Command Interpreter v1, from https://github.com/M4ss1ck/maibuk/pull/261",
   },
@@ -2186,6 +2181,24 @@ export const ROWS: MatrixRow[] = [
       "the settings stay per language and survive a reload",
     ],
     terms: ["Spoken Punctuation", "Dictation Language", "Dictation"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
+    id: "dictation-vocabulary",
+    area: "settings",
+    workflow:
+      "Settings → Dictation: the Dictation vocabulary editor adds, edits, and removes an entry — what the model hears → what to write — for the chosen Dictation Language, all by keyboard",
+    edges: [
+      "an entry is added by keyboard and shown as heard → written",
+      "an entry that repeats a heard form, folded, is refused with an alert",
+      "an entry is edited in place and removed by keyboard",
+      "the entries stay per language and survive a reload",
+    ],
+    terms: ["Dictation Vocabulary", "Dictation Language", "Dictation"],
     shortcuts: [],
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",

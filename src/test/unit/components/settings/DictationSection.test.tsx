@@ -163,6 +163,13 @@ describe("DictationSection", () => {
     expect(within(row).getByText(/no punctuation/i)).toBeInTheDocument();
   });
 
+  it("shows the Dictation vocabulary editor for the offered languages", () => {
+    render(<DictationSection />);
+    expect(screen.getByRole("heading", { name: "Dictation vocabulary" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "What Dictation hears" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Vocabulary language/ })).toBeInTheDocument();
+  });
+
   it("offers no Dictation switch where Dictation is unsupported", () => {
     useDictationStore.setState({ support: { supported: false, reason: "not_isolated" } });
     render(<DictationSection />);

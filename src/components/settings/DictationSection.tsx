@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
+import { DictationVocabularySection } from "@/components/settings/DictationVocabularySection";
 import { SpokenPunctuationSection } from "@/components/settings/SpokenPunctuationSection";
 import { MODEL_CATALOG, modelsFor } from "@/features/dictation/catalog";
 import { getDictation } from "@/features/dictation/runtime";
@@ -181,6 +182,7 @@ export function DictationSection() {
           );
         }}
       />
+      <DictationVocabularySection languages={[...byLanguage.keys()]} />
       {device && (
         <p className="text-sm text-muted-foreground">{t("dictation.section.device", { device })}</p>
       )}

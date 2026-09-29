@@ -381,6 +381,67 @@
         "state": { "capitalizeNext": false, "noSpaceNext": false },
         "spokenPunctuationCount": 1
       }
+    },
+    {
+      "name": "vocabulary: a misheard name is written exactly as typed",
+      "line": "hola a reliano buendía punto",
+      "before": "",
+      "vocabulary": [
+        { "heard": "a reliano", "written": "Aureliano" },
+        { "heard": "buendía", "written": "Buendía" }
+      ],
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Hola Aureliano Buendía." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "vocabulary: the heard form runs before Spoken Punctuation",
+      "line": "nuevo párrafo",
+      "before": "",
+      "vocabulary": [{ "heard": "nuevo párrafo", "written": "Nuevo Palafox" }],
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Nuevo Palafox" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "vocabulary: the written form cannot trigger a scratch phrase",
+      "line": "vora eso",
+      "before": "",
+      "vocabulary": [{ "heard": "vora eso", "written": "borra eso" }],
+      "expected": {
+        "edits": [{ "kind": "text", "text": "borra eso" }],
+        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "spokenPunctuationCount": 0
+      }
+    },
+    {
+      "name": "vocabulary: folds case and accents and takes the longest match",
+      "line": "A RELIANO punto",
+      "before": "",
+      "vocabulary": [
+        { "heard": "reliano", "written": "Reliano" },
+        { "heard": "a reliano", "written": "Aureliano" }
+      ],
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Aureliano." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
+    },
+    {
+      "name": "vocabulary: whole words only, never inside one",
+      "line": "mariano punto",
+      "before": "",
+      "vocabulary": [{ "heard": "reliano", "written": "Reliano" }],
+      "expected": {
+        "edits": [{ "kind": "text", "text": "Mariano." }],
+        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "spokenPunctuationCount": 1
+      }
     }
   ]
 }

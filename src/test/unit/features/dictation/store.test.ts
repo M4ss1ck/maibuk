@@ -6,6 +6,7 @@ import {
   defaultSpokenPunctuationSettings,
   normalizeSpokenPunctuationSettings,
 } from "@/features/dictation/spoken-punctuation";
+import { defaultVocabularySettings } from "@/features/dictation/vocabulary";
 
 const ids = (tier: string, lang: string) =>
   MODEL_CATALOG.find((m) => m.tier === tier && m.languages.includes(lang as "en"))!.id;
@@ -136,5 +137,112 @@ describe("Spoken Punctuation settings", () => {
     expect(useDictationStore.getState().spokenPunctuation).toEqual(
       defaultSpokenPunctuationSettings()
     );
+  });
+});
+
+describe("Dictation Vocabulary settings", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useDictationStore.setState({ vocabulary: defaultVocabularySettings() });
+  });
+
+  it("adds, trims, and removes entries per language", () => {
+    const { addVocabularyEntry, removeVocabularyEntry } = useDictationStore.getState();
+    addVocabularyEntry("es", "  a reliano ", "  Aureliano ");
+    addVocabularyEntry("en", "a reliano", "Aureliano");
+    addVocabularyEntry("es", "   ", "vacío");
+    addVocabularyEntry("es", "sin escrita", "  ");
+
+    expect(useDictationStore.getState().vocabulary).toEqual({
+      es: [{ heard: "a reliano", written: "Aureliano" }],
+      en: [{ heard: "a reliano", written: "Aureliano" }],
+    });
+
+    removeVocabularyEntry("es", 0);
+    removeVocabularyEntry("es", 4);
+    expect(useDictationStore.getState().vocabulary.es).toEqual([]);
+    expect(useDictationStore.getState().vocabulary.en).toHaveLength(1);
+  });
+
+  it("keeps a repeated heard form out, folded", () => {
+    const { addVocabularyEntry } = useDictationStore.getState();
+    addVocabularyEntry("es", "a reliano", "Aureliano");
+    addVocabularyEntry("es", "A RELIANO", "Otro");
+    addVocabularyEntry("es", "Buendía", "Buendía");
+    addVocabularyEntry("es", "buendia", "Otro");
+
+    expect(useDictationStore.getState().vocabulary.es).toEqual([
+      { heard: "a reliano", written: "Aureliano" },
+      { heard: "Buendía", written: "Buendía" },
+    ]);
+  });
+
+  it("edits an entry in place, keeping its own heard form", () => {
+    const { addVocabularyEntry, updateVocabularyEntry } = useDictationStore.getState();
+    addVocabularyEntry("es", "a reliano", "Aureliano");
+    addVocabularyEntry("es", "buendía", "Buendía");
+
+    updateVocabularyEntry("es", 0, " a reliano ", " Aureliano Buendía ");
+    expect(useDictationStore.getState().vocabulary.es[0]).toEqual({
+      heard: "a reliano",
+      written: "Aureliano Buendía",
+    });
+
+    // Another entry's heard form is refused; empty forms are refused.
+    updateVocabularyEntry("es", 0, "BUENDIA", "X");
+    updateVocabularyEntry("es", 0, "", "X");
+    updateVocabularyEntry("es", 9, "otro", "X");
+    expect(useDictationStore.getState().vocabulary.es).toEqual([
+      { heard: "a reliano", written: "Aureliano Buendía" },
+      { heard: "buendía", written: "Buendía" },
+    ]);
+  });
+
+  it("persists the vocabulary and normalizes it on rehydrate", async () => {
+    const { addVocabularyEntry } = useDictationStore.getState();
+    addVocabularyEntry("es", "a reliano", "Aureliano");
+
+    const saved = localStorage.getItem("maibuk-dictation");
+    expect(saved).not.toBeNull();
+    expect(JSON.parse(saved as string).state.vocabulary.es).toEqual([
+      { heard: "a reliano", written: "Aureliano" },
+    ]);
+
+    useDictationStore.setState({ vocabulary: defaultVocabularySettings() });
+    localStorage.setItem(
+      "maibuk-dictation",
+      JSON.stringify({
+        state: {
+          vocabulary: {
+            es: [
+              { heard: " a reliano ", written: " Aureliano " },
+              { heard: "A RELIANO", written: "Otro" },
+              { heard: "", written: "vacío" },
+            ],
+            en: 7,
+          },
+        },
+        version: 0,
+      })
+    );
+    await act(async () => {
+      await useDictationStore.persist.rehydrate();
+    });
+
+    const vocabulary = useDictationStore.getState().vocabulary;
+    expect(vocabulary.es).toEqual([{ heard: "a reliano", written: "Aureliano" }]);
+    expect(vocabulary.en).toEqual([]);
+  });
+
+  it("defaults a legacy record with no vocabulary", async () => {
+    localStorage.setItem(
+      "maibuk-dictation",
+      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 })
+    );
+    await act(async () => {
+      await useDictationStore.persist.rehydrate();
+    });
+
+    expect(useDictationStore.getState().vocabulary).toEqual(defaultVocabularySettings());
   });
 });

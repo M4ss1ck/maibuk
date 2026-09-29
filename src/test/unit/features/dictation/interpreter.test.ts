@@ -3,7 +3,6 @@ import {
   INITIAL_INTERPRETER_STATE,
   buildPhraseTable,
   interpret,
-  isScratchLine,
   type InterpreterState,
 } from "@/features/dictation/interpreter";
 import { normalizePhrase } from "@/features/dictation/normalize";
@@ -20,6 +19,8 @@ interface FixtureCase {
   before: string;
   capabilities?: Capabilities;
   state?: InterpreterState;
+  /** The author's Dictation Vocabulary for this case. */
+  vocabulary?: { heard: string; written: string }[];
   expected: {
     edits: { kind: string; text?: string }[];
     state: InterpreterState;
@@ -173,7 +174,10 @@ describe("interpret() fixtures", () => {
             line: fixture.line,
             before: fixture.before,
             capabilities,
-            table: buildPhraseTable(file.language, { capabilities }),
+            table: buildPhraseTable(file.language, {
+              capabilities,
+              vocabulary: fixture.vocabulary,
+            }),
             state: fixture.state ?? INITIAL_INTERPRETER_STATE,
           });
           expect(result).toEqual({
@@ -278,28 +282,137 @@ describe("interpret() contract", () => {
   });
 });
 
+describe("interpret() Dictation Vocabulary", () => {
+  const noPunctuation: Capabilities = { casing: false, punctuation: false, streaming: true };
+  const tableWith = (vocabulary: { heard: string; written: string }[]) =>
+    buildPhraseTable("es", { capabilities: noPunctuation, vocabulary });
+  const run = (line: string, table: ReturnType<typeof buildPhraseTable>, before = "") =>
+    interpret({
+      line,
+      before,
+      capabilities: noPunctuation,
+      table,
+      state: INITIAL_INTERPRETER_STATE,
+    });
+
+  it("replaces every heard form with the written form exactly as typed", () => {
+    const table = tableWith([
+      { heard: "a reliano", written: "Aureliano" },
+      { heard: "buendía", written: "Buendía" },
+    ]);
+    const { result } = run("hola a reliano buendía punto", table);
+    expect(result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Hola Aureliano Buendía." }],
+    });
+  });
+
+  it("matches whole words, folding case and accents", () => {
+    const table = tableWith([{ heard: "buendia", written: "Buendía" }]);
+    // Case and accents fold on the heard side; the written form keeps its own.
+    expect(run("A BUENDÍA punto", table).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "A Buendía." }],
+    });
+    // "mariano" is one word, so an entry for "ariano" never reaches inside it.
+    const owner = tableWith([{ heard: "ariano", written: "Ariano" }]);
+    expect(run("mariano punto", owner).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Mariano." }],
+    });
+  });
+
+  it("takes the longest match first", () => {
+    const table = tableWith([
+      { heard: "reliano", written: "Reliano" },
+      { heard: "a reliano", written: "Aureliano" },
+    ]);
+    expect(run("a reliano punto", table).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Aureliano." }],
+    });
+  });
+
+  it("inserts the written form exactly: no sentence casing, no lowercasing", () => {
+    const lower = tableWith([{ heard: "a reliano", written: "aureliano buendía" }]);
+    expect(run("a reliano", lower).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "aureliano buendía" }],
+    });
+    const upper = tableWith([{ heard: "a reliano", written: "Aureliano Buendía" }]);
+    expect(run("a reliano", upper, "hola ").result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Aureliano Buendía" }],
+    });
+  });
+
+  it("never reinterprets the written form as punctuation", () => {
+    const table = tableWith([{ heard: "marca", written: "punto y aparte" }]);
+    const { result, spokenPunctuationCount } = run("hola marca", table);
+    expect(result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Hola punto y aparte" }],
+    });
+    expect(spokenPunctuationCount).toBe(0);
+  });
+
+  it("never reinterprets the written form as scratch that", () => {
+    const table = tableWith([{ heard: "vora eso", written: "borra eso" }]);
+    const { result } = run("vora eso", table);
+    expect(result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "borra eso" }] });
+  });
+
+  it("runs first: the heard form shadows a Spoken Punctuation phrase", () => {
+    const table = tableWith([{ heard: "nuevo párrafo", written: "Nuevo Palafox" }]);
+    const { result, spokenPunctuationCount } = run("nuevo párrafo", table);
+    expect(result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "Nuevo Palafox" }] });
+    expect(spokenPunctuationCount).toBe(0);
+  });
+
+  it("drops model punctuation inside the heard span, keeps what follows", () => {
+    const table = tableWith([{ heard: "a reliano", written: "Aureliano" }]);
+    expect(run("a, reliano.", table).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Aureliano." }],
+    });
+  });
+
+  it("a cap modifier cannot re-case the written form", () => {
+    const table = tableWith([{ heard: "a reliano", written: "aureliano" }]);
+    expect(run("mayúscula a reliano dijo", table).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "aureliano dijo" }],
+    });
+  });
+});
+
 describe("interpret() scratch that", () => {
   const esTable = buildPhraseTable("es");
   const enTable = buildPhraseTable("en");
   const caps: Capabilities = { casing: false, punctuation: false, streaming: true };
 
+  /** The whole-line rule as the author sees it: the line is a scratch request. */
+  const isScratch = (line: string, table: ReturnType<typeof buildPhraseTable>) =>
+    interpret({ line, before: "", capabilities: caps, table, state: INITIAL_INTERPRETER_STATE })
+      .result.kind === "scratch";
+
   it("matches the whole line per language, folding case and model punctuation", () => {
-    expect(isScratchLine("borra eso", esTable)).toBe(true);
-    expect(isScratchLine("Borra eso.", esTable)).toBe(true);
-    expect(isScratchLine("¡BORRA ESO!", esTable)).toBe(true);
-    expect(isScratchLine("scratch that", enTable)).toBe(true);
-    expect(isScratchLine("Scratch that.", enTable)).toBe(true);
+    expect(isScratch("borra eso", esTable)).toBe(true);
+    expect(isScratch("Borra eso.", esTable)).toBe(true);
+    expect(isScratch("¡BORRA ESO!", esTable)).toBe(true);
+    expect(isScratch("scratch that", enTable)).toBe(true);
+    expect(isScratch("Scratch that.", enTable)).toBe(true);
   });
 
   it("does not cross languages", () => {
-    expect(isScratchLine("scratch that", esTable)).toBe(false);
-    expect(isScratchLine("borra eso", enTable)).toBe(false);
+    expect(isScratch("scratch that", esTable)).toBe(false);
+    expect(isScratch("borra eso", enTable)).toBe(false);
   });
 
   it("never acts inside prose", () => {
-    expect(isScratchLine("dije borra eso alto", esTable)).toBe(false);
-    expect(isScratchLine("I said scratch that loudly", enTable)).toBe(false);
-    expect(isScratchLine("", esTable)).toBe(false);
+    expect(isScratch("dije borra eso alto", esTable)).toBe(false);
+    expect(isScratch("I said scratch that loudly", enTable)).toBe(false);
+    expect(isScratch("", esTable)).toBe(false);
   });
 
   it("stops matching when the entry is switched off and takes an alias", () => {
@@ -307,12 +420,12 @@ describe("interpret() scratch that", () => {
     const capabilities: Capabilities = { casing: false, punctuation: false, streaming: true };
     settings.entries.borraEso = false;
     const offTable = buildPhraseTable("es", { settings, capabilities });
-    expect(isScratchLine("borra eso", offTable)).toBe(false);
+    expect(isScratch("borra eso", offTable)).toBe(false);
 
     const aliasSettings = defaultSpokenPunctuationLanguageSettings();
     aliasSettings.aliases.borraEso = ["bórralo"];
     const aliasTable = buildPhraseTable("es", { settings: aliasSettings, capabilities });
-    expect(isScratchLine("Bórralo.", aliasTable)).toBe(true);
+    expect(isScratch("Bórralo.", aliasTable)).toBe(true);
     expect(
       interpret({
         line: "bórralo",
