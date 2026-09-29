@@ -154,7 +154,7 @@ describe("Voice Commands in a real editor session", () => {
     // On-verbs set: saying it again keeps bold on instead of toggling it off.
     emit("poner negrita");
     emit("mundo");
-    expect(editor.getHTML()).toBe("<p><strong>Hola</strong> <strong>mundo</strong></p>");
+    expect(editor.getHTML()).toBe("<p><strong>Hola mundo</strong></p>");
     expect(stats.summary().voiceCommandCount).toBe(2);
     expect(stats.summary().spokenPunctuationCount).toBe(0);
   });
@@ -181,6 +181,45 @@ describe("Voice Commands in a real editor session", () => {
     emit("poner negrita");
     emit("dos");
     expect(editor.getHTML()).toBe("<p>Uno <strong>dos</strong></p>");
+  });
+
+  it("keeps a mark running through the separating space", async () => {
+    for (const [on, tag] of [
+      ["poner subrayado", "u"],
+      ["poner tachado", "s"],
+    ] as const) {
+      const { editor, emit } = await setup();
+      emit(on);
+      emit("hola");
+      emit("mundo");
+      expect(editor.getHTML(), on).toBe(`<p><${tag}>Hola mundo</${tag}></p>`);
+      editor.destroy();
+    }
+
+    // Inline code is non-inclusive at its trailing edge (CustomCode), so the
+    // caret there is outside the mark and the next word is plain, exactly as
+    // when typing after the edge.
+    const code = await setup();
+    code.emit("poner código");
+    code.emit("hola");
+    code.emit("mundo");
+    expect(code.editor.getHTML()).toBe("<p><code>Hola</code> mundo</p>");
+  });
+
+  it("keeps a typed mark running through the separating space", async () => {
+    const { editor, emit } = await setup({ content: "<p><strong>Uno</strong></p>" });
+    editor.commands.setTextSelection(4);
+    emit("dos");
+    expect(editor.getHTML()).toBe("<p><strong>Uno dos</strong></p>");
+  });
+
+  it("keeps a typed link running through the separating space", async () => {
+    const { editor, emit } = await setup({ content: '<p><a href="https://example.com">Uno</a></p>' });
+    editor.commands.setTextSelection(4);
+    emit("dos");
+    const html = editor.getHTML();
+    expect(html).toContain("Uno dos");
+    expect((html.match(/<a /g) ?? []).length).toBe(1);
   });
 
   it("changes nothing when an off-verb runs on plain text, and still announces", async () => {
@@ -259,6 +298,31 @@ describe("Voice Commands in a real editor session", () => {
     emit("empezar lista numerada");
     expect((editor.getHTML().match(/<ol>/g) ?? []).length).toBe(1);
     emit("salir de la lista numerada");
+    expect(editor.getHTML()).not.toContain("<ol>");
+  });
+
+  it("ends whichever list the caret is in with the generic list noun", async () => {
+    const { editor, emit } = await setup({ content: "<p>hola</p>" });
+    editor.commands.setTextSelection(2);
+    emit("empezar lista numerada");
+    expect(editor.getHTML()).toContain("<ol>");
+    emit("terminar lista");
+    expect(editor.getHTML()).not.toContain("<ol>");
+
+    // A specific target never ends the other list type.
+    emit("empezar lista");
+    expect(editor.getHTML()).toContain("<ul>");
+    emit("terminar lista numerada");
+    expect(editor.getHTML()).toContain("<ul>");
+    expect(editor.getHTML()).not.toContain("<ol>");
+  });
+
+  it("ends a numbered list in English with the generic target", async () => {
+    const { editor, emit } = await setup({ language: "en", content: "<p>hello</p>" });
+    editor.commands.setTextSelection(2);
+    emit("start numbered list");
+    expect(editor.getHTML()).toContain("<ol>");
+    emit("end list");
     expect(editor.getHTML()).not.toContain("<ol>");
   });
 

@@ -78,6 +78,17 @@ function listRunner(kind: "bulletList" | "orderedList", mode: "start" | "end"): 
   };
 }
 
+/**
+ * Ends the list the caret is in, whichever type it is. The generic noun
+ * ("lista"/"list") maps to the bullet Command, so "terminar lista" must close
+ * a numbered list too; plain text is a no-op.
+ */
+const endActiveList: EditorCommand = (editor) => {
+  if (editor.isActive("bulletList")) return editor.commands.toggleBulletList();
+  if (editor.isActive("orderedList")) return editor.commands.toggleOrderedList();
+  return true;
+};
+
 /** Converts the current block and is a no-op when it already is one. */
 function setBlock(command: EditorCommand, active: (editor: Editor) => boolean): EditorCommand {
   return (editor) => (active(editor) ? true : command(editor));
@@ -97,7 +108,7 @@ export const VOICE_RUNNERS: Partial<Record<CommandId, VoiceRunners>> = {
   "editor.code": { on: run("setCode"), off: run("unsetCode") },
   "editor.bulletList": {
     on: listRunner("bulletList", "start"),
-    off: listRunner("bulletList", "end"),
+    off: endActiveList,
   },
   "editor.numberedList": {
     on: listRunner("orderedList", "start"),

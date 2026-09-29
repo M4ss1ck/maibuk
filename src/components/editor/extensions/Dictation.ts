@@ -464,11 +464,16 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
       }
       const { from, to } = tr.selection;
       const leadingSpace = needsSpaceBefore(tr.doc, from) && !startsWithClosingMark;
+      // A mark the text already runs through keeps running through the space;
+      // only a mark newly set (a Voice Command's stored mark) leaves it plain.
+      const continued = leadingSpace ? tr.doc.resolve(from).marks() : [];
       const spaced = (leadingSpace ? " " : "") + edit.text;
       tr.insertText(spaced, from, to);
-      // The separating space carries no mark: "Uno <strong>dos</strong>",
-      // never "Uno<strong> dos</strong>".
-      if (leadingSpace) tr.removeMark(from, from + 1);
+      if (leadingSpace) {
+        for (const mark of tr.doc.nodeAt(from)?.marks ?? []) {
+          if (!mark.isInSet(continued)) tr.removeMark(from, from + 1, mark);
+        }
+      }
     }
   }
   const endPos = tr.selection.from;
