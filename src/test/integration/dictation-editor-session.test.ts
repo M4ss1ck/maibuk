@@ -58,7 +58,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -100,7 +99,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -150,7 +148,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -203,7 +200,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -243,7 +239,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -282,7 +277,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -321,7 +315,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -377,7 +370,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -437,7 +429,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -481,7 +472,6 @@ describe("Dictation line to rich-text document", () => {
         state = next.state;
         return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats,
@@ -523,7 +513,6 @@ describe("Dictation line to rich-text document", () => {
         before.push(context);
         return { kind: "edits", edits: [{ kind: "text", text }] };
       }),
-      runCommand: vi.fn(),
       notify: vi.fn(),
       copyText: vi.fn(async () => {}),
       stats: createLineStats(),

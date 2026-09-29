@@ -1,6 +1,8 @@
 // Every finished line passes through this seam before reaching an editor.
 // The Interpreter produces text, layout, list, and opener edits, or one Voice
 // Command, or a scratch request.
+import type { VoiceCommandRun } from "@/features/dictation/voice-commands";
+
 export type DictationEdit =
   | { kind: "text"; text: string }
   | { kind: "paragraph" }
@@ -10,7 +12,7 @@ export type DictationEdit =
 
 export type RouteResult =
   | { kind: "edits"; edits: DictationEdit[]; spokenPunctuationCount?: number }
-  | { kind: "voice_command"; id: string }
+  | ({ kind: "voice_command" } & VoiceCommandRun)
   | { kind: "scratch" };
 
 export type Interpreter = (text: string, before: string) => RouteResult | null;

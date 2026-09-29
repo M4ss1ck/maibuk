@@ -11,11 +11,14 @@ describe("createRouter()", () => {
 
   it("lets an interpreter turn a line into a Command", () => {
     const route = createRouter((text) =>
-      text === "nuevo capítulo" ? { kind: "voice_command", id: "bookEditor.addChapter" } : null
+      text === "nuevo capítulo"
+        ? { kind: "voice_command", id: "bookEditor.addChapter", polarity: null }
+        : null
     );
     expect(route("nuevo capítulo", "")).toEqual({
       kind: "voice_command",
       id: "bookEditor.addChapter",
+      polarity: null,
     });
     expect(route("otra cosa", "")).toEqual({
       kind: "edits",

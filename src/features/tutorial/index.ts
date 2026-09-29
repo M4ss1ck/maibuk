@@ -22,6 +22,7 @@ export { LIBRARY_VIEWS } from "@/features/tutorial/tutorial-library";
 export {
   EMPTY_TUTORIAL_PROGRESS,
   isTutorialProgressEmpty,
+  isTutorialStatusActive,
   useTutorialStore,
   type TutorialRun,
   type TutorialStatus,

@@ -462,3 +462,78 @@ describe("interpret() scratch that", () => {
     expect(out.result).toEqual({ kind: "scratch" });
   });
 });
+
+describe("interpret() Voice Commands", () => {
+  const esTable = buildPhraseTable("es");
+  const enTable = buildPhraseTable("en");
+  const caps: Capabilities = { casing: false, punctuation: false, streaming: true };
+
+  const run = (line: string, table: ReturnType<typeof buildPhraseTable>, before = "") =>
+    interpret({ line, before, capabilities: caps, table, state: INITIAL_INTERPRETER_STATE });
+
+  it("returns the Command and its polarity instead of edits", () => {
+    expect(run("poner negrita", esTable).result).toEqual({
+      kind: "voice_command",
+      id: "editor.bold",
+      polarity: "on",
+    });
+    expect(run("Quitar negrita.", esTable).result).toEqual({
+      kind: "voice_command",
+      id: "editor.bold",
+      polarity: "off",
+    });
+    expect(run("undo that", enTable).result).toEqual({
+      kind: "voice_command",
+      id: "common.undo",
+      polarity: null,
+    });
+  });
+
+  it("never counts a Voice Command as Spoken Punctuation and keeps the state", () => {
+    const state = { capitalizeNext: true, noSpaceNext: false };
+    const out = interpret({
+      line: "convertir en título uno",
+      before: "hola ",
+      capabilities: caps,
+      table: esTable,
+      state,
+    });
+    expect(out.result).toEqual({
+      kind: "voice_command",
+      id: "editor.heading1",
+      polarity: null,
+    });
+    expect(out.spokenPunctuationCount).toBe(0);
+    expect(out.state).toBe(state);
+  });
+
+  it("runs before scratch that: a Command line never removes the last sentence", () => {
+    expect(run("parar dictado", esTable).result).toEqual({
+      kind: "voice_command",
+      id: "dictation.stop",
+      polarity: null,
+    });
+  });
+
+  it("never fires from prose that contains the words", () => {
+    expect(run("puso la negrita en el título", esTable).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Puso la negrita en el título" }],
+    });
+    expect(run("make the sentence bold", enTable).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Make the sentence bold" }],
+    });
+  });
+
+  it("never fires for a written form the Dictation Vocabulary produced", () => {
+    const table = buildPhraseTable("es", {
+      capabilities: caps,
+      vocabulary: [{ heard: "orden", written: "poner negrita" }],
+    });
+    expect(run("orden", table).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "poner negrita" }],
+    });
+  });
+});

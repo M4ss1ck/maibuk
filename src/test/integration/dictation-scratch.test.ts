@@ -88,7 +88,6 @@ function setupSession(opts?: {
       if (next.result.kind === "scratch") return { kind: "scratch" };
       return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
     }),
-    runCommand: vi.fn(),
     notify: (n) => void notices.push(n),
     copyText: vi.fn(async () => {}),
     stats,

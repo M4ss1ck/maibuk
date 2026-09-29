@@ -8,7 +8,9 @@ import { dictationHub } from "@/features/dictation/hub";
 import type { DictationTarget, ScratchOutcome } from "@/features/dictation/session";
 import type { DictationEdit } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
+import type { VoiceOutcome } from "@/features/dictation/voice-commands";
 import { normalizeLanguage } from "@/features/settings/types";
+import { runVoiceCommand } from "@/components/editor/editor-commands";
 
 /** One dictated sentence: its range in the document and the exact text there. */
 export interface DictatedRange {
@@ -360,15 +362,26 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
   if (edits.length === 0) return;
   const { state } = editor;
   const startPos = state.selection.from;
+  /**
+   * The mark a Voice Command set for the text dictated next. A layout edit
+   * moves the selection, which clears the transaction's stored marks, so they
+   * are carried across by hand or the new paragraph's text loses the mark.
+   */
+  const storedMarks = state.storedMarks;
   let openersInserted = false;
   const tr = closeHistory(state.tr);
+  const carryStoredMarks = () => {
+    if (storedMarks && storedMarks.length > 0) tr.setStoredMarks(storedMarks);
+  };
   for (const edit of edits) {
     if (edit.kind === "paragraph") {
       tr.deleteSelection();
       tr.split(tr.selection.from, 1, [{ type: state.schema.nodes.paragraph }]);
+      carryStoredMarks();
     } else if (edit.kind === "line_break") {
       const hardBreak = state.schema.nodes.hardBreak;
       if (hardBreak) tr.replaceSelectionWith(hardBreak.create());
+      carryStoredMarks();
     } else if (edit.kind === "list_item") {
       tr.deleteSelection();
       const pos = tr.selection.from;
@@ -423,6 +436,7 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
           if (range) tr.wrap(range, [{ type: bulletList }, { type: listItem }]);
         }
       }
+      carryStoredMarks();
     } else if (edit.kind === "opener") {
       const caret = tr.selection.from;
       const at = findSentenceStartPos(tr.doc, caret);
@@ -449,9 +463,17 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
         if (spaces > 0) tr.delete(from - spaces, from);
       }
       const { from, to } = tr.selection;
-      const spaced =
-        (needsSpaceBefore(tr.doc, from) && !startsWithClosingMark ? " " : "") + edit.text;
+      const leadingSpace = needsSpaceBefore(tr.doc, from) && !startsWithClosingMark;
+      // A mark the text already runs through keeps running through the space;
+      // only a mark newly set (a Voice Command's stored mark) leaves it plain.
+      const continued = leadingSpace ? tr.doc.resolve(from).marks() : [];
+      const spaced = (leadingSpace ? " " : "") + edit.text;
       tr.insertText(spaced, from, to);
+      if (leadingSpace) {
+        for (const mark of tr.doc.nodeAt(from)?.marks ?? []) {
+          if (!mark.isInSet(continued)) tr.removeMark(from, from + 1, mark);
+        }
+      }
     }
   }
   const endPos = tr.selection.from;
@@ -616,6 +638,16 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
       apply: (edits) => {
         if (editor.isDestroyed || !editor.isEditable) return;
         applyDictationEdits(editor, edits);
+      },
+      voice: (run) => {
+        if (editor.isDestroyed || !editor.isEditable) return "ignored";
+        // A Voice Command is its own undo step: close the group the previous
+        // line (typed or dictated) opened, run the Command, then close again
+        // so the next line starts a new one.
+        editor.view.dispatch(closeHistory(editor.state.tr));
+        const outcome: VoiceOutcome = runVoiceCommand(editor, run);
+        editor.view.dispatch(closeHistory(editor.state.tr));
+        return outcome;
       },
       scratch: () => {
         if (editor.isDestroyed || !editor.isEditable) return "empty";

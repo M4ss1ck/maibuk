@@ -2,6 +2,7 @@
 // ships with. Bindings name a Command by id and never carry keys: the keys
 // that fire are these defaults merged with the author's Custom Shortcuts
 // (ADR 0012), resolved in `shortcut-resolve.ts`.
+import type { VoiceCommandSpec } from "@/features/dictation/voice-commands";
 
 /**
  * One key combination: modifiers then a key, joined by "+". `Mod` is Cmd on
@@ -49,6 +50,8 @@ export interface CommandDef {
   /** Replaces `defaults` on the web build, where the browser keeps some keys. */
   web?: readonly Shortcut[];
   source?: ShortcutSource;
+  /** Declares Voice Commands for this Command; absent means it takes none (ADR 0014). */
+  voice?: VoiceCommandSpec;
 }
 
 const FIXED_UNDO = "shortcuts.fixed.undo";
@@ -148,6 +151,7 @@ export const COMMANDS = {
     fixed: [["Escape"]],
     fixedReasonKey: FIXED_ESCAPE,
     sealed: true,
+    voice: { verbs: ["dictation"], targets: { en: ["dictation"], es: ["dictado"] } },
   },
 
   "tutorial.skip": {
@@ -170,6 +174,7 @@ export const COMMANDS = {
     defaults: [],
     fixed: [["Mod+z"]],
     fixedReasonKey: FIXED_UNDO,
+    voice: { verbs: ["undo"], targets: { en: ["that"], es: ["eso"] } },
   },
   "common.redo": {
     labelKey: "editor.redo",
@@ -178,6 +183,7 @@ export const COMMANDS = {
     defaults: [["Mod+y"]],
     fixed: [["Mod+Shift+z"]],
     fixedReasonKey: FIXED_UNDO,
+    voice: { verbs: ["redo"], targets: { en: ["that"], es: ["eso"] } },
   },
   "common.zoomIn": {
     labelKey: "shortcuts.zoomIn",
@@ -380,24 +386,40 @@ export const COMMANDS = {
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+b"]],
+    voice: {
+      verbs: ["formatOn", "formatOff"],
+      targets: { en: ["bold", "boldface"], es: ["negrita", "negritas"] },
+    },
   },
   "editor.italic": {
     labelKey: "editor.italic",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+i"]],
+    voice: {
+      verbs: ["formatOn", "formatOff"],
+      targets: { en: ["italic", "italics"], es: ["cursiva", "cursivas"] },
+    },
   },
   "editor.underline": {
     labelKey: "editor.underline",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+u"]],
+    voice: {
+      verbs: ["formatOn", "formatOff"],
+      targets: { en: ["underline"], es: ["subrayado", "subrayada"] },
+    },
   },
   "editor.strikethrough": {
     labelKey: "editor.strikethrough",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+s"]],
+    voice: {
+      verbs: ["formatOn", "formatOff"],
+      targets: { en: ["strike", "strikethrough"], es: ["tachado", "tachada"] },
+    },
   },
   "editor.highlight": {
     labelKey: "editor.highlight",
@@ -422,6 +444,10 @@ export const COMMANDS = {
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+e"]],
+    voice: {
+      verbs: ["formatOn", "formatOff"],
+      targets: { en: ["code", "inline code"], es: ["código", "código en línea"] },
+    },
   },
   "editor.codeBlock": {
     labelKey: "editor.codeBlock",
@@ -434,30 +460,56 @@ export const COMMANDS = {
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Alt+1"]],
+    voice: {
+      verbs: ["block"],
+      targets: { en: ["heading one", "heading 1"], es: ["título uno", "título 1"] },
+    },
   },
   "editor.heading2": {
     labelKey: "editor.heading2",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Alt+2"]],
+    voice: {
+      verbs: ["block"],
+      targets: { en: ["heading two", "heading 2"], es: ["título dos", "título 2"] },
+    },
   },
   "editor.heading3": {
     labelKey: "editor.heading3",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Alt+3"]],
+    voice: {
+      verbs: ["block"],
+      targets: { en: ["heading three", "heading 3"], es: ["título tres", "título 3"] },
+    },
   },
   "editor.bulletList": {
     labelKey: "editor.bulletList",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+8"]],
+    voice: {
+      verbs: ["listOn", "listOff"],
+      targets: {
+        en: ["bullet list", "bulleted list", "bullets", "list"],
+        es: ["lista", "lista con viñetas", "viñetas"],
+      },
+    },
   },
   "editor.numberedList": {
     labelKey: "editor.numberedList",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+7"]],
+    voice: {
+      verbs: ["listOn", "listOff"],
+      targets: {
+        en: ["numbered list", "number list", "ordered list"],
+        es: ["lista numerada", "lista ordenada"],
+      },
+    },
   },
   "editor.taskList": {
     labelKey: "editor.taskList",
@@ -470,30 +522,41 @@ export const COMMANDS = {
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+b"]],
+    voice: {
+      verbs: ["block"],
+      targets: { en: ["quote", "block quote"], es: ["cita", "cita textual"] },
+    },
   },
   "editor.alignLeft": {
     labelKey: "editor.alignLeft",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+l"]],
+    voice: { verbs: ["align"], targets: { en: ["left"], es: ["izquierda"] } },
   },
   "editor.alignCenter": {
     labelKey: "editor.alignCenter",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+e"]],
+    voice: { verbs: ["align"], targets: { en: ["center", "text"], es: ["centro", "texto"] } },
   },
   "editor.alignRight": {
     labelKey: "editor.alignRight",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+r"]],
+    voice: { verbs: ["align"], targets: { en: ["right"], es: ["derecha"] } },
   },
   "editor.alignJustify": {
     labelKey: "editor.alignJustify",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+j"]],
+    voice: {
+      verbs: ["align"],
+      targets: { en: ["justify", "justified"], es: ["justificado", "justificada"] },
+    },
   },
   "editor.toggleHeadingCollapse": {
     labelKey: "editor.toggleHeadingCollapse",

@@ -9,7 +9,7 @@
 // punctuation; model punctuation adjacent to a matched phrase is dropped so
 // marks never double. Text is then cased and spaced using the bounded text
 // before the caret.
-import { normalizePhrase, tokenize, type Token } from "@/features/dictation/normalize";
+import { normalizePhrase, tokenWords, tokenize, type Token } from "@/features/dictation/normalize";
 import type { DictationEdit } from "@/features/dictation/router";
 import {
   entriesFor,
@@ -19,6 +19,12 @@ import {
   type SpokenPunctuationLanguageSettings,
 } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
+import {
+  buildVoiceCommandTable,
+  matchVoiceCommand,
+  type VoiceCommandRun,
+  type VoiceCommandTable,
+} from "@/features/dictation/voice-commands";
 import type { VocabularyEntry } from "@/features/dictation/vocabulary";
 
 export interface TokenTrieNode<Match = SpokenPunctuationEntry> {
@@ -34,6 +40,8 @@ export interface PhraseTable {
   vocabularyTrie: TokenTrieNode<VocabularyEntry>;
   /** Normalized whole-line phrases that remove the last dictated sentence. */
   scratch: ReadonlySet<string>;
+  /** Whole-line Voice Commands (ADR 0014), matched before scratch that. */
+  voice: VoiceCommandTable;
 }
 
 export interface PhraseTableOptions {
@@ -69,7 +77,10 @@ export interface InterpretInput {
 }
 
 export interface InterpretResult {
-  result: { kind: "edits"; edits: DictationEdit[] } | { kind: "scratch" };
+  result:
+    | { kind: "edits"; edits: DictationEdit[] }
+    | ({ kind: "voice_command" } & VoiceCommandRun)
+    | { kind: "scratch" };
   state: InterpreterState;
   spokenPunctuationCount: number;
 }
@@ -81,13 +92,9 @@ export interface InterpretResult {
  * removing it again.
  */
 function isScratchTokens(tokens: Token[], table: PhraseTable): boolean {
-  const words: string[] = [];
-  for (const token of tokens) {
-    if (token.mark) continue;
-    if (token.protected) return false;
-    words.push(token.norm ?? "");
-  }
-  const norm = words.join(" ");
+  // Never let a protected Vocabulary written form act as scratch that.
+  if (tokens.some((token) => token.protected)) return false;
+  const norm = tokenWords(tokens).join(" ");
   return norm !== "" && table.scratch.has(norm);
 }
 
@@ -238,7 +245,13 @@ export function buildPhraseTable(
     addPhrase(vocabularyTrie, entry.heard, entry);
   }
 
-  return { language, trie, vocabularyTrie, scratch };
+  return {
+    language,
+    trie,
+    vocabularyTrie,
+    scratch,
+    voice: buildVoiceCommandTable(language),
+  };
 }
 
 function isSentenceStart(before: string): boolean {
@@ -283,6 +296,20 @@ export function interpret(input: InterpretInput): InterpretResult {
   // The Dictation Vocabulary runs first (ADR 0015): the rest of the pipeline
   // sees its written forms as protected literal text.
   const tokens = applyVocabulary(rawTokens, table.vocabularyTrie);
+
+  // A whole-line Voice Command runs a registry Command instead of inserting
+  // (ADR 0015 order: after the Vocabulary, before scratch that). A written
+  // form the Vocabulary produced is literal text and never fires a Command.
+  if (tokens.every((token) => !token.protected)) {
+    const command = matchVoiceCommand(table.voice, tokenWords(tokens));
+    if (command) {
+      return {
+        result: { kind: "voice_command", id: command.id, polarity: command.polarity },
+        state,
+        spokenPunctuationCount: 0,
+      };
+    }
+  }
 
   // Built-in whole-line words (ADR 0015 order): scratch that never acts inside
   // prose, and never matches words the Vocabulary replacement wrote.

@@ -1721,6 +1721,11 @@
     "announceLanguage": "Idioma del dictado: {{language}}",
     "scratchRefused": "No se eliminó nada. Borra eso solo elimina texto que no ha sido editado.",
     "scratchEmpty": "No hay nada que borrar.",
+    "voiceCommand": "Comando de voz: {{command}}",
+    "voiceCommandOn": "Se activó {{command}}",
+    "voiceCommandOff": "Se desactivó {{command}}",
+    "nothingToUndo": "No hay nada que deshacer.",
+    "nothingToRedo": "No hay nada que rehacer.",
     "languages": { "en": "inglés", "es": "español" },
     "languageNames": { "en": "Inglés", "es": "Español" },
     "errors": {
@@ -1757,7 +1762,7 @@
       "progress": "{{done}} de {{total}} MB",
       "size": "{{size}} MB",
       "recent": "Líneas recientes: {{lines}}, demora típica {{ms}} ms",
-      "interpreter": "Intérprete: demora típica {{median}} ms, peor demora {{max}} ms, puntuación dictada {{count}}, borra eso {{scratch}}",
+      "interpreter": "Intérprete: demora típica {{median}} ms, peor demora {{max}} ms, puntuación dictada {{count}}, comandos de voz {{voice}}, borra eso {{scratch}}",
       "noPunctuation": "No añade puntuación ni mayúsculas.",
       "device": "Micrófono: {{device}}"
     },

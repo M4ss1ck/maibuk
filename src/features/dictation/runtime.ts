@@ -19,6 +19,7 @@ import {
   type RecognizerHost,
 } from "@/features/dictation/types";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
+import { isTutorialStatusActive, useTutorialStore } from "@/features/tutorial/store";
 import { createRecognizerHost, dictationPlatform, getModelFiles } from "@/lib/platform";
 import { createUnsupportedHost, unsupportedModelFiles } from "@/lib/platform/unsupported-dictation";
 
@@ -107,8 +108,9 @@ async function build(): Promise<DictationRuntime> {
       if (output.result.kind === "scratch") return { kind: "scratch" };
       return { ...output.result, spokenPunctuationCount: output.spokenPunctuationCount };
     }),
-    // Voice Commands (Anticipated) dispatch registry Commands here; v1's router never asks.
-    runCommand: () => {},
+    // Voice Commands run on the target's editor; the Tutorial blocks them
+    // exactly like Shortcuts, so only its own skip works while a run is on.
+    voiceCommandsAllowed: () => !isTutorialStatusActive(useTutorialStore.getState().status),
     notify: (notice) => notify(notice),
     copyText: (text) => navigator.clipboard.writeText(text),
     stats,

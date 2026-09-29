@@ -58,6 +58,44 @@ describe("noticeMessage()", () => {
       "No hay nada que borrar."
     );
   });
+  it("announces a Voice Command with the Command's label and its polarity", () => {
+    expect(
+      noticeMessage({ kind: "voice_command", id: "editor.bold", polarity: "on" }, t).announce
+    ).toBe("Bold on");
+    expect(
+      noticeMessage({ kind: "voice_command", id: "editor.bold", polarity: "off" }, t).announce
+    ).toBe("Bold off");
+    expect(noticeMessage({ kind: "voice_command", id: "common.undo", polarity: null }, t).announce)
+      .toBe("Voice command: Undo");
+  });
+  it("announces a Voice Command in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(
+      noticeMessage({ kind: "voice_command", id: "editor.bold", polarity: "on" }, es).announce
+    ).toBe("Se activó Negrita");
+    expect(
+      noticeMessage({ kind: "voice_command", id: "editor.bold", polarity: "off" }, es).announce
+    ).toBe("Se desactivó Negrita");
+    expect(noticeMessage({ kind: "voice_command", id: "dictation.stop", polarity: null }, es).announce)
+      .toBe("Comando de voz: Detener dictado");
+  });
+  it("announces nothing to undo or redo", () => {
+    expect(noticeMessage({ kind: "voice_command_empty", id: "common.undo" }, t)).toEqual({
+      announce: "Nothing to undo.",
+    });
+    expect(noticeMessage({ kind: "voice_command_empty", id: "common.redo" }, t).announce).toBe(
+      "Nothing to redo."
+    );
+  });
+  it("announces nothing to undo or redo in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "voice_command_empty", id: "common.undo" }, es).announce).toBe(
+      "No hay nada que deshacer."
+    );
+    expect(noticeMessage({ kind: "voice_command_empty", id: "common.redo" }, es).announce).toBe(
+      "No hay nada que rehacer."
+    );
+  });
   it("announces an orphan copied to the clipboard", () => {
     const message = noticeMessage({ kind: "orphan_copied" }, t);
     expect(message.toast?.variant).toBe("info");

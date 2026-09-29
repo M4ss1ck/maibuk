@@ -74,7 +74,6 @@ function setupSession(vocabulary: VocabularyEntry[]) {
       if (next.result.kind === "scratch") return { kind: "scratch" };
       return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
     }),
-    runCommand: vi.fn(),
     notify: vi.fn(),
     copyText: vi.fn(async () => {}),
     stats: createLineStats(),

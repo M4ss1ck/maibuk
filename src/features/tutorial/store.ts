@@ -118,6 +118,15 @@ export const useTutorialStore = create<TutorialStore>()(
   )
 );
 
+/**
+ * Whether a Tutorial run is under way. Shortcuts and Voice Commands act only
+ * while this is false (ADR 0008), whether read from a subscription or the
+ * plain store.
+ */
+export function isTutorialStatusActive(status: TutorialStatus): boolean {
+  return status !== "idle";
+}
+
 /** Nothing recorded on this device: no dismiss, no finished run, no section done, no run left open. */
 export function isTutorialProgressEmpty(progress: TutorialProgress): boolean {
   return (
