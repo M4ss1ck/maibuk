@@ -74,17 +74,11 @@ export interface InterpretResult {
   spokenPunctuationCount: number;
 }
 
-/** Whole-line match for scratch that: folds case and accents, ignores model punctuation. */
-export function isScratchLine(line: string, table: PhraseTable): boolean {
-  const norm = normalizePhrase(line);
-  if (norm === "") return false;
-  return table.scratch.has(norm);
-}
-
 /**
- * The whole-line rule over already-substituted tokens: a protected Vocabulary
- * written form never counts toward a scratch phrase, so the Vocabulary can
- * write "borra eso" without the line removing it again.
+ * The whole-line rule over the already-substituted tokens: folds case and
+ * accents, ignores model punctuation, and never counts a protected Vocabulary
+ * written form, so the Vocabulary can write "borra eso" without the line
+ * removing it again.
  */
 function isScratchTokens(tokens: Token[], table: PhraseTable): boolean {
   const words: string[] = [];
@@ -279,10 +273,6 @@ function endsWithOpening(text: string): boolean {
   return OPENING_MARKS.has(text[text.length - 1]);
 }
 
-function findMatches(tokens: Token[], table: PhraseTable): Match[] {
-  return findTrieMatches(tokens, table.trie);
-}
-
 export function interpret(input: InterpretInput): InterpretResult {
   const { line, before, capabilities, table, state } = input;
   const rawTokens = tokenize(line);
@@ -400,7 +390,7 @@ export function interpret(input: InterpretInput): InterpretResult {
     }
   };
 
-  const allMatches = findMatches(tokens, table);
+  const allMatches = findTrieMatches(tokens, table.trie);
   const allByStart = new Map<number, Match>();
   for (const match of allMatches) allByStart.set(match.start, match);
 

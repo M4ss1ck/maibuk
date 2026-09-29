@@ -23,7 +23,6 @@ export {
   applyVocabulary,
   buildPhraseTable,
   interpret,
-  isScratchLine,
   INITIAL_INTERPRETER_STATE,
   type InterpreterState,
   type PhraseTable,

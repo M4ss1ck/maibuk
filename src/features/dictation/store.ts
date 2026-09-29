@@ -16,6 +16,7 @@ import type {
 } from "@/features/dictation/types";
 import {
   defaultVocabularySettings,
+  findVocabularyEntryIndex,
   normalizeVocabularySettings,
   type VocabularyEntry,
   type VocabularySettings,
@@ -79,13 +80,6 @@ function withVocabulary(
   entries: VocabularyEntry[]
 ): VocabularySettings {
   return { ...vocabulary, [language]: entries };
-}
-
-/** Whether `heard` already answers to an entry other than `index` (folded, whole words). */
-function isHeardTaken(entries: readonly VocabularyEntry[], heard: string, index = -1): boolean {
-  const normalized = normalizePhrase(heard);
-  if (normalized === "") return true;
-  return entries.some((entry, at) => at !== index && normalizePhrase(entry.heard) === normalized);
 }
 
 export const useDictationStore = create<DictationStoreState>()(
@@ -181,11 +175,11 @@ export const useDictationStore = create<DictationStoreState>()(
         set((state) => {
           const trimmedHeard = heard.trim();
           const trimmedWritten = written.trim();
-          if (trimmedWritten === "") return state;
           const entries = state.vocabulary[language];
+          if (trimmedWritten === "" || normalizePhrase(trimmedHeard) === "") return state;
           // A repeated heard form would make the written form depend on
           // storage order; the caller refuses it first, this keeps it out.
-          if (isHeardTaken(entries, trimmedHeard)) return state;
+          if (findVocabularyEntryIndex(entries, trimmedHeard) !== -1) return state;
           return {
             vocabulary: withVocabulary(state.vocabulary, language, [
               ...entries,
@@ -199,8 +193,8 @@ export const useDictationStore = create<DictationStoreState>()(
           const current = entries[index];
           const trimmedHeard = heard.trim();
           const trimmedWritten = written.trim();
-          if (!current || trimmedWritten === "") return state;
-          if (isHeardTaken(entries, trimmedHeard, index)) return state;
+          if (!current || trimmedWritten === "" || normalizePhrase(trimmedHeard) === "") return state;
+          if (findVocabularyEntryIndex(entries, trimmedHeard, index) !== -1) return state;
           const next = [...entries];
           next[index] = { heard: trimmedHeard, written: trimmedWritten };
           return { vocabulary: withVocabulary(state.vocabulary, language, next) };

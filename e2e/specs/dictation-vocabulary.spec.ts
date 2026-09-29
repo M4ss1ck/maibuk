@@ -13,16 +13,13 @@ const selectTrigger = (page: Page) => page.getByRole("button", { name: /Vocabula
 const heardField = (page: Page) => page.getByRole("textbox", { name: "What Dictation hears" });
 const writtenField = (page: Page) => page.getByRole("textbox", { name: "Write instead" });
 
-/** Opens the focused Vocabulary language Select and picks a language. */
-async function chooseLanguage(page: Page, name: "English" | "Spanish") {
-  await page.keyboard.press("Enter");
-  // Home lands on the first option, so the walk works from any selection.
-  await page.keyboard.press("Home");
-  await pressUntilFocused(page, "ArrowDown", page.getByRole("option", { name }));
-  await page.keyboard.press("Enter");
+/** Opens Settings at the Dictation section and tabs into the Vocabulary editor. */
+async function openVocabularyEditor(page: Page) {
+  await page.goto("/settings#dictation");
+  await tabTo(page, selectTrigger(page), { max: 320 });
 }
 
-/** Tabs into the Vocabulary editor and adds one entry. */
+/** Adds one entry from the open editor's add form. */
 async function addEntry(page: Page, heard: string, written: string) {
   await tabTo(page, heardField(page), { max: 40 });
   await page.keyboard.type(heard);
@@ -32,8 +29,17 @@ async function addEntry(page: Page, heard: string, written: string) {
   await page.keyboard.press("Enter");
 }
 
+/** Opens the focused Vocabulary language Select and picks a language. */
+async function chooseLanguage(page: Page, name: "English" | "Spanish") {
+  await page.keyboard.press("Enter");
+  // Home lands on the first option, so the walk works from any selection.
+  await page.keyboard.press("Home");
+  await pressUntilFocused(page, "ArrowDown", page.getByRole("option", { name }));
+  await page.keyboard.press("Enter");
+}
+
 test.describe("@wf:dictation-vocabulary @chromium-only", () => {
-  test("adds an entry by keyboard and refuses a repeated heard form", async ({ page }) => {
+  test("adds an entry by keyboard and shows it as heard → written", async ({ page }) => {
     await page.goto("/settings#dictation");
     const section = page.locator("#dictation");
     // The capture point both the base and this branch can reach: the last
@@ -44,11 +50,7 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
     await capture(page, "settings-dictation-vocabulary", { around: [section] });
 
     await tabTo(page, selectTrigger(page), { max: 320 });
-    await tabTo(page, heardField(page), { max: 40 });
-    await page.keyboard.type("a reliano");
-    await page.keyboard.press("Tab");
-    await page.keyboard.type("Aureliano");
-    await page.keyboard.press("Enter");
+    await addEntry(page, "a reliano", "Aureliano");
 
     const list = page.getByRole("list", { name: "Dictation vocabulary for English" });
     await expect(list.getByText("a reliano", { exact: true })).toBeVisible();
@@ -59,17 +61,6 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
     await list.scrollIntoViewIfNeeded();
     await capture(page, "settings-dictation-vocabulary-entry", { around: [list] });
 
-    // A heard form that folds to an existing one is refused, naming it.
-    await page.keyboard.type("A RELIANO");
-    await page.keyboard.press("Tab");
-    await page.keyboard.type("Otro");
-    await page.keyboard.press("Enter");
-    await expect(page.getByRole("alert")).toHaveText(
-      "A RELIANO is already in the Dictation vocabulary."
-    );
-    await expect(heardField(page)).toBeFocused();
-    await expect(list.getByText("Otro", { exact: true })).toHaveCount(0);
-
     await page.setViewportSize({ width: 390, height: 844 });
     await list.scrollIntoViewIfNeeded();
     await capture(page, "settings-dictation-vocabulary-narrow", {
@@ -77,9 +68,23 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
     });
   });
 
+  test("refuses a heard form that folds to an existing entry, with an alert", async ({ page }) => {
+    await openVocabularyEditor(page);
+    await addEntry(page, "a reliano", "Aureliano");
+
+    await addEntry(page, "A RELIANO", "Otro");
+
+    await expect(page.getByRole("alert")).toHaveText(
+      "A RELIANO is already in the Dictation vocabulary."
+    );
+    await expect(heardField(page)).toBeFocused();
+    const list = page.getByRole("list", { name: "Dictation vocabulary for English" });
+    await expect(list.getByText("Otro", { exact: true })).toHaveCount(0);
+    await expect(list.getByText("Aureliano", { exact: true })).toBeVisible();
+  });
+
   test("edits an entry in place and removes it by keyboard", async ({ page }) => {
-    await page.goto("/settings#dictation");
-    await tabTo(page, selectTrigger(page), { max: 320 });
+    await openVocabularyEditor(page);
     await addEntry(page, "a reliano", "Aureliano");
 
     const edit = page.getByRole("button", { name: "Edit a reliano" });
@@ -111,8 +116,7 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
   });
 
   test("keeps entries per language and across a reload", async ({ page }) => {
-    await page.goto("/settings#dictation");
-    await tabTo(page, selectTrigger(page), { max: 320 });
+    await openVocabularyEditor(page);
     await addEntry(page, "a reliano", "Aureliano");
 
     // Spanish starts empty, and takes its own entries.

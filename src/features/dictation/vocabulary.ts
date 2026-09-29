@@ -23,6 +23,22 @@ export function defaultVocabularySettings(): VocabularySettings {
 export type VocabularyRefusal = { kind: "empty" } | { kind: "duplicate"; entry: string };
 
 /**
+ * The index of the entry whose heard form folds to `heard`, or -1 when none
+ * does. `exceptIndex` is the entry being edited, which may keep its own form.
+ */
+export function findVocabularyEntryIndex(
+  entries: readonly VocabularyEntry[],
+  heard: string,
+  exceptIndex = -1
+): number {
+  const normalized = normalizePhrase(heard);
+  if (normalized === "") return -1;
+  return entries.findIndex(
+    (entry, index) => index !== exceptIndex && normalizePhrase(entry.heard) === normalized
+  );
+}
+
+/**
  * A new entry is refused when either form is empty after trimming, or when
  * its heard form already answers to another entry (compared the same way
  * matching does: whole words, folding case and accents). An entry being
@@ -36,13 +52,10 @@ export function findVocabularyRefusal(options: {
 }): VocabularyRefusal | null {
   const heard = options.heard.trim();
   const written = options.written.trim();
-  const normalized = normalizePhrase(heard);
-  if (heard === "" || written === "" || normalized === "") return { kind: "empty" };
-  for (const [index, entry] of options.entries.entries()) {
-    if (index === options.editingIndex) continue;
-    if (normalizePhrase(entry.heard) === normalized) {
-      return { kind: "duplicate", entry: entry.heard };
-    }
+  if (heard === "" || written === "" || normalizePhrase(heard) === "") return { kind: "empty" };
+  const duplicate = findVocabularyEntryIndex(options.entries, heard, options.editingIndex);
+  if (duplicate !== -1) {
+    return { kind: "duplicate", entry: options.entries[duplicate].heard };
   }
   return null;
 }

@@ -97,7 +97,10 @@
       "line": "nueva línea qué tal punto",
       "before": "Hola",
       "expected": {
-        "edits": [{ "kind": "line_break" }, { "kind": "text", "text": "Qué tal." }],
+        "edits": [
+          { "kind": "line_break" },
+          { "kind": "text", "text": "Qué tal." }
+        ],
         "state": { "capitalizeNext": true, "noSpaceNext": false },
         "spokenPunctuationCount": 2
       }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultVocabularySettings,
+  findVocabularyEntryIndex,
   findVocabularyRefusal,
   normalizeVocabularySettings,
   type VocabularyEntry,
@@ -21,6 +22,20 @@ describe("defaultVocabularySettings()", () => {
     const second = defaultVocabularySettings();
     expect(first).not.toBe(second);
     expect(first.en).not.toBe(second.en);
+  });
+});
+
+describe("findVocabularyEntryIndex()", () => {
+  it("returns the entry whose heard form folds to the phrase, or -1", () => {
+    expect(findVocabularyEntryIndex(entries, "A RELIANO")).toBe(0);
+    expect(findVocabularyEntryIndex(entries, "buendia.")).toBe(1);
+    expect(findVocabularyEntryIndex(entries, "reliano")).toBe(-1);
+  });
+
+  it("skips the entry being edited and empty phrases", () => {
+    expect(findVocabularyEntryIndex(entries, "a reliano", 0)).toBe(-1);
+    expect(findVocabularyEntryIndex(entries, "buendía", 0)).toBe(1);
+    expect(findVocabularyEntryIndex(entries, " ,.! ")).toBe(-1);
   });
 });
 

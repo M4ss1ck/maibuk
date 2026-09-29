@@ -3,7 +3,6 @@ import {
   INITIAL_INTERPRETER_STATE,
   buildPhraseTable,
   interpret,
-  isScratchLine,
   type InterpreterState,
 } from "@/features/dictation/interpreter";
 import { normalizePhrase } from "@/features/dictation/normalize";
@@ -392,23 +391,28 @@ describe("interpret() scratch that", () => {
   const enTable = buildPhraseTable("en");
   const caps: Capabilities = { casing: false, punctuation: false, streaming: true };
 
+  /** The whole-line rule as the author sees it: the line is a scratch request. */
+  const isScratch = (line: string, table: ReturnType<typeof buildPhraseTable>) =>
+    interpret({ line, before: "", capabilities: caps, table, state: INITIAL_INTERPRETER_STATE })
+      .result.kind === "scratch";
+
   it("matches the whole line per language, folding case and model punctuation", () => {
-    expect(isScratchLine("borra eso", esTable)).toBe(true);
-    expect(isScratchLine("Borra eso.", esTable)).toBe(true);
-    expect(isScratchLine("¡BORRA ESO!", esTable)).toBe(true);
-    expect(isScratchLine("scratch that", enTable)).toBe(true);
-    expect(isScratchLine("Scratch that.", enTable)).toBe(true);
+    expect(isScratch("borra eso", esTable)).toBe(true);
+    expect(isScratch("Borra eso.", esTable)).toBe(true);
+    expect(isScratch("¡BORRA ESO!", esTable)).toBe(true);
+    expect(isScratch("scratch that", enTable)).toBe(true);
+    expect(isScratch("Scratch that.", enTable)).toBe(true);
   });
 
   it("does not cross languages", () => {
-    expect(isScratchLine("scratch that", esTable)).toBe(false);
-    expect(isScratchLine("borra eso", enTable)).toBe(false);
+    expect(isScratch("scratch that", esTable)).toBe(false);
+    expect(isScratch("borra eso", enTable)).toBe(false);
   });
 
   it("never acts inside prose", () => {
-    expect(isScratchLine("dije borra eso alto", esTable)).toBe(false);
-    expect(isScratchLine("I said scratch that loudly", enTable)).toBe(false);
-    expect(isScratchLine("", esTable)).toBe(false);
+    expect(isScratch("dije borra eso alto", esTable)).toBe(false);
+    expect(isScratch("I said scratch that loudly", enTable)).toBe(false);
+    expect(isScratch("", esTable)).toBe(false);
   });
 
   it("stops matching when the entry is switched off and takes an alias", () => {
@@ -416,12 +420,12 @@ describe("interpret() scratch that", () => {
     const capabilities: Capabilities = { casing: false, punctuation: false, streaming: true };
     settings.entries.borraEso = false;
     const offTable = buildPhraseTable("es", { settings, capabilities });
-    expect(isScratchLine("borra eso", offTable)).toBe(false);
+    expect(isScratch("borra eso", offTable)).toBe(false);
 
     const aliasSettings = defaultSpokenPunctuationLanguageSettings();
     aliasSettings.aliases.borraEso = ["bórralo"];
     const aliasTable = buildPhraseTable("es", { settings: aliasSettings, capabilities });
-    expect(isScratchLine("Bórralo.", aliasTable)).toBe(true);
+    expect(isScratch("Bórralo.", aliasTable)).toBe(true);
     expect(
       interpret({
         line: "bórralo",
