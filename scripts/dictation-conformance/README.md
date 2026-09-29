@@ -90,3 +90,59 @@ detector and matching rule in `onsets.py`.
 
 `report.py` exits non-zero and lists every failed bar. When a bar fails, the
 number is reported as it is; the thresholds are not adjusted to make it pass.
+
+## Phrase lane (issue #285)
+
+Proves the default Spoken Punctuation and Voice Command phrases with a real
+voice: per-phrase hit rate for every Fast and Accurate model, and a prose set
+that must type as text.
+
+### What is recorded
+
+About 55 short lines per Dictation Language, around two minutes each
+(`src/test/support/dictation-phrase-set.ts`):
+
+- **Voice Commands.** Every default phrase is a verb crossed with a target, so
+  the script says each verb and each target at least once inside a real
+  command. A default phrase no clip says is *inferred*: it scores its verb's
+  hit rate times its target's. The report marks recorded and inferred rows.
+- **Spoken Punctuation** rides in carrier sentences, several phrases per clip.
+  Each phrase is scored on its own (a table where only it acts), and English
+  marks count even though they are off by default: an author may switch them on.
+- **Prose** must run nothing under the shipped defaults. The report also says
+  which sentences fire on their own text, before any model hears them.
+
+The gate lane (`phrase-conformance.test.ts`) fails when a default verb, target,
+or Spoken Punctuation phrase is added without a line in the script.
+
+### Record
+
+```bash
+pnpm record:dictation-phrases en     # then es
+```
+
+One continuous capture through `arecord`: read the line, press Enter, read the
+next. `r` redoes the current line, `b` goes back one, `q` stops (a rerun
+resumes). `--take 2` records a second take next to the first; takes average.
+`--device <alsa name>` picks a microphone (`arecord -L` lists them). Clips land
+in `vendor/moonshine/phrases/<lang>/` and are never committed.
+
+### Score
+
+```bash
+pnpm conformance:dictation:phrases
+```
+
+The native half transcribes every clip with each model (the production engine,
+fed faster than real time) into `vendor/moonshine/conformance/phrases-<id>.json`;
+`scripts/dictation-phrases/score.ts` runs the lines through the production
+Dictation Command Interpreter and writes `phrases-report.md` next to them.
+
+| Bar | Scope |
+| --- | --- |
+| Hit rate over every default phrase >= 80% | Accurate models |
+| Prose triggers == 0 | every model |
+| No clip missing | every model |
+
+Each default phrase under the bar on Accurate gets an alias default or is
+removed (issue #285); the report lists them with what the model heard.
