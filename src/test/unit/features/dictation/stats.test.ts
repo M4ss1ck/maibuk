@@ -10,6 +10,7 @@ const summary = (
   maxInterpreterMs: null as number | null,
   spokenPunctuationCount: 0,
   scratchCount: 0,
+  voiceCommandCount: 0,
   ...overrides,
 });
 
@@ -110,5 +111,16 @@ describe("createLineStats()", () => {
     expect(stats.summary()).toEqual(
       summary({ medianInterpreterMs: 8, maxInterpreterMs: 8, spokenPunctuationCount: 2 })
     );
+  });
+
+  it("sums Voice Commands across every interpreted line", () => {
+    const stats = createLineStats();
+    stats.recordInterpreter(8, 0, 0, 1);
+    stats.recordInterpreter(9, 2, 0, 0);
+    stats.recordInterpreter(7, 0, 1, 1);
+    const result = stats.summary();
+    expect(result.voiceCommandCount).toBe(2);
+    expect(result.spokenPunctuationCount).toBe(2);
+    expect(result.scratchCount).toBe(1);
   });
 });

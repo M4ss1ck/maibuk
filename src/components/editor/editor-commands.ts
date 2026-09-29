@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import type { CommandId } from "@/lib/shortcut-registry";
 import { dictationHub } from "@/features/dictation/hub";
+import type { VoiceCommandRun } from "@/features/dictation/voice-commands";
 
 type EditorCommand = (editor: Editor) => boolean;
 
@@ -63,3 +64,24 @@ export const EDITOR_COMMANDS: Partial<Record<CommandId, EditorCommand>> = {
     return true;
   },
 };
+
+type MarkRunners = { on: EditorCommand; off: EditorCommand };
+
+/**
+ * What an on-verb and an off-verb do to a mark, so a Voice Command sets or
+ * unsets and never toggles. Commands not listed here run their own runner.
+ */
+export const VOICE_MARK_RUNNERS: Partial<Record<CommandId, MarkRunners>> = {
+  "editor.bold": { on: run("setBold"), off: run("unsetBold") },
+  "editor.italic": { on: run("setItalic"), off: run("unsetItalic") },
+  "editor.underline": { on: run("setUnderline"), off: run("unsetUnderline") },
+  "editor.strikethrough": { on: run("setStrike"), off: run("unsetStrike") },
+  "editor.code": { on: run("setCode"), off: run("unsetCode") },
+};
+
+/** Runs one Voice Command's runner on this editor; the class polarity picks set or unset. */
+export function runVoiceCommand(editor: Editor, run: VoiceCommandRun): boolean {
+  const mark = VOICE_MARK_RUNNERS[run.id];
+  if (mark) return (run.polarity === "off" ? mark.off : mark.on)(editor);
+  return EDITOR_COMMANDS[run.id]?.(editor) ?? false;
+}

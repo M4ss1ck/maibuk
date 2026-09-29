@@ -81,7 +81,6 @@ function makeSession() {
     host,
     modelFor: (lang) => models[lang] ?? null,
     route: createRouter(),
-    runCommand: vi.fn(),
     notify: (n) => void notices.push(n),
     copyText: (t) => copyText(t),
     stats: createLineStats(),
@@ -262,7 +261,6 @@ describe("Dictation Session", () => {
         ],
         spokenPunctuationCount: 1,
       })),
-      runCommand: vi.fn(),
       notify: (n) => void notices.push(n),
       copyText: (t) => copyText(t),
       stats: createLineStats(),
@@ -360,24 +358,79 @@ describe("Dictation Session", () => {
     expect(session.getSnapshot()).toMatchObject({ status: "listening", language: "en" });
   });
 
-  it("routes a command result to runCommand instead of the editor", async () => {
-    const runCommand = vi.fn();
-    const target = fakeTarget("a");
+  it("runs a Voice Command on the active target instead of inserting its words", async () => {
+    const voice = vi.fn(() => true);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
     const session = createDictationSession({
       host,
       modelFor: (l) => models[l] ?? null,
-      route: createRouter(() => ({ kind: "voice_command", id: "common.save" })),
-      runCommand,
-      notify: () => {},
+      route: createRouter(() => ({
+        kind: "voice_command",
+        id: "common.undo",
+        polarity: null,
+      })),
+      notify: (n) => void notices.push(n),
       copyText: async () => {},
-      stats: createLineStats(),
+      stats,
     });
     session.register(target);
     session.focus("a");
     await session.start();
-    host.emit({ type: "final", text: "guardar" });
-    expect(runCommand).toHaveBeenCalledWith("common.save");
+    host.emit({ type: "final", text: "deshacer eso" });
+    expect(voice).toHaveBeenCalledWith({ id: "common.undo", polarity: null });
     expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({
+      kind: "voice_command",
+      id: "common.undo",
+      polarity: null,
+    });
+    expect(stats.summary().voiceCommandCount).toBe(1);
+    expect(stats.summary().spokenPunctuationCount).toBe(0);
+  });
+
+  it("stays silent and counts nothing when the runner did not run", async () => {
+    const voice = vi.fn(() => false);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "common.undo", polarity: null })),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "deshacer eso" });
+    expect(voice).toHaveBeenCalledTimes(1);
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_command" }));
+    expect(stats.summary().voiceCommandCount).toBe(0);
+  });
+
+  it("blocks Voice Commands while the Tutorial runs, without inserting them", async () => {
+    const voice = vi.fn(() => true);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "editor.bold", polarity: "on" })),
+      voiceCommandsAllowed: () => false,
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "poner negrita" });
+    expect(voice).not.toHaveBeenCalled();
+    expect(target.commits).toEqual([]);
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_command" }));
+    expect(stats.summary().voiceCommandCount).toBe(0);
   });
 
   it("does not apply a scratch request", async () => {
@@ -386,7 +439,6 @@ describe("Dictation Session", () => {
       host,
       modelFor: (l) => models[l] ?? null,
       route: createRouter(() => ({ kind: "scratch" })),
-      runCommand: vi.fn(),
       notify: () => {},
       copyText: async () => {},
       stats: createLineStats(),
@@ -406,7 +458,6 @@ describe("Dictation Session", () => {
       host,
       modelFor: (l) => models[l] ?? null,
       route: createRouter(() => ({ kind: "scratch" })),
-      runCommand: vi.fn(),
       notify: (n) => void notices.push(n),
       copyText: async () => {},
       stats,
@@ -429,7 +480,6 @@ describe("Dictation Session", () => {
       host,
       modelFor: (l) => models[l] ?? null,
       route: createRouter(() => ({ kind: "scratch" })),
-      runCommand: vi.fn(),
       notify: (n) => void notices.push(n),
       copyText: async () => {},
       stats,
@@ -450,7 +500,6 @@ describe("Dictation Session", () => {
       host,
       modelFor: (l) => models[l] ?? null,
       route: createRouter(() => ({ kind: "scratch" })),
-      runCommand: vi.fn(),
       notify: (n) => void notices.push(n),
       copyText: async () => {},
       stats,
@@ -470,7 +519,6 @@ describe("Dictation Session", () => {
       host,
       modelFor: (l) => models[l] ?? null,
       route: createRouter(() => ({ kind: "scratch" })),
-      runCommand: vi.fn(),
       notify: (n) => void notices.push(n),
       copyText: async () => {},
       stats: createLineStats(),

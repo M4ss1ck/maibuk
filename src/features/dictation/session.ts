@@ -4,6 +4,7 @@
 import type { LineStats } from "@/features/dictation/stats";
 import type { DictationEdit, RouteResult } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
+import type { VoiceCommandRun } from "@/features/dictation/voice-commands";
 import {
   toDictationError,
   type DictationErrorCode,
@@ -25,6 +26,11 @@ export interface DictationTarget {
   before(): string;
   /** Applies one finished line as one undo step. */
   apply(edits: DictationEdit[]): void;
+  /**
+   * Runs one Voice Command on this target's editor; true when it ran. The
+   * polarity picks a mark's set or unset runner. Absent targets run none.
+   */
+  voice?(run: VoiceCommandRun): boolean;
   /** Removes the last dictated sentence as one undo step. Absent targets ignore scratch. */
   scratch?(): ScratchOutcome;
   /** Drops the dictated history so scratch never reaches into another editor. Absent targets keep no history. */
@@ -43,7 +49,10 @@ export type SessionNotice =
   // Scratch that found edited dictated text: nothing removed, the live region says so.
   | { kind: "scratch_refused" }
   // Scratch that had nothing to remove: the live region says so.
-  | { kind: "scratch_empty" };
+  | { kind: "scratch_empty" }
+  // A Voice Command ran: the live region says which one, so a spoken action
+  // with no visible cause is never silent.
+  | ({ kind: "voice_command" } & VoiceCommandRun);
 
 export interface SessionSnapshot {
   status: SessionStatus;
@@ -86,7 +95,8 @@ export function createDictationSession(deps: {
   host: RecognizerHost;
   modelFor: (language: DictationLanguage) => ModelSpec | null;
   route: (text: string, before: string) => RouteResult;
-  runCommand: (id: string) => void;
+  /** False while the Tutorial runs: no Voice Command may act (ADR 0008), like Shortcuts. */
+  voiceCommandsAllowed?: () => boolean;
   notify: (notice: SessionNotice) => void;
   copyText: (text: string) => Promise<void>;
   stats: LineStats;
@@ -149,13 +159,24 @@ export function createDictationSession(deps: {
         const target = active();
         const startedAt = performance.now();
         const result = deps.route(event.text, target?.before() ?? "");
+        const interpreterMs = performance.now() - startedAt;
+        // The Tutorial gate is the Shortcuts one: while a run is under way no
+        // Voice Command acts, and its words are never inserted either. Only a
+        // Command that really ran counts.
+        const voiceRan =
+          result.kind === "voice_command" &&
+          deps.voiceCommandsAllowed?.() !== false &&
+          target?.voice?.({ id: result.id, polarity: result.polarity }) === true;
         deps.stats.recordInterpreter(
-          performance.now() - startedAt,
+          interpreterMs,
           result.kind === "edits" ? (result.spokenPunctuationCount ?? 0) : 0,
-          result.kind === "scratch" ? 1 : 0
+          result.kind === "scratch" ? 1 : 0,
+          voiceRan ? 1 : 0
         );
         if (result.kind === "voice_command") {
-          deps.runCommand(result.id);
+          if (voiceRan) {
+            deps.notify({ kind: "voice_command", id: result.id, polarity: result.polarity });
+          }
           return;
         }
         if (result.kind === "scratch") {

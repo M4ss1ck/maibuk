@@ -5,11 +5,17 @@ export interface LineStatsSummary {
   maxInterpreterMs: number | null;
   spokenPunctuationCount: number;
   scratchCount: number;
+  voiceCommandCount: number;
 }
 
 export interface LineStats {
   record(latencyMs: number | undefined): void;
-  recordInterpreter(durationMs: number, spokenPunctuationCount: number, scratchCount?: number): void;
+  recordInterpreter(
+    durationMs: number,
+    spokenPunctuationCount: number,
+    scratchCount?: number,
+    voiceCommandCount?: number
+  ): void;
   summary(): LineStatsSummary;
 }
 
@@ -25,6 +31,7 @@ export function createLineStats(capacity = 50): LineStats {
   let lines = 0;
   let spokenPunctuationCount = 0;
   let scratchCount = 0;
+  let voiceCommands = 0;
   const upperMiddle = (samples: number[]): number | null => {
     if (samples.length === 0) return null;
     const sorted = [...samples].sort((a, b) => a - b);
@@ -37,9 +44,10 @@ export function createLineStats(capacity = 50): LineStats {
       recent.push(latencyMs);
       if (recent.length > capacity) recent.shift();
     },
-    recordInterpreter(durationMs, spoken, scratch = 0) {
+    recordInterpreter(durationMs, spoken, scratch = 0, voice = 0) {
       spokenPunctuationCount += spoken;
       scratchCount += scratch;
+      voiceCommands += voice;
       recentInterpreter.push(durationMs);
       if (recentInterpreter.length > capacity) recentInterpreter.shift();
     },
@@ -51,6 +59,7 @@ export function createLineStats(capacity = 50): LineStats {
         maxInterpreterMs: recentInterpreter.length === 0 ? null : Math.max(...recentInterpreter),
         spokenPunctuationCount,
         scratchCount,
+        voiceCommandCount: voiceCommands,
       };
     },
   };

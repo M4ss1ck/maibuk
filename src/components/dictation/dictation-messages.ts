@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import type { SessionNotice } from "@/features/dictation/session";
+import { COMMANDS } from "@/lib/shortcut-registry";
 
 export interface NoticeMessage {
   toast?: { variant: "error" | "info"; text: string };
@@ -23,6 +24,16 @@ export function noticeMessage(
       return { announce: t("dictation.scratchRefused") };
     case "scratch_empty":
       return { announce: t("dictation.scratchEmpty") };
+    case "voice_command": {
+      const command = t(COMMANDS[notice.id].labelKey);
+      const key =
+        notice.polarity === "on"
+          ? "dictation.voiceCommandOn"
+          : notice.polarity === "off"
+            ? "dictation.voiceCommandOff"
+            : "dictation.voiceCommand";
+      return { announce: t(key, { command }) };
+    }
     case "orphan_copied": {
       const text = t("dictation.orphanCopied");
       return { toast: { variant: "info", text }, announce: text };

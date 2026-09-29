@@ -76,6 +76,7 @@ export default defineConfig(() => ({
         "src/features/dictation/interpreter.ts",
         "src/features/dictation/normalize.ts",
         "src/features/dictation/spoken-punctuation.ts",
+        "src/features/dictation/voice-commands.ts",
         "src/features/dictation/vocabulary.ts",
         "src/features/dictation/model-store.ts",
         "src/features/dictation/router.ts",

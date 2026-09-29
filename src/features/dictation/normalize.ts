@@ -34,10 +34,17 @@ export function tokenize(text: string): Token[] {
   return tokens;
 }
 
+/** The normalized word tokens of an already-tokenized line; model punctuation is dropped. */
+export function tokenWords(tokens: readonly Token[]): string[] {
+  return tokens.filter((token) => !token.mark).map((token) => token.norm ?? "");
+}
+
+/** The normalized word tokens of a phrase. */
+export function phraseWords(text: string): string[] {
+  return tokenWords(tokenize(text));
+}
+
 /** Case- and accent-folded, punctuation-free phrase key. Shared by matching and storage. */
 export function normalizePhrase(text: string): string {
-  return tokenize(text)
-    .filter((token) => !token.mark)
-    .map((token) => token.norm ?? "")
-    .join(" ");
+  return phraseWords(text).join(" ");
 }

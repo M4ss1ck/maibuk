@@ -1721,6 +1721,9 @@
     "announceLanguage": "Dictation language: {{language}}",
     "scratchRefused": "Nothing removed. Scratch that only removes text that hasn't been edited.",
     "scratchEmpty": "Nothing to remove.",
+    "voiceCommand": "Voice command: {{command}}",
+    "voiceCommandOn": "{{command}} on",
+    "voiceCommandOff": "{{command}} off",
     "languages": { "en": "English", "es": "Spanish" },
     "languageNames": { "en": "English", "es": "Spanish" },
     "errors": {
@@ -1757,7 +1760,7 @@
       "progress": "{{done}} of {{total}} MB",
       "size": "{{size}} MB",
       "recent": "Recent lines: {{lines}}, typical delay {{ms}} ms",
-      "interpreter": "Interpreter: typical delay {{median}} ms, worst delay {{max}} ms, spoken punctuation {{count}}, scratch that {{scratch}}",
+      "interpreter": "Interpreter: typical delay {{median}} ms, worst delay {{max}} ms, spoken punctuation {{count}}, voice commands {{voice}}, scratch that {{scratch}}",
       "noPunctuation": "Adds no punctuation or capitals.",
       "device": "Microphone: {{device}}"
     },

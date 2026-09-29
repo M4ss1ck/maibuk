@@ -3,7 +3,7 @@ import { isTypingTarget } from "@/lib/keyboard";
 import { isMac } from "@/lib/platform/detect";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
-import { useTutorialStore } from "@/features/tutorial/store";
+import { isTutorialStatusActive, useTutorialStore } from "@/features/tutorial/store";
 import { getLiveShortcuts } from "@/lib/command-keys";
 import { isIgnoredKeyEvent, stepsFromEvent } from "@/lib/shortcut-keys";
 import type { CommandId, Step } from "@/lib/shortcut-registry";
@@ -37,7 +37,7 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
   const shortcutsRef = useRef(shortcuts);
   const sequenceRef = useRef<{ step: Step; time: number } | null>(null);
   const modalIdsLen = useModalStore((s) => s.modalIds.length);
-  const tutorialRunning = useTutorialStore((s) => s.status !== "idle");
+  const tutorialRunning = useTutorialStore((s) => isTutorialStatusActive(s.status));
   const isLive = (binding: ShortcutBinding) =>
     binding.enabled !== false && (!tutorialRunning || isTutorialShortcut(binding));
 

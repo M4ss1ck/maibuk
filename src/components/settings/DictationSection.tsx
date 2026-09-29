@@ -200,6 +200,7 @@ export function DictationSection() {
             median: formatMs(recent.medianInterpreterMs),
             max: formatMs(recent.maxInterpreterMs ?? recent.medianInterpreterMs),
             count: recent.spokenPunctuationCount,
+            voice: recent.voiceCommandCount,
             scratch: recent.scratchCount,
           })}
         </p>

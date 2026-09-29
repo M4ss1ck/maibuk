@@ -9,6 +9,7 @@ import type { DictationTarget, ScratchOutcome } from "@/features/dictation/sessi
 import type { DictationEdit } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
 import { normalizeLanguage } from "@/features/settings/types";
+import { runVoiceCommand } from "@/components/editor/editor-commands";
 
 /** One dictated sentence: its range in the document and the exact text there. */
 export interface DictatedRange {
@@ -616,6 +617,10 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
       apply: (edits) => {
         if (editor.isDestroyed || !editor.isEditable) return;
         applyDictationEdits(editor, edits);
+      },
+      voice: (run) => {
+        if (editor.isDestroyed || !editor.isEditable) return false;
+        return runVoiceCommand(editor, run);
       },
       scratch: () => {
         if (editor.isDestroyed || !editor.isEditable) return "empty";

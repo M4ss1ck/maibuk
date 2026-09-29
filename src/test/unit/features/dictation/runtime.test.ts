@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createUnsupportedHost, unsupportedModelFiles } from "@/lib/platform/unsupported-dictation";
-import { DictationError, type ModelFiles, type ModelSpec } from "@/features/dictation/types";
+import { useTutorialStore } from "@/features/tutorial/store";
+import {
+  DictationError,
+  type DictationEvent,
+  type ModelFiles,
+  type ModelSpec,
+} from "@/features/dictation/types";
 
 const { createRecognizerHost, getModelFiles } = vi.hoisted(() => ({
   createRecognizerHost: vi.fn(),
@@ -19,6 +25,7 @@ const { MODEL_CATALOG } = await import("@/features/dictation/catalog");
 beforeEach(() => {
   resetDictationForTests();
   useDictationStore.setState({ enabled: true });
+  useTutorialStore.setState({ status: "idle" });
   createRecognizerHost.mockReset();
   getModelFiles.mockReset();
   getModelFiles.mockResolvedValue(unsupportedModelFiles);
@@ -77,6 +84,43 @@ describe("getDictation()", () => {
     expect(host.start).not.toHaveBeenCalled();
     expect(session.getSnapshot().status).toBe("idle");
   });
+  it("blocks Voice Commands while a Tutorial run is under way", async () => {
+    const control: { listener: ((event: DictationEvent) => void) | null } = { listener: null };
+    const host = {
+      ...createUnsupportedHost("platform"),
+      load: vi.fn(async () => {}),
+      start: vi.fn(async (listener: (event: DictationEvent) => void) => {
+        control.listener = listener;
+      }),
+      stop: vi.fn(async () => {}),
+    };
+    createRecognizerHost.mockResolvedValue(host);
+    const { session } = await getDictation();
+    const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast");
+    if (!esFast) throw new Error("no Spanish model in the catalog");
+    useDictationStore.setState({ installed: [esFast.id] });
+    const voice = vi.fn(() => true);
+    session.register({
+      id: "chapter",
+      language: () => "es",
+      showPartial() {},
+      before: () => "",
+      apply() {},
+      voice,
+    });
+    session.focus("chapter");
+    await session.start();
+
+    useTutorialStore.setState({ status: "running" });
+    control.listener?.({ type: "final", text: "poner negrita" });
+    expect(voice).not.toHaveBeenCalled();
+
+    useTutorialStore.setState({ status: "idle" });
+    control.listener?.({ type: "final", text: "poner negrita" });
+    expect(voice).toHaveBeenCalledWith({ id: "editor.bold", polarity: "on" });
+    await session.stop();
+  });
+
   it("builds the runtime once and shares it", async () => {
     createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
     const [a, b] = await Promise.all([getDictation(), getDictation()]);
