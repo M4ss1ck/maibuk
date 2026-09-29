@@ -114,6 +114,35 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
     await expect(row.getByRole("button", { name: "Download" })).toBeVisible();
   });
 
+  test("the Dictation Language tab scopes the models and the language editors", async ({
+    page,
+  }) => {
+    await page.goto("/settings#dictation");
+    // The tab list opens on the author's language: English models, no Spanish.
+    await expect(page.getByRole("group", { name: "English, Fast" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Spanish, Fast" })).toHaveCount(0);
+
+    const englishTab = page.getByRole("tab", { name: "English" });
+    await tabTo(page, englishTab, { max: 200 });
+    await pressUntilFocused(page, "ArrowRight", page.getByRole("tab", { name: "Spanish" }));
+    await expect(page.getByRole("tab", { name: "Spanish" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    // The one panel scopes the model fieldsets, Spoken punctuation, and the
+    // Dictation vocabulary editor to the chosen language.
+    await expect(page.getByRole("group", { name: "Spanish, Fast" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "English, Fast" })).toHaveCount(0);
+    await expect(
+      page.getByRole("switch", { name: "Spoken punctuation for Spanish" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Spoken punctuation entries for Spanish" })
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dictation vocabulary" })).toBeVisible();
+  });
+
   test("Cancel during download leaves the model not downloaded", async ({ page }) => {
     // Hold the model files until Cancel is pressed, so the download is in flight.
     let release: () => void = () => {};

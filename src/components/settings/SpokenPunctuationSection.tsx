@@ -1,10 +1,10 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { RotateCcw, X } from "lucide-react";
+import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-components";
+import { ChevronRight, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { phraseConflictMessage } from "@/components/dictation/phrase-conflict-message";
 import { findPhraseConflict, type PhraseConflict } from "@/features/dictation/phrase-conflicts";
@@ -15,15 +15,15 @@ import {
   type SpokenPunctuationEntry,
   type SpokenPunctuationLanguageSettings,
 } from "@/features/dictation/spoken-punctuation";
-import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
+import { useDictationStore } from "@/features/dictation/store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
 
 interface SpokenPunctuationSectionProps {
-  /** The Dictation Languages this build offers, in display order. */
-  languages: readonly DictationLanguage[];
-  /** What the picked Dictation Model of a language can do; sets the entry defaults. */
-  capabilitiesFor: (language: DictationLanguage) => ModelSpec["capabilities"];
+  /** The Dictation Language of the Dictation settings tab this sits in. */
+  language: DictationLanguage;
+  /** What the picked Dictation Model of the language can do; sets the entry defaults. */
+  capabilities: ModelSpec["capabilities"];
 }
 
 function actionLabel(action: PhraseAction, t: TFunction): string {
@@ -216,68 +216,66 @@ function EntryRow({
 }
 
 /**
- * Settings → Dictation's Spoken Punctuation list: every entry of the chosen
- * Dictation Language with its phrases and what it inserts, a master switch,
- * a switch per entry, extra phrases, and a reset. Device-local (ADR 0014).
+ * Settings → Dictation's Spoken Punctuation list for one Dictation Language:
+ * a master switch, and behind a collapsed disclosure every entry with its
+ * phrases and what it inserts, a switch per entry, extra phrases, and a
+ * reset. Device-local (ADR 0014).
  */
 export function SpokenPunctuationSection({
-  languages,
-  capabilitiesFor,
+  language,
+  capabilities,
 }: SpokenPunctuationSectionProps) {
-  const { t, i18n } = useTranslation();
-  const override = useDictationStore((state) => state.languageOverride);
-  const spoken = useDictationStore((state) => state.spokenPunctuation);
+  const { t } = useTranslation();
+  const settings = useDictationStore((state) => state.spokenPunctuation[language]);
   const setLanguageEnabled = useDictationStore((state) => state.setSpokenPunctuationEnabled);
-  const [chosen, setChosen] = useState<DictationLanguage>(() =>
-    dictationLanguageFor(override, i18n.language)
-  );
+  const [isExpanded, setExpanded] = useState(false);
 
-  if (languages.length === 0) return null;
-  const language = languages.includes(chosen) ? chosen : languages[0];
-  const settings = spoken[language];
-  const capabilities = capabilitiesFor(language);
   const languageName = t(`dictation.languageNames.${language}`);
   const masterLabel = t("dictation.spokenPunctuation.master", { language: languageName });
+  const listLabel = t("dictation.spokenPunctuation.listLabel", { language: languageName });
+  const entries = entriesFor(language);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-medium">{t("dictation.spokenPunctuation.title")}</h3>
-        <Select<DictationLanguage>
-          ariaLabel={t("dictation.language")}
-          value={language}
-          options={languages.map((value) => ({
-            value,
-            label: t(`dictation.languageNames.${value}`),
-          }))}
-          onChange={setChosen}
-        />
-      </div>
-      <p className="text-sm text-muted-foreground">
-        {t("dictation.spokenPunctuation.description")}
-      </p>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium">{masterLabel}</span>
+    <Disclosure isExpanded={isExpanded} onExpandedChange={setExpanded} className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <h3 className="font-medium">{t("dictation.spokenPunctuation.title")}</h3>
+          <span className="text-xs text-muted-foreground">
+            {t("dictation.spokenPunctuation.entryCount", { count: entries.length })}
+          </span>
+        </div>
         <Switch
           checked={settings.enabled}
           onChange={(enabled) => setLanguageEnabled(language, enabled)}
           label={masterLabel}
         />
-      </div>
-      <ul
-        aria-label={t("dictation.spokenPunctuation.listLabel", { language: languageName })}
-        className="space-y-2"
-      >
-        {entriesFor(language).map((entry) => (
-          <EntryRow
-            key={entry.id}
-            language={language}
-            entry={entry}
-            settings={settings}
-            capabilities={capabilities}
+        <AriaButton
+          slot="trigger"
+          aria-label={listLabel}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:h-11 pointer-coarse:w-11"
+        >
+          <ChevronRight
+            className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+            aria-hidden="true"
           />
-        ))}
-      </ul>
-    </div>
+        </AriaButton>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {t("dictation.spokenPunctuation.description")}
+      </p>
+      <DisclosurePanel>
+        <ul aria-label={listLabel} className="space-y-2">
+          {entries.map((entry) => (
+            <EntryRow
+              key={entry.id}
+              language={language}
+              entry={entry}
+              settings={settings}
+              capabilities={capabilities}
+            />
+          ))}
+        </ul>
+      </DisclosurePanel>
+    </Disclosure>
   );
 }

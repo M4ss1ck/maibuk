@@ -9,14 +9,16 @@ import { expect, test } from "../support/test";
 // reason as the rest of the Dictation settings (WebKit has no Dictation).
 test.use({ library: "oneBookThreeChapters" });
 
-const selectTrigger = (page: Page) => page.getByRole("button", { name: /Vocabulary language/ });
+const languageTab = (page: Page, name: "English" | "Spanish") => page.getByRole("tab", { name });
 const heardField = (page: Page) => page.getByRole("textbox", { name: "What Dictation hears" });
 const writtenField = (page: Page) => page.getByRole("textbox", { name: "Write instead" });
+const vocabularyList = (page: Page, name: "English" | "Spanish") =>
+  page.getByRole("list", { name: `Dictation vocabulary for ${name}` });
 
 /** Opens Settings at the Dictation section and tabs into the Vocabulary editor. */
 async function openVocabularyEditor(page: Page) {
   await page.goto("/settings#dictation");
-  await tabTo(page, selectTrigger(page), { max: 320 });
+  await tabTo(page, heardField(page), { max: 320 });
 }
 
 /** Adds one entry from the open editor's add form. */
@@ -29,30 +31,34 @@ async function addEntry(page: Page, heard: string, written: string) {
   await page.keyboard.press("Enter");
 }
 
-/** Opens the focused Vocabulary language Select and picks a language. */
-async function chooseLanguage(page: Page, name: "English" | "Spanish") {
-  await page.keyboard.press("Enter");
-  // Home lands on the first option, so the walk works from any selection.
-  await page.keyboard.press("Home");
-  await pressUntilFocused(page, "ArrowDown", page.getByRole("option", { name }));
-  await page.keyboard.press("Enter");
+/**
+ * Walks the Dictation Language tab list with the arrow keys: selection follows
+ * focus, so the wanted tab is focused and selected on arrival. Focus is inside
+ * the section, so the tab list is reached by tabbing back.
+ */
+async function chooseLanguage(
+  page: Page,
+  current: "English" | "Spanish",
+  wanted: "English" | "Spanish"
+) {
+  await tabTo(page, languageTab(page, current), { backwards: true, max: 120 });
+  const target = languageTab(page, wanted);
+  await pressUntilFocused(page, wanted === "Spanish" ? "ArrowRight" : "ArrowLeft", target);
+  await expect(target).toHaveAttribute("aria-selected", "true");
 }
 
 test.describe("@wf:dictation-vocabulary @chromium-only", () => {
   test("adds an entry by keyboard and shows it as heard → written", async ({ page }) => {
     await page.goto("/settings#dictation");
     const section = page.locator("#dictation");
-    // The capture point both the base and this branch can reach: the last
-    // Spoken punctuation entry, which the vocabulary editor follows.
-    await page
-      .getByRole("group", { name: "scratch that", exact: true })
-      .scrollIntoViewIfNeeded();
+    // The Vocabulary editor sits at the end of the Dictation section.
+    await page.getByRole("heading", { name: "Dictation vocabulary" }).scrollIntoViewIfNeeded();
     await capture(page, "settings-dictation-vocabulary", { around: [section] });
 
-    await tabTo(page, selectTrigger(page), { max: 320 });
+    await tabTo(page, heardField(page), { max: 320 });
     await addEntry(page, "a reliano", "Aureliano");
 
-    const list = page.getByRole("list", { name: "Dictation vocabulary for English" });
+    const list = vocabularyList(page, "English");
     await expect(list.getByText("a reliano", { exact: true })).toBeVisible();
     await expect(list.getByText("Aureliano", { exact: true })).toBeVisible();
     // The form is ready for the next word instead of dropping focus to <body>.
@@ -78,7 +84,7 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
       "A RELIANO is already in the Dictation vocabulary."
     );
     await expect(heardField(page)).toBeFocused();
-    const list = page.getByRole("list", { name: "Dictation vocabulary for English" });
+    const list = vocabularyList(page, "English");
     await expect(list.getByText("Otro", { exact: true })).toHaveCount(0);
     await expect(list.getByText("Aureliano", { exact: true })).toBeVisible();
   });
@@ -103,7 +109,7 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
     await page.keyboard.press("Enter");
 
     await expect(page.getByRole("button", { name: "Edit a reliano buendía" })).toBeFocused();
-    const list = page.getByRole("list", { name: "Dictation vocabulary for English" });
+    const list = vocabularyList(page, "English");
     await expect(list.getByText("Aureliano Buendía", { exact: true })).toBeVisible();
 
     // The Remove button follows the Edit button in the row.
@@ -119,31 +125,26 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
     await openVocabularyEditor(page);
     await addEntry(page, "a reliano", "Aureliano");
 
-    // Spanish starts empty, and takes its own entries.
-    await tabTo(page, selectTrigger(page), { backwards: true, max: 60 });
-    await chooseLanguage(page, "Spanish");
+    // Spanish starts empty, and takes its own entries; choose it by arrow keys.
+    await chooseLanguage(page, "English", "Spanish");
     await expect(
       page.getByText("No entries yet. Add the first word Dictation gets wrong.")
     ).toBeVisible();
     await addEntry(page, "nuevo párrafo", "Nuevo Palafox");
-    const spanishList = page.getByRole("list", { name: "Dictation vocabulary for Spanish" });
-    await expect(spanishList.getByText("Nuevo Palafox", { exact: true })).toBeVisible();
-
-    // Device-local: both languages survive a reload.
-    await page.reload();
-    await tabTo(page, selectTrigger(page), { max: 320 });
-    await chooseLanguage(page, "Spanish");
     await expect(
-      page
-        .getByRole("list", { name: "Dictation vocabulary for Spanish" })
-        .getByText("Nuevo Palafox", { exact: true })
+      vocabularyList(page, "Spanish").getByText("Nuevo Palafox", { exact: true })
     ).toBeVisible();
-    await tabTo(page, selectTrigger(page), { backwards: true, max: 60 });
-    await chooseLanguage(page, "English");
+
+    // Device-local: both languages survive a reload, chosen again by arrow keys.
+    await page.reload();
+    await tabTo(page, languageTab(page, "English"), { max: 320 });
+    await chooseLanguage(page, "English", "Spanish");
     await expect(
-      page
-        .getByRole("list", { name: "Dictation vocabulary for English" })
-        .getByText("Aureliano", { exact: true })
+      vocabularyList(page, "Spanish").getByText("Nuevo Palafox", { exact: true })
+    ).toBeVisible();
+    await chooseLanguage(page, "Spanish", "English");
+    await expect(
+      vocabularyList(page, "English").getByText("Aureliano", { exact: true })
     ).toBeVisible();
   });
 });

@@ -1,7 +1,8 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  catalogCapabilities,
   defaultSpokenPunctuationSettings,
   type SpokenPunctuationLanguageSettings,
 } from "@/features/dictation/spoken-punctuation";
@@ -21,26 +22,54 @@ const punctuating: ModelSpec["capabilities"] = {
 };
 const bare: ModelSpec["capabilities"] = { casing: false, punctuation: false, streaming: true };
 
-function renderSection() {
-  return render(
+/** Renders one language's list, expanded (the collapse has its own tests). */
+function renderSection(language: "en" | "es" = "en") {
+  const view = render(
     <SpokenPunctuationSection
-      languages={["en", "es"]}
-      capabilitiesFor={(language) => (language === "en" ? punctuating : bare)}
+      language={language}
+      capabilities={language === "en" ? punctuating : bare}
     />
   );
+  // Collapsed, the disclosure trigger is the only button; its name follows the UI language.
+  fireEvent.click(screen.getByRole("button", { expanded: false }));
+  return view;
 }
 
 function settingsFor(language: "en" | "es"): SpokenPunctuationLanguageSettings {
   return useDictationStore.getState().spokenPunctuation[language];
 }
 
-async function chooseSpanish(user: ReturnType<typeof userEvent.setup>) {
-  // React Aria names the trigger with its value plus the Select's label.
-  const select = screen.getByRole("button", { name: /Dictation language/ });
-  select.focus();
-  await user.keyboard("{Enter}");
-  await user.keyboard("{ArrowDown}{Enter}");
+type User = ReturnType<typeof userEvent.setup>;
+
+/** Tabs (or Shift+Tabs) until `target` is the active element. */
+async function tabToFocused(
+  user: User,
+  target: () => HTMLElement | null,
+  { backwards = false }: { backwards?: boolean } = {}
+) {
+  for (let i = 0; i < 25; i++) {
+    if (target() === document.activeElement) return;
+    await user.tab({ shift: backwards });
+  }
+  expect(target()).toHaveFocus();
 }
+
+function renderCollapsed(language: "en" | "es" = "en") {
+  return render(
+    <SpokenPunctuationSection language={language} capabilities={catalogCapabilities(language)} />
+  );
+}
+
+const languageName = (language: "en" | "es") => (language === "es" ? "Spanish" : "English");
+
+const listTrigger = (language: "en" | "es" = "en") =>
+  screen.getByRole("button", {
+    name: `Spoken punctuation entries for ${languageName(language)}`,
+  });
+const masterSwitch = (language: "en" | "es" = "en") =>
+  screen.getByRole("switch", {
+    name: `Spoken punctuation for ${languageName(language)}`,
+  });
 
 beforeEach(() => {
   localStorage.clear();
@@ -56,8 +85,7 @@ afterEach(async () => {
 });
 
 describe("SpokenPunctuationSection", () => {
-  it("lists each entry's phrases and what it inserts for the chosen language", async () => {
-    const user = userEvent.setup();
+  it("lists each entry's phrases and what it inserts for the chosen language", () => {
     renderSection();
 
     const comma = screen.getByRole("group", { name: "comma" });
@@ -66,7 +94,8 @@ describe("SpokenPunctuationSection", () => {
     expect(within(comma).getByText(",")).toBeInTheDocument();
     expect(within(comma).getByText("Inserts")).toBeInTheDocument();
 
-    await chooseSpanish(user);
+    cleanup();
+    renderSection("es");
 
     const coma = screen.getByRole("group", { name: "coma" });
     expect(
@@ -162,9 +191,7 @@ describe("SpokenPunctuationSection", () => {
     field.focus();
     await user.keyboard("comma{Enter}");
 
-    expect(
-      within(comma).getByText("comma is already used by comma.")
-    ).toBeInTheDocument();
+    expect(within(comma).getByText("comma is already used by comma.")).toBeInTheDocument();
     expect(within(comma).getByRole("alert")).toBeInTheDocument();
     expect(settingsFor("en").aliases.comma).toBeUndefined();
     expect(field).toHaveFocus();
@@ -279,7 +306,7 @@ describe("SpokenPunctuationSection", () => {
   it("shows the glossary copy in Spanish and starts on the Spanish entries", async () => {
     await act(() => i18n.changeLanguage("es"));
     const user = userEvent.setup();
-    renderSection();
+    renderSection("es");
 
     expect(screen.getByRole("heading", { name: "Puntuación dictada" })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Puntuación dictada para Español" })).toBeChecked();
@@ -292,16 +319,68 @@ describe("SpokenPunctuationSection", () => {
     expect(within(coma).getByText("punto ya lo usa punto.")).toBeInTheDocument();
   });
 
-  it("opens the language Select with the keyboard", async () => {
-    const user = userEvent.setup();
-    renderSection();
-    const select = screen.getByRole("button", { name: /Dictation language/ });
-    select.focus();
-    await user.keyboard("{Enter}");
+  describe("collapse", () => {
+    it("starts collapsed and expands and collapses from the trigger by keyboard", async () => {
+      const user = userEvent.setup();
+      renderCollapsed();
 
-    const listbox = screen.getByRole("listbox");
-    expect(within(listbox).getByRole("option", { name: "Spanish" })).toBeInTheDocument();
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("listbox")).toBeNull();
+      expect(screen.queryByRole("group", { name: "comma" })).toBeNull();
+
+      const trigger = listTrigger();
+      await tabToFocused(user, () => trigger);
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+      await user.keyboard("{Enter}");
+      expect(trigger).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("group", { name: "comma" })).toBeInTheDocument();
+
+      await user.keyboard("{Enter}");
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByRole("group", { name: "comma" })).toBeNull();
+    });
+
+    it("toggles the master switch with Space without expanding the list", async () => {
+      const user = userEvent.setup();
+      renderCollapsed();
+
+      await tabToFocused(user, masterSwitch);
+      expect(masterSwitch()).toBeChecked();
+
+      await user.keyboard(" ");
+
+      expect(masterSwitch()).not.toBeChecked();
+      expect(screen.queryByRole("group", { name: "comma" })).toBeNull();
+    });
+
+    it("shows the Spanish entries after expanding", async () => {
+      const user = userEvent.setup();
+      renderCollapsed("es");
+
+      expect(screen.queryByRole("group", { name: "coma" })).toBeNull();
+
+      const trigger = listTrigger("es");
+      await tabToFocused(user, () => trigger);
+      await user.keyboard("{Enter}");
+
+      expect(masterSwitch("es")).toBeInTheDocument();
+      expect(screen.getByRole("group", { name: "coma" })).toBeInTheDocument();
+    });
+
+    it("disables the entry switches while the master switch is off", async () => {
+      const user = userEvent.setup();
+      renderCollapsed();
+
+      const trigger = listTrigger();
+      await tabToFocused(user, () => trigger);
+      await user.keyboard("{Enter}");
+      const commaSwitch = screen.getByRole("switch", { name: "comma" });
+      expect(commaSwitch).toBeEnabled();
+
+      await tabToFocused(user, masterSwitch, { backwards: true });
+      await user.keyboard(" ");
+
+      expect(masterSwitch()).not.toBeChecked();
+      expect(commaSwitch).toBeDisabled();
+    });
   });
 });

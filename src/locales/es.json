@@ -1780,6 +1780,7 @@
     "orphanLost": "El dictado se detuvo. Copia la última frase: {{text}}",
     "section": {
       "title": "Dictado",
+      "models": "Modelos",
       "description": "Habla y Maibuk escribe, sin conexión. Los modelos se descargan una vez y se quedan en este dispositivo.",
       "unsupported": "El dictado funciona en Maibuk para Linux y en Chrome, Edge y Firefox.",
       "libraryMissing": "Falta la biblioteca nativa del dictado. Vuelve a instalar Maibuk para Linux para restaurar el dictado.",
@@ -1805,6 +1806,8 @@
       "description": "Di estas palabras mientras dictas y se convierten en puntuación o saltos en lugar de texto. Los cambios se guardan en este dispositivo.",
       "master": "Puntuación dictada para {{language}}",
       "listLabel": "Entradas de Puntuación dictada para {{language}}",
+      "entryCount_one": "{{count}} entrada",
+      "entryCount_other": "{{count}} entradas",
       "inserts": "Inserta",
       "insertsLabels": {
         "paragraph": "Párrafo nuevo",
@@ -1832,7 +1835,6 @@
     "vocabulary": {
       "title": "Vocabulario de dictado",
       "description": "Palabras y nombres que Dictado oye mal: lo que oye el modelo y lo que hay que escribir en su lugar. Palabras completas, sin distinguir mayúsculas ni acentos. La forma escrita se inserta exactamente como la escribes. Los cambios quedan en este dispositivo.",
-      "language": "Idioma del vocabulario",
       "listLabel": "Vocabulario de dictado para {{language}}",
       "entry": "{{heard}} se escribe {{written}}",
       "empty": "Todavía no hay entradas. Agrega la primera palabra que Dictado oye mal.",

@@ -1780,6 +1780,7 @@
     "orphanLost": "Dictation stopped. Copy the last phrase: {{text}}",
     "section": {
       "title": "Dictation",
+      "models": "Models",
       "description": "Speak and Maibuk types, offline. Models download once and stay on this device.",
       "unsupported": "Dictation works in Maibuk for Linux and in Chrome, Edge, and Firefox.",
       "libraryMissing": "Dictation's native library is missing. Reinstall Maibuk for Linux to restore Dictation.",
@@ -1805,6 +1806,8 @@
       "description": "Say these words while dictating and they become punctuation or breaks instead of text. Changes stay on this device.",
       "master": "Spoken punctuation for {{language}}",
       "listLabel": "Spoken punctuation entries for {{language}}",
+      "entryCount_one": "{{count}} entry",
+      "entryCount_other": "{{count}} entries",
       "inserts": "Inserts",
       "insertsLabels": {
         "paragraph": "New paragraph",
@@ -1832,7 +1835,6 @@
     "vocabulary": {
       "title": "Dictation vocabulary",
       "description": "Words and names Dictation gets wrong: what the model hears and what to write instead. Whole words, ignoring case and accents. The written form is inserted exactly as typed. Changes stay on this device.",
-      "language": "Vocabulary language",
       "listLabel": "Dictation vocabulary for {{language}}",
       "entry": "{{heard}} writes {{written}}",
       "empty": "No entries yet. Add the first word Dictation gets wrong.",
