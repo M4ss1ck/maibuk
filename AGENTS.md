@@ -290,7 +290,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `useCommandKeys(id)` / `useCommandHint(id)` / `liveShortcuts()` / `getLiveShortcuts()` (the keys that fire now, for hints and matching) | `src/lib/command-keys.ts` |
 | `useShortcutSettingsStore` (Custom Shortcuts, custom Voice Commands, and the Single-key Shortcuts switch, device-local, own localStorage key, version 2; ADR 0012) | `src/features/settings/shortcut-store.ts` |
 | `saveShortcutFile()` / `pickShortcutFileText()` (Shortcut File through the platform adapters) | `src/features/settings/shortcut-file.ts` |
-| `useItemCommands(ref, actions)` (runs Item Menu actions from their Commands while focus is inside the item; inside a React Aria collection pass the row, which is what takes focus) | `src/hooks/useItemCommands.ts` |
+| `useItemCommands(ref, actions)` (runs Item Menu actions from their Commands while focus is inside the item, submenu children included; inside a React Aria collection pass the row, which is what takes focus) | `src/hooks/useItemCommands.ts` |
 | `collectFootnotes()` / `findFootnote()` / `footnoteKeys()` and the editor commands `updateFootnote` / `deleteFootnote` (Footnotes in document order; the commands change one by `{ id, index }` in one undoable step) | `src/components/editor/extensions/Footnote.ts` |
 | `FootnoteGrid` (a Footnotes list with an Item Menu per entry, Edit dialog, and focus after Delete; the list after the text and the side panel's tab) | `src/components/editor/FootnoteGrid.tsx` |
 | `ShortcutEditorDialog` / `ShortcutRecorder` (the Shortcut Editor and its read-only key-capture field) | `src/components/shortcuts/` |

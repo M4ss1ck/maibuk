@@ -656,6 +656,21 @@ export const COMMANDS = {
     contexts: ["chapterItem"],
     defaults: [],
   },
+  "chapterItem.setStatusDraft": {
+    labelKey: "commands.chapterItem.setStatusDraft",
+    contexts: ["chapterItem"],
+    defaults: [],
+  },
+  "chapterItem.setStatusRevised": {
+    labelKey: "commands.chapterItem.setStatusRevised",
+    contexts: ["chapterItem"],
+    defaults: [],
+  },
+  "chapterItem.setStatusFinal": {
+    labelKey: "commands.chapterItem.setStatusFinal",
+    contexts: ["chapterItem"],
+    defaults: [],
+  },
 
   "footnoteItem.edit": {
     labelKey: "editor.editFootnote",
