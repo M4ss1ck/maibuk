@@ -77,13 +77,11 @@ test.describe("@wf:voice-commands-app @sc:dictation.toggle @chromium-only", () =
     const busy = dialog.getByRole("button", { name: "Exporting...", exact: true });
     await expect(busy).toBeDisabled();
 
-    // The Dictation live region sits outside the modal's accessibility tree
-    // while the dialog is open (issue #336), so the wait reads it with hidden
-    // included.
+    // The refusal is heard while the dialog is still open (issue #336).
     const refusal = "The dialog can't close now, so Go to Notes did not run.";
-    await expect(
-      page.getByRole("status", { includeHidden: true }).filter({ hasText: refusal })
-    ).toHaveCount(1, { timeout: 90_000 });
+    await expect(page.getByRole("status").filter({ hasText: refusal })).toHaveCount(1, {
+      timeout: 90_000,
+    });
     expect(page.url()).toBe(bookUrl);
     await expect(dialog).toBeVisible();
     await expect(busy).toBeDisabled();
