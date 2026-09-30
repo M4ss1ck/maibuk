@@ -72,6 +72,7 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
 
     const floating = page.locator(".selection-toolbar-enter");
     await expect(floating).toBeVisible();
+    await capture(page, "selection-toolbar-shown", { around: [floating] });
     await expect(floating.getByRole("button", { name: "Bold" })).toBeVisible();
   });
 
