@@ -702,15 +702,15 @@ export const ROWS: MatrixRow[] = [
   {
     id: "editor-selection-toolbar",
     area: "editor",
-    workflow: "Selecting text with Shift+Arrows shows selection toolbar; reachable by keyboard?",
-    edges: [],
+    workflow:
+      "Shift+Arrows selects text and shows the selection toolbar; Alt+F10 focuses it; arrows/Home/End move; Enter applies Bold keeping focus and selection; Esc returns to the text; Link dialog returns focus to the text; asserts: toolbar focus; selection kept",
+    edges: ["Link dialog Esc returns to the text", "group only in the floating toolbar"],
     terms: [],
-    shortcuts: [],
+    shortcuts: ["editor.focusSelectionToolbar"],
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],
-    status: "not-accepted",
-    issue: "https://github.com/M4ss1ck/maibuk/issues/218",
+    status: "accepted",
   },
   {
     id: "editor-context-menu",

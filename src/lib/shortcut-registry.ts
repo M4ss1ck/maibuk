@@ -606,6 +606,11 @@ export const COMMANDS = {
     contexts: ["editor"],
     defaults: [["Mod+Shift+,"]],
   },
+  "editor.focusSelectionToolbar": {
+    labelKey: "editor.focusSelectionToolbar",
+    contexts: ["editor"],
+    defaults: [["Alt+F10"]],
+  },
   "editor.findNext": {
     labelKey: "editor.findNext",
     contexts: ["editor"],

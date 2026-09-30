@@ -599,7 +599,16 @@ export function Editor({
       <LinkDialog
         editor={editor}
         isOpen={showBubbleLinkDialog}
-        onClose={() => setShowBubbleLinkDialog(false)}
+        onClose={() => {
+          setShowBubbleLinkDialog(false);
+          // The bubble's Link command is one step out of the text, so closing
+          // its dialog must land back on the selection it was acting on. The
+          // dialog's FocusScope still contains focus while it is mounted and
+          // pulls it straight back, so wait for it to unmount first.
+          setTimeout(() => {
+            if (!editor.isDestroyed) editor.commands.focus();
+          }, 0);
+        }}
         bookId={bookId}
         internalTargets={internalTargets}
         loadInternalTargetChildren={loadInternalTargetChildren}

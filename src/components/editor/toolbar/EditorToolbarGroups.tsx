@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useEditorState, type Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
@@ -55,6 +55,7 @@ import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 import { Tooltip } from "@/components/ui";
 import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
+import { EditorFocusPolicyContext } from "@/components/editor/toolbar/toolbar-focus-context";
 import { useSettingsStore } from "@/features/settings/store";
 import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
 import type { ToolbarGroupId } from "@/features/settings/toolbar-config";
@@ -148,15 +149,17 @@ export function EditorToolbarGroups({
     },
   });
   const icon = iconSize === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
+  const shouldFocusEditor = useContext(EditorFocusPolicyContext);
+  // The floating selection toolbar keeps focus on its own controls: a command
+  // started from there must not pull the caret back out of the toolbar.
+  const chain = () => (shouldFocusEditor() ? editor.chain().focus() : editor.chain());
 
   const handleHeadingToggle = (level: 1 | 2 | 3) => {
     const isCurrentlyActive =
       (level === 1 && editorState.isH1) ||
       (level === 2 && editorState.isH2) ||
       (level === 3 && editorState.isH3);
-    editor
-      .chain()
-      .focus()
+    chain()
       .toggleHeading({ level })
       .setFontSize(`${isCurrentlyActive ? DEFAULT_FONT_SIZE : HEADING_SIZES[level]}px`)
       .setFontFamily(editorState.fontFamily)
@@ -169,7 +172,7 @@ export function EditorToolbarGroups({
         return (
           <>
             <ToolbarButton
-              onClick={() => editor.chain().focus().undo().run()}
+              onClick={() => chain().undo().run()}
               disabled={!editorState.canUndo}
               label={t("editor.undo")}
               shortcut="common.undo"
@@ -177,7 +180,7 @@ export function EditorToolbarGroups({
               <Undo2 className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().redo().run()}
+              onClick={() => chain().redo().run()}
               disabled={!editorState.canRedo}
               label={t("editor.redo")}
               shortcut="common.redo"
@@ -197,7 +200,7 @@ export function EditorToolbarGroups({
         return (
           <>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleBold().run()}
+              onClick={() => chain().toggleBold().run()}
               isActive={editorState.isBold}
               label={t("editor.bold")}
               shortcut="editor.bold"
@@ -206,7 +209,7 @@ export function EditorToolbarGroups({
               <Bold className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleItalic().run()}
+              onClick={() => chain().toggleItalic().run()}
               isActive={editorState.isItalic}
               label={t("editor.italic")}
               shortcut="editor.italic"
@@ -215,7 +218,7 @@ export function EditorToolbarGroups({
               <Italic className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              onClick={() => chain().toggleUnderline().run()}
               isActive={editorState.isUnderline}
               label={t("editor.underline")}
               shortcut="editor.underline"
@@ -223,7 +226,7 @@ export function EditorToolbarGroups({
               <Underline className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleStrike().run()}
+              onClick={() => chain().toggleStrike().run()}
               isActive={editorState.isStrike}
               label={t("editor.strikethrough")}
               shortcut="editor.strikethrough"
@@ -291,9 +294,7 @@ export function EditorToolbarGroups({
             onPreview={(color) => previewSelectionColor(editor, "highlight", color)}
             onClear={() => editor.chain().unsetHighlight().run()}
             onToggle={() =>
-              editor
-                .chain()
-                .focus()
+              chain()
                 .toggleHighlight({ color: editorState.highlightColor || "#FFFF00" })
                 .run()
             }
@@ -308,7 +309,7 @@ export function EditorToolbarGroups({
         return (
           <>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleSubscript().run()}
+              onClick={() => chain().toggleSubscript().run()}
               isActive={editorState.isSubscript}
               label={t("editor.subscript")}
               shortcut="editor.subscript"
@@ -316,7 +317,7 @@ export function EditorToolbarGroups({
               <Subscript className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleSuperscript().run()}
+              onClick={() => chain().toggleSuperscript().run()}
               isActive={editorState.isSuperscript}
               label={t("editor.superscript")}
               shortcut="editor.superscript"
@@ -334,8 +335,8 @@ export function EditorToolbarGroups({
             onClear={() => editor.chain().unsetColor().run()}
             onToggle={() =>
               editorState.color
-                ? editor.chain().focus().unsetColor().run()
-                : editor.chain().focus().setColor("#000000").run()
+                ? chain().unsetColor().run()
+                : chain().setColor("#000000").run()
             }
             isActive={!!editorState.color}
             label={t("editor.textColor")}
@@ -355,7 +356,7 @@ export function EditorToolbarGroups({
               <Link className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleCode().run()}
+              onClick={() => chain().toggleCode().run()}
               isActive={editorState.isCode}
               label={t("editor.code")}
               shortcut="editor.code"
@@ -364,7 +365,7 @@ export function EditorToolbarGroups({
               <Code className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+              onClick={() => chain().toggleCodeBlock().run()}
               isActive={editorState.isCodeBlock}
               label={t("editor.codeBlock")}
               shortcut="editor.codeBlock"
@@ -378,7 +379,7 @@ export function EditorToolbarGroups({
         return (
           <>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              onClick={() => chain().toggleBulletList().run()}
               isActive={editorState.isBulletList}
               label={t("editor.bulletList")}
               shortcut="editor.bulletList"
@@ -387,7 +388,7 @@ export function EditorToolbarGroups({
               <List className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              onClick={() => chain().toggleOrderedList().run()}
               isActive={editorState.isOrderedList}
               label={t("editor.numberedList")}
               shortcut="editor.numberedList"
@@ -412,7 +413,7 @@ export function EditorToolbarGroups({
       case "blockquote":
         return (
           <ToolbarButton
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            onClick={() => chain().toggleBlockquote().run()}
             isActive={editorState.isBlockquote}
             label={t("editor.quote")}
             shortcut="editor.quote"
@@ -427,8 +428,8 @@ export function EditorToolbarGroups({
             <ToolbarButton
               onClick={() =>
                 editorState.canSinkListItem
-                  ? editor.chain().focus().sinkListItem("listItem").run()
-                  : editor.chain().focus().increaseIndent().run()
+                  ? chain().sinkListItem("listItem").run()
+                  : chain().increaseIndent().run()
               }
               label={t("editor.increaseIndent")}
               shortcut="editor.increaseIndent"
@@ -438,8 +439,8 @@ export function EditorToolbarGroups({
             <ToolbarButton
               onClick={() =>
                 editorState.canLiftListItem
-                  ? editor.chain().focus().liftListItem("listItem").run()
-                  : editor.chain().focus().decreaseIndent().run()
+                  ? chain().liftListItem("listItem").run()
+                  : chain().decreaseIndent().run()
               }
               label={t("editor.decreaseIndent")}
               shortcut="editor.decreaseIndent"
@@ -447,14 +448,14 @@ export function EditorToolbarGroups({
               <IndentDecrease className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().increaseFirstLineIndent().run()}
+              onClick={() => chain().increaseFirstLineIndent().run()}
               label={t("editor.increaseFirstLineIndent")}
               shortcut="editor.increaseFirstLineIndent"
             >
               <WrapText className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().decreaseFirstLineIndent().run()}
+              onClick={() => chain().decreaseFirstLineIndent().run()}
               label={t("editor.decreaseFirstLineIndent")}
               shortcut="editor.decreaseFirstLineIndent"
             >
@@ -466,7 +467,7 @@ export function EditorToolbarGroups({
         return (
           <>
             <ToolbarButton
-              onClick={() => editor.chain().focus().setTextAlign("left").run()}
+              onClick={() => chain().setTextAlign("left").run()}
               isActive={editorState.isAlignLeft}
               label={t("editor.alignLeft")}
               shortcut="editor.alignLeft"
@@ -474,7 +475,7 @@ export function EditorToolbarGroups({
               <AlignLeft className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().setTextAlign("center").run()}
+              onClick={() => chain().setTextAlign("center").run()}
               isActive={editorState.isAlignCenter}
               label={t("editor.alignCenter")}
               shortcut="editor.alignCenter"
@@ -482,7 +483,7 @@ export function EditorToolbarGroups({
               <AlignCenter className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().setTextAlign("right").run()}
+              onClick={() => chain().setTextAlign("right").run()}
               isActive={editorState.isAlignRight}
               label={t("editor.alignRight")}
               shortcut="editor.alignRight"
@@ -490,7 +491,7 @@ export function EditorToolbarGroups({
               <AlignRight className={icon} />
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+              onClick={() => chain().setTextAlign("justify").run()}
               isActive={editorState.isAlignJustify}
               label={t("editor.alignJustify")}
               shortcut="editor.alignJustify"
@@ -502,7 +503,7 @@ export function EditorToolbarGroups({
       case "clear-formatting":
         return (
           <ToolbarButton
-            onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+            onClick={() => chain().unsetAllMarks().clearNodes().run()}
             label={t("editor.removeFormatting")}
             shortcut="editor.removeFormatting"
           >
@@ -538,7 +539,7 @@ export function EditorToolbarGroups({
       case "horizontal-rule":
         return (
           <ToolbarButton
-            onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            onClick={() => chain().setHorizontalRule().run()}
             label={t("editor.horizontalRule")}
             shortcut="editor.horizontalRule"
             markdownHint={markdownHints("horizontalRule")}
