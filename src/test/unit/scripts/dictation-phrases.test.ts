@@ -173,4 +173,29 @@ describe("renderReport()", () => {
     ]);
     expect(report.markdown).toContain("## Failed bars");
   });
+
+  it("reports every app clip at 100% when heard as read", () => {
+    const report = renderReport([model("accurate", cleanClips())]);
+    expect(report.failures).toEqual([]);
+    expect(report.markdown).toContain("## en: App phrases");
+    expect(report.markdown).toContain("| go to notes | voice_command:global.gotoNotes |");
+    expect(report.markdown).toContain("| click two | click_number:2 |");
+    expect(report.markdown).not.toContain("| not recorded |");
+  });
+
+  it("reports a missing app clip as not recorded without failing", () => {
+    const clips = cleanClips().filter((clip) => clip.itemId !== "a-sync-now");
+    const report = renderReport([model("accurate", clips)]);
+    expect(report.failures).toEqual([]);
+    expect(report.markdown).toContain("not recorded");
+  });
+
+  it("reports a misheard app clip without failing the bar", () => {
+    const clips = cleanClips().map((clip) =>
+      clip.itemId === "a-click-two" ? { ...clip, finals: ["Click three."] } : clip
+    );
+    const report = renderReport([model("accurate", clips)]);
+    expect(report.failures).toEqual([]);
+    expect(report.markdown).toContain("| click two | click_number:2 | 0%");
+  });
 });

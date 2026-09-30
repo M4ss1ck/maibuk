@@ -26,6 +26,7 @@ interface Key {
 
 const HINT: Record<PhraseItem["kind"], string> = {
   voice: "command: say it on its own, like a command",
+  app: "command: say it on its own, like a command",
   punctuation: "dictate it as one sentence, saying the punctuation words",
   prose: "say it as ordinary prose",
 };

@@ -270,6 +270,57 @@ export function voiceClipHit(
   );
 }
 
+/**
+ * An app-tier clip hits when the model's finals come back as exactly one
+ * line that runs what the script line runs: the same kind, and for a
+ * voice_command the same Command, for a click the same name, for a
+ * click_number the same number. Recorded whole, scored whole, never
+ * inferred from units (issue #324).
+ */
+export function appClipHit(
+  finals: readonly string[],
+  item: PhraseItem,
+  capabilities: ModelSpec["capabilities"]
+): boolean {
+  const table = defaultTable(item.language, capabilities);
+  const [expected] = runLines([item.say], table, capabilities);
+  if (
+    expected.result.kind !== "voice_command" &&
+    expected.result.kind !== "click" &&
+    expected.result.kind !== "click_number"
+  ) {
+    return false;
+  }
+  const lines = spokenLines(finals);
+  if (lines.length !== 1) return false;
+  const [got] = runLines(lines, table, capabilities);
+  if (got.result.kind !== expected.result.kind) return false;
+  if (expected.result.kind === "voice_command" && got.result.kind === "voice_command") {
+    return got.result.id === expected.result.id;
+  }
+  if (expected.result.kind === "click" && got.result.kind === "click") {
+    return got.result.name === expected.result.name;
+  }
+  if (expected.result.kind === "click_number" && got.result.kind === "click_number") {
+    return got.result.n === expected.result.n;
+  }
+  return false;
+}
+
+/** What an app clip is expected to run, as a short report label. */
+export function appExpectedLabel(
+  item: PhraseItem,
+  capabilities: ModelSpec["capabilities"]
+): string {
+  const table = defaultTable(item.language, capabilities);
+  const [expected] = runLines([item.say], table, capabilities);
+  const result = expected.result;
+  if (result.kind === "voice_command") return `voice_command:${result.id}`;
+  if (result.kind === "click") return `click:${result.name}`;
+  if (result.kind === "click_number") return `click_number:${result.n}`;
+  return result.kind;
+}
+
 export interface Clip {
   itemId: string;
   finals: string[];
@@ -299,10 +350,23 @@ export interface ProseScore {
   heard: string[];
 }
 
+/** One app-tier clip (issue #324): recorded whole, scored whole, never inferred. */
+export interface AppScore {
+  item: PhraseItem;
+  /** What the script line runs, e.g. "voice_command:global.gotoNotes" or "click:export". */
+  expected: string;
+  takes: number;
+  hits: number;
+  rate: number;
+  heard: string[];
+}
+
 export interface ModelScore {
   language: DictationLanguage;
   phrases: PhraseScore[];
   prose: ProseScore[];
+  /** One row per app-tier clip, in script order; never inferred, never gated. */
+  app: AppScore[];
   /** Mean phrase rate over every default phrase: the ship bar. */
   hitRate: number;
   /** The same mean over Voice Command phrases and over Spoken Punctuation phrases. */
@@ -500,6 +564,29 @@ function scoreProse(context: ScoreContext): ProseScore[] {
 }
 
 /**
+ * App-tier rows (issue #324): one row per script clip, in script order.
+ * Every take counts; a clip with no take stays in the list with no takes,
+ * reported as "not recorded" and never failing the lane.
+ */
+function scoreApp(context: ScoreContext): AppScore[] {
+  const { capabilities, script, clips } = context;
+  return script
+    .filter((item) => item.kind === "app")
+    .map((item) => {
+      const own = clips.get(item.id) ?? [];
+      const hits = own.filter((clip) => appClipHit(clip.finals, item, capabilities)).length;
+      return {
+        item,
+        expected: appExpectedLabel(item, capabilities),
+        takes: own.length,
+        hits,
+        rate: own.length > 0 ? hits / own.length : 0,
+        heard: own.map((clip) => clip.finals.join(" / ")),
+      };
+    });
+}
+
+/**
  * Scores one Dictation Model on the clips of its language. Each clip may
  * appear several times (one per take); every take counts.
  */
@@ -528,6 +615,7 @@ export function scoreModel(input: {
     return score ? [score] : [];
   });
   const prose = scoreProse(context);
+  const app = scoreApp(context);
   const rateOf = (...kinds: readonly DefaultPhrase["kind"][]) =>
     mean(phrases.filter((score) => kinds.includes(score.row.kind)).map((score) => score.rate));
 
@@ -535,6 +623,7 @@ export function scoreModel(input: {
     language,
     phrases,
     prose,
+    app,
     hitRate: mean(phrases.map((score) => score.rate)),
     voiceRate: rateOf("voice", "voice_that"),
     punctuationRate: rateOf("punctuation"),
@@ -542,6 +631,10 @@ export function scoreModel(input: {
     misheardProseTriggers: prose
       .filter((score) => !score.firesOnText)
       .reduce((sum, score) => sum + score.triggered, 0),
-    missingItems: script.filter((item) => !clips.has(item.id)).map((item) => item.id),
+    // App clips are reported as "not recorded" in their own section and
+    // never fail the lane, so they are not missing items.
+    missingItems: script
+      .filter((item) => item.kind !== "app" && !clips.has(item.id))
+      .map((item) => item.id),
   };
 }

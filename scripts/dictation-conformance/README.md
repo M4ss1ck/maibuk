@@ -115,6 +115,16 @@ minutes each (`src/test/support/dictation-phrase-set.ts`):
   on its own text ("empezar la lista") is a command said alone, which the
   whole-line rule runs by design (ADR 0015); the report lists those apart and
   they do not fail the bar.
+- **App phrases** (issue #324). Thirteen whole-line app commands per language
+  (go to notes, sync now, the focus keys, Click by Name), each recorded as a
+  whole clip and scored as a whole clip, never inferred. A missing clip is
+  reported as *not recorded* and never fails the bar.
+
+No heard forms ship yet for the click word, the numbers, or the focus keys:
+English Fast hears "two" as "to" and "three" as "free" in E2E text-to-speech,
+but TTS is not the author's voice, so a heard form gets added only once the
+author's recordings show the same mishearing on more than one clip or model,
+like any other heard form.
 
 The gate lane (`phrase-conformance.test.ts`) fails when a default verb, target,
 or Spoken Punctuation phrase is added without a line in the script.

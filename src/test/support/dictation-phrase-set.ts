@@ -5,12 +5,14 @@
 // script records each verb and each target at least once inside a real
 // command, and the scorer infers the rest from those units. Demonstrative
 // mark phrases ("bold that") are recorded as whole clips, never inferred.
+// App-tier whole-line phrases ("go to notes", "click export") are recorded
+// as whole clips and scored as whole clips, never inferred.
 // Spoken Punctuation phrases ride in carrier sentences, several per clip. The
 // gate lane (dictation-phrase-set.test.ts) proves the script still covers
 // every unit and every entry whenever the defaults change.
 import type { DictationLanguage } from "@/features/dictation/types";
 
-export type PhraseItemKind = "voice" | "punctuation" | "prose";
+export type PhraseItemKind = "voice" | "app" | "punctuation" | "prose";
 
 export interface PhraseItem {
   /** Stable clip id; the WAV is `<language>/<id>.wav`. */
@@ -111,6 +113,42 @@ const VOICE: Record<DictationLanguage, readonly string[]> = {
   ],
 };
 
+// App-tier whole-line phrases (issue #324): one clip per phrase, recorded
+// whole and scored whole, never inferred from units. Each line runs a
+// whole-line Voice Command or a Click by Name on its own text.
+const APP: Record<DictationLanguage, readonly string[]> = {
+  en: [
+    "go to notes",
+    "sync now",
+    "show voice commands",
+    "dark theme",
+    "press tab",
+    "press shift tab",
+    "press down",
+    "press enter",
+    "press escape",
+    "click export",
+    "click cancel",
+    "click two",
+    "click three",
+  ],
+  es: [
+    "ir a notas",
+    "sincronizar ahora",
+    "mostrar comandos de voz",
+    "tema oscuro",
+    "pulsar tab",
+    "pulsar mayús tab",
+    "pulsar abajo",
+    "pulsar intro",
+    "pulsar escape",
+    "pulsar exportar",
+    "pulsar cancelar",
+    "pulsar dos",
+    "pulsar tres",
+  ],
+};
+
 // Carriers use only common words: a word no model knows (the first script
 // said "Maibuk") makes the model end the line before it, and a "capitalize"
 // with no word after it on its line stays as prose, so that clip could only fail.
@@ -191,7 +229,7 @@ function items(
   kind: PhraseItemKind,
   lines: readonly string[]
 ): PhraseItem[] {
-  const prefix = { voice: "v", punctuation: "p", prose: "x" }[kind];
+  const prefix = { voice: "v", app: "a", punctuation: "p", prose: "x" }[kind];
   return lines.map((say) => ({ id: `${prefix}-${clipSlug(say)}`, language, kind, say }));
 }
 
@@ -199,6 +237,7 @@ function items(
 export function phraseItems(language: DictationLanguage): PhraseItem[] {
   return [
     ...items(language, "voice", VOICE[language]),
+    ...items(language, "app", APP[language]),
     ...items(language, "punctuation", PUNCTUATION[language]),
     ...items(language, "prose", PROSE[language]),
   ];
