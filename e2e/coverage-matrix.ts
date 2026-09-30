@@ -2232,7 +2232,7 @@ export const ROWS: MatrixRow[] = [
       'A Chapter is open and Dictation is listening; the microphone says a Command\'s label ("Dark theme"); asserts: the html element takes the dark class, the Dictation live region announces "Voice command: Dark", and the Chapter text never holds the spoken words',
     edges: [
       'a navigating Voice Command ("Go to Notes") said over an open dialog closes the dialog and shows the Notes gallery, and the Chapter text never holds the spoken words',
-      "a dialog that cannot close keeps the route and stays open (no shipped holdable dialog yet: https://github.com/M4ss1ck/maibuk/issues/328)",
+      "a busy Export dialog refuses a navigating Voice Command: the route and the dialog stay, and the refusal is announced",
       'a navigating Voice Command ("Go to Ephemeral") hands Dictation to the editor that takes the caret there: the sentence after the pause lands in it and Dictation stays on',
       'a navigating Voice Command to a screen with no editor ("Go to Settings") stops Dictation and the live region announces the handoff message',
       '"Show voice commands" opens the shortcut help, which lists each Bound Shortcut\'s Voice Command next to its Shortcut',

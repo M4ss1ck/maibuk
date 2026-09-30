@@ -103,3 +103,40 @@ export async function allowLibraryReads(page: Page): Promise<void> {
     (window as unknown as { __e2eFailLibraryReads?: boolean }).__e2eFailLibraryReads = false;
   });
 }
+
+type BlobReadHold = { held: boolean; waiting: (() => void)[] };
+
+/**
+ * Holds every `Blob.arrayBuffer()` read pending until `releaseBlobReads` is
+ * called, like a slow disk under an export. Installed after the app has
+ * booted and just before the export starts, so the Export dialog stays busy
+ * for as long as the spec needs (issue #328).
+ */
+export async function holdBlobReads(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const state = window as unknown as { __e2eBlobReads?: BlobReadHold };
+    if (state.__e2eBlobReads) {
+      state.__e2eBlobReads.held = true;
+      return;
+    }
+    const hold: BlobReadHold = { held: true, waiting: [] };
+    state.__e2eBlobReads = hold;
+    const original = Blob.prototype.arrayBuffer;
+    Blob.prototype.arrayBuffer = function (this: Blob) {
+      if (!hold.held) return original.call(this);
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        hold.waiting.push(() => original.call(this).then(resolve, reject));
+      });
+    };
+  });
+}
+
+/** Lets held and future Blob reads through, so the export can finish. */
+export async function releaseBlobReads(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const hold = (window as unknown as { __e2eBlobReads?: BlobReadHold }).__e2eBlobReads;
+    if (!hold) return;
+    hold.held = false;
+    for (const read of hold.waiting.splice(0)) read();
+  });
+}
