@@ -2236,7 +2236,10 @@ export const ROWS: MatrixRow[] = [
     area: "shell",
     workflow:
       'A Chapter is open and Dictation is listening; the microphone says a Command\'s label ("Dark theme"); asserts: the html element takes the dark class, the Dictation live region announces "Voice command: Dark", and the Chapter text never holds the spoken words',
-    edges: [],
+    edges: [
+      'a navigating Voice Command ("Go to Notes") said over an open dialog closes the dialog and shows the Notes gallery, and the Chapter text never holds the spoken words',
+      "a dialog that cannot close keeps the route and stays open (no shipped holdable dialog yet: https://github.com/M4ss1ck/maibuk/issues/328)",
+    ],
     terms: ["Voice Command", "Dictation"],
     shortcuts: ["dictation.toggle"],
     routes: ["/settings", "/book/:bookId"],

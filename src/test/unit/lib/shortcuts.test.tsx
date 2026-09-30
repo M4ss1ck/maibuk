@@ -31,7 +31,7 @@ beforeEach(() => {
 describe("useShortcuts modal blocking", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   });
 
   afterEach(() => {
@@ -64,7 +64,7 @@ describe("useShortcuts modal blocking", () => {
   });
 
   it("fires shortcuts when no modal is open", async () => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
 
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
@@ -87,7 +87,7 @@ describe("useShortcuts modal blocking", () => {
     expect(onTrigger).not.toHaveBeenCalled();
 
     act(() => {
-      useModalStore.setState({ modalIds: [], openCount: 0 });
+      useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
     });
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
@@ -95,7 +95,7 @@ describe("useShortcuts modal blocking", () => {
   });
 
   it("fires a modifier shortcut even when a pressable stops keydown propagation", async () => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
 
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
@@ -118,7 +118,7 @@ describe("useShortcuts modal blocking", () => {
   });
 
   it("preserves sequence matching when no modal is open", async () => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
 
     const { useShortcuts } = await import("@/lib/shortcuts");
     const onTrigger = vi.fn();
@@ -174,7 +174,7 @@ describe("useShortcuts modal blocking", () => {
 
 describe("useShortcuts capture phase and typing targets", () => {
   beforeEach(() => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   });
 
   it("does not fire a Mod shortcut without allowInInput while focus is in a textbox", async () => {
@@ -231,7 +231,7 @@ describe("useShortcuts capture phase and typing targets", () => {
 
 describe("useShortcuts resolves keys from the registry and Custom Shortcuts", () => {
   beforeEach(() => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   });
 
   it("fires a rebound key and no longer fires the default key", async () => {

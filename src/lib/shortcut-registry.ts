@@ -53,6 +53,8 @@ export interface CommandDef {
   source?: ShortcutSource;
   /** Declares Voice Commands for this Command; absent means its label answers (ADR 0016). */
   voice?: VoiceCommandSpec;
+  /** The runner changes the route: with a dialog open it closes dialogs first. */
+  navigates?: true;
 }
 
 const FIXED_UNDO = "shortcuts.fixed.undo";
@@ -69,31 +71,37 @@ export const COMMANDS = {
     labelKey: "shortcuts.gotoProjects",
     contexts: ["global"],
     defaults: [["g", "p"]],
+    navigates: true,
   },
   "global.gotoNotes": {
     labelKey: "shortcuts.gotoNotes",
     contexts: ["global"],
     defaults: [["g", "n"]],
+    navigates: true,
   },
   "global.gotoCanvas": {
     labelKey: "shortcuts.gotoCanvas",
     contexts: ["global"],
     defaults: [["g", "c"]],
+    navigates: true,
   },
   "global.gotoEphemeral": {
     labelKey: "shortcuts.gotoEphemeral",
     contexts: ["global"],
     defaults: [["g", "e"]],
+    navigates: true,
   },
   "global.gotoMetrics": {
     labelKey: "shortcuts.gotoMetrics",
     contexts: ["global"],
     defaults: [["g", "m"]],
+    navigates: true,
   },
   "global.gotoSettings": {
     labelKey: "shortcuts.gotoSettings",
     contexts: ["global"],
     defaults: [["g", "s"]],
+    navigates: true,
   },
   "global.toggleTheme": {
     labelKey: "shortcuts.toggleTheme",
@@ -224,6 +232,7 @@ export const COMMANDS = {
     labelKey: "shortcuts.backFromEditor",
     contexts: ["bookEditor", "notes"],
     defaults: [["Backspace"]],
+    navigates: true,
   },
   // Find in the open document, or focus the Notes search in the Notes Gallery.
   "common.find": {
@@ -303,7 +312,12 @@ export const COMMANDS = {
   },
   "bookEditor.bookNotes": { labelKey: "nav.bookNotes", contexts: ["bookEditor"], defaults: [] },
   "bookEditor.exportBook": { labelKey: "nav.exportBook", contexts: ["bookEditor"], defaults: [] },
-  "bookEditor.designCover": { labelKey: "nav.designCover", contexts: ["bookEditor"], defaults: [] },
+  "bookEditor.designCover": {
+    labelKey: "nav.designCover",
+    contexts: ["bookEditor"],
+    defaults: [],
+    navigates: true,
+  },
   "bookEditor.bookSettings": {
     labelKey: "bookSettings.title",
     contexts: ["bookEditor"],
@@ -797,7 +811,12 @@ export const COMMANDS = {
     fixedReasonKey: FIXED_NAVIGATION,
     sealed: true,
   },
-  "notes.newNote": { labelKey: "notes.newNote", contexts: ["notes"], defaults: [] },
+  "notes.newNote": {
+    labelKey: "notes.newNote",
+    contexts: ["notes"],
+    defaults: [],
+    navigates: true,
+  },
   "notes.addNoteToBook": { labelKey: "notes.addNoteToBook", contexts: ["notes"], defaults: [] },
   "notes.clearFilters": { labelKey: "notes.clearFilters", contexts: ["notes"], defaults: [] },
 
@@ -840,8 +859,14 @@ export const COMMANDS = {
     labelKey: "shortcuts.backToCanvasGallery",
     contexts: ["canvas"],
     defaults: [["Alt+ArrowLeft"]],
+    navigates: true,
   },
-  "canvas.newCanvas": { labelKey: "canvas.newCanvas", contexts: ["canvas"], defaults: [] },
+  "canvas.newCanvas": {
+    labelKey: "canvas.newCanvas",
+    contexts: ["canvas"],
+    defaults: [],
+    navigates: true,
+  },
 
   "ephemeral.clear": {
     labelKey: "ephemeral.clear",
@@ -853,6 +878,7 @@ export const COMMANDS = {
     labelKey: "ephemeral.createNote",
     contexts: ["ephemeral"],
     defaults: [],
+    navigates: true,
   },
 
   "coverDesigner.duplicate": {

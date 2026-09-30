@@ -119,7 +119,7 @@ export function createDictationSession(deps: {
    * Runs a non-editor Command without a key event (the Command Runner). When
    * present, Commands that are not editor-keymap Commands run through it.
    */
-  runCommand?: (id: CommandId) => CommandRunOutcome;
+  runCommand?: (id: CommandId) => Promise<CommandRunOutcome>;
   /** Whether the Command runs inside the editor's own keymap. */
   isEditorCommand?: (id: CommandId) => boolean;
   notify: (notice: SessionNotice) => void;
@@ -197,20 +197,29 @@ export function createDictationSession(deps: {
           // A Command outside the editor's keymap runs through the Command
           // Runner, never as text; editor Commands run on the target's editor.
           if (deps.isEditorCommand?.(result.id) === false && deps.runCommand) {
-            const outcome = deps.runCommand(result.id);
-            if (outcome === "ran") {
-              deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
-              deps.notify({ kind: "voice_command", ...run });
-            } else if (outcome === "unavailable") {
-              deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
-              deps.notify({ kind: "voice_command_unavailable", id: run.id });
-            } else if (outcome === "refused-dialog") {
-              deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
-              deps.notify({ kind: "voice_command_refused", id: run.id, reason: "dialog" });
-            } else {
-              deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
-              deps.notify({ kind: "voice_command_refused", id: run.id, reason: "tutorial" });
-            }
+            const runCommand = deps.runCommand;
+            void Promise.resolve(runCommand(result.id)).then((outcome) => {
+              if (outcome === "ran") {
+                deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
+                deps.notify({ kind: "voice_command", ...run });
+              } else if (outcome === "unavailable") {
+                deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+                deps.notify({ kind: "voice_command_unavailable", id: run.id });
+              } else if (outcome === "refused-dialog") {
+                deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+                deps.notify({ kind: "voice_command_refused", id: run.id, reason: "dialog" });
+              } else if (outcome === "refused-dialog-close") {
+                deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+                deps.notify({
+                  kind: "voice_command_refused",
+                  id: run.id,
+                  reason: "dialog_refused",
+                });
+              } else {
+                deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+                deps.notify({ kind: "voice_command_refused", id: run.id, reason: "tutorial" });
+              }
+            });
             return;
           }
           if (deps.voiceCommandsAllowed?.() === false) {

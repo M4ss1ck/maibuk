@@ -252,18 +252,18 @@ describe("Home keyboard navigation", () => {
     const user = userEvent.setup();
     render(<Home />);
 
-    expect(runCommand("bookList.newBook", { source: "voice" })).toBe("ran");
+    expect(await runCommand("bookList.newBook", { source: "voice" })).toBe("ran");
     expect(await screen.findByRole("dialog", { name: "New Book" })).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it("runs moveSelectionNext through runCommand and focuses the first book", () => {
+  it("runs moveSelectionNext through runCommand and focuses the first book", async () => {
     render(<Home />);
 
     expect(document.body).toHaveFocus();
-    expect(runCommand("bookList.moveSelectionNext", { source: "voice" })).toBe("ran");
+    expect(await runCommand("bookList.moveSelectionNext", { source: "voice" })).toBe("ran");
     expect(screen.getAllByRole("row")[0]).toHaveFocus();
   });
 

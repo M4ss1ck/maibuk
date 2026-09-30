@@ -15,7 +15,7 @@ vi.mock("react-i18next", async (importOriginal) => ({
 
 describe("BookSettingsDialog modal registration", () => {
   beforeEach(() => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   });
 
   function Harness({

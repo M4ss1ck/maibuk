@@ -15,10 +15,10 @@ import { runCommand, type CommandRunOutcome } from "@/lib/command-runner";
 import { focusCommandBindings, pressKey, moveFocus, useFocusCommands } from "@/lib/focus-commands";
 import { isOutsideLayer, topmostLayer } from "@/lib/top-layer";
 
-function run(id: Parameters<typeof runCommand>[0]): CommandRunOutcome {
+async function run(id: Parameters<typeof runCommand>[0]): Promise<CommandRunOutcome> {
   let outcome: CommandRunOutcome = "unavailable";
-  act(() => {
-    outcome = runCommand(id, { source: "voice" });
+  await act(async () => {
+    outcome = await runCommand(id, { source: "voice" });
   });
   return outcome;
 }
@@ -103,7 +103,7 @@ function CheckHarness({ onChange }: { onChange: (checked: boolean) => void }) {
 }
 
 beforeEach(() => {
-  useModalStore.setState({ modalIds: [], openCount: 0 });
+  useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   useTutorialStore.setState({ status: "idle" });
 });
 
@@ -142,18 +142,18 @@ describe("focus arrows in a menu", () => {
       expect(screen.getByRole("menuitem", { name: "First action" })).toHaveFocus()
     );
 
-    expect(run("focus.down")).toBe("ran");
+    expect(await run("focus.down")).toBe("ran");
     expect(screen.getByRole("menuitem", { name: "Second action" })).toHaveFocus();
-    expect(run("focus.down")).toBe("ran");
+    expect(await run("focus.down")).toBe("ran");
     expect(screen.getByRole("menuitem", { name: "Third action" })).toHaveFocus();
-    expect(run("focus.up")).toBe("ran");
+    expect(await run("focus.up")).toBe("ran");
     expect(screen.getByRole("menuitem", { name: "Second action" })).toHaveFocus();
-    expect(run("focus.last")).toBe("ran");
+    expect(await run("focus.last")).toBe("ran");
     expect(screen.getByRole("menuitem", { name: "Third action" })).toHaveFocus();
-    expect(run("focus.first")).toBe("ran");
+    expect(await run("focus.first")).toBe("ran");
     expect(screen.getByRole("menuitem", { name: "First action" })).toHaveFocus();
-    expect(run("focus.left")).toBe("ran");
-    expect(run("focus.right")).toBe("ran");
+    expect(await run("focus.left")).toBe("ran");
+    expect(await run("focus.right")).toBe("ran");
   });
 });
 
@@ -165,28 +165,28 @@ describe("focus.escape in a dialog", () => {
     await user.click(screen.getByRole("button", { name: "Open dialog" }));
     await screen.findByRole("dialog");
 
-    expect(run("focus.escape")).toBe("ran");
+    expect(await run("focus.escape")).toBe("ran");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Open dialog" })).toHaveFocus();
   });
 });
 
 describe("focus.activate and focus.toggle", () => {
-  it("runs a native button click once", () => {
+  it("runs a native button click once", async () => {
     const onNative = vi.fn();
     render(<ActivateHarness onNative={onNative} onPress={() => {}} />);
 
     screen.getByRole("button", { name: "Native" }).focus();
-    expect(run("focus.activate")).toBe("ran");
+    expect(await run("focus.activate")).toBe("ran");
     expect(onNative).toHaveBeenCalledTimes(1);
   });
 
-  it("runs a React Aria Button onPress exactly once", () => {
+  it("runs a React Aria Button onPress exactly once", async () => {
     const onPress = vi.fn();
     render(<ActivateHarness onNative={() => {}} onPress={onPress} />);
 
     screen.getByRole("button", { name: "Aria" }).focus();
-    expect(run("focus.activate")).toBe("ran");
+    expect(await run("focus.activate")).toBe("ran");
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
@@ -199,27 +199,27 @@ describe("focus.activate and focus.toggle", () => {
     await user.tab();
     expect(screen.getByRole("checkbox", { name: "Agree" })).toHaveFocus();
 
-    expect(run("focus.toggle")).toBe("ran");
+    expect(await run("focus.toggle")).toBe("ran");
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenLastCalledWith(true);
-    expect(run("focus.toggle")).toBe("ran");
+    expect(await run("focus.toggle")).toBe("ran");
     expect(onChange).toHaveBeenCalledTimes(2);
     expect(onChange).toHaveBeenLastCalledWith(false);
   });
 });
 
 describe("focus.next and focus.previous", () => {
-  it("skips an inert subtree and wraps around", () => {
+  it("skips an inert subtree and wraps around", async () => {
     render(<TabHarness />);
 
     screen.getByRole("button", { name: "First" }).focus();
-    expect(run("focus.next")).toBe("ran");
+    expect(await run("focus.next")).toBe("ran");
     expect(screen.getByRole("button", { name: "Second" })).toHaveFocus();
-    expect(run("focus.next")).toBe("ran");
+    expect(await run("focus.next")).toBe("ran");
     expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
-    expect(run("focus.previous")).toBe("ran");
+    expect(await run("focus.previous")).toBe("ran");
     expect(screen.getByRole("button", { name: "Second" })).toHaveFocus();
-    expect(run("focus.previous")).toBe("ran");
+    expect(await run("focus.previous")).toBe("ran");
     expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
   });
 
@@ -233,23 +233,23 @@ describe("focus.next and focus.previous", () => {
     const close = screen.getByRole("button", { name: "Close dialog" });
     close.focus();
 
-    expect(run("focus.next")).toBe("ran");
+    expect(await run("focus.next")).toBe("ran");
     expect(dialog.contains(document.activeElement)).toBe(true);
-    expect(run("focus.next")).toBe("ran");
+    expect(await run("focus.next")).toBe("ran");
     expect(dialog.contains(document.activeElement)).toBe(true);
-    expect(run("focus.previous")).toBe("ran");
+    expect(await run("focus.previous")).toBe("ran");
     expect(dialog.contains(document.activeElement)).toBe(true);
   });
 });
 
 describe("focus commands during a Tutorial run", () => {
-  it("runs focus.next while the Tutorial is active", () => {
+  it("runs focus.next while the Tutorial is active", async () => {
     render(<TabHarness />);
     act(() => {
       useTutorialStore.setState({ status: "running" } as never);
     });
 
-    expect(runCommand("focus.next", { source: "voice" })).toBe("ran");
+    expect(await runCommand("focus.next", { source: "voice" })).toBe("ran");
   });
 });
 
