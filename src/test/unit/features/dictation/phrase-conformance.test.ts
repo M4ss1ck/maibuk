@@ -13,6 +13,7 @@ import {
   defaultTable,
   namesHeard,
   phraseCount,
+  phraseRecordingVocabulary,
   proseTriggers,
   scoreModel,
   spokenWords,
@@ -56,7 +57,7 @@ describe("the recording script", () => {
   it.each(LANGUAGES)("%s: clip ids are unique and file-safe", (language) => {
     const ids = phraseItems(language).map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ids) expect(id).toMatch(/^[vpaxn]-[a-z0-9-]+$/);
+    for (const id of ids) expect(id).toMatch(/^[vpaxnw]-[a-z0-9-]+$/);
   });
 
   it.each(LANGUAGES)("%s: every voice line is a default phrase", (language) => {
@@ -244,7 +245,7 @@ describe("scoreModel()", () => {
     // App and names clips are reported as "not recorded" in their own
     // sections and never fail the lane, so they are not missing items.
     expect(score.missingItems).toHaveLength(
-      phraseItems("en").filter((item) => item.kind !== "app" && item.kind !== "names").length
+      phraseItems("en").filter((item) => !["app", "names", "alone"].includes(item.kind)).length
     );
     expect(score.hitRate).toBe(0);
   });
@@ -391,9 +392,7 @@ describe("scoreModel()", () => {
       clip.itemId === item
         ? {
             ...clip,
-            finals: [
-              "abre interrogación vienes cierre interrogación claro signo de interrogación",
-            ],
+            finals: ["abre interrogación vienes cierre interrogación claro signo de interrogación"],
           }
         : clip
     );
@@ -480,10 +479,7 @@ describe("scoreModel()", () => {
   });
 
   it("averages takes of the same app clip", () => {
-    const clips = [
-      ...perfectClips("en"),
-      { itemId: "a-dark-theme", finals: ["Duck theme."] },
-    ];
+    const clips = [...perfectClips("en"), { itemId: "a-dark-theme", finals: ["Duck theme."] }];
     const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
     expect(score.app.find((row) => row.item.say === "dark theme")?.rate).toBe(0.5);
   });
@@ -493,8 +489,10 @@ describe("the names tier (issue #274)", () => {
   const namesOf = (language: DictationLanguage) =>
     phraseItems(language).filter((item) => item.kind === "names");
 
-  it.each(LANGUAGES)("%s: about ten lines, recorded last, each with its names", (language) => {
-    const items = phraseItems(language);
+  it.each(
+    LANGUAGES
+  )("%s: about ten lines, after the ship-bar tiers, each with its names", (language) => {
+    const items = phraseItems(language).filter((item) => item.kind !== "alone");
     const names = namesOf(language);
     expect(names.length).toBeGreaterThanOrEqual(10);
     expect(items.slice(-names.length)).toEqual(names);
@@ -655,5 +653,52 @@ describe("the names tier (issue #274)", () => {
     const clips = [{ itemId: item.id, finals: ["Make bold."] }];
     const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
     expect(score.names.find((entry) => entry.item.id === item.id)?.triggered).toBe(1);
+  });
+});
+
+describe("names said alone (issue #274)", () => {
+  const alone = (language: DictationLanguage) =>
+    phraseItems(language).filter((item) => item.kind === "alone");
+
+  it.each(LANGUAGES)("%s: one clip per name of the names tier, after it", (language) => {
+    const items = phraseItems(language);
+    const names = items.filter((item) => item.kind === "names").flatMap((item) => item.names ?? []);
+    expect(alone(language).map((item) => item.say)).toEqual([...new Set(names)]);
+    expect(items.slice(-alone(language).length)).toEqual(alone(language));
+    for (const item of alone(language)) {
+      expect(item.id).toMatch(/^w-/);
+      expect(item.names).toEqual([item.say]);
+    }
+  });
+
+  it("an unrecorded tier is not missing", () => {
+    const clips = perfectClips("en").filter((clip) => !clip.itemId.startsWith("w-"));
+    expect(scoreModel({ language: "en", capabilities: PUNCTUATES, clips }).missingItems).toEqual(
+      []
+    );
+  });
+
+  it("phraseRecordingVocabulary() takes the first line with words, as a Phrase Recording does", () => {
+    const item = alone("en").find((entry) => entry.say === "Siobhan");
+    if (!item) throw new Error("no Siobhan said alone");
+    const vocabulary = phraseRecordingVocabulary("en", [
+      { itemId: item.id, finals: [".", "Sho-bang!", "again"] },
+    ]);
+    expect(vocabulary).toEqual([{ heard: "sho bang", written: "Siobhan" }]);
+  });
+
+  it("phraseRecordingVocabulary() keeps the first take and the first entry for a heard form", () => {
+    const [first, second] = alone("es");
+    const vocabulary = phraseRecordingVocabulary("es", [
+      { itemId: first.id, finals: ["Chochil"] },
+      { itemId: first.id, finals: ["Otra toma"] },
+      { itemId: second.id, finals: ["chochil"] },
+    ]);
+    expect(vocabulary).toEqual([{ heard: "chochil", written: first.say }]);
+  });
+
+  it("phraseRecordingVocabulary() skips a name heard as nothing", () => {
+    const [first] = alone("en");
+    expect(phraseRecordingVocabulary("en", [{ itemId: first.id, finals: ["", "."] }])).toEqual([]);
   });
 });

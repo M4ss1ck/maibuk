@@ -12,7 +12,15 @@ import {
   peak,
   wavBytes,
 } from "../../../../scripts/dictation-phrases/clips";
+import { traceNumbers } from "../../../../scripts/dictation-phrases/biasing-results";
+import {
+  bookPassage,
+  formsPassage,
+  formsRepeat,
+  gutenbergBody,
+} from "../../../../scripts/dictation-phrases/passages";
 import { renderReport, type ScoredModel } from "../../../../scripts/dictation-phrases/report";
+import { median, runSummary } from "../../../../scripts/dictation-phrases/summary";
 
 const PUNCTUATES = { casing: true, punctuation: true, streaming: true };
 
@@ -219,5 +227,95 @@ describe("renderReport()", () => {
     expect(report.failures).toEqual([]);
     expect(report.markdown).toContain("| 0 (0) | not recorded | pass |");
     expect(report.markdown).toMatch(/## en: names[\s\S]*not recorded/);
+  });
+});
+
+describe("context passages (issue #274)", () => {
+  const body = ["one two three four", "five six seven eight", "nine ten eleven twelve"].join(
+    "\n\n"
+  );
+
+  it("takes the novel between the Project Gutenberg markers", () => {
+    const text =
+      "header\n*** START OF THE PROJECT GUTENBERG EBOOK X ***\nthe novel\n*** END OF THE PROJECT GUTENBERG EBOOK X ***\nlicense";
+    expect(gutenbergBody(text)).toBe("the novel");
+    expect(() => gutenbergBody("no markers")).toThrow(/markers/);
+  });
+
+  it("keeps the first words and carries each name the given number of times", () => {
+    const passage = bookPassage(body, 6, ["Siobhan", "Redis"], "en", 2);
+    const words = passage.split(/\s+/);
+    expect(words.slice(0, 4)).toEqual(["one", "two", "three", "four"]);
+    expect(passage).not.toContain("seven");
+    expect(passage.match(/Siobhan/g)).toHaveLength(2);
+    expect(passage.match(/Redis/g)).toHaveLength(2);
+    expect(passage.trimEnd().endsWith(".")).toBe(true);
+  });
+
+  it("spreads the names by words, not by paragraphs", () => {
+    const titled = ["Title", "Preface", "a b c d e f g h i j k l m n o p q r s t"].join("\n\n");
+    const paragraphs = bookPassage(titled, 22, ["Siobhan"], "en", 2).split("\n\n");
+    expect(paragraphs.slice(0, 2)).toEqual(["Title", "Preface"]);
+    expect(
+      paragraphs
+        .slice(3)
+        .join(" ")
+        .match(/Siobhan/g)
+    ).toHaveLength(2);
+  });
+
+  it("spreads the names across the passage instead of bunching them", () => {
+    const passage = bookPassage(body, 100, ["Siobhan"], "es", 3);
+    const paragraphs = passage.split("\n\n");
+    expect(paragraphs.filter((p) => p.includes("Siobhan"))).toHaveLength(3);
+    expect(paragraphs[1]).toContain("Siobhan");
+  });
+
+  it("repeats the forms once more than the passage's most used long word", () => {
+    expect(formsRepeat("Defarge said. Defarge left. the the the the")).toBe(3);
+    expect(formsRepeat("a b c")).toBe(1);
+    expect(formsPassage(["Siobhan", "Redis"], 2)).toBe("Siobhan. Redis.\nSiobhan. Redis.");
+  });
+});
+
+describe("run summaries (issue #274)", () => {
+  it("median() takes the middle, or the mean of the middle two", () => {
+    expect(median([])).toBeNull();
+    expect(median([5, 1, 3])).toBe(3);
+    expect(median([4, 1, 3, 2])).toBe(2.5);
+  });
+
+  it("runSummary() keeps the scores and the medians of every line and clip", () => {
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips: cleanClips() });
+    const summary = runSummary({
+      model: "moonshine-small-en",
+      score,
+      clips: [{ latencies: [100, null, 300], ms: 50 }, { latencies: [200], ms: 70 }, { ms: 60 }],
+      setContextMs: 12.5,
+      vocabularyEntries: 19,
+    });
+    expect(summary).toEqual({
+      model: "moonshine-small-en",
+      hitRate: score.hitRate,
+      proseTriggers: score.proseTriggers,
+      misheardProseTriggers: score.misheardProseTriggers,
+      nameHitRate: score.nameHitRate,
+      lineLatencyP50: 200,
+      clipMsP50: 60,
+      setContextMs: 12.5,
+      vocabularyEntries: 19,
+    });
+  });
+});
+
+describe("traceNumbers() (issue #274)", () => {
+  it("takes the median final latency, the CPU, and the setContext time", () => {
+    expect(
+      traceNumbers({
+        summary: { cpuPctOfOneCore: 57.8 },
+        bias: { setContextMs: 2.5 },
+        trace: [{ finalLatencyMs: 120 }, { finalLatencyMs: null }, { finalLatencyMs: 200 }],
+      })
+    ).toEqual({ lineLatencyP50: 160, lines: 3, cpuPct: 57.8, setContextMs: 2.5 });
   });
 });

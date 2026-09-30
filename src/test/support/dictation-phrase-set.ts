@@ -9,12 +9,14 @@
 // as whole clips and scored as whole clips, never inferred.
 // Spoken Punctuation phrases ride in carrier sentences, several per clip.
 // The names tier (issue #274) is ordinary prose carrying unusual names and
-// jargon, recorded last so a rerun of the recorder adds only it. The
+// jargon, recorded after the rest so a rerun of the recorder adds only it.
+// Each of its names is then said alone, once: the Phrase Recording an author
+// would make to teach it, taken from audio so every condition gets its own. The
 // gate lane (dictation-phrase-set.test.ts) proves the script still covers
 // every unit and every entry whenever the defaults change.
 import type { DictationLanguage } from "@/features/dictation/types";
 
-export type PhraseItemKind = "voice" | "app" | "punctuation" | "prose" | "names";
+export type PhraseItemKind = "voice" | "app" | "punctuation" | "prose" | "names" | "alone";
 
 export interface PhraseItem {
   /** Stable clip id; the WAV is `<language>/<id>.wav`. */
@@ -260,6 +262,11 @@ export function parseNamesLine(line: string): { say: string; names: string[] } {
   return { say, names };
 }
 
+/** Every name of the names tier once, in order of first use. */
+function namesAlone(language: DictationLanguage): string[] {
+  return [...new Set(NAMES[language].flatMap((line) => parseNamesLine(line).names))];
+}
+
 /** A file-safe id: accents folded, words joined by dashes, at most 48 characters. */
 export function clipSlug(text: string): string {
   return text
@@ -277,8 +284,12 @@ function items(
   kind: PhraseItemKind,
   lines: readonly string[]
 ): PhraseItem[] {
-  const prefix = { voice: "v", app: "a", punctuation: "p", prose: "x", names: "n" }[kind];
+  const prefix = { voice: "v", app: "a", punctuation: "p", prose: "x", names: "n", alone: "w" }[
+    kind
+  ];
   return lines.map((line) => {
+    if (kind === "alone")
+      return { id: `${prefix}-${clipSlug(line)}`, language, kind, say: line, names: [line] };
     if (kind !== "names") return { id: `${prefix}-${clipSlug(line)}`, language, kind, say: line };
     const { say, names } = parseNamesLine(line);
     return { id: `${prefix}-${clipSlug(say)}`, language, kind, say, names };
@@ -293,5 +304,6 @@ export function phraseItems(language: DictationLanguage): PhraseItem[] {
     ...items(language, "punctuation", PUNCTUATION[language]),
     ...items(language, "prose", PROSE[language]),
     ...items(language, "names", NAMES[language]),
+    ...items(language, "alone", namesAlone(language)),
   ];
 }

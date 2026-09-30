@@ -10,10 +10,10 @@ import {
   type PhraseTable,
   type TokenTrieNode,
 } from "@/features/dictation/interpreter";
-import { phraseWords } from "@/features/dictation/normalize";
+import { heardPhrase, phraseWords } from "@/features/dictation/normalize";
 import { entriesFor, type SpokenPunctuationEntry } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
-import type { VocabularyEntry } from "@/features/dictation/vocabulary";
+import { normalizeVocabularySettings, type VocabularyEntry } from "@/features/dictation/vocabulary";
 import {
   VOICE_VOCABULARY,
   heardForms,
@@ -357,6 +357,9 @@ export function appExpectedLabel(
   return result.kind;
 }
 
+/** Tiers reported apart, never gated: a clip of theirs is never a missing item. */
+const OPTIONAL_KINDS: ReadonlySet<PhraseItem["kind"]> = new Set(["app", "names", "alone"]);
+
 export interface Clip {
   itemId: string;
   finals: string[];
@@ -643,6 +646,29 @@ function scoreApp(context: ScoreContext): AppScore[] {
 }
 
 /**
+ * The Dictation Vocabulary an author would build from the names said alone
+ * (issue #274): each name's heard form is what its first take's Phrase
+ * Recording keeps, the first finished line with words, and the first entry
+ * for a heard form wins, as Settings refuses a duplicate.
+ */
+export function phraseRecordingVocabulary(
+  language: DictationLanguage,
+  clips: readonly Clip[]
+): VocabularyEntry[] {
+  const firstTake = new Map<string, Clip>();
+  for (const clip of clips) if (!firstTake.has(clip.itemId)) firstTake.set(clip.itemId, clip);
+  const entries: VocabularyEntry[] = [];
+  for (const item of phraseItems(language).filter((entry) => entry.kind === "alone")) {
+    const clip = firstTake.get(item.id);
+    const heard = clip?.finals
+      .map((line) => heardPhrase(line, language))
+      .find((line) => line !== "");
+    if (heard) entries.push({ heard, written: item.say });
+  }
+  return normalizeVocabularySettings({ [language]: entries })[language];
+}
+
+/**
  * Names-tier rows (issue #274): every take through the shipped table plus the
  * author's Dictation Vocabulary, scored only on the name words of its line.
  */
@@ -725,10 +751,10 @@ export function scoreModel(input: {
     misheardProseTriggers: prose
       .filter((score) => !score.firesOnText)
       .reduce((sum, score) => sum + score.triggered, 0),
-    // App and names clips are reported as "not recorded" in their own
-    // sections and never fail the lane, so they are not missing items.
+    // Optional tiers are reported as "not recorded" in their own sections
+    // and never fail the lane, so they are not missing items.
     missingItems: script
-      .filter((item) => item.kind !== "app" && item.kind !== "names" && !clips.has(item.id))
+      .filter((item) => !OPTIONAL_KINDS.has(item.kind) && !clips.has(item.id))
       .map((item) => item.id),
   };
 }

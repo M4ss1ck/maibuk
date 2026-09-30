@@ -99,7 +99,7 @@ that must type as text.
 
 ### What is recorded
 
-87 English and 86 Spanish short lines, around three minutes per Dictation
+106 English and 105 Spanish short lines, around three minutes per Dictation
 Language (`src/test/support/dictation-phrase-set.ts`):
 
 - **Voice Commands.** Every default phrase is a verb crossed with a target, so
@@ -127,6 +127,10 @@ Language (`src/test/support/dictation-phrase-set.ts`):
   (the Interpreter lowercases a line that continues a sentence), so it misses.
   The report gives each model's name hit rate and, per line, what each take
   typed. A missing clip is *not recorded*; the names tier never fails the bar.
+- **Names said alone** (issue #274). Each name of the names tier once, on its
+  own: the Phrase Recording an author would make. `score.ts
+  --vocabulary-from-clips` builds each run's Dictation Vocabulary from these
+  clips. Never scored, never missing.
 
 No heard forms ship yet for the click word, the numbers, or the focus keys:
 English Fast hears "two" as "to" and "three" as "free" in E2E text-to-speech,
@@ -173,6 +177,11 @@ pnpm exec tsx scripts/dictation-phrases/score.ts --vocabulary vocabulary.json
 
 The Vocabulary applies to the names tier only; every other tier scores the
 shipped defaults, so the bars are unchanged by it.
+
+Context biasing runs (issue #274, discarded; numbers and commands in
+`docs/research/dictation-context-biasing.md`) set `BIAS_LABEL`,
+`BIAS_KEYTERMS`, `BIAS_CONTEXT` and `BIAS_BOOST` on the native lane, then score
+with `--label <label>`.
 
 | Bar | Scope |
 | --- | --- |
