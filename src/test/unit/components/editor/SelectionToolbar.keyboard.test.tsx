@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectionToolbar } from "@/components/editor/SelectionToolbar";
 import { Editor as WritingEditor } from "@/components/editor/Editor";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { selectionKeptPluginKey } from "@/components/editor/extensions/SelectionKept";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { DEFAULT_SHORTCUT_SETTINGS } from "@/lib/shortcut-resolve";
@@ -404,5 +405,191 @@ describe("SelectionToolbar keyboard operation", () => {
     await waitFor(() => expect(editor!.view.dom.contains(document.activeElement)).toBe(true));
     expect(editor!.state.selection.from).toBe(1);
     expect(editor!.state.selection.to).toBe(6);
+  });
+});
+
+describe("SelectionToolbar keeps the selection visible", () => {
+  async function arrowUntilFocused(
+    user: { keyboard: (text: string) => Promise<void> },
+    target: HTMLElement,
+    max = 24
+  ) {
+    for (let i = 0; i < max && document.activeElement !== target; i++) {
+      await user.keyboard("{ArrowRight}");
+    }
+    expect(document.activeElement).toBe(target);
+  }
+
+  it("paints the selection only while focus is in the toolbar", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar();
+
+    selectHello(editor);
+    expect(editor.view.dom.querySelector(".selection-kept")).toBeNull();
+
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Bold" }));
+    expect(editor.view.dom.querySelector(".selection-kept")).toHaveTextContent("Hello");
+  });
+
+  it("clears the paint on Escape and returns focus to the text", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar();
+
+    selectHello(editor);
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+    expect(editor.view.dom.querySelector(".selection-kept")).toHaveTextContent("Hello");
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() =>
+      expect(editor.view.dom.querySelector(".selection-kept")).toBeNull()
+    );
+    expect(editor.view.dom.contains(document.activeElement)).toBe(true);
+  });
+
+  it("keeps the paint across a Bold command run from the toolbar", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar();
+
+    selectHello(editor);
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+
+    await user.keyboard("{Enter}");
+
+    expect(editor.isActive("bold")).toBe(true);
+    const painted = Array.from(editor.view.dom.querySelectorAll(".selection-kept"))
+      .map((element) => element.textContent ?? "")
+      .join("");
+    expect(painted).toBe("Hello");
+    expect(toolbar().contains(document.activeElement)).toBe(true);
+  });
+
+  it("clears the paint when focus leaves the toolbar", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar();
+
+    selectHello(editor);
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+    expect(editor.view.dom.querySelector(".selection-kept")).toHaveTextContent("Hello");
+
+    act(() => {
+      screen.getByLabelText("Outside field").focus();
+    });
+
+    await waitFor(() =>
+      expect(editor.view.dom.querySelector(".selection-kept")).toBeNull()
+    );
+  });
+
+  it("keeps the paint while the highlight color picker is open, and Escape applies nothing", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar();
+
+    selectHello(editor);
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+
+    const optionsTrigger = within(toolbar()).getByRole("button", {
+      name: "{{label}} options",
+    });
+    await arrowUntilFocused(user, optionsTrigger);
+
+    await user.keyboard("{Enter}");
+    const dialog = await screen.findByRole("dialog", { name: "{{label}} options" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    // Focus moved from the bubble into a popover the bubble opened: the
+    // blur-clear must have been cancelled, so the range stays painted.
+    expect(editor.view.dom.querySelector(".selection-kept")).toHaveTextContent("Hello");
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(editor.view.dom.dataset.colorPreview).toBeUndefined();
+    expect(editor.isActive("highlight")).toBe(false);
+    // Leaving the picker does not touch the text, so the paint stays until
+    // focus returns to the editor or leaves the toolbar another way.
+    expect(editor.view.dom.querySelector(".selection-kept")).toHaveTextContent("Hello");
+  });
+
+  it("keeps the paint while the Link dialog opened from the bubble is open, and clears it when the text regains focus", async () => {
+    const user = userEvent.setup();
+    let editor: Editor | null = null;
+    render(
+      <WritingEditor
+        content="<p>Hello world</p>"
+        onUpdate={vi.fn()}
+        onEditorReady={(instance) => {
+          editor = instance as unknown as Editor;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+
+    // jsdom has no layout: the bubble needs a visible editor area to sit in.
+    const scroller = editor!.view.dom.closest(".overflow-auto") as HTMLElement;
+    scroller.getBoundingClientRect = scrollContainerRect;
+    editor!.view.coordsAtPos = () =>
+      ({ top: 100, bottom: 120, left: 50, right: 60 }) as unknown as DOMRect;
+
+    act(() => {
+      editor!.view.focus();
+      editor!.commands.setTextSelection({ from: 1, to: 6 });
+    });
+    await waitFor(() => expect(toolbar()).toBeInTheDocument());
+
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Bold" }));
+
+    // The arrow walks the toolbar to the Link command.
+    const link = within(toolbar()).getByRole("button", { name: "Insert Link" });
+    for (let i = 0; i < 12 && document.activeElement !== link; i++) {
+      await user.keyboard("{ArrowRight}");
+    }
+    expect(document.activeElement).toBe(link);
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+
+    expect(editor!.view.dom.querySelector(".selection-kept")).toHaveTextContent("Hello");
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(editor!.view.dom.contains(document.activeElement)).toBe(true));
+    await waitFor(() => expect(editor!.view.dom.querySelector(".selection-kept")).toBeNull());
+  });
+
+  it("clears the paint when Tab leaves the toolbar, and shows none when the text is focused again", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar();
+
+    selectHello(editor);
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+    expect(editor.view.dom.querySelector(".selection-kept")).toHaveTextContent("Hello");
+
+    await user.tab({ shift: true });
+
+    expect(toolbar().contains(document.activeElement)).toBe(false);
+    await waitFor(() => expect(editor.view.dom.querySelector(".selection-kept")).toBeNull());
+
+    act(() => {
+      editor.view.focus();
+    });
+    expect(editor.view.dom.querySelector(".selection-kept")).toBeNull();
+    expect(selectionKeptPluginKey.getState(editor.state)).toBe(false);
+  });
+
+  it("a mouse press on a bubble button paints nothing: focus stays in the text", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar();
+
+    selectHello(editor);
+
+    await user.click(screen.getByRole("button", { name: "Bold" }));
+
+    expect(editor.isActive("bold")).toBe(true);
+    expect(document.activeElement).toBe(editor.view.dom);
+    expect(editor.view.dom.querySelector(".selection-kept")).toBeNull();
   });
 });

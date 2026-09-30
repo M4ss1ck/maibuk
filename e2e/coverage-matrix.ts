@@ -703,8 +703,13 @@ export const ROWS: MatrixRow[] = [
     id: "editor-selection-toolbar",
     area: "editor",
     workflow:
-      "Shift+Arrows selects text and shows the selection toolbar; Alt+F10 focuses it; arrows/Home/End move; Enter applies Bold keeping focus and selection; Esc returns to the text; Link dialog returns focus to the text; asserts: toolbar focus; selection kept",
-    edges: ["Link dialog Esc returns to the text", "group only in the floating toolbar"],
+      "Shift+Arrows selects text and shows the selection toolbar; Alt+F10 focuses it; arrows/Home/End move; Enter applies Bold keeping focus and selection; Esc returns to the text; Link dialog returns focus to the text; asserts: toolbar focus; selection kept; selection painted while the toolbar has focus",
+    edges: [
+      "Link dialog Esc returns to the text",
+      "group only in the floating toolbar",
+      "selection stays visible while the toolbar has focus",
+      "highlight picker from the bubble keeps the selection painted",
+    ],
     terms: [],
     shortcuts: ["editor.focusSelectionToolbar"],
     routes: ["/book/:bookId"],

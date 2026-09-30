@@ -123,6 +123,76 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
     await expect(editorText(page).locator("strong")).toHaveText("The s");
   });
 
+  // The browser stops painting ::selection once focus leaves the text, so the
+  // range the toolbar acts on is painted by a decoration (issue #306).
+  test("selection stays visible while the toolbar has focus @sc:editor.focusSelectionToolbar", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await selectFirstWords(page, 5);
+
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+    // Native selection while the text has focus: no second, decoration paint.
+    const kept = editorText(page).locator(".selection-kept");
+    await expect(kept).toHaveCount(0);
+
+    await page.keyboard.press("Alt+F10");
+    await expect(kept).toBeVisible();
+    await expect(kept).toHaveText("The s");
+    await capture(page, "selection-toolbar-kept", { around: [floating] });
+
+    const bold = floating.getByRole("button", { name: "Bold" });
+    await pressUntilFocused(page, "ArrowRight", bold);
+    await page.keyboard.press("Enter");
+
+    // The decoration may now be split around the <strong>.
+    await expect(editorText(page).locator(".selection-kept").first()).toBeVisible();
+    await expect.poll(async () => (await kept.allTextContents()).join("")).toBe("The s");
+
+    await page.keyboard.press("Escape");
+    await expect(editorText(page)).toBeFocused();
+    await expect(kept).toHaveCount(0);
+  });
+
+  test("the highlight picker opened from the bubble keeps the selection painted @sc:editor.focusSelectionToolbar", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await selectFirstWords(page, 5);
+
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    const kept = editorText(page).locator(".selection-kept");
+    await expect(kept).toHaveText("The s");
+
+    const trigger = floating.getByRole("button", { name: "Highlight options" });
+    await pressUntilFocused(page, "ArrowRight", trigger);
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("dialog", { name: "Highlight options" });
+    await expectFocusWithin(picker);
+    await expect(kept).toHaveText("The s");
+    await capture(page, "selection-toolbar-color-picker", { around: [picker, kept] });
+
+    // A keyboard step on the hue is one adjustment, committed as it ends
+    // (ADR 0011), so the color lands on the painted range.
+    await pressUntilFocused(page, "Tab", picker.getByRole("slider", { name: "Hue" }));
+    await page.keyboard.press("ArrowRight");
+    await expect(editorText(page).locator("mark")).toHaveText("The s");
+    await expect.poll(async () => (await kept.allTextContents()).join("")).toBe("The s");
+
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(editorText(page).locator("mark")).toHaveText("The s");
+    await expect.poll(async () => (await kept.allTextContents()).join("")).toBe("The s");
+
+    await page.keyboard.press("Escape");
+    await expect(editorText(page)).toBeFocused();
+    await expect(kept).toHaveCount(0);
+  });
+
   test("Link from the bubble: Esc closes the dialog and returns to the text @sc:editor.focusSelectionToolbar", async ({
     page,
   }) => {
@@ -143,10 +213,12 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
     await expect(dialog).toBeVisible();
     await expectFocusWithin(dialog);
     await expectTabContained(page, dialog);
+    await expect(editorText(page).locator(".selection-kept")).toHaveText("The s");
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect(editorText(page)).toBeFocused();
+    await expect(editorText(page).locator(".selection-kept")).toHaveCount(0);
   });
 
   test("a group hidden from the main toolbar stays reachable in the bubble @sc:editor.focusSelectionToolbar", async ({
