@@ -204,6 +204,7 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Change Kind": "architecture vocabulary (ADR 0003); never shown to the author",
   "Change Feed": "architecture vocabulary (ADR 0003); never shown to the author",
   "Entity Sync": "architecture vocabulary (ADR 0006); never shown to the author",
+  "Click by Name": "decided, not built (ADR 0016); the #267 build decides whether the Dictation section teaches it",
 };
 
 /** The step the Settings → Tutorial row is anchored to; the whole Tutorial ends there. */

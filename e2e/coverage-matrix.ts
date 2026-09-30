@@ -10,6 +10,12 @@ const SYNC_FOLLOW_UP =
 
 export const EXCLUSIONS: Exclusion[] = [
   {
+    kind: "term",
+    items: ["Click by Name"],
+    reason: "Decided, not built (ADR 0016); the #267 build adds its row",
+    owner: "App-tier Voice Commands, https://github.com/M4ss1ck/maibuk/issues/267",
+  },
+  {
     kind: "context-section",
     section: "Sync",
     reason: "Sync is out of scope for this delivery (maintainer, 2026-09-25)",
