@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShortcuts } from "@/lib/shortcuts";
+import { useFocusCommands } from "@/lib/focus-commands";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { noticeMessage } from "@/components/dictation/dictation-messages";
@@ -76,6 +77,10 @@ export function GlobalShortcuts() {
   // Unbound until the runtime reports support, so an unsupported device lists no Dictation shortcut.
   const dictationSupported = useDictationStore((state) => state.support?.supported === true);
   const dictationEnabled = useDictationStore((state) => state.enabled);
+
+  // The browser's own keys as voice-runnable Commands; above the Tutorial
+  // boundary, so they work while a run is under way.
+  useFocusCommands();
 
   // Session notices become a toast and/or a screen-reader announcement. The
   // runtime may not exist yet (unsupported build), so a failure is silent.

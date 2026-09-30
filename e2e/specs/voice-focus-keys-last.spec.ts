@@ -1,0 +1,33 @@
+// focus.last by voice (issue #318): the microphone says "Press End".
+// Pattern: e2e/specs/voice-commands-app.spec.ts; setup: e2e/support/voice-focus.ts.
+import { expect, test } from "../support/test";
+import {
+  downloadEnglishFast,
+  editorText,
+  focusChapter,
+  openChapterWithDictation,
+  row,
+  stopDictation,
+  voiceAudioArgs,
+  voiceStatus,
+} from "../support/voice-focus";
+
+test.use({
+  library: "oneBookThreeChapters",
+  launchOptions: { args: voiceAudioArgs("focus-last") },
+});
+
+test.describe("@wf:voice-focus-keys @sc:focus.last @chromium-only", () => {
+  test("saying Press End moves to the last Chapter row", async ({ page }) => {
+    test.setTimeout(180_000);
+    await downloadEnglishFast(page);
+    await openChapterWithDictation(page);
+    await focusChapter(page, "Arrival");
+
+    await expect(row(page, "Storm")).toBeFocused({ timeout: 90_000 });
+    await expect(voiceStatus(page)).toHaveText("Voice command: Press End");
+    await expect(editorText(page)).not.toContainText("Press End");
+
+    await stopDictation(page);
+  });
+});

@@ -1166,6 +1166,19 @@
     "nudgeLeftFar": "Mover 10 px a la izquierda",
     "nudgeRightFar": "Mover 10 px a la derecha",
     "customize": "Personalizar atajos",
+    "focus": {
+      "next": "Pulsar Tab",
+      "previous": "Pulsar Mayús Tab",
+      "up": "Pulsar arriba",
+      "down": "Pulsar abajo",
+      "left": "Pulsar izquierda",
+      "right": "Pulsar derecha",
+      "first": "Pulsar Inicio",
+      "last": "Pulsar Fin",
+      "activate": "Pulsar Intro",
+      "toggle": "Pulsar espacio",
+      "escape": "Pulsar Escape"
+    },
     "fixed": {
       "escape": "Escape siempre cierra o sale",
       "undo": "Tu sistema usa esta tecla para deshacer y rehacer",
@@ -1173,7 +1186,8 @@
       "findField": "El campo de búsqueda usa esta tecla",
       "tab": "Tab sangra y mueve el foco",
       "family": "Una tecla por posición, del 1 al 9",
-      "activate": "Enter abre el libro enfocado"
+      "activate": "Enter abre el libro enfocado",
+      "focusKey": "Es la propia tecla, igual en todas las pantallas"
     },
     "sections": {
       "common": "Comunes",
@@ -1184,7 +1198,8 @@
       "notes": "Notas",
       "canvas": "Lienzo",
       "editor": "Editor",
-      "ephemeral": "Efímero"
+      "ephemeral": "Efímero",
+      "focus": "Foco"
     },
     "onThisScreen": "En esta pantalla",
     "onOtherScreens": "En otras pantallas",

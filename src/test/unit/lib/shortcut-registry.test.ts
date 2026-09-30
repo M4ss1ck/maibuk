@@ -52,6 +52,8 @@ describe("command registry", () => {
     expect(definition.contexts.length).toBeGreaterThan(0);
     if (prefix === "common") expect(definition.contexts.length).toBeGreaterThan(1);
     else if (prefix === "tutorial") expect(definition.contexts).toEqual(["global"]);
+    // Focus is a help section, not a Context: its Commands are global.
+    else if (prefix === "focus") expect(definition.contexts).toEqual(["global"]);
     // Dictation is a feature, not a Context: its Commands are global or editor.
     else if (prefix === "dictation") {
       for (const context of definition.contexts) expect(["global", "editor"]).toContain(context);
@@ -112,6 +114,7 @@ describe("command registry", () => {
     expect(commandSection("editor.bold")).toBe("editor");
     expect(commandSection("tutorial.skip")).toBe("global");
     expect(commandSection("coverDesigner.duplicate")).toBe("coverDesigner");
+    expect(commandSection("focus.next")).toBe("focus");
   });
 
   it("renames only to Commands that exist", () => {

@@ -16,9 +16,24 @@ VOICES_DIR=".cache/piper-voices"
 OUT_DIR="vendor/moonshine/e2e-voice"
 
 # The fake microphone plays one WAV per browser launch; the spec swaps in
-# dark-theme.wav to speak a Voice Command. `name|voice|text`.
+# dark-theme.wav to speak a Voice Command. `name|voice|text|pre_seconds|post_seconds`
+# (silence paddings default to 0.5|3 for existing entries). Focus-key entries
+# carry a long pre-padding so the keyboard setup finishes before the first
+# phrase, and a long post-padding so the looping fake mic never repeats a
+# phrase inside a test.
 PHRASES=(
   "dark-theme|en_US-lessac-medium|Dark theme."
+  "focus-next|en_US-lessac-medium|Press the tab key.|45|30"
+  "focus-previous|en_US-lessac-medium|Press shift tab key.|45|30"
+  "focus-up|en_US-lessac-medium|Press Up.|45|30"
+  "focus-down|en_US-lessac-medium|Press Down.|45|30"
+  "focus-left|en_US-lessac-medium|Press Left.|45|30"
+  "focus-right|en_US-lessac-medium|Press Right.|45|30"
+  "focus-first|en_US-lessac-medium|Press Home.|45|30"
+  "focus-last|en_US-lessac-medium|Press End.|45|30"
+  "focus-activate|en_US-lessac-medium|Press enter key.|45|30"
+  "focus-toggle|en_US-lessac-medium|Press Space.|45|30"
+  "focus-escape|en_US-lessac-medium|Press Escape.|45|30"
 )
 
 # The voices the phrase list references.
@@ -50,20 +65,22 @@ done
 
 mkdir -p "$OUT_DIR"
 for entry in "${PHRASES[@]}"; do
-  IFS='|' read -r name voice text <<<"$entry"
+  IFS='|' read -r name voice text pre_seconds post_seconds <<<"$entry"
+  pre_seconds="${pre_seconds:-0.5}"
+  post_seconds="${post_seconds:-3}"
   out="$OUT_DIR/$name.wav"
   if [ -f "$out" ]; then
     echo "Keeping $out"
     continue
   fi
-  echo "Synthesizing $out (\"$text\")"
+  echo "Synthesizing $out (\"$text\", +${pre_seconds}s/+${post_seconds}s)"
   raw="$(mktemp --suffix=.wav)"
   printf '%s\n' "$text" |
     "$python_bin" -m piper -m "$voice" --data-dir "$VOICES_DIR" -f "$raw"
-  # 16 kHz mono s16, half a second of silence before, three seconds after: the
-  # Dictation Session needs a moment to start listening, and a trailing pause
-  # closes the line.
-  ffmpeg -y -loglevel error -i "$raw" -af "adelay=500,apad=pad_dur=3" -ar 16000 -ac 1 "$out"
+  # 16 kHz mono s16, silence before and after: the Dictation Session needs a
+  # moment to start listening, and a trailing pause closes the line.
+  pre_ms="$(python3 -c "print(int(float('$pre_seconds') * 1000))")"
+  ffmpeg -y -loglevel error -i "$raw" -af "adelay=${pre_ms},apad=pad_dur=${post_seconds}" -ar 16000 -ac 1 "$out"
   rm -f "$raw"
 done
 

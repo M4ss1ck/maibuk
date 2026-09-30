@@ -1166,6 +1166,19 @@
     "nudgeLeftFar": "Nudge left 10 px",
     "nudgeRightFar": "Nudge right 10 px",
     "customize": "Customize shortcuts",
+    "focus": {
+      "next": "Press Tab",
+      "previous": "Press Shift Tab",
+      "up": "Press Up",
+      "down": "Press Down",
+      "left": "Press Left",
+      "right": "Press Right",
+      "first": "Press Home",
+      "last": "Press End",
+      "activate": "Press Enter",
+      "toggle": "Press Space",
+      "escape": "Press Escape"
+    },
     "fixed": {
       "escape": "Escape always closes or leaves",
       "undo": "Your system uses this key for undo and redo",
@@ -1173,7 +1186,8 @@
       "findField": "The find field uses this key",
       "tab": "Tab indents and moves focus",
       "family": "One key per position, 1 to 9",
-      "activate": "Enter opens the focused book"
+      "activate": "Enter opens the focused book",
+      "focusKey": "The key itself, the same on every screen"
     },
     "sections": {
       "common": "Common",
@@ -1184,7 +1198,8 @@
       "notes": "Notes",
       "canvas": "Canvas",
       "editor": "Editor",
-      "ephemeral": "Ephemeral"
+      "ephemeral": "Ephemeral",
+      "focus": "Focus"
     },
     "onThisScreen": "On this screen",
     "onOtherScreens": "On other screens",

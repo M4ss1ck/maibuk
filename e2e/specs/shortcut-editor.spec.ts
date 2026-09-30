@@ -75,6 +75,19 @@ test.describe("Shortcut Editor @wf:shortcut-editor", () => {
     await expect(open).toBeFocused();
   });
 
+  test("lists the Focus Commands with their fixed keys", async ({ page }) => {
+    await openFromSettings(page);
+    const search = editorDialog(page).getByRole("searchbox");
+    await tabTo(page, search);
+    await page.keyboard.type("press t");
+    const row = commandRow(page, "Press Tab");
+    await expect(row).toBeVisible();
+    await expect(row.getByText("Tab", { exact: true })).toBeVisible();
+    await capture(page, "shortcut-editor-focus-section", {
+      around: [editorDialog(page).getByRole("grid")],
+    });
+  });
+
   test("keeps the current section's header pinned to the top of the list while scrolling", async ({
     page,
   }) => {
@@ -82,11 +95,11 @@ test.describe("Shortcut Editor @wf:shortcut-editor", () => {
     const dialog = editorDialog(page);
     const grid = dialog.getByRole("grid");
     await tabTo(page, commandRow(page, "Save"));
-    // End moves focus to the last Command and scrolls deep into the Editor section.
+    // End moves focus to the last Command and scrolls deep into the Focus section, the last one.
     await page.keyboard.press("End");
     await expect(grid.getByRole("row").last()).toBeFocused();
 
-    const header = dialog.getByRole("row", { name: "Editor", exact: true });
+    const header = dialog.getByRole("row", { name: "Focus", exact: true });
     // toBeInViewport's IntersectionObserver misreports inside the Virtualizer's
     // `contain: size` wrappers, so the position is measured against the grid.
     await expect(header).toBeVisible();
@@ -97,7 +110,7 @@ test.describe("Shortcut Editor @wf:shortcut-editor", () => {
     await capture(page, "shortcut-editor-sticky-section", { around: [grid] });
 
     // Arrowing up past the top edge scrolls the focused row in below the header.
-    for (let i = 0; i < 16; i++) await page.keyboard.press("ArrowUp");
+    for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowUp");
     const focused = grid.locator("[role=row]:focus");
     await expect(focused).toBeVisible();
     // The Virtualizer re-lays out after the scroll, so wait for the row to settle.

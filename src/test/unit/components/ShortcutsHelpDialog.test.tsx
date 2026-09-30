@@ -82,6 +82,19 @@ describe("ShortcutsHelpDialog", () => {
     expect(within(thisScreen).getByText("shortcuts.none")).toBeInTheDocument();
   });
 
+  it("lists the Focus section last with its voice-runnable keys", async () => {
+    const { dialog } = await openHelp(["global.showHelp", "focus.next", "focus.previous"]);
+
+    const thisScreen = within(dialog).getByRole("region", { name: "shortcuts.onThisScreen" });
+    const focus = within(thisScreen).getByRole("region", {
+      name: "shortcuts.sections.focus",
+    });
+    expect(within(focus).getByText("shortcuts.focus.next")).toBeInTheDocument();
+    expect(within(focus).getByText("shortcuts.focus.previous")).toBeInTheDocument();
+    const sections = within(thisScreen).getAllByRole("region");
+    expect(sections[sections.length - 1]).toBe(focus);
+  });
+
   it("closes with Escape and returns focus to the button that opened it", async () => {
     const { user } = await openHelp(["global.showHelp"]);
 

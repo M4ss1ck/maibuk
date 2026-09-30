@@ -2245,6 +2245,37 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "voice-focus-keys",
+    area: "shell",
+    workflow:
+      'A Chapter is open and Dictation is listening; the microphone says a focus key\'s label ("Press Tab", "Press Shift Tab", "Press Up", "Press Down", "Press Left", "Press Right", "Press Home", "Press End", "Press Enter", "Press Space", "Press Escape"); asserts: focus moves to the asserted element, the dialog closes, the menu item focuses, or the control activates, the Dictation live region announces the Command, and the Chapter text never holds the spoken words',
+    edges: [
+      "Tab in Book Settings moves from Book Title to Subtitle; Shift Tab moves back",
+      "Down and Up move between Chapter rows; End and Home move to the last and first row",
+      "Enter on a Chapter row opens it; Space on the delete confirm's No keeps the Chapter",
+      "Escape closes the shortcuts help and returns focus to its trigger",
+      "Left and Right move inside the editor toolbar",
+    ],
+    terms: ["Voice Command", "Dictation"],
+    shortcuts: [
+      "focus.next",
+      "focus.previous",
+      "focus.up",
+      "focus.down",
+      "focus.left",
+      "focus.right",
+      "focus.first",
+      "focus.last",
+      "focus.activate",
+      "focus.toggle",
+      "focus.escape",
+    ],
+    routes: ["/settings", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "dictation-spoken-punctuation",
     area: "settings",
     workflow:
