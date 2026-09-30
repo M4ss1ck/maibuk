@@ -575,4 +575,133 @@ describe("Dictation Session", () => {
     expect(session.getSnapshot().level).toBe(0.3);
     expect(listener).toHaveBeenCalled();
   });
+
+  it("passes that through and announces a ran that run as a voice command", async () => {
+    const voice = vi.fn(() => "ran" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({
+        kind: "voice_command",
+        id: "editor.bold",
+        polarity: "on",
+        that: true,
+      })),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "ponlo en negrita", latencyMs: 5 });
+    expect(voice).toHaveBeenCalledWith({ id: "editor.bold", polarity: "on", that: true });
+    expect(notices).toContainEqual({
+      kind: "voice_command",
+      id: "editor.bold",
+      polarity: "on",
+      that: true,
+    });
+    expect(stats.summary().voiceCommandCount).toBe(1);
+  });
+
+  it("announces a refused that run without counting it", async () => {
+    const voice = vi.fn(() => "refused" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({
+        kind: "voice_command",
+        id: "editor.bold",
+        polarity: "on",
+        that: true,
+      })),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "ponlo en negrita", latencyMs: 5 });
+    expect(notices).toContainEqual({ kind: "voice_that_refused" });
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_command" }));
+    expect(stats.summary().voiceCommandCount).toBe(0);
+  });
+
+  it("announces an empty that run without counting it", async () => {
+    const voice = vi.fn(() => "empty" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({
+        kind: "voice_command",
+        id: "editor.bold",
+        polarity: "on",
+        that: true,
+      })),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "ponlo en negrita", latencyMs: 5 });
+    expect(notices).toContainEqual({ kind: "voice_that_empty" });
+    expect(stats.summary().voiceCommandCount).toBe(0);
+  });
+
+  it("stays silent when a that run is ignored", async () => {
+    const voice = vi.fn(() => "ignored" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({
+        kind: "voice_command",
+        id: "editor.bold",
+        polarity: "on",
+        that: true,
+      })),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats: createLineStats(),
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "ponlo en negrita", latencyMs: 5 });
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_that_refused" }));
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_that_empty" }));
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_command" }));
+  });
+
+  it("notifies nothing when a non-that run is refused", async () => {
+    const voice = vi.fn(() => "refused" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "editor.bold", polarity: "on" })),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats: createLineStats(),
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "ponlo en negrita", latencyMs: 5 });
+    expect(voice).toHaveBeenCalledWith({ id: "editor.bold", polarity: "on" });
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_command" }));
+    expect(notices).not.toContainEqual(
+      expect.objectContaining({ kind: "voice_that_refused" })
+    );
+  });
 });

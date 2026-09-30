@@ -1796,6 +1796,8 @@
     "announceLanguage": "Idioma del dictado: {{language}}",
     "scratchRefused": "No se eliminó nada. Borra eso solo elimina texto que no ha sido editado.",
     "scratchEmpty": "No hay nada que borrar.",
+    "voiceThatRefused": "No se cambió nada. Eso solo alcanza texto dictado que no se ha editado.",
+    "voiceThatEmpty": "No hay nada dictado que cambiar.",
     "voiceCommand": "Comando de voz: {{command}}",
     "voiceCommandOn": "Se activó {{command}}",
     "voiceCommandOff": "Se desactivó {{command}}",

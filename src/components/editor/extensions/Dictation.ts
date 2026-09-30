@@ -1,16 +1,16 @@
 import { Extension, type Editor } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { liftTarget } from "@tiptap/pm/transform";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
 import type { DictationTarget, ScratchOutcome } from "@/features/dictation/session";
 import type { DictationEdit } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
-import type { VoiceOutcome } from "@/features/dictation/voice-commands";
+import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 import { normalizeLanguage } from "@/features/settings/types";
-import { runVoiceCommand } from "@/components/editor/editor-commands";
+import { runVoiceCommand, VOICE_MARKS } from "@/components/editor/editor-commands";
 
 /** One dictated sentence: its range in the document and the exact text there. */
 export interface DictatedRange {
@@ -297,18 +297,17 @@ export function extractDictatedSentences(
   return out;
 }
 
-/** Remove the last dictated sentence as one undo step. Never touches typed text. */
-export function scratchDictation(editor: Editor): ScratchOutcome {
-  const pluginState = dictationPluginKey.getState(editor.state);
-  const history = pluginState?.history ?? [];
+/** The last dictated span scratch that would remove, without removing it. */
+export function lastDictatedRange(state: EditorState): { from: number; to: number } | "empty" | "refused" {
+  const history = dictationPluginKey.getState(state)?.history ?? [];
   if (history.length === 0) return "empty";
   const last = history[history.length - 1];
-  const doc = editor.state.doc;
+  const doc = state.doc;
   if (last.from < 0 || last.to > doc.content.size || last.from >= last.to) return "refused";
   if (last.dirty || doc.textBetween(last.from, last.to, "\n", "\n") !== last.text)
     return "refused";
-  // An entry without a sentence end is an unfinished sentence: remove only
-  // its last dictated line and keep the rest as the new last entry.
+  // An entry without a sentence end is an unfinished sentence: only its last
+  // dictated line is in reach, like scratch that removes it.
   if (!/[.!?]/.test(last.text)) {
     const lines = last.lines.filter(
       (line) => line.from < line.to && line.from >= last.from && line.to <= last.to
@@ -317,6 +316,51 @@ export function scratchDictation(editor: Editor): ScratchOutcome {
     const from = Math.max(line.from, last.from);
     const to = Math.min(line.to, last.to);
     if (from >= to) return "refused";
+    return { from, to };
+  }
+  return { from: last.from, to: last.to };
+}
+
+/** Apply one mark Command to the last dictated span, as one undo step. */
+export function markLastDictated(editor: Editor, run: VoiceCommandRun): VoiceOutcome {
+  const markName = VOICE_MARKS[run.id];
+  const type = markName ? editor.schema.marks[markName] : undefined;
+  if (!type) return "ignored";
+  const range = lastDictatedRange(editor.state);
+  if (range === "empty" || range === "refused") return range;
+  let { from, to } = range;
+  // The span's separating spaces and hard breaks stay plain, so the mark
+  // covers only the dictated words.
+  const text = editor.state.doc.textBetween(from, to, "\n", "\n");
+  const trimmed = text.trim();
+  if (trimmed === "") return "empty";
+  from += text.length - text.trimStart().length;
+  to -= text.length - text.trimEnd().length;
+  const tr = closeHistory(editor.state.tr);
+  if (run.polarity === "off") tr.removeMark(from, to, type);
+  else tr.addMark(from, to, type.create());
+  // Marks ride on the range, not the caret: keep the author's pending marks.
+  const stored = editor.state.storedMarks;
+  if (stored !== null) tr.setStoredMarks(stored);
+  editor.view.dispatch(tr);
+  return "ran";
+}
+
+/** Remove the last dictated sentence as one undo step. Never touches typed text. */
+export function scratchDictation(editor: Editor): ScratchOutcome {
+  const range = lastDictatedRange(editor.state);
+  if (range === "empty") return "empty";
+  if (range === "refused") return "refused";
+  const pluginState = dictationPluginKey.getState(editor.state);
+  const history = pluginState?.history ?? [];
+  const last = history[history.length - 1];
+  const { from, to } = range;
+  // An entry without a sentence end is an unfinished sentence: remove only
+  // its last dictated line and keep the rest as the new last entry.
+  if (!/[.!?]/.test(last.text)) {
+    const lines = last.lines.filter(
+      (line) => line.from < line.to && line.from >= last.from && line.to <= last.to
+    );
     const rest = lines.slice(0, -1);
     const tr = closeHistory(editor.state.tr);
     tr.delete(from, to);
@@ -645,7 +689,12 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
         // line (typed or dictated) opened, run the Command, then close again
         // so the next line starts a new one.
         editor.view.dispatch(closeHistory(editor.state.tr));
-        const outcome: VoiceOutcome = runVoiceCommand(editor, run);
+        // A real selection wins: "bold that" with selected text bolds the
+        // selection through the usual runner, not the dictated span.
+        const outcome: VoiceOutcome =
+          run.that && editor.state.selection.empty
+            ? markLastDictated(editor, run)
+            : runVoiceCommand(editor, run);
         editor.view.dispatch(closeHistory(editor.state.tr));
         return outcome;
       },

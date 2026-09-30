@@ -57,7 +57,11 @@ export type SessionNotice =
   | ({ kind: "voice_command" } & VoiceCommandRun)
   // A Voice Command had nothing to do ("undo that" on an empty history): the
   // live region says so, and the stats do not count it as a run.
-  | { kind: "voice_command_empty"; id: CommandId };
+  | { kind: "voice_command_empty"; id: CommandId }
+  // "Bold that" on edited dictated text: nothing changed, the live region says so.
+  | { kind: "voice_that_refused" }
+  // "Bold that" with nothing dictated yet: the live region says so.
+  | { kind: "voice_that_empty" };
 
 export interface SessionSnapshot {
   status: SessionStatus;
@@ -168,25 +172,34 @@ export function createDictationSession(deps: {
         // The Tutorial gate is the Shortcuts one: while a run is under way no
         // Voice Command acts, and its words are never inserted either. Only a
         // Command that really ran counts; an empty action is announced instead.
-        let voiceOutcome: VoiceOutcome = "ignored";
-        if (result.kind === "voice_command" && deps.voiceCommandsAllowed?.() !== false) {
-          voiceOutcome =
-            target?.voice?.({ id: result.id, polarity: result.polarity }) ?? "ignored";
+        if (result.kind === "voice_command") {
+          const run: VoiceCommandRun = {
+            id: result.id,
+            polarity: result.polarity,
+            ...(result.that ? { that: true as const } : {}),
+          };
+          const voiceOutcome: VoiceOutcome =
+            deps.voiceCommandsAllowed?.() !== false
+              ? (target?.voice?.(run) ?? "ignored")
+              : "ignored";
+          deps.stats.recordInterpreter(interpreterMs, 0, 0, voiceOutcome === "ran" ? 1 : 0);
+          if (voiceOutcome === "ran") {
+            deps.notify({ kind: "voice_command", ...run });
+          } else if (voiceOutcome === "empty") {
+            deps.notify(
+              run.that ? { kind: "voice_that_empty" } : { kind: "voice_command_empty", id: run.id }
+            );
+          } else if (voiceOutcome === "refused" && run.that) {
+            deps.notify({ kind: "voice_that_refused" });
+          }
+          return;
         }
         deps.stats.recordInterpreter(
           interpreterMs,
           result.kind === "edits" ? (result.spokenPunctuationCount ?? 0) : 0,
           result.kind === "scratch" ? 1 : 0,
-          voiceOutcome === "ran" ? 1 : 0
+          0
         );
-        if (result.kind === "voice_command") {
-          if (voiceOutcome === "ran") {
-            deps.notify({ kind: "voice_command", id: result.id, polarity: result.polarity });
-          } else if (voiceOutcome === "empty") {
-            deps.notify({ kind: "voice_command_empty", id: result.id });
-          }
-          return;
-        }
         if (result.kind === "scratch") {
           const outcome = target?.scratch?.() ?? "empty";
           if (outcome === "refused") deps.notify({ kind: "scratch_refused" });

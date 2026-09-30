@@ -261,4 +261,20 @@ describe("findPhraseConflict()", () => {
       }
     }
   });
+
+  it("refuses a demonstrative mark phrase as another Command's Voice Command", () => {
+    expect(
+      findPhraseConflict({
+        language: "en",
+        phrase: "bold that",
+        candidate: { kind: "alias", entryId: "coma" },
+        voice: {},
+      })
+    ).toEqual({ kind: "voiceCommand", commandId: "editor.bold", phrase: "bold that" });
+    expect(voice("editor.italic", "negrita eso")).toEqual({
+      kind: "voiceCommand",
+      commandId: "editor.bold",
+      phrase: "negrita eso",
+    });
+  });
 });

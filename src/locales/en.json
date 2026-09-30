@@ -1796,6 +1796,8 @@
     "announceLanguage": "Dictation language: {{language}}",
     "scratchRefused": "Nothing removed. Scratch that only removes text that hasn't been edited.",
     "scratchEmpty": "Nothing to remove.",
+    "voiceThatRefused": "Nothing changed. That only reaches dictated text that hasn't been edited.",
+    "voiceThatEmpty": "Nothing dictated to change.",
     "voiceCommand": "Voice command: {{command}}",
     "voiceCommandOn": "{{command}} on",
     "voiceCommandOff": "{{command}} off",

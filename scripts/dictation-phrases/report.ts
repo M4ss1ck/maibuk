@@ -24,7 +24,10 @@ const pct = (rate: number) => `${Math.round(rate * 100)}%`;
 const cell = (text: string) => text.replace(/\|/g, "\\|") || "(nothing)";
 
 function label(phrase: PhraseScore): string {
-  return phrase.row.kind === "voice" ? phrase.row.split.id : phrase.row.entry.id;
+  const row = phrase.row;
+  if (row.kind === "voice") return row.split.id;
+  if (row.kind === "voice_that") return row.id;
+  return row.entry.id;
 }
 
 /** The ship bars one model fails (issue #285); empty when it passes. */

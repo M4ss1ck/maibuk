@@ -45,7 +45,9 @@ interface LanguageData {
 // Each line starts with a Voice Command verb so the whole-line match gets past
 // the verb before it fails, repeats the prose run the synthetic phrases start
 // with, and hits every kind of match: marks, layout, cap, literal, Vocabulary,
-// and bare phrase prefixes ("question", "open", "nuevo") that miss.
+// and bare phrase prefixes ("question", "open", "nuevo") that miss, and ends
+// with the language's demonstrative, so the match also tries the line without
+// it ("bold that").
 const DATA: Record<DictationLanguage, LanguageData> = {
   en: {
     prose: ["the", "quiet", "river", "ran", "past", "our", "old", "mill"],
@@ -57,7 +59,7 @@ const DATA: Record<DictationLanguage, LanguageData> = {
       "make the quiet river ran past our old mill comma the quiet river ran past our old mill " +
       "period question the quiet river ran past our old mill question mark new paragraph " +
       "capitalize moonshine said tip tap the quiet river ran past literal comma our old mill " +
-      "open quote the quiet river ran close quote exclamation point new line open the old mill",
+      "open quote the quiet river ran close quote exclamation point new line open the old mill that",
     before:
       "The mill had stood by the river for longer than anyone in the village could say, and " +
       "every spring the water rose to its lowest window and fell back again. We walked down " +
@@ -73,7 +75,7 @@ const DATA: Record<DictationLanguage, LanguageData> = {
       "poner el viejo molino junto al río que corre coma el viejo molino junto al río que corre " +
       "punto y coma abre el viejo molino junto al río que corre signo de interrogación " +
       "nuevo párrafo mayúscula moonshine dijo tip tap el viejo molino junto al literal coma " +
-      "río que corre abre comillas el viejo molino cierra comillas nueva línea nuevo el molino",
+      "río que corre abre comillas el viejo molino cierra comillas nueva línea nuevo el molino eso",
     before:
       "El molino llevaba junto al río más tiempo del que nadie en el pueblo podía recordar, y " +
       "cada primavera el agua subía hasta su ventana más baja y volvía a bajar. ¿Bajábamos a " +

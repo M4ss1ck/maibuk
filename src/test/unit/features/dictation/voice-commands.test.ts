@@ -12,6 +12,8 @@ import {
   rewriteHeard,
   voiceCommandPhrases,
   voiceEligibleCommands,
+  voiceThatPhrases,
+  type CustomVoiceCommands,
   type VoiceCommandTable,
   type VoiceVerbClass,
 } from "@/features/dictation/voice-commands";
@@ -225,6 +227,126 @@ describe("matchVoiceCommand()", () => {
     expect(match("es", "nuevo párrafo")).toBeNull();
     expect(match("en", "new paragraph")).toBeNull();
     expect(match("en", "scratch that")).toBeNull();
+  });
+});
+
+describe("matchVoiceCommand() demonstratives", () => {
+  const tables: Record<DictationLanguage, VoiceCommandTable> = {
+    en: buildVoiceCommandTable("en"),
+    es: buildVoiceCommandTable("es"),
+  };
+  const match = (language: DictationLanguage, line: string) =>
+    matchVoiceCommand(tables[language], normalizePhrase(line).split(" "));
+
+  it("runs a mark verb and target with the demonstrative on the last span", () => {
+    expect(match("en", "make bold that")).toEqual({ id: "editor.bold", polarity: "on", that: true });
+    expect(match("en", "remove bold that")).toEqual({
+      id: "editor.bold",
+      polarity: "off",
+      that: true,
+    });
+    expect(match("en", "turn off italics that")).toEqual({
+      id: "editor.italic",
+      polarity: "off",
+      that: true,
+    });
+    expect(match("en", "set in italics that")).toEqual({
+      id: "editor.italic",
+      polarity: "on",
+      that: true,
+    });
+    expect(match("es", "poner en negrita eso")).toEqual({
+      id: "editor.bold",
+      polarity: "on",
+      that: true,
+    });
+    expect(match("es", "quitar la negrita esto")).toEqual({
+      id: "editor.bold",
+      polarity: "off",
+      that: true,
+    });
+  });
+
+  it("runs a bare mark target with the demonstrative", () => {
+    expect(match("en", "bold that")).toEqual({ id: "editor.bold", polarity: "on", that: true });
+    expect(match("en", "underline that")).toEqual({
+      id: "editor.underline",
+      polarity: "on",
+      that: true,
+    });
+    expect(match("es", "negrita eso")).toEqual({ id: "editor.bold", polarity: "on", that: true });
+    expect(match("es", "cursiva esto")).toEqual({
+      id: "editor.italic",
+      polarity: "on",
+      that: true,
+    });
+  });
+
+  it("reads the demonstrative through the heard rewrite", () => {
+    const esTable = buildVoiceCommandTable("es");
+    expect(matchVoiceCommand(esTable, phraseWords("una grita eso"))).toEqual({
+      id: "editor.bold",
+      polarity: "on",
+      that: true,
+    });
+    expect(matchVoiceCommand(esTable, phraseWords("quitad negrita eso"))).toEqual({
+      id: "editor.bold",
+      polarity: "off",
+      that: true,
+    });
+  });
+
+  it("leaves plain phrases without the demonstrative flag", () => {
+    expect(match("en", "undo that")).toEqual({ id: "common.undo", polarity: null });
+    expect(match("es", "deshacer eso")).toEqual({ id: "common.undo", polarity: null });
+    expect(match("en", "make bold")).toEqual({ id: "editor.bold", polarity: "on" });
+  });
+
+  it("never runs a non-mark Command with the demonstrative", () => {
+    expect(match("en", "make heading one that")).toBeNull();
+    expect(match("en", "start list that")).toBeNull();
+    expect(match("en", "heading one that")).toBeNull();
+    expect(match("en", "center text that")).toBeNull();
+    expect(match("en", "that")).toBeNull();
+    expect(match("en", "bold that now")).toBeNull();
+    expect(match("en", "make bold that that")).toBeNull();
+  });
+
+  it("follows the author's list for the bare form", () => {
+    const custom: CustomVoiceCommands = { "editor.bold": { en: ["embolden text"] } };
+    const table = buildVoiceCommandTable("en", custom);
+    const run = (line: string) => matchVoiceCommand(table, normalizePhrase(line).split(" "));
+    expect(run("bold that")).toBeNull();
+    expect(run("make bold that")).toBeNull();
+    expect(run("embolden text that")).toEqual({ id: "editor.bold", polarity: "on", that: true });
+  });
+});
+
+describe("voiceThatPhrases()", () => {
+  it("matches every demonstrative phrase on its own mark with that set", () => {
+    for (const language of ["en", "es"] as const) {
+      const table = buildVoiceCommandTable(language);
+      const punctuation = new Set(
+        entriesFor(language).flatMap((entry) => defaultTriggers(entry).map(normalizePhrase))
+      );
+      const owner = new Map<string, string>();
+      const phrases = voiceThatPhrases(language);
+      expect(phrases.length).toBeGreaterThan(0);
+      for (const { id, phrase } of phrases) {
+        const normalized = normalizePhrase(phrase);
+        expect(wordsOf(phrase).length, `${id}: ${phrase}`).toBeGreaterThanOrEqual(2);
+        expect(matchVoiceCommand(table, normalized.split(" ")), `${id}: ${phrase}`).toMatchObject(
+          { id, that: true }
+        );
+        expect(punctuation.has(normalized), `${id}: ${phrase}`).toBe(false);
+        const previous = owner.get(normalized);
+        expect(
+          previous === undefined || previous === id,
+          `${normalized}: ${previous} and ${id}`
+        ).toBe(true);
+        owner.set(normalized, id);
+      }
+    }
   });
 });
 

@@ -112,7 +112,7 @@ describe("renderReport()", () => {
     const report = renderReport([model("fast", cleanClips()), model("accurate", cleanClips())]);
     expect(report.failures).toEqual([]);
     expect(report.markdown).toContain(
-      "| moonshine-accurate-en | accurate | 55 | 100% | 100% | 100% | 0 (0) | pass |"
+      `| moonshine-accurate-en | accurate | ${phraseItems("en").length} | 100% | 100% | 100% | 0 (0) | pass |`
     );
     expect(report.markdown).toContain(
       "## en: under the bar on Accurate\n\nReported, not gated: this language is outside the ship bar.\n\nNone."

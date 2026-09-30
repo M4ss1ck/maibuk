@@ -2,13 +2,17 @@
 // recording script must keep covering every default phrase's units, and the
 // scorer must turn transcripts into the right verdicts. No model runs here.
 import { describe, expect, it } from "vitest";
+import { INITIAL_INTERPRETER_STATE, interpret } from "@/features/dictation/interpreter";
 import { entriesFor, catalogCapabilities } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage } from "@/features/dictation/types";
+import { voiceThatPhrases } from "@/features/dictation/voice-commands";
 import {
   defaultPhrases,
+  defaultTable,
   phraseCount,
   proseTriggers,
   scoreModel,
+  spokenWords,
   splitVoicePhrase,
   voiceClipHit,
   voiceUnits,
@@ -19,6 +23,25 @@ import { clipSlug, phraseItems } from "@/test/support/dictation-phrase-set";
 const LANGUAGES: DictationLanguage[] = ["en", "es"];
 const NO_PUNCTUATION = { casing: false, punctuation: false, streaming: true };
 const PUNCTUATES = { casing: true, punctuation: true, streaming: true };
+
+/** The demonstrative mark clips (issue #268), recorded as whole clips. */
+const NEW_VOICE: Record<DictationLanguage, readonly string[]> = {
+  en: ["make bold that", "remove italics that", "bold that", "underline that"],
+  es: ["poner negrita eso", "quitar cursiva esto", "negrita eso", "subrayado esto"],
+};
+
+/** Near misses of the new shape that must stay text. */
+const NEW_PROSE: Record<DictationLanguage, readonly string[]> = {
+  en: ["I said that.", "Make that bold.", "That is bold."],
+  es: ["Eso es negrita.", "Pon eso en negrita.", "Dije eso."],
+};
+
+/** The spoken keys of a language's default demonstrative mark phrases. */
+function thatSpokenKeys(language: DictationLanguage): Set<string> {
+  return new Set(
+    voiceThatPhrases(language).map(({ phrase }) => spokenWords(phrase, language).join(" "))
+  );
+}
 
 /** Every clip heard exactly as it was read. */
 function perfectClips(language: DictationLanguage): Clip[] {
@@ -33,8 +56,23 @@ describe("the recording script", () => {
   });
 
   it.each(LANGUAGES)("%s: every voice line is a default phrase", (language) => {
+    // A demonstrative line ("bold that", "poner negrita eso") is a whole-clip
+    // that phrase, matched by its spoken key, not a verb-target pair.
+    const that = thatSpokenKeys(language);
     for (const item of phraseItems(language).filter((entry) => entry.kind === "voice")) {
+      if (that.has(spokenWords(item.say, language).join(" "))) continue;
       expect(splitVoicePhrase(item.say, language), item.say).not.toBeNull();
+    }
+  });
+
+  it.each(LANGUAGES)("%s: every voice_that line has exactly one voice_that row", (language) => {
+    const rows = defaultPhrases(language).filter((row) => row.kind === "voice_that");
+    const that = thatSpokenKeys(language);
+    for (const item of phraseItems(language).filter((entry) => entry.kind === "voice")) {
+      const key = spokenWords(item.say, language).join(" ");
+      if (!that.has(key)) continue;
+      const matches = rows.filter((row) => spokenWords(row.phrase, language).join(" ") === key);
+      expect(matches, item.say).toHaveLength(1);
     }
   });
 
@@ -68,6 +106,33 @@ describe("the recording script", () => {
   it.each(LANGUAGES)("%s: every voice line runs its Command on its own text", (language) => {
     for (const item of phraseItems(language).filter((entry) => entry.kind === "voice")) {
       expect(voiceClipHit([item.say], item, catalogCapabilities(language)), item.say).toBe(true);
+    }
+  });
+
+  it.each(LANGUAGES)("%s: new demonstrative lines run a mark with that:true", (language) => {
+    const capabilities = catalogCapabilities(language);
+    const table = defaultTable(language, capabilities);
+    for (const say of NEW_VOICE[language]) {
+      const item = phraseItems(language).find((entry) => entry.say === say);
+      expect(item, say).toBeDefined();
+      if (!item) continue;
+      expect(voiceClipHit([item.say], item, capabilities), say).toBe(true);
+      const result = interpret({
+        line: say,
+        before: "",
+        capabilities,
+        table,
+        state: INITIAL_INTERPRETER_STATE,
+      });
+      expect(result.result, say).toMatchObject({ kind: "voice_command", that: true });
+    }
+  });
+
+  it.each(LANGUAGES)("%s: new prose lines stay text on their own words", (language) => {
+    for (const say of NEW_PROSE[language]) {
+      const item = phraseItems(language).find((entry) => entry.say === say);
+      expect(item, say).toBeDefined();
+      expect(proseTriggers([say], language, catalogCapabilities(language)), say).toBe(false);
     }
   });
 
@@ -278,5 +343,41 @@ describe("scoreModel()", () => {
     const rate = (phrase: string) => score.phrases.find((row) => row.row.phrase === phrase)?.rate;
     expect(rate("cierra interrogación")).toBe(1);
     expect(rate("signo de interrogación")).toBe(1);
+  });
+
+  it("voiceClipHit needs the demonstrative flag to match", () => {
+    const item = phraseItems("en").find((entry) => entry.say === "make bold that");
+    expect(item).toBeDefined();
+    if (!item) return;
+    const capabilities = catalogCapabilities("en");
+    expect(voiceClipHit(["make bold"], item, capabilities)).toBe(false);
+    expect(voiceClipHit(["Make bold that."], item, capabilities)).toBe(true);
+  });
+
+  it("scores a voice_that row from its clip and ignores one with no clip", () => {
+    const item = phraseItems("en").find((entry) => entry.say === "make bold that");
+    expect(item).toBeDefined();
+    if (!item) return;
+    const score = scoreModel({
+      language: "en",
+      capabilities: NO_PUNCTUATION,
+      clips: [{ itemId: item.id, finals: [item.say] }],
+    });
+    expect(
+      score.phrases.find(
+        (row) => row.row.kind === "voice_that" && row.row.phrase === "make bold that"
+      )
+    ).toMatchObject({ source: "recorded", rate: 1 });
+    // A that phrase nobody recorded is neither counted nor missing.
+    expect(
+      score.phrases.some(
+        (row) => row.row.kind === "voice_that" && row.row.phrase === "set boldface that"
+      )
+    ).toBe(false);
+    expect(score.voiceRate).toBeGreaterThan(0);
+    expect(score.missingItems).not.toContain(item.id);
+    expect(score.missingItems).toContain(
+      phraseItems("en").find((entry) => entry.say === "bold that")?.id
+    );
   });
 });
