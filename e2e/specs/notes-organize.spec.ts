@@ -27,7 +27,7 @@ const addTag = (page: Page) => page.getByRole("button", { name: "Add tag" });
  * measuring copy, so only the visible span counts.
  */
 const lastEdited = (page: Page, text: string) =>
-  page.locator('[data-tutorial="notes.tags"]').getByText(text).filter({ visible: true }).first();
+  page.locator('[data-tutorial~="notes.tags"]').getByText(text).filter({ visible: true }).first();
 
 /** Opens a seeded Note from the Gallery the way an author reaches it. */
 async function openNote(page: Page, title: string) {

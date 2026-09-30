@@ -231,6 +231,7 @@ export default defineConfig(() => ({
         "src/lib/db/memory-database.ts",
         "src/components/tutorial/TutorialCard.tsx",
         "src/components/tutorial/TutorialRunner.tsx",
+        "src/components/tutorial/TutorialIllustration.tsx",
         "src/components/tutorial/TutorialOffer.tsx",
         "src/components/settings/TutorialSection.tsx",
       ],

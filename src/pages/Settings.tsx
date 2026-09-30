@@ -417,7 +417,7 @@ export function Settings() {
             </p>
             <Button
               variant="secondary"
-              data-tutorial="settings.shortcuts"
+              data-tutorial="settings.shortcuts dictation.voice-commands"
               onClick={() => setShowShortcutEditor(true)}
             >
               {t("shortcutEditor.open")}
@@ -653,7 +653,7 @@ export function Settings() {
           id="dictation"
           className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
         >
-          <h2 className="text-lg text-primary font-medium mb-4">
+          <h2 className="text-lg text-primary font-medium mb-4" data-tutorial="dictation.overview">
             {t("dictation.section.title")}
           </h2>
           <DictationSection />

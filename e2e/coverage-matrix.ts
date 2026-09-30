@@ -2071,6 +2071,28 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "tutorial-dictation-section",
+    area: "tutorial",
+    workflow:
+      'Settings → Tutorial "Dictation" row by keyboard; walks the six Dictation steps to Done without starting Dictation',
+    edges: [],
+    terms: [
+      "Dictation",
+      "Dictation Session",
+      "Dictation Model",
+      "Dictation Language",
+      "Dictation Command Interpreter",
+      "Spoken Punctuation",
+      "Voice Command",
+      "Dictation Vocabulary",
+    ],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "tutorial-settings-esc",
     area: "tutorial",
     workflow: "Esc mid-run returns to Settings, focus on launching button, section not done",

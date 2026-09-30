@@ -4,6 +4,7 @@ import { Dialog, Heading } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { TutorialIllustration } from "@/components/tutorial/TutorialIllustration";
 import type { TutorialStep } from "@/features/tutorial/types";
 
 export interface TutorialCardProps {
@@ -68,6 +69,11 @@ export function TutorialCard({
         <Heading slot="title" className="text-lg font-semibold tracking-tight">
           {translate(step.titleKey)}
         </Heading>
+        {step.illustration && (
+          <div className="mt-3">
+            <TutorialIllustration id={step.illustration} />
+          </div>
+        )}
         {step.image && (
           <img
             src={step.image.src}

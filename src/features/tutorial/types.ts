@@ -6,10 +6,17 @@ export const TUTORIAL_SECTION_IDS = [
   "canvas-gallery",
   "canvas",
   "ephemeral",
+  "dictation",
   "settings",
 ] as const;
 
 export type TutorialSectionId = (typeof TUTORIAL_SECTION_IDS)[number];
+
+/**
+ * A drawing the TutorialCard renders from app tokens and i18n, so it follows
+ * theme and locale; it replaces an image asset.
+ */
+export type TutorialIllustrationId = "dictation";
 
 /** Where a run came from; decides where focus lands when it ends. */
 export type TutorialOrigin = "offer" | "settings" | "help" | "shortcut";
@@ -32,6 +39,8 @@ export interface TutorialStep {
   bodyKey: string;
   /** Optional image shown above the text (an app asset URL) with its localized alt text. */
   image?: { src: string; altKey: string };
+  /** Optional illustration the card draws from app tokens and i18n. */
+  illustration?: TutorialIllustrationId;
   link?: TutorialStepLink;
   /** Glossary terms (CONTEXT.md) this step teaches; the coverage gate reads them. */
   terms: readonly string[];

@@ -59,10 +59,15 @@ describe("coverage gate: every glossary concept in scope has a Tutorial step", (
     expect([...taught].filter((term) => !known.has(term))).toEqual([]);
     expect(Object.keys(TUTORIAL_OUT_OF_SCOPE_TERMS).filter((term) => !known.has(term))).toEqual([]);
   });
+
+  it("keeps no out-of-scope reason promising a future section", () => {
+    const reasons = Object.values(TUTORIAL_OUT_OF_SCOPE_TERMS);
+    expect(reasons.filter((reason) => reason.includes("#266"))).toEqual([]);
+  });
 });
 
 describe("step definitions", () => {
-  it("lists the eight sections in the order the Tutorial walks them", () => {
+  it("lists the nine sections in the order the Tutorial walks them", () => {
     expect(TUTORIAL_SECTIONS.map((section) => section.id)).toEqual([...TUTORIAL_SECTION_IDS]);
   });
 
@@ -90,7 +95,7 @@ describe("step definitions", () => {
 
     let back: TutorialPosition | null = {
       section: "settings",
-      step: TUTORIAL_SECTIONS[7].steps.length - 1,
+      step: TUTORIAL_SECTIONS[TUTORIAL_SECTIONS.length - 1].steps.length - 1,
     };
     const reversed: string[] = [];
     while (back) {

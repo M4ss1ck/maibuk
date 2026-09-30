@@ -1460,7 +1460,15 @@
       "canvas-gallery": "Galería de Lienzos",
       "canvas": "Lienzo",
       "ephemeral": "Efímero",
+      "dictation": "Dictado",
       "settings": "Ajustes"
+    },
+    "illustrations": {
+      "dictation": {
+        "label": "El botón de dictado escuchando mientras se dice «hola coma abre interrogación cómo estás cierra interrogación», que aparece en el texto como «Hola, ¿cómo estás?»",
+        "spoken": "hola coma abre interrogación cómo estás cierra interrogación",
+        "written": "Hola, ¿cómo estás?"
+      }
     },
     "steps": {
       "books": {
@@ -1627,6 +1635,32 @@
         "to-note": {
           "title": "Conservarlo como Nota",
           "body": "¿Cambiaste de idea? Convierte lo que escribiste en una Nota."
+        }
+      },
+      "dictation": {
+        "overview": {
+          "title": "Dictado",
+          "body": "El dictado convierte tu voz en texto en el editor donde está el cursor, sin conexión, en este dispositivo. Empieza una sesión de dictado con el botón del micrófono al pie del editor; sigue al cursor hasta que la detengas. Cada línea terminada pasa por reglas fijas que convierten palabras como «coma» en puntuación antes de llegar a tu texto."
+        },
+        "models": {
+          "title": "Modelos de dictado",
+          "body": "El dictado necesita un modelo para cada idioma, que se descarga una vez y se queda en este dispositivo. Un modelo rápido es más pequeño y ligero; uno preciso comete menos errores. Donde el dictado no está disponible, esta sección dice dónde funciona."
+        },
+        "language": {
+          "title": "Idioma del dictado",
+          "body": "El dictado escucha el idioma del editor en el que escribe, salvo que elijas otro. La puntuación dictada, los comandos de voz y tu vocabulario se guardan por idioma: cada pestaña muestra los de ese idioma."
+        },
+        "punctuation": {
+          "title": "Puntuación dictada",
+          "body": "Di «coma» o «punto y aparte» mientras dictas y obtienes el signo o el salto, no las palabras. «Borra eso» quita la última frase que dictaste, nunca lo que escribiste. Aquí desactivas cualquiera o le das frases extra."
+        },
+        "vocabulary": {
+          "title": "Vocabulario de dictado",
+          "body": "Enséñale al dictado los nombres que oye mal: lo que oye y lo que debe escribir. Desde entonces los escribe a tu manera. Tu vocabulario se queda en este dispositivo."
+        },
+        "voice-commands": {
+          "title": "Comandos de voz",
+          "body": "Una frase corta dicha sola, como «poner negrita», ejecuta un comando igual que su atajo. En el Editor de atajos, cada comando que puedes decir tiene una lista de voz donde agregas tus propias frases."
         }
       },
       "settings": {

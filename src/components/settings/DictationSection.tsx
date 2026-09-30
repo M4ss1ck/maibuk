@@ -55,7 +55,10 @@ export function DictationSection() {
   if (platform && support === null && !settled) return null;
   if (!support?.supported || !platform) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p
+        className="text-sm text-muted-foreground"
+        data-tutorial="dictation.models dictation.language dictation.punctuation dictation.vocabulary"
+      >
         {t(
           support?.reason === "library_missing"
             ? "dictation.section.libraryMissing"
@@ -86,6 +89,7 @@ export function DictationSection() {
           selected={languages.includes(chosen) ? chosen : languages[0]}
           onChange={setChosen}
           ariaLabel={t("dictation.language")}
+          tutorialAnchor="dictation.language"
         >
           {(language) => {
             const specs = byLanguage.get(language) ?? [];
@@ -94,7 +98,7 @@ export function DictationSection() {
               catalogCapabilities(language);
             return (
               <div className="space-y-6">
-                <div className="space-y-2">
+                <div className="space-y-2" data-tutorial="dictation.models">
                   <h3 className="font-medium">{t("dictation.section.models")}</h3>
                   {specs.map((spec) => {
                     const name = `${t(`dictation.languageNames.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
@@ -191,8 +195,12 @@ export function DictationSection() {
                     );
                   })}
                 </div>
-                <SpokenPunctuationSection language={language} capabilities={capabilities} />
-                <DictationVocabularySection language={language} />
+                <div data-tutorial="dictation.punctuation">
+                  <SpokenPunctuationSection language={language} capabilities={capabilities} />
+                </div>
+                <div data-tutorial="dictation.vocabulary">
+                  <DictationVocabularySection language={language} />
+                </div>
               </div>
             );
           }}

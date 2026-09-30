@@ -53,6 +53,52 @@ vi.mock("@/features/backup/lifecycle", () => ({
   createDailyBackup: vi.fn(async () => undefined),
 }));
 
+// The Tutorial must never start Dictation. The runtime is a spy whose model
+// install and host start/load record any call; nothing here is a real engine.
+const dictationRuntime = vi.hoisted(() => ({
+  getDictation: vi.fn(),
+  install: vi.fn(async () => {}),
+  remove: vi.fn(async () => {}),
+  cancelInstall: vi.fn(),
+  start: vi.fn(async () => {}),
+  load: vi.fn(async () => {}),
+}));
+
+vi.mock("@/features/dictation/runtime", () => ({
+  getDictation: dictationRuntime.getDictation,
+  resetDictationForTests: vi.fn(),
+}));
+
+const EMPTY_LINE_SUMMARY = {
+  lines: 0,
+  medianLatencyMs: null,
+  medianInterpreterMs: null,
+  maxInterpreterMs: null,
+  spokenPunctuationCount: 0,
+  scratchCount: 0,
+  voiceCommandCount: 0,
+};
+
+dictationRuntime.getDictation.mockImplementation(async () => ({
+  session: {
+    toggle: vi.fn(async () => {}),
+    start: vi.fn(async () => {}),
+    stop: vi.fn(async () => {}),
+    setLanguage: vi.fn(async () => {}),
+    getSnapshot: () => ({ status: "idle" }),
+  },
+  host: {
+    start: dictationRuntime.start,
+    load: dictationRuntime.load,
+    inputDevice: async () => null,
+  },
+  install: dictationRuntime.install,
+  remove: dictationRuntime.remove,
+  cancelInstall: dictationRuntime.cancelInstall,
+  setNotifier: vi.fn(),
+  stats: { summary: () => EMPTY_LINE_SUMMARY },
+}));
+
 vi.mock("@/components/settings/MetricsSection", () => ({
   MetricsSection: () => <h2>Metrics</h2>,
 }));
@@ -104,6 +150,7 @@ const { useNoteStore } = await import("@/features/notes/store");
 const { useCanvasStore } = await import("@/features/canvas/store");
 const { useBoundShortcutStore } = await import("@/lib/bound-shortcuts");
 const { Modal } = await import("@/components/ui/Modal");
+const { tutorialTargetSelector } = await import("@/components/tutorial/TutorialRunner");
 const { resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
 const { resetAutoSyncForTests, runAutoSync } = await import("@/features/sync/auto-sync");
 const { useSyncStore } = await import("@/features/sync/store");
@@ -191,6 +238,11 @@ beforeEach(async () => {
   localStorage.clear();
   await i18n.changeLanguage("en");
   useTutorialStore.setState({ progress: EMPTY_TUTORIAL_PROGRESS, status: "idle", run: null });
+  dictationRuntime.install.mockClear();
+  dictationRuntime.remove.mockClear();
+  dictationRuntime.cancelInstall.mockClear();
+  dictationRuntime.start.mockClear();
+  dictationRuntime.load.mockClear();
   // Spell Check runs in a worker jsdom does not have.
   useSettingsStore.setState({
     lastPath: null,
@@ -235,7 +287,7 @@ describe("the first-launch offer", () => {
         // Anchor gate: the control this step points at is on this screen,
         // rendered from the Tutorial Library's sample content.
         expect(
-          document.querySelector(`[data-tutorial="${step.id}"]`),
+          document.querySelector(tutorialTargetSelector(step.id)),
           `${step.id} has no target on ${path}`
         ).not.toBeNull();
         expect(path).toBe(step.route ?? section.route);
@@ -392,6 +444,66 @@ describe("running the Tutorial again", () => {
     const { progress } = useTutorialStore.getState();
     expect(progress.sections["cover-designer"]?.completedAt).toEqual(expect.any(Number));
     expect(progress.completedAt).toBeNull();
+  }, 60_000);
+
+  it("runs the Dictation section from Settings by keyboard; its steps point at the Dictation settings and never start the recognizer", async () => {
+    dismissOffer();
+    const user = userEvent.setup();
+    renderApp("/settings");
+    const list = await screen.findByRole("listbox", { name: en("tutorial.settings.sectionsLabel") });
+    const options = within(list).getAllByRole("option");
+    const dictation = TUTORIAL_SECTIONS.find((section) => section.id === "dictation");
+    if (!dictation) throw new Error("no Dictation Tutorial section");
+    const index = TUTORIAL_SECTIONS.indexOf(dictation);
+    expect(options[index]).toHaveTextContent(
+      `${en("tutorial.sections.dictation")} · ${en("tutorial.settings.steps", { count: dictation.steps.length })}`
+    );
+
+    options[0].focus();
+    for (let i = 0; i < index; i++) await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(options[index]);
+    await user.keyboard("{Enter}");
+
+    for (const [stepIndex, step] of dictation.steps.entries()) {
+      const dialog = await findCard(step.id);
+      // The card names its section and where the step sits inside it.
+      expect(dialog).toHaveTextContent(en("tutorial.sections.dictation"));
+      expect(dialog).toHaveTextContent(
+        en("tutorial.card.progress", { current: stepIndex + 1, total: dictation.steps.length })
+      );
+      // Anchor gate: every Dictation step points at its element on this screen.
+      expect(
+        document.querySelector(tutorialTargetSelector(step.id)),
+        `${step.id} has no target on ${path}`
+      ).not.toBeNull();
+      const isLast = stepIndex === dictation.steps.length - 1;
+      await pressCardButton(user, en(isLast ? "tutorial.card.finish" : "tutorial.card.next"));
+    }
+
+    await waitFor(() => expect(path).toBe("/settings"), CARD_TIMEOUT);
+    await waitFor(() =>
+      expect(document.activeElement?.getAttribute("data-tutorial-trigger")).toBe(
+        "settings-section-dictation"
+      )
+    );
+    const { progress } = useTutorialStore.getState();
+    expect(progress.sections.dictation?.completedAt).toEqual(expect.any(Number));
+    expect(progress.completedAt).toBeNull();
+
+    // Nothing in the run reached for the recognizer or a model download.
+    expect(dictationRuntime.start).not.toHaveBeenCalled();
+    expect(dictationRuntime.load).not.toHaveBeenCalled();
+    expect(dictationRuntime.install).not.toHaveBeenCalled();
+    expect(dictationRuntime.remove).not.toHaveBeenCalled();
+
+    // A second run Skips by Escape and leaves the section Done.
+    await user.keyboard("{Enter}");
+    await findCard("dictation.overview");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(path).toBe("/settings"), CARD_TIMEOUT);
+    expect(useTutorialStore.getState().progress.sections.dictation?.completedAt).toEqual(
+      expect.any(Number)
+    );
   }, 60_000);
 
   it("Back crosses into the previous section's last step", async () => {

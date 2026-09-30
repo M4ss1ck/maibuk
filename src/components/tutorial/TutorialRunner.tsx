@@ -75,7 +75,9 @@ interface ReturnTarget {
 }
 
 export function tutorialTargetSelector(stepId: string): string {
-  return `[data-tutorial="${stepId}"]`;
+  // A token list (`data-tutorial="a b"`) matches every id in it, so several
+  // steps can point at the same element.
+  return `[data-tutorial~="${stepId}"]`;
 }
 
 function pathnameOf(route: string): string {
