@@ -1110,6 +1110,29 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     }
   );
 
+  it("keeps listening when a dialog hides the target and refuses a navigating run", async () => {
+    const session = handoffSession(routeForHandoff);
+    const target = fakeTarget("a");
+    let hidden = false;
+    target.isAvailable = () => !hidden;
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    hidden = true;
+    runCommand.mockResolvedValueOnce("refused-dialog-close");
+    host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+    await flushRuns();
+
+    expect(notices).toContainEqual({
+      kind: "voice_command_refused",
+      id: "global.gotoNotes",
+      reason: "dialog_refused",
+    });
+    expect(notices).not.toContainEqual({ kind: "stopped" });
+    expect(session.getSnapshot().status).toBe("listening");
+    expect(target.commits).toEqual([]);
+  });
+
   it("stops as today when the target leaves after a non-navigating run", async () => {
     const session = createDictationSession({
       host,

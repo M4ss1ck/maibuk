@@ -328,11 +328,13 @@ export function createDictationSession(deps: {
           if (outcome !== "ran") {
             // The screen did not change: the queued lines belong to the
             // editor that is still here, or to the clipboard path when none is.
+            // A target hidden behind the dialog that refused is still here, so
+            // the Session keeps listening and the refusal stays what is heard.
             const queued = pending.queue;
             handoff = null;
             const current = active();
             for (const line of queued) applyFinishedLine(line, current);
-            if (!current) void stop();
+            if (targets.size === 0) void stop();
             return;
           }
           pending.timer = setTimeout(onHandoffTimeout, HANDOFF_LIMIT_MS);
