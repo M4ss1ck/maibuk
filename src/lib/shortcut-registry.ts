@@ -144,7 +144,17 @@ export const COMMANDS = {
     contexts: ["global"],
     defaults: [["Mod+Shift+y"]],
   },
-  "global.showHelp": { labelKey: "shortcuts.showHelp", contexts: ["global"], defaults: [["?"]] },
+  "global.showHelp": {
+    labelKey: "shortcuts.showHelp",
+    contexts: ["global"],
+    defaults: [["?"]],
+    voice: {
+      phrases: {
+        en: ["show shortcuts help", "show voice commands"],
+        es: ["mostrar ayuda de atajos", "mostrar comandos de voz"],
+      },
+    },
+  },
   "global.toggleAlwaysOnTop": {
     labelKey: "shortcuts.toggleAlwaysOnTop",
     contexts: ["global"],

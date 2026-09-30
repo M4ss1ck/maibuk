@@ -4,6 +4,7 @@ import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { useModalStore } from "@/components/ui/modal-store";
+import { useDictationStore } from "@/features/dictation/store";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { DEFAULT_SHORTCUT_SETTINGS } from "@/lib/shortcut-resolve";
@@ -42,6 +43,7 @@ describe("ShortcutsHelpDialog", () => {
   beforeEach(() => {
     useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
     useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
+    useDictationStore.setState({ enabled: false, languageOverride: null });
   });
 
   it("lists what works on this screen first, then the rest by section", async () => {
@@ -119,5 +121,41 @@ describe("ShortcutsHelpDialog", () => {
     const thisScreen = within(dialog).getByRole("region", { name: "shortcuts.onThisScreen" });
     expect(within(thisScreen).queryByText("shortcuts.showHelp")).not.toBeInTheDocument();
     expect(within(thisScreen).getByText("shortcuts.none")).toBeInTheDocument();
+  });
+
+  it("shows no voice phrases when Dictation is off", async () => {
+    useDictationStore.setState({ enabled: false });
+    const { dialog } = await openHelp(["global.showHelp", "global.gotoNotes"]);
+
+    expect(within(dialog).queryByText("Go to Notes")).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByText("shortcutEditor.voice.rowLabel")
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the derived phrase when Dictation is on", async () => {
+    useDictationStore.setState({ enabled: true, languageOverride: null });
+    const { dialog } = await openHelp(["global.showHelp", "global.gotoNotes"]);
+
+    expect(within(dialog).getByText("Go to Notes")).toBeInTheDocument();
+  });
+
+  it("shows the custom phrase instead of the default", async () => {
+    useDictationStore.setState({ enabled: true, languageOverride: null });
+    useShortcutSettingsStore.getState().setCommandVoicePhrases("global.gotoNotes", "en", [
+      "open notes list",
+    ]);
+    const { dialog } = await openHelp(["global.showHelp", "global.gotoNotes"]);
+
+    expect(within(dialog).getByText("open notes list")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Go to Notes")).not.toBeInTheDocument();
+  });
+
+  it("shows the Spanish phrase for the Spanish Dictation Language", async () => {
+    useDictationStore.setState({ enabled: true, languageOverride: "es" });
+    const { dialog } = await openHelp(["global.showHelp", "global.gotoNotes"]);
+
+    expect(within(dialog).getByText("Ir a Notas")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Go to Notes")).not.toBeInTheDocument();
   });
 });
