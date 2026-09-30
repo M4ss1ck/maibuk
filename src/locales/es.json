@@ -1805,6 +1805,8 @@
     "settings": "Ajustes de dictado",
     "announceStarted": "Dictado activado, {{language}}",
     "announceStopped": "Dictado desactivado",
+    "announceCapsOn": "Mayúsculas activadas",
+    "announceCapsOff": "Mayúsculas desactivadas",
     "announceLanguage": "Idioma del dictado: {{language}}",
     "scratchRefused": "No se eliminó nada. Borra eso solo elimina texto que no ha sido editado.",
     "scratchEmpty": "No hay nada que borrar.",
@@ -1869,6 +1871,8 @@
         "line_break": "Salto de línea",
         "list_item": "Elemento de lista",
         "cap": "Pone mayúscula a la palabra siguiente",
+        "caps_on": "Activa las mayúsculas",
+        "caps_off": "Desactiva las mayúsculas",
         "literal": "Escribe la palabra siguiente tal cual",
         "scratch": "Borra la última frase dictada"
       },

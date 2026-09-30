@@ -705,3 +705,43 @@ describe("Dictation Session", () => {
     );
   });
 });
+
+describe("Dictation Session all-caps lock (#271)", () => {
+  it("notifies when a line turns the lock on", async () => {
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "edits", edits: [], capsLock: true })),
+      notify: (n) => void notices.push(n),
+      copyText: (t) => copyText(t),
+      stats: createLineStats(),
+    });
+    const target = fakeTarget("a");
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "all caps on", latencyMs: 5 });
+    expect(target.commits).toEqual([""]);
+    expect(notices).toContainEqual({ kind: "caps_lock", on: true });
+  });
+
+  it("copies nothing orphaned for a line that only changed the lock", async () => {
+    const copy = vi.fn(async (_text: string) => {});
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "edits", edits: [], capsLock: true })),
+      notify: (n) => void notices.push(n),
+      copyText: copy,
+      stats: createLineStats(),
+    });
+    const unregister = session.register(fakeTarget("a"));
+    session.focus("a");
+    await session.start();
+    unregister();
+    await vi.waitFor(() => expect(session.getSnapshot().status).toBe("idle"));
+    expect(copy).not.toHaveBeenCalled();
+    expect(notices).not.toContainEqual({ kind: "orphan_copied" });
+    expect(notices).toContainEqual({ kind: "caps_lock", on: true });
+  });
+});

@@ -58,6 +58,8 @@ export type SessionNotice =
   // A Voice Command had nothing to do ("undo that" on an empty history): the
   // live region says so, and the stats do not count it as a run.
   | { kind: "voice_command_empty"; id: CommandId }
+  // The all-caps lock changed: the live region says whether it is on or off.
+  | { kind: "caps_lock"; on: boolean }
   // "Bold that" on edited dictated text: nothing changed, the live region says so.
   | { kind: "voice_that_refused" }
   // "Bold that" with nothing dictated yet: the live region says so.
@@ -207,12 +209,15 @@ export function createDictationSession(deps: {
           return;
         }
         if (target) target.apply(result.edits);
-        else {
+        else if (result.edits.length > 0) {
           const text = editsToOrphanText(result.edits);
           deps.copyText(text).then(
             () => deps.notify({ kind: "orphan_copied" }),
             () => deps.notify({ kind: "orphan_lost", text })
           );
+        }
+        if (result.capsLock !== undefined) {
+          deps.notify({ kind: "caps_lock", on: result.capsLock });
         }
         return;
       }

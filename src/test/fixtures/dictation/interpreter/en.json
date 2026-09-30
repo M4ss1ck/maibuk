@@ -8,7 +8,7 @@
       "before": "",
       "expected": {
         "edits": [{ "kind": "text", "text": "Hello, comma, how are you question mark?" }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 0
       }
     },
@@ -22,7 +22,7 @@
           { "kind": "paragraph" },
           { "kind": "text", "text": "She looked at the clock." }
         ],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 1
       }
     },
@@ -32,7 +32,7 @@
       "before": "",
       "expected": {
         "edits": [{ "kind": "paragraph" }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 1
       }
     },
@@ -42,7 +42,7 @@
       "before": "",
       "expected": {
         "edits": [{ "kind": "text", "text": "He waited for a period of time before speaking." }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 0
       }
     },
@@ -52,7 +52,7 @@
       "before": "",
       "expected": {
         "edits": [{ "kind": "text", "text": "You line." }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 0
       }
     },
@@ -62,7 +62,7 @@
       "before": "",
       "expected": {
         "edits": [{ "kind": "text", "text": "I said the word literal, come out, loud." }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 0
       }
     },
@@ -76,7 +76,7 @@
           { "kind": "line_break" },
           { "kind": "text", "text": "Second" }
         ],
-        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "state": { "capitalizeNext": false, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 1
       }
     },
@@ -87,7 +87,7 @@
       "capabilities": { "casing": true, "punctuation": false, "streaming": true },
       "expected": {
         "edits": [{ "kind": "text", "text": "Hello, world. How are you?" }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 3
       }
     },
@@ -98,7 +98,7 @@
       "capabilities": { "casing": true, "punctuation": false, "streaming": true },
       "expected": {
         "edits": [{ "kind": "text", "text": "Wow! Really!" }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 2
       }
     },
@@ -109,7 +109,7 @@
       "capabilities": { "casing": true, "punctuation": false, "streaming": true },
       "expected": {
         "edits": [{ "kind": "text", "text": "She said “hello” and (aside)" }],
-        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "state": { "capitalizeNext": false, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 4
       }
     },
@@ -123,7 +123,7 @@
           { "kind": "list_item" },
           { "kind": "text", "text": "Second" }
         ],
-        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "state": { "capitalizeNext": false, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 1
       }
     },
@@ -134,7 +134,7 @@
       "capabilities": { "casing": true, "punctuation": false, "streaming": true },
       "expected": {
         "edits": [{ "kind": "text", "text": "Hello Maria how are you" }],
-        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "state": { "capitalizeNext": false, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 1
       }
     },
@@ -145,7 +145,7 @@
       "capabilities": { "casing": true, "punctuation": false, "streaming": true },
       "expected": {
         "edits": [{ "kind": "text", "text": "Maria said hi" }],
-        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "state": { "capitalizeNext": false, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 1
       }
     },
@@ -155,7 +155,7 @@
       "before": "",
       "expected": {
         "edits": [{ "kind": "text", "text": "He wore a cap and gloves." }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 0
       }
     },
@@ -165,7 +165,7 @@
       "before": "",
       "expected": {
         "edits": [{ "kind": "text", "text": "It was a literal translation." }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 0
       }
     },
@@ -176,7 +176,7 @@
       "capabilities": { "casing": true, "punctuation": false, "streaming": true },
       "expected": {
         "edits": [{ "kind": "text", "text": "Say comma please" }],
-        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "state": { "capitalizeNext": false, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 1
       }
     },
@@ -188,7 +188,7 @@
       "vocabulary": [{ "heard": "a reliano", "written": "Aureliano" }],
       "expected": {
         "edits": [{ "kind": "text", "text": "Hello Aureliano." }],
-        "state": { "capitalizeNext": true, "noSpaceNext": false },
+        "state": { "capitalizeNext": true, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 1
       }
     },
@@ -200,7 +200,7 @@
       "vocabulary": [{ "heard": "note maker", "written": "new paragraph" }],
       "expected": {
         "edits": [{ "kind": "text", "text": "new paragraph" }],
-        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "state": { "capitalizeNext": false, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 0
       }
     },
@@ -212,7 +212,7 @@
       "vocabulary": [{ "heard": "dot dot", "written": "comma" }],
       "expected": {
         "edits": [{ "kind": "text", "text": "comma" }],
-        "state": { "capitalizeNext": false, "noSpaceNext": false },
+        "state": { "capitalizeNext": false, "noSpaceNext": false, "allCaps": false },
         "spokenPunctuationCount": 0
       }
     }

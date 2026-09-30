@@ -110,6 +110,24 @@ describe("SpokenPunctuationSection", () => {
     expect(screen.queryByRole("group", { name: "comma" })).toBeNull();
   });
 
+  it("shows the all-caps lock entries and what they insert (#271)", async () => {
+    renderSection();
+
+    const on = screen.getByRole("group", { name: "all caps on" });
+    expect(within(on).getByText("Turns all caps on")).toBeInTheDocument();
+    const off = screen.getByRole("group", { name: "all caps off" });
+    expect(within(off).getByText("Turns all caps off")).toBeInTheDocument();
+
+    cleanup();
+    await act(() => i18n.changeLanguage("es"));
+    renderSection("es");
+
+    const activadas = screen.getByRole("group", { name: "mayúsculas activadas" });
+    expect(within(activadas).getByText("Activa las mayúsculas")).toBeInTheDocument();
+    const desactivadas = screen.getByRole("group", { name: "mayúsculas desactivadas" });
+    expect(within(desactivadas).getByText("Desactiva las mayúsculas")).toBeInTheDocument();
+  });
+
   it("follows the model's capabilities for the initial switch state", () => {
     renderSection();
     const comma = screen.getByRole("group", { name: "comma" });

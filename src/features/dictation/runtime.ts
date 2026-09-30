@@ -2,7 +2,12 @@
 import { MODEL_CATALOG } from "@/features/dictation/catalog";
 import { createModelStore, type ModelStore } from "@/features/dictation/model-store";
 import { createRouter } from "@/features/dictation/router";
-import { buildPhraseTable, interpret, type PhraseTable } from "@/features/dictation/interpreter";
+import {
+  buildPhraseTable,
+  interpret,
+  INITIAL_INTERPRETER_STATE,
+  type PhraseTable,
+} from "@/features/dictation/interpreter";
 import { catalogCapabilities } from "@/features/dictation/spoken-punctuation";
 import { attachSession } from "@/features/dictation/hub";
 import {
@@ -72,7 +77,7 @@ async function build(): Promise<DictationRuntime> {
   let notify: (notice: SessionNotice) => void = () => {};
   let selectedModel: ModelSpec | null = null;
   let selectedLanguage: DictationLanguage = "es";
-  let interpreterState = { capitalizeNext: false, noSpaceNext: false };
+  let interpreterState = INITIAL_INTERPRETER_STATE;
   // The author's switches, aliases, and Vocabulary feed the table; so do the
   // picked model's capabilities, which set the entries' defaults.
   const buildTable = (language: DictationLanguage): PhraseTable =>
@@ -96,7 +101,7 @@ async function build(): Promise<DictationRuntime> {
       const { installed, preferredTier } = useDictationStore.getState();
       selectedLanguage = language;
       selectedModel = pickModel(language, models.available(), installed, preferredTier);
-      interpreterState = { capitalizeNext: false, noSpaceNext: false };
+      interpreterState = INITIAL_INTERPRETER_STATE;
       phraseTables = { ...phraseTables, [language]: buildTable(language) };
       return selectedModel;
     },
@@ -111,12 +116,19 @@ async function build(): Promise<DictationRuntime> {
       });
       interpreterState = output.state;
       if (output.result.kind === "scratch") return { kind: "scratch" };
-      return { ...output.result, spokenPunctuationCount: output.spokenPunctuationCount };
+      return {
+        ...output.result,
+        spokenPunctuationCount: output.spokenPunctuationCount,
+        ...(output.capsLock !== undefined ? { capsLock: output.capsLock } : {}),
+      };
     }),
     // Voice Commands run on the target's editor; the Tutorial blocks them
     // exactly like Shortcuts, so only its own skip works while a run is on.
     voiceCommandsAllowed: () => !isTutorialStatusActive(useTutorialStore.getState().status),
-    notify: (notice) => notify(notice),
+    notify: (notice) => {
+      if (notice.kind === "stopped") interpreterState = INITIAL_INTERPRETER_STATE;
+      notify(notice);
+    },
     copyText: (text) => navigator.clipboard.writeText(text),
     stats,
     isEnabled: () => useDictationStore.getState().enabled,

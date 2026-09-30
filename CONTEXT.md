@@ -394,7 +394,7 @@ The language a Dictation Session listens for: the language of the editor it type
 The step between a finished spoken line and the editor that turns it into text, Spoken Punctuation, or a Voice Command, by fixed rules that do not depend on the Dictation Model. (ADR 0015)
 
 **Spoken Punctuation**:
-Words said while dictating that become punctuation, a paragraph or line break, or a list item instead of text, such as "comma" or "punto y aparte"; also the dictation words "scratch that", "literal", and "capitalize" / "mayúscula". Each can be switched off and given extra phrases per Dictation Language, on this device. (ADR 0014)
+Words said while dictating that become punctuation, a paragraph or line break, or a list item instead of text, such as "comma" or "punto y aparte"; also the dictation words "scratch that", "literal", "capitalize" / "mayúscula", and the all-caps lock "all caps on" / "all caps off" ("mayúsculas activadas" / "mayúsculas desactivadas"), which lasts across lines until turned off or the Dictation Session ends. Each can be switched off and given extra phrases per Dictation Language, on this device. (ADR 0014)
 _UI_: en "Spoken punctuation" / es "Puntuación dictada"
 _Avoid_: voice command (for these)
 

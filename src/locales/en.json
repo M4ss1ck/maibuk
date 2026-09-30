@@ -1805,6 +1805,8 @@
     "settings": "Dictation settings",
     "announceStarted": "Dictation on, {{language}}",
     "announceStopped": "Dictation off",
+    "announceCapsOn": "All caps on",
+    "announceCapsOff": "All caps off",
     "announceLanguage": "Dictation language: {{language}}",
     "scratchRefused": "Nothing removed. Scratch that only removes text that hasn't been edited.",
     "scratchEmpty": "Nothing to remove.",
@@ -1869,6 +1871,8 @@
         "line_break": "Line break",
         "list_item": "New list item",
         "cap": "Capitalizes the next word",
+        "caps_on": "Turns all caps on",
+        "caps_off": "Turns all caps off",
         "literal": "Writes the next word literally",
         "scratch": "Removes the last dictated sentence"
       },
