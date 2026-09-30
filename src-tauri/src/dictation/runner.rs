@@ -767,6 +767,108 @@ mod tests {
         (root, models)
     }
 
+    /// Contextual biasing for a lane run (issue #274), from the environment,
+    /// so a run with and without it differs only in these. `{lang}` in a path
+    /// is the model's language.
+    /// - `BIAS_LABEL`: names the run; its files are `<name>.<label>.json`.
+    /// - `BIAS_CONTEXT`: a text file handed to `set_context` after load.
+    /// - `BIAS_KEYTERMS`: a comma-separated term list, the `keyterms` load option.
+    /// - `BIAS_BOOST`: the `keyterm_boost` load option.
+    #[derive(Default)]
+    struct Bias {
+        label: Option<String>,
+        context: Option<String>,
+        keyterms: Option<String>,
+        boost: Option<String>,
+    }
+
+    impl Bias {
+        fn from_env(language: &str) -> Self {
+            let read = |var: &str| {
+                std::env::var(var).ok().map(|template| {
+                    let path = template.replace("{lang}", language);
+                    std::fs::read_to_string(&path)
+                        .unwrap_or_else(|e| panic!("{var}={path}: {e}"))
+                        .trim()
+                        .to_string()
+                })
+            };
+            Self {
+                label: std::env::var("BIAS_LABEL").ok().filter(|l| !l.is_empty()),
+                context: read("BIAS_CONTEXT"),
+                keyterms: read("BIAS_KEYTERMS"),
+                boost: std::env::var("BIAS_BOOST").ok(),
+            }
+        }
+
+        /// The load options this run adds to the catalog's.
+        fn load_spec(
+            &self,
+            spec: &crate::dictation::protocol::ModelSpec,
+        ) -> crate::dictation::protocol::ModelSpec {
+            let mut spec = spec.clone();
+            if let Some(keyterms) = &self.keyterms {
+                spec.engine_options
+                    .insert("keyterms".into(), keyterms.clone());
+            }
+            if let Some(boost) = &self.boost {
+                spec.engine_options
+                    .insert("keyterm_boost".into(), boost.clone());
+            }
+            spec
+        }
+
+        /// Hands the context over and returns how long `set_context` took.
+        fn apply_context(&self, engine: &mut dyn SpeechEngine) -> Option<f64> {
+            let context = self.context.as_ref()?;
+            let started = Instant::now();
+            engine.set_context(context);
+            Some(started.elapsed().as_secs_f64() * 1000.0)
+        }
+
+        fn file_name(&self, stem: &str) -> String {
+            match &self.label {
+                Some(label) => format!("{stem}.{label}.json"),
+                None => format!("{stem}.json"),
+            }
+        }
+
+        fn describe(&self) -> serde_json::Value {
+            serde_json::json!({
+                "label": self.label,
+                "contextWords": self.context.as_ref().map(|c| c.split_whitespace().count()),
+                "keyterms": self.keyterms.as_ref().map(|k| k.split(',').count()),
+                "boost": self.boost,
+            })
+        }
+    }
+
+    #[test]
+    fn bias_adds_its_load_options_and_names_its_files() {
+        let spec: Vec<crate::dictation::protocol::ModelSpec> =
+            serde_json::from_str(include_str!("../../../src/features/dictation/catalog.json"))
+                .expect("catalog.json");
+        let bias = Bias {
+            label: Some("a-keyterms".into()),
+            keyterms: Some("Siobhan,Redis".into()),
+            boost: Some("3".into()),
+            ..Bias::default()
+        };
+        let loaded = bias.load_spec(&spec[0]);
+        assert_eq!(loaded.engine_options["keyterms"], "Siobhan,Redis");
+        assert_eq!(loaded.engine_options["keyterm_boost"], "3");
+        assert_eq!(
+            loaded.engine_options.get("arch"),
+            spec[0].engine_options.get("arch")
+        );
+        assert_eq!(bias.file_name("phrases-x"), "phrases-x.a-keyterms.json");
+        assert_eq!(Bias::default().file_name("phrases-x"), "phrases-x.json");
+        assert_eq!(
+            Bias::default().load_spec(&spec[0]).engine_options,
+            spec[0].engine_options
+        );
+    }
+
     /// Real models, real WAVs, production Runner. Ignored: run with
     /// `cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture`.
     #[test]
@@ -797,10 +899,14 @@ mod tests {
                 dir.display()
             );
 
+            let bias = Bias::from_env(&language);
             let mut engine = crate::dictation::engine::create_engine(&spec).expect("create engine");
             let load_start = Instant::now();
-            engine.load(&dir, &spec).expect("load model");
+            engine
+                .load(&dir, &bias.load_spec(&spec))
+                .expect("load model");
             let load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
+            let set_context_ms = bias.apply_context(engine.as_mut());
             engine.start().expect("start engine");
             let engine: SharedEngine = Arc::new(Mutex::new(engine));
 
@@ -847,7 +953,7 @@ mod tests {
             }
 
             let captured = messages.lock().unwrap();
-            let doc = trace_document(
+            let mut doc = trace_document(
                 &spec.id,
                 &language,
                 wav_name,
@@ -856,9 +962,11 @@ mod tests {
                 load_ms,
                 Some(cpu_pct),
             );
+            doc["bias"] = bias.describe();
+            doc["bias"]["setContextMs"] = serde_json::json!(set_context_ms.map(round3));
             let path = root
                 .join("conformance")
-                .join(format!("native-{}.json", spec.id));
+                .join(bias.file_name(&format!("native-{}", spec.id)));
             write_trace(&path, &doc);
             let finals = doc["trace"].as_array().unwrap().len();
             let violations = doc["summary"]["contractViolations"]
@@ -879,14 +987,24 @@ mod tests {
     // as a live session, without waiting out the audio in real time.
     // ---------------------------------------------------------------------
 
-    /// The finished lines an engine produces for one clip, in order.
-    fn transcribe_clip(engine: &mut dyn SpeechEngine, pcm: &[f32]) -> Vec<String> {
+    /// The finished lines an engine produces for one clip, in order, with the
+    /// latency the engine reported for each.
+    struct ClipTranscript {
+        finals: Vec<String>,
+        latencies: Vec<Option<u32>>,
+    }
+
+    fn transcribe_clip(engine: &mut dyn SpeechEngine, pcm: &[f32]) -> ClipTranscript {
         engine.start().expect("start engine");
         let mut finals = Vec::new();
+        let mut latencies = Vec::new();
         let mut keep = |events: Vec<DictationEvent>| {
             for event in events {
                 match event {
-                    DictationEvent::Final { text, .. } => finals.push(text),
+                    DictationEvent::Final { text, latency_ms } => {
+                        finals.push(text);
+                        latencies.push(latency_ms);
+                    }
                     DictationEvent::Error { code, detail } => {
                         panic!("engine error {code:?}: {detail:?}")
                     }
@@ -899,7 +1017,7 @@ mod tests {
             keep(engine.poll().expect("poll"));
         }
         keep(engine.finish().expect("finish"));
-        finals
+        ClipTranscript { finals, latencies }
     }
 
     /// The same clip through the production Runner at real-time pace, like a
@@ -972,8 +1090,9 @@ mod tests {
             started: 0,
         };
         // 0.25 s of audio is three chunks, so three polls.
-        let finals = transcribe_clip(&mut engine, &[0.0; 4_000]);
-        assert_eq!(finals, vec!["Align.".to_string(), "right".to_string()]);
+        let clip = transcribe_clip(&mut engine, &[0.0; 4_000]);
+        assert_eq!(clip.finals, vec!["Align.".to_string(), "right".to_string()]);
+        assert_eq!(clip.latencies, vec![Some(80), None]);
         assert_eq!(engine.started, 1);
     }
 
@@ -1007,8 +1126,12 @@ mod tests {
                 "missing {}: run `pnpm fetch:dictation --test-assets`",
                 dir.display()
             );
+            let bias = Bias::from_env(&language);
             let mut engine = crate::dictation::engine::create_engine(&spec).expect("create engine");
-            engine.load(&dir, &spec).expect("load model");
+            engine
+                .load(&dir, &bias.load_spec(&spec))
+                .expect("load model");
+            let set_context_ms = bias.apply_context(engine.as_mut());
             let realtime = std::env::var_os("PHRASE_REALTIME").is_some();
             let shared: SharedEngine = Arc::new(Mutex::new(engine));
 
@@ -1021,27 +1144,36 @@ mod tests {
                 } else {
                     crate::dictation::resample::Resampler::new(rate).push(&pcm)
                 };
-                let finals = if realtime {
-                    transcribe_clip_realtime(&shared, file)
+                let clip_started = Instant::now();
+                let clip = if realtime {
+                    ClipTranscript {
+                        finals: transcribe_clip_realtime(&shared, file),
+                        latencies: Vec::new(),
+                    }
                 } else {
                     transcribe_clip(shared.lock().unwrap().as_mut(), &pcm)
                 };
                 clips.push(serde_json::json!({
                     "file": file.file_name().unwrap().to_string_lossy(),
-                    "finals": finals,
+                    "finals": clip.finals,
+                    "latencies": clip.latencies,
+                    "ms": round3(clip_started.elapsed().as_secs_f64() * 1000.0),
                 }));
             }
             let doc = serde_json::json!({
                 "model": spec.id,
                 "language": language,
                 "backend": if realtime { "native-realtime" } else { "native" },
+                "bias": bias.describe(),
+                "setContextMs": set_context_ms.map(round3),
                 "clips": clips,
             });
-            let path = root.join("conformance").join(format!(
-                "phrases-{}{}.json",
+            let stem = format!(
+                "phrases-{}{}",
                 spec.id,
                 if realtime { ".realtime" } else { "" }
-            ));
+            );
+            let path = root.join("conformance").join(bias.file_name(&stem));
             write_trace(&path, &doc);
             println!(
                 "{:<28} clips={:<4} seconds={:.1}",
@@ -1050,5 +1182,57 @@ mod tests {
                 started.elapsed().as_secs_f64()
             );
         }
+    }
+
+    /// How long `set_context` takes on each passage in `BIAS_TIMING` (comma-
+    /// separated paths, `{lang}` for the language), five calls each, median
+    /// and worst. Ignored: run with
+    /// `cargo test --release dictation::runner::tests::set_context_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn set_context_timing() {
+        let (root, models) = conformance_models();
+        let templates = std::env::var("BIAS_TIMING").expect("BIAS_TIMING=<path>[,<path>...]");
+        let mut rows = Vec::new();
+        for spec in models {
+            let language = spec
+                .languages
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "en".into());
+            let dir = root.join("models").join(&spec.id);
+            let mut engine = crate::dictation::engine::create_engine(&spec).expect("create engine");
+            engine.load(&dir, &spec).expect("load model");
+            for template in templates.split(',') {
+                let path = template.trim().replace("{lang}", &language);
+                let passage =
+                    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+                let mut runs: Vec<f64> = (0..5)
+                    .map(|_| {
+                        let started = Instant::now();
+                        engine.set_context(&passage);
+                        started.elapsed().as_secs_f64() * 1000.0
+                    })
+                    .collect();
+                engine.set_context("");
+                runs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                let words = passage.split_whitespace().count();
+                println!(
+                    "{:<28} {:>7} words  median {:>8.2} ms  worst {:>8.2} ms  {}",
+                    spec.id, words, runs[2], runs[4], path
+                );
+                rows.push(serde_json::json!({
+                    "model": spec.id,
+                    "passage": path,
+                    "words": words,
+                    "medianMs": round3(runs[2]),
+                    "worstMs": round3(runs[4]),
+                }));
+            }
+        }
+        write_trace(
+            &root.join("conformance").join("set-context-timing.json"),
+            &serde_json::json!({ "backend": "native", "runs": rows }),
+        );
     }
 }

@@ -30,6 +30,7 @@ const HINT: Record<PhraseItem["kind"], string> = {
   punctuation: "dictate it as one sentence, saying the punctuation words",
   prose: "say it as ordinary prose",
   names: "say it as ordinary prose, names and all",
+  alone: "say only this name, once, as if teaching it to Dictation",
 };
 
 function parseArgs(argv: string[]) {
