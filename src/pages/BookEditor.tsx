@@ -12,7 +12,7 @@ import {
 import { FocusScope, useOverlay } from "react-aria";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
-import type { Chapter, ChapterType } from "@/features/chapters/types";
+import type { Chapter, ChapterStatus, ChapterType } from "@/features/chapters/types";
 import { Editor, ChapterList, SaveStatus, type EditorTutorialAnchors } from "@/components/editor";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { BookSidePanel } from "@/components/book/BookSidePanel";
@@ -719,6 +719,11 @@ export function BookEditor() {
     [updateChapter]
   );
 
+  const handleSetChapterStatus = useCallback(
+    (id: string, status: ChapterStatus) => updateChapter(id, { status }),
+    [updateChapter]
+  );
+
   // Toggle focus mode
   const toggleFocusMode = useCallback(() => {
     setFocusMode((prev) => !prev);
@@ -1340,6 +1345,7 @@ export function BookEditor() {
                   onCreateChapter={handleCreateChapter}
                   onUpdateChapter={handleUpdateChapter}
                   onDeleteChapter={handleDeleteChapter}
+                  onSetChapterStatus={handleSetChapterStatus}
                   onReorderChapters={handleReorderChapters}
                   onImportFiles={handleImportFiles}
                   onImportFromFiles={handleImportFromFiles}
@@ -1367,6 +1373,7 @@ export function BookEditor() {
                 onCreateChapter={handleCreateChapter}
                 onUpdateChapter={handleUpdateChapter}
                 onDeleteChapter={handleDeleteChapter}
+                onSetChapterStatus={handleSetChapterStatus}
                 onReorderChapters={handleReorderChapters}
                 onImportFiles={handleImportFiles}
                 onImportFromFiles={handleImportFromFiles}

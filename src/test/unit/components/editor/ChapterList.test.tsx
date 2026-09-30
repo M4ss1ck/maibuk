@@ -87,6 +87,8 @@ vi.mock("@/features/settings/store", () => ({
 
 import { ChapterList } from "@/components/editor/ChapterList";
 import { readDroppedItems } from "@/hooks/useTextFileDrop";
+import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
+import { DEFAULT_SHORTCUT_SETTINGS } from "@/lib/shortcut-resolve";
 import {
   createDataTransfer,
   createFileDataTransfer,
@@ -227,6 +229,7 @@ describe("ChapterList", () => {
     storeState.showChapterOutline = false;
     i18nState.language = "en";
     textFileDropOptions.current = null;
+    useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
   });
 
   it.each([
@@ -428,6 +431,31 @@ describe("ChapterList", () => {
 
   // ---------------------------------------------------------------------------
   describe("Tab navigation to nested controls", () => {
+    it("runs a Chapter Item Menu Command from its Shortcut while a row has focus", async () => {
+      const user = userEvent.setup();
+      useShortcutSettingsStore.setState({
+        shortcuts: {
+          version: 2,
+          voice: {},
+          custom: { "chapterItem.delete": [["Mod+Shift+x"]] },
+          singleKeyEnabled: true,
+        },
+      });
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id });
+
+      // Keyboard navigation into the grid, not programmatic focus: the
+      // Commands must follow the row React Aria focuses.
+      for (let i = 0; i < 20 && !screen.getByRole("grid").contains(document.activeElement); i++) {
+        await user.tab();
+      }
+      expect(screen.getByRole("grid").contains(document.activeElement)).toBe(true);
+
+      await user.keyboard("{Control>}{Shift>}X{/Shift}{/Control}");
+
+      expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
+    });
+
     it("lets the title use the action area until the overlay is revealed", () => {
       const chapters = [buildChapter({ id: "ch-1", title: "A very long chapter title", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id });

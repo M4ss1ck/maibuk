@@ -8,6 +8,11 @@
     "noteItem": {
       "togglePinned": "Pin or unpin note"
     },
+    "chapterItem": {
+      "setStatusDraft": "Chapter Status: Draft",
+      "setStatusRevised": "Chapter Status: Revised",
+      "setStatusFinal": "Chapter Status: Final"
+    },
     "bookEditor": {
       "toggleCompactView": "Toggle compact chapter list",
       "toggleOutline": "Toggle chapter outline"
@@ -200,7 +205,14 @@
     "typeEpilogue": "Epilogue",
     "typePart": "Part",
     "typeFrontmatter": "Front Matter",
-    "typeBackmatter": "Back Matter"
+    "typeBackmatter": "Back Matter",
+    "statusMenu": "Status",
+    "chapterStatus": {
+      "draft": "Draft",
+      "revised": "Revised",
+      "final": "Final"
+    },
+    "statusChangeFailed": "Couldn't change the Chapter Status"
   },
   "notes": {
     "title": "Notes",

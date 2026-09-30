@@ -6,7 +6,7 @@ export interface ItemCommand {
   commandId?: CommandId;
   isDisabled?: boolean;
   onAction?: () => void;
-  children?: unknown[];
+  children?: ItemCommand[];
 }
 
 /** Whether focus is on the element or inside it; only reads focus, never moves it. */
@@ -33,6 +33,8 @@ function useFocusInside(ref: RefObject<HTMLElement | null>): boolean {
  * Runs an item's Item Menu actions from their Commands' Shortcuts while focus
  * is inside that item (a Note row, a Chapter, a Canvas node). Nothing listens
  * for items without focus, so a long list costs one binding, not one per row.
+ * Submenu children bind too: a value the menu reaches by opening a submenu is
+ * still a Command the item's Shortcut can run.
  */
 export function useItemCommands(
   ref: RefObject<HTMLElement | null>,
@@ -40,16 +42,26 @@ export function useItemCommands(
   { enabled = true }: { enabled?: boolean } = {}
 ): void {
   const focused = useFocusInside(ref);
-  const bindings = actions.flatMap((action) =>
-    action.commandId && action.onAction && !action.children
-      ? [
-          {
-            id: action.commandId,
-            enabled: !action.isDisabled,
-            onTrigger: () => action.onAction?.(),
-          },
-        ]
-      : []
-  );
+  const bindings = actions.flatMap((action) => collectBindings(action));
   useShortcuts(bindings, { enabled: enabled && focused });
+}
+
+function collectBindings(action: ItemCommand): {
+  id: CommandId;
+  enabled: boolean;
+  onTrigger: () => void;
+}[] {
+  if (action.children && action.children.length > 0) {
+    return action.children.flatMap((child) => collectBindings(child));
+  }
+  if (action.commandId && action.onAction && !action.children) {
+    return [
+      {
+        id: action.commandId,
+        enabled: !action.isDisabled,
+        onTrigger: () => action.onAction?.(),
+      },
+    ];
+  }
+  return [];
 }

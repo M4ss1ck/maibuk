@@ -8,6 +8,11 @@
     "noteItem": {
       "togglePinned": "Fijar o desfijar la nota"
     },
+    "chapterItem": {
+      "setStatusDraft": "Estado del capítulo: Borrador",
+      "setStatusRevised": "Estado del capítulo: Revisado",
+      "setStatusFinal": "Estado del capítulo: Final"
+    },
     "bookEditor": {
       "toggleCompactView": "Alternar la lista compacta de capítulos",
       "toggleOutline": "Alternar el esquema de capítulos"
@@ -200,7 +205,14 @@
     "typeEpilogue": "Epílogo",
     "typePart": "Parte",
     "typeFrontmatter": "Páginas preliminares",
-    "typeBackmatter": "Páginas finales"
+    "typeBackmatter": "Páginas finales",
+    "statusMenu": "Estado",
+    "chapterStatus": {
+      "draft": "Borrador",
+      "revised": "Revisado",
+      "final": "Final"
+    },
+    "statusChangeFailed": "No se pudo cambiar el estado del capítulo"
   },
   "notes": {
     "title": "Notas",

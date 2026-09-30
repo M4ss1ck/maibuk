@@ -9,11 +9,12 @@ import {
 } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { DropIndicator } from "react-aria-components";
-import type { Chapter, ChapterType } from "@/features/chapters/types";
+import type { Chapter, ChapterStatus, ChapterType } from "@/features/chapters/types";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { Select } from "@/components/ui/Select";
 import { useTranslation } from "react-i18next";
-import { FileUp, List, ListTree, Rows3 } from "lucide-react";
+import { FileUp, Flag, List, ListTree, Rows3 } from "lucide-react";
+import type { CommandId } from "@/lib/shortcut-registry";
 import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
@@ -41,6 +42,7 @@ interface ChapterListProps {
   onCreateChapter: (title: string, type: ChapterType) => void;
   onUpdateChapter: (id: string, title: string, type: ChapterType) => void;
   onDeleteChapter: (id: string) => void;
+  onSetChapterStatus?: (id: string, status: ChapterStatus) => Promise<unknown>;
   onReorderChapters: (chapterIds: string[]) => void;
   onImportFiles?: (files: DroppedTextFile[], target: ListDropTarget | null) => void | Promise<void>;
   /** Marks Tutorial step targets; only the list the author can see carries them. */
@@ -52,6 +54,17 @@ interface ChapterListProps {
 }
 
 const CHAPTER_DND_TYPE = "chapter";
+
+/**
+ * The Chapter Status submenu: each value runs its own Command, so an action
+ * bound to a Shortcut (the row's Item Menu commands) can set a status without
+ * the menu. `commandId` stays a literal so the binding scan finds it.
+ */
+const CHAPTER_STATUS_CHOICES = [
+  { status: "draft", commandId: "chapterItem.setStatusDraft" },
+  { status: "revised", commandId: "chapterItem.setStatusRevised" },
+  { status: "final", commandId: "chapterItem.setStatusFinal" },
+] as const satisfies readonly { status: ChapterStatus; commandId: CommandId }[];
 
 function ChapterItemGestures({
   onOpenMenu,
@@ -67,15 +80,24 @@ function ChapterItemGestures({
   children: (anchorRef: RefObject<HTMLDivElement | null>) => ReactNode;
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
+  // React Aria focuses the row around this body, so the Commands follow the row.
+  const rowRef = useRef<HTMLElement | null>(null);
   const { itemProps, setOwnerRef } = useItemContextMenu({
     onOpen: onOpenMenu,
     isDisabled,
     anchorRef,
   });
-  useItemCommands(anchorRef, actions, { enabled: !isDisabled });
+  const setBodyRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setOwnerRef(node);
+      rowRef.current = node?.closest<HTMLElement>('[role="row"]') ?? null;
+    },
+    [setOwnerRef]
+  );
+  useItemCommands(rowRef, actions, { enabled: !isDisabled });
   return (
     <div
-      ref={setOwnerRef}
+      ref={setBodyRef}
       {...itemProps}
       className={`${className} pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]`}
     >
@@ -92,6 +114,7 @@ export function ChapterList({
   onCreateChapter,
   onUpdateChapter,
   onDeleteChapter,
+  onSetChapterStatus,
   onReorderChapters,
   onImportFiles,
   tutorialAnchors = false,
@@ -312,6 +335,17 @@ export function ChapterList({
     });
   };
 
+  const setChapterStatus = async (chapter: Chapter, status: ChapterStatus) => {
+    // The row only changes once the store updates after persistence, so a
+    // failed write leaves the old status displayed.
+    if (chapter.status === status) return;
+    try {
+      await onSetChapterStatus?.(chapter.id, status);
+    } catch {
+      toast.error(t("chapters.statusChangeFailed"));
+    }
+  };
+
   const startEditing = (chapter: Chapter) => {
     setEditingId(chapter.id);
     setEditTitle(chapter.title);
@@ -518,6 +552,22 @@ export function ChapterList({
                 commandId: "chapterItem.edit",
                 onAction: () => startEditing(chapter),
               },
+              ...(onSetChapterStatus
+                ? [
+                    {
+                      id: "status",
+                      label: t("chapters.statusMenu"),
+                      icon: Flag,
+                      children: CHAPTER_STATUS_CHOICES.map((choice) => ({
+                        id: `status:${choice.status}`,
+                        label: t(`chapters.chapterStatus.${choice.status}`),
+                        isCurrent: chapter.status === choice.status,
+                        commandId: choice.commandId,
+                        onAction: () => setChapterStatus(chapter, choice.status),
+                      })),
+                    },
+                  ]
+                : []),
               {
                 id: "delete",
                 label: t("chapters.deleteChapter"),
@@ -661,7 +711,7 @@ export function ChapterList({
                                   {chapter.wordCount.toLocaleString()} {t("common.words")}
                                 </span>
                                 <span>•</span>
-                                <span className="capitalize">{chapter.status}</span>
+                                <span>{t(`chapters.chapterStatus.${chapter.status}`)}</span>
                                 {outlineToggle && (
                                   <span className="ml-auto flex">{outlineToggle}</span>
                                 )}

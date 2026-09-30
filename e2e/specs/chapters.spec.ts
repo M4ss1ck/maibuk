@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
-import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { describeFocus, expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -313,8 +314,43 @@ test.describe("Chapter Status display @wf:chapters-status-display", () => {
   test("each row shows its Chapter Status", async ({ page }) => {
     await openBook(page);
     for (const title of CHAPTERS) {
-      await expect(row(page, title)).toContainText("draft");
+      await expect(row(page, title)).toContainText("Draft");
     }
+  });
+});
+
+test.describe("Set Chapter Status @wf:chapters-status-set", () => {
+  test("the Item Menu sets a Chapter's Status and a reload agrees", async ({ page }) => {
+    await openBook(page);
+    await focusChapter(page, "The Lamp");
+
+    // Shift+F10 opens the row's Item Menu with the keyboard.
+    await page.keyboard.press("Shift+F10");
+    const menu = page.getByRole("menu", { name: "More actions for The Lamp" });
+    await expect(menu).toBeVisible();
+    await capture(page, "chapter-status-menu");
+    await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: "Status" }));
+
+    await page.keyboard.press("ArrowRight");
+    const draft = page.getByRole("menuitem", { name: "Draft" });
+    await expect(draft).toBeFocused();
+
+    await page.keyboard.press("ArrowDown");
+    const revised = page.getByRole("menuitem", { name: "Revised" });
+    await expect(revised).toBeFocused();
+    await capture(page, "chapter-status-submenu");
+    expect(await describeFocus(page)).toContain("Revised");
+
+    await page.keyboard.press("Enter");
+
+    await expect(row(page, "The Lamp")).toContainText("Revised");
+    await expectFocusWithin(row(page, "The Lamp"));
+    await capture(page, "chapter-status-row");
+
+    await page.reload();
+    await expect(editorText(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(row(page, "The Lamp")).toContainText("Revised");
   });
 });
 
