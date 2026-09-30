@@ -7,6 +7,8 @@ import { entriesFor, catalogCapabilities } from "@/features/dictation/spoken-pun
 import type { DictationLanguage } from "@/features/dictation/types";
 import { voiceThatPhrases } from "@/features/dictation/voice-commands";
 import {
+  appClipHit,
+  appExpectedLabel,
   defaultPhrases,
   defaultTable,
   phraseCount,
@@ -52,7 +54,7 @@ describe("the recording script", () => {
   it.each(LANGUAGES)("%s: clip ids are unique and file-safe", (language) => {
     const ids = phraseItems(language).map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ids) expect(id).toMatch(/^[vpx]-[a-z0-9-]+$/);
+    for (const id of ids) expect(id).toMatch(/^[vpax]-[a-z0-9-]+$/);
   });
 
   it.each(LANGUAGES)("%s: every voice line is a default phrase", (language) => {
@@ -154,6 +156,54 @@ describe("the recording script", () => {
       "empezar la lista",
     ]);
   });
+
+  it.each(LANGUAGES)("%s: every app line runs a command or a click on its own text", (language) => {
+    // App-tier whole-line phrases (issue #324): each clip is recorded whole
+    // and scored whole, never inferred. Every line below was checked
+    // against the production interpreter: each is a whole-line
+    // voice_command or a Click by Name the registry really derives
+    // (defaultWholeLinePhrases), including the Spanish labels ("Ir a
+    // Notas", "Sincronizar ahora", "Pulsar Escape").
+    const capabilities = catalogCapabilities(language);
+    const table = defaultTable(language, capabilities);
+    for (const item of phraseItems(language).filter((entry) => entry.kind === "app")) {
+      const result = interpret({
+        line: item.say,
+        before: "",
+        capabilities,
+        table,
+        state: INITIAL_INTERPRETER_STATE,
+      }).result;
+      expect(
+        ["voice_command", "click", "click_number"].includes(result.kind),
+        `${item.say} runs ${result.kind}`
+      ).toBe(true);
+      expect(appExpectedLabel(item, capabilities), item.say).not.toBe("edits");
+      expect(appClipHit([item.say], item, capabilities), item.say).toBe(true);
+    }
+  });
+
+  it.each(LANGUAGES)("%s: app clips follow voice clips and keep unit coverage", (language) => {
+    const items = phraseItems(language);
+    const kinds = items.map((item) => item.kind);
+    const firstApp = kinds.indexOf("app");
+    const lastVoice = kinds.lastIndexOf("voice");
+    const firstPunctuation = kinds.indexOf("punctuation");
+    expect(firstApp).toBeGreaterThan(lastVoice);
+    expect(firstPunctuation).toBeGreaterThan(firstApp);
+    for (const item of items.filter((entry) => entry.kind === "app")) {
+      expect(item.id.startsWith("a-")).toBe(true);
+    }
+    // The script still says every verb and every target at least once: the
+    // app lines are whole clips and contribute no units.
+    const said = items
+      .filter((item) => item.kind === "voice")
+      .map((item) => splitVoicePhrase(item.say, language));
+    const verbsSaid = new Set(said.map((split) => split?.verb));
+    for (const unit of voiceUnits(language)) {
+      for (const verb of unit.verbs) expect(verbsSaid, `${unit.id}: ${verb}`).toContain(verb);
+    }
+  });
 });
 
 describe("clipSlug()", () => {
@@ -183,11 +233,17 @@ describe("scoreModel()", () => {
     const below = score.phrases.filter((phrase) => phrase.rate < 1).map((p) => p.row.phrase);
     expect(below).toEqual([]);
     expect(score.hitRate).toBe(1);
+    const appBelow = score.app.filter((row) => row.rate < 1).map((row) => row.item.say);
+    expect(appBelow).toEqual([]);
   });
 
   it("reports missing clips", () => {
     const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips: [] });
-    expect(score.missingItems).toHaveLength(phraseItems("en").length);
+    // App clips are reported as "not recorded" in their own section and
+    // never fail the lane, so they are not missing items.
+    expect(score.missingItems).toHaveLength(
+      phraseItems("en").filter((item) => item.kind !== "app").length
+    );
     expect(score.hitRate).toBe(0);
   });
 
@@ -379,5 +435,54 @@ describe("scoreModel()", () => {
     expect(score.missingItems).toContain(
       phraseItems("en").find((entry) => entry.say === "bold that")?.id
     );
+  });
+
+  it("scores an app clip whole: a miss fails only its own clip", () => {
+    const clips = perfectClips("en").map((clip) =>
+      clip.itemId === "a-click-two" ? { ...clip, finals: ["Click three."] } : clip
+    );
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    const rate = (say: string) => score.app.find((row) => row.item.say === say)?.rate;
+    expect(rate("click two")).toBe(0);
+    expect(rate("click three")).toBe(1);
+    // The app lane never moves the ship bar.
+    expect(score.hitRate).toBe(1);
+  });
+
+  it("an app clip split over two lines is a miss", () => {
+    const clips = perfectClips("en").map((clip) =>
+      clip.itemId === "a-go-to-notes" ? { ...clip, finals: ["Go to.", "Notes."] } : clip
+    );
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    expect(score.app.find((row) => row.item.say === "go to notes")?.rate).toBe(0);
+    expect(score.hitRate).toBe(1);
+  });
+
+  it("an app command heard as another command is a miss", () => {
+    const item = phraseItems("en").find((entry) => entry.say === "go to notes");
+    expect(item).toBeDefined();
+    if (!item) return;
+    const capabilities = catalogCapabilities("en");
+    expect(appClipHit(["Go to settings."], item, capabilities)).toBe(false);
+    expect(appClipHit(["Go to Notes."], item, capabilities)).toBe(true);
+  });
+
+  it("a missing app clip is not recorded and never missing", () => {
+    const clips = perfectClips("en").filter((clip) => clip.itemId !== "a-sync-now");
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    const row = score.app.find((entry) => entry.item.say === "sync now");
+    expect(row).toMatchObject({ takes: 0, hits: 0, rate: 0 });
+    expect(score.missingItems).not.toContain("a-sync-now");
+    expect(score.missingItems).toEqual([]);
+    expect(score.hitRate).toBe(1);
+  });
+
+  it("averages takes of the same app clip", () => {
+    const clips = [
+      ...perfectClips("en"),
+      { itemId: "a-dark-theme", finals: ["Duck theme."] },
+    ];
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    expect(score.app.find((row) => row.item.say === "dark theme")?.rate).toBe(0.5);
   });
 });

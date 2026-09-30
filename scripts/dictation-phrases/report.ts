@@ -7,7 +7,6 @@ import {
   type ModelScore,
   type PhraseScore,
 } from "@/test/support/dictation-phrase-score";
-
 export interface ScoredModel {
   spec: Pick<ModelSpec, "id" | "tier" | "languages">;
   clipCount: number;
@@ -126,6 +125,28 @@ export function renderReport(models: readonly ScoredModel[]): Report {
       out.push(
         `| ${phrase.row.phrase} | ${label(phrase)} | ${phrase.source} | ${rates.join(" | ")} |`
       );
+    }
+
+    out.push("", `## ${language}: App phrases`, "");
+    out.push(
+      "Whole-line app phrases, one clip each: a clip hits when it comes back as one line that runs what the script line runs. Missing clips are reported as not recorded and never fail the bar.",
+      "",
+      `| Say | Expected | ${ofLanguage.map((model) => model.spec.id).join(" | ")} |`,
+      `| --- | --- | ${ofLanguage.map(() => "---").join(" | ")} |`
+    );
+    const app = ofLanguage[0]?.score.app ?? [];
+    if (app.length === 0) {
+      out.push("None.");
+    } else {
+      for (const [index, row] of app.entries()) {
+        const perModel = ofLanguage.map(({ score }) => {
+          const own = score.app[index];
+          if (!own || own.takes === 0) return "not recorded";
+          const heard = own.heard.map(cell).join("; ");
+          return `${pct(own.rate)} (${heard || "(nothing)"})`;
+        });
+        out.push(`| ${row.item.say} | ${row.expected} | ${perModel.join(" | ")} |`);
+      }
     }
   }
 
