@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { EDITOR_COMMANDS, VOICE_RUNNERS } from "@/components/editor/editor-commands";
 import { MODEL_CATALOG } from "@/features/dictation/catalog";
+import {
+  INITIAL_INTERPRETER_STATE,
+  buildPhraseTable,
+  interpret,
+} from "@/features/dictation/interpreter";
+import { labelPhrase } from "@/features/dictation/label-phrases";
 import { normalizePhrase, phraseWords } from "@/features/dictation/normalize";
 import { defaultTriggers, entriesFor } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
   VOICE_VOCABULARY,
   buildVoiceCommandTable,
+  defaultWholeLinePhrases,
   heardForms,
   matchVoiceCommand,
   rewriteHeard,
@@ -17,7 +24,7 @@ import {
   type VoiceCommandTable,
   type VoiceVerbClass,
 } from "@/features/dictation/voice-commands";
-import { COMMANDS, type CommandDef } from "@/lib/shortcut-registry";
+import { COMMAND_IDS, COMMANDS, type CommandDef } from "@/lib/shortcut-registry";
 
 /** Every language the model catalog can dictate, so a new one cannot ship without a vocabulary. */
 const LANGUAGES = [
@@ -58,13 +65,16 @@ describe("Voice Command defaults", () => {
     }
   });
 
-  it("gives every voice-eligible Command targets in every language", () => {
-    expect(voiceEligibleCommands().length).toBeGreaterThan(0);
-    for (const id of voiceEligibleCommands()) {
+  it("gives every verb Command targets in every language", () => {
+    const verbCommands = COMMAND_IDS.filter(
+      (id) => (COMMANDS[id] as CommandDef).voice?.verbs !== undefined
+    );
+    expect(verbCommands.length).toBeGreaterThan(0);
+    for (const id of verbCommands) {
       const voice = (COMMANDS[id] as CommandDef).voice;
       expect(voice, id).toBeDefined();
       for (const language of LANGUAGES) {
-        const targets = voice?.targets[language] ?? [];
+        const targets = voice?.targets?.[language] ?? [];
         expect(targets.length, `${id}.${language}`).toBeGreaterThan(0);
         for (const target of targets) expect(wordsOf(target).length, target).toBeGreaterThan(0);
       }
@@ -89,16 +99,17 @@ describe("Voice Command defaults", () => {
     }
   });
 
-  it("resolves every filler-inserted default phrase to its own Command", () => {
+  it("resolves every filler-inserted verb phrase to its own Command", () => {
     for (const language of LANGUAGES) {
       const table = buildVoiceCommandTable(language);
       const vocabulary = VOICE_VOCABULARY[language];
       for (const id of voiceEligibleCommands()) {
         const voice = (COMMANDS[id] as CommandDef).voice;
-        if (!voice) continue;
-        for (const cls of voice.verbs) {
+        const verbs = voice?.verbs;
+        if (!verbs) continue;
+        for (const cls of verbs) {
           for (const verb of vocabulary.verbs[cls].phrases) {
-            for (const target of voice.targets[language] ?? []) {
+            for (const target of voice?.targets?.[language] ?? []) {
               for (const filler of vocabulary.fillers) {
                 const words = normalizePhrase(`${verb} ${filler} ${target}`).split(" ");
                 expect(matchVoiceCommand(table, words), `${id}: ${verb} ${filler} ${target}`).toEqual({
@@ -124,9 +135,10 @@ describe("Voice Command defaults", () => {
     }
   });
 
-  it("gives every voice-eligible Command an event-free runner", () => {
+  it("gives every verb Command an event-free runner", () => {
     for (const id of voiceEligibleCommands()) {
       const voice = (COMMANDS[id] as CommandDef).voice;
+      if (!voice?.verbs) continue;
       const runners = VOICE_RUNNERS[id];
       const polarities = new Set(
         LANGUAGES.flatMap((language) =>
@@ -400,7 +412,7 @@ describe("Voice Command heard forms", () => {
       const fillers = new Set(vocabulary.fillers.map(normalizePhrase));
       const targets = new Set(
         voiceEligibleCommands().flatMap((id) =>
-          ((COMMANDS[id] as CommandDef).voice?.targets[language] ?? []).map(normalizePhrase)
+          ((COMMANDS[id] as CommandDef).voice?.targets?.[language] ?? []).map(normalizePhrase)
         )
       );
       const punctuation = new Set(
@@ -418,5 +430,58 @@ describe("Voice Command heard forms", () => {
         );
       }
     }
+  });
+});
+
+describe("label-derived whole-line phrases (ADR 0016)", () => {
+  const tables: Record<DictationLanguage, VoiceCommandTable> = {
+    en: buildVoiceCommandTable("en"),
+    es: buildVoiceCommandTable("es"),
+  };
+  const match = (language: DictationLanguage, line: string) =>
+    matchVoiceCommand(tables[language], phraseWords(line));
+
+  it("runs an explicit phrase with the label's words, whatever the casing", () => {
+    expect(match("en", "Dark theme.")).toEqual({ id: "global.themeDark", polarity: null });
+    expect(match("en", "dark THEME")).toEqual({ id: "global.themeDark", polarity: null });
+    expect(match("es", "Tema oscuro.")).toEqual({ id: "global.themeDark", polarity: null });
+  });
+
+  it("derives the phrase from the Dictation Language's label, not the UI language", () => {
+    expect(labelPhrase("global.gotoNotes", "es")).toBe("Ir a Notas");
+    expect(defaultWholeLinePhrases("global.gotoNotes", "es")).toEqual(["Ir a Notas"]);
+    expect(match("es", "Ir a Notas.")).toEqual({ id: "global.gotoNotes", polarity: null });
+    expect(match("en", "Ir a Notas.")).toBeNull();
+    expect(match("en", "Go to Notes.")).toEqual({ id: "global.gotoNotes", polarity: null });
+  });
+
+  it("leaves the phrase as text mid-sentence", () => {
+    const output = interpret({
+      line: "I like the dark theme a lot.",
+      before: "",
+      capabilities: { casing: false, punctuation: false, streaming: true },
+      table: buildPhraseTable("en"),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result.kind).toBe("edits");
+  });
+
+  it("lets an explicit phrase win over the label", () => {
+    expect(match("en", "open dictionary")).toEqual({ id: "editor.dictionary", polarity: null });
+    // "Look up word" is the Dictionary's label, but it answers to its
+    // explicit phrase; the line runs Word Lookup instead.
+    expect(match("en", "Look up word.")).toEqual({ id: "editor.lookUp", polarity: null });
+  });
+
+  it("replaces the derived phrase for that Command and language only", () => {
+    const custom: CustomVoiceCommands = { "global.gotoNotes": { en: ["open notes list"] } };
+    const enTable = buildVoiceCommandTable("en", custom);
+    const esTable = buildVoiceCommandTable("es", custom);
+    const runEn = (line: string) => matchVoiceCommand(enTable, phraseWords(line));
+    const runEs = (line: string) => matchVoiceCommand(esTable, phraseWords(line));
+    expect(runEn("open notes list")).toEqual({ id: "global.gotoNotes", polarity: null });
+    expect(runEn("Go to Notes.")).toBeNull();
+    expect(runEs("Ir a Notas.")).toEqual({ id: "global.gotoNotes", polarity: null });
+    expect(runEs("open notes list")).toBeNull();
   });
 });

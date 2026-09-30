@@ -355,7 +355,10 @@ describe("shortcut settings version 2: custom Voice Commands", () => {
         },
         singleKeyEnabled: true,
       }).voice
-    ).toEqual({ "editor.bold": { es: ["pon esto fuerte"] } });
+    ).toEqual({
+      "editor.bold": { es: ["pon esto fuerte"] },
+      "common.save": { en: ["save it now"] },
+    });
   });
 
   it("round-trips Voice Commands through the Shortcut File", () => {
@@ -398,10 +401,9 @@ describe("shortcut settings version 2: custom Voice Commands", () => {
     expect(result).toEqual({
       ok: true,
       custom: {},
-      voice: { "editor.bold": { es: ["pon esto fuerte"] } },
+      voice: { "editor.bold": { es: ["pon esto fuerte"] }, "common.save": { es: ["guardar ya"] } },
       dropped: [
         { id: "bogus.command", reason: "unknown" },
-        { id: "common.save", reason: "notVoice" },
         { id: "editor.italic", reason: "invalid" },
         { id: "editor.bold", language: "en", reason: "invalid" },
         { id: "editor.bold", language: "es", phrase: "negrita", reason: "tooShort" },

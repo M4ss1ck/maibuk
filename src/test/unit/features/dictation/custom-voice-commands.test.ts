@@ -96,14 +96,17 @@ describe("defaultVoicePhrases() / voicePhrases()", () => {
 });
 
 describe("normalizeCustomVoiceCommands()", () => {
-  it("drops unknown Commands, Commands that take no Voice Commands, and unknown languages", () => {
+  it("keeps known Commands and drops unknown Commands and unknown languages", () => {
     expect(
       normalizeCustomVoiceCommands({
         "bogus.command": { es: ["poner algo"] },
         "common.save": { en: ["save it now"] },
         "editor.bold": { fr: ["mettre gras"], es: ["pon esto fuerte"] },
       })
-    ).toEqual({ "editor.bold": { es: ["pon esto fuerte"] } });
+    ).toEqual({
+      "common.save": { en: ["save it now"] },
+      "editor.bold": { es: ["pon esto fuerte"] },
+    });
   });
 
   it("drops phrases under two words or empty after normalizing, and duplicates", () => {
@@ -253,13 +256,15 @@ describe("findPhraseConflict()", () => {
     // An escape word that starts a Voice Command would type it as text.
     expect(alias("poner", {}, "literal")).toMatchObject({
       kind: "voiceCommand",
-      commandId: "editor.bold",
+      commandId: "editor.uppercase",
     });
     // The Spoken Punctuation rules still apply first.
     expect(alias("punto")).toEqual({ kind: "duplicate", entryId: "punto" });
     expect(alias("la coma")).toBeNull();
   });
 
+  // Every Command is eligible now, so this walks the whole registry: the
+  // conflict check builds a table per phrase, well past the default budget.
   it("keeps every default phrase clear of every other phrase (registry gate)", () => {
     for (const language of ["en", "es"] as const) {
       for (const id of voiceEligibleCommands()) {
@@ -271,7 +276,7 @@ describe("findPhraseConflict()", () => {
         }
       }
     }
-  });
+  }, 60_000);
 
   it("refuses a demonstrative mark phrase as another Command's Voice Command", () => {
     expect(

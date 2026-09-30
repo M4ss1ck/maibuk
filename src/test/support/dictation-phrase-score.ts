@@ -53,15 +53,16 @@ export interface VoiceUnits {
   targets: string[];
 }
 
-/** Each voice-eligible Command's verb phrases and target nouns in one language. */
+/** Each verb Command's verb phrases and target nouns in one language. */
 export function voiceUnits(language: DictationLanguage): VoiceUnits[] {
   const vocabulary = VOICE_VOCABULARY[language];
   const units: VoiceUnits[] = [];
   for (const id of COMMAND_IDS) {
     const voice = (COMMANDS[id] as CommandDef).voice;
-    if (!voice) continue;
-    const verbs = [...new Set(voice.verbs.flatMap((cls) => vocabulary.verbs[cls].phrases))];
-    units.push({ id, verbs, targets: [...(voice.targets[language] ?? [])] });
+    const verbs = voice?.verbs;
+    if (!verbs) continue;
+    const verbPhrases = [...new Set(verbs.flatMap((cls) => vocabulary.verbs[cls].phrases))];
+    units.push({ id, verbs: verbPhrases, targets: [...(voice?.targets?.[language] ?? [])] });
   }
   return units;
 }
@@ -113,7 +114,8 @@ export function defaultPhrases(language: DictationLanguage): DefaultPhrase[] {
   const seen = new Set<string>();
   for (const { id, phrase } of voiceCommandPhrases(language)) {
     const split = splitVoicePhrase(phrase, language, id);
-    if (!split) throw new Error(`cannot split default phrase "${phrase}" of ${id}`);
+    // Whole-line label phrases have no verb and target units to infer from.
+    if (!split) continue;
     const key = `${id}|${spokenKey(phrase, language)}`;
     if (seen.has(key)) continue;
     seen.add(key);

@@ -409,7 +409,7 @@ async function openBoldVoice() {
 }
 
 describe("Shortcut Editor: Voice commands", { timeout: 20_000 }, () => {
-  it("shows the Voice list on a voice-eligible row only", async () => {
+  it("shows the Voice list on every row", async () => {
     await openEditor();
     const user = userEvent.setup();
     await focusRow(user, "editor.bold");
@@ -419,7 +419,8 @@ describe("Shortcut Editor: Voice commands", { timeout: 20_000 }, () => {
     );
     expect(grid).toHaveTextContent("make bold");
     await focusRow(user, "shortcuts.syncNow");
-    expect(screen.getByRole("grid")).not.toHaveTextContent("shortcutEditor.voice.rowLabel");
+    expect(screen.getByRole("grid")).toHaveTextContent("shortcutEditor.voice.rowLabel");
+    expect(screen.getByRole("grid")).toHaveTextContent("Sync now");
   });
 
   it("opens from the row with focus inside, and Escape returns focus to Voice", async () => {
@@ -429,6 +430,28 @@ describe("Shortcut Editor: Voice commands", { timeout: 20_000 }, () => {
     await vi.waitFor(() => expect(opener).toHaveFocus());
     // The Shortcut Editor is still open underneath.
     expect(screen.getByRole("searchbox")).toBeInTheDocument();
+  });
+
+  it("opens Voice commands on a non-editor row and lists its derived label phrase", async () => {
+    const { user } = await openEditor();
+    await focusRow(user, "shortcuts.gotoNotes");
+    for (let press = 0; press < 8; press += 1) {
+      if (
+        /^shortcutEditor\.voice\.open/.test(document.activeElement?.getAttribute("aria-label") ?? "")
+      )
+        break;
+      await user.keyboard("{ArrowRight}");
+    }
+    expectFocusName(/^shortcutEditor\.voice\.open/);
+    const opener = document.activeElement as HTMLElement;
+    await user.keyboard("{Enter}");
+    const dialog = await findDialogTitled(
+      'shortcutEditor.voice.title {"command":"shortcuts.gotoNotes"}'
+    );
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(within(dialog).getByRole("grid")).toHaveTextContent("Go to Notes");
+    await user.keyboard("{Escape}");
+    await vi.waitFor(() => expect(opener).toHaveFocus());
   });
 
   it("adds a phrase for the current Dictation Language, replacing the defaults", async () => {
