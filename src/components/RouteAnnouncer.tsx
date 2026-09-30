@@ -39,7 +39,14 @@ export function RouteAnnouncer() {
   }, [pathname]);
 
   return (
-    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+    // Kept visible under an open Modal, like React Aria's own announcer.
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className="sr-only"
+      data-live-announcer="true"
+    >
       {heading}
     </div>
   );

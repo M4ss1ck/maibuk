@@ -156,6 +156,8 @@ const { tutorialTargetSelector } = await import("@/components/tutorial/TutorialR
 const { resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
 const { resetAutoSyncForTests, runAutoSync } = await import("@/features/sync/auto-sync");
 const { useSyncStore } = await import("@/features/sync/store");
+const { useDictationStore } = await import("@/features/dictation/store");
+const { toast } = await import("@/components/ui/Toast");
 
 const en = (key: string, options?: Record<string, unknown>) =>
   (i18n.t as unknown as (k: string, o?: Record<string, unknown>) => string)(key, {
@@ -619,6 +621,76 @@ describe("running the Tutorial again", () => {
     const resumed = await findCard("books.new-book");
     await waitFor(() => expect(resumed.contains(document.activeElement)).toBe(true));
     expect(useTutorialStore.getState().status).toBe("running");
+  }, 60_000);
+});
+
+// Issue #336: a Modal hides everything outside it from assistive technology.
+// The live regions the app shell mounts beside the routes (Dictation, toasts,
+// route changes) must stay out of that, or what they say while a dialog is
+// open, like a Voice Command's refusal, is never heard. Regions inside the
+// Tutorial boundary belong to a screen and are rightly hidden with it.
+describe("the app shell's live regions", () => {
+  const LIVE_REGIONS = '[aria-live], [role="status"], [role="alert"]';
+
+  function hiddenShellRegions(): Element[] {
+    return [...document.querySelectorAll(LIVE_REGIONS)].filter(
+      (region) =>
+        region.closest("[data-tutorial-boundary]") === null &&
+        region.closest('[aria-modal="true"], [data-tutorial-card]') === null &&
+        region.closest('[inert], [aria-hidden="true"]') !== null
+    );
+  }
+
+  /** A status the accessibility tree reaches (no `hidden`) that says `text`. */
+  async function expectStatusHeard(text: string) {
+    await waitFor(() =>
+      expect(screen.getAllByRole("status").some((status) => status.textContent?.includes(text))).toBe(
+        true
+      )
+    );
+  }
+
+  afterEach(() => {
+    useDictationStore.setState({ announcement: "" });
+  });
+
+  it("stay reachable while a Modal is open, and say what happens meanwhile", async () => {
+    useTutorialStore.getState().dismiss(1);
+    renderApp("/");
+    await screen.findByRole("heading", { level: 1, name: en("books.title") });
+    const before = document.querySelectorAll(LIVE_REGIONS).length;
+
+    act(() => openInterruption?.());
+    await screen.findByRole("dialog", { name: "Sync Conflict" });
+    // The Modal really did hide the page behind it.
+    expect(screen.queryByRole("heading", { level: 1, name: en("books.title") })).toBeNull();
+    expect(before).toBeGreaterThan(0);
+    expect(hiddenShellRegions()).toEqual([]);
+
+    const refusal = en("dictation.voiceCommandRefusedDialogStuck", { command: "Go to Notes" });
+    act(() => useDictationStore.setState({ announcement: refusal }));
+    await expectStatusHeard(refusal);
+
+    act(() => toast.error("Sync failed"));
+    await expectStatusHeard("Sync failed");
+  }, 60_000);
+
+  it("stay reachable while the Tutorial runs, with and without a Modal over it", async () => {
+    useTutorialStore.getState().dismiss(1);
+    const user = userEvent.setup();
+    renderApp("/");
+    await screen.findByRole("heading", { level: 1, name: en("books.title") });
+    await user.keyboard("gu");
+    await findCard("books.gallery");
+    expect(hiddenShellRegions()).toEqual([]);
+    act(() => useDictationStore.setState({ announcement: "During the run" }));
+    await expectStatusHeard("During the run");
+
+    act(() => openInterruption?.());
+    await screen.findByRole("dialog", { name: "Sync Conflict" });
+    expect(hiddenShellRegions()).toEqual([]);
+    act(() => useDictationStore.setState({ announcement: "Over the Modal" }));
+    await expectStatusHeard("Over the Modal");
   }, 60_000);
 });
 

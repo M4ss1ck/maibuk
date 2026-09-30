@@ -88,8 +88,12 @@ export function forceToastError(message: string): void {
 export function ToastViewport() {
   const toasts = useToastStore((state) => state.toasts);
 
+  // Toasts paint above an open Modal, so they join React Aria's top layer:
+  // the Modal leaves them visible to assistive technology, as React Aria's
+  // own toast region does.
   return (
     <div
+      data-react-aria-top-layer
       className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-50 flex flex-col gap-2 pointer-events-none"
       aria-live="polite"
     >
