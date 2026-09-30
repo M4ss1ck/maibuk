@@ -144,17 +144,15 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
     }
   }, [book, chapters, epubOptions, pdfOptions, format, onClose, t]);
 
-  const handleClose = useCallback(() => {
-    if (progress.status !== "generating" && progress.status !== "saving") {
-      onClose();
-      setProgress({ status: "idle", message: "" });
-    }
-  }, [onClose, progress.status]);
+  const isExporting = progress.status === "preparing" || progress.status === "saving";
 
-  const isExporting =
-    progress.status === "preparing" ||
-    progress.status === "generating" ||
-    progress.status === "saving";
+  // A busy export refuses every close path, so the download never fires after
+  // the dialog is gone and a navigating Command is refused (issue #328).
+  const handleClose = useCallback(() => {
+    if (isExporting) return;
+    onClose();
+    setProgress({ status: "idle", message: "" });
+  }, [onClose, isExporting]);
 
   const exportableChapters = chapters.filter((ch) => ch.isIncludedInExport);
 
@@ -432,9 +430,7 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
           }`}
         >
           <div className="flex items-center gap-2">
-            {(progress.status === "preparing" ||
-              progress.status === "generating" ||
-              progress.status === "saving") && <SpinnerIcon className="h-4 w-4" />}
+            {isExporting && <SpinnerIcon className="h-4 w-4" />}
             {progress.status === "complete" && <CheckIcon className="h-4 w-4" />}
             {progress.status === "error" && <XIcon className="h-4 w-4" />}
             <span>{progress.message}</span>

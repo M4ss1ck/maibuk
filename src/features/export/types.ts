@@ -5,7 +5,7 @@ export interface EpubExportOptions {
 }
 
 export interface ExportProgress {
-  status: "idle" | "preparing" | "generating" | "saving" | "complete" | "error";
+  status: "idle" | "preparing" | "saving" | "complete" | "error";
   message: string;
   progress?: number;
 }
