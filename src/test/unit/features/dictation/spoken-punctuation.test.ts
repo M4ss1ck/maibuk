@@ -288,6 +288,25 @@ describe("findAliasRefusal()", () => {
       })
     ).toEqual({ kind: "duplicate", entryId: "mayusculasActivadas" });
   });
+
+  it("refuses numeral as a duplicate of its entry (#272)", () => {
+    expect(
+      findAliasRefusal({
+        language: "en",
+        entryId: "comma",
+        alias: "numeral",
+        settings: defaultSpokenPunctuationSettings().en,
+      })
+    ).toEqual({ kind: "duplicate", entryId: "numeral" });
+    expect(
+      findAliasRefusal({
+        language: "es",
+        entryId: "coma",
+        alias: "numeral",
+        settings: defaultSpokenPunctuationSettings().es,
+      })
+    ).toEqual({ kind: "duplicate", entryId: "numeral" });
+  });
 });
 
 describe("normalizeSpokenPunctuationSettings()", () => {

@@ -1873,6 +1873,7 @@
         "cap": "Capitalizes the next word",
         "caps_on": "Turns all caps on",
         "caps_off": "Turns all caps off",
+        "numeral": "Writes the next number in digits",
         "literal": "Writes the next word literally",
         "scratch": "Removes the last dictated sentence"
       },

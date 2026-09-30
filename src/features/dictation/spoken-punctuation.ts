@@ -17,6 +17,7 @@ export type PhraseAction =
   | { kind: "cap" }
   | { kind: "caps_on" }
   | { kind: "caps_off" }
+  | { kind: "numeral" }
   | { kind: "literal" }
   | { kind: "scratch" };
 

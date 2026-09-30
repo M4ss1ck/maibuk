@@ -42,6 +42,8 @@ function actionLabel(action: PhraseAction, t: TFunction): string {
       return t("dictation.spokenPunctuation.insertsLabels.caps_on");
     case "caps_off":
       return t("dictation.spokenPunctuation.insertsLabels.caps_off");
+    case "numeral":
+      return t("dictation.spokenPunctuation.insertsLabels.numeral");
     case "literal":
       return t("dictation.spokenPunctuation.insertsLabels.literal");
     case "scratch":

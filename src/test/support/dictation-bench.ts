@@ -44,7 +44,7 @@ interface LanguageData {
 
 // Each line starts with a Voice Command verb so the whole-line match gets past
 // the verb before it fails, repeats the prose run the synthetic phrases start
-// with, and hits every kind of match: marks, layout, cap, literal, Vocabulary,
+// with, and hits every kind of match: marks, layout, cap, numeral, literal, Vocabulary,
 // and bare phrase prefixes ("question", "open", "nuevo") that miss, and ends
 // with the language's demonstrative, so the match also tries the line without
 // it ("bold that").
@@ -56,8 +56,8 @@ const DATA: Record<DictationLanguage, LanguageData> = {
       { heard: "tip tap", written: "TipTap" },
     ],
     line:
-      "make the quiet river ran past our old mill comma the quiet river ran past our old mill " +
-      "period question the quiet river ran past our old mill question mark new paragraph " +
+      "make the quiet river ran past our old mill comma numeral nine hundred and ninety nine thousand and one period " +
+      "question the quiet river ran past our old mill question mark new paragraph " +
       "capitalize moonshine said tip tap the quiet river ran past literal comma our old mill " +
       "open quote the quiet river ran close quote exclamation point new line open the old mill that",
     before:
@@ -72,8 +72,8 @@ const DATA: Record<DictationLanguage, LanguageData> = {
       { heard: "tip tap", written: "TipTap" },
     ],
     line:
-      "poner el viejo molino junto al río que corre coma el viejo molino junto al río que corre " +
-      "punto y coma abre el viejo molino junto al río que corre signo de interrogación " +
+      "poner el viejo molino junto al río que corre coma numeral novecientos noventa y nueve mil novecientos noventa y nueve punto y coma " +
+      "abre el viejo molino junto al río que corre signo de interrogación " +
       "nuevo párrafo mayúscula moonshine dijo tip tap el viejo molino junto al literal coma " +
       "río que corre abre comillas el viejo molino cierra comillas nueva línea nuevo el molino eso",
     before:

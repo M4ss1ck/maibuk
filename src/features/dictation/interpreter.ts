@@ -10,6 +10,7 @@
 // marks never double. Text is then cased and spaced using the bounded text
 // before the caret.
 import { normalizePhrase, tokenWords, tokenize, type Token } from "@/features/dictation/normalize";
+import { parseNumberWords } from "@/features/dictation/number-words";
 import type { DictationEdit } from "@/features/dictation/router";
 import {
   defaultTriggers,
@@ -133,6 +134,8 @@ function addPhrase<MatchType>(root: TokenTrieNode<MatchType>, phrase: string, en
 
 const OPENING_MARKS = new Set(["¿", "¡", "«", "“", "‘", "(", "[", "{"]);
 const SENTENCE_END_MARKS = new Set([".", "?", "!"]);
+// The longest number in range, "nine hundred and ninety nine million…", is 18 words.
+const MAX_NUMBER_WORDS = 24;
 
 /**
  * One shared sentence-boundary rule for the interpreter, the editor target,
@@ -459,6 +462,30 @@ export function interpret(input: InterpretInput): InterpretResult {
     return null;
   };
 
+  // The number a "numeral" modifier writes: the longest run of number words
+  // from `from` (a hyphen may join two of them, "twenty-one"), or a number
+  // the model already wrote in digits, which passes through as written.
+  const numberRunAt = (from: number): { text: string; end: number } | null => {
+    const first = tokens[from];
+    if (first.protected) return null;
+    if (/^\p{Nd}+$/u.test(first.surface)) return { text: first.surface, end: from };
+    const words: string[] = [];
+    const at: number[] = [];
+    let j = from;
+    while (j < tokens.length && words.length < MAX_NUMBER_WORDS) {
+      const token = tokens[j];
+      if (token.protected || token.mark) break;
+      words.push(token.norm ?? "");
+      at.push(j);
+      const next = tokens[j + 1];
+      const after = tokens[j + 2];
+      j += next?.surface === "-" && after && !after.mark ? 2 : 1;
+    }
+    const parsed = parseNumberWords(words, table.language);
+    return parsed ? { text: String(parsed.value), end: at[parsed.length - 1] } : null;
+  };
+  const numerals = new Map<number, { text: string; end: number }>();
+
   // "literal" only escapes when the words right after it would otherwise act
   // (they start a matched phrase). Otherwise it is ordinary prose and stays
   // as text, so it never deletes a word. "capitalize"/"mayúscula" acts on the
@@ -467,6 +494,17 @@ export function interpret(input: InterpretInput): InterpretResult {
   for (const match of allMatches) {
     const isCap = match.entry.actions.some((action) => action.kind === "cap");
     const isLiteral = match.entry.actions.some((action) => action.kind === "literal");
+    const isNumeral = match.entry.actions.some((action) => action.kind === "numeral");
+    if (isNumeral) {
+      // With no number after it, "numeral" is prose and stays as written.
+      const target = immediateNextWord(match.end + 1);
+      const run = target === null ? null : numberRunAt(target);
+      if (run) {
+        numerals.set(match.start, run);
+        matches.push(match);
+      }
+      continue;
+    }
     if (!isCap && !isLiteral) {
       matches.push(match);
       continue;
@@ -547,6 +585,19 @@ export function interpret(input: InterpretInput): InterpretResult {
       emitActions(match.entry.actions);
       spokenPunctuationCount += 1;
       i = match.end + 1;
+      const numeral = numerals.get(match.start);
+      if (numeral) {
+        // The number words are spent on the digits. A phrase that starts
+        // inside the run and ends past it gives its tail back to prose.
+        for (let k = i; k <= numeral.end; k += 1) {
+          const inside = byStart.get(k);
+          if (!inside) continue;
+          byStart.delete(k);
+          for (let t = numeral.end + 1; t <= inside.end; t += 1) skip.delete(t);
+        }
+        appendWord(numeral.text);
+        i = numeral.end + 1;
+      }
       continue;
     }
     if (skip.has(i) || drop.has(i)) {
