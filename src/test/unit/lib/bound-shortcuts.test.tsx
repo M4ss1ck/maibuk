@@ -44,7 +44,7 @@ function bound() {
 
 describe("Bound Shortcuts", () => {
   beforeEach(() => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   });
 
   it("lists a shortcut while the screen that binds it is mounted, and still runs it", async () => {

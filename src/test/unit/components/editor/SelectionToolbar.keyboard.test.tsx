@@ -145,7 +145,7 @@ beforeEach(() => {
     return 0;
   });
   useSettingsStore.setState({ toolbarConfig: DEFAULT_TOOLBAR_CONFIG });
-  useModalStore.setState({ modalIds: [], openCount: 0 });
+  useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   useTutorialStore.setState({ status: "idle" });
   useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
   useBoundShortcutStore.setState({ counts: {} });

@@ -92,7 +92,7 @@ async function saveEdit(user: ReturnType<typeof userEvent.setup>, text: string) 
 }
 
 beforeEach(() => {
-  useModalStore.setState({ modalIds: [], openCount: 0 });
+  useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
 });
 
 afterEach(() => {

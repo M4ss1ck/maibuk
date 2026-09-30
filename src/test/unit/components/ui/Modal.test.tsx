@@ -40,7 +40,7 @@ import { runTopBackDismiss } from "@/lib/platform/backDismiss";
 describe("Modal modal scope registration", () => {
   beforeEach(() => {
     i18nState.language = "en";
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   });
 
   it("registers in the modal store when opened and unregisters on close", async () => {

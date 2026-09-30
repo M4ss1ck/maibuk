@@ -75,7 +75,7 @@ function renderToolbar() {
 }
 
 beforeEach(() => {
-  useModalStore.setState({ modalIds: [], openCount: 0 });
+  useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   useSettingsStore.setState({
     toolbarExpanded: false,
     showNotesChapter: false,

@@ -23,6 +23,7 @@ OUT_DIR="vendor/moonshine/e2e-voice"
 # phrase inside a test.
 PHRASES=(
   "dark-theme|en_US-lessac-medium|Dark theme."
+  "go-to-notes|en_US-lessac-medium|Go to Notes.|45|30"
   "focus-next|en_US-lessac-medium|Press the tab key.|45|30"
   "focus-previous|en_US-lessac-medium|Press shift tab key.|45|30"
   "focus-up|en_US-lessac-medium|Press Up.|45|30"

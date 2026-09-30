@@ -6,7 +6,7 @@ import { useModalScope } from "@/hooks/useModalScope";
 
 describe("modal store stack", () => {
   beforeEach(() => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   });
 
   it("duplicate registration of same ID is idempotent", () => {
@@ -43,7 +43,7 @@ describe("modal store stack", () => {
   });
 
   it("openCount never goes negative", () => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
 
     act(() => {
       useModalStore.getState().unregister("phantom");
@@ -70,7 +70,7 @@ describe("modal store stack", () => {
 
 describe("useModalScope", () => {
   beforeEach(() => {
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   });
 
   it("registers on mount and unregisters on unmount when isOpen is true", () => {

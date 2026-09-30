@@ -146,11 +146,11 @@ describe("NotesGallery", () => {
     expect(screen.getByPlaceholderText("notes.search")).toHaveFocus();
   });
 
-  it("runs enterList through runCommand and focuses the first note", () => {
+  it("runs enterList through runCommand and focuses the first note", async () => {
     render(<NotesGallery />);
 
     expect(document.body).toHaveFocus();
-    expect(runCommand("notes.enterList", { source: "voice" })).toBe("ran");
+    expect(await runCommand("notes.enterList", { source: "voice" })).toBe("ran");
     expect(screen.getAllByRole("row")[0]).toHaveFocus();
   });
 

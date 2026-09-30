@@ -86,7 +86,7 @@ describe("ExportDialog project EPUB options", () => {
 describe("ExportDialog modal registration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
     mockGetEpubStructure.mockResolvedValue(null);
     mockListBookStyles.mockResolvedValue([]);
   });

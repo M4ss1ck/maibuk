@@ -720,7 +720,7 @@ describe("Dictation Session Command Runner voice commands (#316)", () => {
     isEditorCommand,
     voiceCommandsAllowed,
   }: {
-    runCommand?: (id: CommandId) => CommandRunOutcome;
+    runCommand?: (id: CommandId) => Promise<CommandRunOutcome>;
     isEditorCommand?: (id: CommandId) => boolean;
     voiceCommandsAllowed?: () => boolean;
   }) {
@@ -742,7 +742,7 @@ describe("Dictation Session Command Runner voice commands (#316)", () => {
   }
 
   it("runs a non-editor voice command through runCommand and announces it", async () => {
-    const stub = vi.fn(() => "ran" as const);
+    const stub = vi.fn(async () => "ran" as const);
     const { session, target, voice, stats } = runnerSession({
       runCommand: stub,
       isEditorCommand: () => false,
@@ -752,18 +752,20 @@ describe("Dictation Session Command Runner voice commands (#316)", () => {
     await session.start();
     host.emit({ type: "final", text: "new book", latencyMs: 5 });
     expect(stub).toHaveBeenCalledWith("bookList.newBook");
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command",
+        id: "bookList.newBook",
+        polarity: null,
+      })
+    );
     expect(voice).not.toHaveBeenCalled();
     expect(target.commits).toEqual([]);
-    expect(notices).toContainEqual({
-      kind: "voice_command",
-      id: "bookList.newBook",
-      polarity: null,
-    });
     expect(stats.summary().voiceCommandCount).toBe(1);
   });
 
   it("announces an unavailable voice command and counts it without inserting", async () => {
-    const stub = vi.fn(() => "unavailable" as const);
+    const stub = vi.fn(async () => "unavailable" as const);
     const { session, target, stats } = runnerSession({
       runCommand: stub,
       isEditorCommand: () => false,
@@ -773,13 +775,18 @@ describe("Dictation Session Command Runner voice commands (#316)", () => {
     await session.start();
     host.emit({ type: "final", text: "new book", latencyMs: 5 });
     expect(target.commits).toEqual([]);
-    expect(notices).toContainEqual({ kind: "voice_command_unavailable", id: "bookList.newBook" });
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command_unavailable",
+        id: "bookList.newBook",
+      })
+    );
     expect(stats.summary().voiceCommandCount).toBe(0);
     expect(stats.summary().voiceCommandUnavailableCount).toBe(1);
   });
 
   it("announces a dialog-refused voice command and counts it without inserting", async () => {
-    const stub = vi.fn(() => "refused-dialog" as const);
+    const stub = vi.fn(async () => "refused-dialog" as const);
     const { session, target, stats } = runnerSession({
       runCommand: stub,
       isEditorCommand: () => false,
@@ -789,16 +796,18 @@ describe("Dictation Session Command Runner voice commands (#316)", () => {
     await session.start();
     host.emit({ type: "final", text: "new book", latencyMs: 5 });
     expect(target.commits).toEqual([]);
-    expect(notices).toContainEqual({
-      kind: "voice_command_refused",
-      id: "bookList.newBook",
-      reason: "dialog",
-    });
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command_refused",
+        id: "bookList.newBook",
+        reason: "dialog",
+      })
+    );
     expect(stats.summary().voiceCommandRefusedCount).toBe(1);
   });
 
   it("announces a tutorial-refused voice command and counts it without inserting", async () => {
-    const stub = vi.fn(() => "refused-tutorial" as const);
+    const stub = vi.fn(async () => "refused-tutorial" as const);
     const { session, target, stats } = runnerSession({
       runCommand: stub,
       isEditorCommand: () => false,
@@ -808,16 +817,40 @@ describe("Dictation Session Command Runner voice commands (#316)", () => {
     await session.start();
     host.emit({ type: "final", text: "new book", latencyMs: 5 });
     expect(target.commits).toEqual([]);
-    expect(notices).toContainEqual({
-      kind: "voice_command_refused",
-      id: "bookList.newBook",
-      reason: "tutorial",
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command_refused",
+        id: "bookList.newBook",
+        reason: "tutorial",
+      })
+    );
+    expect(stats.summary().voiceCommandRefusedCount).toBe(1);
+  });
+
+  it("announces a stuck-dialog refusal and counts it without inserting", async () => {
+    const stub = vi.fn(async () => "refused-dialog-close" as const);
+    const { session, target, stats } = runnerSession({
+      runCommand: stub,
+      isEditorCommand: () => false,
     });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "new book", latencyMs: 5 });
+    expect(target.commits).toEqual([]);
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command_refused",
+        id: "bookList.newBook",
+        reason: "dialog_refused",
+      })
+    );
+    expect(stats.summary().voiceCommandCount).toBe(0);
     expect(stats.summary().voiceCommandRefusedCount).toBe(1);
   });
 
   it("still runs an editor-keymap command on the target instead of runCommand", async () => {
-    const stub = vi.fn(() => "ran" as const);
+    const stub = vi.fn(async () => "ran" as const);
     const voice = vi.fn(() => "ran" as const);
     const target = { ...fakeTarget("a"), voice };
     const stats = createLineStats();

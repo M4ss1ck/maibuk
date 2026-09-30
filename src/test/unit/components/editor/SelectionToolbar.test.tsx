@@ -64,7 +64,7 @@ beforeEach(() => {
     return 0;
   });
   useSettingsStore.setState({ toolbarConfig: DEFAULT_TOOLBAR_CONFIG });
-  useModalStore.setState({ modalIds: [], openCount: 0 });
+  useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
 });
 
 describe("SelectionToolbar", () => {

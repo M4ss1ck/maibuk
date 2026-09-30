@@ -72,7 +72,7 @@ export function Modal({
   const { t } = useTranslation();
   const sizeClass = size === "wide" ? "sm:max-w-5xl" : "sm:max-w-md";
 
-  const modalId = useModalScope(isOpen);
+  const modalId = useModalScope(isOpen, () => onCloseRef.current());
   const modalRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;

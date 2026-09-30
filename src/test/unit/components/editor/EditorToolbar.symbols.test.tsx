@@ -171,7 +171,7 @@ describe("editor.insertSymbol shortcut", () => {
   beforeEach(() => {
     mockUseShortcuts.mockClear();
     mockUseShortcuts.mockImplementation(() => undefined);
-    useModalStore.setState({ modalIds: [], openCount: 0 });
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
     useSettingsStore.setState({
       toolbarExpanded: false,
       showNotesChapter: false,

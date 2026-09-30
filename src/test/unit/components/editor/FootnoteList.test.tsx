@@ -79,7 +79,7 @@ async function chooseMenuItem(user: ReturnType<typeof userEvent.setup>, name: st
 
 beforeEach(() => {
   editorRef = null;
-  useModalStore.setState({ modalIds: [], openCount: 0 });
+  useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
 });
 
