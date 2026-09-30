@@ -1,12 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import {
   createDictationSession,
+  HANDOFF_LIMIT_MS,
   type DictationTarget,
   type SessionNotice,
 } from "@/features/dictation/session";
 import type { CommandRunOutcome } from "@/lib/command-runner";
 import type { CommandId } from "@/lib/shortcut-registry";
-import { createRouter } from "@/features/dictation/router";
+import { createRouter, type RouteResult } from "@/features/dictation/router";
 import { createLineStats } from "@/features/dictation/stats";
 import {
   DictationError,
@@ -963,5 +964,229 @@ describe("Dictation Session all-caps lock (#271)", () => {  it("notifies when a 
     expect(copy).not.toHaveBeenCalled();
     expect(notices).not.toContainEqual({ kind: "orphan_copied" });
     expect(notices).toContainEqual({ kind: "caps_lock", on: true });
+  });
+});
+
+describe("Dictation Session navigation hand-off (#320)", () => {
+  let resolveRun: ((outcome: CommandRunOutcome) => void) | null;
+  let runCommand: Mock<(id: CommandId) => Promise<CommandRunOutcome>>;
+
+  function handoffSession(routeText: (text: string) => RouteResult | null) {
+    return createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(routeText),
+      runCommand: (...args) => runCommand(...args),
+      isEditorCommand: () => false,
+      isNavigatingCommand: (id) => id === "global.gotoNotes",
+      notify: (n) => void notices.push(n),
+      copyText: (t) => copyText(t),
+      stats: createLineStats(),
+    });
+  }
+
+  // "go notes" is the navigating Voice Command; anything else is plain prose.
+  const routeForHandoff = (text: string): RouteResult | null =>
+    text === "go notes"
+      ? { kind: "voice_command", id: "global.gotoNotes", polarity: null }
+      : null;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resolveRun = null;
+    runCommand = vi.fn(
+      () =>
+        new Promise<CommandRunOutcome>((resolve) => {
+          resolveRun = resolve;
+        })
+    );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function flushRuns() {
+    for (let i = 0; i < 10 && resolveRun === null; i++) await Promise.resolve();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  }
+
+  it("queues a line mid-window and hands it to the editor that takes the caret", async () => {
+    const session = handoffSession(routeForHandoff);
+    const oldTarget = fakeTarget("old");
+    const unregisterOld = session.register(oldTarget);
+    session.focus("old");
+    await session.start();
+    host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+    expect(runCommand).toHaveBeenCalledWith("global.gotoNotes");
+
+    // The route change unmounts the old editor while the run is pending.
+    unregisterOld();
+    expect(session.getSnapshot().status).toBe("listening");
+
+    // A line finishing mid-window queues instead of routing; partials are
+    // shown nowhere.
+    host.emit({ type: "partial", text: "hel" });
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+    expect(oldTarget.commits).toEqual([]);
+    expect(oldTarget.partials).toEqual([""]);
+
+    const next = fakeTarget("new");
+    session.register(next);
+    session.focus("new");
+    expect(next.commits).toEqual(["hello"]);
+    expect(session.getSnapshot().status).toBe("listening");
+
+    resolveRun?.("ran");
+    await flushRuns();
+    expect(notices).toContainEqual({
+      kind: "voice_command",
+      id: "global.gotoNotes",
+      polarity: null,
+    });
+    // The window already closed at focus: the timer never starts, and the
+    // Session keeps listening past the hand-off wait.
+    vi.advanceTimersByTime(HANDOFF_LIMIT_MS + 1000);
+    await flushRuns();
+    expect(session.getSnapshot().status).toBe("listening");
+    expect(copied).toEqual([]);
+  });
+
+  it("stops with handoff_no_editor when no editor takes the caret in time", async () => {
+    const session = handoffSession(routeForHandoff);
+    const unregister = session.register(fakeTarget("old"));
+    session.focus("old");
+    await session.start();
+    host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+    unregister();
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+
+    resolveRun?.("ran");
+    await flushRuns();
+    vi.advanceTimersByTime(HANDOFF_LIMIT_MS);
+    await flushRuns();
+
+    expect(copied).toContain("hello");
+    expect(notices).toContainEqual({ kind: "handoff_no_editor" });
+    await vi.waitFor(() => expect(session.getSnapshot().status).toBe("idle"));
+  });
+
+  it.each(["unavailable", "refused-dialog-close"] as const)(
+    "keeps its target with no window when a navigating run ends %s",
+    async (outcome) => {
+      const session = handoffSession(routeForHandoff);
+      const target = fakeTarget("a");
+      session.register(target);
+      session.focus("a");
+      await session.start();
+      runCommand.mockResolvedValueOnce(outcome);
+      host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+      await flushRuns();
+
+      // No window: the next line routes live into the target that never left.
+      host.emit({ type: "final", text: "still here", latencyMs: 5 });
+      expect(target.commits).toEqual(["still here"]);
+      expect(session.getSnapshot().status).toBe("listening");
+      vi.advanceTimersByTime(HANDOFF_LIMIT_MS + 1000);
+      await flushRuns();
+      expect(session.getSnapshot().status).toBe("listening");
+      expect(copied).toEqual([]);
+    }
+  );
+
+  it("stops as today when the target leaves after a non-navigating run", async () => {
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(
+        (text): RouteResult | null =>
+          text === "toggle theme"
+            ? { kind: "voice_command", id: "global.toggleTheme", polarity: null }
+            : null
+      ),
+      runCommand: vi.fn(async () => "ran" as const),
+      isEditorCommand: () => false,
+      isNavigatingCommand: (id) => id === "global.gotoNotes",
+      notify: (n) => void notices.push(n),
+      copyText: (t) => copyText(t),
+      stats: createLineStats(),
+    });
+    const unregister = session.register(fakeTarget("a"));
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "toggle theme", latencyMs: 5 });
+    unregister();
+    await vi.waitFor(() => expect(session.getSnapshot().status).toBe("idle"));
+    expect(copied).toEqual(["flushed"]);
+    expect(notices).toContainEqual({ kind: "orphan_copied" });
+  });
+
+  it("routes scratch after the hand-off to the new target only, from a clean history", async () => {
+    const routeText = (text: string): RouteResult | null =>
+      text === "go notes"
+        ? { kind: "voice_command", id: "global.gotoNotes", polarity: null }
+        : text === "scratch that"
+          ? { kind: "scratch" }
+          : null;
+    const session = handoffSession(routeText);
+    const oldScratch = vi.fn(() => "removed" as const);
+    const oldReset = vi.fn();
+    const unregisterOld = session.register({ ...fakeTarget("old"), scratch: oldScratch, resetScratch: oldReset });
+    session.focus("old");
+    await session.start();
+    host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+    unregisterOld();
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+
+    const newScratch = vi.fn(() => "removed" as const);
+    const newReset = vi.fn();
+    session.register({ ...fakeTarget("new"), scratch: newScratch, resetScratch: newReset });
+    session.focus("new");
+    resolveRun?.("ran");
+    await flushRuns();
+
+    // "scratch that" after the hand-off reaches only the new editor, whose
+    // history was reset when it took the caret.
+    host.emit({ type: "final", text: "scratch that", latencyMs: 5 });
+    expect(newScratch).toHaveBeenCalledTimes(1);
+    expect(oldScratch).not.toHaveBeenCalled();
+    expect(newReset).toHaveBeenCalled();
+  });
+
+  it("drops the queue when the Session stops mid-window", async () => {
+    const session = handoffSession(routeForHandoff);
+    const unregister = session.register(fakeTarget("old"));
+    session.focus("old");
+    await session.start();
+    host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+    unregister();
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+
+    await session.stop();
+    expect(session.getSnapshot().status).toBe("idle");
+    resolveRun?.("ran");
+    await flushRuns();
+    vi.advanceTimersByTime(HANDOFF_LIMIT_MS + 1000);
+    await flushRuns();
+    expect(copied).not.toContain("hello");
+    expect(notices).not.toContainEqual({ kind: "handoff_no_editor" });
+  });
+
+  it("flushes the queue into the old editor when it survives the run", async () => {
+    const session = handoffSession(routeForHandoff);
+    const target = fakeTarget("a");
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+    // The run kept the route (or the editor): the target never left.
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+    resolveRun?.("ran");
+    await flushRuns();
+    vi.advanceTimersByTime(HANDOFF_LIMIT_MS);
+    await flushRuns();
+    expect(target.commits).toEqual(["hello"]);
+    expect(session.getSnapshot().status).toBe("listening");
+    expect(copied).toEqual([]);
   });
 });

@@ -1854,6 +1854,7 @@
     },
     "orphanCopied": "Dictation stopped. The last phrase was copied to the clipboard.",
     "orphanLost": "Dictation stopped. Copy the last phrase: {{text}}",
+    "handoffNoEditor": "No editor here, so Dictation stopped.",
     "section": {
       "title": "Dictation",
       "models": "Models",

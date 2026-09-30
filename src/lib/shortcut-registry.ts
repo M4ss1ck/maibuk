@@ -90,6 +90,14 @@ export const COMMANDS = {
     contexts: ["global"],
     defaults: [["g", "e"]],
     navigates: true,
+    // The English model hears "Ephemeral" as "a femoral" (measured in the E2E
+    // lane), so the Command also answers to a spelling it transcribes: "go to
+    // a femoral". Both stay listed, and the label remains the first phrase.
+    voice: {
+      phrases: {
+        en: ["go to ephemeral", "go to a femoral"],
+      },
+    },
   },
   "global.gotoMetrics": {
     labelKey: "shortcuts.gotoMetrics",

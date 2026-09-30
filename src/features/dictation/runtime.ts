@@ -130,6 +130,7 @@ async function build(): Promise<DictationRuntime> {
     // Commands outside the editor's keymap run through the Command Runner.
     runCommand: (id) => runCommand(id, { source: "voice" }),
     isEditorCommand: (id) => getCommand(id).source === "editor-keymap",
+    isNavigatingCommand: (id) => getCommand(id).navigates === true,
     notify: (notice) => {
       if (notice.kind === "stopped") interpreterState = INITIAL_INTERPRETER_STATE;
       notify(notice);

@@ -178,6 +178,7 @@ vi.mock("../../../components/versions/HistoryMenuButton", () => ({
 }));
 
 import { BookEditor } from "@/pages/BookEditor";
+import { registerCommandSource, runCommand } from "@/lib/command-runner";
 import {
   activateTutorialDatabase,
   resetLibrarySwitchForTests,
@@ -209,6 +210,31 @@ describe("BookEditor never silently loses an edit", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     resetLibrarySwitchForTests();
+  });
+
+  it("saves typed text when a voice command navigates away", async () => {
+    const { unmount } = render(<BookEditor />);
+
+    act(() => {
+      editorProps.current?.onUpdate("<p>Typed, then a voice command moved on</p>");
+    });
+    // The navigating Voice Command runs through the Command Runner; its
+    // binding unmounts the editor the way a route change does.
+    const unregisterSource = registerCommandSource(() => [
+      { id: "global.gotoNotes", onTrigger: () => unmount() },
+    ]);
+    try {
+      await act(async () => {
+        expect(await runCommand("global.gotoNotes", { source: "voice" })).toBe("ran");
+      });
+      await settle();
+    } finally {
+      unregisterSource();
+    }
+
+    expect(mockUpdateChapter).toHaveBeenCalledWith("chapter-1", {
+      content: "<p>Typed, then a voice command moved on</p>",
+    });
   });
 
   it("takes the close Checkpoint before a Tutorial switch can happen", async () => {

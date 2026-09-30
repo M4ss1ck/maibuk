@@ -14,15 +14,25 @@ vi.mock("@/features/dictation/runtime", () => ({
 }));
 const { useDictationStore } = await import("@/features/dictation/store");
 const { DictationControl } = await import("@/components/dictation/DictationControl");
+const { DictationLiveRegion } = await import("@/components/dictation/DictationLiveRegion");
 
 const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast")!.id;
 const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "fast")!.id;
 
 function renderControl() {
+  // The live region lives in the app shell beside the control.
   return render(
     <MemoryRouter initialEntries={["/book/b1"]}>
       <Routes>
-        <Route path="/book/:bookId" element={<DictationControl />} />
+        <Route
+          path="/book/:bookId"
+          element={
+            <>
+              <DictationControl />
+              <DictationLiveRegion />
+            </>
+          }
+        />
         <Route path="/settings" element={<p>settings page</p>} />
       </Routes>
     </MemoryRouter>
@@ -53,8 +63,8 @@ describe("DictationControl", () => {
     useDictationStore.setState({
       support: { supported: false, reason: "library_missing" },
     });
-    const { container } = renderControl();
-    expect(container).toBeEmptyDOMElement();
+    renderControl();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("toggles dictation by keyboard", async () => {
@@ -199,7 +209,7 @@ describe("DictationControl", () => {
 
   it("renders nothing when Dictation is off", () => {
     useDictationStore.setState({ enabled: false });
-    const { container } = renderControl();
-    expect(container).toBeEmptyDOMElement();
+    renderControl();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });

@@ -30,7 +30,7 @@ export interface DictationStoreState {
   installed: string[];
   downloads: Record<string, { done: number; total: number }>;
   preferredTier: Record<DictationLanguage, ModelTier>;
-  /** The latest screen-reader announcement; the control renders it in a live region. */
+  /** The latest screen-reader announcement; the app shell renders it in a live region. */
   announcement: string;
   /** The control's language choice for the Session; `session.setLanguage` owns the engine. */
   languageOverride: DictationLanguage | null;

@@ -16,6 +16,7 @@ const { useBoundShortcutStore } = await import("@/lib/bound-shortcuts");
 const { useDictationStore } = await import("@/features/dictation/store");
 
 const { DictationControl } = await import("@/components/dictation/DictationControl");
+const { DictationLiveRegion } = await import("@/components/dictation/DictationLiveRegion");
 const { useShortcutSettingsStore } = await import("@/features/settings/shortcut-store");
 const { MODEL_CATALOG } = await import("@/features/dictation/catalog");
 const i18n = (await import("@/i18n")).default;
@@ -80,6 +81,7 @@ describe("Cycle Dictation language", () => {
         <GlobalShortcuts />
         <textarea aria-label="writing" />
         <DictationControl />
+        <DictationLiveRegion />
       </MemoryRouter>
     );
   }
