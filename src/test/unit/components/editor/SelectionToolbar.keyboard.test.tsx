@@ -93,7 +93,14 @@ function mountSelectionToolbar(config: ToolbarConfig = DEFAULT_TOOLBAR_CONFIG) {
   editor.view.coordsAtPos = () =>
     ({ top: 100, bottom: 120, left: 50, right: 60 }) as unknown as DOMRect;
 
-  render(<SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />);
+  // A field outside the editor: the Command is bound only while the text has
+  // focus, so the tests need somewhere else for focus to go.
+  render(
+    <>
+      <input aria-label="Outside field" />
+      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
+    </>
+  );
   return { editor, host };
 }
 
@@ -306,6 +313,26 @@ describe("SelectionToolbar keyboard operation", () => {
     act(() => {
       editor.commands.setTextSelection(1);
     });
+    expect(isBound()).toBe(false);
+  });
+
+  it("binds its Command only while the editor has focus", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar();
+
+    selectHello(editor);
+    expect(isBound()).toBe(true);
+
+    const outside = screen.getByRole("textbox", { name: "Outside field" });
+    await user.click(outside);
+    expect(document.activeElement).toBe(outside);
+
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+
+    // The bubble is still shown, but the text is not what has focus, so the
+    // Command is not a Bound Shortcut and its keys do nothing.
+    expect(toolbar()).toBeInTheDocument();
+    expect(document.activeElement).toBe(outside);
     expect(isBound()).toBe(false);
   });
 

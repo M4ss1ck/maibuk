@@ -7,7 +7,6 @@ import { Toolbar } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useModalStore } from "@/components/ui/modal-store";
 import { FormattingButtons } from "@/components/editor/FormattingButtons";
-import { EditorFocusPolicyContext } from "@/components/editor/toolbar/toolbar-focus-context";
 import { deriveFloatingGroupIds } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
 import { useShortcuts } from "@/lib/shortcuts";
@@ -41,6 +40,9 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     editor,
     selector: ({ editor: e }) => ({
       hasSelection: !e.state.selection.empty && !(e.state.selection instanceof NodeSelection),
+      // The Command reaches the bubble from the text, so it works only while
+      // the text has focus. Focus arrives as a transaction, so this is live.
+      isFocused: e.isFocused,
     }),
   });
 
@@ -49,6 +51,12 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
   const hasFloatingGroups = deriveFloatingGroupIds(toolbarConfig).length > 0;
 
   const isVisible = editorState.hasSelection && position !== null && !isAnyModalOpen && hasFloatingGroups;
+
+  /** Whether the bubble itself holds focus, so a command must not move it away. */
+  const toolbarHasFocus = useCallback(
+    () => toolbarRef.current?.contains(document.activeElement) === true,
+    []
+  );
 
   const updatePosition = useCallback(() => {
     if (!editor || editor.state.selection.empty) {
@@ -65,7 +73,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
 
     // While the toolbar holds focus it keeps its last place: a selection that
     // scrolled out of view must not take away the control the author is using.
-    if (toolbarRef.current?.contains(document.activeElement)) return;
+    if (toolbarHasFocus()) return;
 
     const { from, to } = editor.state.selection;
     const start = editor.view.coordsAtPos(from);
@@ -92,7 +100,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
       top: bubbleTop,
       left,
     });
-  }, [editor]);
+  }, [editor, toolbarHasFocus]);
 
   useEffect(() => {
     if (!editor) return;
@@ -118,10 +126,9 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     return () => scrollContainer.removeEventListener("scroll", updatePosition);
   }, [editor, updatePosition]);
 
-  const shouldFocusEditor = useCallback(
-    () => !toolbarRef.current?.contains(document.activeElement),
-    []
-  );
+  // A command from the bubble leaves focus where it is; the main toolbar's
+  // commands pull it back into the text.
+  const shouldFocusEditor = useCallback(() => !toolbarHasFocus(), [toolbarHasFocus]);
 
   // Focus the first control that can be operated, so the keyboard reaches the
   // toolbar's commands without a pointer.
@@ -133,68 +140,60 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
   useShortcuts([
     {
       id: "editor.focusSelectionToolbar",
-      enabled: isVisible,
+      enabled: isVisible && editorState.isFocused,
       allowInInput: true,
       onTrigger: focusFirstControl,
     },
   ]);
-
-  // React Aria's Toolbar keeps only DOM props on the toolbar element, and it
-  // binds its arrow-key capture itself; Escape and Home/End are ours, so they
-  // are registered on the element rather than passed as an `onKeyDown` prop.
-  useEffect(() => {
-    const toolbar = toolbarRef.current;
-    if (!toolbar) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      // A picker portaled out of the toolbar (a color) still bubbles through
-      // React, but it owns its own keys.
-      if (!toolbar.contains(event.target as Node)) return;
-      if (event.key === "Home" || event.key === "End") {
-        // React Aria's Toolbar handles the arrows but has no Home/End, so the
-        // walk goes through its focus manager, which skips disabled controls.
-        event.preventDefault();
-        event.stopPropagation();
-        if (event.key === "Home") focusManagerRef.current?.focusFirst();
-        else focusManagerRef.current?.focusLast();
-        return;
-      }
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      // Back to the text with the selection the toolbar was acting on.
-      editor.commands.focus();
-    };
-    toolbar.addEventListener("keydown", onKeyDown);
-    // A pointer press keeps focus in the text; only the keyboard Command moves
-    // focus into the bubble.
-    const onMouseDown = (event: MouseEvent) => {
-      if (toolbar.contains(event.target as Node)) event.preventDefault();
-    };
-    toolbar.addEventListener("mousedown", onMouseDown);
-    return () => {
-      toolbar.removeEventListener("keydown", onKeyDown);
-      toolbar.removeEventListener("mousedown", onMouseDown);
-    };
-  }, [editor, isVisible]);
 
   if (!isVisible) {
     return null;
   }
 
   return (
-    <EditorFocusPolicyContext.Provider value={shouldFocusEditor}>
+    <div
+      className="fixed z-50 selection-toolbar-enter"
+      style={{ top: `${position.top}px`, left: `${position.left}px` }}
+      onKeyDownCapture={(event) => {
+        // A picker portaled out of the bubble (a color) still bubbles through
+        // React, but it owns its own keys.
+        if (!event.currentTarget.contains(event.target as Node)) return;
+        if (event.key === "Home" || event.key === "End") {
+          // React Aria's Toolbar handles the arrows but has no Home/End, so the
+          // walk goes through its focus manager, which skips disabled controls.
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.key === "Home") focusManagerRef.current?.focusFirst();
+          else focusManagerRef.current?.focusLast();
+          return;
+        }
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        // Back to the text with the selection the toolbar was acting on.
+        editor.commands.focus();
+      }}
+      onMouseDown={(event) => {
+        // A pointer press keeps focus in the text; only the keyboard Command
+        // moves focus into the bubble.
+        if (event.currentTarget.contains(event.target as Node)) event.preventDefault();
+      }}
+    >
       <Toolbar
         ref={toolbarRef}
         orientation="horizontal"
         aria-label={t("editor.selectionToolbar")}
-        className="fixed z-50 flex items-center gap-0.5 px-1.5 py-1 bg-card border border-border rounded-lg shadow-lg selection-toolbar-enter"
-        style={{ top: `${position.top}px`, left: `${position.left}px` }}
+        className="flex items-center gap-0.5 px-1.5 py-1 bg-card border border-border rounded-lg shadow-lg"
       >
         <FocusScope>
           <FocusManagerBridge managerRef={focusManagerRef} />
-          <FormattingButtons editor={editor} onLinkClick={onLinkClick} />
+          <FormattingButtons
+            editor={editor}
+            onLinkClick={onLinkClick}
+            shouldFocusEditor={shouldFocusEditor}
+          />
         </FocusScope>
       </Toolbar>
-    </EditorFocusPolicyContext.Provider>
+    </div>
   );
 }

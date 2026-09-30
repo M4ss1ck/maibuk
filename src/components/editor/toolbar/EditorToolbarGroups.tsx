@@ -1,4 +1,4 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useEditorState, type Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
@@ -55,7 +55,6 @@ import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 import { Tooltip } from "@/components/ui";
 import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
-import { EditorFocusPolicyContext } from "@/components/editor/toolbar/toolbar-focus-context";
 import { useSettingsStore } from "@/features/settings/store";
 import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
 import type { ToolbarGroupId } from "@/features/settings/toolbar-config";
@@ -112,7 +111,11 @@ interface EditorToolbarGroupsProps {
   callbacks: ToolbarGroupCallbacks;
   iconSize?: "sm" | "md";
   wrapItems?: boolean;
+  /** Whether a command pulls focus into the editor before it runs. */
+  shouldFocusEditor?: () => boolean;
 }
+
+const alwaysFocusEditor = () => true;
 
 /** Tints the selected range with an uncommitted color; index.css reads these. */
 function previewSelectionColor(editor: Editor, kind: "text" | "highlight", color: string | null) {
@@ -133,6 +136,7 @@ export function EditorToolbarGroups({
   callbacks,
   iconSize = "md",
   wrapItems = false,
+  shouldFocusEditor = alwaysFocusEditor,
 }: EditorToolbarGroupsProps) {
   const { t } = useTranslation();
   const markdownHints = (name: string) =>
@@ -149,7 +153,6 @@ export function EditorToolbarGroups({
     },
   });
   const icon = iconSize === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
-  const shouldFocusEditor = useContext(EditorFocusPolicyContext);
   // The floating selection toolbar keeps focus on its own controls: a command
   // started from there must not pull the caret back out of the toolbar.
   const chain = () => (shouldFocusEditor() ? editor.chain().focus() : editor.chain());

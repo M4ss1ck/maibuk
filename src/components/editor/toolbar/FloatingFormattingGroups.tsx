@@ -7,9 +7,15 @@ import { useSettingsStore } from "@/features/settings/store";
 interface FloatingFormattingGroupsProps {
   editor: Editor;
   onLinkClick: () => void;
+  /** Whether a command pulls focus into the editor; the bubble says no. */
+  shouldFocusEditor?: () => boolean;
 }
 
-export function FloatingFormattingGroups({ editor, onLinkClick }: FloatingFormattingGroupsProps) {
+export function FloatingFormattingGroups({
+  editor,
+  onLinkClick,
+  shouldFocusEditor,
+}: FloatingFormattingGroupsProps) {
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const groupIds = deriveFloatingGroupIds(toolbarConfig);
 
@@ -21,6 +27,7 @@ export function FloatingFormattingGroups({ editor, onLinkClick }: FloatingFormat
         editor={editor}
         groupIds={groupIds}
         iconSize="sm"
+        shouldFocusEditor={shouldFocusEditor}
         callbacks={{
           spellCheckLanguage: "en",
           onSpellCheckLanguageChange: () => {},
