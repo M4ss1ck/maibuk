@@ -216,6 +216,7 @@ export function ColorPickerControl({
             <Label className="mb-1 block text-xs font-medium">{t("colorPicker.hexValue")}</Label>
             <Input
               value={hexDraft}
+              data-dictation="off"
               onChange={(event) => {
                 setHexDraft(event.target.value);
                 setInvalid(false);

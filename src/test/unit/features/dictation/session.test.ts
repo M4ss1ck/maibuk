@@ -573,6 +573,22 @@ describe("Dictation Session", () => {
     expect(resetA).toHaveBeenCalledTimes(1);
   });
 
+  it("resets an unavailable previous target's history when focus moves", async () => {
+    const resetField = vi.fn();
+    const session = makeSession();
+    // A field that lost the caret reports unavailable, but it is still
+    // registered: taking focus elsewhere must still drop its history.
+    session.register({
+      ...fakeTarget("field"),
+      resetScratch: resetField,
+      isAvailable: () => false,
+    });
+    session.register({ ...fakeTarget("b"), resetScratch: vi.fn() });
+    session.focus("field");
+    session.focus("b");
+    expect(resetField).toHaveBeenCalledTimes(1);
+  });
+
   it("level events update the snapshot and notify subscribers", async () => {
     const session = makeSession();
     const listener = vi.fn();
@@ -1094,6 +1110,29 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     }
   );
 
+  it("keeps listening when a dialog hides the target and refuses a navigating run", async () => {
+    const session = handoffSession(routeForHandoff);
+    const target = fakeTarget("a");
+    let hidden = false;
+    target.isAvailable = () => !hidden;
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    hidden = true;
+    runCommand.mockResolvedValueOnce("refused-dialog-close");
+    host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+    await flushRuns();
+
+    expect(notices).toContainEqual({
+      kind: "voice_command_refused",
+      id: "global.gotoNotes",
+      reason: "dialog_refused",
+    });
+    expect(notices).not.toContainEqual({ kind: "stopped" });
+    expect(session.getSnapshot().status).toBe("listening");
+    expect(target.commits).toEqual([]);
+  });
+
   it("stops as today when the target leaves after a non-navigating run", async () => {
     const session = createDictationSession({
       host,
@@ -1336,5 +1375,211 @@ describe("Dictation Session Click by Name", () => {
     await session.start();
     host.emit({ type: "final", text: "click nine", latencyMs: 5 });
     expect(notices).toContainEqual({ kind: "click_not_found", name: "9" });
+  });
+});
+
+describe("Dictation Session field targets (#313)", () => {
+  it("skips an unavailable target: the line goes to the next available one", async () => {
+    const session = makeSession();
+    const available = fakeTarget("a");
+    const applySpy = vi.fn((edits: Parameters<DictationTarget["apply"]>[0]) =>
+      available.apply(edits)
+    );
+    const unavailable = { ...fakeTarget("b"), apply: applySpy, isAvailable: () => false };
+    session.register(available);
+    session.register(unavailable);
+    session.focus("a");
+    session.focus("b");
+    await session.start();
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+    expect(available.commits).toEqual(["hello"]);
+    expect(applySpy).not.toHaveBeenCalled();
+  });
+
+  it("takes the orphan path when no target is available, never touching the unavailable one", async () => {
+    const session = makeSession();
+    const applySpy = vi.fn();
+    const unavailable = { ...fakeTarget("b"), apply: applySpy, isAvailable: () => false };
+    const unregisterAvailable = session.register(fakeTarget("a"));
+    session.register(unavailable);
+    session.focus("a");
+    session.focus("b");
+    await session.start();
+    // The Modal over the editor unmounted it: only the hidden target is left.
+    unregisterAvailable();
+    await vi.waitFor(() => expect(session.getSnapshot().status).toBe("idle"));
+    expect(copied).toEqual(["flushed"]);
+    expect(notices).toContainEqual({ kind: "orphan_copied" });
+    expect(applySpy).not.toHaveBeenCalled();
+  });
+
+  it("does not start with only unavailable targets", async () => {
+    const session = makeSession();
+    session.register({ ...fakeTarget("b"), isAvailable: () => false });
+    session.focus("b");
+    await session.start();
+    expect(session.getSnapshot().status).toBe("idle");
+    expect(notices).toEqual([{ kind: "error", code: "no_target" }]);
+    expect(host.load).not.toHaveBeenCalled();
+  });
+
+  it("refuses dictated text on a secret target without reading, applying, or copying it", async () => {
+    const before = vi.fn(() => "s3cr3t");
+    const route = vi.fn(
+      (): RouteResult => ({ kind: "edits", edits: [{ kind: "text", text: "hello" }] })
+    );
+    const copy = vi.fn(async (_text: string) => {});
+    const applySpy = vi.fn();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(route),
+      notify: (n) => void notices.push(n),
+      copyText: copy,
+      stats: createLineStats(),
+    });
+    const secret = {
+      ...fakeTarget("pw"),
+      before,
+      apply: applySpy,
+      secret: true as const,
+    };
+    session.register(secret);
+    session.focus("pw");
+    await session.start();
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+    expect(route).toHaveBeenCalledWith("hello", "", { verbatim: false });
+    expect(before).not.toHaveBeenCalled();
+    expect(applySpy).not.toHaveBeenCalled();
+    expect(copy).not.toHaveBeenCalled();
+    expect(notices).toContainEqual({ kind: "field_secret_refused" });
+  });
+
+  it("never shows partials on a secret target", async () => {
+    const session = makeSession();
+    const secret = { ...fakeTarget("pw"), secret: true as const };
+    session.register(secret);
+    session.focus("pw");
+    await session.start();
+    host.emit({ type: "partial", text: "hel" });
+    expect(secret.partials).toEqual([]);
+  });
+
+  it("announces unavailable for a voice command on a secret target with no voice runner", async () => {
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "common.undo", polarity: null })),
+      notify: (n) => void notices.push(n),
+      copyText: (t) => copyText(t),
+      stats: createLineStats(),
+    });
+    const secret = { ...fakeTarget("pw"), secret: true as const };
+    session.register(secret);
+    session.focus("pw");
+    await session.start();
+    host.emit({ type: "final", text: "deshacer eso", latencyMs: 5 });
+    expect(secret.commits).toEqual([]);
+    expect(notices).toContainEqual({ kind: "voice_command_unavailable", id: "common.undo" });
+  });
+
+  it("announces when a field drops layout it cannot hold", async () => {
+    const session = makeSession();
+    const target = { ...fakeTarget("a"), apply: vi.fn(() => "layout_ignored" as const) };
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+    expect(target.apply).toHaveBeenCalled();
+    expect(notices).toContainEqual({ kind: "field_layout_ignored" });
+  });
+
+  it("announces unavailable when a voice runner cannot run, instead of a run", async () => {
+    const voice = vi.fn(() => "unavailable" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "common.undo", polarity: null })),
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "deshacer eso", latencyMs: 5 });
+    expect(notices).toContainEqual({ kind: "voice_command_unavailable", id: "common.undo" });
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_command" }));
+    expect(stats.summary().voiceCommandUnavailableCount).toBe(1);
+    expect(stats.summary().voiceCommandCount).toBe(0);
+  });
+
+  it("passes verbatim through to the route for phrase-editor targets only", async () => {
+    const seen: unknown[] = [];
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter((_text, _before, options) => {
+        seen.push(options);
+        return null;
+      }),
+      notify: (n) => void notices.push(n),
+      copyText: (t) => copyText(t),
+      stats: createLineStats(),
+    });
+    const plain = fakeTarget("plain");
+    const verbatimTarget = { ...fakeTarget("phrase"), verbatim: () => true };
+    session.register(plain);
+    session.register(verbatimTarget);
+    session.focus("plain");
+    await session.start();
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+    session.focus("phrase");
+    host.emit({ type: "final", text: "hello", latencyMs: 5 });
+    expect(seen).toEqual([{ verbatim: false }, { verbatim: true }]);
+    await session.stop();
+  });
+
+  it("hands queued lines to a dialog field registered after the command ran", async () => {
+    vi.useFakeTimers();
+    try {
+      const runCommand = vi.fn(
+        (_id: CommandId): Promise<CommandRunOutcome> => new Promise(() => {})
+      );
+      const session = createDictationSession({
+        host,
+        modelFor: (l) => models[l] ?? null,
+        route: createRouter((text): RouteResult | null =>
+          text === "new book"
+            ? { kind: "voice_command", id: "bookList.newBook", polarity: null }
+            : null
+        ),
+        runCommand: (...args) => runCommand(...args),
+        isEditorCommand: () => false,
+        isNavigatingCommand: (id) => id === "bookList.newBook",
+        notify: (n) => void notices.push(n),
+        copyText: (t) => copyText(t),
+        stats: createLineStats(),
+      });
+      const oldTarget = fakeTarget("old");
+      session.register(oldTarget);
+      session.focus("old");
+      await session.start();
+      host.emit({ type: "final", text: "new book", latencyMs: 5 });
+      expect(runCommand).toHaveBeenCalledWith("bookList.newBook");
+      // A line spoken before the dialog field takes focus queues.
+      host.emit({ type: "final", text: "my title", latencyMs: 5 });
+      // The dialog field registers and takes the caret after the command ran.
+      const field = fakeTarget("field");
+      session.register(field);
+      session.focus("field");
+      expect(field.commits).toEqual(["my title"]);
+      expect(oldTarget.commits).toEqual([]);
+      expect(copied).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

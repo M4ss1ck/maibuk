@@ -7,7 +7,14 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
 import type { DictationTarget, ScratchOutcome } from "@/features/dictation/session";
 import type { DictationEdit } from "@/features/dictation/router";
+import { isOutsideLayer } from "@/lib/top-layer";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
+import {
+  MAX_DICTATED_SENTENCES,
+  NO_SPACE_AFTER,
+  SENTENCE_CLOSERS,
+  splitSliceIntoSentences,
+} from "@/features/dictation/plain-text";
 import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 import { normalizeLanguage } from "@/features/settings/types";
 import { runVoiceCommand, VOICE_MARKS } from "@/components/editor/editor-commands";
@@ -38,8 +45,8 @@ export interface DictationPluginState {
   history: DictatedRange[];
 }
 
-/** Scratch that reaches back this many dictated sentences. */
-export const MAX_DICTATED_SENTENCES = 10;
+/** Scratch that reaches back this many dictated sentences. Re-exported so existing imports keep working. */
+export { MAX_DICTATED_SENTENCES };
 
 /** Plugin state for scratch that. Ranges map through every transaction. */
 export const dictationPluginKey = new PluginKey<DictationPluginState>("dictation");
@@ -73,9 +80,6 @@ function sameHistory(a: readonly DictatedRange[], b: readonly DictatedRange[]): 
   }
   return true;
 }
-
-// No space after whitespace or an opening mark (¿ ¡ « “ ( [ { — –).
-const NO_SPACE_AFTER = /[\s([{"'“‘«¿¡—–-]/;
 
 export function needsSpaceBefore(doc: ProseMirrorNode, pos: number): boolean {
   const before = doc.textBetween(Math.max(0, pos - 1), pos, "\n", "\n");
@@ -113,13 +117,6 @@ function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
   return sliceStart + findSentenceStartOffset(text);
 }
 
-function isSentenceEndMark(ch: string): boolean {
-  return ch === "." || ch === "?" || ch === "!";
-}
-
-/** Closing marks a sentence end takes with it: `hola.»` is one sentence. */
-const SENTENCE_CLOSERS = new Set(['»', '”', '’', '"', "'", ")", "]", "}"]);
-
 /**
  * Whether the block text before `pos` ends a sentence: trailing spaces and
  * closing marks are skipped, then `.?!`, a hard break, or the block start
@@ -144,43 +141,6 @@ function blockTextEndsSentence(
   if (end === 0) return true;
   const ch = text[end - 1];
   return ch === "." || ch === "?" || ch === "!" || ch === "\n";
-}
-
-/**
- * Split one textblock slice into dictated sentences. Shares the interpreter's
- * boundary rule (`.`, `?`, `!`, hard breaks); paragraph breaks are handled by
- * splitting per block. A hard break belongs to the sentence after it, so
- * scratching that sentence removes the break too. Spaces after a mark belong
- * to the next sentence, so scratching leaves no trailing space.
- */
-function splitSliceIntoSentences(sliceText: string): { start: number; end: number }[] {
-  const bounds: { start: number; end: number }[] = [];
-  let start = 0;
-  let i = 0;
-  while (i < sliceText.length) {
-    const ch = sliceText[i];
-    if (isSentenceEndMark(ch)) {
-      let j = i + 1;
-      while (j < sliceText.length && isSentenceEndMark(sliceText[j])) j += 1;
-      while (j < sliceText.length && SENTENCE_CLOSERS.has(sliceText[j])) j += 1;
-      bounds.push({ start, end: j });
-      start = j;
-      i = j;
-    } else if (ch === "\n") {
-      if (i > start) bounds.push({ start, end: i });
-      let j = i + 1;
-      while (j < sliceText.length && sliceText[j] === "\n") j += 1;
-      start = i;
-      i = j;
-    } else {
-      i += 1;
-    }
-  }
-  if (start < sliceText.length) bounds.push({ start, end: sliceText.length });
-  return bounds.filter(({ start: s, end: e }) => {
-    const text = sliceText.slice(s, e);
-    return /[^\s]/.test(text) || text.includes("\n");
-  });
 }
 
 /**
@@ -670,6 +630,9 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
         normalizeLanguage(
           (editor.storage as { spellCheck?: { language?: string } }).spellCheck?.language
         ),
+      // Behind a modal the editor keeps its DOM but the author cannot see it:
+      // the Session treats it as absent and takes the orphan path instead.
+      isAvailable: () => !editor.isDestroyed && !isOutsideLayer(editor.view.dom),
       showPartial: (text) => {
         if (editor.isDestroyed) return;
         editor.view.dispatch(

@@ -66,6 +66,29 @@ describe("Dictation extension", () => {
     expect(targets).toHaveLength(0);
   });
 
+  it("reports unavailable behind a modal layer and available otherwise", async () => {
+    const editor = await makeEditor("<p>x</p>", "es");
+    expect(targets).toHaveLength(1);
+    expect(targets[0].isAvailable?.()).toBe(true);
+    // A modal over the editor hides its DOM with aria-hidden: the Session
+    // must treat it as absent and take the orphan path.
+    const modal = document.createElement("div");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.appendChild(modal);
+    modal.appendChild(editor.view.dom);
+    expect(targets[0].isAvailable?.()).toBe(false);
+    document.body.appendChild(editor.view.dom);
+    expect(targets[0].isAvailable?.()).toBe(true);
+    const inert = document.createElement("div");
+    inert.setAttribute("inert", "");
+    document.body.appendChild(inert);
+    inert.appendChild(editor.view.dom);
+    expect(targets[0].isAvailable?.()).toBe(false);
+    editor.destroy();
+    modal.remove();
+    inert.remove();
+  });
+
   it("shows a partial without changing the document, undo history, or firing update", async () => {
     const editor = await makeEditor();
     const onUpdate = vi.fn();

@@ -242,6 +242,24 @@ describe("noticeMessage()", () => {
       "Aquí no hay nada llamado exportar."
     );
   });
+  it("announces a refused password field in both locales", () => {
+    expect(noticeMessage({ kind: "field_secret_refused" }, t).announce).toBe(
+      "Dictation does not type into password fields."
+    );
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "field_secret_refused" }, es).announce).toBe(
+      "El dictado no escribe en campos de contraseña."
+    );
+  });
+  it("announces a dropped line break in both locales", () => {
+    expect(noticeMessage({ kind: "field_layout_ignored" }, t).announce).toBe(
+      "No line breaks in this field."
+    );
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "field_layout_ignored" }, es).announce).toBe(
+      "Este campo no admite saltos de línea."
+    );
+  });
   it("covers every error code in both locales", async () => {
     const codes = [
       "mic_denied",

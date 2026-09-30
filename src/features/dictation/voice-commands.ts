@@ -280,9 +280,10 @@ export interface VoiceCommandRun {
  * What running one Voice Command did. "empty" is an action with nothing to do
  * ("undo" on an empty history, "bold that" with nothing dictated): the live
  * region says so and it is not counted. "refused" is "bold that" on dictated
- * text the author edited since.
+ * text the author edited since. "unavailable" is a field target that cannot
+ * run the Command: the live region says so and it counts as unavailable.
  */
-export type VoiceOutcome = "ran" | "empty" | "ignored" | "refused";
+export type VoiceOutcome = "ran" | "empty" | "ignored" | "refused" | "unavailable";
 
 /** Every Command takes Voice Commands (ADR 0016), in registry order. */
 export function voiceEligibleCommands(): CommandId[] {

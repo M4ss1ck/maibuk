@@ -263,6 +263,7 @@ function VoiceCommandsDialogContent({
                         : t("shortcutEditor.voice.editLabel", { phrase: editing })
                     }
                     placeholder={t("shortcutEditor.voice.placeholder")}
+                    data-dictation="verbatim"
                     aria-invalid={refusal ? true : undefined}
                     aria-describedby={refusal ? refusalId : undefined}
                   />

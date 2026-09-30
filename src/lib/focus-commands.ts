@@ -24,8 +24,9 @@ function codeFor(key: FocusPressKey): string {
 
 // Presses a browser key the way the platform would: a keydown then its
 // keyup on the focused element, so the focused control's own handler runs.
-// jsdom runs no default action, so when nothing prevented the keydown an
-// Enter or Space that would activate the control clicks it once.
+// A synthetic key runs no default action, so when nothing prevented the
+// keydown an Enter or Space that would activate the control clicks it once,
+// and an Enter in a form field submits its form.
 export function pressKey(key: FocusPressKey): void {
   const target = document.activeElement ?? document.body;
   const code = codeFor(key);
@@ -45,6 +46,7 @@ export function pressKey(key: FocusPressKey): void {
   if (key === "Enter") {
     if (target instanceof HTMLButtonElement && !target.disabled) target.click();
     else if (target instanceof HTMLAnchorElement && target.hasAttribute("href")) target.click();
+    else if (target instanceof HTMLInputElement) submitImplicitly(target);
   } else if (key === " ") {
     if (target instanceof HTMLButtonElement && !target.disabled) target.click();
     else if (
@@ -55,6 +57,37 @@ export function pressKey(key: FocusPressKey): void {
       target.click();
     }
   }
+}
+
+const NO_IMPLICIT_SUBMISSION = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+
+// A synthetic Enter never triggers the browser's implicit submission, so a
+// voice "press enter" in a form field does it here the way the HTML spec
+// does: press the form's default button, or submit a form that has none.
+function submitImplicitly(field: HTMLInputElement): void {
+  const form = field.form;
+  if (!form || field.disabled || NO_IMPLICIT_SUBMISSION.has(field.type)) return;
+  const defaultButton = Array.from(form.elements).find(
+    (element): element is HTMLButtonElement | HTMLInputElement =>
+      (element instanceof HTMLButtonElement && element.type === "submit") ||
+      (element instanceof HTMLInputElement && (element.type === "submit" || element.type === "image"))
+  );
+  if (defaultButton) {
+    if (!defaultButton.disabled) defaultButton.click();
+    return;
+  }
+  form.requestSubmit();
 }
 
 // Moves focus one tabbable stop in `direction`, wrapping at the ends. The

@@ -208,6 +208,77 @@ describe("focus.activate and focus.toggle", () => {
   });
 });
 
+describe("focus.activate in a form field", () => {
+  function FormHarness({
+    onSubmit,
+    submitDisabled = false,
+    withButton = true,
+  }: {
+    onSubmit: () => void;
+    submitDisabled?: boolean;
+    withButton?: boolean;
+  }) {
+    useFocusCommands();
+    return (
+      <>
+        <form
+          id="book-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+          }}
+        >
+          <input aria-label="Title" />
+          <input aria-label="Agree" type="checkbox" />
+          <textarea aria-label="Notes" />
+        </form>
+        {/* The New Book dialog's button sits outside its form, tied by `form`. */}
+        {withButton && (
+          <button type="submit" form="book-form" disabled={submitDisabled}>
+            Create
+          </button>
+        )}
+      </>
+    );
+  }
+
+  it("submits the form through its default button once", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(<FormHarness onSubmit={onSubmit} />);
+    await user.click(screen.getByRole("textbox", { name: "Title" }));
+
+    expect(await run("focus.activate")).toBe("ran");
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("submits a form with no submit button", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(<FormHarness onSubmit={onSubmit} withButton={false} />);
+    await user.click(screen.getByRole("textbox", { name: "Title" }));
+
+    expect(await run("focus.activate")).toBe("ran");
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not submit through a disabled default button, from a checkbox, or from a textarea", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const { unmount } = render(<FormHarness onSubmit={onSubmit} submitDisabled />);
+    await user.click(screen.getByRole("textbox", { name: "Title" }));
+    expect(await run("focus.activate")).toBe("ran");
+    unmount();
+
+    render(<FormHarness onSubmit={onSubmit} />);
+    await user.click(screen.getByRole("checkbox", { name: "Agree" }));
+    await run("focus.activate");
+    await user.click(screen.getByRole("textbox", { name: "Notes" }));
+    await run("focus.activate");
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
 describe("focus.next and focus.previous", () => {
   it("skips an inert subtree and wraps around", async () => {
     render(<TabHarness />);

@@ -1,8 +1,8 @@
 // The one Dictation Session per app (framework-free, like the Edit Session).
-// It knows targets (editors), a language, and a RecognizerHost; it never
+// It knows targets (editors and text fields), a language, and a RecognizerHost; it never
 // knows which engine or platform is underneath.
 import type { LineStats } from "@/features/dictation/stats";
-import type { DictationEdit, RouteResult } from "@/features/dictation/router";
+import type { DictationEdit, RouteOptions, RouteResult } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
 import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 import {
@@ -19,6 +19,9 @@ import type { CommandRunOutcome } from "@/lib/command-runner";
 /** What a scratch request did on its target. `refused` means the author edited inside the dictated text. */
 export type ScratchOutcome = "removed" | "refused" | "empty";
 
+/** What applying one finished line did. `layout_ignored` dropped a line break, paragraph, or list item the field cannot hold; the rest was inserted. */
+export type ApplyOutcome = "applied" | "layout_ignored";
+
 export interface DictationTarget {
   id: string;
   language(): DictationLanguage;
@@ -27,7 +30,14 @@ export interface DictationTarget {
   /** At most 256 characters before the caret; never the whole document. */
   before(): string;
   /** Applies one finished line as one undo step. */
-  apply(edits: DictationEdit[]): void;
+  // biome-ignore lint/suspicious/noConfusingVoidType: editor targets and fakes that report nothing stay assignable.
+  apply(edits: DictationEdit[]): ApplyOutcome | void;
+  /** False while hidden behind the topmost modal layer or no longer holding the caret; the Session treats it as absent. */
+  isAvailable?(): boolean;
+  /** The target takes each line as heard (phrase editors): no Spoken Punctuation, no Vocabulary. */
+  verbatim?(): boolean;
+  /** A password field: dictated text is refused and never read, shown, or copied. */
+  secret?: boolean;
   /**
    * Runs one Voice Command on this target's editor. The polarity picks a
    * mark's set or unset runner; "empty" is an action with nothing to do.
@@ -79,7 +89,11 @@ export type SessionNotice =
   // Click by Name found several controls: the live region says how many.
   | { kind: "click_choices"; count: number }
   // Click by Name found nothing called that: the live region names it.
-  | { kind: "click_not_found"; name: string };
+  | { kind: "click_not_found"; name: string }
+  // A password field refused dictated text.
+  | { kind: "field_secret_refused" }
+  // A single-line field dropped a line break, paragraph, or list item.
+  | { kind: "field_layout_ignored" };
 
 export interface SessionSnapshot {
   status: SessionStatus;
@@ -138,7 +152,7 @@ export interface ClickDeps {
 export function createDictationSession(deps: {
   host: RecognizerHost;
   modelFor: (language: DictationLanguage) => ModelSpec | null;
-  route: (text: string, before: string) => RouteResult;
+  route: (text: string, before: string, options?: RouteOptions) => RouteResult;
   /** False while the Tutorial runs: no Voice Command may act (ADR 0008), like Shortcuts. */
   voiceCommandsAllowed?: () => boolean;
   /**
@@ -190,14 +204,18 @@ export function createDictationSession(deps: {
   const active = (): DictationTarget | null => {
     for (let i = focusOrder.length - 1; i >= 0; i--) {
       const target = targets.get(focusOrder[i]);
-      if (target) return target;
+      if (!target) continue;
+      if (target.isAvailable?.() === false) continue;
+      return target;
     }
     return null;
   };
 
   const showPartial = (text: string) => {
     partial = text;
-    active()?.showPartial(text);
+    const target = active();
+    if (target?.secret) return;
+    target?.showPartial(text);
   };
 
   // A navigating Voice Command keeps the Session listening across the route
@@ -219,7 +237,10 @@ export function createDictationSession(deps: {
   // scratch, Click by Name, and edits behave the same wherever the line waited.
   const applyFinishedLine = (text: string, target: DictationTarget | null) => {
     const startedAt = performance.now();
-    const result = deps.route(text, target?.before() ?? "");
+    const before = target?.secret ? "" : (target?.before() ?? "");
+    const result = deps.route(text, before, {
+      verbatim: target?.verbatim?.() === true,
+    });
     const interpreterMs = performance.now() - startedAt;
     // Click by Name owns numbered choices until a number answers them: any
     // other line drops them first, then runs normally. Click lines never
@@ -307,11 +328,13 @@ export function createDictationSession(deps: {
           if (outcome !== "ran") {
             // The screen did not change: the queued lines belong to the
             // editor that is still here, or to the clipboard path when none is.
+            // A target hidden behind the dialog that refused is still here, so
+            // the Session keeps listening and the refusal stays what is heard.
             const queued = pending.queue;
             handoff = null;
             const current = active();
             for (const line of queued) applyFinishedLine(line, current);
-            if (!current) void stop();
+            if (targets.size === 0) void stop();
             return;
           }
           pending.timer = setTimeout(onHandoffTimeout, HANDOFF_LIMIT_MS);
@@ -330,6 +353,11 @@ export function createDictationSession(deps: {
         return;
       }
       const voiceOutcome: VoiceOutcome = voice(run);
+      if (voiceOutcome === "unavailable") {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+        deps.notify({ kind: "voice_command_unavailable", id: run.id });
+        return;
+      }
       deps.stats.recordInterpreter(interpreterMs, 0, 0, voiceOutcome === "ran" ? 1 : 0);
       if (voiceOutcome === "ran") {
         deps.notify({ kind: "voice_command", ...run });
@@ -354,8 +382,12 @@ export function createDictationSession(deps: {
       else if (outcome === "empty") deps.notify({ kind: "scratch_empty" });
       return;
     }
-    if (target) target.apply(result.edits);
-    else if (result.edits.length > 0) {
+    if (target?.secret && result.edits.length > 0) {
+      deps.notify({ kind: "field_secret_refused" });
+    } else if (target) {
+      const outcome = target.apply(result.edits);
+      if (outcome === "layout_ignored") deps.notify({ kind: "field_layout_ignored" });
+    } else if (result.edits.length > 0) {
       const orphanText = editsToOrphanText(result.edits);
       deps.copyText(orphanText).then(
         () => deps.notify({ kind: "orphan_copied" }),
@@ -513,7 +545,7 @@ export function createDictationSession(deps: {
         set({ hasTarget: targets.size > 0 });
         if (!wasActive) return;
         const next = active();
-        if (next) next.showPartial(partial);
+        if (next && !next.secret) next.showPartial(partial);
         // While the hand-off window is open the route change is expected: the
         // old editor leaving does not stop the Session, which waits for the
         // next editor to take the caret instead.
@@ -525,7 +557,16 @@ export function createDictationSession(deps: {
       const target = targets.get(targetId);
       if (!target) return;
       const pending = handoff;
-      const previous = active();
+      // The previous target is the most recently focused one still registered,
+      // even when it already lost the caret (isAvailable false): an unfocused
+      // field still drops its dictated history when another target takes focus.
+      let previous: DictationTarget | null = null;
+      for (let i = focusOrder.length - 1; i >= 0; i--) {
+        const candidate = targets.get(focusOrder[i]);
+        if (!candidate) continue;
+        previous = candidate;
+        break;
+      }
       const index = focusOrder.indexOf(targetId);
       if (index >= 0) focusOrder.splice(index, 1);
       focusOrder.push(targetId);
@@ -543,8 +584,9 @@ export function createDictationSession(deps: {
         // Scratch history never reaches into another editor.
         previous.resetScratch?.();
         if (partial) {
-          previous.showPartial("");
-          targets.get(targetId)?.showPartial(partial);
+          if (!previous.secret) previous.showPartial("");
+          const next = targets.get(targetId);
+          if (next && !next.secret) next.showPartial(partial);
         }
       }
     },

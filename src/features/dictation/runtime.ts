@@ -108,7 +108,7 @@ async function build(): Promise<DictationRuntime> {
       phraseTables = { ...phraseTables, [language]: buildTable(language) };
       return selectedModel;
     },
-    route: createRouter((line, before) => {
+    route: createRouter((line, before, options) => {
       if (!selectedModel) return null;
       const output = interpret({
         line,
@@ -116,6 +116,7 @@ async function build(): Promise<DictationRuntime> {
         capabilities: selectedModel.capabilities,
         table: phraseTables[selectedLanguage],
         state: interpreterState,
+        verbatim: options?.verbatim === true,
       });
       interpreterState = output.state;
       if (output.result.kind === "scratch") return { kind: "scratch" };
@@ -133,7 +134,10 @@ async function build(): Promise<DictationRuntime> {
     // Commands outside the editor's keymap run through the Command Runner.
     runCommand: (id) => runCommand(id, { source: "voice" }),
     isEditorCommand: (id) => getCommand(id).source === "editor-keymap",
-    isNavigatingCommand: (id) => getCommand(id).navigates === true,
+    // A Command whose dialog puts the caret in a text field opens the hand-off
+    // window too, so lines spoken before the field takes focus land in it.
+    isNavigatingCommand: (id) =>
+      getCommand(id).navigates === true || getCommand(id).opensDialog === true,
     notify: (notice) => {
       if (notice.kind === "stopped") interpreterState = INITIAL_INTERPRETER_STATE;
       notify(notice);

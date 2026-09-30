@@ -51,6 +51,17 @@ COMPOUND_PHRASES=(
   "click-bold-then-one|en_US-lessac-medium|Click Bold.|3|Click one.|70|30"
 )
 
+# Sequenced phrases for multi-step voice flows (issue #313): alternating
+# spoken texts and gaps of silence, played once per browser launch.
+# `name|voice|pre|post|text1|gap1|text2|gap2|text3|...` (the silence paddings
+# default to 45|30 like the focus-key entries, so the model download and
+# keyboard setup finish before the first phrase speaks). The gap after the
+# title is 6 s so the spec has time for its undo/redo keys before the Tab
+# command.
+SEQUENCE_PHRASES=(
+  "go-to-books-new-book|en_US-lessac-medium|45|30|Go to Books.|5|The silent harbor.|6|Press the tab key.|3|Harbor Author.|4|Press enter key."
+)
+
 # The voices the phrase list references.
 VOICES=(
   "en_US-lessac-medium"
@@ -125,6 +136,76 @@ for entry in "${COMPOUND_PHRASES[@]}"; do
     -filter_complex "[0:a]aresample=16000[a0];[1:a]aresample=16000[a1];[2:a]aresample=16000[a2];[a0][a2][a1]concat=n=3:v=0:a=1,adelay=${pre_ms},apad=pad_dur=${post_seconds}[out]" \
     -map "[out]" -ar 16000 -ac 1 "$out"
   rm -f "$raw_command" "$raw_sentence"
+done
+
+for entry in "${SEQUENCE_PHRASES[@]}"; do
+  IFS='|' read -ra parts <<<"$entry"
+  name="${parts[0]}"
+  voice="${parts[1]}"
+  pre_seconds="${parts[2]:-45}"
+  post_seconds="${parts[3]:-30}"
+  # The remaining fields alternate spoken text and gap seconds, ending with
+  # spoken text: text1|gap1|text2|gap2|...|textN.
+  texts=()
+  gaps=()
+  i=4
+  while [ "$i" -lt "${#parts[@]}" ]; do
+    texts+=("${parts[$i]}")
+    i=$((i + 1))
+    if [ "$i" -lt "${#parts[@]}" ]; then
+      gaps+=("${parts[$i]}")
+      i=$((i + 1))
+    fi
+  done
+  out="$OUT_DIR/$name.wav"
+  if [ -f "$out" ]; then
+    echo "Keeping $out"
+    continue
+  fi
+  echo "Synthesizing $out (${#texts[@]} phrases, +${pre_seconds}s/+${post_seconds}s)"
+  raws=()
+  for text in "${texts[@]}"; do
+    raw="$(mktemp --suffix=.wav)"
+    printf '%s\n' "$text" |
+      "$python_bin" -m piper -m "$voice" --data-dir "$VOICES_DIR" -f "$raw"
+    raws+=("$raw")
+  done
+  # One take: each phrase with a spoken gap of silence between phrases (the
+  # recognizer closes each line in it), with leading silence for the setup
+  # and trailing silence so the looping fake mic never repeats a phrase
+  # inside a test. Phrase inputs come first, then the gap inputs, with the
+  # same Piper + ffmpeg concat approach the compound entries use.
+  pre_ms="$(python3 -c "print(int(float('$pre_seconds') * 1000))")"
+  inputs=()
+  for raw in "${raws[@]}"; do
+    inputs+=(-i "$raw")
+  done
+  for gap in "${gaps[@]}"; do
+    inputs+=(-f lavfi -i "anullsrc=r=16000:cl=mono:d=${gap}")
+  done
+  n_texts="${#raws[@]}"
+  filter=""
+  for idx in "${!raws[@]}"; do
+    filter+="[${idx}:a]aresample=16000[a${idx}];"
+  done
+  for jdx in "${!gaps[@]}"; do
+    gidx=$((n_texts + jdx))
+    filter+="[${gidx}:a]aresample=16000[g${jdx}];"
+  done
+  concat=""
+  for idx in "${!raws[@]}"; do
+    concat+="[a${idx}]"
+    if [ "$idx" -lt "${#gaps[@]}" ]; then
+      concat+="[g${idx}]"
+    fi
+  done
+  total=$((n_texts + ${#gaps[@]}))
+  filter+="${concat}concat=n=${total}:v=0:a=1,adelay=${pre_ms},apad=pad_dur=${post_seconds}[out]"
+  # shellcheck disable=SC2068
+  ffmpeg -y -loglevel error "${inputs[@]}" \
+    -filter_complex "$filter" \
+    -map "[out]" -ar 16000 -ac 1 "$out"
+  rm -f "${raws[@]}"
 done
 
 echo "E2E voice audio ready in $OUT_DIR"

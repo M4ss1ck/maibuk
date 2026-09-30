@@ -22,4 +22,4 @@ Keyboard parity also needs the keys that move focus, so Tab, Shift+Tab, the arro
 - Commands run without a KeyboardEvent through one entry point shared with the Command Palette (#226), which applies the same enabled and Tutorial gates as `useShortcuts`.
 - The Dictation Session keeps listening when a Voice Command changes screen and hands off to the editor that takes the caret there; with none, it stops and says so.
 - While a Tutorial runs, only `tutorial.skip`, the `focus.*` Commands, and Click by Name act by voice, confined to the Tutorial card by the same `inert` boundary as keys.
-- Dictating into plain text fields is a separate change.
+- Dictating into plain text fields was a separate change (#313): a focused text field is a target like an editor, and a dialog-opening Voice Command hands off to its field.
