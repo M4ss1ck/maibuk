@@ -17,6 +17,8 @@ const defaultSummary: LineStatsSummary = {
   spokenPunctuationCount: 4,
   scratchCount: 2,
   voiceCommandCount: 1,
+  voiceCommandUnavailableCount: 0,
+  voiceCommandRefusedCount: 0,
 };
 const summaryMock = vi.fn<() => LineStatsSummary>(() => defaultSummary);
 vi.mock("@/features/dictation/runtime", () => ({
@@ -389,6 +391,8 @@ describe("DictationSection", () => {
       spokenPunctuationCount: 0,
       scratchCount: 0,
       voiceCommandCount: 0,
+      voiceCommandUnavailableCount: 0,
+      voiceCommandRefusedCount: 0,
     });
     render(<DictationSection />);
     expect(await screen.findByText(/Recent lines: 1/)).toBeInTheDocument();
@@ -401,6 +405,33 @@ describe("DictationSection", () => {
     expect(
       await screen.findByText(
         "Intérprete: demora típica 8 ms, peor demora 15 ms, puntuación dictada 4, comandos de voz 1, borra eso 2"
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("shows unavailable and refused voice command counts beside the interpreter stats", async () => {
+    summaryMock.mockReturnValue({
+      ...defaultSummary,
+      voiceCommandUnavailableCount: 2,
+      voiceCommandRefusedCount: 1,
+    });
+    render(<DictationSection />);
+    expect(
+      await screen.findByText("Unavailable voice commands: 2 Refused voice commands: 1")
+    ).toBeInTheDocument();
+  });
+
+  it("names the unavailable and refused voice command counts in Spanish", async () => {
+    await act(() => i18n.changeLanguage("es"));
+    summaryMock.mockReturnValue({
+      ...defaultSummary,
+      voiceCommandUnavailableCount: 2,
+      voiceCommandRefusedCount: 1,
+    });
+    render(<DictationSection />);
+    expect(
+      await screen.findByText(
+        "Comandos de voz no disponibles: 2 Comandos de voz rechazados: 1"
       )
     ).toBeInTheDocument();
   });

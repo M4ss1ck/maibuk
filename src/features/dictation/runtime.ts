@@ -27,6 +27,8 @@ import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { isTutorialStatusActive, useTutorialStore } from "@/features/tutorial/store";
 import { createRecognizerHost, dictationPlatform, getModelFiles } from "@/lib/platform";
+import { getCommand } from "@/lib/shortcut-registry";
+import { runCommand } from "@/lib/command-runner";
 import { createUnsupportedHost, unsupportedModelFiles } from "@/lib/platform/unsupported-dictation";
 
 export interface DictationRuntime {
@@ -125,6 +127,9 @@ async function build(): Promise<DictationRuntime> {
     // Voice Commands run on the target's editor; the Tutorial blocks them
     // exactly like Shortcuts, so only its own skip works while a run is on.
     voiceCommandsAllowed: () => !isTutorialStatusActive(useTutorialStore.getState().status),
+    // Commands outside the editor's keymap run through the Command Runner.
+    runCommand: (id) => runCommand(id, { source: "voice" }),
+    isEditorCommand: (id) => getCommand(id).source === "editor-keymap",
     notify: (notice) => {
       if (notice.kind === "stopped") interpreterState = INITIAL_INTERPRETER_STATE;
       notify(notice);

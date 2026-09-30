@@ -103,6 +103,60 @@ describe("noticeMessage()", () => {
     expect(noticeMessage({ kind: "voice_command", id: "dictation.stop", polarity: null }, es).announce)
       .toBe("Comando de voz: Detener dictado");
   });
+  it("announces an unavailable voice command with the Command's label", () => {
+    expect(
+      noticeMessage({ kind: "voice_command_unavailable", id: "editor.bold" }, t).announce
+    ).toBe("Bold is not available here.");
+  });
+  it("announces an unavailable voice command in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "voice_command_unavailable", id: "editor.bold" }, es).announce).toBe(
+      "Negrita no está disponible aquí."
+    );
+  });
+  it("announces a dialog-refused voice command with the Command's label", () => {
+    expect(
+      noticeMessage({ kind: "voice_command_refused", id: "editor.bold", reason: "dialog" }, t)
+        .announce
+    ).toBe("Close the dialog to use Bold.");
+  });
+  it("announces a dialog-refused voice command in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(
+      noticeMessage({ kind: "voice_command_refused", id: "editor.bold", reason: "dialog" }, es)
+        .announce
+    ).toBe("Cierra el diálogo para usar Negrita.");
+  });
+  it("announces a tutorial-refused voice command with the Command's label", () => {
+    expect(
+      noticeMessage({ kind: "voice_command_refused", id: "editor.bold", reason: "tutorial" }, t)
+        .announce
+    ).toBe("Bold is not available during the Tutorial.");
+  });
+  it("announces a tutorial-refused voice command in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(
+      noticeMessage({ kind: "voice_command_refused", id: "editor.bold", reason: "tutorial" }, es)
+        .announce
+    ).toBe("Negrita no está disponible durante el Tutorial.");
+  });
+  it("announces a stuck-dialog refusal with the Command's label", () => {
+    expect(
+      noticeMessage(
+        { kind: "voice_command_refused", id: "editor.bold", reason: "dialog_refused" },
+        t
+      ).announce
+    ).toBe("The dialog can't close now, so Bold did not run.");
+  });
+  it("announces a stuck-dialog refusal in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(
+      noticeMessage(
+        { kind: "voice_command_refused", id: "editor.bold", reason: "dialog_refused" },
+        es
+      ).announce
+    ).toBe("El diálogo no puede cerrarse ahora, así que Negrita no se ejecutó.");
+  });
   it("announces nothing to undo or redo", () => {
     expect(noticeMessage({ kind: "voice_command_empty", id: "common.undo" }, t)).toEqual({
       announce: "Nothing to undo.",

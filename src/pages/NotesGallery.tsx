@@ -309,11 +309,11 @@ export function NotesGallery() {
         onTrigger: (event) => {
           if (document.activeElement !== document.body) return;
           const target =
-            event.key === "ArrowUp" || event.key === "ArrowLeft"
+            event?.key === "ArrowUp" || event?.key === "ArrowLeft"
               ? filteredNotes[filteredNotes.length - 1]
               : filteredNotes[0];
           if (!target) return;
-          event.preventDefault();
+          event?.preventDefault();
           focusNote(target.id);
         },
       },

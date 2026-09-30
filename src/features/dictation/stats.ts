@@ -6,6 +6,8 @@ export interface LineStatsSummary {
   spokenPunctuationCount: number;
   scratchCount: number;
   voiceCommandCount: number;
+  voiceCommandUnavailableCount: number;
+  voiceCommandRefusedCount: number;
 }
 
 export interface LineStats {
@@ -14,7 +16,9 @@ export interface LineStats {
     durationMs: number,
     spokenPunctuationCount: number,
     scratchCount?: number,
-    voiceCommandCount?: number
+    voiceCommandCount?: number,
+    unavailable?: number,
+    refused?: number
   ): void;
   summary(): LineStatsSummary;
 }
@@ -32,6 +36,8 @@ export function createLineStats(capacity = 50): LineStats {
   let spokenPunctuationCount = 0;
   let scratchCount = 0;
   let voiceCommands = 0;
+  let voiceUnavailable = 0;
+  let voiceRefused = 0;
   const upperMiddle = (samples: number[]): number | null => {
     if (samples.length === 0) return null;
     const sorted = [...samples].sort((a, b) => a - b);
@@ -44,10 +50,12 @@ export function createLineStats(capacity = 50): LineStats {
       recent.push(latencyMs);
       if (recent.length > capacity) recent.shift();
     },
-    recordInterpreter(durationMs, spoken, scratch = 0, voice = 0) {
+    recordInterpreter(durationMs, spoken, scratch = 0, voice = 0, unavailable = 0, refused = 0) {
       spokenPunctuationCount += spoken;
       scratchCount += scratch;
       voiceCommands += voice;
+      voiceUnavailable += unavailable;
+      voiceRefused += refused;
       recentInterpreter.push(durationMs);
       if (recentInterpreter.length > capacity) recentInterpreter.shift();
     },
@@ -60,6 +68,8 @@ export function createLineStats(capacity = 50): LineStats {
         spokenPunctuationCount,
         scratchCount,
         voiceCommandCount: voiceCommands,
+        voiceCommandUnavailableCount: voiceUnavailable,
+        voiceCommandRefusedCount: voiceRefused,
       };
     },
   };

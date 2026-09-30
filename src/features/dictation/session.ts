@@ -14,6 +14,7 @@ import {
   type RecognizerHost,
 } from "@/features/dictation/types";
 import type { CommandId } from "@/lib/shortcut-registry";
+import type { CommandRunOutcome } from "@/lib/command-runner";
 
 /** What a scratch request did on its target. `refused` means the author edited inside the dictated text. */
 export type ScratchOutcome = "removed" | "refused" | "empty";
@@ -58,6 +59,12 @@ export type SessionNotice =
   // A Voice Command had nothing to do ("undo that" on an empty history): the
   // live region says so, and the stats do not count it as a run.
   | { kind: "voice_command_empty"; id: CommandId }
+  // A Voice Command whose Command has no live binding here: the live region
+  // says so, and the stats count it as unavailable.
+  | { kind: "voice_command_unavailable"; id: CommandId }
+  // A Voice Command refused by a gate (an open dialog, the Tutorial): the
+  // live region says so, and the stats count it as refused.
+  | { kind: "voice_command_refused"; id: CommandId; reason: "dialog" | "tutorial" | "dialog_refused" }
   // The all-caps lock changed: the live region says whether it is on or off.
   | { kind: "caps_lock"; on: boolean }
   // "Bold that" on edited dictated text: nothing changed, the live region says so.
@@ -108,6 +115,13 @@ export function createDictationSession(deps: {
   route: (text: string, before: string) => RouteResult;
   /** False while the Tutorial runs: no Voice Command may act (ADR 0008), like Shortcuts. */
   voiceCommandsAllowed?: () => boolean;
+  /**
+   * Runs a non-editor Command without a key event (the Command Runner). When
+   * present, Commands that are not editor-keymap Commands run through it.
+   */
+  runCommand?: (id: CommandId) => CommandRunOutcome;
+  /** Whether the Command runs inside the editor's own keymap. */
+  isEditorCommand?: (id: CommandId) => boolean;
   notify: (notice: SessionNotice) => void;
   copyText: (text: string) => Promise<void>;
   stats: LineStats;
@@ -180,10 +194,37 @@ export function createDictationSession(deps: {
             polarity: result.polarity,
             ...(result.that ? { that: true as const } : {}),
           };
-          const voiceOutcome: VoiceOutcome =
-            deps.voiceCommandsAllowed?.() !== false
-              ? (target?.voice?.(run) ?? "ignored")
-              : "ignored";
+          // A Command outside the editor's keymap runs through the Command
+          // Runner, never as text; editor Commands run on the target's editor.
+          if (deps.isEditorCommand?.(result.id) === false && deps.runCommand) {
+            const outcome = deps.runCommand(result.id);
+            if (outcome === "ran") {
+              deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
+              deps.notify({ kind: "voice_command", ...run });
+            } else if (outcome === "unavailable") {
+              deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+              deps.notify({ kind: "voice_command_unavailable", id: run.id });
+            } else if (outcome === "refused-dialog") {
+              deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+              deps.notify({ kind: "voice_command_refused", id: run.id, reason: "dialog" });
+            } else {
+              deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+              deps.notify({ kind: "voice_command_refused", id: run.id, reason: "tutorial" });
+            }
+            return;
+          }
+          if (deps.voiceCommandsAllowed?.() === false) {
+            deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+            deps.notify({ kind: "voice_command_refused", id: run.id, reason: "tutorial" });
+            return;
+          }
+          const voice = target?.voice;
+          if (!voice) {
+            deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+            deps.notify({ kind: "voice_command_unavailable", id: run.id });
+            return;
+          }
+          const voiceOutcome: VoiceOutcome = voice(run);
           deps.stats.recordInterpreter(interpreterMs, 0, 0, voiceOutcome === "ran" ? 1 : 0);
           if (voiceOutcome === "ran") {
             deps.notify({ kind: "voice_command", ...run });

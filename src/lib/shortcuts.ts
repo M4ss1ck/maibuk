@@ -3,6 +3,7 @@ import { isTypingTarget } from "@/lib/keyboard";
 import { isMac } from "@/lib/platform/detect";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { registerCommandSource } from "@/lib/command-runner";
 import { isTutorialStatusActive, useTutorialStore } from "@/features/tutorial/store";
 import { getLiveShortcuts } from "@/lib/command-keys";
 import { isIgnoredKeyEvent, stepsFromEvent } from "@/lib/shortcut-keys";
@@ -14,7 +15,7 @@ import type { CommandId, Step } from "@/lib/shortcut-registry";
  */
 export type ShortcutBinding = {
   id: CommandId;
-  onTrigger: (event: KeyboardEvent) => void;
+  onTrigger: (event?: KeyboardEvent) => void;
   preventDefault?: boolean;
   allowInInput?: boolean;
   enabled?: boolean;
@@ -46,10 +47,22 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
   useBoundShortcutIds(boundIds);
 
   const tutorialRunningRef = useRef(tutorialRunning);
+  const optionsEnabledRef = useRef(options.enabled);
   useEffect(() => {
     shortcutsRef.current = shortcuts;
     tutorialRunningRef.current = tutorialRunning;
-  }, [shortcuts, tutorialRunning]);
+    optionsEnabledRef.current = options.enabled;
+  }, [shortcuts, tutorialRunning, options.enabled]);
+
+  // One source per hook instance, registered in mount order; later prop
+  // changes never reorder. The getter reads the live bindings at run time.
+  useEffect(
+    () =>
+      registerCommandSource(() =>
+        optionsEnabledRef.current === false ? [] : shortcutsRef.current
+      ),
+    []
+  );
 
   useEffect(() => {
     if (options.enabled === false) return;

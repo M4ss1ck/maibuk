@@ -228,6 +228,14 @@ export function DictationSection() {
           })}
         </p>
       )}
+      {recent && recent.medianInterpreterMs !== null && (
+        <p className="text-sm text-muted-foreground">
+          {t("dictation.section.voiceUnavailable", {
+            count: recent.voiceCommandUnavailableCount,
+          })}{" "}
+          {t("dictation.section.voiceRefused", { count: recent.voiceCommandRefusedCount })}
+        </p>
+      )}
     </div>
   );
 }

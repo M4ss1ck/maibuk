@@ -77,6 +77,8 @@ const EMPTY_LINE_SUMMARY = {
   spokenPunctuationCount: 0,
   scratchCount: 0,
   voiceCommandCount: 0,
+  voiceCommandUnavailableCount: 0,
+  voiceCommandRefusedCount: 0,
 };
 
 dictationRuntime.getDictation.mockImplementation(async () => ({

@@ -42,6 +42,20 @@ export function noticeMessage(
           notice.id === "common.redo" ? "dictation.nothingToRedo" : "dictation.nothingToUndo"
         ),
       };
+    case "voice_command_unavailable": {
+      const command = t(COMMANDS[notice.id].labelKey);
+      return { announce: t("dictation.voiceCommandUnavailable", { command }) };
+    }
+    case "voice_command_refused": {
+      const command = t(COMMANDS[notice.id].labelKey);
+      const key =
+        notice.reason === "dialog"
+          ? "dictation.voiceCommandRefusedDialog"
+          : notice.reason === "dialog_refused"
+            ? "dictation.voiceCommandRefusedDialogStuck"
+            : "dictation.voiceCommandRefusedTutorial";
+      return { announce: t(key, { command }) };
+    }
     case "voice_that_refused":
       return { announce: t("dictation.voiceThatRefused") };
     case "voice_that_empty":
