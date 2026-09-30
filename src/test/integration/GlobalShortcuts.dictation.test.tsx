@@ -163,7 +163,9 @@ describe("Cycle Dictation language", () => {
     await user.tab();
     await user.keyboard("?");
     expect(await screen.findByRole("dialog", { name: /keyboard shortcuts/i })).toBeVisible();
-    expect(screen.getByText("Cycle Dictation language")).toBeVisible();
+    // The row also lists the Command's Voice Command, so the label text
+    // appears twice while Dictation is on.
+    expect(screen.getAllByText("Cycle Dictation language").length).toBeGreaterThan(0);
     act(() => useDictationStore.getState().setEnabled(false));
     expect(screen.queryByText("Cycle Dictation language")).not.toBeInTheDocument();
     expect(screen.queryByText("Start or stop dictation")).not.toBeInTheDocument();

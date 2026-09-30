@@ -211,6 +211,7 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
     await page.keyboard.press("?");
     const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
     await expect(help).toBeVisible();
+    await capture(page, "shortcut-help");
     await expect(
       help.getByRole("region", { name: "On this screen" }).getByText("Start or stop dictation")
     ).toHaveCount(0);

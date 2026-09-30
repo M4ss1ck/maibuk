@@ -17,6 +17,7 @@ import { Button, KeyboardShortcut, Modal, Switch } from "@/components/ui";
 import { ResponsiveToggleGroup } from "@/components/ui/ResponsiveToggleGroup";
 import { toast } from "@/components/ui/Toast";
 import { ShortcutRecorder, describeShortcut } from "@/components/shortcuts/ShortcutRecorder";
+import { VoicePhraseSummary } from "@/components/shortcuts/VoicePhraseSummary";
 import { VoiceCommandsDialog } from "@/components/shortcuts/VoiceCommandsDialog";
 import { MAX_SHORTCUTS_PER_COMMAND } from "@/constants";
 import { findPhraseConflict } from "@/features/dictation/phrase-conflicts";
@@ -63,9 +64,6 @@ type FocusTarget = {
   control: "change" | "add" | "reset" | "voice";
   index?: number;
 } | null;
-
-/** How many of a Command's Voice Commands its row shows before "+N more". */
-const VOICE_PREVIEW_COUNT = 3;
 
 /**
  * Moves focus to a row's control once that row has re-rendered: the control
@@ -471,25 +469,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   const voiceSummary = (id: CommandId) => {
     if (!isVoiceEligible(id)) return null;
     const phrases = voicePhrases(id, voiceLanguage, settings.voice);
-    const shown = phrases.slice(0, VOICE_PREVIEW_COUNT);
-    const more = phrases.length - shown.length;
-    return (
-      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <Mic className="h-3 w-3" aria-hidden="true" />
-        <span>
-          {t("shortcutEditor.voice.rowLabel", {
-            language: t(`dictation.languageNames.${voiceLanguage}`),
-          })}
-        </span>
-        {shown.map((phrase) => (
-          <span key={phrase} className="rounded-md bg-muted/50 px-1.5 py-0.5 text-foreground">
-            {phrase}
-          </span>
-        ))}
-        {more > 0 && <span>{t("shortcutEditor.voice.more", { count: more })}</span>}
-        {phrases.length === 0 && <span>{t("shortcutEditor.voice.none")}</span>}
-      </p>
-    );
+    return <VoicePhraseSummary phrases={phrases} language={voiceLanguage} />;
   };
 
   const actions = (id: CommandId) => {

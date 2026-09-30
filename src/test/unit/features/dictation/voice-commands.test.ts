@@ -473,6 +473,27 @@ describe("label-derived whole-line phrases (ADR 0016)", () => {
     expect(match("en", "Look up word.")).toEqual({ id: "editor.lookUp", polarity: null });
   });
 
+  it("runs the shortcut help from its explicit phrases, label first", () => {
+    expect(defaultWholeLinePhrases("global.showHelp", "en")).toEqual([
+      "show shortcuts help",
+      "show voice commands",
+    ]);
+    expect(defaultWholeLinePhrases("global.showHelp", "es")).toEqual([
+      "mostrar ayuda de atajos",
+      "mostrar comandos de voz",
+    ]);
+    expect(match("en", "Show voice commands.")).toEqual({ id: "global.showHelp", polarity: null });
+    expect(match("es", "Mostrar comandos de voz.")).toEqual({
+      id: "global.showHelp",
+      polarity: null,
+    });
+    expect(match("en", "Show shortcuts help.")).toEqual({ id: "global.showHelp", polarity: null });
+    expect(match("es", "Mostrar ayuda de atajos.")).toEqual({
+      id: "global.showHelp",
+      polarity: null,
+    });
+  });
+
   it("replaces the derived phrase for that Command and language only", () => {
     const custom: CustomVoiceCommands = { "global.gotoNotes": { en: ["open notes list"] } };
     const enTable = buildVoiceCommandTable("en", custom);

@@ -2,10 +2,13 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { GraduationCap } from "lucide-react";
 import { Button, Modal, KeyboardShortcut } from "@/components/ui";
+import { VoicePhraseSummary } from "@/components/shortcuts/VoicePhraseSummary";
 import { useBoundShortcuts } from "@/lib/bound-shortcuts";
 import { liveShortcuts, useCommandKeys } from "@/lib/command-keys";
 import { formatShortcut, shortcutKey } from "@/lib/shortcut-keys";
 import { isMac } from "@/lib/platform/detect";
+import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
+import { voicePhrases } from "@/features/dictation/voice-commands";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import {
   COMMANDS,
@@ -28,21 +31,45 @@ type SectionLabelKey = (typeof SHORTCUT_SECTIONS)[number]["labelKey"];
 type SectionGroup = { id: string; labelKey: SectionLabelKey; ids: CommandId[] };
 
 function ShortcutRow({ id }: { id: CommandId }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const shortcuts = useCommandKeys(id);
+  const enabled = useDictationStore((state) => state.enabled);
+  const languageOverride = useDictationStore((state) => state.languageOverride);
+  const customVoice = useShortcutSettingsStore((state) => state.shortcuts.voice);
+  const voiceLanguage = dictationLanguageFor(languageOverride, i18n?.language);
+  const phrases = enabled ? voicePhrases(id, voiceLanguage, customVoice) : [];
   if (shortcuts.length === 0) return null;
+  if (!enabled || phrases.length === 0) {
+    return (
+      <li className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+        <span className="text-sm text-foreground">{t(COMMANDS[id].labelKey)}</span>
+        <span className="inline-flex items-center gap-2">
+          {shortcuts.map((shortcut) => (
+            <KeyboardShortcut
+              key={shortcutKey(shortcut)}
+              shortcut={formatShortcut(shortcut, isMac())}
+              alwaysVisible
+            />
+          ))}
+        </span>
+      </li>
+    );
+  }
   return (
-    <li className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
-      <span className="text-sm text-foreground">{t(COMMANDS[id].labelKey)}</span>
-      <span className="inline-flex items-center gap-2">
-        {shortcuts.map((shortcut) => (
-          <KeyboardShortcut
-            key={shortcutKey(shortcut)}
-            shortcut={formatShortcut(shortcut, isMac())}
-            alwaysVisible
-          />
-        ))}
-      </span>
+    <li className="rounded-lg border border-border px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-foreground">{t(COMMANDS[id].labelKey)}</span>
+        <span className="inline-flex items-center gap-2">
+          {shortcuts.map((shortcut) => (
+            <KeyboardShortcut
+              key={shortcutKey(shortcut)}
+              shortcut={formatShortcut(shortcut, isMac())}
+              alwaysVisible
+            />
+          ))}
+        </span>
+      </div>
+      <VoicePhraseSummary phrases={phrases} language={voiceLanguage} hideWhenEmpty />
     </li>
   );
 }

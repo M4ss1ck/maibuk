@@ -36,6 +36,7 @@ PHRASES=(
   "focus-toggle|en_US-lessac-medium|Press Space.|45|30"
   "focus-escape|en_US-lessac-medium|Press Escape.|45|30"
   "go-to-settings|en_US-lessac-medium|Go to Settings.|45|30"
+  "show-voice-commands|en_US-lessac-medium|Show voice commands.|45|30"
   "click-book-settings|en_US-lessac-medium|Click Book Settings.|70|30"
   "click-cancel|en_US-lessac-medium|Click Cancel.|70|30"
 )
