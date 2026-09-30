@@ -20,6 +20,8 @@ export interface Report {
 }
 
 const pct = (rate: number) => `${Math.round(rate * 100)}%`;
+/** A model's name hit rate, or "not recorded" before the names tier has a take. */
+export const namesRate = (rate: number | null) => (rate === null ? "not recorded" : pct(rate));
 const cell = (text: string) => text.replace(/\|/g, "\\|") || "(nothing)";
 
 function label(phrase: PhraseScore): string {
@@ -57,15 +59,17 @@ export function renderReport(models: readonly ScoredModel[]): Report {
     "",
     "Prose triggers count every take that ran something; *misheard* are the ones on sentences that type as text when heard right, and only those fail the bar.",
     "",
-    "| Model | Tier | Clips | Hit rate | Voice Commands | Spoken Punctuation | Prose triggers (misheard) | Bar |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |"
+    "Names is the share of name words typed exactly as written in the names tier (issue #274); it is reported, never gated.",
+    "",
+    "| Model | Tier | Clips | Hit rate | Voice Commands | Spoken Punctuation | Prose triggers (misheard) | Names | Bar |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
   );
   for (const model of models) {
     const { spec, clipCount, score } = model;
     const own = failedBars(model);
     for (const failure of own) failures.push(`${spec.id}: ${failure}`);
     out.push(
-      `| ${spec.id} | ${spec.tier} | ${clipCount} | ${pct(score.hitRate)} | ${pct(score.voiceRate)} | ${pct(score.punctuationRate)} | ${score.proseTriggers} (${score.misheardProseTriggers}) | ${own.length ? "FAIL" : "pass"} |`
+      `| ${spec.id} | ${spec.tier} | ${clipCount} | ${pct(score.hitRate)} | ${pct(score.voiceRate)} | ${pct(score.punctuationRate)} | ${score.proseTriggers} (${score.misheardProseTriggers}) | ${namesRate(score.nameHitRate)} | ${own.length ? "FAIL" : "pass"} |`
     );
   }
 
@@ -147,6 +151,23 @@ export function renderReport(models: readonly ScoredModel[]): Report {
         });
         out.push(`| ${row.item.say} | ${row.expected} | ${perModel.join(" | ")} |`);
       }
+    }
+
+    out.push("", `## ${language}: names`, "");
+    out.push(
+      "Unusual names and jargon in prose (issue #274). Each cell is name hits over name slots (takes × names), then what each take typed. A name counts only when typed exactly as written, after the Dictation Vocabulary when one is given. Takes that ran something instead of typing are marked. Reported, never gated.",
+      "",
+      `| Say | Names | ${ofLanguage.map((model) => model.spec.id).join(" | ")} |`,
+      `| --- | --- | ${ofLanguage.map(() => "---").join(" | ")} |`
+    );
+    for (const [index, row] of (ofLanguage[0]?.score.names ?? []).entries()) {
+      const perModel = ofLanguage.map(({ score }) => {
+        const own = score.names[index];
+        if (!own || own.takes === 0) return "not recorded";
+        const ran = own.triggered ? `, ran something ${own.triggered}×` : "";
+        return `${own.hits}/${own.slots}${ran} (${own.typed.map(cell).join("; ")})`;
+      });
+      out.push(`| ${row.item.say} | ${row.item.names?.join(", ")} | ${perModel.join(" | ")} |`);
     }
   }
 

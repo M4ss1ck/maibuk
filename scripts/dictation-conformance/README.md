@@ -99,8 +99,8 @@ that must type as text.
 
 ### What is recorded
 
-About 60 short lines per Dictation Language (62 English, 61 Spanish), around two
-minutes each (`src/test/support/dictation-phrase-set.ts`):
+87 English and 86 Spanish short lines, around three minutes per Dictation
+Language (`src/test/support/dictation-phrase-set.ts`):
 
 - **Voice Commands.** Every default phrase is a verb crossed with a target, so
   the script says each verb and each target at least once inside a real
@@ -119,6 +119,14 @@ minutes each (`src/test/support/dictation-phrase-set.ts`):
   (go to notes, sync now, the focus keys, Click by Name), each recorded as a
   whole clip and scored as a whole clip, never inferred. A missing clip is
   reported as *not recorded* and never fails the bar.
+- **Names** (issue #274). Ten prose lines per language carrying unusual names
+  and jargon (invented characters and places, rare personal names, technical
+  terms), recorded last so a rerun of the recorder adds only them. Only the
+  name words are scored, and only as exact written forms: case and accents
+  count, and a name the model starts a new line with is typed in lowercase
+  (the Interpreter lowercases a line that continues a sentence), so it misses.
+  The report gives each model's name hit rate and, per line, what each take
+  typed. A missing clip is *not recorded*; the names tier never fails the bar.
 
 No heard forms ship yet for the click word, the numbers, or the focus keys:
 English Fast hears "two" as "to" and "three" as "free" in E2E text-to-speech,
@@ -151,6 +159,20 @@ The native half transcribes every clip with each model (the production engine,
 fed faster than real time) into `vendor/moonshine/conformance/phrases-<id>.json`;
 `scripts/dictation-phrases/score.ts` runs the lines through the production
 Dictation Command Interpreter and writes `phrases-report.md` next to them.
+
+To score the names tier after a Dictation Vocabulary, the baseline the context
+biasing spike must beat (issue #274), pass the Vocabulary as a JSON file shaped
+like the setting. Build it the way an author would: one Phrase Recording per
+name in Settings → Dictation, each heard form paired with the name's written
+form. A written form is typed exactly as entered, even at the start of a line.
+
+```bash
+pnpm exec tsx scripts/dictation-phrases/score.ts --vocabulary vocabulary.json
+# vocabulary.json: { "en": [{ "heard": "shivawn", "written": "Siobhan" }], "es": [] }
+```
+
+The Vocabulary applies to the names tier only; every other tier scores the
+shipped defaults, so the bars are unchanged by it.
 
 | Bar | Scope |
 | --- | --- |

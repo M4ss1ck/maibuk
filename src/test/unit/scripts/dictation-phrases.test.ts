@@ -112,7 +112,7 @@ describe("renderReport()", () => {
     const report = renderReport([model("fast", cleanClips()), model("accurate", cleanClips())]);
     expect(report.failures).toEqual([]);
     expect(report.markdown).toContain(
-      `| moonshine-accurate-en | accurate | ${phraseItems("en").length} | 100% | 100% | 100% | 0 (0) | pass |`
+      `| moonshine-accurate-en | accurate | ${phraseItems("en").length} | 100% | 100% | 100% | 0 (0) | 100% | pass |`
     );
     expect(report.markdown).toContain(
       "## en: under the bar on Accurate\n\nReported, not gated: this language is outside the ship bar.\n\nNone."
@@ -197,5 +197,27 @@ describe("renderReport()", () => {
     const report = renderReport([model("accurate", clips)]);
     expect(report.failures).toEqual([]);
     expect(report.markdown).toContain("| click two | click_number:2 | 0%");
+  });
+
+  it("reports the names tier per line without gating it", () => {
+    const item = phraseItems("en").find((entry) => entry.kind === "names");
+    if (!item) throw new Error("no English names tier");
+    const clips = cleanClips().map((clip) =>
+      clip.itemId === item.id ? { ...clip, finals: [item.say.toLowerCase()] } : clip
+    );
+    const report = renderReport([model("accurate", clips)]);
+    expect(report.failures).toEqual([]);
+    expect(report.markdown).toContain("## en: names");
+    expect(report.markdown).toContain(
+      `| ${item.say} | ${item.names?.join(", ")} | 0/${item.names?.length}`
+    );
+  });
+
+  it("reports an unrecorded names tier as not recorded without failing", () => {
+    const clips = cleanClips().filter((clip) => !clip.itemId.startsWith("n-"));
+    const report = renderReport([model("accurate", clips)]);
+    expect(report.failures).toEqual([]);
+    expect(report.markdown).toContain("| 0 (0) | not recorded | pass |");
+    expect(report.markdown).toMatch(/## en: names[\s\S]*not recorded/);
   });
 });

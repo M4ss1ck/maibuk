@@ -13,6 +13,7 @@ import {
 import { phraseWords } from "@/features/dictation/normalize";
 import { entriesFor, type SpokenPunctuationEntry } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
+import type { VocabularyEntry } from "@/features/dictation/vocabulary";
 import {
   VOICE_VOCABULARY,
   heardForms,
@@ -194,11 +195,11 @@ export function isolatedTable(
  * A clip's finished lines through the interpreter in order, the way a session
  * inserts them: each line sees the text before it and the carried state.
  */
-function runLines(
+function interpretLines(
   lines: readonly string[],
   table: PhraseTable,
   capabilities: ModelSpec["capabilities"]
-): InterpretResult[] {
+): { results: InterpretResult[]; text: string } {
   const results: InterpretResult[] = [];
   let before = "";
   let state = INITIAL_INTERPRETER_STATE;
@@ -213,7 +214,42 @@ function runLines(
       else if (edit.kind !== "opener") before += "\n";
     }
   }
-  return results;
+  return { results, text: before };
+}
+
+function runLines(
+  lines: readonly string[],
+  table: PhraseTable,
+  capabilities: ModelSpec["capabilities"]
+): InterpretResult[] {
+  return interpretLines(lines, table, capabilities).results;
+}
+
+/** The text a clip's finished lines leave in the editor, approximately: a line break per mark. */
+export function typedText(
+  lines: readonly string[],
+  table: PhraseTable,
+  capabilities: ModelSpec["capabilities"]
+): string {
+  return interpretLines(lines, table, capabilities).text;
+}
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * The names `text` contains as exact written forms (issue #274): case and
+ * accents as written (in either Unicode form), whole words only, any
+ * whitespace between the words of a name. A name the model spells another
+ * way is a miss even when it sounds right: the author would fix it by hand.
+ */
+export function namesHeard(text: string, names: readonly string[]): string[] {
+  const composed = text.normalize("NFC");
+  return names.filter((name) => {
+    const words = name.normalize("NFC").split(/\s+/u).map(escapeRegExp).join("\\s+");
+    return new RegExp(`(?<![\\p{L}\\p{M}\\p{N}])${words}(?![\\p{L}\\p{M}\\p{N}])`, "u").test(
+      composed
+    );
+  });
 }
 
 function acted(result: InterpretResult): boolean {
@@ -361,12 +397,32 @@ export interface AppScore {
   heard: string[];
 }
 
+/** One names-tier line (issue #274): how often each of its names was typed as written. */
+export interface NameScore {
+  item: PhraseItem;
+  takes: number;
+  /** Per name, in line order: the takes that typed it exactly. */
+  names: { name: string; hits: number }[];
+  /** Name words typed exactly, over every take. */
+  hits: number;
+  /** Name words said, over every take: takes × names. */
+  slots: number;
+  /** Takes that ran a Command or a mark instead of typing the line. */
+  triggered: number;
+  /** What each take typed. */
+  typed: string[];
+}
+
 export interface ModelScore {
   language: DictationLanguage;
   phrases: PhraseScore[];
   prose: ProseScore[];
   /** One row per app-tier clip, in script order; never inferred, never gated. */
   app: AppScore[];
+  /** One row per names-tier line, in script order; never gated. */
+  names: NameScore[];
+  /** Name words typed as written over every recorded take; null when none is recorded. */
+  nameHitRate: number | null;
   /** Mean phrase rate over every default phrase: the ship bar. */
   hitRate: number;
   /** The same mean over Voice Command phrases and over Spoken Punctuation phrases. */
@@ -587,6 +643,37 @@ function scoreApp(context: ScoreContext): AppScore[] {
 }
 
 /**
+ * Names-tier rows (issue #274): every take through the shipped table plus the
+ * author's Dictation Vocabulary, scored only on the name words of its line.
+ */
+function scoreNames(context: ScoreContext, vocabulary: readonly VocabularyEntry[]): NameScore[] {
+  const { language, capabilities, script, clips } = context;
+  const table = buildPhraseTable(language, { capabilities, vocabulary });
+  return script
+    .filter((item) => item.kind === "names")
+    .map((item) => {
+      const own = clips.get(item.id) ?? [];
+      const takes = own.map((clip) =>
+        interpretLines(spokenLines(clip.finals), table, capabilities)
+      );
+      const names = item.names ?? [];
+      const heard = takes.map((take) => namesHeard(take.text, names));
+      return {
+        item,
+        takes: own.length,
+        names: names.map((name) => ({
+          name,
+          hits: heard.filter((found) => found.includes(name)).length,
+        })),
+        hits: heard.reduce((sum, found) => sum + found.length, 0),
+        slots: own.length * names.length,
+        triggered: takes.filter((take) => take.results.some(acted)).length,
+        typed: takes.map((take) => take.text),
+      };
+    });
+}
+
+/**
  * Scores one Dictation Model on the clips of its language. Each clip may
  * appear several times (one per take); every take counts.
  */
@@ -594,6 +681,8 @@ export function scoreModel(input: {
   language: DictationLanguage;
   capabilities: ModelSpec["capabilities"];
   clips: readonly Clip[];
+  /** The Dictation Vocabulary for the names tier only; the other tiers score the shipped defaults. */
+  vocabulary?: readonly VocabularyEntry[];
 }): ModelScore {
   const { language, capabilities } = input;
   const script = phraseItems(language);
@@ -616,6 +705,9 @@ export function scoreModel(input: {
   });
   const prose = scoreProse(context);
   const app = scoreApp(context);
+  const names = scoreNames(context, input.vocabulary ?? []);
+  const nameSlots = names.reduce((sum, row) => sum + row.slots, 0);
+  const nameHits = names.reduce((sum, row) => sum + row.hits, 0);
   const rateOf = (...kinds: readonly DefaultPhrase["kind"][]) =>
     mean(phrases.filter((score) => kinds.includes(score.row.kind)).map((score) => score.rate));
 
@@ -624,6 +716,8 @@ export function scoreModel(input: {
     phrases,
     prose,
     app,
+    names,
+    nameHitRate: nameSlots > 0 ? nameHits / nameSlots : null,
     hitRate: mean(phrases.map((score) => score.rate)),
     voiceRate: rateOf("voice", "voice_that"),
     punctuationRate: rateOf("punctuation"),
@@ -631,10 +725,10 @@ export function scoreModel(input: {
     misheardProseTriggers: prose
       .filter((score) => !score.firesOnText)
       .reduce((sum, score) => sum + score.triggered, 0),
-    // App clips are reported as "not recorded" in their own section and
-    // never fail the lane, so they are not missing items.
+    // App and names clips are reported as "not recorded" in their own
+    // sections and never fail the lane, so they are not missing items.
     missingItems: script
-      .filter((item) => item.kind !== "app" && !clips.has(item.id))
+      .filter((item) => item.kind !== "app" && item.kind !== "names" && !clips.has(item.id))
       .map((item) => item.id),
   };
 }

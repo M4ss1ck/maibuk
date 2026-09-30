@@ -7,12 +7,14 @@
 // mark phrases ("bold that") are recorded as whole clips, never inferred.
 // App-tier whole-line phrases ("go to notes", "click export") are recorded
 // as whole clips and scored as whole clips, never inferred.
-// Spoken Punctuation phrases ride in carrier sentences, several per clip. The
+// Spoken Punctuation phrases ride in carrier sentences, several per clip.
+// The names tier (issue #274) is ordinary prose carrying unusual names and
+// jargon, recorded last so a rerun of the recorder adds only it. The
 // gate lane (dictation-phrase-set.test.ts) proves the script still covers
 // every unit and every entry whenever the defaults change.
 import type { DictationLanguage } from "@/features/dictation/types";
 
-export type PhraseItemKind = "voice" | "app" | "punctuation" | "prose";
+export type PhraseItemKind = "voice" | "app" | "punctuation" | "prose" | "names";
 
 export interface PhraseItem {
   /** Stable clip id; the WAV is `<language>/<id>.wav`. */
@@ -21,6 +23,8 @@ export interface PhraseItem {
   kind: PhraseItemKind;
   /** Exactly what the reader says. */
   say: string;
+  /** Names tier only: the written forms scored in this line, in order. */
+  names?: readonly string[];
 }
 
 const VOICE: Record<DictationLanguage, readonly string[]> = {
@@ -212,6 +216,50 @@ const PROSE: Record<DictationLanguage, readonly string[]> = {
   ],
 };
 
+// Unusual names and jargon in ordinary prose (issue #274): the recordings the
+// context biasing spike measures, scoring only the words in braces, as exact
+// written forms. Invented names stand for an author's characters and places.
+// No line starts with a name, so sentence casing never decides a hit, and no
+// line says a Voice Command or a Spoken Punctuation phrase.
+const NAMES: Record<DictationLanguage, readonly string[]> = {
+  en: [
+    "yesterday we drove with {Siobhan} to {Llangollen} for the weekend",
+    "the old sailor named his boat the {Ximena} after his mother",
+    "our guide {Tadhg} says the {Brahmaputra} floods every spring",
+    "she restarted {Kubernetes} and flushed the {Redis} cache before lunch",
+    "in the story the dragon {Zorvath} guards the gates of {Ithilmere}",
+    "my editor {Oyelaran} wants more {sfumato} in the second act",
+    "they drank cold {kvass} at the market in {Tbilisi}",
+    "every winter {Wojciechowska} bakes {pierogi} for the whole street",
+    "the knight {Aelfric} rode north toward {Dunmarrow} at dawn",
+    "her thesis on {epigenetics} impressed professor {Nguyen} at once",
+  ],
+  es: [
+    "ayer {Xóchitl} viajó a {Oaxaca} con su hermano",
+    "el pescador llamó a su barca {Itziar} por su madre",
+    "nuestro guía {Iñaki} dice que el {Urubamba} crece en verano",
+    "reinició {Kubernetes} y vació la caché de {Redis} antes del almuerzo",
+    "en la novela el dragón {Zorvath} vigila las puertas de {Ithilmere}",
+    "mi editora {Maialen} quiere más {sfumato} en el segundo acto",
+    "tomamos {tepache} frío en el mercado de {Tlaquepaque}",
+    "cada invierno {Wojciechowska} hornea {pierogi} para toda la calle",
+    "el caballero {Aelfric} cabalgó hacia {Dunmarrow} al amanecer",
+    "su tesis sobre {epigenética} convenció enseguida a la doctora {Etxeberria}",
+  ],
+};
+
+/** A names line without its braces, and the braced names in order. */
+export function parseNamesLine(line: string): { say: string; names: string[] } {
+  const names: string[] = [];
+  const say = line.replace(/\{([^{}]+)\}/g, (_, name: string) => {
+    names.push(name);
+    return name;
+  });
+  if (/[{}]/.test(say)) throw new Error(`unbalanced brace in names line "${line}"`);
+  if (names.length === 0) throw new Error(`names line "${line}" has no {name}`);
+  return { say, names };
+}
+
 /** A file-safe id: accents folded, words joined by dashes, at most 48 characters. */
 export function clipSlug(text: string): string {
   return text
@@ -229,8 +277,12 @@ function items(
   kind: PhraseItemKind,
   lines: readonly string[]
 ): PhraseItem[] {
-  const prefix = { voice: "v", app: "a", punctuation: "p", prose: "x" }[kind];
-  return lines.map((say) => ({ id: `${prefix}-${clipSlug(say)}`, language, kind, say }));
+  const prefix = { voice: "v", app: "a", punctuation: "p", prose: "x", names: "n" }[kind];
+  return lines.map((line) => {
+    if (kind !== "names") return { id: `${prefix}-${clipSlug(line)}`, language, kind, say: line };
+    const { say, names } = parseNamesLine(line);
+    return { id: `${prefix}-${clipSlug(say)}`, language, kind, say, names };
+  });
 }
 
 /** The whole script for one language, in reading order. */
@@ -240,5 +292,6 @@ export function phraseItems(language: DictationLanguage): PhraseItem[] {
     ...items(language, "app", APP[language]),
     ...items(language, "punctuation", PUNCTUATION[language]),
     ...items(language, "prose", PROSE[language]),
+    ...items(language, "names", NAMES[language]),
   ];
 }
