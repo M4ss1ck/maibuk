@@ -381,7 +381,7 @@ _UI_: en "Dictation" / es "Dictado"
 _Avoid_: voice typing, speech-to-text (in UI copy)
 
 **Dictation Session**:
-The span from starting Dictation to stopping it. One per app at a time; it follows the caret across the editors on the page.
+The span from starting Dictation to stopping it. One per app at a time; it follows the caret across the editors on the page. A Voice Command that changes screen keeps it listening: it goes on in the editor that takes the caret there, or stops and says so when none does. (ADR 0016)
 
 **Dictation Model**:
 A downloaded speech model for one language and tier (Fast or Accurate), kept on this device.
@@ -399,9 +399,13 @@ _UI_: en "Spoken punctuation" / es "Puntuación dictada"
 _Avoid_: voice command (for these)
 
 **Voice Command**:
-A spoken phrase, said on its own, that runs a Command instead of inserting text, such as "poner negrita". A second way to run a Command, next to its Shortcuts; the author edits a Command's phrases per Dictation Language in the Shortcut Editor, and custom ones stay on this device. A formatting Voice Command ending in "that" / "eso" ("bold that", "poner en negrita eso") formats the last dictated sentence instead, like "scratch that" finds it. (ADR 0014)
+A spoken phrase, said on its own, that runs a Command instead of inserting text. Every Command takes them: formatting Commands answer to a verb and a target ("poner negrita"), every other Command to its own name in the Dictation Language ("go to Notes" / "ir a Notas"), and moving focus is a Command too ("press tab", "press enter"). A second way to run a Command, next to its Shortcuts; the author edits a Command's phrases per Dictation Language in the Shortcut Editor, and custom ones stay on this device. A formatting Voice Command ending in "that" / "eso" ("bold that", "poner en negrita eso") formats the last dictated sentence instead, like "scratch that" finds it. With Dictation on, the shortcut help lists the Voice Commands that work on the current screen. (ADR 0014, 0016)
 _UI_: en "Voice commands" / es "Comandos de voz"
 _Avoid_: voice shortcut
+
+**Click by Name**:
+Saying "click" / "pulsar" and then a control's visible name presses that control; when several share the name, each gets a number to say instead. (ADR 0016)
+_Avoid_: voice click, tap
 
 **Dictation Vocabulary**:
 Words and names the author teaches Dictation: what the Dictation Model hears and what to write instead, per Dictation Language, on this device. (ADR 0014)
@@ -495,12 +499,6 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 ## Decided, not built
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
-
-ADR 0016 widens **Voice Command** to every Command: a Command without its own phrases is run by saying its name ("go to Notes"), and moving focus is a Command too ("press tab"). It widens **Dictation Session**: a Voice Command that changes screen keeps the Session listening, and it goes on in the editor that takes the caret there, or stops when none does.
-
-**Click by Name**:
-Saying "click" / "pulsar" and then a control's visible name presses that control; when several share the name, each gets a number to say instead. (ADR 0016)
-_Avoid_: voice click, tap
 
 ## Relationships
 

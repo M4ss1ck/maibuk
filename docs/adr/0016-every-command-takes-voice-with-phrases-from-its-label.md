@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted
 ---
 
 # Every Command takes voice, with default phrases from its label
