@@ -496,6 +496,12 @@ _UI_: en "Writing volume", "Time tracking", "Engagement"
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
 
+ADR 0016 widens **Voice Command** to every Command: a Command without its own phrases is run by saying its name ("go to Notes"), and moving focus is a Command too ("press tab"). It widens **Dictation Session**: a Voice Command that changes screen keeps the Session listening, and it goes on in the editor that takes the caret there, or stops when none does.
+
+**Click by Name**:
+Saying "click" / "pulsar" and then a control's visible name presses that control; when several share the name, each gets a number to say instead. (ADR 0016)
+_Avoid_: voice click, tap
+
 ## Relationships
 
 - A **Library** holds many **Books**, **Notes**, and **Canvases**.
