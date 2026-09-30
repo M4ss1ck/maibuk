@@ -173,6 +173,9 @@ importers:
       dictionary-es:
         specifier: ^4.0.0
         version: 4.0.0
+      dom-accessibility-api:
+        specifier: ^0.7.1
+        version: 0.7.1
       dompurify:
         specifier: ^3.4.3
         version: 3.4.3
@@ -2483,6 +2486,9 @@ packages:
 
   dom-accessibility-api@0.6.3:
     resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}
+
+  dom-accessibility-api@0.7.1:
+    resolution: {integrity: sha512-vdnCeZD+3wZ+8h8xXL/ZtBlvvoobOFyPzSiIfO6sGOZDqjFx4aLMAjZhl4rawj5xYz3UwP6Tgvyh0iH4IOCVnQ==}
 
   dom-serializer@1.4.1:
     resolution: {integrity: sha512-VHwB3KfrcOOkelEG2ZOfxqLZdfkil8PtJi4P8N2MMXucZq2yLp75ClViUlOVwyoHEDjYU433Aq+5zWP61+RGag==}
@@ -5762,6 +5768,8 @@ snapshots:
   dom-accessibility-api@0.5.16: {}
 
   dom-accessibility-api@0.6.3: {}
+
+  dom-accessibility-api@0.7.1: {}
 
   dom-serializer@1.4.1:
     dependencies:

@@ -36,6 +36,8 @@ PHRASES=(
   "focus-toggle|en_US-lessac-medium|Press Space.|45|30"
   "focus-escape|en_US-lessac-medium|Press Escape.|45|30"
   "go-to-settings|en_US-lessac-medium|Go to Settings.|45|30"
+  "click-book-settings|en_US-lessac-medium|Click Book Settings.|70|30"
+  "click-cancel|en_US-lessac-medium|Click Cancel.|70|30"
 )
 
 # Compound phrases for the navigation hand-off spec (issue #320): a Voice
@@ -45,6 +47,7 @@ PHRASES=(
 # download and keyboard setup finish before the command speaks).
 COMPOUND_PHRASES=(
   "go-to-ephemeral-handoff|en_US-lessac-medium|Go to Ephemeral.|2|The sea was calm.|45|30"
+  "click-bold-then-one|en_US-lessac-medium|Click Bold.|3|Click one.|70|30"
 )
 
 # The voices the phrase list references.

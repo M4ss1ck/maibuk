@@ -293,4 +293,27 @@ describe("findPhraseConflict()", () => {
       phrase: "negrita eso",
     });
   });
+
+  it("refuses an author's phrase that starts with a click word", () => {
+    expect(voice("editor.bold", "click export", {}, "en")).toEqual({
+      kind: "clickWord",
+      word: "click",
+    });
+    expect(voice("editor.bold", "pulsar guardar")).toEqual({
+      kind: "clickWord",
+      word: "pulsar",
+    });
+  });
+
+  it("allows a focus.* default that starts with a click word", () => {
+    expect(voice("focus.next", "pulsar tab", {}, "es", "pulsar tab")).toBeNull();
+    expect(
+      findPhraseConflict({
+        language: "es",
+        phrase: "pulsar tab",
+        candidate: { kind: "voice", id: "focus.next", replacing: "pulsar tab" },
+        voice: {},
+      })
+    ).toBeNull();
+  });
 });

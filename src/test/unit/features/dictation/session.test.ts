@@ -1190,3 +1190,151 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     expect(copied).toEqual([]);
   });
 });
+
+describe("Dictation Session Click by Name", () => {
+  function clickSession(
+    routeText: (text: string) => RouteResult | null,
+    click: {
+      pressByName: (name: string) => { kind: "pressed"; name: string } | { kind: "choices"; count: number } | { kind: "not_found" };
+      pressChoice: (n: number) => { kind: "pressed"; name: string } | { kind: "no_choice" };
+      clearChoices: () => void;
+      hasChoices: () => boolean;
+    },
+    stats = createLineStats()
+  ) {
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(routeText),
+      notify: (n) => void notices.push(n),
+      copyText: (t) => copyText(t),
+      stats,
+      click,
+    });
+    return { session, stats };
+  }
+
+  function stubClick(overrides: Partial<Parameters<typeof clickSession>[1]> = {}) {
+    let pending = false;
+    return {
+      pressByName: vi.fn((name: string) => {
+        if (name === "export") return { kind: "pressed" as const, name: "Export" };
+        if (name === "duplicate") {
+          pending = true;
+          return { kind: "choices" as const, count: 2 };
+        }
+        return { kind: "not_found" as const };
+      }),
+      pressChoice: vi.fn((n: number) => {
+        pending = false;
+        return n === 2
+          ? { kind: "pressed" as const, name: "Duplicate" }
+          : ({ kind: "no_choice" as const });
+      }),
+      clearChoices: vi.fn(() => {
+        pending = false;
+      }),
+      hasChoices: vi.fn(() => pending),
+      ...overrides,
+    };
+  }
+
+  const clickRoute = (text: string): RouteResult | null =>
+    text === "click export"
+      ? { kind: "click", name: "export" }
+      : text === "click duplicate"
+        ? { kind: "click", name: "duplicate" }
+        : text === "click two"
+          ? { kind: "click_number", n: 2 }
+          : text === "click nine"
+            ? { kind: "click_number", n: 9 }
+            : null;
+
+  it("presses one match and counts it as a run without inserting", async () => {
+    const click = stubClick();
+    const { session, stats } = clickSession(clickRoute, click);
+    const target = fakeTarget("a");
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "click export", latencyMs: 5 });
+    expect(click.pressByName).toHaveBeenCalledWith("export");
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({ kind: "click_pressed", name: "Export" });
+    expect(stats.summary().voiceCommandCount).toBe(1);
+  });
+
+  it("lists choices and presses the numbered one", async () => {
+    const click = stubClick();
+    const { session } = clickSession(clickRoute, click);
+    const target = fakeTarget("a");
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "click duplicate", latencyMs: 5 });
+    expect(notices).toContainEqual({ kind: "click_choices", count: 2 });
+    host.emit({ type: "final", text: "click two", latencyMs: 5 });
+    expect(click.pressChoice).toHaveBeenCalledWith(2);
+    expect(notices).toContainEqual({ kind: "click_pressed", name: "Duplicate" });
+    expect(target.commits).toEqual([]);
+  });
+
+  it("announces no match and counts it as unavailable without inserting", async () => {
+    const click = stubClick();
+    const { session, stats } = clickSession(
+      (text) => (text === "click missing" ? { kind: "click", name: "missing" } : null),
+      click
+    );
+    const target = fakeTarget("a");
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "click missing", latencyMs: 5 });
+    expect(notices).toContainEqual({ kind: "click_not_found", name: "missing" });
+    expect(target.commits).toEqual([]);
+    expect(stats.summary().voiceCommandUnavailableCount).toBe(1);
+  });
+
+  it("answers a number with no pending choices as a name", async () => {
+    const pressByName = vi.fn((_name: string) => ({ kind: "not_found" as const }));
+    const click = stubClick({ pressByName, hasChoices: vi.fn(() => false) });
+    const { session } = clickSession(clickRoute, click);
+    session.register(fakeTarget("a"));
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "click nine", latencyMs: 5 });
+    expect(pressByName).toHaveBeenCalledWith("9");
+    expect(notices).toContainEqual({ kind: "click_not_found", name: "9" });
+  });
+
+  it("clears pending choices on a non-number line and handles it normally", async () => {
+    let pending = true;
+    const clearChoices = vi.fn(() => {
+      pending = false;
+    });
+    const click = stubClick({ clearChoices, hasChoices: vi.fn(() => pending) });
+    const { session } = clickSession(clickRoute, click);
+    const target = fakeTarget("a");
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "hello world", latencyMs: 5 });
+    expect(clearChoices).toHaveBeenCalledTimes(1);
+    expect(target.commits).toEqual(["hello world"]);
+  });
+
+  it("reports no_choice for a number with no matching choice", async () => {
+    let pending = true;
+    const click = stubClick({ hasChoices: vi.fn(() => pending) });
+    vi.mocked(click.pressChoice).mockImplementationOnce((_n: number) => {
+      pending = false;
+      return { kind: "no_choice" as const };
+    });
+    const { session } = clickSession(clickRoute, click);
+    session.register(fakeTarget("a"));
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "click nine", latencyMs: 5 });
+    expect(notices).toContainEqual({ kind: "click_not_found", name: "9" });
+  });
+});

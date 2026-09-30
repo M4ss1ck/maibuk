@@ -50,6 +50,8 @@ export interface VoiceVocabulary {
   fillers: readonly string[];
   /** The words that point back at the last dictated span, "bold that". */
   demonstratives: readonly string[];
+  /** The words that start Click by Name ("click" / "pulsar", "pulsa"). */
+  click: readonly string[];
   /**
    * What Dictation Models write for a default verb or target when they mishear
    * it the same way every time, heard → default ("quitad" → "quitar"). A line
@@ -104,6 +106,7 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
     // code.", "Center the text.", "Stop the list.") into Commands.
     fillers: ["to", "in"],
     demonstratives: ["that"],
+    click: ["click"],
     heard: {},
   },
   es: {
@@ -138,6 +141,7 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
     },
     fillers: ["la", "el", "las", "los", "en", "a", "al"],
     demonstratives: ["eso", "esto"],
+    click: ["pulsar", "pulsa"],
     // From the phrase conformance recordings (#285): the models turn
     // infinitives into vosotros imperatives and split or bend some targets.
     heard: {
@@ -202,6 +206,8 @@ export interface VoiceCommandTable {
   polarity: ReadonlyMap<VoiceVerbClass, VoicePolarity | null>;
   /** The language's demonstratives as normalized words. */
   demonstratives: ReadonlySet<string>;
+  /** The language's Click by Name words as normalized words. */
+  clickWords: ReadonlySet<string>;
   /** The author's phrases that match only as the whole line, by normalized words. */
   exact: ReadonlyMap<string, readonly VoiceCommandRun[]>;
   /** The author's phrases that are a default verb and target of their own Command. */
@@ -542,6 +548,7 @@ export function buildVoiceCommandTable(
     pinned,
     heard: heardForms(language),
     demonstratives: new Set(vocabulary.demonstratives.map(normalizeWord)),
+    clickWords: new Set(vocabulary.click.map(normalizeWord)),
   };
 }
 

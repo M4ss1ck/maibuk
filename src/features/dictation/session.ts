@@ -73,7 +73,13 @@ export type SessionNotice =
   // "Bold that" on edited dictated text: nothing changed, the live region says so.
   | { kind: "voice_that_refused" }
   // "Bold that" with nothing dictated yet: the live region says so.
-  | { kind: "voice_that_empty" };
+  | { kind: "voice_that_empty" }
+  // Click by Name pressed one control: the live region names it.
+  | { kind: "click_pressed"; name: string }
+  // Click by Name found several controls: the live region says how many.
+  | { kind: "click_choices"; count: number }
+  // Click by Name found nothing called that: the live region names it.
+  | { kind: "click_not_found"; name: string };
 
 export interface SessionSnapshot {
   status: SessionStatus;
@@ -119,6 +125,16 @@ export function editsToOrphanText(edits: DictationEdit[]): string {
   return out;
 }
 
+export interface ClickDeps {
+  pressByName(name: string):
+    | { kind: "pressed"; name: string }
+    | { kind: "choices"; count: number }
+    | { kind: "not_found" };
+  pressChoice(n: number): { kind: "pressed"; name: string } | { kind: "no_choice" };
+  clearChoices(): void;
+  hasChoices(): boolean;
+}
+
 export function createDictationSession(deps: {
   host: RecognizerHost;
   modelFor: (language: DictationLanguage) => ModelSpec | null;
@@ -138,6 +154,8 @@ export function createDictationSession(deps: {
   copyText: (text: string) => Promise<void>;
   stats: LineStats;
   isEnabled?: () => boolean;
+  /** Click by Name's DOM press; absent in tests that never route a click line. */
+  click?: ClickDeps;
 }): DictationSession {
   const targets = new Map<string, DictationTarget>();
   /** Most recently focused last; the active target is the last one still registered. */
@@ -198,11 +216,56 @@ export function createDictationSession(deps: {
   };
 
   // One code path for every finished line, live or queued: Voice Commands,
-  // scratch, and edits behave the same wherever the line waited.
+  // scratch, Click by Name, and edits behave the same wherever the line waited.
   const applyFinishedLine = (text: string, target: DictationTarget | null) => {
     const startedAt = performance.now();
     const result = deps.route(text, target?.before() ?? "");
     const interpreterMs = performance.now() - startedAt;
+    // Click by Name owns numbered choices until a number answers them: any
+    // other line drops them first, then runs normally. Click lines never
+    // insert text and never pass the Tutorial gate.
+    if (result.kind === "click_number") {
+      if (deps.click?.hasChoices()) {
+        const outcome = deps.click.pressChoice(result.n);
+        if (outcome.kind === "pressed") {
+          deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
+          deps.notify({ kind: "click_pressed", name: outcome.name });
+        } else {
+          deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+          deps.notify({ kind: "click_not_found", name: String(result.n) });
+        }
+        return;
+      }
+      const outcome = deps.click?.pressByName(String(result.n)) ?? { kind: "not_found" as const };
+      if (outcome.kind === "pressed") {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
+        deps.notify({ kind: "click_pressed", name: outcome.name });
+      } else if (outcome.kind === "choices") {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
+        deps.notify({ kind: "click_choices", count: outcome.count });
+      } else {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+        deps.notify({ kind: "click_not_found", name: String(result.n) });
+      }
+      return;
+    }
+    if (result.kind === "click") {
+      // A fresh "click <name>" drops stale choices before pressing.
+      deps.click?.clearChoices();
+      const outcome = deps.click?.pressByName(result.name) ?? { kind: "not_found" as const };
+      if (outcome.kind === "pressed") {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
+        deps.notify({ kind: "click_pressed", name: outcome.name });
+      } else if (outcome.kind === "choices") {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
+        deps.notify({ kind: "click_choices", count: outcome.count });
+      } else {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+        deps.notify({ kind: "click_not_found", name: result.name });
+      }
+      return;
+    }
+    if (deps.click?.hasChoices()) deps.click.clearChoices();
     // The Tutorial gate is the Shortcuts one: while a run is under way no
     // Voice Command acts, and its words are never inserted either. Only a
     // Command that really ran counts; an empty action is announced instead.

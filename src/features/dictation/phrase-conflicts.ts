@@ -5,7 +5,7 @@
 // Voice Command, and anything that starts with the escape word. The Shortcut
 // Editor, Settings → Dictation, and Shortcut File loading all refuse through
 // it.
-import { normalizePhrase, phraseWords } from "@/features/dictation/normalize";
+import { normalizePhrase, normalizeWord, phraseWords } from "@/features/dictation/normalize";
 import {
   defaultSpokenPunctuationLanguageSettings,
   defaultTriggers,
@@ -17,7 +17,9 @@ import {
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
   MIN_VOICE_PHRASE_WORDS,
+  VOICE_VOCABULARY,
   buildVoiceCommandTable,
+  defaultVoicePhrases,
   voiceCommandMatches,
   voiceEligibleCommands,
   voicePhrases,
@@ -33,7 +35,9 @@ export type PhraseConflict =
   /** The Command already answers to this phrase. */
   | { kind: "voiceDuplicate"; phrase: string }
   /** Another Command's Voice Command answers to it. */
-  | { kind: "voiceCommand"; commandId: CommandId; phrase: string };
+  | { kind: "voiceCommand"; commandId: CommandId; phrase: string }
+  /** A Voice Command that starts with a Click by Name word. */
+  | { kind: "clickWord"; word: string };
 
 /** What the phrase would become: a Voice Command of a Command, or an extra Spoken Punctuation phrase. */
 export type PhraseCandidate =
@@ -125,6 +129,16 @@ function voiceConflict(
       const matched = voiceCommandMatches(alone, phraseWords(existing)).next();
       if (!matched.done) return { kind: "voiceCommand", commandId: other, phrase: existing };
     }
+  }
+  // Click by Name owns lines that start with a click word: an author's Voice
+  // Command there would never run. A Command's own default keeps its phrase
+  // (the focus.* Spanish labels like "pulsar tab").
+  const clickWords = new Set(VOICE_VOCABULARY[language].click.map((word) => normalizeWord(word)));
+  if (words.length >= 2 && clickWords.has(words[0])) {
+    const ownDefaults = new Set(
+      defaultVoicePhrases(id, language).map((existing) => normalizePhrase(existing))
+    );
+    if (!ownDefaults.has(normalized)) return { kind: "clickWord", word: words[0] };
   }
   return null;
 }

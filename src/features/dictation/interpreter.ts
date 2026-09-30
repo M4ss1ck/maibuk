@@ -88,6 +88,8 @@ export interface InterpretResult {
   result:
     | { kind: "edits"; edits: DictationEdit[] }
     | ({ kind: "voice_command" } & VoiceCommandRun)
+    | { kind: "click"; name: string }
+    | { kind: "click_number"; n: number }
     | { kind: "scratch" };
   state: InterpreterState;
   spokenPunctuationCount: number;
@@ -323,6 +325,23 @@ export function interpret(input: InterpretInput): InterpretResult {
         state,
         spokenPunctuationCount: 0,
       };
+    }
+    // Click by Name (ADR 0016): after Voice Commands, before scratch. The
+    // first normalized word is a click word and at least one word follows.
+    const words = tokenWords(tokens);
+    if (words.length >= 2 && table.voice.clickWords.has(words[0])) {
+      const rest = words.slice(1);
+      const parsed = parseNumberWords(rest, table.language);
+      if (parsed && parsed.length === rest.length && parsed.value >= 1) {
+        return { result: { kind: "click_number", n: parsed.value }, state, spokenPunctuationCount: 0 };
+      }
+      if (rest.length === 1 && /^\p{Nd}+$/u.test(rest[0])) {
+        const n = Number.parseInt(rest[0], 10);
+        if (Number.isSafeInteger(n) && n >= 1) {
+          return { result: { kind: "click_number", n }, state, spokenPunctuationCount: 0 };
+        }
+      }
+      return { result: { kind: "click", name: rest.join(" ") }, state, spokenPunctuationCount: 0 };
     }
   }
 

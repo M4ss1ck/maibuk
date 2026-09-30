@@ -27,6 +27,7 @@ import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { isTutorialStatusActive, useTutorialStore } from "@/features/tutorial/store";
 import { createRecognizerHost, dictationPlatform, getModelFiles } from "@/lib/platform";
+import { clearChoices, hasChoices, pressByName, pressChoice } from "@/lib/click-by-name";
 import { getCommand } from "@/lib/shortcut-registry";
 import { runCommand } from "@/lib/command-runner";
 import { createUnsupportedHost, unsupportedModelFiles } from "@/lib/platform/unsupported-dictation";
@@ -118,6 +119,8 @@ async function build(): Promise<DictationRuntime> {
       });
       interpreterState = output.state;
       if (output.result.kind === "scratch") return { kind: "scratch" };
+      if (output.result.kind === "click") return { kind: "click", name: output.result.name };
+      if (output.result.kind === "click_number") return { kind: "click_number", n: output.result.n };
       return {
         ...output.result,
         spokenPunctuationCount: output.spokenPunctuationCount,
@@ -138,6 +141,7 @@ async function build(): Promise<DictationRuntime> {
     copyText: (text) => navigator.clipboard.writeText(text),
     stats,
     isEnabled: () => useDictationStore.getState().enabled,
+    click: { pressByName, pressChoice, clearChoices, hasChoices },
   });
   session.subscribe(() => useDictationStore.setState({ snapshot: session.getSnapshot() }));
 

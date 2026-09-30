@@ -881,3 +881,47 @@ describe("numeral (#272)", () => {
     });
   });
 });
+
+describe("interpret() Click by Name", () => {
+  const caps = { casing: false, punctuation: false, streaming: true } as const;
+  const enTable = () => buildPhraseTable("en", { capabilities: caps });
+  const esTable = () => buildPhraseTable("es", { capabilities: caps });
+  const run = (line: string, table: ReturnType<typeof buildPhraseTable>) =>
+    interpret({ line, before: "", capabilities: caps, table, state: INITIAL_INTERPRETER_STATE });
+
+  it("clicks a named control in English, folding case and punctuation", () => {
+    expect(run("Click Export.", enTable()).result).toEqual({ kind: "click", name: "export" });
+  });
+
+  it("clicks a number as digits or words", () => {
+    expect(run("click 2", enTable()).result).toEqual({ kind: "click_number", n: 2 });
+    expect(run("click two", enTable()).result).toEqual({ kind: "click_number", n: 2 });
+  });
+
+  it("clicks a named control in Spanish", () => {
+    expect(run("Pulsar Exportar.", esTable()).result).toEqual({ kind: "click", name: "exportar" });
+    expect(run("pulsa dos", esTable()).result).toEqual({ kind: "click_number", n: 2 });
+  });
+
+  it("lets Voice Commands win first", () => {
+    expect(run("Pulsar tab.", esTable()).result).toEqual({
+      kind: "voice_command",
+      id: "focus.next",
+      polarity: null,
+    });
+  });
+
+  it("stays text when click is not first", () => {
+    const { result } = run("I will click the button later", enTable());
+    expect(result.kind).toBe("edits");
+  });
+
+  it("stops when a protected Vocabulary token is present", () => {
+    const table = buildPhraseTable("en", {
+      capabilities: caps,
+      vocabulary: [{ heard: "export", written: "Export" }],
+    });
+    const { result } = run("click export", table);
+    expect(result.kind).toBe("edits");
+  });
+});

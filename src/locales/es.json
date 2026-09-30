@@ -1687,7 +1687,7 @@
         },
         "voice-commands": {
           "title": "Comandos de voz",
-          "body": "Una frase corta dicha sola, como «poner negrita», ejecuta un comando igual que su atajo. En el Editor de atajos, cada comando que puedes decir tiene una lista de voz donde agregas tus propias frases."
+          "body": "Una frase corta dicha sola, como «poner negrita», ejecuta un comando igual que su atajo. En el Editor de atajos, cada comando que puedes decir tiene una lista de voz donde agregas tus propias frases. Di «pulsar» y el nombre de un botón para pulsarlo; si dos se llaman igual, aparecen números y dices «pulsar 2»."
         }
       },
       "settings": {
@@ -1836,6 +1836,9 @@
     "voiceCommandRefusedDialogStuck": "El diálogo no puede cerrarse ahora, así que {{command}} no se ejecutó.",
     "nothingToUndo": "No hay nada que deshacer.",
     "nothingToRedo": "No hay nada que rehacer.",
+    "clickPressed": "Pulsado: {{name}}.",
+    "clickChoices": "{{count}} coincidencias. Di pulsar y un número.",
+    "clickNotFound": "Aquí no hay nada llamado {{name}}.",
     "languages": { "en": "inglés", "es": "español" },
     "languageNames": { "en": "Inglés", "es": "Español" },
     "errors": {
@@ -1937,7 +1940,8 @@
     "phraseRefused": {
       "tooShort": "Un comando de voz necesita dos palabras o más, así una frase de una sola palabra nunca lo ejecuta.",
       "spokenPunctuation": "{{phrase}} ya es puntuación dictada: {{entry}}.",
-      "voiceCommand": "{{phrase}} ya ejecuta {{command}}."
+      "voiceCommand": "{{phrase}} ya ejecuta {{command}}.",
+      "clickWord": "Pulsar por nombre ya usa «{{word}}» al principio de una línea."
     }
   },
   "colorPicker": {
