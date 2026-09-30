@@ -154,6 +154,8 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
       cursivo: "cursiva",
       "su brallado": "subrayado",
       "su rayada": "subrayada",
+      // Issue #324: both models write "pulsar tab" as "pulsar tap".
+      tap: "tab",
     },
   },
 };
