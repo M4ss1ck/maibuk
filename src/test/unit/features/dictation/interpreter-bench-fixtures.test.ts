@@ -92,6 +92,12 @@ describe.each(["en", "es"] as const)("interpreter bench fixtures (%s)", (languag
     expect(text).not.toContain("Written");
   });
 
+  it("writes the numeral run as digits", () => {
+    const text = textOf(interpretation);
+    const expected: Record<"en" | "es", string> = { en: "999001", es: "999999" };
+    expect(text).toContain(expected[language]);
+  });
+
   it("never matches a synthetic alias or heard form, only deepens the tries", () => {
     const { vocabulary = [], settings } = benchCase.options;
     const withoutSynthetic = interpret({

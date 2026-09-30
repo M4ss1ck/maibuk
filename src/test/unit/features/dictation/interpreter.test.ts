@@ -752,3 +752,132 @@ describe("all-caps lock (#271)", () => {
     expect(output.state.allCaps).toBe(false);
   });
 });
+
+describe("numeral (#272)", () => {
+  const bare: Capabilities = { casing: false, punctuation: false, streaming: true };
+  const enTable = () => buildPhraseTable("en", { capabilities: bare });
+  const esTable = () => buildPhraseTable("es", { capabilities: bare });
+
+  const runEn = (line: string, before = "") =>
+    interpret({
+      line,
+      before,
+      capabilities: bare,
+      table: enTable(),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+
+  const runEs = (line: string, before = "") =>
+    interpret({
+      line,
+      before,
+      capabilities: bare,
+      table: esTable(),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+
+  it("leaves numeral as prose when the author switches it off", () => {
+    const table = buildPhraseTable("en", {
+      capabilities: bare,
+      settings: { enabled: true, entries: { numeral: false }, aliases: {} },
+    });
+    const output = interpret({
+      line: "numeral twenty one",
+      before: "",
+      capabilities: bare,
+      table,
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Numeral twenty one" }],
+    });
+    expect(output.spokenPunctuationCount).toBe(0);
+  });
+
+  it("gives the tail of a phrase that starts inside the number back to prose", () => {
+    const table = buildPhraseTable("en", {
+      capabilities: bare,
+      settings: { enabled: true, entries: {}, aliases: { comma: ["one two"] } },
+    });
+    const output = interpret({
+      line: "numeral twenty one two apples",
+      before: "",
+      capabilities: bare,
+      table,
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "21 two apples" }],
+    });
+  });
+
+  it.each([
+    { line: "numeral twenty one apples", expected: "21 apples", count: 1 },
+    { line: "numeral twenty-one apples", expected: "21 apples", count: 1 },
+    { line: "numeral one hundred and five pages", expected: "105 pages" },
+    { line: "numeral one hundred and bread", expected: "100 and bread" },
+    { line: "numeral three four", expected: "3 four" },
+    { line: "numeral apples", expected: "Numeral apples", count: 0 },
+    { line: "the end numeral", expected: "The end numeral", count: 0 },
+    { line: "numeral 21 apples", expected: "21 apples", count: 1 },
+    { line: "numeral twenty one comma then", expected: "21, then", count: 2 },
+    { line: "numeral twenty one period", expected: "21.", count: 2 },
+    { line: "chapter numeral one million", expected: "Chapter 1000000" },
+    { line: "literal numeral three", expected: "Numeral three" },
+  ])("$line -> $expected", ({ line, expected, count }) => {
+    const output = runEn(line);
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: expected }],
+    });
+    if (count !== undefined) expect(output.spokenPunctuationCount).toBe(count);
+  });
+
+  it("writes zero with text before the caret", () => {
+    const output = runEn("numeral zero", "hello ");
+    expect(output.result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "0" }] });
+  });
+
+  it.each([
+    { line: "capítulo numeral veintiún", expected: "Capítulo 21" },
+    { line: "numeral un millón de euros", expected: "1000000 de euros" },
+    { line: "numeral treinta y pan", expected: "30 y pan" },
+    { line: "numeral doscientos cinco coma luego", expected: "205, luego", count: 2 },
+    { line: "numeral número", expected: "Numeral número", count: 0 },
+  ])("$line -> $expected", ({ line, expected, count }) => {
+    const output = runEs(line);
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: expected }],
+    });
+    if (count !== undefined) expect(output.spokenPunctuationCount).toBe(count);
+  });
+
+  it("writes digits from model punctuation", () => {
+    const capabilities: Capabilities = { casing: true, punctuation: true, streaming: true };
+    const output = interpret({
+      line: "Numeral, twenty one.",
+      before: "",
+      capabilities,
+      table: buildPhraseTable("en", { capabilities }),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "21." }] });
+  });
+
+  it("upper-cases the prose after the digits while all caps is on", () => {
+    const output = interpret({
+      line: "numeral twenty one apples",
+      before: "",
+      capabilities: bare,
+      table: enTable(),
+      state: { ...INITIAL_INTERPRETER_STATE, allCaps: true },
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "21 APPLES" }],
+    });
+  });
+});

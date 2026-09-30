@@ -116,6 +116,7 @@ export const ES_ENTRIES: readonly SpokenPunctuationEntry[] = [
     actions: [{ kind: "caps_off" }],
     punctuation: false,
   },
+  { id: "numeral", phrases: ["numeral"], actions: [{ kind: "numeral" }], punctuation: false },
   { id: "literal", phrases: ["literal"], actions: [{ kind: "literal" }], punctuation: false },
   {
     id: "borraEso",

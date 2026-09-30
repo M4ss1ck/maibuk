@@ -365,6 +365,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `DictationLanguageTabs` (one React Aria tab per Dictation Language, only the chosen panel mounted; Settings → Dictation and the Voice Commands dialog switch language through it, never a Select) | `src/components/dictation/DictationLanguageTabs.tsx` |
 | `dictationLanguageFor(override, uiLanguage)` (the Dictation Language a phrase editor opens on) | `src/features/dictation/store.ts` |
 | `findVocabularyRefusal()` / `normalizeVocabularySettings()` / `VocabularyEntry` (the Dictation Vocabulary: heard form → written form, whole-word and folded, this device, ADR 0014) | `src/features/dictation/vocabulary.ts` |
+| `parseNumberWords()` (the longest run of English or Spanish number words as an integer 0 to 999,999,999; the "numeral" Spoken Punctuation modifier writes it in digits) | `src/features/dictation/number-words.ts` |
 | `createResampler()` / Rust `Resampler` (any input rate → 16 kHz mono; shared fixture `src/test/fixtures/dictation/resampler.json`) | `src/lib/platform/web/dictation/resampler.ts` / `src-tauri/src/dictation/resample.rs` |
 | `pnpm fetch:dictation` (vendors the pinned Moonshine WASM release and native libs; `--web` fetches only the WASM runtime, which `pnpm build:web` runs first) | `scripts/fetch-dictation-runtime.mjs` |
 | `pnpm conformance:dictation` (periodic lane: plays the vendored WAVs through the web host in Chromium and the Rust runner, then reports latency and CPU per model) | `scripts/dictation-conformance/web.mjs` / `src-tauri/src/dictation/runner.rs` |

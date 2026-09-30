@@ -1873,6 +1873,7 @@
         "cap": "Pone mayúscula a la palabra siguiente",
         "caps_on": "Activa las mayúsculas",
         "caps_off": "Desactiva las mayúsculas",
+        "numeral": "Escribe el número siguiente en cifras",
         "literal": "Escribe la palabra siguiente tal cual",
         "scratch": "Borra la última frase dictada"
       },

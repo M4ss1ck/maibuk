@@ -128,6 +128,20 @@ describe("SpokenPunctuationSection", () => {
     expect(within(desactivadas).getByText("Desactiva las mayúsculas")).toBeInTheDocument();
   });
 
+  it("shows the numeral entry and what it inserts (#272)", async () => {
+    renderSection();
+
+    const numeral = screen.getByRole("group", { name: "numeral" });
+    expect(within(numeral).getByText("Writes the next number in digits")).toBeInTheDocument();
+
+    cleanup();
+    await act(() => i18n.changeLanguage("es"));
+    renderSection("es");
+
+    const numeralEs = screen.getByRole("group", { name: "numeral" });
+    expect(within(numeralEs).getByText("Escribe el número siguiente en cifras")).toBeInTheDocument();
+  });
+
   it("follows the model's capabilities for the initial switch state", () => {
     renderSection();
     const comma = screen.getByRole("group", { name: "comma" });
