@@ -1,15 +1,19 @@
 import type { Page } from "@playwright/test";
-import { pressUntilFocused } from "../support/keyboard";
+import { capture } from "../support/capture";
+import { expectFocusWithin, expectTabContained, pressUntilFocused } from "../support/keyboard";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
-// The editor context menu and the floating selection toolbar (issue #207).
+// The editor context menu and the floating selection toolbar (issue #207),
+// the selection toolbar driven by keyboard alone (issue #218).
 test.use({ library: "oneBookThreeChapters" });
 
 const editorText = (page: Page) => page.getByRole("textbox", { name: /^Text of / });
+const mainToolbar = (page: Page) => page.getByRole("toolbar", { name: "Toolbar" });
+const floatingToolbar = (page: Page) => page.getByRole("toolbar", { name: "Selection formatting" });
 
-async function openEditor(page: Page) {
-  await seedSettings(page, { toolbarExpanded: true });
+async function openEditor(page: Page, settings: Record<string, unknown> = {}) {
+  await seedSettings(page, { toolbarExpanded: true, ...settings });
   await page.goto("/");
   await page.getByRole("grid", { name: "Books" }).getByRole("row").waitFor();
   await page.keyboard.press("1");
@@ -68,26 +72,104 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
 
     const floating = page.locator(".selection-toolbar-enter");
     await expect(floating).toBeVisible();
+    await capture(page, "selection-toolbar-shown", { around: [floating] });
     await expect(floating.getByRole("button", { name: "Bold" })).toBeVisible();
   });
 
-  test.fail(
-    "Tab moves focus into the floating toolbar",
-    {
-      annotation: {
-        type: "issue",
-        description: "https://github.com/M4ss1ck/maibuk/issues/218",
+  test("Alt+F10 focuses it; arrows, Home and End move; Esc returns to the text @sc:editor.focusSelectionToolbar", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await selectFirstWords(page, 5);
+
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+
+    await page.keyboard.press("Alt+F10");
+    await expect(floating.getByRole("button").first()).toBeFocused();
+
+    await page.keyboard.press("ArrowRight");
+    await expect(floating.getByRole("button", { name: "Italic" })).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(floating.getByRole("button").last()).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(floating.getByRole("button").first()).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(editorText(page)).toBeFocused();
+    // The 5 selected characters ("The s") are the ones replaced, so the
+    // selection survived the round trip through the toolbar.
+    await page.keyboard.type("X");
+    await expect(editorText(page)).toHaveText("Xtorm came in from the west without warning.");
+  });
+
+  test("Enter on Bold bolds the selection and keeps the toolbar focused @sc:editor.focusSelectionToolbar", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await selectFirstWords(page, 5);
+
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    const bold = floating.getByRole("button", { name: "Bold" });
+    await pressUntilFocused(page, "ArrowRight", bold);
+    await page.keyboard.press("Enter");
+    await capture(page, "selection-toolbar-focused");
+
+    await expect(bold).toHaveAttribute("aria-pressed", "true");
+    await expect(bold).toBeFocused();
+    await expect(floating).toBeVisible();
+    await expect(editorText(page).locator("strong")).toHaveText("The s");
+  });
+
+  test("Link from the bubble: Esc closes the dialog and returns to the text @sc:editor.focusSelectionToolbar", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await selectFirstWords(page, 5);
+
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      floating.getByRole("button", { name: "Insert Link" })
+    );
+    await page.keyboard.press("Enter");
+
+    const dialog = page.getByRole("dialog", { name: "Insert Link" });
+    await expect(dialog).toBeVisible();
+    await expectFocusWithin(dialog);
+    await expectTabContained(page, dialog);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(editorText(page)).toBeFocused();
+  });
+
+  test("a group hidden from the main toolbar stays reachable in the bubble @sc:editor.focusSelectionToolbar", async ({
+    page,
+  }) => {
+    // basic-marks off in the main toolbar, on in the bubble: Bold lives only there.
+    await openEditor(page, {
+      toolbarConfig: {
+        start: [{ kind: "group", id: "basic-marks", toolbarVisible: false, floatingVisible: true }],
+        end: [],
       },
-    },
-    async ({ page }) => {
-      await openEditor(page);
-      await selectFirstWords(page, 5);
-      const floating = page.locator(".selection-toolbar-enter");
-      await expect(floating).toBeVisible();
+    });
+    await expect(mainToolbar(page).getByRole("button", { name: "Bold" })).toHaveCount(0);
 
-      await page.keyboard.press("Tab");
+    await selectFirstWords(page, 5);
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    const bold = floating.getByRole("button", { name: "Bold" });
+    await pressUntilFocused(page, "ArrowRight", bold);
+    await page.keyboard.press("Enter");
 
-      await expect(floating.getByRole("button").first()).toBeFocused();
-    }
-  );
+    await expect(bold).toBeFocused();
+    await expect(editorText(page).locator("strong")).toHaveText("The s");
+  });
 });

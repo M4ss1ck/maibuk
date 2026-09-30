@@ -537,6 +537,8 @@
     "clear": "Clear",
     "selectionStats": "Selected text statistics",
     "toolbar": "Toolbar",
+    "selectionToolbar": "Selection formatting",
+    "focusSelectionToolbar": "Focus selection toolbar",
     "hideToolbar": "Hide toolbar",
     "showToolbar": "Show toolbar",
     "uppercase": "Uppercase",

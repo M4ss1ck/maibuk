@@ -4,9 +4,17 @@ import { FloatingFormattingGroups } from "@/components/editor/toolbar/FloatingFo
 export function FormattingButtons({
   editor,
   onLinkClick,
+  shouldFocusEditor,
 }: {
   editor: Editor;
   onLinkClick: () => void;
+  shouldFocusEditor?: () => boolean;
 }) {
-  return <FloatingFormattingGroups editor={editor} onLinkClick={onLinkClick} />;
+  return (
+    <FloatingFormattingGroups
+      editor={editor}
+      onLinkClick={onLinkClick}
+      shouldFocusEditor={shouldFocusEditor}
+    />
+  );
 }

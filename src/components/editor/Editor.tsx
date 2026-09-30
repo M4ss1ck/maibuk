@@ -600,6 +600,9 @@ export function Editor({
         editor={editor}
         isOpen={showBubbleLinkDialog}
         onClose={() => setShowBubbleLinkDialog(false)}
+        // The bubble's Link command is one step out of the text, so closing its
+        // dialog must land back on the selection it was acting on.
+        restoreFocusTarget={() => editor?.view?.dom ?? null}
         bookId={bookId}
         internalTargets={internalTargets}
         loadInternalTargetChildren={loadInternalTargetChildren}

@@ -57,6 +57,8 @@ interface LinkDialogProps {
   bookId?: string | null;
   internalTargets?: InternalTarget[];
   loadInternalTargetChildren?: InternalTargetChildrenLoader;
+  /** Focus returns here when the dialog closes (the editor, usually). */
+  restoreFocusTarget?: () => HTMLElement | null;
 }
 
 function getSelectedMarks(editor: Editor): LinkTextMark[] {
@@ -170,6 +172,7 @@ export function LinkDialog({
   bookId,
   internalTargets = [],
   loadInternalTargetChildren,
+  restoreFocusTarget,
 }: LinkDialogProps) {
   const { t } = useTranslation();
   const [url, setUrl] = useState("");
@@ -421,6 +424,7 @@ export function LinkDialog({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
+      restoreFocusTarget={restoreFocusTarget}
       title={isEditing ? t("editor.editLink") : t("editor.insertLink")}
       footer={
         <>

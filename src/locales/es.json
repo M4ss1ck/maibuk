@@ -537,6 +537,8 @@
     "clear": "Limpiar",
     "selectionStats": "Estadísticas del texto seleccionado",
     "toolbar": "Barra de herramientas",
+    "selectionToolbar": "Formato de la selección",
+    "focusSelectionToolbar": "Enfocar la barra de la selección",
     "hideToolbar": "Ocultar barra de herramientas",
     "showToolbar": "Mostrar barra de herramientas",
     "uppercase": "Mayúsculas",

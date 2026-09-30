@@ -212,6 +212,7 @@ export default defineConfig(() => ({
         "src/components/editor/SymbolsDialog.tsx",
         "src/components/editor/SymbolSuggestion.tsx",
         "src/components/editor/extensions/SymbolAutocomplete.ts",
+        "src/components/editor/SelectionToolbar.tsx",
         "scripts/symbols-data/transform.ts",
         // Deep-link / strict link-uri
         "src/features/links/link-uri.ts",
