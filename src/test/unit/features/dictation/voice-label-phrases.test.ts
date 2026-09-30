@@ -32,9 +32,7 @@ function findSharedWholeLinePhrases(entries: readonly WholeLineEntry[]): string[
     const key = phraseWords(phrase).join(" ");
     owners.set(key, [...(owners.get(key) ?? []), id]);
   }
-  return [...owners.entries()]
-    .filter(([, ids]) => new Set(ids).size > 1)
-    .map(([key]) => key);
+  return [...owners.entries()].filter(([, ids]) => new Set(ids).size > 1).map(([key]) => key);
 }
 
 describe.each(VOICE_LANGUAGES)("voice label phrases (%s)", (language) => {
@@ -53,7 +51,11 @@ describe.each(VOICE_LANGUAGES)("voice label phrases (%s)", (language) => {
     }
   });
 
-  it("keeps every default whole-line phrase clear of every other phrase", () => {
+  // Each check builds two full phrase tables for ~200 Commands: about 1 s
+  // locally, but over 5 s on CI with coverage instrumentation.
+  it("keeps every default whole-line phrase clear of every other phrase", {
+    timeout: 30_000,
+  }, () => {
     for (const { id, phrase } of wholeLineEntries(language)) {
       expect(
         findPhraseConflict({

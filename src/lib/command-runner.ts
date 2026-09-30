@@ -24,9 +24,9 @@ export function registerCommandSource(
   };
 }
 
-/** Commands runnable while a Tutorial run is under way; later tickets may add focus.* ones. */
+/** Commands runnable while a Tutorial run is under way; focus.* keys are the browser's own. */
 export function isTutorialRunnable(id: CommandId): boolean {
-  return id === "tutorial.skip";
+  return id === "tutorial.skip" || id.startsWith("focus.");
 }
 
 export function runCommand(

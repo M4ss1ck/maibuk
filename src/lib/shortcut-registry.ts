@@ -62,6 +62,7 @@ const FIXED_FIELD = "shortcuts.fixed.findField";
 const FIXED_TAB = "shortcuts.fixed.tab";
 const FIXED_FAMILY = "shortcuts.fixed.family";
 const FIXED_ACTIVATE = "shortcuts.fixed.activate";
+const FIXED_FOCUS_KEY = "shortcuts.fixed.focusKey";
 
 export const COMMANDS = {
   "global.gotoProjects": {
@@ -1027,6 +1028,122 @@ export const COMMANDS = {
     contexts: ["coverDesigner"],
     defaults: [],
   },
+
+  // The browser's own keys, spoken as Voice Commands (ADR 0016). Never
+  // handled by `useShortcuts`: their Fixed Shortcut is the platform key
+  // itself, never intercepted.
+  // The tiny English model mishears some short keys ("Press Tab" -> "Pressed
+  // tab", "Press Enter" -> "Presenter"), so these Commands also answer to a
+  // spelling the models transcribe. The label phrase stays listed first.
+  "focus.next": {
+    labelKey: "shortcuts.focus.next",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["Tab"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+    voice: {
+      phrases: {
+        en: ["press tab", "press the tab key"],
+        es: ["pulsar tab", "pulsar la tecla tab"],
+      },
+    },
+  },
+  "focus.previous": {
+    labelKey: "shortcuts.focus.previous",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["Shift+Tab"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+    voice: {
+      phrases: {
+        en: ["press shift tab", "press shift tab key"],
+        es: ["pulsar mayús tab", "pulsar mayús y tab"],
+      },
+    },
+  },
+  "focus.up": {
+    labelKey: "shortcuts.focus.up",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["ArrowUp"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+  },
+  "focus.down": {
+    labelKey: "shortcuts.focus.down",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["ArrowDown"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+  },
+  "focus.left": {
+    labelKey: "shortcuts.focus.left",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["ArrowLeft"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+  },
+  "focus.right": {
+    labelKey: "shortcuts.focus.right",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["ArrowRight"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+  },
+  "focus.first": {
+    labelKey: "shortcuts.focus.first",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["Home"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+  },
+  "focus.last": {
+    labelKey: "shortcuts.focus.last",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["End"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+  },
+  "focus.activate": {
+    labelKey: "shortcuts.focus.activate",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["Enter"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+    // The models hear "Press Enter" as "Presenter" (measured in the E2E lane),
+    // so the Command also answers to a spelling they transcribe: "press enter
+    // key". Both stay listed, and the label remains the first phrase.
+    voice: {
+      phrases: {
+        en: ["press enter", "press enter key"],
+        es: ["pulsar intro", "pulsar la tecla intro"],
+      },
+    },
+  },
+  "focus.toggle": {
+    labelKey: "shortcuts.focus.toggle",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["Space"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+  },
+  "focus.escape": {
+    labelKey: "shortcuts.focus.escape",
+    contexts: ["global"],
+    defaults: [],
+    fixed: [["Escape"]],
+    fixedReasonKey: FIXED_FOCUS_KEY,
+    sealed: true,
+  },
 } as const satisfies Record<string, CommandDef>;
 
 export type CommandId = keyof typeof COMMANDS;
@@ -1082,6 +1199,7 @@ export const SHORTCUT_SECTIONS = [
     labelKey: "shortcuts.sections.editor",
     contexts: ["editor", "image", "footnoteItem"],
   },
+  { id: "focus", labelKey: "shortcuts.sections.focus", contexts: [] },
 ] as const satisfies readonly {
   id: string;
   labelKey: string;
@@ -1092,6 +1210,7 @@ export type ShortcutSectionId = (typeof SHORTCUT_SECTIONS)[number]["id"];
 
 /** A Shared Command lives in "common"; any other Command in its Context's section. */
 export function commandSection(id: CommandId): ShortcutSectionId {
+  if (id.startsWith("focus.")) return "focus";
   const contexts: readonly ShortcutContext[] = COMMANDS[id].contexts;
   if (contexts.length > 1) return "common";
   const section = SHORTCUT_SECTIONS.find((candidate) =>
