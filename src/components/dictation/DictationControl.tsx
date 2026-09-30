@@ -25,7 +25,6 @@ export function DictationControl() {
   const enabled = useDictationStore((s) => s.enabled);
   const snapshot = useDictationStore((s) => s.snapshot);
   const installed = useDictationStore((s) => s.installed);
-  const announcement = useDictationStore((s) => s.announcement);
   const languageOverride = useDictationStore((s) => s.languageOverride);
   const hint = useCommandHint("dictation.toggle");
 
@@ -117,9 +116,6 @@ export function DictationControl() {
       >
         <Settings2 className="h-5 w-5" aria-hidden />
       </button>
-      <div role="status" aria-live="polite" className="sr-only">
-        {announcement}
-      </div>
     </div>
   );
 }

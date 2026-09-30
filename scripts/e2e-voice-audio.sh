@@ -35,6 +35,16 @@ PHRASES=(
   "focus-activate|en_US-lessac-medium|Press enter key.|45|30"
   "focus-toggle|en_US-lessac-medium|Press Space.|45|30"
   "focus-escape|en_US-lessac-medium|Press Escape.|45|30"
+  "go-to-settings|en_US-lessac-medium|Go to Settings.|45|30"
+)
+
+# Compound phrases for the navigation hand-off spec (issue #320): a Voice
+# Command, a spoken gap, then a dictated sentence, played once per browser
+# launch. `name|voice|command_text|gap_seconds|sentence_text|pre|post` (the
+# silence paddings default to 45|30 like the focus-key entries, so the model
+# download and keyboard setup finish before the command speaks).
+COMPOUND_PHRASES=(
+  "go-to-ephemeral-handoff|en_US-lessac-medium|Go to Ephemeral.|2|The sea was calm.|45|30"
 )
 
 # The voices the phrase list references.
@@ -83,6 +93,34 @@ for entry in "${PHRASES[@]}"; do
   pre_ms="$(python3 -c "print(int(float('$pre_seconds') * 1000))")"
   ffmpeg -y -loglevel error -i "$raw" -af "adelay=${pre_ms},apad=pad_dur=${post_seconds}" -ar 16000 -ac 1 "$out"
   rm -f "$raw"
+done
+
+for entry in "${COMPOUND_PHRASES[@]}"; do
+  IFS='|' read -r name voice command_text gap_seconds sentence_text pre_seconds post_seconds <<<"$entry"
+  pre_seconds="${pre_seconds:-45}"
+  post_seconds="${post_seconds:-30}"
+  out="$OUT_DIR/$name.wav"
+  if [ -f "$out" ]; then
+    echo "Keeping $out"
+    continue
+  fi
+  echo "Synthesizing $out (\"$command_text\" +${gap_seconds}s \"$sentence_text\", +${pre_seconds}s/+${post_seconds}s)"
+  raw_command="$(mktemp --suffix=.wav)"
+  raw_sentence="$(mktemp --suffix=.wav)"
+  printf '%s\n' "$command_text" |
+    "$python_bin" -m piper -m "$voice" --data-dir "$VOICES_DIR" -f "$raw_command"
+  printf '%s\n' "$sentence_text" |
+    "$python_bin" -m piper -m "$voice" --data-dir "$VOICES_DIR" -f "$raw_sentence"
+  # One take: the command, a spoken gap of silence (the recognizer closes the
+  # command's line in it), then the sentence, with leading silence for the
+  # setup and trailing silence so the looping fake mic never repeats a phrase
+  # inside a test.
+  pre_ms="$(python3 -c "print(int(float('$pre_seconds') * 1000))")"
+  ffmpeg -y -loglevel error -i "$raw_command" -i "$raw_sentence" \
+    -f lavfi -i "anullsrc=r=16000:cl=mono:d=${gap_seconds}" \
+    -filter_complex "[0:a]aresample=16000[a0];[1:a]aresample=16000[a1];[2:a]aresample=16000[a2];[a0][a2][a1]concat=n=3:v=0:a=1,adelay=${pre_ms},apad=pad_dur=${post_seconds}[out]" \
+    -map "[out]" -ar 16000 -ac 1 "$out"
+  rm -f "$raw_command" "$raw_sentence"
 done
 
 echo "E2E voice audio ready in $OUT_DIR"

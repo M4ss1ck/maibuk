@@ -1854,6 +1854,7 @@
     },
     "orphanCopied": "El dictado se detuvo. La última frase se copió al portapapeles.",
     "orphanLost": "El dictado se detuvo. Copia la última frase: {{text}}",
+    "handoffNoEditor": "Aquí no hay editor, así que el dictado se detuvo.",
     "section": {
       "title": "Dictado",
       "models": "Modelos",

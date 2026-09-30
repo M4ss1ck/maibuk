@@ -62,6 +62,9 @@ export type SessionNotice =
   // A Voice Command whose Command has no live binding here: the live region
   // says so, and the stats count it as unavailable.
   | { kind: "voice_command_unavailable"; id: CommandId }
+  // A Voice Command that changed the screen but no editor took the caret in
+  // time: the queued lines went to the clipboard path, and the Session stopped.
+  | { kind: "handoff_no_editor" }
   // A Voice Command refused by a gate (an open dialog, the Tutorial): the
   // live region says so, and the stats count it as refused.
   | { kind: "voice_command_refused"; id: CommandId; reason: "dialog" | "tutorial" | "dialog_refused" }
@@ -93,6 +96,13 @@ export interface DictationSession {
 }
 
 /**
+ * How long a navigating Voice Command waits for an editor to take the caret
+ * on the new screen: long enough for a route change plus an editor mount on a
+ * slow phone, short enough that a forgotten mic does not stay on.
+ */
+export const HANDOFF_LIMIT_MS = 4000;
+
+/**
  * Plain-text rendering for the orphan path (no editor target). Layout edits
  * become line breaks; an opener is inserted at the start of its sentence in
  * the text built so far, using the interpreter's boundary rule.
@@ -122,6 +132,8 @@ export function createDictationSession(deps: {
   runCommand?: (id: CommandId) => Promise<CommandRunOutcome>;
   /** Whether the Command runs inside the editor's own keymap. */
   isEditorCommand?: (id: CommandId) => boolean;
+  /** Whether the Command changes the screen (COMMANDS[id].navigates). */
+  isNavigatingCommand?: (id: CommandId) => boolean;
   notify: (notice: SessionNotice) => void;
   copyText: (text: string) => Promise<void>;
   stats: LineStats;
@@ -170,105 +182,166 @@ export function createDictationSession(deps: {
     active()?.showPartial(text);
   };
 
+  // A navigating Voice Command keeps the Session listening across the route
+  // change. While the window is open the old editor may unregister without
+  // stopping the Session, and finished lines queue as raw text until an editor
+  // takes the caret (focus) or the wait runs out (the timer).
+  interface HandoffWindow {
+    queue: string[];
+    timer: ReturnType<typeof setTimeout> | null;
+  }
+  let handoff: HandoffWindow | null = null;
+
+  const closeHandoff = () => {
+    if (handoff?.timer) clearTimeout(handoff.timer);
+    handoff = null;
+  };
+
+  // One code path for every finished line, live or queued: Voice Commands,
+  // scratch, and edits behave the same wherever the line waited.
+  const applyFinishedLine = (text: string, target: DictationTarget | null) => {
+    const startedAt = performance.now();
+    const result = deps.route(text, target?.before() ?? "");
+    const interpreterMs = performance.now() - startedAt;
+    // The Tutorial gate is the Shortcuts one: while a run is under way no
+    // Voice Command acts, and its words are never inserted either. Only a
+    // Command that really ran counts; an empty action is announced instead.
+    if (result.kind === "voice_command") {
+      const run: VoiceCommandRun = {
+        id: result.id,
+        polarity: result.polarity,
+        ...(result.that ? { that: true as const } : {}),
+      };
+      // A Command outside the editor's keymap runs through the Command
+      // Runner, never as text; editor Commands run on the target's editor.
+      if (deps.isEditorCommand?.(result.id) === false && deps.runCommand) {
+        const runCommand = deps.runCommand;
+        const navigating = deps.isNavigatingCommand?.(result.id) === true;
+        const pending: HandoffWindow | null = navigating ? { queue: [], timer: null } : null;
+        if (pending) handoff = pending;
+        void Promise.resolve(runCommand(result.id)).then((outcome) => {
+          if (outcome === "ran") {
+            deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
+            deps.notify({ kind: "voice_command", ...run });
+          } else if (outcome === "unavailable") {
+            deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+            deps.notify({ kind: "voice_command_unavailable", id: run.id });
+          } else if (outcome === "refused-dialog") {
+            deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+            deps.notify({ kind: "voice_command_refused", id: run.id, reason: "dialog" });
+          } else if (outcome === "refused-dialog-close") {
+            deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+            deps.notify({
+              kind: "voice_command_refused",
+              id: run.id,
+              reason: "dialog_refused",
+            });
+          } else {
+            deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+            deps.notify({ kind: "voice_command_refused", id: run.id, reason: "tutorial" });
+          }
+          if (!pending || handoff !== pending) return;
+          if (outcome !== "ran") {
+            // The screen did not change: the queued lines belong to the
+            // editor that is still here, or to the clipboard path when none is.
+            const queued = pending.queue;
+            handoff = null;
+            const current = active();
+            for (const line of queued) applyFinishedLine(line, current);
+            if (!current) void stop();
+            return;
+          }
+          pending.timer = setTimeout(onHandoffTimeout, HANDOFF_LIMIT_MS);
+        });
+        return;
+      }
+      if (deps.voiceCommandsAllowed?.() === false) {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
+        deps.notify({ kind: "voice_command_refused", id: run.id, reason: "tutorial" });
+        return;
+      }
+      const voice = target?.voice;
+      if (!voice) {
+        deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
+        deps.notify({ kind: "voice_command_unavailable", id: run.id });
+        return;
+      }
+      const voiceOutcome: VoiceOutcome = voice(run);
+      deps.stats.recordInterpreter(interpreterMs, 0, 0, voiceOutcome === "ran" ? 1 : 0);
+      if (voiceOutcome === "ran") {
+        deps.notify({ kind: "voice_command", ...run });
+      } else if (voiceOutcome === "empty") {
+        deps.notify(
+          run.that ? { kind: "voice_that_empty" } : { kind: "voice_command_empty", id: run.id }
+        );
+      } else if (voiceOutcome === "refused" && run.that) {
+        deps.notify({ kind: "voice_that_refused" });
+      }
+      return;
+    }
+    deps.stats.recordInterpreter(
+      interpreterMs,
+      result.kind === "edits" ? (result.spokenPunctuationCount ?? 0) : 0,
+      result.kind === "scratch" ? 1 : 0,
+      0
+    );
+    if (result.kind === "scratch") {
+      const outcome = target?.scratch?.() ?? "empty";
+      if (outcome === "refused") deps.notify({ kind: "scratch_refused" });
+      else if (outcome === "empty") deps.notify({ kind: "scratch_empty" });
+      return;
+    }
+    if (target) target.apply(result.edits);
+    else if (result.edits.length > 0) {
+      const orphanText = editsToOrphanText(result.edits);
+      deps.copyText(orphanText).then(
+        () => deps.notify({ kind: "orphan_copied" }),
+        () => deps.notify({ kind: "orphan_lost", text: orphanText })
+      );
+    }
+    if (result.capsLock !== undefined) {
+      deps.notify({ kind: "caps_lock", on: result.capsLock });
+    }
+  };
+
+  const onHandoffTimeout = () => {
+    const pending = handoff;
+    if (!pending) return;
+    handoff = null;
+    const queued = pending.queue;
+    const current = active();
+    if (current) {
+      // The old editor survived the run (the route kept it): the lines are its.
+      for (const line of queued) applyFinishedLine(line, current);
+      return;
+    }
+    // No editor took the caret: the lines go through the orphan path with no
+    // surrounding text, then the Session stops, and the author is told why.
+    // The handoff notice lands after the stop's own notice so the reason is
+    // what the live region keeps.
+    for (const line of queued) applyFinishedLine(line, null);
+    void Promise.resolve(stop()).then(() => deps.notify({ kind: "handoff_no_editor" }));
+  };
+
   const onEvent = (event: DictationEvent) => {
     switch (event.type) {
       case "level":
         set({ level: event.rms });
         return;
       case "partial":
+        // While the hand-off window is open no editor owns the line in
+        // progress, so partials are shown nowhere.
+        if (handoff) return;
         showPartial(event.text);
         return;
       case "final": {
-        showPartial("");
         deps.stats.record(event.latencyMs);
-        const target = active();
-        const startedAt = performance.now();
-        const result = deps.route(event.text, target?.before() ?? "");
-        const interpreterMs = performance.now() - startedAt;
-        // The Tutorial gate is the Shortcuts one: while a run is under way no
-        // Voice Command acts, and its words are never inserted either. Only a
-        // Command that really ran counts; an empty action is announced instead.
-        if (result.kind === "voice_command") {
-          const run: VoiceCommandRun = {
-            id: result.id,
-            polarity: result.polarity,
-            ...(result.that ? { that: true as const } : {}),
-          };
-          // A Command outside the editor's keymap runs through the Command
-          // Runner, never as text; editor Commands run on the target's editor.
-          if (deps.isEditorCommand?.(result.id) === false && deps.runCommand) {
-            const runCommand = deps.runCommand;
-            void Promise.resolve(runCommand(result.id)).then((outcome) => {
-              if (outcome === "ran") {
-                deps.stats.recordInterpreter(interpreterMs, 0, 0, 1);
-                deps.notify({ kind: "voice_command", ...run });
-              } else if (outcome === "unavailable") {
-                deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
-                deps.notify({ kind: "voice_command_unavailable", id: run.id });
-              } else if (outcome === "refused-dialog") {
-                deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
-                deps.notify({ kind: "voice_command_refused", id: run.id, reason: "dialog" });
-              } else if (outcome === "refused-dialog-close") {
-                deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
-                deps.notify({
-                  kind: "voice_command_refused",
-                  id: run.id,
-                  reason: "dialog_refused",
-                });
-              } else {
-                deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
-                deps.notify({ kind: "voice_command_refused", id: run.id, reason: "tutorial" });
-              }
-            });
-            return;
-          }
-          if (deps.voiceCommandsAllowed?.() === false) {
-            deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 0, 1);
-            deps.notify({ kind: "voice_command_refused", id: run.id, reason: "tutorial" });
-            return;
-          }
-          const voice = target?.voice;
-          if (!voice) {
-            deps.stats.recordInterpreter(interpreterMs, 0, 0, 0, 1, 0);
-            deps.notify({ kind: "voice_command_unavailable", id: run.id });
-            return;
-          }
-          const voiceOutcome: VoiceOutcome = voice(run);
-          deps.stats.recordInterpreter(interpreterMs, 0, 0, voiceOutcome === "ran" ? 1 : 0);
-          if (voiceOutcome === "ran") {
-            deps.notify({ kind: "voice_command", ...run });
-          } else if (voiceOutcome === "empty") {
-            deps.notify(
-              run.that ? { kind: "voice_that_empty" } : { kind: "voice_command_empty", id: run.id }
-            );
-          } else if (voiceOutcome === "refused" && run.that) {
-            deps.notify({ kind: "voice_that_refused" });
-          }
+        if (handoff) {
+          handoff.queue.push(event.text);
           return;
         }
-        deps.stats.recordInterpreter(
-          interpreterMs,
-          result.kind === "edits" ? (result.spokenPunctuationCount ?? 0) : 0,
-          result.kind === "scratch" ? 1 : 0,
-          0
-        );
-        if (result.kind === "scratch") {
-          const outcome = target?.scratch?.() ?? "empty";
-          if (outcome === "refused") deps.notify({ kind: "scratch_refused" });
-          else if (outcome === "empty") deps.notify({ kind: "scratch_empty" });
-          return;
-        }
-        if (target) target.apply(result.edits);
-        else if (result.edits.length > 0) {
-          const text = editsToOrphanText(result.edits);
-          deps.copyText(text).then(
-            () => deps.notify({ kind: "orphan_copied" }),
-            () => deps.notify({ kind: "orphan_lost", text })
-          );
-        }
-        if (result.capsLock !== undefined) {
-          deps.notify({ kind: "caps_lock", on: result.capsLock });
-        }
+        showPartial("");
+        applyFinishedLine(event.text, active());
         return;
       }
       case "error":
@@ -328,6 +401,9 @@ export function createDictationSession(deps: {
   }
 
   async function stop(): Promise<void> {
+    // Stopping (Escape, the toggle, an error) drops the hand-off wait: the
+    // timer and whatever queued behind the route change go with it.
+    if (handoff) closeHandoff();
     if (snapshot.status === "loading") {
       stopRequested = true;
       await starting;
@@ -375,15 +451,31 @@ export function createDictationSession(deps: {
         if (!wasActive) return;
         const next = active();
         if (next) next.showPartial(partial);
+        // While the hand-off window is open the route change is expected: the
+        // old editor leaving does not stop the Session, which waits for the
+        // next editor to take the caret instead.
+        else if (handoff) return;
         else if (snapshot.status === "listening" || snapshot.status === "loading") void stop();
       };
     },
     focus(targetId) {
-      if (!targets.has(targetId)) return;
+      const target = targets.get(targetId);
+      if (!target) return;
+      const pending = handoff;
       const previous = active();
       const index = focusOrder.indexOf(targetId);
       if (index >= 0) focusOrder.splice(index, 1);
       focusOrder.push(targetId);
+      if (pending) {
+        // An editor took the caret mid-hand-off: the wait is over, its
+        // dictated history starts clean, and the queued lines land in it
+        // exactly as live lines would.
+        if (pending.timer) clearTimeout(pending.timer);
+        handoff = null;
+        target.resetScratch?.();
+        for (const line of pending.queue) applyFinishedLine(line, target);
+        return;
+      }
       if (previous && previous.id !== targetId) {
         // Scratch history never reaches into another editor.
         previous.resetScratch?.();

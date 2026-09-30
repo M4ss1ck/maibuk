@@ -76,7 +76,9 @@ afterEach(async () => {
   await act(() => i18n.changeLanguage("en"));
 });
 
-describe("DictationSection", () => {
+// Every test renders the whole section (models, tabs, vocabulary, Spoken
+// Punctuation): about 1 s locally, over 5 s on CI with coverage.
+describe("DictationSection", { timeout: 15_000 }, () => {
   it("explains when dictation is unsupported", () => {
     useDictationStore.setState({
       support: { supported: false, reason: "not_isolated" },

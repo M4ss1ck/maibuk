@@ -68,6 +68,8 @@ export function noticeMessage(
       const text = t("dictation.orphanLost", { text: notice.text });
       return { toast: { variant: "info", text }, announce: text };
     }
+    case "handoff_no_editor":
+      return { announce: t("dictation.handoffNoEditor") };
     case "error": {
       const text = t(`dictation.errors.${notice.code}`, {
         language: notice.language

@@ -354,7 +354,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `createCrc32c()` / `crc32cBase64()` (incremental CRC32C, base64 big-endian; vectors shared with Rust in `src/test/fixtures/dictation/crc32c.json`) | `src/features/dictation/crc32c.ts` |
 | `createModelStore()` (installs, lists and removes Dictation Models through a platform `ModelFiles`; refuses while the Tutorial Library is active) | `src/features/dictation/model-store.ts` |
 | `createRouter()` / `createLineStats()` (finished line → insert or Command, the seam for the Dictation Command Interpreter; bounded in-memory latency ring) | `src/features/dictation/router.ts` / `stats.ts` |
-| `getDictation()` (boots the one Dictation runtime: store wiring, hub, recognizer, session) | `src/features/dictation/runtime.ts` |
+| `getDictation()` (boots the one Dictation runtime: store wiring, hub, recognizer, session; a navigating Voice Command opens a hand-off window of `HANDOFF_LIMIT_MS` that queues lines until an editor takes the caret) | `src/features/dictation/runtime.ts` |
 | `useDictationStore` / `pickModel()` (installed Dictation Models, preference, the device-local Dictation on/off `enabled`, live session snapshot) | `src/features/dictation/store.ts` |
 | `setDictationLanguage()` / `cycleDictationLanguage()` / `nextDictationLanguage()` / `installedDictationLanguages()` (the one path that changes the Dictation language, used by the bar's picker and the Cycle Dictation language Command) | `src/features/dictation/language.ts` |
 | `dictationHub` (follows the caret: attaches a session to whichever editor registers as focused) | `src/features/dictation/hub.ts` |

@@ -2239,6 +2239,8 @@ export const ROWS: MatrixRow[] = [
     edges: [
       'a navigating Voice Command ("Go to Notes") said over an open dialog closes the dialog and shows the Notes gallery, and the Chapter text never holds the spoken words',
       "a dialog that cannot close keeps the route and stays open (no shipped holdable dialog yet: https://github.com/M4ss1ck/maibuk/issues/328)",
+      'a navigating Voice Command ("Go to Ephemeral") hands Dictation to the editor that takes the caret there: the sentence after the pause lands in it and Dictation stays on',
+      'a navigating Voice Command to a screen with no editor ("Go to Settings") stops Dictation and the live region announces the handoff message',
     ],
     terms: ["Voice Command", "Dictation"],
     shortcuts: ["dictation.toggle"],

@@ -204,6 +204,17 @@ describe("noticeMessage()", () => {
     });
     expect(message.announce).toBe(message.toast?.text);
   });
+  it("announces a hand-off with no editor without a toast", () => {
+    const message = noticeMessage({ kind: "handoff_no_editor" }, t);
+    expect(message.toast).toBeUndefined();
+    expect(message.announce).toBe("No editor here, so Dictation stopped.");
+  });
+  it("announces a hand-off with no editor in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "handoff_no_editor" }, es).announce).toBe(
+      "Aquí no hay editor, así que el dictado se detuvo."
+    );
+  });
   it("covers every error code in both locales", async () => {
     const codes = [
       "mic_denied",
