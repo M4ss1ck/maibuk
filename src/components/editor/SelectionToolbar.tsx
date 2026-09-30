@@ -7,6 +7,7 @@ import { Toolbar } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useModalStore } from "@/components/ui/modal-store";
 import { FormattingButtons } from "@/components/editor/FormattingButtons";
+import { setSelectionKept } from "@/components/editor/extensions/SelectionKept";
 import { deriveFloatingGroupIds } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
 import { useShortcuts } from "@/lib/shortcuts";
@@ -35,6 +36,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
   const [position, setPosition] = useState<Position | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const focusManagerRef = useRef<FocusManager | null>(null);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editorState = useEditorState({
     editor,
@@ -146,6 +148,16 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     },
   ]);
 
+  useEffect(() => {
+    return () => {
+      if (clearTimerRef.current !== null) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+      setSelectionKept(editor, false);
+    };
+  }, [editor]);
+
   if (!isVisible) {
     return null;
   }
@@ -154,6 +166,18 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     <div
       className="fixed z-50 selection-toolbar-enter"
       style={{ top: `${position.top}px`, left: `${position.left}px` }}
+      // The native selection is not painted while focus is in the bubble, so
+      // the range stays visible through the selection-kept decoration instead.
+      onFocus={() => {
+        if (clearTimerRef.current !== null) {
+          clearTimeout(clearTimerRef.current);
+          clearTimerRef.current = null;
+        }
+        setSelectionKept(editor, true);
+      }}
+      onBlur={() => {
+        clearTimerRef.current = setTimeout(() => setSelectionKept(editor, false), 0);
+      }}
       onKeyDownCapture={(event) => {
         // A picker portaled out of the bubble (a color) still bubbles through
         // React, but it owns its own keys.

@@ -11,3 +11,4 @@ export { CustomCode } from "@/components/editor/extensions/CustomCode";
 export { HeadingId } from "@/components/editor/extensions/HeadingId";
 export { SymbolAutocomplete } from "@/components/editor/extensions/SymbolAutocomplete";
 export { Wikilink } from "@/components/editor/extensions/Wikilink";
+export { SelectionKept, setSelectionKept } from "@/components/editor/extensions/SelectionKept";

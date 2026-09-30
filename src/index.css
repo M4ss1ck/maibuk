@@ -1607,11 +1607,25 @@ li.footnote-item,
   pointer-events: none;
 }
 
+/*
+ * The range the selection toolbar acts on while focus is in the toolbar: the
+ * browser stops painting ::selection once focus leaves the text. The underline
+ * carries the 3:1 non-text contrast; the tint is only a hint.
+ */
+.ProseMirror .selection-kept {
+  background-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  box-shadow: inset 0 -2px 0 var(--color-primary);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
 /* Show a selected editor range while a color adjustment is still uncommitted. */
-.ProseMirror[data-color-preview="text"] *::selection {
+.ProseMirror[data-color-preview="text"] *::selection,
+.ProseMirror[data-color-preview="text"] .selection-kept {
   color: var(--editor-color-preview);
 }
 
-.ProseMirror[data-color-preview="highlight"] *::selection {
+.ProseMirror[data-color-preview="highlight"] *::selection,
+.ProseMirror[data-color-preview="highlight"] .selection-kept {
   background-color: var(--editor-color-preview);
 }

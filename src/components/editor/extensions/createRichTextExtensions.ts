@@ -29,6 +29,7 @@ import { SpellCheck } from "@/components/editor/extensions/SpellCheck";
 import { Footnote } from "@/components/editor/extensions/Footnote";
 import { HeadingId } from "@/components/editor/extensions/HeadingId";
 import { SymbolAutocomplete } from "@/components/editor/extensions/SymbolAutocomplete";
+import { SelectionKept } from "@/components/editor/extensions/SelectionKept";
 import { AutoClose } from "@/components/editor/extensions/AutoClose";
 import { ShortcutOverrides } from "@/components/editor/extensions/ShortcutOverrides";
 import { Dictation } from "@/components/editor/extensions/Dictation";
@@ -105,6 +106,7 @@ export function createRichTextExtensions({
     TaskItemDeletion,
     SymbolAutocomplete,
     Footnote.configure({ startIndex: footnoteStartIndex }),
+    SelectionKept,
     ...(spellCheck ? [SpellCheck.configure(spellCheck)] : []),
     Dictation,
   ];
