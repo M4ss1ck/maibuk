@@ -10,7 +10,7 @@
 // marks never double. Text is then cased and spaced using the bounded text
 // before the caret.
 import { normalizePhrase, tokenWords, tokenize, type Token } from "@/features/dictation/normalize";
-import { parseNumberWords } from "@/features/dictation/number-words";
+import { MAX_NUMBER_WORDS, parseNumberWords } from "@/features/dictation/number-words";
 import type { DictationEdit } from "@/features/dictation/router";
 import {
   defaultTriggers,
@@ -134,8 +134,6 @@ function addPhrase<MatchType>(root: TokenTrieNode<MatchType>, phrase: string, en
 
 const OPENING_MARKS = new Set(["¿", "¡", "«", "“", "‘", "(", "[", "{"]);
 const SENTENCE_END_MARKS = new Set([".", "?", "!"]);
-// The longest number in range, "nine hundred and ninety nine million…", is 18 words.
-const MAX_NUMBER_WORDS = 24;
 
 /**
  * One shared sentence-boundary rule for the interpreter, the editor target,

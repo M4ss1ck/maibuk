@@ -776,6 +776,25 @@ describe("numeral (#272)", () => {
       state: INITIAL_INTERPRETER_STATE,
     });
 
+  it("leaves numeral as prose when the author switches it off", () => {
+    const table = buildPhraseTable("en", {
+      capabilities: bare,
+      settings: { enabled: true, entries: { numeral: false }, aliases: {} },
+    });
+    const output = interpret({
+      line: "numeral twenty one",
+      before: "",
+      capabilities: bare,
+      table,
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Numeral twenty one" }],
+    });
+    expect(output.spokenPunctuationCount).toBe(0);
+  });
+
   it("gives the tail of a phrase that starts inside the number back to prose", () => {
     const table = buildPhraseTable("en", {
       capabilities: bare,

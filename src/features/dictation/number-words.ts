@@ -43,6 +43,9 @@ const EN_TENS: Record<string, number> = {
   ninety: 90,
 };
 
+// The longest number in range, "nine hundred and ninety nine million…", is 18 words.
+export const MAX_NUMBER_WORDS = 24;
+
 interface Below {
   value: number;
   next: number;
@@ -297,7 +300,7 @@ export function parseNumberWords(
 ): ParsedNumber | null {
   if (words.length === 0) return null;
   // Longest valid prefix wins; a failed long prefix falls back to a shorter one.
-  const cap = Math.min(words.length, 24);
+  const cap = Math.min(words.length, MAX_NUMBER_WORDS);
   for (let length = cap; length >= 1; length -= 1) {
     const prefix = words.slice(0, length);
     const value = language === "en" ? enExact(prefix) : esExact(prefix);
