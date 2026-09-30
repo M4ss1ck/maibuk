@@ -29,6 +29,7 @@ const HINT: Record<PhraseItem["kind"], string> = {
   app: "command: say it on its own, like a command",
   punctuation: "dictate it as one sentence, saying the punctuation words",
   prose: "say it as ordinary prose",
+  names: "say it as ordinary prose, names and all",
 };
 
 function parseArgs(argv: string[]) {

@@ -11,16 +11,18 @@ import {
   appExpectedLabel,
   defaultPhrases,
   defaultTable,
+  namesHeard,
   phraseCount,
   proseTriggers,
   scoreModel,
   spokenWords,
   splitVoicePhrase,
+  typedText,
   voiceClipHit,
   voiceUnits,
   type Clip,
 } from "@/test/support/dictation-phrase-score";
-import { clipSlug, phraseItems } from "@/test/support/dictation-phrase-set";
+import { clipSlug, parseNamesLine, phraseItems } from "@/test/support/dictation-phrase-set";
 
 const LANGUAGES: DictationLanguage[] = ["en", "es"];
 const NO_PUNCTUATION = { casing: false, punctuation: false, streaming: true };
@@ -54,7 +56,7 @@ describe("the recording script", () => {
   it.each(LANGUAGES)("%s: clip ids are unique and file-safe", (language) => {
     const ids = phraseItems(language).map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ids) expect(id).toMatch(/^[vpax]-[a-z0-9-]+$/);
+    for (const id of ids) expect(id).toMatch(/^[vpaxn]-[a-z0-9-]+$/);
   });
 
   it.each(LANGUAGES)("%s: every voice line is a default phrase", (language) => {
@@ -239,10 +241,10 @@ describe("scoreModel()", () => {
 
   it("reports missing clips", () => {
     const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips: [] });
-    // App clips are reported as "not recorded" in their own section and
-    // never fail the lane, so they are not missing items.
+    // App and names clips are reported as "not recorded" in their own
+    // sections and never fail the lane, so they are not missing items.
     expect(score.missingItems).toHaveLength(
-      phraseItems("en").filter((item) => item.kind !== "app").length
+      phraseItems("en").filter((item) => item.kind !== "app" && item.kind !== "names").length
     );
     expect(score.hitRate).toBe(0);
   });
@@ -484,5 +486,174 @@ describe("scoreModel()", () => {
     ];
     const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
     expect(score.app.find((row) => row.item.say === "dark theme")?.rate).toBe(0.5);
+  });
+});
+
+describe("the names tier (issue #274)", () => {
+  const namesOf = (language: DictationLanguage) =>
+    phraseItems(language).filter((item) => item.kind === "names");
+
+  it.each(LANGUAGES)("%s: about ten lines, recorded last, each with its names", (language) => {
+    const items = phraseItems(language);
+    const names = namesOf(language);
+    expect(names.length).toBeGreaterThanOrEqual(10);
+    expect(items.slice(-names.length)).toEqual(names);
+    for (const item of names) {
+      expect(item.id, item.say).toMatch(/^n-/);
+      expect(item.say, item.say).not.toMatch(/[{}]/);
+      expect(item.names?.length, item.say).toBeGreaterThan(0);
+      expect(new Set(item.names).size, item.say).toBe(item.names?.length);
+    }
+  });
+
+  it.each(LANGUAGES)("%s: a names line runs nothing on its own text", (language) => {
+    for (const capabilities of [catalogCapabilities(language), PUNCTUATES, NO_PUNCTUATION]) {
+      for (const item of namesOf(language)) {
+        expect(proseTriggers([item.say], language, capabilities), item.say).toBe(false);
+      }
+    }
+  });
+
+  it.each(LANGUAGES)("%s: every name is typed as written when heard as read", (language) => {
+    const capabilities = catalogCapabilities(language);
+    const table = defaultTable(language, capabilities);
+    for (const item of namesOf(language)) {
+      const typed = typedText([item.say], table, capabilities);
+      expect(namesHeard(typed, item.names ?? []), item.say).toEqual(item.names);
+    }
+  });
+
+  it("parseNamesLine() takes the braces off and keeps the names in order", () => {
+    expect(parseNamesLine("we met {Siobhan} in {San Sebastián} today")).toEqual({
+      say: "we met Siobhan in San Sebastián today",
+      names: ["Siobhan", "San Sebastián"],
+    });
+    expect(() => parseNamesLine("no names here")).toThrow(/no \{name\}/);
+    expect(() => parseNamesLine("an {open brace")).toThrow(/brace/);
+  });
+
+  describe("namesHeard()", () => {
+    it("needs the exact written form: case and accents count", () => {
+      expect(namesHeard("we met siobhan", ["Siobhan"])).toEqual([]);
+      expect(namesHeard("dijo Inaki", ["Iñaki"])).toEqual([]);
+      expect(namesHeard("dijo Iñaki", ["Iñaki"])).toEqual(["Iñaki"]);
+      expect(namesHeard("dijo Iñaki".normalize("NFD"), ["Iñaki"])).toEqual(["Iñaki"]);
+    });
+
+    it("matches whole words only, next to punctuation or not", () => {
+      expect(namesHeard("the Redisson cache", ["Redis"])).toEqual([]);
+      expect(namesHeard("a MyRedis cache", ["Redis"])).toEqual([]);
+      expect(namesHeard("cleared Redis.", ["Redis"])).toEqual(["Redis"]);
+      expect(namesHeard("(Redis) and ¿Iñaki?", ["Redis", "Iñaki"])).toEqual(["Redis", "Iñaki"]);
+    });
+
+    it("matches a name of several words across any whitespace", () => {
+      expect(namesHeard("in San\nSebastián", ["San Sebastián"])).toEqual(["San Sebastián"]);
+      expect(namesHeard("in San Sebastian", ["San Sebastián"])).toEqual([]);
+    });
+  });
+
+  it("typedText() joins the lines of a clip the way a session inserts them", () => {
+    const capabilities = PUNCTUATES;
+    const table = defaultTable("en", capabilities);
+    expect(typedText(["We met", "Siobhan today."], table, capabilities)).toBe(
+      // A line that continues a sentence loses the capital the model gave it,
+      // so a name the model starts a line with is typed wrong: a miss the
+      // names tier must see, since models end a line before unknown words.
+      "We met siobhan today."
+    );
+    expect(
+      namesHeard(typedText(["We met", "Siobhan today."], table, capabilities), ["Siobhan"])
+    ).toEqual([]);
+  });
+
+  const siobhan = () => {
+    const item = namesOf("en").find((entry) => entry.names?.includes("Siobhan"));
+    if (!item) throw new Error("the English names tier lost Siobhan");
+    return item;
+  };
+
+  it("scores only the name words, over every take", () => {
+    const item = siobhan();
+    const names = item.names ?? [];
+    // A second take heard all in lowercase misses every name in it, and the
+    // words around the names never count either way.
+    const clips = [
+      ...perfectClips("en"),
+      { itemId: item.id, finals: [item.say.toLowerCase().replace(/\w+$/, "mumble")] },
+    ];
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    const row = score.names.find((entry) => entry.item.id === item.id);
+    expect(row?.takes).toBe(2);
+    expect(row?.names).toEqual(names.map((name) => ({ name, hits: 1 })));
+    expect(row).toMatchObject({ hits: names.length, slots: 2 * names.length });
+    const total = namesOf("en").reduce((sum, entry) => sum + (entry.names?.length ?? 0), 0);
+    expect(score.nameHitRate).toBeCloseTo(total / (total + names.length), 10);
+  });
+
+  it("a name split over two finished lines still counts", () => {
+    const item = siobhan();
+    const [before, after] = item.say.split("Siobhan");
+    const clips = [{ itemId: item.id, finals: [`${before}Siobhan`, after] }];
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    const row = score.names.find((entry) => entry.item.id === item.id);
+    expect(row?.names.find((entry) => entry.name === "Siobhan")?.hits).toBe(1);
+  });
+
+  it("the Dictation Vocabulary writes a misheard name, the baseline biasing must beat", () => {
+    const item = siobhan();
+    const clips = [{ itemId: item.id, finals: [item.say.replace("Siobhan", "shivawn")] }];
+    const hitsOf = (vocabulary?: { heard: string; written: string }[]) =>
+      scoreModel({ language: "en", capabilities: PUNCTUATES, clips, vocabulary })
+        .names.find((entry) => entry.item.id === item.id)
+        ?.names.find((entry) => entry.name === "Siobhan")?.hits;
+    expect(hitsOf()).toBe(0);
+    expect(hitsOf([{ heard: "shivawn", written: "Siobhan" }])).toBe(1);
+  });
+
+  it("a Vocabulary name keeps its written case at the start of a line", () => {
+    const item = siobhan();
+    const [before, after] = item.say.split("Siobhan");
+    const clips = [{ itemId: item.id, finals: [before, `Shivawn${after}`] }];
+    const score = scoreModel({
+      language: "en",
+      capabilities: PUNCTUATES,
+      clips,
+      vocabulary: [{ heard: "shivawn", written: "Siobhan" }],
+    });
+    const row = score.names.find((entry) => entry.item.id === item.id);
+    expect(row?.names.find((entry) => entry.name === "Siobhan")?.hits).toBe(1);
+  });
+
+  it("the Vocabulary is used only for the names tier", () => {
+    const vocabulary = [{ heard: "bold", written: "Bold" }];
+    const plain = scoreModel({
+      language: "en",
+      capabilities: PUNCTUATES,
+      clips: perfectClips("en"),
+    });
+    const taught = scoreModel({
+      language: "en",
+      capabilities: PUNCTUATES,
+      clips: perfectClips("en"),
+      vocabulary,
+    });
+    expect(taught.hitRate).toBe(plain.hitRate);
+    expect(taught.proseTriggers).toBe(plain.proseTriggers);
+  });
+
+  it("an unrecorded names tier is not missing and has no rate", () => {
+    const clips = perfectClips("en").filter((clip) => !clip.itemId.startsWith("n-"));
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    expect(score.missingItems).toEqual([]);
+    expect(score.nameHitRate).toBeNull();
+    expect(score.names.every((row) => row.takes === 0)).toBe(true);
+  });
+
+  it("counts a names take that ran something instead of typing", () => {
+    const item = siobhan();
+    const clips = [{ itemId: item.id, finals: ["Make bold."] }];
+    const score = scoreModel({ language: "en", capabilities: PUNCTUATES, clips });
+    expect(score.names.find((entry) => entry.item.id === item.id)?.triggered).toBe(1);
   });
 });
