@@ -4,7 +4,9 @@ import type { TFunction } from "i18next";
 import { Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PhraseRecordingStatus, RecordPhraseButton } from "@/components/dictation/PhraseRecording";
 import { useDictationStore } from "@/features/dictation/store";
+import { usePhraseRecording } from "@/features/dictation/usePhraseRecording";
 import type { DictationLanguage } from "@/features/dictation/types";
 import { findVocabularyRefusal, type VocabularyRefusal } from "@/features/dictation/vocabulary";
 
@@ -48,6 +50,24 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
   const pendingEditFocus = useRef<number | null>(null);
   const addRefusalId = useId();
   const editRefusalId = useId();
+  // Phrase Recording fills the heard form only: the written form is what the
+  // author wants on the page, typed exactly.
+  const addRecorder = usePhraseRecording({
+    language,
+    fieldRef: heardRef,
+    onHeard: (text) => {
+      setHeard(text);
+      setAddRefusal(null);
+    },
+  });
+  const editRecorder = usePhraseRecording({
+    language,
+    fieldRef: editHeardRef,
+    onHeard: (text) => {
+      setEditHeard(text);
+      setEditRefusal(null);
+    },
+  });
 
   // The Edit form replaces the row's buttons: focus enters the form, and
   // leaving it returns to the button that opened it, never to <body>. Only the
@@ -148,9 +168,18 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
             onChange={(event) => {
               setHeard(event.target.value);
               setAddRefusal(null);
+              addRecorder.clearMessage();
             }}
             label={t("dictation.vocabulary.heardLabel")}
             placeholder={t("dictation.vocabulary.heardPlaceholder")}
+            endAdornment={
+              addRecorder.available ? (
+                <RecordPhraseButton
+                  recording={addRecorder}
+                  label={t("dictation.phraseRecording.recordHeard")}
+                />
+              ) : undefined
+            }
             data-dictation="verbatim"
             aria-invalid={addRefusal ? true : undefined}
             aria-describedby={addRefusal ? addRefusalId : undefined}
@@ -177,6 +206,8 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
           {t("dictation.vocabulary.add")}
         </Button>
       </form>
+
+      <PhraseRecordingStatus recording={addRecorder} />
 
       {addRefusal && (
         <div
@@ -208,8 +239,17 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
                       onChange={(event) => {
                         setEditHeard(event.target.value);
                         setEditRefusal(null);
+                        editRecorder.clearMessage();
                       }}
                       label={t("dictation.vocabulary.heardLabel")}
+                      endAdornment={
+                        editRecorder.available ? (
+                          <RecordPhraseButton
+                            recording={editRecorder}
+                            label={t("dictation.phraseRecording.recordHeard")}
+                          />
+                        ) : undefined
+                      }
                       data-dictation="verbatim"
                       aria-invalid={editRefusal ? true : undefined}
                       aria-describedby={editRefusal ? editRefusalId : undefined}
@@ -237,6 +277,7 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
                   <Button type="button" variant="ghost" size="sm" onClick={cancelEdit}>
                     {t("dictation.vocabulary.cancel")}
                   </Button>
+                  <PhraseRecordingStatus recording={editRecorder} className="w-full" />
                   {editRefusal && (
                     <div
                       id={editRefusalId}

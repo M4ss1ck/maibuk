@@ -50,6 +50,7 @@ test.describe("@wf:dictation-spoken-punctuation @chromium-only", () => {
 
     const comma = page.getByRole("group", { name: "comma", exact: true });
     await expect(comma.getByText("comma", { exact: true }).first()).toBeVisible();
+    await capture(page, "record-phrase-spoken-punctuation", { around: [comma] });
     await expect(comma.getByText(",", { exact: true })).toBeVisible();
     await expect(page.getByRole("group", { name: "question mark", exact: true })).toBeVisible();
     await expect(

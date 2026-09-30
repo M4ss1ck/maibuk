@@ -2348,6 +2348,25 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "dictation-record-phrase",
+    area: "settings",
+    workflow:
+      "Shortcut Editor → a Command's Voice commands: the record button beside the phrase field records ONE finished line in the Dictation Language of the tab being edited; the line replaces the draft as the model heard it (lowercase, no punctuation), the status reads Listening in <Language> then Heard: <phrase>, and Enter adds it through the normal conflict check, all by keyboard",
+    edges: [
+      "a recorded phrase is taken as heard and the conflict check still decides: 'make italic' fills the field, focus stays there, and Enter shows the phrase-conflict refusal with nothing added",
+      "a recorded phrase no Command owns ('make it heavy') is added with Enter and the field empties",
+      "on the Spanish tab with the English UI the recording listens in Spanish and its phrase is added",
+      "Escape while recording shows Recording cancelled., does not close the dialog, and leaves focus in the field",
+      "with no model for the language a role=alert says No <Language> dictation model is downloaded.",
+    ],
+    terms: ["Phrase Recording"],
+    shortcuts: ["dictation.recordPhrase"],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "dictation-interpreter-stats",
     area: "settings",
     workflow:

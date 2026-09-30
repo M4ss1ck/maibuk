@@ -388,7 +388,7 @@ A downloaded speech model for one language and tier (Fast or Accurate), kept on 
 _Avoid_: voice pack
 
 **Dictation Language**:
-The language a Dictation Session listens for: the language of the editor it types into, or the app language in a text field (Auto), unless the author picked one for the Session.
+The language a Dictation Session listens for: the language of the editor it types into, or the app language in a text field (Auto), unless the author picked one for the Session. A Phrase Recording always listens in the language of the phrase being edited.
 
 **Dictation Command Interpreter**:
 The step between a finished spoken line and the editor that turns it into text, Spoken Punctuation, or a Voice Command, by fixed rules that do not depend on the Dictation Model. (ADR 0015)
@@ -411,6 +411,11 @@ _Avoid_: voice click, tap
 Words and names the author teaches Dictation: what the Dictation Model hears and what to write instead, per Dictation Language, on this device. (ADR 0014)
 _UI_: en "Dictation vocabulary" / es "Vocabulario de dictado"
 _Avoid_: dictionary (that is Spell Check's), autocorrect
+
+**Phrase Recording**:
+Saying a phrase once into the field where a Voice Command, a Dictation Vocabulary heard form, or a Spoken Punctuation phrase is written, so the field holds what the Dictation Model heard, mishearings included. It takes one line as heard, runs no Voice Command, and leaves the Dictation Session as it was; it changes nothing in the Dictation Model.
+_UI_: en "Record phrase" / es "Grabar frase"
+_Avoid_: voice training, teach
 
 ## Shortcuts
 

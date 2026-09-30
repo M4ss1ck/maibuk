@@ -51,6 +51,7 @@ beforeEach(() => {
       modelId: null,
       level: 0,
       hasTarget: true,
+      recording: false,
     }),
   });
 });

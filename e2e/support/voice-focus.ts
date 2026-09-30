@@ -54,6 +54,24 @@ export async function downloadEnglish(page: Page, tier: "Fast" | "Accurate") {
   await expect(group.getByText("Used for English")).toBeVisible({ timeout: 60_000 });
 }
 
+export async function downloadSpanishFast(page: Page) {
+  await downloadSpanish(page, "Fast");
+}
+
+export async function downloadSpanish(page: Page, tier: "Fast" | "Accurate") {
+  await page.goto("/settings#dictation");
+  // Only the selected Dictation Language panel is mounted: switch to Spanish
+  // first, or its model rows are not in the DOM.
+  await tabTo(page, page.getByRole("tab", { name: "English" }));
+  await pressUntilFocused(page, "ArrowRight", page.getByRole("tab", { name: "Spanish" }), {
+    max: 4,
+  });
+  const group = page.getByRole("group", { name: `Spanish, ${tier}` });
+  await tabTo(page, group.getByRole("button", { name: "Download" }), { max: 200 });
+  await page.keyboard.press("Enter");
+  await expect(group.getByText("Used for Spanish")).toBeVisible({ timeout: 60_000 });
+}
+
 // The first Book, Enter opens its last Chapter with the caret in the text.
 // After a model download the last path is Settings, which StartupRedirect
 // would restore, so an app already running returns Home with "g p".

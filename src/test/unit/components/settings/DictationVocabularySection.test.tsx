@@ -1,9 +1,14 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultVocabularySettings } from "@/features/dictation/vocabulary";
 import i18n from "@/i18n";
 import "@/i18n";
+
+const rec = vi.hoisted(() => ({ recordPhrase: vi.fn() }));
+vi.mock("@/features/dictation/runtime", () => ({
+  getDictation: async () => ({ session: { recordPhrase: rec.recordPhrase } }),
+}));
 
 const { DictationVocabularySection } = await import(
   "@/components/settings/DictationVocabularySection"
@@ -219,5 +224,52 @@ describe("DictationVocabularySection", () => {
     );
     expect(screen.getByRole("button", { name: "Editar a reliano" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Quitar a reliano" })).toBeInTheDocument();
+  });
+});
+
+describe("DictationVocabularySection Phrase Recording (#270)", () => {
+  beforeEach(() => {
+    rec.recordPhrase.mockReset();
+    // The record button only exists where Dictation is supported; each case
+    // turns it on once the setup that relies on the old Tab order is done.
+    useDictationStore.setState({ support: null });
+  });
+
+  afterEach(() => {
+    useDictationStore.setState({ support: null });
+  });
+
+  it("fills only the add form's heard field with what Dictation heard", async () => {
+    rec.recordPhrase.mockResolvedValue({ kind: "heard", text: "a reliano" });
+    const user = userEvent.setup();
+    renderSection();
+    act(() => useDictationStore.setState({ support: { supported: true } }));
+
+    const record = screen.getByRole("button", { name: "Record what Dictation hears" });
+    record.focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(addFields().heard).toHaveValue("a reliano"));
+    // The written form is what the author wants on the page: never recorded.
+    expect(addFields().written).toHaveValue("");
+  });
+
+  it("fills only the edit form's heard field, leaving the written form alone", async () => {
+    rec.recordPhrase.mockResolvedValue({ kind: "heard", text: "buendía" });
+    const user = userEvent.setup();
+    renderSection();
+    await addEntry(user, "a reliano", "Aureliano");
+    act(() => useDictationStore.setState({ support: { supported: true } }));
+
+    screen.getByRole("button", { name: "Edit a reliano" }).focus();
+    await user.keyboard("{Enter}");
+
+    const form = editFields("a reliano").form;
+    const record = within(form).getByRole("button", { name: "Record what Dictation hears" });
+    record.focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(editFields("a reliano").heard).toHaveValue("buendía"));
+    expect(editFields("a reliano").written).toHaveValue("Aureliano");
   });
 });

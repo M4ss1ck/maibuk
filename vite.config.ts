@@ -86,6 +86,7 @@ export default defineConfig(() => ({
         "src/features/dictation/language.ts",
         "src/features/dictation/session.ts",
         "src/features/dictation/store.ts",
+        "src/features/dictation/usePhraseRecording.ts",
         "src/lib/color.ts",
         "src/features/settings/toolbar-config.ts",
         "src/features/theme/store.ts",
@@ -106,6 +107,7 @@ export default defineConfig(() => ({
         "src/components/ui/Combobox.tsx",
         "src/components/ui/MultiSelectCombobox.tsx",
         "src/components/ui/ItemActionsMenu.tsx",
+        "src/components/dictation/PhraseRecording.tsx",
         // Phase 4: Integration (routing, providers, layout)
         "src/components/LoadingScreen.tsx",
         "src/components/PathTracker.tsx",

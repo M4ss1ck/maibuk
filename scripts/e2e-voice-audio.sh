@@ -39,6 +39,15 @@ PHRASES=(
   "show-voice-commands|en_US-lessac-medium|Show voice commands.|45|30"
   "click-book-settings|en_US-lessac-medium|Click Book Settings.|70|30"
   "click-cancel|en_US-lessac-medium|Click Cancel.|70|30"
+  # Phrase Recording (issue #270): each clip is one phrase said into a phrase
+  # field. The long pre-padding covers the model download and the keyboard walk
+  # to the field's record button; the trailing silence keeps the looping fake
+  # mic from repeating inside a test. "Make italic" is another Command's Voice
+  # Command, so the conflict check refuses it; "Make it heavy" is owned by no
+  # Command, so it is added.
+  "record-make-italic|en_US-lessac-medium|Make italic.|70|30"
+  "record-make-it-heavy|en_US-lessac-medium|Make it heavy.|70|30"
+  "record-letra-gruesa|es_ES-davefx-medium|Letra gruesa.|70|30"
 )
 
 # Compound phrases for the navigation hand-off spec (issue #320): a Voice

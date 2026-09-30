@@ -188,6 +188,29 @@ describe("Input", () => {
 
       expect(ref.current).toBeInstanceOf(HTMLInputElement);
     });
+
+    // Regression: a Dictation Language tab swap hands one object ref from the
+    // Input that unmounts to the Input that takes its place, and the survivor
+    // attaches first (its element is reused, so React does not re-attach it).
+    // The unmounting Input's detach must not clear a ref that already points at
+    // the new node, or the record button focuses a field that is not there.
+    it("keeps a shared object ref on the replacement input when the old one unmounts", () => {
+      const sharedRef = { current: null as HTMLInputElement | null };
+      const a = <Input key="a" ref={sharedRef} aria-label="a" />;
+      const b = <Input key="b" ref={sharedRef} aria-label="b" />;
+      const { rerender } = render(
+        <>
+          {a}
+          {b}
+        </>
+      );
+      expect(sharedRef.current).toBe(screen.getByLabelText("b"));
+
+      // A unmounts in this commit; B is the same element, so it does not attach again.
+      rerender(b);
+
+      expect(sharedRef.current).toBe(screen.getByLabelText("b"));
+    });
   });
 
   describe("HTML attributes", () => {

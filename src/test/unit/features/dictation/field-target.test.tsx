@@ -406,6 +406,7 @@ describe("installDictationFieldTracker", () => {
         modelId: null,
         level: 0,
         hasTarget: true,
+        recording: false,
       }),
     };
     attachSession(session);

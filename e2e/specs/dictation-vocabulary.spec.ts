@@ -25,8 +25,8 @@ async function openVocabularyEditor(page: Page) {
 async function addEntry(page: Page, heard: string, written: string) {
   await tabTo(page, heardField(page), { max: 40 });
   await page.keyboard.type(heard);
-  await page.keyboard.press("Tab");
-  await expect(writtenField(page)).toBeFocused();
+  // The heard field's record button comes next in the Tab order.
+  await tabTo(page, writtenField(page), { max: 3 });
   await page.keyboard.type(written);
   await page.keyboard.press("Enter");
 }
@@ -54,6 +54,14 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
     // The Vocabulary editor sits at the end of the Dictation section.
     await page.getByRole("heading", { name: "Dictation vocabulary" }).scrollIntoViewIfNeeded();
     await capture(page, "settings-dictation-vocabulary", { around: [section] });
+    await expect(heardField(page)).toBeVisible();
+    await capture(page, "record-phrase-vocabulary", {
+      around: [
+        page.getByRole("heading", { name: "Dictation vocabulary" }),
+        heardField(page),
+        writtenField(page),
+      ],
+    });
 
     await tabTo(page, heardField(page), { max: 320 });
     await addEntry(page, "a reliano", "Aureliano");
@@ -103,8 +111,9 @@ test.describe("@wf:dictation-vocabulary @chromium-only", () => {
     await expect(editHeard).toHaveValue("a reliano");
     await page.keyboard.press("End");
     await page.keyboard.type(" buendía");
-    // Tabbing into the field selects its text, so typing replaces it.
-    await page.keyboard.press("Tab");
+    // Tabbing into the field (past the heard field's record button) selects
+    // its text, so typing replaces it.
+    await tabTo(page, form.getByRole("textbox", { name: "Write instead" }), { max: 3 });
     await page.keyboard.type("Aureliano Buendía");
     await page.keyboard.press("Enter");
 
