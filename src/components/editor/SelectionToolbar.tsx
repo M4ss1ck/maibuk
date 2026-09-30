@@ -148,15 +148,21 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     },
   ]);
 
+  const clearKept = useCallback(() => {
+    // A dialog opened from the bubble (Link) still acts on this range; the text regaining focus clears it.
+    if (useModalStore.getState().openCount > 0) return;
+    setSelectionKept(editor, false);
+  }, [editor]);
+
   useEffect(() => {
     return () => {
       if (clearTimerRef.current !== null) {
         clearTimeout(clearTimerRef.current);
         clearTimerRef.current = null;
       }
-      setSelectionKept(editor, false);
+      clearKept();
     };
-  }, [editor]);
+  }, [editor, clearKept]);
 
   if (!isVisible) {
     return null;
@@ -176,7 +182,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
         setSelectionKept(editor, true);
       }}
       onBlur={() => {
-        clearTimerRef.current = setTimeout(() => setSelectionKept(editor, false), 0);
+        clearTimerRef.current = setTimeout(clearKept, 0);
       }}
       onKeyDownCapture={(event) => {
         // A picker portaled out of the bubble (a color) still bubbles through

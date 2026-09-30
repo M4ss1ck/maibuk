@@ -3,16 +3,12 @@
 // plugin state only, never stored, synced, or in history.
 import { Extension, type Editor } from "@tiptap/core";
 import { NodeSelection, Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
-import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 export const selectionKeptPluginKey = new PluginKey<boolean>("selectionKept");
 
-function clearKept(view: EditorView): void {
-  view.dispatch(view.state.tr.setMeta(selectionKeptPluginKey, false).setMeta("addToHistory", false));
-}
-
-export function isSelectionKept(state: EditorState): boolean {
-  return selectionKeptPluginKey.getState(state) === true;
+function keptTransaction(state: EditorState, kept: boolean) {
+  return state.tr.setMeta(selectionKeptPluginKey, kept).setMeta("addToHistory", false);
 }
 
 export function setSelectionKept(editor: Editor, kept: boolean): void {
@@ -20,9 +16,7 @@ export function setSelectionKept(editor: Editor, kept: boolean): void {
   const current = selectionKeptPluginKey.getState(editor.state);
   if (current === undefined) return;
   if (current === kept) return;
-  editor.view.dispatch(
-    editor.state.tr.setMeta(selectionKeptPluginKey, kept).setMeta("addToHistory", false)
-  );
+  editor.view.dispatch(keptTransaction(editor.state, kept));
 }
 
 export const SelectionKept = Extension.create({
@@ -52,7 +46,7 @@ export const SelectionKept = Extension.create({
           handleDOMEvents: {
             focus(view) {
               if (selectionKeptPluginKey.getState(view.state) === true) {
-                clearKept(view);
+                view.dispatch(keptTransaction(view.state, false));
               }
               return false;
             },

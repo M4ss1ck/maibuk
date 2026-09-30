@@ -185,6 +185,7 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
     await page.keyboard.press("Escape");
     await expect(picker).toBeHidden();
     await expect(trigger).toBeFocused();
+    await expect(editorText(page).locator("mark")).toHaveText("The s");
     await expect.poll(async () => (await kept.allTextContents()).join("")).toBe("The s");
 
     await page.keyboard.press("Escape");
@@ -212,10 +213,12 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
     await expect(dialog).toBeVisible();
     await expectFocusWithin(dialog);
     await expectTabContained(page, dialog);
+    await expect(editorText(page).locator(".selection-kept")).toHaveText("The s");
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect(editorText(page)).toBeFocused();
+    await expect(editorText(page).locator(".selection-kept")).toHaveCount(0);
   });
 
   test("a group hidden from the main toolbar stays reachable in the bubble @sc:editor.focusSelectionToolbar", async ({

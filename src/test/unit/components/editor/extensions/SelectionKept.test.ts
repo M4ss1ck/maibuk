@@ -3,7 +3,6 @@ import { undoDepth } from "@tiptap/pm/history";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import {
-  isSelectionKept,
   selectionKeptPluginKey,
   setSelectionKept,
 } from "@/components/editor/extensions/SelectionKept";
@@ -53,14 +52,14 @@ describe("SelectionKept", () => {
     selectRange(editor, 1, 6);
 
     setSelectionKept(editor, true);
-    expect(isSelectionKept(editor.state)).toBe(true);
+    expect(selectionKeptPluginKey.getState(editor.state)).toBe(true);
 
     const kept = keptElements(editor);
     expect(kept).toHaveLength(1);
     expect(kept[0].textContent).toBe("Hello");
 
     setSelectionKept(editor, false);
-    expect(isSelectionKept(editor.state)).toBe(false);
+    expect(selectionKeptPluginKey.getState(editor.state)).toBe(false);
     expect(keptElements(editor)).toHaveLength(0);
   });
 
@@ -69,7 +68,7 @@ describe("SelectionKept", () => {
     editor.commands.setTextSelection(1);
 
     setSelectionKept(editor, true);
-    expect(isSelectionKept(editor.state)).toBe(true);
+    expect(selectionKeptPluginKey.getState(editor.state)).toBe(true);
     expect(keptElements(editor)).toHaveLength(0);
   });
 
@@ -127,7 +126,7 @@ describe("SelectionKept", () => {
 
     editor.view.dom.focus();
 
-    expect(isSelectionKept(editor.state)).toBe(false);
+    expect(selectionKeptPluginKey.getState(editor.state)).toBe(false);
     expect(keptElements(editor)).toHaveLength(0);
   });
 
