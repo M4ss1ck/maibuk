@@ -575,4 +575,16 @@ describe("interpret() Voice Commands", () => {
       edits: [{ kind: "text", text: "poner negrita" }],
     });
   });
+
+  it("carries the demonstrative flag with model punctuation", () => {
+    expect(
+      interpret({
+        line: "Bold that.",
+        before: "",
+        capabilities: { casing: true, punctuation: true, streaming: true },
+        table: enTable,
+        state: INITIAL_INTERPRETER_STATE,
+      }).result
+    ).toEqual({ kind: "voice_command", id: "editor.bold", polarity: "on", that: true });
+  });
 });

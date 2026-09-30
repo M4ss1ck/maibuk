@@ -308,7 +308,12 @@ export function interpret(input: InterpretInput): InterpretResult {
     const command = matchVoiceCommand(table.voice, tokenWords(tokens));
     if (command) {
       return {
-        result: { kind: "voice_command", id: command.id, polarity: command.polarity },
+        result: {
+          kind: "voice_command",
+          id: command.id,
+          polarity: command.polarity,
+          ...(command.that ? { that: true as const } : {}),
+        },
         state,
         spokenPunctuationCount: 0,
       };

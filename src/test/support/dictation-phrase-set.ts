@@ -3,10 +3,11 @@
 //
 // Every default Voice Command phrase is a verb crossed with a target, so the
 // script records each verb and each target at least once inside a real
-// command, and the scorer infers the rest from those units. Spoken Punctuation
-// phrases ride in carrier sentences, several per clip. The gate lane
-// (dictation-phrase-set.test.ts) proves the script still covers every unit and
-// every entry whenever the defaults change.
+// command, and the scorer infers the rest from those units. Demonstrative
+// mark phrases ("bold that") are recorded as whole clips, never inferred.
+// Spoken Punctuation phrases ride in carrier sentences, several per clip. The
+// gate lane (dictation-phrase-set.test.ts) proves the script still covers
+// every unit and every entry whenever the defaults change.
 import type { DictationLanguage } from "@/features/dictation/types";
 
 export type PhraseItemKind = "voice" | "punctuation" | "prose";
@@ -59,6 +60,10 @@ const VOICE: Record<DictationLanguage, readonly string[]> = {
     "align right",
     "align justify",
     "center justified",
+    "make bold that",
+    "remove italics that",
+    "bold that",
+    "underline that",
   ],
   es: [
     "parar dictado",
@@ -99,6 +104,10 @@ const VOICE: Record<DictationLanguage, readonly string[]> = {
     "alinear derecha",
     "alinear justificado",
     "centrar justificada",
+    "poner negrita eso",
+    "quitar cursiva esto",
+    "negrita eso",
+    "subrayado esto",
   ],
 };
 
@@ -145,6 +154,9 @@ const PROSE: Record<DictationLanguage, readonly string[]> = {
     "Turn off the light.",
     "align to the left",
     "turn into a quote",
+    "I said that.",
+    "Make that bold.",
+    "That is bold.",
   ],
   es: [
     "Compré dos puntos y una lista",
@@ -152,6 +164,9 @@ const PROSE: Record<DictationLanguage, readonly string[]> = {
     "empezar la lista",
     "poner la mesa",
     "quitar el polvo",
+    "Eso es negrita.",
+    "Pon eso en negrita.",
+    "Dije eso.",
   ],
 };
 

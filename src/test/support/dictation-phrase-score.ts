@@ -18,6 +18,7 @@ import {
   heardForms,
   rewriteHeard,
   voiceCommandPhrases,
+  voiceThatPhrases,
 } from "@/features/dictation/voice-commands";
 import { COMMAND_IDS, COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
 import { phraseItems, type PhraseItem } from "@/test/support/dictation-phrase-set";
@@ -95,6 +96,7 @@ export function splitVoicePhrase(
 
 export type DefaultPhrase =
   | { kind: "voice"; language: DictationLanguage; phrase: string; split: VoiceSplit }
+  | { kind: "voice_that"; language: DictationLanguage; phrase: string; id: CommandId }
   | {
       kind: "punctuation";
       language: DictationLanguage;
@@ -116,6 +118,14 @@ export function defaultPhrases(language: DictationLanguage): DefaultPhrase[] {
     if (seen.has(key)) continue;
     seen.add(key);
     rows.push({ kind: "voice", language, phrase: `${split.verb} ${split.target}`, split });
+  }
+  // Demonstrative mark phrases ("bold that") follow the voice rows in order.
+  // They are one row per default phrase, deduped by how they sound.
+  for (const { id, phrase } of voiceThatPhrases(language)) {
+    const key = `${id}|${spokenKey(phrase, language)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ kind: "voice_that", language, phrase, id });
   }
   for (const entry of entriesFor(language)) {
     for (const phrase of entry.phrases) rows.push({ kind: "punctuation", language, phrase, entry });
@@ -253,7 +263,8 @@ export function voiceClipHit(
   return (
     got.result.kind === "voice_command" &&
     got.result.id === expected.result.id &&
-    got.result.polarity === expected.result.polarity
+    got.result.polarity === expected.result.polarity &&
+    Boolean(got.result.that) === Boolean(expected.result.that)
   );
 }
 
@@ -364,10 +375,17 @@ interface ScoreContext {
 function scoreVoice(context: ScoreContext, rows: readonly DefaultPhrase[]): PhraseScore[] {
   const { language, capabilities, script, clips } = context;
   const heard = heardForms(language);
+  // Demonstrative clips ("bold that", "poner negrita eso") match a
+  // voiceThatPhrases row by how they sound; they are scored as whole clips
+  // below, never as verb-target units, so this loop skips them.
+  const thatSpoken = new Set(
+    voiceThatPhrases(language).map(({ phrase }) => spokenKey(phrase, language))
+  );
   const recorded = new Map<string, Evidence[]>();
   const verbs = new Map<string, UnitTally>();
   const targets = new Map<CommandId, Map<string, UnitTally>>();
   for (const item of script.filter((entry) => entry.kind === "voice")) {
+    if (thatSpoken.has(spokenKey(item.say, language))) continue;
     const split = splitVoicePhrase(item.say, language);
     if (!split) throw new Error(`script line "${item.say}" is not a default phrase`);
     const ownTargets = targets.get(split.id) ?? new Map<string, UnitTally>();
@@ -401,6 +419,39 @@ function scoreVoice(context: ScoreContext, rows: readonly DefaultPhrase[]): Phra
     const target = targets.get(row.split.id)?.get(row.split.target)?.rate ?? 0;
     return [{ row, source: "inferred", rate: verb * target, evidence: [] }];
   });
+}
+
+/**
+ * Demonstrative mark rows ("bold that"). A row is scored only from recorded
+ * clips that say it, normalized the way they sound; a row with no recorded
+ * clip is left out entirely, never inferred and never missing.
+ */
+function scoreVoiceThat(context: ScoreContext, rows: readonly DefaultPhrase[]): PhraseScore[] {
+  const { capabilities, script, clips } = context;
+  const out: PhraseScore[] = [];
+  for (const row of rows) {
+    if (row.kind !== "voice_that") continue;
+    const key = spokenKey(row.phrase, row.language);
+    const evidence: Evidence[] = [];
+    for (const item of script.filter((entry) => entry.kind === "voice")) {
+      if (spokenKey(item.say, row.language) !== key) continue;
+      for (const clip of clips.get(item.id) ?? []) {
+        evidence.push({
+          itemId: item.id,
+          heard: clip.finals.join(" / "),
+          hit: voiceClipHit(clip.finals, item, capabilities),
+        });
+      }
+    }
+    if (evidence.length === 0) continue;
+    out.push({
+      row,
+      source: "recorded",
+      rate: mean(evidence.map((take) => (take.hit ? 1 : 0))),
+      evidence,
+    });
+  }
+  return out;
 }
 
 /**
@@ -461,21 +512,29 @@ export function scoreModel(input: {
   for (const clip of input.clips) clips.set(clip.itemId, [...(clips.get(clip.itemId) ?? []), clip]);
   const context: ScoreContext = { language, capabilities, script, clips };
 
-  // Default-phrase order, so every model's rows line up in the report.
+  // Default-phrase order, so every model's rows line up in the report. A
+  // voice_that row with no recorded clip has no score and stays out.
   const rows = defaultPhrases(language);
-  const scored = [...scoreVoice(context, rows), ...scorePunctuation(context, rows)];
+  const scored = [
+    ...scoreVoice(context, rows),
+    ...scoreVoiceThat(context, rows),
+    ...scorePunctuation(context, rows),
+  ];
   const byRow = new Map(scored.map((score) => [score.row, score]));
-  const phrases = rows.map((row) => byRow.get(row) as PhraseScore);
+  const phrases = rows.flatMap((row) => {
+    const score = byRow.get(row);
+    return score ? [score] : [];
+  });
   const prose = scoreProse(context);
-  const rateOf = (kind: DefaultPhrase["kind"]) =>
-    mean(phrases.filter((score) => score.row.kind === kind).map((score) => score.rate));
+  const rateOf = (...kinds: readonly DefaultPhrase["kind"][]) =>
+    mean(phrases.filter((score) => kinds.includes(score.row.kind)).map((score) => score.rate));
 
   return {
     language,
     phrases,
     prose,
     hitRate: mean(phrases.map((score) => score.rate)),
-    voiceRate: rateOf("voice"),
+    voiceRate: rateOf("voice", "voice_that"),
     punctuationRate: rateOf("punctuation"),
     proseTriggers: prose.reduce((sum, score) => sum + score.triggered, 0),
     misheardProseTriggers: prose

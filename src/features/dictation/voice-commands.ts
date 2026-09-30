@@ -4,7 +4,8 @@
 // Dictation Language, never in en.json/es.json. Commands declare their verb
 // classes and target nouns in the registry (`CommandDef.voice`); this module is
 // the one owner of the rules over them: how the table is built, how a line is
-// matched, and which default phrases a Command expands to.
+// matched, and which default phrases a Command expands to. A mark said with
+// the language's demonstrative ("bold that") acts on the last dictated span.
 import { normalizeWord, phraseWords } from "@/features/dictation/normalize";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
@@ -43,6 +44,8 @@ export interface VoiceVocabulary {
   verbs: Readonly<Record<VoiceVerbClass, VoiceVerbClassSpec>>;
   /** Single words the match skips between the verb and the target ("poner en negrita"). */
   fillers: readonly string[];
+  /** The words that point back at the last dictated span, "bold that". */
+  demonstratives: readonly string[];
   /**
    * What Dictation Models write for a default verb or target when they mishear
    * it the same way every time, heard → default ("quitad" → "quitar"). A line
@@ -96,6 +99,7 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
     // "the" and "a" are not fillers: they turned short sentences ("Use the
     // code.", "Center the text.", "Stop the list.") into Commands.
     fillers: ["to", "in"],
+    demonstratives: ["that"],
     heard: {},
   },
   es: {
@@ -129,6 +133,7 @@ export const VOICE_VOCABULARY: Readonly<Record<DictationLanguage, VoiceVocabular
       dictation: { phrases: ["parar", "detener"], polarity: null },
     },
     fillers: ["la", "el", "las", "los", "en", "a", "al"],
+    demonstratives: ["eso", "esto"],
     // From the phrase conformance recordings (#285): the models turn
     // infinitives into vosotros imperatives and split or bend some targets.
     heard: {
@@ -182,6 +187,8 @@ export interface VoiceCommandTable {
   fillers: ReadonlySet<string>;
   targets: ReadonlyMap<VoiceVerbClass, readonly VoiceTargetEntry[]>;
   polarity: ReadonlyMap<VoiceVerbClass, VoicePolarity | null>;
+  /** The language's demonstratives as normalized words. */
+  demonstratives: ReadonlySet<string>;
   /** The author's phrases that match only as the whole line, by normalized words. */
   exact: ReadonlyMap<string, readonly VoiceCommandRun[]>;
   /** The author's phrases that are a default verb and target of their own Command. */
@@ -244,13 +251,17 @@ export const VOICE_LANGUAGES = Object.keys(VOICE_VOCABULARY) as DictationLanguag
 export interface VoiceCommandRun {
   id: CommandId;
   polarity: VoicePolarity | null;
+  /** A mark said with the language's demonstrative ("bold that"): acts on the last dictated span. */
+  that?: true;
 }
 
 /**
  * What running one Voice Command did. "empty" is an action with nothing to do
- * ("undo" on an empty history): the live region says so and it is not counted.
+ * ("undo" on an empty history, "bold that" with nothing dictated): the live
+ * region says so and it is not counted. "refused" is "bold that" on dictated
+ * text the author edited since.
  */
-export type VoiceOutcome = "ran" | "empty" | "ignored";
+export type VoiceOutcome = "ran" | "empty" | "ignored" | "refused";
 
 /** Commands that declare Voice Commands, in registry order. */
 export function voiceEligibleCommands(): CommandId[] {
@@ -259,6 +270,11 @@ export function voiceEligibleCommands(): CommandId[] {
 
 export function isVoiceEligible(id: CommandId): boolean {
   return (COMMANDS[id] as CommandDef).voice !== undefined;
+}
+
+/** A mark Command: its registry voice verbs include "formatOn". */
+export function isMarkCommand(id: CommandId): boolean {
+  return (COMMANDS[id] as CommandDef).voice?.verbs.includes("formatOn") ?? false;
 }
 
 /**
@@ -469,6 +485,7 @@ export function buildVoiceCommandTable(
     exact,
     pinned,
     heard: heardForms(language),
+    demonstratives: new Set(vocabulary.demonstratives.map(normalizeWord)),
   };
 }
 
@@ -498,7 +515,27 @@ export function* voiceCommandMatches(
   yield* matchesOfWords(table, words);
   // The line as the author meant it, when the model misheard a default word.
   const rewritten = rewriteHeard(table.heard, words);
-  if (rewritten.join(" ") !== words.join(" ")) yield* matchesOfWords(table, rewritten);
+  const changed = rewritten.join(" ") !== words.join(" ");
+  if (changed) yield* matchesOfWords(table, rewritten);
+  yield* thatMatches(table, words);
+  if (changed) yield* thatMatches(table, rewritten);
+}
+
+function* thatMatches(
+  table: VoiceCommandTable,
+  words: readonly string[]
+): Generator<VoiceCommandRun> {
+  if (words.length < MIN_VOICE_PHRASE_WORDS) return;
+  if (!table.demonstratives.has(words[words.length - 1])) return;
+  const rest = words.slice(0, -1);
+  for (const run of matchesOfWords(table, rest)) {
+    if (isMarkCommand(run.id)) yield { ...run, that: true };
+  }
+  for (const entry of table.targets.get("formatOn") ?? []) {
+    if (entry.words.length === rest.length && entry.words.every((word, at) => rest[at] === word)) {
+      yield { id: entry.id, polarity: "on", that: true };
+    }
+  }
 }
 
 function* matchesOfWords(
@@ -567,6 +604,36 @@ export function voiceCommandPhrases(language: DictationLanguage): VoiceCommandPh
         for (const target of voice.targets[language] ?? []) {
           phrases.push({ id, phrase: `${verb} ${target}` });
         }
+      }
+    }
+  }
+  return phrases;
+}
+
+/**
+ * Every default demonstrative phrase of a mark Command in one language, for
+ * the gates only: `verb target dem` for every verb phrase and the bare
+ * `target dem`. Never listed in the Shortcut Editor.
+ */
+export function voiceThatPhrases(language: DictationLanguage): VoiceCommandPhrase[] {
+  const vocabulary = VOICE_VOCABULARY[language];
+  const phrases: VoiceCommandPhrase[] = [];
+  for (const id of COMMAND_IDS) {
+    if (!isMarkCommand(id)) continue;
+    const voice = (COMMANDS[id] as CommandDef).voice;
+    if (!voice) continue;
+    for (const cls of voice.verbs) {
+      for (const verb of vocabulary.verbs[cls].phrases) {
+        for (const target of voice.targets[language] ?? []) {
+          for (const dem of vocabulary.demonstratives) {
+            phrases.push({ id, phrase: `${verb} ${target} ${dem}` });
+          }
+        }
+      }
+    }
+    for (const target of voice.targets[language] ?? []) {
+      for (const dem of vocabulary.demonstratives) {
+        phrases.push({ id, phrase: `${target} ${dem}` });
       }
     }
   }

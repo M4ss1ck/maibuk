@@ -8,6 +8,7 @@ import {
   interpret,
 } from "@/features/dictation/interpreter";
 import { normalizePhrase, tokenize, tokenWords } from "@/features/dictation/normalize";
+import { VOICE_VOCABULARY } from "@/features/dictation/voice-commands";
 import {
   BENCH_ALIAS_COUNT,
   BENCH_VOCABULARY_COUNT,
@@ -45,6 +46,12 @@ describe.each(["en", "es"] as const)("interpreter bench fixtures (%s)", (languag
     const wordCount = tokenWords(tokenize(benchCase.line)).length;
     expect(wordCount).toBeGreaterThanOrEqual(55);
     expect(wordCount).toBeLessThanOrEqual(65);
+  });
+
+  it("ends with the demonstrative, so the whole-line match tries that path too", () => {
+    const words = benchCase.line.split(/\s+/).filter(Boolean);
+    const lastWord = words[words.length - 1];
+    expect(VOICE_VOCABULARY[language].demonstratives).toContain(lastWord);
   });
 
   it("carries the full alias and vocabulary load", () => {

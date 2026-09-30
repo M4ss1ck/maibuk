@@ -99,13 +99,15 @@ that must type as text.
 
 ### What is recorded
 
-About 55 short lines per Dictation Language, around two minutes each
-(`src/test/support/dictation-phrase-set.ts`):
+About 60 short lines per Dictation Language (62 English, 61 Spanish), around two
+minutes each (`src/test/support/dictation-phrase-set.ts`):
 
 - **Voice Commands.** Every default phrase is a verb crossed with a target, so
   the script says each verb and each target at least once inside a real
   command. A default phrase no clip says is *inferred*: it scores its verb's
   hit rate times its target's. The report marks recorded and inferred rows.
+  A demonstrative mark phrase ("bold that") is recorded as a whole clip and
+  scored from it alone, never inferred: no clip, no row.
 - **Spoken Punctuation** rides in carrier sentences, several phrases per clip.
   Each phrase is scored on its own (a table where only it acts), and English
   marks count even though they are off by default: an author may switch them on.

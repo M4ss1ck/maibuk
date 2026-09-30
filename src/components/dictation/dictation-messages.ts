@@ -40,6 +40,10 @@ export function noticeMessage(
           notice.id === "common.redo" ? "dictation.nothingToRedo" : "dictation.nothingToUndo"
         ),
       };
+    case "voice_that_refused":
+      return { announce: t("dictation.voiceThatRefused") };
+    case "voice_that_empty":
+      return { announce: t("dictation.voiceThatEmpty") };
     case "orphan_copied": {
       const text = t("dictation.orphanCopied");
       return { toast: { variant: "info", text }, announce: text };

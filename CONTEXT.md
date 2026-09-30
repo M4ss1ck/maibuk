@@ -399,7 +399,7 @@ _UI_: en "Spoken punctuation" / es "Puntuación dictada"
 _Avoid_: voice command (for these)
 
 **Voice Command**:
-A spoken phrase, said on its own, that runs a Command instead of inserting text, such as "poner negrita". A second way to run a Command, next to its Shortcuts; the author edits a Command's phrases per Dictation Language in the Shortcut Editor, and custom ones stay on this device. (ADR 0014)
+A spoken phrase, said on its own, that runs a Command instead of inserting text, such as "poner negrita". A second way to run a Command, next to its Shortcuts; the author edits a Command's phrases per Dictation Language in the Shortcut Editor, and custom ones stay on this device. A formatting Voice Command ending in "that" / "eso" ("bold that", "poner en negrita eso") formats the last dictated sentence instead, like "scratch that" finds it. (ADR 0014)
 _UI_: en "Voice commands" / es "Comandos de voz"
 _Avoid_: voice shortcut
 

@@ -4,8 +4,10 @@ import { undo, undoDepth } from "@tiptap/pm/history";
 import type { DecorationSet } from "@tiptap/pm/view";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { dictationPluginKey } from "@/components/editor/extensions/Dictation";
+import { VOICE_MARKS } from "@/components/editor/editor-commands";
 import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
 import type { DictationTarget } from "@/features/dictation/session";
+import { isMarkCommand, voiceEligibleCommands } from "@/features/dictation/voice-commands";
 
 let targets: DictationTarget[];
 const focus = vi.fn();
@@ -213,6 +215,116 @@ describe("Dictation extension", () => {
     editor.setEditable(false);
     targets[0].apply([{ kind: "text", text: "mundo" }]);
     expect(editor.getText()).toBe("Hola");
+    editor.destroy();
+  });
+});
+
+describe("Dictation voice that", () => {
+  async function dictateTwoSentences() {
+    const editor = await makeEditor("<p></p>");
+    targets[0].apply([{ kind: "text", text: "Hello there." }]);
+    targets[0].apply([{ kind: "text", text: "Second one." }]);
+    expect(editor.getHTML()).toBe("<p>Hello there. Second one.</p>");
+    return editor;
+  }
+
+  it("has an editor mark for every mark Command, so no that phrase runs into nothing", async () => {
+    const editor = await makeEditor("<p></p>");
+    const marks = voiceEligibleCommands().filter(isMarkCommand);
+    expect(marks.length).toBeGreaterThan(0);
+    for (const id of marks) {
+      const name = VOICE_MARKS[id];
+      expect(name && editor.schema.marks[name], id).toBeTruthy();
+    }
+  });
+
+  it("bolds the last dictated sentence, leaves the rest plain, keeps the caret", async () => {
+    const editor = await dictateTwoSentences();
+    const { from, to } = editor.state.selection;
+    const outcome = targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    expect(outcome).toBe("ran");
+    expect(editor.getHTML()).toBe("<p>Hello there. <strong>Second one.</strong></p>");
+    expect(editor.state.selection.from).toBe(from);
+    expect(editor.state.selection.to).toBe(to);
+    editor.destroy();
+  });
+
+  it("removes the mark in one undo step and leaves the text", async () => {
+    const editor = await dictateTwoSentences();
+    targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    editor.commands.undo();
+    expect(editor.getHTML()).toBe("<p>Hello there. Second one.</p>");
+    editor.destroy();
+  });
+
+  it("removes the mark from the span with polarity off", async () => {
+    const editor = await dictateTwoSentences();
+    targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    expect(editor.getHTML()).toContain("<strong>");
+    const outcome = targets[0].voice!({ id: "editor.bold", polarity: "off", that: true });
+    expect(outcome).toBe("ran");
+    expect(editor.getHTML()).toBe("<p>Hello there. Second one.</p>");
+    editor.destroy();
+  });
+
+  it("marks only the last line of an unfinished sentence", async () => {
+    const editor = await makeEditor("<p></p>");
+    targets[0].apply([{ kind: "text", text: "one two" }]);
+    targets[0].apply([{ kind: "text", text: "three four" }]);
+    expect(editor.getHTML()).toBe("<p>one two three four</p>");
+    const outcome = targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    expect(outcome).toBe("ran");
+    expect(editor.getHTML()).toBe("<p>one two <strong>three four</strong></p>");
+    editor.destroy();
+  });
+
+  it("refuses when the author edited inside the span", async () => {
+    const editor = await dictateTwoSentences();
+    editor.commands.setTextSelection(18);
+    editor.commands.insertContent("X");
+    const edited = editor.getHTML();
+    expect(edited).toContain("X");
+    const outcome = targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    expect(outcome).toBe("refused");
+    expect(editor.getHTML()).toBe(edited);
+    expect(editor.getHTML()).not.toContain("<strong>");
+    editor.destroy();
+  });
+
+  it("reports empty with nothing dictated", async () => {
+    const editor = await makeEditor("<p></p>");
+    const outcome = targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    expect(outcome).toBe("empty");
+    expect(editor.getHTML()).toBe("<p></p>");
+    editor.destroy();
+  });
+
+  it("bolds the selection, not the dictated span, with a real selection", async () => {
+    const editor = await dictateTwoSentences();
+    editor.commands.setTextSelection({ from: 1, to: 13 });
+    const outcome = targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    expect(outcome).toBe("ran");
+    expect(editor.getHTML()).toBe("<p><strong>Hello there.</strong> Second one.</p>");
+    editor.destroy();
+  });
+
+  it("scratches the sentence after bolding it", async () => {
+    const editor = await dictateTwoSentences();
+    targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    expect(targets[0].scratch!()).toBe("removed");
+    expect(editor.getHTML()).toBe("<p>Hello there.</p>");
+    editor.destroy();
+  });
+
+  it("keeps the author's pending stored marks", async () => {
+    const editor = await dictateTwoSentences();
+    editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+    editor.commands.setItalic();
+    expect(editor.state.storedMarks?.some((mark) => mark.type.name === "italic")).toBe(true);
+    const outcome = targets[0].voice!({ id: "editor.bold", polarity: "on", that: true });
+    expect(outcome).toBe("ran");
+    expect(editor.getHTML()).toBe("<p>Hello there. <strong>Second one.</strong></p>");
+    expect(editor.state.storedMarks?.some((mark) => mark.type.name === "italic")).toBe(true);
     editor.destroy();
   });
 });

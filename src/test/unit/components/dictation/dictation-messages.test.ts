@@ -58,6 +58,30 @@ describe("noticeMessage()", () => {
       "No hay nada que borrar."
     );
   });
+  it("announces a refused voice that without a toast", () => {
+    const message = noticeMessage({ kind: "voice_that_refused" }, t);
+    expect(message.toast).toBeUndefined();
+    expect(message.announce).toBe(
+      "Nothing changed. That only reaches dictated text that hasn't been edited."
+    );
+  });
+  it("announces a refused voice that in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "voice_that_refused" }, es).announce).toBe(
+      "No se cambió nada. Eso solo alcanza texto dictado que no se ha editado."
+    );
+  });
+  it("announces an empty voice that without a toast", () => {
+    const message = noticeMessage({ kind: "voice_that_empty" }, t);
+    expect(message.toast).toBeUndefined();
+    expect(message.announce).toBe("Nothing dictated to change.");
+  });
+  it("announces an empty voice that in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "voice_that_empty" }, es).announce).toBe(
+      "No hay nada dictado que cambiar."
+    );
+  });
   it("announces a Voice Command with the Command's label and its polarity", () => {
     expect(
       noticeMessage({ kind: "voice_command", id: "editor.bold", polarity: "on" }, t).announce

@@ -65,6 +65,18 @@ export const EDITOR_COMMANDS: Partial<Record<CommandId, EditorCommand>> = {
   },
 };
 
+/**
+ * The TipTap mark each `that` Voice Command applies to the last dictated
+ * span. Names are schema mark names.
+ */
+export const VOICE_MARKS: Partial<Record<CommandId, string>> = {
+  "editor.bold": "bold",
+  "editor.italic": "italic",
+  "editor.underline": "underline",
+  "editor.strikethrough": "strike",
+  "editor.code": "code",
+};
+
 type VoiceRunners = { on: EditorCommand; off?: EditorCommand };
 
 /** Starts a list only when it is not already one; ends it only when it is. */
