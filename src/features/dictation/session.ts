@@ -1,5 +1,5 @@
 // The one Dictation Session per app (framework-free, like the Edit Session).
-// It knows targets (editors), a language, and a RecognizerHost; it never
+// It knows targets (editors and text fields), a language, and a RecognizerHost; it never
 // knows which engine or platform is underneath.
 import type { LineStats } from "@/features/dictation/stats";
 import type { DictationEdit, RouteOptions, RouteResult } from "@/features/dictation/router";

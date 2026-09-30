@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import {
   createFieldTarget,
@@ -24,13 +25,6 @@ function makeTextarea(): HTMLTextAreaElement {
   const el = document.createElement("textarea");
   document.body.appendChild(el);
   return el;
-}
-
-// jsdom fires focus on .focus() but the tracker listens for focusin, so tests
-// deliver both, like a browser does.
-function focusEl(el: HTMLElement): void {
-  el.focus();
-  el.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
 }
 
 // document.execCommand stubbed the way a browser implements it: insertText and
@@ -132,9 +126,10 @@ afterEach(() => {
 });
 
 describe("createFieldTarget", () => {
-  it("inserts dictated text as exactly one input event (the fallback path: jsdom has no execCommand)", () => {
+  it("inserts dictated text as exactly one input event (the fallback path: jsdom has no execCommand)", async () => {
+    const user = userEvent.setup();
     const el = makeInput();
-    el.focus();
+    await user.click(el);
     const target = createFieldTarget(el, "text");
     const events: InputEvent[] = [];
     el.addEventListener("input", (event) =>
@@ -146,7 +141,8 @@ describe("createFieldTarget", () => {
     expect(events[0].data).toBe("My book");
   });
 
-  it("updates a React-controlled input's state", () => {
+  it("updates a React-controlled input's state", async () => {
+    const user = userEvent.setup();
     function Controlled() {
       const [value, setValue] = useState("");
       return (
@@ -162,7 +158,7 @@ describe("createFieldTarget", () => {
     }
     const { getByLabelText, getByTestId } = render(<Controlled />);
     const el = getByLabelText("title") as HTMLInputElement;
-    el.focus();
+    await user.click(el);
     const target = createFieldTarget(el, "text");
     act(() => {
       target.apply([{ kind: "text", text: "My book" }]);
@@ -171,12 +167,13 @@ describe("createFieldTarget", () => {
     expect(getByTestId("echo").textContent).toBe("My book");
   });
 
-  it("uses one native execCommand per line after selecting the replaced range", () => {
+  it("uses one native execCommand per line after selecting the replaced range", async () => {
+    const user = userEvent.setup();
     const exec = stubExecCommand();
     const setter = spyNativeValueSetter();
     try {
       const el = makeInput();
-      el.focus();
+      await user.click(el);
       const target = createFieldTarget(el, "text");
       const setSelection = vi.spyOn(el, "setSelectionRange");
       target.apply([
@@ -200,13 +197,14 @@ describe("createFieldTarget", () => {
     }
   });
 
-  it("falls back to the setter path when execCommand refuses", () => {
+  it("falls back to the setter path when execCommand refuses", async () => {
+    const user = userEvent.setup();
     const exec = stubExecCommand();
     exec.mockImplementationOnce(() => false);
     const setter = spyNativeValueSetter();
     try {
       const el = makeInput();
-      el.focus();
+      await user.click(el);
       const target = createFieldTarget(el, "text");
       target.apply([{ kind: "text", text: "Hi" }]);
       expect(el.value).toBe("Hi");
@@ -216,12 +214,13 @@ describe("createFieldTarget", () => {
     }
   });
 
-  it("appends at the end of an email input through the setter path", () => {
+  it("appends at the end of an email input through the setter path", async () => {
+    const user = userEvent.setup();
     const setter = spyNativeValueSetter();
     try {
       const el = makeInput("email");
       el.value = "me@";
-      el.focus();
+      await user.click(el);
       if (el.selectionStart !== null)
         el.setSelectionRange(el.value.length, el.value.length);
       const target = createFieldTarget(el, "text");
@@ -234,22 +233,24 @@ describe("createFieldTarget", () => {
     }
   });
 
-  it("ignores layout on a single line and keeps line breaks in a textarea", () => {
+  it("ignores layout on a single line and keeps line breaks in a textarea", async () => {
+    const user = userEvent.setup();
     const el = makeInput();
-    el.focus();
+    await user.click(el);
     const target = createFieldTarget(el, "text");
     expect(target.apply([{ kind: "paragraph" }])).toBe("layout_ignored");
     expect(el.value).toBe("");
     const ta = makeTextarea();
-    ta.focus();
+    await user.click(ta);
     const area = createFieldTarget(ta, "multiline");
     expect(area.apply([{ kind: "line_break" }])).toBe("applied");
     expect(ta.value).toBe("\n");
   });
 
-  it("does nothing on a secret target: no apply, no voice, scratch is empty", () => {
+  it("does nothing on a secret target: no apply, no voice, scratch is empty", async () => {
+    const user = userEvent.setup();
     const el = makeInput("password");
-    el.focus();
+    await user.click(el);
     const target = createFieldTarget(el, "secret");
     expect(target.secret).toBe(true);
     const events: string[] = [];
@@ -261,10 +262,11 @@ describe("createFieldTarget", () => {
     expect(target.scratch?.()).toBe("empty");
   });
 
-  it("runs undo/redo through execCommand and reports unavailable for the rest", () => {
+  it("runs undo/redo through execCommand and reports unavailable for the rest", async () => {
+    const user = userEvent.setup();
     stubExecCommand();
     const el = makeInput();
-    el.focus();
+    await user.click(el);
     const target = createFieldTarget(el, "text");
     expect(target.voice).toBeDefined();
     target.apply([{ kind: "text", text: "Hello." }]);
@@ -281,9 +283,10 @@ describe("createFieldTarget", () => {
     expect(el.value).toBe("");
   });
 
-  it("scratches the last dictated sentence, refuses after an author edit, empties after reset", () => {
+  it("scratches the last dictated sentence, refuses after an author edit, empties after reset", async () => {
+    const user = userEvent.setup();
     const el = makeInput();
-    el.focus();
+    await user.click(el);
     const target = createFieldTarget(el, "text");
     target.apply([{ kind: "text", text: "Hello there." }]);
     expect(el.value).toBe("Hello there.");
@@ -291,17 +294,18 @@ describe("createFieldTarget", () => {
     expect(el.value).toBe("");
     target.apply([{ kind: "text", text: "Hello there." }]);
     // The author typed inside the dictated sentence: positions no longer hold.
-    el.value += " typed";
+    await user.keyboard(" typed");
     expect(target.scratch?.()).toBe("refused");
     expect(el.value).toBe("Hello there. typed");
     target.resetScratch?.();
     expect(target.scratch?.()).toBe("empty");
   });
 
-  it("reads at most 256 characters before the caret", () => {
+  it("reads at most 256 characters before the caret", async () => {
+    const user = userEvent.setup();
     const el = makeInput();
     el.value = "x".repeat(500);
-    el.focus();
+    await user.click(el);
     const target = createFieldTarget(el, "text");
     el.setSelectionRange(500, 500);
     expect(target.before()).toBe("x".repeat(FIELD_BEFORE_LIMIT));
@@ -309,9 +313,10 @@ describe("createFieldTarget", () => {
     expect(target.before()).toBe("x".repeat(10));
   });
 
-  it("never shows partial text in the field", () => {
+  it("never shows partial text in the field", async () => {
+    const user = userEvent.setup();
     const el = makeInput();
-    el.focus();
+    await user.click(el);
     const target = createFieldTarget(el, "text");
     const events: string[] = [];
     el.addEventListener("input", () => events.push("input"));
@@ -334,34 +339,35 @@ describe("createFieldTarget", () => {
     }
   });
 
-  it("is unavailable without focus, outside its layer, detached, or read-only", () => {
+  it("is unavailable without focus, outside its layer, detached, or read-only", async () => {
+    const user = userEvent.setup();
     const el = makeInput();
     const target = createFieldTarget(el, "text");
     // Not focused yet.
     expect(target.isAvailable?.()).toBe(false);
-    el.focus();
+    await user.click(el);
     expect(target.isAvailable?.()).toBe(true);
     const inert = document.createElement("div");
     inert.setAttribute("inert", "");
     document.body.appendChild(inert);
     inert.appendChild(el);
     // Focus is lost moving across containers; focus again inside [inert].
-    el.focus();
+    await user.click(el);
     expect(target.isAvailable?.()).toBe(false);
     document.body.appendChild(el);
-    el.focus();
+    await user.click(el);
     expect(target.isAvailable?.()).toBe(true);
     const hidden = document.createElement("div");
     hidden.setAttribute("aria-hidden", "true");
     document.body.appendChild(hidden);
     hidden.appendChild(el);
-    el.focus();
+    await user.click(el);
     expect(target.isAvailable?.()).toBe(false);
     document.body.appendChild(el);
     el.remove();
     expect(target.isAvailable?.()).toBe(false);
     document.body.appendChild(el);
-    el.focus();
+    await user.click(el);
     el.readOnly = true;
     expect(target.isAvailable?.()).toBe(false);
   });
@@ -420,7 +426,8 @@ describe("installDictationFieldTracker", () => {
     uninstall = null;
   });
 
-  it("registers and focuses each eligible kind", () => {
+  it("registers and focuses each eligible kind", async () => {
+    const user = userEvent.setup();
     const password = makeInput("password");
     const cases: Array<{
       make: () => HTMLInputElement | HTMLTextAreaElement;
@@ -434,7 +441,7 @@ describe("installDictationFieldTracker", () => {
     let count = 0;
     for (const { make, secret } of cases) {
       const el = make();
-      focusEl(el);
+      await user.click(el);
       count += 1;
       expect(register).toHaveBeenCalledTimes(count);
       const id = lastId();
@@ -446,29 +453,31 @@ describe("installDictationFieldTracker", () => {
     expect(password).toBeDefined();
   });
 
-  it("ignores number, opted-out, readOnly, and disabled fields", () => {
+  it("ignores number, opted-out, readOnly, and disabled fields", async () => {
+    const user = userEvent.setup();
     const number = makeInput("number");
-    focusEl(number);
+    await user.click(number);
     const off = makeInput("text");
     off.setAttribute("data-dictation", "off");
-    focusEl(off);
+    await user.click(off);
     const ro = makeInput("text");
     ro.readOnly = true;
-    focusEl(ro);
+    await user.click(ro);
     const disabled = makeInput("text");
     disabled.disabled = true;
-    focusEl(disabled);
+    await user.click(disabled);
     expect(register).not.toHaveBeenCalled();
     expect(registered.size).toBe(0);
   });
 
-  it("registers the new field before unregistering the old one", () => {
+  it("registers the new field before unregistering the old one", async () => {
+    const user = userEvent.setup();
     const a = makeInput();
-    focusEl(a);
+    await user.click(a);
     const idA = lastId();
     const unregisterA = unregisters.get(idA)!;
     const b = makeInput();
-    focusEl(b);
+    await user.click(b);
     expect(register).toHaveBeenCalledTimes(2);
     const idB = lastId();
     expect(focus).toHaveBeenLastCalledWith(idB);
@@ -477,11 +486,13 @@ describe("installDictationFieldTracker", () => {
     expect(registered.has(idB)).toBe(true);
   });
 
-  it("refocusing the same field focuses without re-registering", () => {
+  it("refocusing the same field focuses without re-registering", async () => {
+    const user = userEvent.setup();
     const a = makeInput();
-    focusEl(a);
+    await user.click(a);
     const idA = lastId();
-    focusEl(a);
+    await user.click(document.body);
+    await user.click(a);
     expect(register).toHaveBeenCalledTimes(1);
     expect(focus).toHaveBeenLastCalledWith(idA);
   });
@@ -491,6 +502,7 @@ describe("installDictationFieldTracker", () => {
     resetDictationHubForTests();
     installSpySession();
     const a = makeInput();
+    // Autofocus before install, not a user: no focusin fires after install listens.
     a.focus();
     expect(register).not.toHaveBeenCalled();
     uninstall = installDictationFieldTracker();
@@ -500,15 +512,16 @@ describe("installDictationFieldTracker", () => {
     void a;
   });
 
-  it("uninstall unregisters and stops listening", () => {
+  it("uninstall unregisters and stops listening", async () => {
+    const user = userEvent.setup();
     const a = makeInput();
-    focusEl(a);
+    await user.click(a);
     expect(registered.size).toBe(1);
     uninstall?.();
     uninstall = null;
     expect(registered.size).toBe(0);
     const c = makeInput();
-    focusEl(c);
+    await user.click(c);
     expect(register).toHaveBeenCalledTimes(1);
   });
 });

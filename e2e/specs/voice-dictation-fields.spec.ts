@@ -1,11 +1,14 @@
 // Dictation types into plain text fields (issue #313): the Chromium fake
-// microphone plays vendor/moonshine/e2e-voice/go-to-projects-new-book.wav,
+// microphone plays vendor/moonshine/e2e-voice/go-to-books-new-book.wav,
 // which says "Go to Books.", pauses five seconds, dictates "The silent
-// harbor.", pauses four seconds, then says "Press enter key.". The navigating
-// Voice Command keeps the Dictation Session listening across the route change
-// to Home; the author opens New Book inside the hand-off window, the queued
-// sentence lands in the title field that takes the caret, and the focus Voice
-// Command submits the dialog so the Book is created by voice.
+// harbor.", pauses six seconds, says "Press the tab key.", pauses three
+// seconds, dictates "Harbor Author.", pauses four seconds, then says "Press
+// enter key.". The navigating Voice Command keeps the Dictation Session
+// listening across the route change to Home; the author opens New Book inside
+// the hand-off window, the first queued sentence lands in the title field
+// that takes the caret, the focus Voice Command moves to the Author field,
+// the second sentence lands there, and the closing focus Voice Command
+// submits the dialog so the Book is created by voice.
 //
 // The audio is generated once with `pnpm e2e:voice-audio` (Piper text to
 // speech, not the author's voice). Chromium only: the fake microphone is a
@@ -15,7 +18,6 @@
 //
 // Pattern: e2e/specs/voice-handoff.spec.ts; setup: e2e/support/voice-focus.ts.
 import { capture } from "../support/capture";
-import { tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import {
   downloadEnglishFast,
@@ -27,11 +29,11 @@ import {
 
 test.use({
   library: "oneBookThreeChapters",
-  launchOptions: { args: voiceAudioArgs("go-to-projects-new-book") },
+  launchOptions: { args: voiceAudioArgs("go-to-books-new-book") },
 });
 
 test.describe("@wf:dictation-fields @sc:dictation.toggle @chromium-only", () => {
-  test("a dictated line queued during navigation lands in the New Book title field, and Press Enter creates the Book", async ({
+  test("a dictated line queued during navigation lands in the New Book fields, and Press Enter creates the Book", async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -55,17 +57,21 @@ test.describe("@wf:dictation-fields @sc:dictation.toggle @chromium-only", () => 
     await expect(titleField).toHaveValue(/silent harbor/i, { timeout: 30_000 });
     await expect(titleField).not.toHaveValue(/go to books/i);
 
+    // One dictated line is one undo step: Ctrl+Z removes the whole title
+    // and Ctrl+Shift+Z restores it.
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(titleField).toHaveValue("");
+    await page.keyboard.press("ControlOrMeta+Shift+z");
+    await expect(titleField).toHaveValue(/silent harbor/i);
+
     await capture(page, "dictation-field-new-book", { around: [dialog] });
 
-    // The dialog needs an author too: type it by keyboard, then Tab to the
-    // Create Book button. The closing "Press enter key." (focus.activate)
-    // presses Enter on the focused control, which clicks the button and
-    // submits the form by voice.
-    await page.keyboard.press("Tab");
+    // No more keyboard: "Press the tab key." (focus.next) moves to the
+    // Author field, "Harbor Author." is dictated there, and "Press enter
+    // key." (focus.activate) submits the form by voice.
     const authorField = dialog.getByRole("textbox", { name: "Author Name" });
-    await expect(authorField).toBeFocused();
-    await page.keyboard.type("Harbor Author");
-    await tabTo(page, dialog.getByRole("button", { name: "Create Book" }), { max: 20 });
+    await expect(authorField).toBeFocused({ timeout: 30_000 });
+    await expect(authorField).toHaveValue(/harbor author/i, { timeout: 30_000 });
 
     // "Press enter key." submits the dialog: it closes and the new Book opens.
     await expect(dialog).toBeHidden({ timeout: 60_000 });

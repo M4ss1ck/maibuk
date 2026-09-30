@@ -133,6 +133,16 @@ export function createFieldTarget(
   return target;
 }
 
+function asDictationField(
+  el: Element | null
+): { el: HTMLInputElement | HTMLTextAreaElement; kind: FieldKind } | null {
+  const kind = dictationFieldKind(el);
+  if (kind === null) return null;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+    return { el, kind };
+  return null;
+}
+
 /**
  * The only wiring plain fields need: no per-component hooks. While a text
  * field holds the caret it is the Session's target; at most one field target
@@ -162,28 +172,17 @@ export function installDictationFieldTracker(
   }
 
   function onFocusIn(event: FocusEvent): void {
-    const candidate = event.target as Element | null;
-    const kind = dictationFieldKind(candidate);
-    if (kind === null) return;
-    if (
-      !(candidate instanceof HTMLInputElement) &&
-      !(candidate instanceof HTMLTextAreaElement)
-    )
-      return;
-    track(candidate, kind);
+    const field = asDictationField(event.target as Element | null);
+    if (field === null) return;
+    track(field.el, field.kind);
   }
 
   doc.addEventListener("focusin", onFocusIn, true);
   // A field focused before install (an autofocused dialog field) never fires
   // focusin again: pick it up now.
-  const active = doc.activeElement;
-  const initialKind = dictationFieldKind(active);
-  if (
-    initialKind !== null &&
-    (active instanceof HTMLInputElement ||
-      active instanceof HTMLTextAreaElement)
-  ) {
-    track(active, initialKind);
+  const initial = asDictationField(doc.activeElement);
+  if (initial !== null) {
+    track(initial.el, initial.kind);
   }
   return () => {
     doc.removeEventListener("focusin", onFocusIn, true);

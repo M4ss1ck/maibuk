@@ -2248,10 +2248,11 @@ export const ROWS: MatrixRow[] = [
     id: "dictation-fields",
     area: "shell",
     workflow:
-      'Dictation is listening in a Chapter; the microphone says "Go to Books", the author opens New Book within the hand-off window, the dictated sentence becomes the Book title, and "Press enter key" creates the Book; asserts: the title field holds the dictated text and the Book exists',
+      'Dictation is listening in a Chapter; the microphone says "Go to Books", the author opens New Book within the hand-off window, the first dictated sentence becomes the Book title, a focus Voice Command moves to the Author field, the second dictated sentence becomes the author, and "Press enter key" creates the Book; asserts: each field holds its dictated text and the Book exists',
     edges: [
       "a dictated line queued during a navigating Voice Command lands in the New Book title field that takes the caret",
-      "a focus Voice Command submits the dialog so the Book is created by voice",
+      "a focus Voice Command moves to the Author field, the author is dictated there, and \"Press enter key\" creates the Book by voice",
+      "one dictated line is one undo step: Ctrl+Z removes the whole title and Ctrl+Shift+Z restores it",
     ],
     terms: ["Dictation", "Dictation Session"],
     shortcuts: ["dictation.toggle"],

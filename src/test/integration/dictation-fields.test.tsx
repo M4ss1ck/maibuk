@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { Input as AriaInput, Label, TextField } from "react-aria-components";
 import { Input } from "@/components/ui/Input";
@@ -112,11 +113,6 @@ function makeSession({
   });
 }
 
-function focusEl(el: HTMLElement): void {
-  el.focus();
-  el.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-}
-
 let uninstall: (() => void) | null = null;
 let previousLanguage: DictationLanguage;
 
@@ -220,6 +216,7 @@ function TextareaForm({ onSubmit }: { onSubmit: (value: string) => void }) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
       />
+      <button type="submit">Submit</button>
     </form>
   );
 }
@@ -233,15 +230,14 @@ describe("dictation into plain text fields", () => {
   ])(
     "dictates into a $name and submits the form with the dictated value",
     async ({ Form, label }) => {
+      const user = userEvent.setup();
       const { session, host } = setupFieldSession();
       const submitted: string[] = [];
-      const { container } = render(
-        <Form onSubmit={(value) => void submitted.push(value)} />
-      );
+      render(<Form onSubmit={(value) => void submitted.push(value)} />);
       const el = screen.getByLabelText(label) as
         | HTMLInputElement
         | HTMLTextAreaElement;
-      focusEl(el);
+      await user.click(el);
       await act(async () => {
         await session.start();
       });
@@ -249,12 +245,17 @@ describe("dictation into plain text fields", () => {
         host.emitFinal("My book");
       });
       expect(el.value).toBe("My book");
-      fireEvent.submit(container.querySelector("form")!);
+      if (el instanceof HTMLTextAreaElement) {
+        await user.click(screen.getByRole("button", { name: "Submit" }));
+      } else {
+        await user.keyboard("{Enter}");
+      }
       expect(submitted).toEqual(["My book"]);
     }
   );
 
   it("never dictates into opted-out, read-only, disabled, or number fields", async () => {
+    const user = userEvent.setup();
     const { session, host } = setupFieldSession();
     // Something else owns the Session so it can start: lines keep going
     // there while the ineligible field holds DOM focus.
@@ -284,7 +285,7 @@ describe("dictation into plain text fields", () => {
     });
     for (const name of ["off", "readonly", "disabled", "number"]) {
       const el = screen.getByLabelText(name) as HTMLInputElement;
-      focusEl(el);
+      await user.click(el);
       act(() => {
         host.emitFinal("hello");
       });
@@ -294,10 +295,11 @@ describe("dictation into plain text fields", () => {
   });
 
   it("refuses a password field without reading, writing, or copying it", async () => {
+    const user = userEvent.setup();
     const { session, host, notices, copyText } = setupFieldSession();
     render(<input aria-label="Password" type="password" defaultValue="" />);
     const el = screen.getByLabelText("Password") as HTMLInputElement;
-    focusEl(el);
+    await user.click(el);
     await act(async () => {
       await session.start();
     });
@@ -310,6 +312,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("never shows partial text in a field and fires no input event", async () => {
+    const user = userEvent.setup();
     const { session, host } = setupFieldSession();
     render(
       <>
@@ -320,7 +323,7 @@ describe("dictation into plain text fields", () => {
     const el = screen.getByLabelText("Title") as HTMLInputElement;
     const events: string[] = [];
     el.addEventListener("input", () => events.push("input"));
-    focusEl(el);
+    await user.click(el);
     await act(async () => {
       await session.start();
     });
@@ -332,10 +335,11 @@ describe("dictation into plain text fields", () => {
   });
 
   it("picks the model for the app language until the Session overrides it", async () => {
+    const user = userEvent.setup();
     useSettingsStore.setState({ language: "es" });
     const { session, seenModelLangs } = setupFieldSession();
     render(<input aria-label="Title" defaultValue="" />);
-    focusEl(screen.getByLabelText("Title") as HTMLInputElement);
+    await user.click(screen.getByLabelText("Title"));
     await act(async () => {
       await session.start();
     });
@@ -347,6 +351,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("drops a paragraph break in a single-line field and announces it", async () => {
+    const user = userEvent.setup();
     const { session, host, notices } = setupFieldSession();
     render(
       <>
@@ -355,7 +360,7 @@ describe("dictation into plain text fields", () => {
       </>
     );
     const el = screen.getByLabelText("Title") as HTMLInputElement;
-    focusEl(el);
+    await user.click(el);
     await act(async () => {
       await session.start();
     });
@@ -369,6 +374,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("keeps a spoken line break in a textarea", async () => {
+    const user = userEvent.setup();
     const { session, host } = setupFieldSession();
     render(
       <>
@@ -377,7 +383,7 @@ describe("dictation into plain text fields", () => {
       </>
     );
     const el = screen.getByLabelText("Body") as HTMLTextAreaElement;
-    focusEl(el);
+    await user.click(el);
     await act(async () => {
       await session.start();
     });
@@ -388,6 +394,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("takes a verbatim field as heard while a normal field takes the mark", async () => {
+    const user = userEvent.setup();
     const { session, host } = setupFieldSession();
     render(
       <>
@@ -399,7 +406,7 @@ describe("dictation into plain text fields", () => {
     );
     const verbatim = screen.getByLabelText("Verbatim") as HTMLInputElement;
     const normal = screen.getByLabelText("Normal") as HTMLInputElement;
-    focusEl(verbatim);
+    await user.click(verbatim);
     await act(async () => {
       await session.start();
     });
@@ -407,7 +414,7 @@ describe("dictation into plain text fields", () => {
       host.emitFinal("comma");
     });
     expect(verbatim.value).toBe("comma");
-    focusEl(normal);
+    await user.click(normal);
     act(() => {
       host.emitFinal("comma");
     });
@@ -415,6 +422,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("announces a formatting Voice Command as unavailable and changes nothing", async () => {
+    const user = userEvent.setup();
     const { session, host, notices } = setupFieldSession();
     render(
       <>
@@ -423,7 +431,7 @@ describe("dictation into plain text fields", () => {
       </>
     );
     const el = screen.getByLabelText("Title") as HTMLInputElement;
-    focusEl(el);
+    await user.click(el);
     await act(async () => {
       await session.start();
     });
@@ -440,6 +448,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("scratches the last dictated sentence from the field", async () => {
+    const user = userEvent.setup();
     const { session, host, notices } = setupFieldSession();
     render(
       <>
@@ -448,7 +457,7 @@ describe("dictation into plain text fields", () => {
       </>
     );
     const el = screen.getByLabelText("Title") as HTMLInputElement;
-    focusEl(el);
+    await user.click(el);
     await act(async () => {
       await session.start();
     });
@@ -465,6 +474,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("refuses scratch after the author typed inside the dictated sentence", async () => {
+    const user = userEvent.setup();
     const { session, host, notices } = setupFieldSession();
     function ScratchForm() {
       const [value, setValue] = useState("");
@@ -481,7 +491,7 @@ describe("dictation into plain text fields", () => {
     }
     render(<ScratchForm />);
     const el = screen.getByLabelText("Title") as HTMLInputElement;
-    focusEl(el);
+    await user.click(el);
     await act(async () => {
       await session.start();
     });
@@ -489,7 +499,7 @@ describe("dictation into plain text fields", () => {
       host.emitFinal("hello there period");
     });
     expect(el.value).toBe("Hello there.");
-    fireEvent.change(el, { target: { value: "Hello there. typed" } });
+    await user.keyboard("{End} typed");
     expect(el.value).toBe("Hello there. typed");
     act(() => {
       host.emitFinal("scratch that");
@@ -499,6 +509,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("does not scratch an old sentence after focusing another field and back", async () => {
+    const user = userEvent.setup();
     const { session, host, notices } = setupFieldSession();
     function TwoFields() {
       const [a, setA] = useState("");
@@ -523,7 +534,7 @@ describe("dictation into plain text fields", () => {
     render(<TwoFields />);
     const a = screen.getByLabelText("First") as HTMLInputElement;
     const b = screen.getByLabelText("Second") as HTMLInputElement;
-    focusEl(a);
+    await user.click(a);
     await act(async () => {
       await session.start();
     });
@@ -532,8 +543,8 @@ describe("dictation into plain text fields", () => {
     });
     expect(a.value).toBe("Hello there.");
     // Leaving the field drops its history; coming back starts a new target.
-    focusEl(b);
-    focusEl(a);
+    await user.click(b);
+    await user.click(a);
     act(() => {
       host.emitFinal("scratch that");
     });
@@ -542,6 +553,7 @@ describe("dictation into plain text fields", () => {
   });
 
   it("takes the orphan path when a modal hides the editor, never touching it", async () => {
+    const user = userEvent.setup();
     const { session, host, copyText } = setupFieldSession();
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -563,8 +575,9 @@ describe("dictation into plain text fields", () => {
     // A modal opens over the editor and takes focus to its own button.
     container.setAttribute("aria-hidden", "true");
     const button = document.createElement("button");
+    button.textContent = "Close";
     document.body.appendChild(button);
-    button.focus();
+    await user.click(button);
     act(() => {
       host.emitFinal("hello");
     });
@@ -586,6 +599,7 @@ describe("dictation into plain text fields", () => {
             id="dlg-title"
             autoFocus
             ref={(node) => {
+              // Autofocus from the dialog, not a user: deliver the focusin the browser fires.
               node?.focus();
               node?.dispatchEvent(
                 new FocusEvent("focusin", { bubbles: true })
