@@ -56,7 +56,7 @@ describe("custom Voice Commands in the table", () => {
       before: "",
       capabilities: { casing: false, punctuation: false, streaming: true },
       table,
-      state: { capitalizeNext: false, noSpaceNext: false },
+      state: { capitalizeNext: false, noSpaceNext: false, allCaps: false },
     });
     expect(output.result).toEqual({ kind: "voice_command", id: "editor.italic", polarity: "on" });
   });
@@ -203,6 +203,17 @@ describe("findPhraseConflict()", () => {
         },
       })
     ).toEqual({ kind: "duplicate", entryId: "puntoYAparte" });
+  });
+
+  it("refuses the all-caps lock phrases as Spoken Punctuation (#271)", () => {
+    expect(voice("editor.bold", "all caps on", {}, "en")).toEqual({
+      kind: "duplicate",
+      entryId: "allCapsOn",
+    });
+    expect(voice("editor.bold", "mayúsculas activadas")).toEqual({
+      kind: "duplicate",
+      entryId: "mayusculasActivadas",
+    });
   });
 
   it("refuses a phrase that starts with the escape word or one of its aliases", () => {

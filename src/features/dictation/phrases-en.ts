@@ -63,6 +63,13 @@ export const EN_ENTRIES: readonly SpokenPunctuationEntry[] = [
     actions: [{ kind: "cap" }],
     punctuation: false,
   },
+  { id: "allCapsOn", phrases: ["all caps on"], actions: [{ kind: "caps_on" }], punctuation: false },
+  {
+    id: "allCapsOff",
+    phrases: ["all caps off"],
+    actions: [{ kind: "caps_off" }],
+    punctuation: false,
+  },
   { id: "literal", phrases: ["literal"], actions: [{ kind: "literal" }], punctuation: false },
   {
     id: "scratchThat",

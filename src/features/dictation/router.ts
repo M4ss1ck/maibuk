@@ -11,7 +11,7 @@ export type DictationEdit =
   | { kind: "opener"; mark: string };
 
 export type RouteResult =
-  | { kind: "edits"; edits: DictationEdit[]; spokenPunctuationCount?: number }
+  | { kind: "edits"; edits: DictationEdit[]; spokenPunctuationCount?: number; capsLock?: boolean }
   | ({ kind: "voice_command" } & VoiceCommandRun)
   | { kind: "scratch" };
 

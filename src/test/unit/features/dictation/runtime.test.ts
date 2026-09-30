@@ -124,6 +124,43 @@ describe("getDictation()", () => {
     await session.stop();
   });
 
+  it("keeps the all-caps lock across lines until the session ends (#271)", async () => {
+    const control: { listener: ((event: DictationEvent) => void) | null } = { listener: null };
+    const host = {
+      ...createUnsupportedHost("platform"),
+      load: vi.fn(async () => {}),
+      start: vi.fn(async (listener: (event: DictationEvent) => void) => {
+        control.listener = listener;
+      }),
+      stop: vi.fn(async () => {}),
+    };
+    createRecognizerHost.mockResolvedValue(host);
+    const { session } = await getDictation();
+    const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "fast");
+    if (!enFast) throw new Error("no English model in the catalog");
+    useDictationStore.setState({ installed: [enFast.id] });
+    const applied: string[] = [];
+    session.register({
+      id: "chapter",
+      language: () => "en",
+      showPartial() {},
+      before: () => "",
+      apply: (edits) =>
+        void applied.push(edits.map((edit) => (edit.kind === "text" ? edit.text : "\n")).join("")),
+    });
+    session.focus("chapter");
+    await session.start();
+
+    control.listener?.({ type: "final", text: "all caps on hello", latencyMs: 5 });
+    expect(applied).toEqual(["HELLO"]);
+
+    await session.stop();
+    await session.start();
+    control.listener?.({ type: "final", text: "world", latencyMs: 5 });
+    expect(applied).toEqual(["HELLO", "World"]);
+    await session.stop();
+  });
+
   it("hears the author's custom Voice Commands as soon as they change", async () => {
     const control: { listener: ((event: DictationEvent) => void) | null } = { listener: null };
     const host = {

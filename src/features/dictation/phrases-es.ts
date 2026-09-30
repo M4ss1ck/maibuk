@@ -104,6 +104,18 @@ export const ES_ENTRIES: readonly SpokenPunctuationEntry[] = [
     punctuation: false,
   },
   { id: "mayuscula", phrases: ["mayúscula"], actions: [{ kind: "cap" }], punctuation: false },
+  {
+    id: "mayusculasActivadas",
+    phrases: ["mayúsculas activadas"],
+    actions: [{ kind: "caps_on" }],
+    punctuation: false,
+  },
+  {
+    id: "mayusculasDesactivadas",
+    phrases: ["mayúsculas desactivadas"],
+    actions: [{ kind: "caps_off" }],
+    punctuation: false,
+  },
   { id: "literal", phrases: ["literal"], actions: [{ kind: "literal" }], punctuation: false },
   {
     id: "borraEso",

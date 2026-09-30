@@ -120,6 +120,23 @@ describe("noticeMessage()", () => {
       "No hay nada que rehacer."
     );
   });
+  it("announces the all-caps lock turning on and off (#271)", () => {
+    expect(noticeMessage({ kind: "caps_lock", on: true }, t)).toEqual({
+      announce: "All caps on",
+    });
+    expect(noticeMessage({ kind: "caps_lock", on: false }, t)).toEqual({
+      announce: "All caps off",
+    });
+  });
+  it("announces the all-caps lock in Spanish", () => {
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "caps_lock", on: true }, es).announce).toBe(
+      "Mayúsculas activadas"
+    );
+    expect(noticeMessage({ kind: "caps_lock", on: false }, es).announce).toBe(
+      "Mayúsculas desactivadas"
+    );
+  });
   it("announces an orphan copied to the clipboard", () => {
     const message = noticeMessage({ kind: "orphan_copied" }, t);
     expect(message.toast?.variant).toBe("info");

@@ -20,6 +20,8 @@ export function noticeMessage(
       };
     case "stopped":
       return { announce: t("dictation.announceStopped") };
+    case "caps_lock":
+      return { announce: t(notice.on ? "dictation.announceCapsOn" : "dictation.announceCapsOff") };
     case "scratch_refused":
       return { announce: t("dictation.scratchRefused") };
     case "scratch_empty":

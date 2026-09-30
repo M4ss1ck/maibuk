@@ -15,6 +15,8 @@ export type PhraseAction =
   | { kind: "line_break" }
   | { kind: "list_item" }
   | { kind: "cap" }
+  | { kind: "caps_on" }
+  | { kind: "caps_off" }
   | { kind: "literal" }
   | { kind: "scratch" };
 

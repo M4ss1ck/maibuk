@@ -235,7 +235,7 @@ describe("interpret() contract", () => {
   const noPunctuation: Capabilities = { casing: false, punctuation: false, streaming: true };
 
   it("returns no edits for an empty line and keeps the state", () => {
-    const state = { capitalizeNext: true, noSpaceNext: false };
+    const state = { capitalizeNext: true, noSpaceNext: false, allCaps: false };
     expect(
       interpret({ line: "", before: "uno ", capabilities: noPunctuation, table: esTable, state })
     ).toEqual({
@@ -246,7 +246,7 @@ describe("interpret() contract", () => {
   });
 
   it("does not mutate the input state", () => {
-    const state = { capitalizeNext: true, noSpaceNext: false };
+    const state = { capitalizeNext: true, noSpaceNext: false, allCaps: false };
     interpret({
       line: "cómo estás",
       before: "",
@@ -254,7 +254,7 @@ describe("interpret() contract", () => {
       table: esTable,
       state,
     });
-    expect(state).toEqual({ capitalizeNext: true, noSpaceNext: false });
+    expect(state).toEqual({ capitalizeNext: true, noSpaceNext: false, allCaps: false });
   });
 
   it("does not include a leading space in the first text edit", () => {
@@ -477,7 +477,7 @@ describe("interpret() scratch that", () => {
   });
 
   it("returns a scratch result with unchanged state", () => {
-    const state = { capitalizeNext: true, noSpaceNext: false };
+    const state = { capitalizeNext: true, noSpaceNext: false, allCaps: false };
     const out = interpret({
       line: "Borra eso.",
       before: "hola ",
@@ -529,7 +529,7 @@ describe("interpret() Voice Commands", () => {
   });
 
   it("never counts a Voice Command as Spoken Punctuation and keeps the state", () => {
-    const state = { capitalizeNext: true, noSpaceNext: false };
+    const state = { capitalizeNext: true, noSpaceNext: false, allCaps: false };
     const out = interpret({
       line: "convertir en título uno",
       before: "hola ",
@@ -586,5 +586,169 @@ describe("interpret() Voice Commands", () => {
         state: INITIAL_INTERPRETER_STATE,
       }).result
     ).toEqual({ kind: "voice_command", id: "editor.bold", polarity: "on", that: true });
+  });
+});
+
+describe("all-caps lock (#271)", () => {
+  const bare: Capabilities = { casing: false, punctuation: false, streaming: true };
+  const enTable = () => buildPhraseTable("en", { capabilities: bare });
+  const esTable = () => buildPhraseTable("es", { capabilities: bare });
+
+  it("upper-cases words after all caps on in the same line", () => {
+    const output = interpret({
+      line: "all caps on hello world",
+      before: "",
+      capabilities: bare,
+      table: enTable(),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "HELLO WORLD" }],
+    });
+    expect(output.state.allCaps).toBe(true);
+    expect(output.capsLock).toBe(true);
+    expect(output.spokenPunctuationCount).toBe(1);
+  });
+
+  it("carries the lock across lines until all caps off", () => {
+    const first = interpret({
+      line: "all caps on we",
+      before: "",
+      capabilities: bare,
+      table: enTable(),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(first.result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "WE" }] });
+    expect(first.capsLock).toBe(true);
+
+    const second = interpret({
+      line: "keep going",
+      before: "WE",
+      capabilities: bare,
+      table: enTable(),
+      state: first.state,
+    });
+    expect(second.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "KEEP GOING" }],
+    });
+    expect(second.capsLock).toBeUndefined();
+    expect(second.state.allCaps).toBe(true);
+
+    const third = interpret({
+      line: "all caps off and stop",
+      before: "WE KEEP GOING",
+      capabilities: bare,
+      table: enTable(),
+      state: second.state,
+    });
+    expect(third.result).toEqual({ kind: "edits", edits: [{ kind: "text", text: "and stop" }] });
+    expect(third.capsLock).toBe(false);
+    expect(third.state.allCaps).toBe(false);
+    expect(third.spokenPunctuationCount).toBe(1);
+  });
+
+  it("leaves punctuation marks unchanged while locked", () => {
+    const output = interpret({
+      line: "all caps on wait comma what question mark",
+      before: "",
+      capabilities: bare,
+      table: enTable(),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "WAIT, WHAT?" }],
+    });
+    expect(output.capsLock).toBe(true);
+    expect(output.spokenPunctuationCount).toBe(3);
+  });
+
+  it("consumes a pending capitalize before the lock starts", () => {
+    const output = interpret({
+      line: "capitalize summer all caps on is here all caps off now",
+      before: "",
+      capabilities: bare,
+      table: enTable(),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Summer IS HERE now" }],
+    });
+    expect(output.capsLock).toBe(false);
+    expect(output.state.allCaps).toBe(false);
+    expect(output.spokenPunctuationCount).toBe(3);
+  });
+
+  it("never upper-cases a protected Vocabulary written form", () => {
+    const table = buildPhraseTable("en", {
+      capabilities: bare,
+      vocabulary: [{ heard: "a reliano", written: "Aureliano" }],
+    });
+    const output = interpret({
+      line: "all caps on a reliano came",
+      before: "",
+      capabilities: bare,
+      table,
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Aureliano CAME" }],
+    });
+    expect(output.capsLock).toBe(true);
+  });
+
+  it("upper-cases accented Spanish words while locked", () => {
+    const output = interpret({
+      line: "mayúsculas activadas qué año tan ñoño",
+      before: "",
+      capabilities: bare,
+      table: esTable(),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "QUÉ AÑO TAN ÑOÑO" }],
+    });
+    expect(output.capsLock).toBe(true);
+    expect(output.spokenPunctuationCount).toBe(1);
+  });
+
+  it("stays prose when the on entry is switched off", () => {
+    const settings = defaultSpokenPunctuationLanguageSettings();
+    settings.entries.allCapsOn = false;
+    const output = interpret({
+      line: "all caps on hello",
+      before: "she said ",
+      capabilities: bare,
+      table: buildPhraseTable("en", { capabilities: bare, settings }),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "all caps on hello" }],
+    });
+    expect(output.capsLock).toBeUndefined();
+    expect(output.state.allCaps).toBe(false);
+    expect(output.spokenPunctuationCount).toBe(0);
+  });
+
+  it("does not turn the lock on through the literal escape", () => {
+    const output = interpret({
+      line: "literal all caps on hello",
+      before: "",
+      capabilities: bare,
+      table: enTable(),
+      state: INITIAL_INTERPRETER_STATE,
+    });
+    expect(output.result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "All caps on hello" }],
+    });
+    expect(output.capsLock).toBeUndefined();
+    expect(output.state.allCaps).toBe(false);
   });
 });

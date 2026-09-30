@@ -47,7 +47,7 @@ afterEach(() => resetDictationHubForTests());
 describe("Dictation line to rich-text document", () => {
   it("turns a Spanish spoken line into punctuated paragraphs as one undo step", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -88,7 +88,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("starts a bulleted list outside one and splits inside one, each as one undo step", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -137,7 +137,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("inserts Spanish openers automatically, explicitly, and across lines as one undo step", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -170,14 +170,14 @@ describe("Dictation line to rich-text document", () => {
       expect(undoDepth(editor.state)).toBe(1);
       undo(editor.state, editor.view.dispatch);
       expect(editor.getHTML()).toBe("<p></p>");
-      state = { capitalizeNext: false, noSpaceNext: false };
+      state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
       host.emitFinal("si vienes abre interrogación me avisas cierra interrogación");
       expect(editor.getHTML()).toBe("<p>Si vienes ¿me avisas?</p>");
       expect(undoDepth(editor.state)).toBe(1);
       // Across two finished lines: the question starts in the first line and
       // closes in the second, so the opener goes at its sentence start.
       editor.commands.setContent("<p></p>");
-      state = { capitalizeNext: false, noSpaceNext: false };
+      state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
       host.emitFinal("qué hora");
       expect(editor.getHTML()).toBe("<p>Qué hora</p>");
       host.emitFinal("es cierra interrogación");
@@ -189,7 +189,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("places the auto opener after a hard break, not at the paragraph start", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -228,7 +228,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("places the auto opener inside opening quotes and parentheses", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -266,7 +266,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("turns an empty paragraph into the list item instead of leaving it above", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -304,7 +304,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("lifts out of an empty list item like Enter instead of adding another", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -359,7 +359,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("moves an empty nested item up one list level like Enter", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -418,7 +418,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("capitalizes with mayúscula and writes punctuation words with literal as one undo step", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const table = buildPhraseTable("es");
     const stats = createLineStats();
     const session = createDictationSession({
@@ -457,7 +457,7 @@ describe("Dictation line to rich-text document", () => {
 
   it("honors the author's Spoken Punctuation settings as one undo step", async () => {
     const host = fakeHost();
-    let state = { capitalizeNext: false, noSpaceNext: false };
+    let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
     const settings = defaultSpokenPunctuationLanguageSettings();
     settings.entries.coma = false;
     settings.aliases.puntoYAparte = ["punto y la parte"];

@@ -269,6 +269,25 @@ describe("findAliasRefusal()", () => {
       findAliasRefusal({ language: "en", entryId: "comma", alias: "punto", settings: en })
     ).toBeNull();
   });
+
+  it("refuses the all-caps lock phrases as duplicates of their entries (#271)", () => {
+    const en = defaultSpokenPunctuationSettings().en;
+    expect(
+      findAliasRefusal({ language: "en", entryId: "comma", alias: "all caps on", settings: en })
+    ).toEqual({ kind: "duplicate", entryId: "allCapsOn" });
+    expect(
+      findAliasRefusal({ language: "en", entryId: "comma", alias: "all caps off", settings: en })
+    ).toEqual({ kind: "duplicate", entryId: "allCapsOff" });
+    const es = defaultSpokenPunctuationSettings().es;
+    expect(
+      findAliasRefusal({
+        language: "es",
+        entryId: "coma",
+        alias: "mayúsculas activadas",
+        settings: es,
+      })
+    ).toEqual({ kind: "duplicate", entryId: "mayusculasActivadas" });
+  });
 });
 
 describe("normalizeSpokenPunctuationSettings()", () => {
@@ -311,6 +330,15 @@ describe("normalizeSpokenPunctuationSettings()", () => {
     });
 
     expect(normalized.es.aliases).toEqual({ literal: ["textual"], coma: ["comita"] });
+  });
+
+  it("keeps a switch for the all-caps off entry (#271)", () => {
+    const normalized = normalizeSpokenPunctuationSettings({
+      es: { entries: { mayusculasDesactivadas: false } },
+      en: { entries: { allCapsOn: false } },
+    });
+    expect(normalized.es.entries).toEqual({ mayusculasDesactivadas: false });
+    expect(normalized.en.entries).toEqual({ allCapsOn: false });
   });
 
   it("resolves a stored escape shadow toward the phrase that keeps working", () => {

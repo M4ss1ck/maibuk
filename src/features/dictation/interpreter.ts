@@ -62,11 +62,14 @@ export interface InterpreterState {
   capitalizeNext: boolean;
   /** Suppress the separating space before the next word. */
   noSpaceNext: boolean;
+  /** Upper-case every inserted word until the author turns the lock off (all caps on/off). */
+  allCaps: boolean;
 }
 
 export const INITIAL_INTERPRETER_STATE: InterpreterState = {
   capitalizeNext: false,
   noSpaceNext: false,
+  allCaps: false,
 };
 
 export interface InterpretInput {
@@ -87,6 +90,8 @@ export interface InterpretResult {
     | { kind: "scratch" };
   state: InterpreterState;
   spokenPunctuationCount: number;
+  /** Present only when the line held a caps_on/caps_off phrase: the lock after the line. */
+  capsLock?: boolean;
 }
 
 /**
@@ -339,6 +344,8 @@ export function interpret(input: InterpretInput): InterpretResult {
   let hasExclamationOpener = openerInSentence(before, "¡");
   let capNext = false;
   let literalNext = false;
+  let allCaps = state.allCaps;
+  let capsSeen = false;
 
   const flush = () => {
     if (current !== "") {
@@ -369,6 +376,7 @@ export function interpret(input: InterpretInput): InterpretResult {
     } else if (firstWord) {
       word = lowercaseFirst(word);
     }
+    if (allCaps) word = word.toLocaleUpperCase(table.language);
     firstWord = false;
     if (current !== "" && !endsWithOpening(current) && !/\s$/u.test(current)) current += " ";
     current += word;
@@ -420,6 +428,12 @@ export function interpret(input: InterpretInput): InterpretResult {
         resetSentence();
       } else if (action.kind === "cap") {
         capNext = true;
+      } else if (action.kind === "caps_on") {
+        allCaps = true;
+        capsSeen = true;
+      } else if (action.kind === "caps_off") {
+        allCaps = false;
+        capsSeen = true;
       } else if (action.kind === "literal") {
         literalNext = true;
       }
@@ -548,7 +562,8 @@ export function interpret(input: InterpretInput): InterpretResult {
 
   return {
     result: { kind: "edits", edits },
-    state: { capitalizeNext: capitalize, noSpaceNext: state.noSpaceNext },
+    state: { capitalizeNext: capitalize, noSpaceNext: state.noSpaceNext, allCaps },
     spokenPunctuationCount,
+    ...(capsSeen ? { capsLock: allCaps } : {}),
   };
 }
