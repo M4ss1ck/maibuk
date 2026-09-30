@@ -91,7 +91,9 @@ describe("DictationSection", () => {
       support: { supported: false, reason: "library_missing" },
     });
     render(<DictationSection />);
-    expect(screen.getByText(/native library is missing.*Reinstall Maibuk for Linux/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/native library is missing.*Reinstall Maibuk for Linux/i)
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download/i })).toBeNull();
   });
 
@@ -137,11 +139,11 @@ describe("DictationSection", () => {
     onSpanish();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    within(row).getByRole("button", { name: /download/i }).focus();
+    within(row)
+      .getByRole("button", { name: /download/i })
+      .focus();
     await user.keyboard("{Enter}");
-    act(() =>
-      useDictationStore.setState({ downloads: { [esFast.id]: { done: 1, total: 2 } } }),
-    );
+    act(() => useDictationStore.setState({ downloads: { [esFast.id]: { done: 1, total: 2 } } }));
     expect(within(row).getByRole("button", { name: /cancel/i })).toHaveFocus();
     act(() => useDictationStore.setState({ downloads: {}, installed: [esFast.id] }));
     expect(within(row).getByRole("button", { name: /remove/i })).toHaveFocus();
@@ -158,7 +160,9 @@ describe("DictationSection", () => {
     onSpanish();
     render(<DictationSection />);
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    within(row).getByRole("button", { name: /use for/i }).focus();
+    within(row)
+      .getByRole("button", { name: /use for/i })
+      .focus();
     await user.keyboard("{Enter}");
     expect(within(row).getByText(/used for spanish/i)).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /remove/i })).toHaveFocus();
@@ -245,7 +249,9 @@ describe("DictationSection", () => {
     expect(toggle).not.toBeChecked();
 
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    within(row).getByRole("button", { name: /download/i }).focus();
+    within(row)
+      .getByRole("button", { name: /download/i })
+      .focus();
     await user.keyboard("{Enter}");
     expect(install).toHaveBeenCalledWith(esFast);
   });
@@ -259,12 +265,18 @@ describe("DictationSection", () => {
     expect(screen.getByRole("switch", { name: "Dictation" })).not.toBeChecked();
 
     const row = screen.getByRole("group", { name: /Spanish.*Fast/i });
-    within(row).getByRole("button", { name: /remove/i }).focus();
+    within(row)
+      .getByRole("button", { name: /remove/i })
+      .focus();
     await user.keyboard("{Enter}");
     expect(remove).toHaveBeenCalledWith(esFast.id);
   });
 
-  it("restores an off switch from persisted storage after a reload", async () => {
+  // Two full renders of the section: about 1 s locally, over 5 s on CI with
+  // coverage instrumentation.
+  it("restores an off switch from persisted storage after a reload", {
+    timeout: 15_000,
+  }, async () => {
     const user = userEvent.setup();
     const { unmount } = render(<DictationSection />);
     const toggle = screen.getByRole("switch", { name: "Dictation" });
@@ -292,7 +304,7 @@ describe("DictationSection", () => {
     useDictationStore.setState({ enabled: true, preferredTier: { en: "fast", es: "fast" } });
     localStorage.setItem(
       "maibuk-dictation",
-      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 }),
+      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 })
     );
     await act(async () => {
       await useDictationStore.persist.rehydrate();
@@ -306,10 +318,11 @@ describe("DictationSection", () => {
     render(<DictationSection />);
 
     const tablist = screen.getByRole("tablist", { name: "Dictation language" });
-    expect(within(tablist).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-      "English",
-      "Spanish",
-    ]);
+    expect(
+      within(tablist)
+        .getAllByRole("tab")
+        .map((tab) => tab.textContent)
+    ).toEqual(["English", "Spanish"]);
     expect(screen.getByRole("tab", { name: "English" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Spanish" })).toHaveAttribute("aria-selected", "false");
 
@@ -353,10 +366,11 @@ describe("DictationSection", () => {
     render(<DictationSection />);
 
     const tablist = screen.getByRole("tablist", { name: "Idioma del dictado" });
-    expect(within(tablist).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-      "Inglés",
-      "Español",
-    ]);
+    expect(
+      within(tablist)
+        .getAllByRole("tab")
+        .map((tab) => tab.textContent)
+    ).toEqual(["Inglés", "Español"]);
     expect(screen.getByRole("tab", { name: "Español" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Usar para español" })).toBeInTheDocument();
   });
@@ -430,9 +444,7 @@ describe("DictationSection", () => {
     });
     render(<DictationSection />);
     expect(
-      await screen.findByText(
-        "Comandos de voz no disponibles: 2 Comandos de voz rechazados: 1"
-      )
+      await screen.findByText("Comandos de voz no disponibles: 2 Comandos de voz rechazados: 1")
     ).toBeInTheDocument();
   });
 });
