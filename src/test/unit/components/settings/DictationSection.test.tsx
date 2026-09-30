@@ -194,6 +194,35 @@ describe("DictationSection", () => {
     expect(screen.getByRole("textbox", { name: "What Dictation hears" })).toBeInTheDocument();
   });
 
+  it("anchors each Dictation settings area once for the Tutorial", () => {
+    render(<DictationSection />);
+    for (const id of [
+      "dictation.models",
+      "dictation.language",
+      "dictation.punctuation",
+      "dictation.vocabulary",
+    ]) {
+      expect(document.querySelectorAll(`[data-tutorial~="${id}"]`), id).toHaveLength(1);
+    }
+  });
+
+  it("points every Dictation step at the explanation where Dictation is unavailable", () => {
+    useDictationStore.setState({ support: { supported: false, reason: "not_isolated" } });
+    render(<DictationSection />);
+    const explanation = screen.getByText(/works in Maibuk for Linux/i);
+    expect(explanation.getAttribute("data-tutorial")).toBe(
+      "dictation.models dictation.language dictation.punctuation dictation.vocabulary"
+    );
+    for (const id of [
+      "dictation.models",
+      "dictation.language",
+      "dictation.punctuation",
+      "dictation.vocabulary",
+    ]) {
+      expect(document.querySelectorAll(`[data-tutorial~="${id}"]`), id).toHaveLength(1);
+    }
+  });
+
   it("offers no Dictation switch where Dictation is unsupported", () => {
     useDictationStore.setState({ support: { supported: false, reason: "not_isolated" } });
     render(<DictationSection />);

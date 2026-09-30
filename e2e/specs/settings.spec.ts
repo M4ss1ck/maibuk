@@ -138,7 +138,7 @@ test.describe("Settings language @wf:settings-language", () => {
     await openSettings(page);
     // Scope to General: the Dictation section's Spoken punctuation list has a
     // "Dictation language" tab list of its own.
-    const general = page.locator('[data-tutorial="settings.general"]');
+    const general = page.locator('[data-tutorial~="settings.general"]');
     await chooseFromSelect(page, general.getByRole("button", { name: "Language" }), "Español");
 
     await expect(page.getByRole("heading", { name: "Configuración", level: 1 })).toBeVisible();

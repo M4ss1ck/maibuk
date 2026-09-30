@@ -5,6 +5,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { readLibraryBytes, readStorageValue, countBackups } from "../support/storage";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -163,7 +164,7 @@ test.describe("Tutorial full run @wf:tutorial-full-run", () => {
 
     // One step was walked with Space above; walkTutorial carries the rest.
     const rest = await walkTutorial(page);
-    expect(rest + 1).toBe(48);
+    expect(rest + 1).toBe(54);
 
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeFocused();
@@ -242,14 +243,14 @@ test.describe("Tutorial from Settings @wf:tutorial-settings-start-all", () => {
 
     await expect(page).toHaveURL(/\/settings$/);
     await expect(startAll).toBeFocused();
-    expect(steps).toBe(48);
+    expect(steps).toBe(54);
     expect(await readLibraryBytes(page)).toBe(before);
 
     // Persisted: every section reads Done after a reload.
     await page.reload();
     await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
     const rows = page.getByRole("listbox", { name: "Tutorial sections" }).getByRole("option");
-    await expect(rows).toHaveCount(8);
+    await expect(rows).toHaveCount(9);
     for (const row of await rows.all()) {
       await expect(row).toContainText("Done");
     }
@@ -281,6 +282,56 @@ test.describe("Tutorial single section @wf:tutorial-settings-section", () => {
     await page.reload();
     await expect(sectionRow(page, "Cover Designer")).toContainText("Done");
     await expect(sectionRow(page, "Books Gallery")).not.toContainText("Done");
+  });
+});
+
+test.describe("Tutorial Dictation section @wf:tutorial-dictation-section", () => {
+  test.use({ library: "oneBookThreeChapters" });
+
+  test("the Dictation row runs its six steps to Done without starting Dictation", async ({
+    page,
+  }) => {
+    await openSettingsTutorial(page);
+    const before = await readLibraryBytes(page);
+
+    await startSection(page, "Dictation");
+    await card(page).waitFor({ state: "visible", timeout: 20_000 });
+
+    // The card's title and its place in the run, step by step, with a
+    // screenshot point at each so PR evidence can be taken.
+    const cards: [string, string][] = [
+      ["Dictation", "overview"],
+      ["Dictation models", "models"],
+      ["Dictation language", "language"],
+      ["Spoken punctuation", "punctuation"],
+      ["Dictation vocabulary", "vocabulary"],
+      ["Voice commands", "voice-commands"],
+    ];
+    for (const [index, [title, name]] of cards.entries()) {
+      await expect(card(page)).toHaveAccessibleName(title);
+      await expect(card(page)).toContainText(`Step ${index + 1} of 6`);
+      // Settings is long: the card and its target land once the scroll ends.
+      await expect(card(page)).toBeInViewport({ ratio: 1 });
+      await expect(page.locator(`[data-tutorial~="dictation.${name}"]`)).toBeInViewport();
+      // Joyride fades the card in after each Next; a class locator because the
+      // fade lives on Joyride's own wrapper, which has no accessible name.
+      await expect(page.locator("[data-tutorial-portal] .react-joyride__floater")).toHaveCSS(
+        "opacity",
+        "1"
+      );
+      await capture(page, `tutorial-dictation-${name}`);
+      const advance = card(page).getByRole("button", {
+        name: index === cards.length - 1 ? "Finish" : "Next",
+      });
+      await expect(advance).toBeFocused();
+      await page.keyboard.press("Enter");
+    }
+
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(sectionRow(page, "Dictation")).toContainText("Done");
+    await expect(sectionRow(page, "Books Gallery")).not.toContainText("Done");
+    // A look-only section leaves the author's Library untouched.
+    expect(await readLibraryBytes(page)).toBe(before);
   });
 });
 

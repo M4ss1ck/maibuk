@@ -1460,7 +1460,15 @@
       "canvas-gallery": "Canvas Gallery",
       "canvas": "Canvas",
       "ephemeral": "Ephemeral",
+      "dictation": "Dictation",
       "settings": "Settings"
+    },
+    "illustrations": {
+      "dictation": {
+        "label": "The dictation button listening while the author says “hello how are you”, which the English model writes as “Hello, how are you?”",
+        "spoken": "hello how are you",
+        "written": "Hello, how are you?"
+      }
     },
     "steps": {
       "books": {
@@ -1627,6 +1635,32 @@
         "to-note": {
           "title": "Keep it as a Note",
           "body": "Changed your mind? Turn what you wrote into a Note."
+        }
+      },
+      "dictation": {
+        "overview": {
+          "title": "Dictation",
+          "body": "Dictation turns your speech into text in whichever editor has the caret, offline, on this device. Start a dictation session with the microphone button at the bottom of the editor; it follows the caret until you stop it. Each finished line goes through fixed rules that turn spoken words like “new paragraph” into a break before it reaches your text."
+        },
+        "models": {
+          "title": "Dictation models",
+          "body": "Dictation needs a model for each language, downloaded once and kept on this device. A fast model is smaller and lighter; an accurate one makes fewer mistakes. Where dictation is not available, this section says where it works."
+        },
+        "language": {
+          "title": "Dictation language",
+          "body": "Dictation listens for the language of the editor it types into, unless you pick one. Spoken punctuation, voice commands, and your vocabulary are kept per language: each tab shows that language’s."
+        },
+        "punctuation": {
+          "title": "Spoken punctuation",
+          "body": "Say “new paragraph” or “new line” while dictating and you get the break, not the words. “Scratch that” removes the last sentence you dictated, never what you typed. English models punctuate on their own, so spoken marks like “comma” start off: switch any entry on or off here, or give it extra phrases."
+        },
+        "vocabulary": {
+          "title": "Dictation vocabulary",
+          "body": "Teach dictation the names it mishears: what it hears and what to write instead. From then on it writes them your way. Your vocabulary stays on this device."
+        },
+        "voice-commands": {
+          "title": "Voice commands",
+          "body": "A short phrase said on its own, like “undo that”, runs a command just as its shortcut does. In the Shortcut Editor, each command you can say has a Voice list where you add your own phrases."
         }
       },
       "settings": {

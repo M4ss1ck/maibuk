@@ -12,6 +12,8 @@ interface DictationLanguageTabsProps {
   onChange: (language: DictationLanguage) => void;
   /** Names the tab list, e.g. "Dictation language". */
   ariaLabel: string;
+  /** Optional Tutorial anchor put on the tab list, for the Dictation section's step. */
+  tutorialAnchor?: string;
   /** The panel of the selected language; only that one is mounted. */
   children: (language: DictationLanguage) => ReactNode;
   className?: string;
@@ -26,6 +28,7 @@ export function DictationLanguageTabs({
   selected,
   onChange,
   ariaLabel,
+  tutorialAnchor,
   children,
   className,
 }: DictationLanguageTabsProps) {
@@ -38,6 +41,7 @@ export function DictationLanguageTabs({
     >
       <TabList
         aria-label={ariaLabel}
+        data-tutorial={tutorialAnchor}
         className="inline-flex max-w-full flex-wrap gap-1 rounded-lg bg-muted/60 p-1"
       >
         {languages.map((language) => (

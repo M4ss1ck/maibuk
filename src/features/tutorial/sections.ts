@@ -1,4 +1,4 @@
-// The Tutorial's content: eight sections in order, each a list of look-only
+// The Tutorial's content: nine sections in order, each a list of look-only
 // steps. A step points at the element carrying `data-tutorial="<step id>"`;
 // labels and classes are never targets, because copy and styling change.
 // Each step lists the glossary terms it teaches (the coverage gate).
@@ -18,7 +18,7 @@ const NOTE_ROUTE = `/notes/${SAMPLE_IDS.noteResearch}`;
 function step(
   id: string,
   terms: readonly string[],
-  extra: Partial<Pick<TutorialStep, "route" | "image" | "link">> = {}
+  extra: Partial<Pick<TutorialStep, "route" | "image" | "illustration" | "link">> = {}
 ): TutorialStep {
   return {
     id,
@@ -122,6 +122,23 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
     steps: [step("ephemeral.editor", ["Ephemeral"]), step("ephemeral.to-note", ["Note"])],
   },
   {
+    id: "dictation",
+    route: "/settings",
+    nameKey: "tutorial.sections.dictation",
+    steps: [
+      step(
+        "dictation.overview",
+        ["Dictation", "Dictation Session", "Dictation Command Interpreter"],
+        { illustration: "dictation" }
+      ),
+      step("dictation.models", ["Dictation Model"]),
+      step("dictation.language", ["Dictation Language"]),
+      step("dictation.punctuation", ["Spoken Punctuation"]),
+      step("dictation.vocabulary", ["Dictation Vocabulary"]),
+      step("dictation.voice-commands", ["Voice Command"]),
+    ],
+  },
+  {
     id: "settings",
     route: "/settings",
     nameKey: "tutorial.sections.settings",
@@ -187,18 +204,6 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Change Kind": "architecture vocabulary (ADR 0003); never shown to the author",
   "Change Feed": "architecture vocabulary (ADR 0003); never shown to the author",
   "Entity Sync": "architecture vocabulary (ADR 0006); never shown to the author",
-  Dictation: "needs a downloaded Dictation Model and a microphone",
-  "Dictation Session": "needs a downloaded Dictation Model and a microphone",
-  "Dictation Model": "needs a downloaded Dictation Model and a microphone",
-  "Dictation Language": "needs a downloaded Dictation Model and a microphone",
-  "Dictation Command Interpreter":
-    "runs only on dictated lines, which need a downloaded Dictation Model and a microphone; the Dictation section will teach it (#266)",
-  "Spoken Punctuation":
-    "said while dictating, which needs a downloaded Dictation Model and a microphone; the Dictation section will teach its Settings list (#266)",
-  "Voice Command":
-    "said while dictating, which needs a downloaded Dictation Model and a microphone; the Dictation section will teach where the Shortcut Editor lists them (#266)",
-  "Dictation Vocabulary":
-    "changes only dictated lines, which need a downloaded Dictation Model and a microphone; the Dictation section will teach its Settings editor (#266)",
 };
 
 /** The step the Settings → Tutorial row is anchored to; the whole Tutorial ends there. */
