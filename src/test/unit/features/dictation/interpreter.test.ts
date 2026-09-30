@@ -911,6 +911,14 @@ describe("interpret() Click by Name", () => {
     });
   });
 
+  it("presses Tab when the model writes pulsar tap (issue #324)", () => {
+    expect(run("pulsar tap", esTable()).result).toEqual({
+      kind: "voice_command",
+      id: "focus.next",
+      polarity: null,
+    });
+  });
+
   it("stays text when click is not first", () => {
     const { result } = run("I will click the button later", enTable());
     expect(result.kind).toBe("edits");

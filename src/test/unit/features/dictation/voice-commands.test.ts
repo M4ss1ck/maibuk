@@ -372,11 +372,14 @@ describe("Voice Command heard forms", () => {
     expect(matchEs("poner su brallado")).toEqual({ id: "editor.underline", polarity: "on" });
     expect(matchEs("central izquierda")).toEqual({ id: "editor.alignLeft", polarity: null });
     expect(matchEs("detened dictado")).toEqual({ id: "dictation.stop", polarity: null });
+    expect(matchEs("pulsar tap")).toEqual({ id: "focus.next", polarity: null });
+    expect(matchEs("pulsar la tecla tap")).toEqual({ id: "focus.next", polarity: null });
   });
 
   it("keeps prose prose", () => {
     expect(matchEs("estación central")).toBeNull();
     expect(matchEs("una grita fuerte")).toBeNull();
+    expect(matchEs("el tap de la cerveza")).toBeNull();
   });
 
   it("lets the raw line win over a rewrite", () => {
@@ -404,6 +407,8 @@ describe("Voice Command heard forms", () => {
   });
 
   it("keeps every heard key clear of a default, a target, a filler, and Spoken Punctuation", () => {
+    // A heard form may also stand for a word of a whole-line default, like
+    // the focus key in "pulsar tab" (issue #324).
     for (const language of LANGUAGES) {
       const vocabulary = VOICE_VOCABULARY[language];
       const verbs = new Set(
@@ -418,16 +423,23 @@ describe("Voice Command heard forms", () => {
       const punctuation = new Set(
         entriesFor(language).flatMap((entry) => defaultTriggers(entry).map(normalizePhrase))
       );
+      const wholeLineWords = new Set(
+        voiceEligibleCommands().flatMap((id) =>
+          defaultWholeLinePhrases(id, language).flatMap((phrase) => phraseWords(phrase))
+        )
+      );
       for (const [heard, meant] of Object.entries(vocabulary.heard)) {
         const key = normalizePhrase(heard);
+        expect(wholeLineWords.has(key), `${language}: ${heard}`).toBe(false);
         expect(verbs.has(key), `${language}: ${heard}`).toBe(false);
         expect(fillers.has(key), `${language}: ${heard}`).toBe(false);
         expect(targets.has(key), `${language}: ${heard}`).toBe(false);
         expect(punctuation.has(key), `${language}: ${heard}`).toBe(false);
         const value = normalizePhrase(meant);
-        expect(verbs.has(value) || targets.has(value), `${language}: ${heard} -> ${meant}`).toBe(
-          true
-        );
+        expect(
+          verbs.has(value) || targets.has(value) || wholeLineWords.has(value),
+          `${language}: ${heard} -> ${meant}`
+        ).toBe(true);
       }
     }
   });
