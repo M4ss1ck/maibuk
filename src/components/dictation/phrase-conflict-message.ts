@@ -52,5 +52,7 @@ export function phraseConflictMessage(
         phrase: conflict.phrase,
         command: command(conflict.commandId),
       });
+    case "clickWord":
+      return t("dictation.phraseRefused.clickWord", { word: conflict.word });
   }
 }

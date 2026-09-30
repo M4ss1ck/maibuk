@@ -1687,7 +1687,7 @@
         },
         "voice-commands": {
           "title": "Voice commands",
-          "body": "A short phrase said on its own, like “undo that”, runs a command just as its shortcut does. In the Shortcut Editor, each command you can say has a Voice list where you add your own phrases."
+          "body": "A short phrase said on its own, like “undo that”, runs a command just as its shortcut does. In the Shortcut Editor, each command you can say has a Voice list where you add your own phrases. Say “click” and a button's name to press it; when two share a name, numbers appear and you say “click 2”."
         }
       },
       "settings": {
@@ -1836,6 +1836,9 @@
     "voiceCommandRefusedDialogStuck": "The dialog can't close now, so {{command}} did not run.",
     "nothingToUndo": "Nothing to undo.",
     "nothingToRedo": "Nothing to redo.",
+    "clickPressed": "Pressed {{name}}.",
+    "clickChoices": "{{count}} matches. Say click and a number.",
+    "clickNotFound": "Nothing called {{name}} here.",
     "languages": { "en": "English", "es": "Spanish" },
     "languageNames": { "en": "English", "es": "Spanish" },
     "errors": {
@@ -1937,7 +1940,8 @@
     "phraseRefused": {
       "tooShort": "A Voice Command needs two words or more, so a one-word sentence never runs it.",
       "spokenPunctuation": "{{phrase}} is already Spoken punctuation: {{entry}}.",
-      "voiceCommand": "{{phrase}} already runs {{command}}."
+      "voiceCommand": "{{phrase}} already runs {{command}}.",
+      "clickWord": "Click by Name already uses “{{word}}” at the start of a line."
     }
   },
   "colorPicker": {

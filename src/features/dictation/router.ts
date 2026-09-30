@@ -13,6 +13,8 @@ export type DictationEdit =
 export type RouteResult =
   | { kind: "edits"; edits: DictationEdit[]; spokenPunctuationCount?: number; capsLock?: boolean }
   | ({ kind: "voice_command" } & VoiceCommandRun)
+  | { kind: "click"; name: string }
+  | { kind: "click_number"; n: number }
   | { kind: "scratch" };
 
 export type Interpreter = (text: string, before: string) => RouteResult | null;

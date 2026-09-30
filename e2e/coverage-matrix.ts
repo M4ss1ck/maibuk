@@ -10,12 +10,6 @@ const SYNC_FOLLOW_UP =
 
 export const EXCLUSIONS: Exclusion[] = [
   {
-    kind: "term",
-    items: ["Click by Name"],
-    reason: "Decided, not built (ADR 0016); the #267 build adds its row",
-    owner: "App-tier Voice Commands, https://github.com/M4ss1ck/maibuk/issues/267",
-  },
-  {
     kind: "context-section",
     section: "Sync",
     reason: "Sync is out of scope for this delivery (maintainer, 2026-09-25)",
@@ -2275,6 +2269,22 @@ export const ROWS: MatrixRow[] = [
       "focus.toggle",
       "focus.escape",
     ],
+    routes: ["/settings", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
+    id: "voice-click-by-name",
+    area: "shell",
+    workflow:
+      'A Chapter is open and Dictation is listening; the microphone says "Click" and a visible unique control name; asserts: the control runs its visible effect and the Dictation live region announces it, and the Chapter text never holds the spoken words',
+    edges: [
+      "two enabled controls share an accessible name: badges show, and saying a number presses exactly one of them",
+      "said over an open dialog, the dialog's control runs, not one behind it",
+    ],
+    terms: ["Click by Name", "Voice Command", "Dictation"],
+    shortcuts: ["dictation.toggle"],
     routes: ["/settings", "/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["chromium-only"],

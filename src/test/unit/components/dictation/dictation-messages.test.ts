@@ -215,6 +215,33 @@ describe("noticeMessage()", () => {
       "Aquí no hay editor, así que el dictado se detuvo."
     );
   });
+  it("announces a pressed click in both locales", () => {
+    expect(noticeMessage({ kind: "click_pressed", name: "Export" }, t).announce).toBe(
+      "Pressed Export."
+    );
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "click_pressed", name: "Exportar" }, es).announce).toBe(
+      "Pulsado: Exportar."
+    );
+  });
+  it("announces click choices in both locales", () => {
+    expect(noticeMessage({ kind: "click_choices", count: 2 }, t).announce).toBe(
+      "2 matches. Say click and a number."
+    );
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "click_choices", count: 2 }, es).announce).toBe(
+      "2 coincidencias. Di pulsar y un número."
+    );
+  });
+  it("announces a click with no match in both locales", () => {
+    expect(noticeMessage({ kind: "click_not_found", name: "export" }, t).announce).toBe(
+      "Nothing called export here."
+    );
+    const es = i18n.getFixedT("es");
+    expect(noticeMessage({ kind: "click_not_found", name: "exportar" }, es).announce).toBe(
+      "Aquí no hay nada llamado exportar."
+    );
+  });
   it("covers every error code in both locales", async () => {
     const codes = [
       "mic_denied",

@@ -4,12 +4,13 @@
 // collide with nothing, and be owned by exactly one Command.
 import { describe, expect, it } from "vitest";
 import { labelPhrase, VOICE_LABEL_EXCLUSIONS } from "@/features/dictation/label-phrases";
-import { phraseWords } from "@/features/dictation/normalize";
+import { normalizeWord, phraseWords } from "@/features/dictation/normalize";
 import { findPhraseConflict } from "@/features/dictation/phrase-conflicts";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
   MIN_VOICE_PHRASE_WORDS,
   VOICE_LANGUAGES,
+  VOICE_VOCABULARY,
   defaultWholeLinePhrases,
 } from "@/features/dictation/voice-commands";
 import { COMMANDS, COMMAND_IDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
@@ -79,6 +80,21 @@ describe("VOICE_LABEL_EXCLUSIONS", () => {
     for (const [id, reason] of Object.entries(VOICE_LABEL_EXCLUSIONS) as [CommandId, string][]) {
       expect(reason.trim().length, `${id}: exclusion needs a reason`).toBeGreaterThan(0);
       expect((COMMANDS[id] as CommandDef).voice, `${id}: exclusion is unneeded`).toBeUndefined();
+    }
+  });
+
+  it("starts no default phrase with a click word except focus.* ids", () => {
+    for (const language of VOICE_LANGUAGES) {
+      const clickWords = new Set(
+        VOICE_VOCABULARY[language].click.map((word) => normalizeWord(word))
+      );
+      for (const id of COMMAND_IDS) {
+        for (const phrase of defaultWholeLinePhrases(id, language)) {
+          const first = phraseWords(phrase)[0];
+          if (!first || !clickWords.has(first)) continue;
+          expect(id.startsWith("focus."), `${language} ${id}: "${phrase}"`).toBe(true);
+        }
+      }
     }
   });
 });

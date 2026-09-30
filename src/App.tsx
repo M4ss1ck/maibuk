@@ -17,7 +17,7 @@ import { StartupRedirect } from "@/components/StartupRedirect";
 import { PathTracker } from "@/components/PathTracker";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { ToastViewport } from "@/components/ui";
-import { DictationLiveRegion } from "@/components/dictation";
+import { ClickBadges, DictationLiveRegion } from "@/components/dictation";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { DeepLinkHandler } from "@/components/DeepLinkHandler";
 import { AndroidBackNavigator } from "@/components/AndroidBackNavigator";
@@ -94,6 +94,7 @@ function App() {
         <TutorialOffer />
         <ToastViewport />
         <DictationLiveRegion />
+        <ClickBadges />
       </StartupRedirect>
     </>
   );

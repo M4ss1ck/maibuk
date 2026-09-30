@@ -96,6 +96,7 @@
     "codemirror": "^6.0.2",
     "dictionary-en": "^4.0.0",
     "dictionary-es": "^4.0.0",
+    "dom-accessibility-api": "^0.7.1",
     "dompurify": "^3.4.3",
     "drizzle-orm": "^0.45.1",
     "epub-gen-memory": "^1.1.2",
